@@ -1,9 +1,7 @@
 package dev.mikoto2000.rei.command;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.prompt.Prompt;
 
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
