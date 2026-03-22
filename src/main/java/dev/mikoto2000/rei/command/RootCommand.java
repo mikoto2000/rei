@@ -14,7 +14,8 @@ name = "",
 description = "AI shell",
 subcommands = {
   ChatCommand.class,
-  ModelsCommand.class
+  ModelsCommand.class,
+  ModelCommand.class
 })
 @RequiredArgsConstructor
 public class RootCommand {}
