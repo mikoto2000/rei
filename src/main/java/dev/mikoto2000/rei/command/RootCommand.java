@@ -13,7 +13,8 @@ import picocli.CommandLine.Command;
 name = "",
 description = "AI shell",
 subcommands = {
-  ChatCommand.class
+  ChatCommand.class,
+  ModelsCommand.class
 })
 @RequiredArgsConstructor
 public class RootCommand {}
