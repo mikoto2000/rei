@@ -77,7 +77,7 @@ public class ReiApplication {
           }
           cmd.execute(splitCommandLine(commandText));
         } else {
-          cmd.execute(trimmed);
+          cmd.execute("chat", trimmed);
         }
 
       } catch (UserInterruptException e) {
