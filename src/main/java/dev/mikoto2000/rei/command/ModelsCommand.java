@@ -10,7 +10,7 @@ import picocli.CommandLine.Command;
 @Component
 @Command(name = "models", description = "モデルの一覧を表示します")
 @RequiredArgsConstructor
-class ModelsCommand implements Runnable {
+public class ModelsCommand implements Runnable {
 
   private final OllamaApi ollamaApi;
 

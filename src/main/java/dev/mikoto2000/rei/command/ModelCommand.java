@@ -12,7 +12,7 @@ import picocli.CommandLine.Parameters;
 @Component
 @Command(name = "model", description = "使用するモデルを確認・指定します")
 @RequiredArgsConstructor
-class ModelCommand implements Runnable {
+public class ModelCommand implements Runnable {
   private final ModelHolderService currentModelHolder;
 
   @Parameters(arity = "0..1")
