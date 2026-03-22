@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.command;
 
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -17,14 +18,17 @@ description = "Chat with AI")
 @RequiredArgsConstructor
 public class ChatCommand implements Runnable {
 
-  private final ChatModel chatModel;
+  private final ChatClient chatClient;
 
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
   private String[] prompts;
 
   @Override
   public void run() {
-    ChatResponse chatResponse = chatModel.call(new Prompt(String.join(" ", prompts)));
+    ChatResponse chatResponse = chatClient
+      .prompt(String.join(" ", prompts))
+      .call()
+      .chatResponse();
 
     String thinking = chatResponse.getResult().getMetadata().get("thinking");
     IO.println(thinking);
