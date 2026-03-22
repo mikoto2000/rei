@@ -13,6 +13,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 import dev.mikoto2000.rei.command.RootCommand;
+import dev.mikoto2000.rei.service.ModelHolderService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine;
 
@@ -22,6 +23,7 @@ public class ReiApplication {
 
   private final RootCommand rootCommand;
   private final CommandLine.IFactory factory;
+  private final ModelHolderService currentModelHolder;
 
   private final Path HISTORY_FILE = Path.of(
       System.getProperty("user.home"),
@@ -56,7 +58,7 @@ public class ReiApplication {
 
     while (true) {
       try {
-        String line = reader.readLine("> ");
+        String line = reader.readLine(currentModelHolder.get() + "> ");
         if (line == null) {
           break;
         }
