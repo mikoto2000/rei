@@ -2,6 +2,7 @@ package dev.mikoto2000.rei;
 
 
 import java.io.IOException;
+import java.nio.file.Path;
 
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
@@ -22,6 +23,13 @@ public class ReiApplication {
   private final RootCommand rootCommand;
   private final CommandLine.IFactory factory;
 
+  private final Path HISTORY_FILE = Path.of(
+      System.getProperty("user.home"),
+      ".cache",
+      "myai",
+      "history"
+      );
+
   public  static void main(String[] args) throws IOException {
     var context = SpringApplication.run(ReiApplication.class, args);
     var app = context.getBean(ReiApplication.class);
@@ -38,6 +46,9 @@ public class ReiApplication {
 
     LineReader reader = LineReaderBuilder.builder()
       .terminal(terminal)
+      .variable(LineReader.HISTORY_FILE, HISTORY_FILE)
+      .variable(LineReader.HISTORY_SIZE, 1000)
+      .variable(LineReader.HISTORY_FILE_SIZE, 1000)
       .build();
 
     System.out.println("AI Shell");
