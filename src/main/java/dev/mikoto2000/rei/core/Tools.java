@@ -6,6 +6,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
@@ -111,4 +112,23 @@ public class Tools {
 
     Files.write(Paths.get(pathStr), contents, options);
   }
+
+  @Tool(name = "deleteFile", description = "ファイルを削除します。ファイルが存在しない場合はエラーになります。")
+  void deleteFile(String pathStr) throws IOException {
+    IO.println(String.format("%s を削除するよ", pathStr));
+    Files.delete(Paths.get(pathStr));
+  }
+
+  @Tool(name = "copyFile", description = "ファイルをコピーします。上書きする場合は false を指定します。ファイルが存在しない場合はエラーになります。")
+  void copyFile(String sourcePath, String destPath, boolean overwrite) throws IOException {
+    IO.println(String.format("%s を %s にコピーするよ。上書き：%s", sourcePath, destPath, overwrite));
+
+    boolean exists = Files.exists(Paths.get(destPath));
+    if (exists && !overwrite) {
+      throw new IOException(String.format("%s は既に存在します。上書き：%s", destPath, overwrite));
+    }
+
+    Files.copy(Paths.get(sourcePath), Paths.get(destPath), overwrite ? StandardCopyOption.REPLACE_EXISTING : StandardCopyOption.COPY_ATTRIBUTES);
+  }
 }
+
