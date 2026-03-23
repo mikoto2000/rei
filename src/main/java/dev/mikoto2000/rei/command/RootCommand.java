@@ -10,12 +10,14 @@ import picocli.CommandLine.Command;
  */
 @Component
 @Command(
+version = "v1.0.0",
 name = "",
 description = "AI shell",
 subcommands = {
   ChatCommand.class,
   ModelsCommand.class,
   ModelCommand.class
-})
+},
+mixinStandardHelpOptions = true)
 @RequiredArgsConstructor
 public class RootCommand {}

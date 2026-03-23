@@ -72,6 +72,16 @@ public class ReiApplication {
           break;
         }
 
+        if (trimmed.equals("/help")) {
+          cmd.execute("--help");
+          continue;
+        }
+
+        if (trimmed.equals("/version")) {
+          cmd.execute("--version");
+          continue;
+        }
+
         if (trimmed.startsWith("/")) {
           String commandText = trimmed.substring(1).trim();
           if (commandText.isEmpty()) {
