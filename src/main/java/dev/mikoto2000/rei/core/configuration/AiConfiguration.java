@@ -32,6 +32,12 @@ public class AiConfiguration {
   @Bean
   public ChatClient chatClient() {
     return ChatClient.builder(chatModel)
+      .defaultSystem("""
+          あなたは優秀なアシスタントです。
+        ユーザーの質問に対して、必要に応じてツールを使いながら、正確かつ簡潔に答えてください。
+        もし質問の意図が不明な場合は、ユーザーに質問の意図を確認してください。
+        ファイルにテキストデータを書き込む場合は、ツールの writeTextFile を使ってください。
+        """)
       .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
       .defaultTools(tools, googleCalendarTools)
       .build();

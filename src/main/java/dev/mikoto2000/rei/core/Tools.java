@@ -3,13 +3,15 @@ package dev.mikoto2000.rei.core;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -22,18 +24,85 @@ public class Tools {
   String executeExternalProgram(String command, String args) throws IOException, InterruptedException {
     IO.println(String.format("%s コマンドを引数 %s で実行するよ", command, args));
 
-    ProcessBuilder processBuilder = new ProcessBuilder();
-    processBuilder.command(command + " " + args);
-    Process process = processBuilder.start();
-    int exitCode = process.waitFor();
+    List<String> commandLine = new ArrayList<>();
+    commandLine.add(command);
+    commandLine.addAll(parseArgs(args));
 
+    ProcessBuilder processBuilder = new ProcessBuilder(commandLine);
+    processBuilder.redirectErrorStream(true);
+    Process process = processBuilder.start();
+
+    String output;
+    try (BufferedReader reader = new BufferedReader(
+        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+      output = reader.lines().collect(Collectors.joining(System.lineSeparator()));
+    }
+
+    int exitCode = process.waitFor();
     IO.println(String.format("%s コマンドは終了コード %d で終了したよ", command, exitCode));
 
-    try (
-        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-        ) {
-      return reader.lines().collect(Collectors.joining(System.lineSeparator()));
+    return output;
+  }
+
+  private List<String> parseArgs(String args) {
+    List<String> parsed = new ArrayList<>();
+    if (args == null || args.isBlank()) {
+      return parsed;
+    }
+
+    StringBuilder current = new StringBuilder();
+    boolean inSingleQuote = false;
+    boolean inDoubleQuote = false;
+    boolean escaping = false;
+
+    for (int i = 0; i < args.length(); i++) {
+      char c = args.charAt(i);
+
+      if (escaping) {
+        current.append(c);
+        escaping = false;
+        continue;
+      }
+
+      if (c == '\\') {
+        escaping = true;
+        continue;
+      }
+
+      if (c == '\'' && !inDoubleQuote) {
+        inSingleQuote = !inSingleQuote;
+        continue;
+      }
+
+      if (c == '"' && !inSingleQuote) {
+        inDoubleQuote = !inDoubleQuote;
+        continue;
+      }
+
+      if (Character.isWhitespace(c) && !inSingleQuote && !inDoubleQuote) {
+        if (!current.isEmpty()) {
+          parsed.add(current.toString());
+          current.setLength(0);
         }
+        continue;
+      }
+
+      current.append(c);
+    }
+
+    if (escaping) {
+      current.append('\\');
+    }
+
+    if (inSingleQuote || inDoubleQuote) {
+      throw new IllegalArgumentException("args contains unterminated quotes");
+    }
+
+    if (!current.isEmpty()) {
+      parsed.add(current.toString());
+    }
+
+    return parsed;
   }
 
   @Tool(name = "rollDice", description = "x 面サイコロをひとつ振る")
@@ -165,4 +234,3 @@ public class Tools {
     Files.move(Paths.get(sourcePath), Paths.get(destPath), overwrite ? StandardCopyOption.REPLACE_EXISTING : StandardCopyOption.ATOMIC_MOVE);
   }
 }
-
