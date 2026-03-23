@@ -2,7 +2,9 @@ package dev.mikoto2000.rei.core;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.OpenOption;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.List;
 
 import org.springframework.ai.tool.annotation.Tool;
@@ -36,6 +38,26 @@ public class Tools {
   List<String> readTextFile(String pathStr) throws IOException {
     IO.println(String.format("%s のテキストファイルを読むよ", pathStr));
     return Files.readAllLines(Paths.get(pathStr));
+  }
+
+  @Tool(name = "writeTextFile", description = "テキストファイルに書き込みます。ファイルが存在しない場合は作成します。")
+  void writeTextFile(String pathStr, List<String> contents, boolean append) throws IOException {
+    IO.println(String.format("%s のテキストファイルに %s を書き込むよ", pathStr, contents));
+
+    OpenOption[] options = null;
+    if (append) {
+      options = new OpenOption[] {
+          StandardOpenOption.CREATE,
+          StandardOpenOption.APPEND
+      };
+    } else {
+      options = new OpenOption[] {
+          StandardOpenOption.CREATE,
+          StandardOpenOption.TRUNCATE_EXISTING
+      };
+    }
+
+    Files.write(Paths.get(pathStr), contents, options);
   }
 
   @Tool(name = "readBinaryFile", description = "バイナリファイルをすべて読み込む。ファイルが存在しない場合は findFile を利用してファイルを探す。")
