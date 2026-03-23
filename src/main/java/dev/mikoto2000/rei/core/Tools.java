@@ -65,4 +65,24 @@ public class Tools {
     IO.println(String.format("%s のバイナリファイルを読むよ", pathStr));
     return Files.readAllBytes(Paths.get(pathStr));
   }
+
+  @Tool(name = "writeBinaryFile", description = "バイナリファイルに書き込みます。ファイルが存在しない場合は作成します。")
+  void writeBinaryFile(String pathStr, byte[] contents, boolean append) throws IOException {
+    IO.println(String.format("%s のバイナリファイルに %s を書き込むよ", pathStr, contents));
+
+    OpenOption[] options = null;
+    if (append) {
+      options = new OpenOption[] {
+          StandardOpenOption.CREATE,
+          StandardOpenOption.APPEND
+      };
+    } else {
+      options = new OpenOption[] {
+          StandardOpenOption.CREATE,
+          StandardOpenOption.TRUNCATE_EXISTING
+      };
+    }
+
+    Files.write(Paths.get(pathStr), contents, options);
+  }
 }
