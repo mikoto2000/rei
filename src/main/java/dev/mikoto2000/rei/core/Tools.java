@@ -12,6 +12,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -20,36 +21,43 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class Tools {
+  /**
+   * 外部プログラムを実行します。コマンドと引数を指定して実行します。
+   *
+   * @param command 実行するコマンド
+   * @param args コマンドに渡す引数のリスト。null の場合は空のリストとして扱います。
+   * @return コマンドの標準出力の内容
+   */
   @Tool(name = "executeExternalProgram",
-        description = """
-        外部プログラムを実行します。コマンドと引数を指定して実行します。
-        @param command 実行するコマンド
-        @param args コマンドに渡す引数のリスト。null の場合は空のリストとして扱います。
-        @return コマンドの標準出力の内容
-        """)
-  String executeExternalProgram(String command, List<String> args) throws IOException, InterruptedException {
-    List<String> safeArgs = args == null ? List.of() : args;
-    IO.println(String.format("%s コマンドを引数 %s で実行するよ", command, safeArgs));
+  description = """
+  外部プログラムを実行します。コマンドと引数を指定して実行します。
+  @param command 実行するコマンド
+  @param args コマンドに渡す引数のリスト。null の場合は空のリストとして扱います。
+  @return コマンドの標準出力の内容
+  """)
+    String executeExternalProgram(String command, List<String> args) throws IOException, InterruptedException {
+      List<String> safeArgs = args == null ? List.of() : args;
+      IO.println(String.format("%s コマンドを引数 %s で実行するよ", command, safeArgs));
 
-    List<String> commandLine = new ArrayList<>();
-    commandLine.add(command);
-    commandLine.addAll(safeArgs);
+      List<String> commandLine = new ArrayList<>();
+      commandLine.add(command);
+      commandLine.addAll(safeArgs);
 
-    ProcessBuilder processBuilder = new ProcessBuilder(commandLine);
-    processBuilder.redirectErrorStream(true);
-    Process process = processBuilder.start();
+      ProcessBuilder processBuilder = new ProcessBuilder(commandLine);
+      processBuilder.redirectErrorStream(true);
+      Process process = processBuilder.start();
 
-    String output;
-    try (BufferedReader reader = new BufferedReader(
-        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-      output = reader.lines().collect(Collectors.joining(System.lineSeparator()));
+      String output;
+      try (BufferedReader reader = new BufferedReader(
+            new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+        output = reader.lines().collect(Collectors.joining(System.lineSeparator()));
+            }
+
+      int exitCode = process.waitFor();
+      IO.println(String.format("%s コマンドは終了コード %d で終了したよ", command, exitCode));
+
+      return output;
     }
-
-    int exitCode = process.waitFor();
-    IO.println(String.format("%s コマンドは終了コード %d で終了したよ", command, exitCode));
-
-    return output;
-  }
 
   @Tool(name = "rollDice", description = "x 面サイコロをひとつ振る")
   int rollDice(int x) {
@@ -69,20 +77,71 @@ public class Tools {
     return OffsetDateTime.now().toString();
   }
 
-  @Tool(name = "listFile", description = "ファイル一覧を取得します")
-  List<String> listFile(String baseDir) throws IOException {
-    IO.println(String.format("%s 以下のファイルを一覧にするよ", baseDir));
-    return Files.walk(Paths.get(baseDir), 20)
-      .map(p -> p.toFile().getAbsolutePath())
-      .toList();
+  @Tool(name = "findFile", description = "ファイルを検索します（.gitignore を尊重）")
+  List<String> findFile(String fileName) throws IOException, InterruptedException {
+    IO.println(String.format("%s のファイルを探すよ（.gitignore を尊重）", fileName));
+
+    // git ls-files でファイルを検索
+    String command = "git ls-files";
+    ProcessBuilder pb = new ProcessBuilder(command, "-z", "--full-name");
+    pb.redirectErrorStream(true);
+
+    Process process = pb.start();
+    IO.println("git ls-files コマンドを実行したよ");
+
+    // 出力をパースしてファイル名を抽出
+    String output;
+    try (BufferedReader reader = new BufferedReader(
+          new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+      output = reader.lines().collect(Collectors.joining(System.lineSeparator()));
+          }
+    int exitCode = process.waitFor();
+
+    if (exitCode != 0) {
+      IO.println("git ls-files コマンドが失敗しました");
+      // git が利用できない場合のフォールバック
+      return Files.find(Paths.get("."), 20, (path, basicFileAttribute) -> 
+          path.toFile().getAbsolutePath().endsWith(fileName))
+        .map(p -> p.toFile().getAbsolutePath())
+        .toList();
+    }
+
+    return Arrays.stream(output.split("\0"))
+      .filter(s -> s.endsWith(fileName))
+      .collect(Collectors.toList());
   }
 
-  @Tool(name = "findFile", description = "ファイルを検索します")
-  List<String> findFile(String fileName) throws IOException {
-    IO.println(String.format("%s のファイルを探すよ", fileName));
-    return Files.find(Paths.get("."), 20, (path, basicFileAttribute) -> path.toFile().getAbsolutePath().endsWith(fileName))
-      .map(p -> p.toFile().getAbsolutePath())
-      .toList();
+  @Tool(name = "listFile", description = "ファイル一覧を取得します（.gitignore を尊重）")
+  List<String> listFile(String baseDir) throws IOException, InterruptedException {
+    IO.println(String.format("%s 以下のファイルを一覧にするよ（.gitignore を尊重）", baseDir));
+
+    // git ls-files でディレクトリを指定してファイル一覧を取得
+    String command = "git ls-files";
+    ProcessBuilder pb = new ProcessBuilder(command, "-z", "--full-name", baseDir);
+    pb.redirectErrorStream(true);
+
+    Process process = pb.start();
+    IO.println("git ls-files コマンドを実行したよ");
+
+    // 出力をパースしてファイル名を抽出
+    String output;
+    try (BufferedReader reader = new BufferedReader(
+          new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+      output = reader.lines().collect(Collectors.joining(System.lineSeparator()));
+          }
+    int exitCode = process.waitFor();
+
+    if (exitCode != 0) {
+      IO.println("git ls-files コマンドが失敗しました");
+      // git が利用できない場合のフォールバック
+      return Files.walk(Paths.get(baseDir), 20)
+        .map(p -> p.toFile().getAbsolutePath())
+        .toList();
+    }
+
+    return Arrays.stream(output.split("\0"))
+      .filter(s -> s.startsWith(baseDir))
+      .collect(Collectors.toList());
   }
 
   @Tool(name = "readTextFile", description = "テキストファイルをすべて読み込む。ファイルが存在しない場合は findFile を利用してファイルを探す。")
