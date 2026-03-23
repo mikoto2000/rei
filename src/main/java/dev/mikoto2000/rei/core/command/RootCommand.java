@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.core.command;
 
 import org.springframework.stereotype.Component;
 
+import dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 
@@ -16,7 +17,8 @@ description = "AI shell",
 subcommands = {
   ChatCommand.class,
   ModelsCommand.class,
-  ModelCommand.class
+  ModelCommand.class,
+  ScheduleCommand.class
 },
 mixinStandardHelpOptions = true)
 @RequiredArgsConstructor

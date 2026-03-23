@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.core;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Paths;
@@ -38,6 +40,18 @@ public class Tools {
   int rollDice(int x) {
     IO.println(String.format("%d 面サイコロをひとつ振るよ", x));
     return (int) (Math.random() * x) + 1;
+  }
+
+  @Tool(name = "today", description = "今日の日付を yyyy-MM-dd 形式で取得します")
+  String today() {
+    IO.println("今日の日付を取得するよ");
+    return LocalDate.now().toString();
+  }
+
+  @Tool(name = "now", description = "現在時刻を ISO-8601 形式で取得します")
+  String now() {
+    IO.println("現在時刻を取得するよ");
+    return OffsetDateTime.now().toString();
   }
 
   @Tool(name = "listFile", description = "ファイル一覧を取得します")
