@@ -18,15 +18,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class Tools {
   @Tool(name = "executeExternalProgram", description = "外部プログラムを実行します")
-  String executeExternalProgram(String command, List<String> args) throws IOException, InterruptedException {
+  String executeExternalProgram(String command, String args) throws IOException, InterruptedException {
     IO.println(String.format("%s コマンドを引数 %s で実行するよ", command, args));
 
-    ArrayList<String> cmd = new ArrayList<>();
-    cmd.add(command);
-    cmd.addAll(args);
-
     ProcessBuilder processBuilder = new ProcessBuilder();
-    processBuilder.command(cmd);
+    processBuilder.command(command + " " + args);
     Process process = processBuilder.start();
     int exitCode = process.waitFor();
 
