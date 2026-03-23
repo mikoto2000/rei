@@ -20,13 +20,20 @@ import org.springframework.stereotype.Component;
 
 @Component
 public class Tools {
-  @Tool(name = "executeExternalProgram", description = "外部プログラムを実行します")
-  String executeExternalProgram(String command, String args) throws IOException, InterruptedException {
-    IO.println(String.format("%s コマンドを引数 %s で実行するよ", command, args));
+  @Tool(name = "executeExternalProgram",
+        description = """
+        外部プログラムを実行します。コマンドと引数を指定して実行します。
+        @param command 実行するコマンド
+        @param args コマンドに渡す引数のリスト。null の場合は空のリストとして扱います。
+        @return コマンドの標準出力の内容
+        """)
+  String executeExternalProgram(String command, List<String> args) throws IOException, InterruptedException {
+    List<String> safeArgs = args == null ? List.of() : args;
+    IO.println(String.format("%s コマンドを引数 %s で実行するよ", command, safeArgs));
 
     List<String> commandLine = new ArrayList<>();
     commandLine.add(command);
-    commandLine.addAll(parseArgs(args));
+    commandLine.addAll(safeArgs);
 
     ProcessBuilder processBuilder = new ProcessBuilder(commandLine);
     processBuilder.redirectErrorStream(true);
@@ -42,67 +49,6 @@ public class Tools {
     IO.println(String.format("%s コマンドは終了コード %d で終了したよ", command, exitCode));
 
     return output;
-  }
-
-  private List<String> parseArgs(String args) {
-    List<String> parsed = new ArrayList<>();
-    if (args == null || args.isBlank()) {
-      return parsed;
-    }
-
-    StringBuilder current = new StringBuilder();
-    boolean inSingleQuote = false;
-    boolean inDoubleQuote = false;
-    boolean escaping = false;
-
-    for (int i = 0; i < args.length(); i++) {
-      char c = args.charAt(i);
-
-      if (escaping) {
-        current.append(c);
-        escaping = false;
-        continue;
-      }
-
-      if (c == '\\') {
-        escaping = true;
-        continue;
-      }
-
-      if (c == '\'' && !inDoubleQuote) {
-        inSingleQuote = !inSingleQuote;
-        continue;
-      }
-
-      if (c == '"' && !inSingleQuote) {
-        inDoubleQuote = !inDoubleQuote;
-        continue;
-      }
-
-      if (Character.isWhitespace(c) && !inSingleQuote && !inDoubleQuote) {
-        if (!current.isEmpty()) {
-          parsed.add(current.toString());
-          current.setLength(0);
-        }
-        continue;
-      }
-
-      current.append(c);
-    }
-
-    if (escaping) {
-      current.append('\\');
-    }
-
-    if (inSingleQuote || inDoubleQuote) {
-      throw new IllegalArgumentException("args contains unterminated quotes");
-    }
-
-    if (!current.isEmpty()) {
-      parsed.add(current.toString());
-    }
-
-    return parsed;
   }
 
   @Tool(name = "rollDice", description = "x 面サイコロをひとつ振る")
