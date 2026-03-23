@@ -8,7 +8,6 @@ import java.nio.file.OpenOption;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -29,10 +28,10 @@ public class Tools {
     IO.println(String.format("%s コマンドは終了コード %d で終了したよ", command, exitCode));
 
     try (
-      BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-    ) {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+        ) {
       return reader.lines().collect(Collectors.joining(System.lineSeparator()));
-    }
+        }
   }
 
   @Tool(name = "rollDice", description = "x 面サイコロをひとつ振る")
@@ -63,25 +62,38 @@ public class Tools {
     return Files.readAllLines(Paths.get(pathStr));
   }
 
-  @Tool(name = "writeTextFile", description = "テキストファイルに書き込みます。ファイルが存在しない場合は作成します。")
-  void writeTextFile(String pathStr, List<String> contents, boolean append) throws IOException {
-    IO.println(String.format("%s のテキストファイルに %s を書き込むよ", pathStr, contents));
+  /**
+   * テキストファイルに書き込みます。ファイルが存在しない場合は作成します。
+   *
+   * @param pathStr ファイルのパス
+   * @param contents 書き込む内容
+   * @param append 既存の内容に追記するかどうか。true の場合は追記、false の場合は上書きします。
+   */
+  @Tool(name = "writeTextFile", description =
+  """
+  テキストファイルに書き込みます。ファイルが存在しない場合は作成します。
+  @param pathStr ファイルのパス
+  @param contents 書き込む内容
+  @param append 既存の内容に追記するかどうか。true の場合は追記、false の場合は上書きします。
+  """)
+    void writeTextFile(String pathStr, String contents, boolean append) throws IOException {
+      IO.println(String.format("%s のテキストファイルに %s を書き込むよ", pathStr, contents));
 
-    OpenOption[] options = null;
-    if (append) {
-      options = new OpenOption[] {
+      OpenOption[] options = null;
+      if (append) {
+        options = new OpenOption[] {
           StandardOpenOption.CREATE,
-          StandardOpenOption.APPEND
-      };
-    } else {
-      options = new OpenOption[] {
+            StandardOpenOption.APPEND
+        };
+      } else {
+        options = new OpenOption[] {
           StandardOpenOption.CREATE,
-          StandardOpenOption.TRUNCATE_EXISTING
-      };
+            StandardOpenOption.TRUNCATE_EXISTING
+        };
+      }
+
+      Files.writeString(Paths.get(pathStr), contents, options);
     }
-
-    Files.write(Paths.get(pathStr), contents, options);
-  }
 
   @Tool(name = "readBinaryFile", description = "バイナリファイルをすべて読み込む。ファイルが存在しない場合は findFile を利用してファイルを探す。")
   byte[] readBinaryFile(String pathStr) throws IOException {
@@ -96,12 +108,12 @@ public class Tools {
     OpenOption[] options = null;
     if (append) {
       options = new OpenOption[] {
-          StandardOpenOption.CREATE,
+        StandardOpenOption.CREATE,
           StandardOpenOption.APPEND
       };
     } else {
       options = new OpenOption[] {
-          StandardOpenOption.CREATE,
+        StandardOpenOption.CREATE,
           StandardOpenOption.TRUNCATE_EXISTING
       };
     }
@@ -125,6 +137,18 @@ public class Tools {
     }
 
     Files.copy(Paths.get(sourcePath), Paths.get(destPath), overwrite ? StandardCopyOption.REPLACE_EXISTING : StandardCopyOption.COPY_ATTRIBUTES);
+  }
+
+  @Tool(name = "moveFile", description = "ファイルを移動します。上書きする場合は false を指定します。ファイルが存在しない場合はエラーになります。")
+  void moveFile(String sourcePath, String destPath, boolean overwrite) throws IOException {
+    IO.println(String.format("%s を %s に移動するよ。上書き：%s", sourcePath, destPath, overwrite));
+
+    boolean exists = Files.exists(Paths.get(destPath));
+    if (exists && !overwrite) {
+      throw new IOException(String.format("%s は既に存在します。上書き：%s", destPath, overwrite));
+    }
+
+    Files.move(Paths.get(sourcePath), Paths.get(destPath), overwrite ? StandardCopyOption.REPLACE_EXISTING : StandardCopyOption.ATOMIC_MOVE);
   }
 }
 
