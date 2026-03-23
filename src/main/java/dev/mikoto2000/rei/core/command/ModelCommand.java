@@ -1,10 +1,10 @@
-package dev.mikoto2000.rei.command;
+package dev.mikoto2000.rei.core.command;
 
 import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 
-import dev.mikoto2000.rei.service.ModelHolderService;
+import dev.mikoto2000.rei.core.service.ModelHolderService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;

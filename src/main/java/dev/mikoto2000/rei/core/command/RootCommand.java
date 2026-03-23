@@ -1,4 +1,4 @@
-package dev.mikoto2000.rei.command;
+package dev.mikoto2000.rei.core.command;
 
 import org.springframework.stereotype.Component;
 

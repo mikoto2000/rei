@@ -1,4 +1,4 @@
-package dev.mikoto2000.rei.service;
+package dev.mikoto2000.rei.core.service;
 
 import java.util.concurrent.atomic.AtomicReference;
 

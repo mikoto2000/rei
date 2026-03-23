@@ -12,8 +12,8 @@ import org.jline.terminal.TerminalBuilder;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-import dev.mikoto2000.rei.command.RootCommand;
-import dev.mikoto2000.rei.service.ModelHolderService;
+import dev.mikoto2000.rei.core.command.RootCommand;
+import dev.mikoto2000.rei.core.service.ModelHolderService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine;
 

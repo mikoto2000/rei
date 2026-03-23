@@ -1,4 +1,4 @@
-package dev.mikoto2000.rei;
+package dev.mikoto2000.rei.core;
 
 import java.io.IOException;
 import java.nio.file.Files;

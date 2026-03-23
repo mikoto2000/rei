@@ -1,4 +1,4 @@
-package dev.mikoto2000.rei.configuration;
+package dev.mikoto2000.rei.core.configuration;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
@@ -7,7 +7,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import dev.mikoto2000.rei.Tools;
+import dev.mikoto2000.rei.core.Tools;
 import lombok.RequiredArgsConstructor;
 
 /**
