@@ -7,6 +7,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import dev.mikoto2000.rei.Tools;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -20,10 +21,13 @@ public class AiConfiguration {
 
   private final ChatMemory chatMemory;
 
+  private final Tools tools;
+
   @Bean
   public ChatClient chatClient() {
     return ChatClient.builder(chatModel)
       .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+      .defaultTools(tools)
       .build();
   }
 }
