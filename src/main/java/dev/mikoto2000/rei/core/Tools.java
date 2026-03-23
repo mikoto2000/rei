@@ -1,17 +1,43 @@
 package dev.mikoto2000.rei.core;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
 @Component
 public class Tools {
+  @Tool(name = "executeExternalProgram", description = "外部プログラムを実行します")
+  String executeExternalProgram(String command, List<String> args) throws IOException, InterruptedException {
+    IO.println(String.format("%s コマンドを引数 %s で実行するよ", command, args));
+
+    ArrayList<String> cmd = new ArrayList<>();
+    cmd.add(command);
+    cmd.addAll(args);
+
+    ProcessBuilder processBuilder = new ProcessBuilder();
+    processBuilder.command(cmd);
+    Process process = processBuilder.start();
+    int exitCode = process.waitFor();
+
+    IO.println(String.format("%s コマンドは終了コード %d で終了したよ", command, exitCode));
+
+    try (
+      BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+    ) {
+      return reader.lines().collect(Collectors.joining(System.lineSeparator()));
+    }
+  }
+
   @Tool(name = "rollDice", description = "x 面サイコロをひとつ振る")
   int rollDice(int x) {
     IO.println(String.format("%d 面サイコロをひとつ振るよ", x));
