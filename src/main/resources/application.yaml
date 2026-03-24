@@ -15,6 +15,8 @@ spring:
         options:
           model: qwen3.5:9b
           temperature: 0.3
+    model:
+      embedding: ollama
   devtools:
     restart:
       enabled: false
@@ -25,3 +27,4 @@ rei:
     credentials-path: ${REI_GOOGLE_CALENDAR_CREDENTIALS_PATH:${user.home}/.config/rei/google-calendar-credentials.json}
     tokens-directory: ${REI_GOOGLE_CALENDAR_TOKENS_DIR:${user.home}/.config/rei/google-calendar-tokens}
     default-calendar-id: ${REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID:primary}
+

@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.core.command;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.client.ChatClientResponse;
 
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
@@ -23,15 +23,20 @@ public class ChatCommand implements Runnable {
 
   @Override
   public void run() {
-    ChatResponse chatResponse = chatClient
+    ChatClientResponse chatClientResponse = chatClient
       .prompt(String.join(" ", prompts))
       .call()
-      .chatResponse();
+      .chatClientResponse();
 
-    String thinking = chatResponse.getResult().getMetadata().get("thinking");
+    String thinking = chatClientResponse.chatResponse().getResult().getMetadata().get("thinking");
     IO.println(thinking);
-    String answer = chatResponse.getResult().getOutput().getText();
+    String answer = chatClientResponse.chatResponse().getResult().getOutput().getText();
     IO.println(answer);
+
+    //IO.println("=== advisor context ===");
+    //chatClientResponse.context().forEach((k, v) -> {
+    //    IO.println(k + " = " + v);
+    //});
   }
 }
 

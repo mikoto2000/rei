@@ -2,8 +2,10 @@ package dev.mikoto2000.rei.core.configuration;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,6 +29,8 @@ public class AiConfiguration {
 
   private final Tools tools;
 
+  private final SimpleVectorStore vectorStore;
+
   private final GoogleCalendarTools googleCalendarTools;
 
   @Bean
@@ -39,7 +43,10 @@ public class AiConfiguration {
         ファイルが見つからない場合は、 findFile ツールを使ってファイルを検索してください。
         ファイルにテキストデータを書き込む場合は、ツールの writeTextFile を使ってください。
         """)
-      .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
+      .defaultAdvisors(
+          MessageChatMemoryAdvisor.builder(chatMemory).build(),
+          QuestionAnswerAdvisor.builder(vectorStore).build()
+          )
       .defaultTools(tools, googleCalendarTools)
       .build();
   }

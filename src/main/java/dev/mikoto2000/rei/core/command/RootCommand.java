@@ -18,7 +18,8 @@ subcommands = {
   ChatCommand.class,
   ModelsCommand.class,
   ModelCommand.class,
-  ScheduleCommand.class
+  ScheduleCommand.class,
+  EmbedCommand.class
 },
 mixinStandardHelpOptions = true)
 @RequiredArgsConstructor
