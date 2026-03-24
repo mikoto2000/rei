@@ -42,6 +42,7 @@ public class AiConfiguration {
         もし質問の意図が不明な場合は、ユーザーに質問の意図を確認してください。
         ファイルが見つからない場合は、 findFile ツールを使ってファイルを検索してください。
         ファイルにテキストデータを書き込む場合は、ツールの writeTextFile を使ってください。
+        vectorStore に関する質問があった場合は、 QuestionAnswerAdvisor を使って vectorStore に保存された情報をもとに回答してください。
         """)
       .defaultAdvisors(
           MessageChatMemoryAdvisor.builder(chatMemory).build(),
