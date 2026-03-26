@@ -82,8 +82,8 @@ public class Tools {
     IO.println(String.format("%s のファイルを探すよ（.gitignore を尊重）", fileName));
 
     // git ls-files でファイルを検索
-    String command = "git ls-files";
-    ProcessBuilder pb = new ProcessBuilder(command, "-z", "--full-name");
+    String command = "git";
+    ProcessBuilder pb = new ProcessBuilder(command, "ls-files", "-z", "--full-name");
     pb.redirectErrorStream(true);
 
     Process process = pb.start();
@@ -116,8 +116,8 @@ public class Tools {
     IO.println(String.format("%s 以下のファイルを一覧にするよ（.gitignore を尊重）", baseDir));
 
     // git ls-files でディレクトリを指定してファイル一覧を取得
-    String command = "git ls-files";
-    ProcessBuilder pb = new ProcessBuilder(command, "-z", "--full-name", baseDir);
+    String command = "git";
+    ProcessBuilder pb = new ProcessBuilder(command, "ls-files", "-z", "--full-name", baseDir);
     pb.redirectErrorStream(true);
 
     Process process = pb.start();
