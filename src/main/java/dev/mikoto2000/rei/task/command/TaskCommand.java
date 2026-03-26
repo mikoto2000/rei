@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.task.Task;
+import dev.mikoto2000.rei.task.TaskQuery;
 import dev.mikoto2000.rei.task.TaskService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
@@ -57,9 +58,18 @@ public class TaskCommand {
 
     private final TaskService taskService;
 
+    @Option(names = "--priority", description = "この優先度以下で絞り込みます")
+    Integer priority;
+
+    @Option(names = "--tag", description = "タグで絞り込みます")
+    String tag;
+
+    @Option(names = "--due-before", description = "この日付以前の期限で絞り込みます。形式: yyyy-MM-dd")
+    LocalDate dueBefore;
+
     @Override
     public void run() {
-      List<Task> tasks = taskService.listOpen();
+      List<Task> tasks = taskService.listOpen(new TaskQuery(priority, tag, dueBefore));
       if (tasks.isEmpty()) {
         System.out.println("未完了タスクはありません");
         return;

@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.task.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
@@ -46,6 +47,29 @@ class TaskCommandTest {
     }
 
     assertTrue(out.toString().contains("議事録作成"));
+  }
+
+  @Test
+  void listCommandFiltersTasks() {
+    TaskService service = newService();
+    newCommand(service).execute("add", "--due", "2026-03-31", "--priority", "2", "--tag", "backend", "設計レビュー");
+    newCommand(service).execute("add", "--due", "2026-04-05", "--priority", "3", "--tag", "sales", "営業資料");
+    newCommand(service).execute("add", "--due", "2026-03-28", "--priority", "1", "--tag", "backend", "バグ修正");
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      int exitCode = newCommand(service).execute("list", "--priority", "2", "--tag", "backend", "--due-before", "2026-03-31");
+      assertEquals(0, exitCode);
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    String output = out.toString();
+    assertTrue(output.contains("設計レビュー"));
+    assertTrue(output.contains("バグ修正"));
+    assertFalse(output.contains("営業資料"));
   }
 
   @Test
