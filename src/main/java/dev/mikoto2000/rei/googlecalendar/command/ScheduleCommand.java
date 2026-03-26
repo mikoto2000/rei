@@ -1,8 +1,7 @@
 package dev.mikoto2000.rei.googlecalendar.command;
 
-import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
@@ -54,11 +53,11 @@ public class ScheduleCommand {
     @Option(names = "--date", description = "対象日。形式: yyyy-MM-dd")
     LocalDate date;
 
-    @Option(names = "--from", description = "開始日時。形式: 2026-03-23T09:00:00Z")
-    Instant from;
+    @Option(names = "--from", description = "開始日時。形式: 2026-03-23T09:00:00+09:00 または 2026-03-23T09:00:00")
+    String from;
 
-    @Option(names = "--to", description = "終了日時。形式: 2026-03-23T18:00:00Z")
-    Instant to;
+    @Option(names = "--to", description = "終了日時。形式: 2026-03-23T18:00:00+09:00 または 2026-03-23T18:00:00")
+    String to;
 
     @Override
     public void run() {
@@ -67,9 +66,13 @@ public class ScheduleCommand {
         if (date != null) {
           events = googleCalendarService.listEventsForDate(date);
         } else {
-          Instant resolvedFrom = from != null ? from : LocalDate.now(ZoneOffset.UTC).atStartOfDay().toInstant(ZoneOffset.UTC);
-          Instant resolvedTo = to != null ? to : resolvedFrom.plusSeconds(24 * 60 * 60);
-          events = googleCalendarService.listEvents(resolvedFrom, resolvedTo);
+          ZonedDateTime resolvedFrom = from != null
+              ? googleCalendarService.parseDateTime(from)
+              : LocalDate.now(googleCalendarService.zoneId()).atStartOfDay(googleCalendarService.zoneId());
+          ZonedDateTime resolvedTo = to != null
+              ? googleCalendarService.parseDateTime(to)
+              : resolvedFrom.plusDays(1);
+          events = googleCalendarService.listEvents(resolvedFrom.toInstant(), resolvedTo.toInstant());
         }
 
         if (events.isEmpty()) {
@@ -102,11 +105,11 @@ public class ScheduleCommand {
 
     private final GoogleCalendarService googleCalendarService;
 
-    @Option(names = "--start", required = true, description = "開始日時。形式: 2026-03-23T09:00:00Z")
-    Instant start;
+    @Option(names = "--start", required = true, description = "開始日時。形式: 2026-03-23T09:00:00+09:00 または 2026-03-23T09:00:00")
+    String start;
 
-    @Option(names = "--end", required = true, description = "終了日時。形式: 2026-03-23T10:00:00Z")
-    Instant end;
+    @Option(names = "--end", required = true, description = "終了日時。形式: 2026-03-23T10:00:00+09:00 または 2026-03-23T10:00:00")
+    String end;
 
     @Option(names = "--location", description = "場所")
     String location;
@@ -120,10 +123,12 @@ public class ScheduleCommand {
     @Override
     public void run() {
       try {
+        ZonedDateTime resolvedStart = googleCalendarService.parseDateTime(start);
+        ZonedDateTime resolvedEnd = googleCalendarService.parseDateTime(end);
         GoogleCalendarEventSummary created = googleCalendarService.createEvent(
             String.join(" ", titleParts),
-            start,
-            end,
+            resolvedStart,
+            resolvedEnd,
             location,
             description
         );
@@ -131,7 +136,7 @@ public class ScheduleCommand {
             "作成しました: %s | %s | %s",
             created.id(),
             created.summary(),
-            DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(start.atOffset(ZoneOffset.UTC))
+            DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(resolvedStart)
         ));
       } catch (Exception e) {
         throw new RuntimeException("Google Calendar への予定追加に失敗しました", e);

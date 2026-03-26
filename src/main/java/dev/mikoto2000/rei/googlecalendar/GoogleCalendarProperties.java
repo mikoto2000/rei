@@ -8,5 +8,6 @@ public record GoogleCalendarProperties(
     String applicationName,
     String credentialsPath,
     String tokensDirectory,
-    String defaultCalendarId
+    String defaultCalendarId,
+    String timeZone
 ) {}

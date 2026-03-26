@@ -9,8 +9,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneOffset;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Objects;
 
@@ -31,7 +35,6 @@ import com.google.api.services.calendar.CalendarScopes;
 import com.google.api.services.calendar.model.Event;
 import com.google.api.services.calendar.model.EventDateTime;
 
-import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -66,8 +69,8 @@ public class GoogleCalendarService {
 
   public GoogleCalendarEventSummary createEvent(
       String summary,
-      Instant start,
-      Instant end,
+      ZonedDateTime start,
+      ZonedDateTime end,
       String location,
       String description
   ) throws Exception {
@@ -91,9 +94,37 @@ public class GoogleCalendarService {
   }
 
   public List<GoogleCalendarEventSummary> listEventsForDate(LocalDate date) throws Exception {
-    Instant from = date.atStartOfDay().toInstant(ZoneOffset.UTC);
-    Instant to = date.plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC);
-    return listEvents(from, to);
+    ZonedDateTime from = date.atStartOfDay(zoneId());
+    ZonedDateTime to = date.plusDays(1).atStartOfDay(zoneId());
+    return listEvents(from.toInstant(), to.toInstant());
+  }
+
+  public ZonedDateTime parseDateTime(String value) {
+    try {
+      return ZonedDateTime.parse(value);
+    } catch (DateTimeParseException ignored) {
+    }
+
+    try {
+      return OffsetDateTime.parse(value).toZonedDateTime();
+    } catch (DateTimeParseException ignored) {
+    }
+
+    try {
+      return LocalDateTime.parse(value).atZone(zoneId());
+    } catch (DateTimeParseException ignored) {
+    }
+
+    throw new IllegalArgumentException(
+        "日時の形式が不正です。ISO-8601 形式で指定してください。例: 2026-03-23T09:00:00+09:00 または 2026-03-23T09:00:00");
+  }
+
+  public ZoneId zoneId() {
+    if (properties.timeZone() == null || properties.timeZone().isBlank()) {
+      return ZoneId.systemDefault();
+    }
+
+    return ZoneId.of(properties.timeZone());
   }
 
   private Calendar getCalendarClient() throws Exception {
@@ -166,7 +197,11 @@ public class GoogleCalendarService {
     }
 
     if (eventDateTime.getDateTime() != null) {
-      return DATE_TIME_FORMATTER.format(Instant.ofEpochMilli(eventDateTime.getDateTime().getValue()).atOffset(ZoneOffset.UTC));
+      ZoneId eventZone = eventDateTime.getTimeZone() == null || eventDateTime.getTimeZone().isBlank()
+          ? zoneId()
+          : ZoneId.of(eventDateTime.getTimeZone());
+      return DATE_TIME_FORMATTER.format(
+          Instant.ofEpochMilli(eventDateTime.getDateTime().getValue()).atZone(eventZone));
     }
 
     if (eventDateTime.getDate() != null) {
@@ -176,8 +211,10 @@ public class GoogleCalendarService {
     return "";
   }
 
-  private EventDateTime toEventDateTime(Instant instant) {
-    return new EventDateTime().setDateTime(new com.google.api.client.util.DateTime(instant.toEpochMilli()));
+  private EventDateTime toEventDateTime(ZonedDateTime dateTime) {
+    return new EventDateTime()
+        .setDateTime(new com.google.api.client.util.DateTime(dateTime.toInstant().toEpochMilli()))
+        .setTimeZone(dateTime.getZone().getId());
   }
 
   private String defaultCalendarId() {

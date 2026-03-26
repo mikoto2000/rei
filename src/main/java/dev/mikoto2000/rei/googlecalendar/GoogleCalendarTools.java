@@ -1,6 +1,5 @@
 package dev.mikoto2000.rei.googlecalendar;
 
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -18,7 +17,9 @@ public class GoogleCalendarTools {
   @Tool(name = "googleCalendarListEvents", description = "Google Calendar の予定を指定期間で一覧します。日時は ISO-8601 形式で指定します。")
   List<GoogleCalendarEventSummary> listEvents(String from, String to) throws Exception {
     IO.println(String.format("Google Calendar の予定を %s から %s で一覧するよ", from, to));
-    return googleCalendarService.listEvents(Instant.parse(from), Instant.parse(to));
+    return googleCalendarService.listEvents(
+        googleCalendarService.parseDateTime(from).toInstant(),
+        googleCalendarService.parseDateTime(to).toInstant());
   }
 
   @Tool(name = "googleCalendarListEventsForDate", description = "Google Calendar の予定を指定日で一覧します。日付は yyyy-MM-dd 形式で指定します。")
@@ -32,8 +33,8 @@ public class GoogleCalendarTools {
     IO.println(String.format("Google Calendar に予定 %s を作成するよ", summary));
     return googleCalendarService.createEvent(
         summary,
-        Instant.parse(start),
-        Instant.parse(end),
+        googleCalendarService.parseDateTime(start),
+        googleCalendarService.parseDateTime(end),
         location,
         description
     );
