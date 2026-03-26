@@ -9,13 +9,46 @@ import org.junit.jupiter.api.Test;
 class VectorStorePathsTest {
 
   @Test
-  void storeFileUsesUserHome() {
+  void storeFileUsesXdgCacheHomeOnLinux() {
     Path expected = Path.of(
-        System.getProperty("user.home"),
+        "/tmp/cache",
+        "rei",
+        "vector-store.json");
+
+    assertEquals(expected, VectorStorePaths.storeFile("Linux", "/home/alice", "/tmp/cache", null));
+  }
+
+  @Test
+  void storeFileFallsBackToUserHomeCacheOnLinux() {
+    Path expected = Path.of(
+        "/home/alice",
         ".cache",
         "rei",
         "vector-store.json");
 
-    assertEquals(expected, VectorStorePaths.storeFile());
+    assertEquals(expected, VectorStorePaths.storeFile("Linux", "/home/alice", null, null));
+  }
+
+  @Test
+  void storeFileUsesLocalAppDataOnWindows() {
+    Path expected = Path.of(
+        "C:/Users/Alice/AppData/Local",
+        "rei",
+        "vector-store.json");
+
+    assertEquals(expected, VectorStorePaths.storeFile("Windows 11", "C:/Users/Alice", null,
+        "C:/Users/Alice/AppData/Local"));
+  }
+
+  @Test
+  void storeFileFallsBackToUserHomeAppDataOnWindows() {
+    Path expected = Path.of(
+        "C:/Users/Alice",
+        "AppData",
+        "Local",
+        "rei",
+        "vector-store.json");
+
+    assertEquals(expected, VectorStorePaths.storeFile("Windows 11", "C:/Users/Alice", null, null));
   }
 }
