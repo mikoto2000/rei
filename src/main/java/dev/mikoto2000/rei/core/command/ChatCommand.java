@@ -6,8 +6,11 @@ import java.util.Set;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
 
+import dev.mikoto2000.rei.core.service.ModelHolderService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -23,13 +26,18 @@ public class ChatCommand implements Runnable {
 
   private final ChatClient chatClient;
 
+  private final ModelHolderService currentModelHolder;
+
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
   private String[] prompts;
 
   @Override
   public void run() {
     ChatClientResponse chatClientResponse = chatClient
-      .prompt(String.join(" ", prompts))
+      .prompt(new Prompt(String.join(" ", prompts),
+            ChatOptions.builder()
+              .model(currentModelHolder.get())
+              .build()))
       .call()
       .chatClientResponse();
 
