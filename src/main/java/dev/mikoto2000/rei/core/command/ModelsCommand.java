@@ -1,25 +1,29 @@
 package dev.mikoto2000.rei.core.command;
 
-import org.springframework.ai.ollama.api.OllamaApi;
-import org.springframework.ai.ollama.api.OllamaApi.ListModelResponse;
-import org.springframework.stereotype.Component;
-
+import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelsService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 
 @Component
-@Command(name = "models", description = "モデルの一覧を表示します")
+@Command(name = "models", description = "OpenAI 互換 API で利用可能なモデル一覧を表示します")
 @RequiredArgsConstructor
 public class ModelsCommand implements Runnable {
 
-  private final OllamaApi ollamaApi;
+  private final OpenAiCompatibleModelsService modelsService;
+  private final ModelHolderService modelHolderService;
 
   @Override
   public void run() {
+    String currentModel = modelHolderService.get();
 
-    ListModelResponse modelsRes = ollamaApi.listModels();
-
-    modelsRes.models().stream()
-      .forEach(e -> IO.println(e.name()));
+    for (String model : modelsService.listModels()) {
+      if (model.equals(currentModel)) {
+        IO.println("* " + model);
+      } else {
+        IO.println(model);
+      }
+    }
   }
 }

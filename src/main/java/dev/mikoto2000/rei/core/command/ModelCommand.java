@@ -10,21 +10,22 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 
 @Component
-@Command(name = "model", description = "使用するモデルを確認・指定します")
+@Command(name = "model", description = "使用する chat モデルを確認・指定します")
 @RequiredArgsConstructor
 public class ModelCommand implements Runnable {
   private final ModelHolderService currentModelHolder;
 
-  @Parameters(arity = "0..1")
+  @Parameters(arity = "0..1", paramLabel = "MODEL")
   Optional<String> modelName;
 
   @Override
   public void run() {
     if (modelName.isEmpty()) {
       IO.println(currentModelHolder.get());
-    } else {
-      currentModelHolder.set(modelName.get());
+      return;
     }
+
+    currentModelHolder.set(modelName.get());
+    IO.println("current model: " + currentModelHolder.get());
   }
 }
-

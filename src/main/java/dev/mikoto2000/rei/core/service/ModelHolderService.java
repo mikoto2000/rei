@@ -7,14 +7,14 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class ModelHolderService {
-  private AtomicReference<String> currentModel;
+  private final AtomicReference<String> currentModel;
 
   public ModelHolderService(
-      @Value("${spring.ai.ollama.chat.options.model}")
+      @Value("${spring.ai.openai.chat.options.model}")
       String defaultModel
       ) {
     this.currentModel = new AtomicReference<>(defaultModel);
-      }
+  }
 
   public String get() {
     return currentModel.get();

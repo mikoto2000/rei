@@ -9,14 +9,19 @@ spring:
         repository:
           jdbc:
             initialize-schema: always
-    ollama:
-      base-url: ${REI_OLLAMA_BASE_URL:http://host.docker.internal:11434}
+    openai:
+      base-url: ${REI_OPENAI_BASE_URL:http://host.docker.internal:11434}
+      api-key: ${REI_OPENAI_API_KEY:dummy}
       chat:
         options:
-          model: qwen3.5:9b
+          model: ${REI_OPENAI_CHAT_MODEL:qwen3.5:9b}
           temperature: 0.3
+      embedding:
+        options:
+          model: ${REI_OPENAI_EMBEDDING_MODEL:mxbai-embed-large:latest}
     model:
-      embedding: ollama
+      chat: openai
+      embedding: openai
   devtools:
     restart:
       enabled: false
