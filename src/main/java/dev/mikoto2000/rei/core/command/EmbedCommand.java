@@ -21,7 +21,7 @@ description = "ドキュメントをベクトルストアに埋め込みます")
 @RequiredArgsConstructor
 public class EmbedCommand implements Runnable {
 
-  private static final File STORE_FILE = new File("target/vector-store.json");
+  private static final File STORE_FILE = new File("~/.cache/rei/vector-store.json");
 
   private final SimpleVectorStore vectorStore;
 
