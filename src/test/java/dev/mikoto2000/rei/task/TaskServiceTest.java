@@ -54,6 +54,20 @@ class TaskServiceTest {
     assertEquals(0, service.listOpen().size());
   }
 
+  @Test
+  void listOpenFiltersByPriorityTagAndDueDate() {
+    TaskService service = newService();
+    service.add("設計レビュー", LocalDate.of(2026, 3, 31), 2, List.of("backend", "review"));
+    service.add("営業資料", LocalDate.of(2026, 4, 3), 3, List.of("sales"));
+    service.add("バグ修正", LocalDate.of(2026, 3, 28), 1, List.of("backend", "urgent"));
+
+    List<Task> filtered = service.listOpen(new TaskQuery(2, "backend", LocalDate.of(2026, 3, 31)));
+
+    assertEquals(2, filtered.size());
+    assertEquals("バグ修正", filtered.get(0).title());
+    assertEquals("設計レビュー", filtered.get(1).title());
+  }
+
   private TaskService newService() {
     return new TaskService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task.db")));
   }

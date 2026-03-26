@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.task;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.sql.DataSource;
@@ -38,13 +39,37 @@ public class TaskService {
   }
 
   public List<Task> listOpen() {
-    return jdbcClient.sql("""
+    return listOpen(new TaskQuery(null, null, null));
+  }
+
+  public List<Task> listOpen(TaskQuery query) {
+    StringBuilder sql = new StringBuilder("""
         SELECT id, title, due_date, priority, status, tags, created_at, completed_at
         FROM tasks
         WHERE status = ?
-        ORDER BY priority ASC, due_date ASC, id ASC
-        """)
-        .param(TaskStatus.OPEN.name())
+        """);
+    List<Object> params = new ArrayList<>();
+    params.add(TaskStatus.OPEN.name());
+
+    if (query.priority() != null) {
+      sql.append(" AND priority <= ?");
+      params.add(query.priority());
+    }
+    if (query.tag() != null && !query.tag().isBlank()) {
+      sql.append(" AND (tags = ? OR tags LIKE ? OR tags LIKE ? OR tags LIKE ?)");
+      params.add(query.tag());
+      params.add(query.tag() + ",%");
+      params.add("%," + query.tag());
+      params.add("%," + query.tag() + ",%");
+    }
+    if (query.dueBefore() != null) {
+      sql.append(" AND due_date IS NOT NULL AND due_date <= ?");
+      params.add(query.dueBefore().toString());
+    }
+    sql.append(" ORDER BY priority ASC, due_date ASC, id ASC");
+
+    return jdbcClient.sql(sql.toString())
+        .params(params)
         .query(this::mapTask)
         .list();
   }
