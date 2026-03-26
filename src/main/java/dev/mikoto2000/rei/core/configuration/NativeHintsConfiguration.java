@@ -20,7 +20,7 @@ class VectorStoreRuntimeHints implements RuntimeHintsRegistrar {
         SimpleVectorStoreContent.class,
         MemberCategory.INVOKE_DECLARED_CONSTRUCTORS,
         MemberCategory.INVOKE_PUBLIC_CONSTRUCTORS,
-        MemberCategory.DECLARED_FIELDS,
+        MemberCategory.ACCESS_DECLARED_FIELDS,
         MemberCategory.INVOKE_DECLARED_METHODS,
         MemberCategory.INVOKE_PUBLIC_METHODS
     );

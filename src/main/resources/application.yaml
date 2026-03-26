@@ -1,8 +1,6 @@
 spring:
   application:
     name: rei
-  datasource:
-    url: jdbc:sqlite:${REI_MEMORY_DIR:./target}/memory.db
   ai:
     chat:
       memory:

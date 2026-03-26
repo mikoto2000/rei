@@ -20,7 +20,7 @@ class PicocliRuntimeHints implements RuntimeHintsRegistrar {
             MemberCategory.INVOKE_PUBLIC_CONSTRUCTORS,
             MemberCategory.INVOKE_DECLARED_METHODS,
             MemberCategory.INVOKE_PUBLIC_METHODS,
-            MemberCategory.DECLARED_FIELDS
+            MemberCategory.ACCESS_DECLARED_FIELDS
         );
 
         hints.reflection().registerType(
@@ -29,7 +29,7 @@ class PicocliRuntimeHints implements RuntimeHintsRegistrar {
             MemberCategory.INVOKE_PUBLIC_CONSTRUCTORS,
             MemberCategory.INVOKE_DECLARED_METHODS,
             MemberCategory.INVOKE_PUBLIC_METHODS,
-            MemberCategory.DECLARED_FIELDS
+            MemberCategory.ACCESS_DECLARED_FIELDS
         );
     }
 }
