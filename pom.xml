@@ -50,6 +50,10 @@
 			<artifactId>spring-ai-tika-document-reader</artifactId>
 		</dependency>
 		<dependency>
+			<groupId>org.eclipse.angus</groupId>
+			<artifactId>angus-mail</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-vector-store</artifactId>
 		</dependency>
@@ -88,6 +92,12 @@
 			<groupId>info.picocli</groupId>
 			<artifactId>picocli-shell-jline3</artifactId>
 			<version>${picocli.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>info.picocli</groupId>
+			<artifactId>picocli-codegen</artifactId>
+			<version>${picocli.version}</version>
+			<scope>provided</scope>
 		</dependency>
 
 		<dependency>
@@ -129,6 +139,11 @@
 						<path>
 							<groupId>org.projectlombok</groupId>
 							<artifactId>lombok</artifactId>
+						</path>
+						<path>
+							<groupId>info.picocli</groupId>
+							<artifactId>picocli-codegen</artifactId>
+							<version>${picocli.version}</version>
 						</path>
 					</annotationProcessorPaths>
 				</configuration>

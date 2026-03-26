@@ -23,6 +23,6 @@ subcommands = {
   EmbedCommand.class,
   TaskCommand.class
 },
-mixinStandardHelpOptions = true)
+mixinStandardHelpOptions = false)
 @RequiredArgsConstructor
 public class RootCommand {}

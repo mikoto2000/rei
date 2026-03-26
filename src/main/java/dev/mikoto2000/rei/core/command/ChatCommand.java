@@ -6,9 +6,9 @@ import java.util.Set;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
-import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.openai.OpenAiChatOptions;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +35,7 @@ public class ChatCommand implements Runnable {
   public void run() {
     ChatClientResponse chatClientResponse = chatClient
       .prompt(new Prompt(String.join(" ", prompts),
-            ChatOptions.builder()
+            OpenAiChatOptions.builder()
               .model(currentModelHolder.get())
               .build()))
       .call()

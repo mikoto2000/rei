@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.core.configuration;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
@@ -49,7 +50,9 @@ public class AiConfiguration {
         タスク管理が必要な場合は taskList、taskCreate、taskUpdate、taskComplete、taskUpdateDeadline、taskDelete を使ってください。
         """)
       .defaultAdvisors(
-          MessageChatMemoryAdvisor.builder(chatMemory).build(),
+          MessageChatMemoryAdvisor.builder(chatMemory)
+              .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
+              .build(),
           QuestionAnswerAdvisor.builder(vectorStore).build()
           )
       .defaultTools(tools, googleCalendarTools, taskTools)
