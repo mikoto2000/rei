@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class VectorStoreConfiguration {
 
-    private static final File STORE_FILE = new File("~/.cache/rei/vector-store.json");
+    private static final File STORE_FILE = new File("target/vector-store.json");
 
     @Bean
     public SimpleVectorStore simpleVectorStore(EmbeddingModel embeddingModel) throws IOException {
