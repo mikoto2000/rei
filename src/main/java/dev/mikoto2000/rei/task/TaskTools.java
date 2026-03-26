@@ -32,4 +32,11 @@ public class TaskTools {
   Task taskComplete(long id) {
     return taskService.complete(id);
   }
+
+  @Tool(name = "taskUpdateDeadline", description = "タスクの期限を更新します。dueDate は yyyy-MM-dd 形式です。null または空文字で期限をクリアします。")
+  Task taskUpdateDeadline(long id, String dueDate) {
+    return taskService.updateDeadline(
+        id,
+        dueDate == null || dueDate.isBlank() ? null : LocalDate.parse(dueDate));
+  }
 }

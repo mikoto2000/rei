@@ -85,6 +85,28 @@ public class TaskService {
         .params(TaskStatus.DONE.name(), completedAt.toString(), id)
         .update();
 
+    return findById(id);
+  }
+
+  public Task updateDeadline(long id, LocalDate dueDate) {
+    jdbcClient.sql("""
+        UPDATE tasks
+        SET due_date = ?
+        WHERE id = ?
+        """)
+        .params(dueDate == null ? null : dueDate.toString(), id)
+        .update();
+
+    return findById(id);
+  }
+
+  public void delete(long id) {
+    jdbcClient.sql("DELETE FROM tasks WHERE id = ?")
+        .param(id)
+        .update();
+  }
+
+  private Task findById(long id) {
     return jdbcClient.sql("""
         SELECT id, title, due_date, priority, status, tags, created_at, completed_at
         FROM tasks
@@ -93,12 +115,6 @@ public class TaskService {
         .param(id)
         .query(this::mapTask)
         .single();
-  }
-
-  public void delete(long id) {
-    jdbcClient.sql("DELETE FROM tasks WHERE id = ?")
-        .param(id)
-        .update();
   }
 
   private Task mapTask(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {

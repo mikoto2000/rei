@@ -46,7 +46,7 @@ public class AiConfiguration {
         ファイルが見つからない場合は、 findFile ツールを使ってファイルを検索してください。
         ファイルにテキストデータを書き込む場合は、ツールの writeTextFile を使ってください。
         vectorStore に関する質問があった場合は、 QuestionAnswerAdvisor を使って vectorStore に保存された情報をもとに回答してください。
-        タスク管理が必要な場合は taskList、taskCreate、taskComplete を使ってください。
+        タスク管理が必要な場合は taskList、taskCreate、taskComplete、taskUpdateDeadline を使ってください。
         """)
       .defaultAdvisors(
           MessageChatMemoryAdvisor.builder(chatMemory).build(),
