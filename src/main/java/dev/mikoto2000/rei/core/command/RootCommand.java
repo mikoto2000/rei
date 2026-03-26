@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.core.command;
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand;
+import dev.mikoto2000.rei.task.command.TaskCommand;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 
@@ -19,7 +20,8 @@ subcommands = {
   ModelsCommand.class,
   ModelCommand.class,
   ScheduleCommand.class,
-  EmbedCommand.class
+  EmbedCommand.class,
+  TaskCommand.class
 },
 mixinStandardHelpOptions = true)
 @RequiredArgsConstructor
