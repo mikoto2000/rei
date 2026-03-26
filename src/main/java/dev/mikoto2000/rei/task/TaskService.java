@@ -49,6 +49,33 @@ public class TaskService {
         .list();
   }
 
+  public Task complete(long id) {
+    OffsetDateTime completedAt = OffsetDateTime.now(ZoneOffset.UTC);
+
+    jdbcClient.sql("""
+        UPDATE tasks
+        SET status = ?, completed_at = ?
+        WHERE id = ?
+        """)
+        .params(TaskStatus.DONE.name(), completedAt.toString(), id)
+        .update();
+
+    return jdbcClient.sql("""
+        SELECT id, title, due_date, priority, status, tags, created_at, completed_at
+        FROM tasks
+        WHERE id = ?
+        """)
+        .param(id)
+        .query(this::mapTask)
+        .single();
+  }
+
+  public void delete(long id) {
+    jdbcClient.sql("DELETE FROM tasks WHERE id = ?")
+        .param(id)
+        .update();
+  }
+
   private Task mapTask(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
     String dueDate = rs.getString("due_date");
     String tags = rs.getString("tags");

@@ -18,8 +18,7 @@ class TaskServiceTest {
 
   @Test
   void addAndListOpenTasks() {
-    TaskService service = new TaskService(
-        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task.db")));
+    TaskService service = newService();
 
     Task created = service.add("設計レビュー", LocalDate.of(2026, 3, 31), 2, List.of("backend", "review"));
 
@@ -31,5 +30,31 @@ class TaskServiceTest {
     assertEquals(LocalDate.of(2026, 3, 31), tasks.getFirst().dueDate());
     assertEquals(List.of("backend", "review"), tasks.getFirst().tags());
     assertNull(tasks.getFirst().completedAt());
+  }
+
+  @Test
+  void completeTaskMovesItOutOfOpenList() {
+    TaskService service = newService();
+
+    Task created = service.add("議事録作成", LocalDate.of(2026, 4, 1), 1, List.of("meeting"));
+
+    Task completed = service.complete(created.id());
+
+    assertEquals(TaskStatus.DONE, completed.status());
+    assertEquals(0, service.listOpen().size());
+  }
+
+  @Test
+  void deleteRemovesTask() {
+    TaskService service = newService();
+
+    Task created = service.add("メール返信", null, 3, List.of());
+    service.delete(created.id());
+
+    assertEquals(0, service.listOpen().size());
+  }
+
+  private TaskService newService() {
+    return new TaskService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task.db")));
   }
 }
