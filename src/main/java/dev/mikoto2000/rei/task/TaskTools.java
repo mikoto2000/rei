@@ -28,6 +28,16 @@ public class TaskTools {
         tags == null ? List.of() : tags);
   }
 
+  @Tool(name = "taskUpdate", description = "タスクを更新します。title, dueDate, priority, tags のうち必要な項目だけ指定できます。dueDate は yyyy-MM-dd 形式です。")
+  Task taskUpdate(long id, String title, String dueDate, Integer priority, List<String> tags) {
+    return taskService.update(
+        id,
+        title,
+        dueDate == null || dueDate.isBlank() ? null : LocalDate.parse(dueDate),
+        priority,
+        tags);
+  }
+
   @Tool(name = "taskComplete", description = "タスクを完了にします")
   Task taskComplete(long id) {
     return taskService.complete(id);
@@ -38,5 +48,10 @@ public class TaskTools {
     return taskService.updateDeadline(
         id,
         dueDate == null || dueDate.isBlank() ? null : LocalDate.parse(dueDate));
+  }
+
+  @Tool(name = "taskDelete", description = "タスクを削除します")
+  void taskDelete(long id) {
+    taskService.delete(id);
   }
 }

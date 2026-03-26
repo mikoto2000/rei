@@ -88,6 +88,24 @@ public class TaskService {
     return findById(id);
   }
 
+  public Task update(long id, String title, LocalDate dueDate, Integer priority, List<String> tags) {
+    Task current = findById(id);
+    String resolvedTitle = title == null || title.isBlank() ? current.title() : title;
+    String resolvedDueDate = dueDate == null ? current.dueDate() == null ? null : current.dueDate().toString() : dueDate.toString();
+    int resolvedPriority = priority == null ? current.priority() : priority;
+    String resolvedTags = tags == null ? String.join(",", current.tags()) : String.join(",", tags);
+
+    jdbcClient.sql("""
+        UPDATE tasks
+        SET title = ?, due_date = ?, priority = ?, tags = ?
+        WHERE id = ?
+        """)
+        .params(resolvedTitle, resolvedDueDate, resolvedPriority, resolvedTags, id)
+        .update();
+
+    return findById(id);
+  }
+
   public Task updateDeadline(long id, LocalDate dueDate) {
     jdbcClient.sql("""
         UPDATE tasks

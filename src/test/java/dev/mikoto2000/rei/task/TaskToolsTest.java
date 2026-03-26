@@ -41,6 +41,34 @@ class TaskToolsTest {
   }
 
   @Test
+  void taskUpdateChangesTaskFields() {
+    TaskService service = new TaskService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task-tools-update.db")));
+    TaskTools tools = new TaskTools(service);
+    Task created = tools.taskCreate("見積作成", "2026-04-03", 2, List.of("sales"));
+
+    Task updated = tools.taskUpdate(created.id(), "提案書更新", "2026-04-10", 1, List.of("sales", "urgent"));
+
+    assertEquals("提案書更新", updated.title());
+    assertEquals(LocalDate.of(2026, 4, 10), updated.dueDate());
+    assertEquals(1, updated.priority());
+    assertEquals(List.of("sales", "urgent"), updated.tags());
+  }
+
+  @Test
+  void taskUpdateCanPartiallyChangeTaskFields() {
+    TaskService service = new TaskService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task-tools-partial.db")));
+    TaskTools tools = new TaskTools(service);
+    Task created = tools.taskCreate("社内共有", "2026-04-03", 2, List.of("team"));
+
+    Task updated = tools.taskUpdate(created.id(), null, null, 1, null);
+
+    assertEquals("社内共有", updated.title());
+    assertEquals(LocalDate.of(2026, 4, 3), updated.dueDate());
+    assertEquals(1, updated.priority());
+    assertEquals(List.of("team"), updated.tags());
+  }
+
+  @Test
   void taskUpdateDeadlineChangesDueDate() {
     TaskService service = new TaskService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task-tools-deadline.db")));
     TaskTools tools = new TaskTools(service);
@@ -61,5 +89,16 @@ class TaskToolsTest {
     Task updated = tools.taskUpdateDeadline(created.id(), null);
 
     assertNull(updated.dueDate());
+  }
+
+  @Test
+  void taskDeleteRemovesTask() {
+    TaskService service = new TaskService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task-tools-delete.db")));
+    TaskTools tools = new TaskTools(service);
+    Task created = tools.taskCreate("削除対象", "2026-04-03", 2, List.of());
+
+    tools.taskDelete(created.id());
+
+    assertEquals(0, tools.taskList().size());
   }
 }
