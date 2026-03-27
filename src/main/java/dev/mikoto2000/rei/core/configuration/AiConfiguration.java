@@ -15,6 +15,7 @@ import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
+import dev.mikoto2000.rei.reminder.ReminderTools;
 import dev.mikoto2000.rei.task.TaskTools;
 import lombok.RequiredArgsConstructor;
 
@@ -40,6 +41,8 @@ public class AiConfiguration {
 
   private final BriefingTools briefingTools;
 
+  private final ReminderTools reminderTools;
+
   @Bean
   public ChatClient chatClient() {
     return ChatClient.builder(chatModel)
@@ -52,6 +55,7 @@ public class AiConfiguration {
         vectorStore に関する質問があった場合は、 QuestionAnswerAdvisor を使って vectorStore に保存された情報をもとに回答してください。
         タスク管理が必要な場合は taskList、taskCreate、taskUpdate、taskComplete、taskUpdateDeadline、taskDelete を使ってください。
         その日の予定・未完了タスク・関連文書をまとめて確認したい場合は dailyBriefing を使ってください。
+        リマインドを作成・確認したい場合は reminderCreate と reminderList を使ってください。
         """)
       .defaultAdvisors(
           MessageChatMemoryAdvisor.builder(chatMemory)
@@ -59,7 +63,7 @@ public class AiConfiguration {
               .build(),
           QuestionAnswerAdvisor.builder(vectorStore).build()
           )
-      .defaultTools(tools, googleCalendarTools, taskTools, briefingTools)
+      .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, reminderTools)
       .build();
   }
 }
