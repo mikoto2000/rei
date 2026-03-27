@@ -32,7 +32,7 @@ public class ReiApplication {
   private final Path HISTORY_FILE = Path.of(
       System.getProperty("user.home"),
       ".cache",
-      "myai",
+      "rei",
       "history"
       );
 
