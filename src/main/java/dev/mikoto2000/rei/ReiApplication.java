@@ -20,6 +20,7 @@ import dev.mikoto2000.rei.core.service.ModelHolderService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine;
 
+@EnableScheduling
 @RequiredArgsConstructor
 @SpringBootApplication
 public class ReiApplication {
