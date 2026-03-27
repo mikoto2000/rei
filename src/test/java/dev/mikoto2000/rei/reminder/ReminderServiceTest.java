@@ -66,6 +66,16 @@ class ReminderServiceTest {
   }
 
   @Test
+  void findDueHandlesOffsetDateTimesByInstant() {
+    ReminderService service = newService();
+    Reminder due = service.addAt("会議の15分前", OffsetDateTime.parse("2026-03-27T13:45:00+09:00"));
+
+    List<Reminder> dueReminders = service.findDue(OffsetDateTime.of(2026, 3, 27, 4, 51, 0, 0, ZoneOffset.UTC));
+
+    assertEquals(List.of(due), dueReminders);
+  }
+
+  @Test
   void deleteRemovesReminder() {
     ReminderService service = newService();
     Reminder created = service.addAt("削除対象", OffsetDateTime.of(2026, 3, 27, 11, 0, 0, 0, ZoneOffset.UTC));
