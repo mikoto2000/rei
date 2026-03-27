@@ -1,3 +1,5 @@
+
+
 package dev.mikoto2000.rei;
 
 
@@ -11,6 +13,7 @@ import org.jline.reader.UserInterruptException;
 import org.jline.terminal.TerminalBuilder;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import dev.mikoto2000.rei.core.command.RootCommand;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
