@@ -1,3 +1,6 @@
+app:
+  ai:
+    system-prompt: ${REI_AI_SYSTEM_PROMPT:classpath:/system-prompt.md}
 spring:
   application:
     name: rei
