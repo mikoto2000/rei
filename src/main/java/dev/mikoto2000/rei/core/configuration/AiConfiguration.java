@@ -18,13 +18,15 @@ import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
 import dev.mikoto2000.rei.reminder.ReminderTools;
 import dev.mikoto2000.rei.task.TaskTools;
+import dev.mikoto2000.rei.websearch.WebSearchProperties;
+import dev.mikoto2000.rei.websearch.WebSearchTools;
 import lombok.RequiredArgsConstructor;
 
 /**
  * AiConfiguration
  */
 @Configuration
-@EnableConfigurationProperties(GoogleCalendarProperties.class)
+@EnableConfigurationProperties({GoogleCalendarProperties.class, WebSearchProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
 
@@ -47,6 +49,8 @@ public class AiConfiguration {
 
   private final ReminderTools reminderTools;
 
+  private final WebSearchTools webSearchTools;
+
   @Bean
   public ChatClient chatClient() {
     return ChatClient.builder(chatModel)
@@ -57,7 +61,7 @@ public class AiConfiguration {
               .build(),
           QuestionAnswerAdvisor.builder(vectorStore).build()
           )
-      .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, reminderTools)
+      .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, reminderTools, webSearchTools)
       .build();
   }
 }

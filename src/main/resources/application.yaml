@@ -37,3 +37,9 @@ rei:
     tokens-directory: ${REI_GOOGLE_CALENDAR_TOKENS_DIR:${user.home}/.config/rei/google-calendar-tokens}
     default-calendar-id: ${REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID:primary}
     time-zone: ${REI_GOOGLE_CALENDAR_TIME_ZONE:}
+  web-search:
+    enabled: ${REI_WEB_SEARCH_ENABLED:false}
+    base-url: ${REI_WEB_SEARCH_BASE_URL:https://api.search.brave.com/res/v1/web/search}
+    api-key: ${REI_WEB_SEARCH_API_KEY:}
+    timeout-seconds: ${REI_WEB_SEARCH_TIMEOUT_SECONDS:10}
+    max-results: ${REI_WEB_SEARCH_MAX_RESULTS:5}

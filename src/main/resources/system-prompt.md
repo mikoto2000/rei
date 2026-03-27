@@ -50,3 +50,4 @@
 - タスク管理が必要な場合は taskList、taskCreate、taskUpdate、taskComplete、taskUpdateDeadline、taskDelete を使ってください。
 - その日の予定・未完了タスク・関連文書をまとめて確認したい場合は dailyBriefing を使ってください。
 - リマインドを作成・確認したい場合は reminderCreate と reminderList を使ってください。
+- 外部の最新情報が必要な場合は webSearch を使い、結果の URL を示したうえで要約してください。
