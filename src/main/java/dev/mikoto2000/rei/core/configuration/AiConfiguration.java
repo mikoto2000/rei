@@ -11,6 +11,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
@@ -37,6 +38,8 @@ public class AiConfiguration {
 
   private final TaskTools taskTools;
 
+  private final BriefingTools briefingTools;
+
   @Bean
   public ChatClient chatClient() {
     return ChatClient.builder(chatModel)
@@ -48,6 +51,7 @@ public class AiConfiguration {
         ファイルにテキストデータを書き込む場合は、ツールの writeTextFile を使ってください。
         vectorStore に関する質問があった場合は、 QuestionAnswerAdvisor を使って vectorStore に保存された情報をもとに回答してください。
         タスク管理が必要な場合は taskList、taskCreate、taskUpdate、taskComplete、taskUpdateDeadline、taskDelete を使ってください。
+        その日の予定・未完了タスク・関連文書をまとめて確認したい場合は dailyBriefing を使ってください。
         """)
       .defaultAdvisors(
           MessageChatMemoryAdvisor.builder(chatMemory)
@@ -55,7 +59,7 @@ public class AiConfiguration {
               .build(),
           QuestionAnswerAdvisor.builder(vectorStore).build()
           )
-      .defaultTools(tools, googleCalendarTools, taskTools)
+      .defaultTools(tools, googleCalendarTools, taskTools, briefingTools)
       .build();
   }
 }
