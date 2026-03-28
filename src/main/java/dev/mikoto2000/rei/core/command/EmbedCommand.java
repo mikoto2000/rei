@@ -1,7 +1,10 @@
 package dev.mikoto2000.rei.core.command;
 
 import java.io.IOException;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 
 import org.springframework.stereotype.Component;
 
@@ -93,7 +96,7 @@ public class EmbedCommand implements Runnable {
         }
         for (VectorDocumentSearchResult result : results) {
           System.out.println(result.docId() + " | " + result.source() + " | chunk=" + result.chunkIndex()
-              + " | score=" + result.score() + " | " + result.snippet());
+              + " | score=" + formatScore(result.score()) + " | " + result.snippet());
         }
       } catch (IOException e) {
         throw new RuntimeException("文書検索に失敗しました", e);
@@ -116,9 +119,18 @@ public class EmbedCommand implements Runnable {
           System.out.println("登録済み文書はありません");
           return;
         }
+
+        LinkedHashMap<String, SourceSummary> grouped = new LinkedHashMap<>();
         for (VectorDocumentEntry entry : entries) {
-          System.out.println(entry.docId() + " | " + entry.source() + " | chunks=" + entry.chunkCount() + " | "
-              + entry.ingestedAt());
+          grouped.compute(entry.source(), (source, current) -> current == null
+              ? new SourceSummary(1, entry.chunkCount(), entry.ingestedAt())
+              : current.add(entry.chunkCount(), entry.ingestedAt()));
+        }
+
+        for (var groupedEntry : grouped.entrySet()) {
+          SourceSummary summary = groupedEntry.getValue();
+          System.out.println(groupedEntry.getKey() + " | docs=" + summary.docCount()
+              + " | chunks=" + summary.chunkCount() + " | latest=" + summary.latestIngestedAt());
         }
       } catch (IOException e) {
         throw new RuntimeException("文書一覧の取得に失敗しました", e);
@@ -162,6 +174,19 @@ public class EmbedCommand implements Runnable {
   private static void printAdded(List<VectorDocumentEntry> entries) {
     for (VectorDocumentEntry entry : entries) {
       System.out.println("追加: " + entry.docId() + " | " + entry.source() + " | chunks=" + entry.chunkCount());
+    }
+  }
+
+  private static String formatScore(Double score) {
+    return score == null ? "n/a" : String.format(Locale.ROOT, "%.3f", score);
+  }
+
+  private record SourceSummary(int docCount, int chunkCount, String latestIngestedAt) {
+
+    SourceSummary add(int additionalChunks, String candidateLatest) {
+      String resolvedLatest = Comparator.nullsLast(String::compareTo)
+          .compare(candidateLatest, latestIngestedAt) > 0 ? candidateLatest : latestIngestedAt;
+      return new SourceSummary(docCount + 1, chunkCount + additionalChunks, resolvedLatest);
     }
   }
 }

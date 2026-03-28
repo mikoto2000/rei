@@ -69,14 +69,18 @@ class EmbedCommandTest {
     }
 
     verify(service).search("spring ai", 2, 0.4d, "/tmp/docs/spec.md");
-    assertTrue(out.toString().contains("Spring AI guide"));
+    String output = out.toString();
+    assertTrue(output.contains("Spring AI guide"));
+    assertTrue(output.contains("score=0.910"));
   }
 
   @Test
-  void listCommandPrintsDocuments() throws Exception {
+  void listCommandPrintsDocumentsGroupedBySource() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
     when(service.list()).thenReturn(List.of(
-        new VectorDocumentEntry("doc-1", "/tmp/docs/spec.md", 3, "2026-03-28T00:00:00Z")));
+        new VectorDocumentEntry("doc-1", "/tmp/docs/spec.md", 3, "2026-03-28T00:00:00Z"),
+        new VectorDocumentEntry("doc-2", "/tmp/docs/spec.md", 2, "2026-03-29T00:00:00Z"),
+        new VectorDocumentEntry("doc-3", "/tmp/docs/other.md", 1, "2026-03-27T00:00:00Z")));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
@@ -89,7 +93,9 @@ class EmbedCommandTest {
     }
 
     verify(service).list();
-    assertTrue(out.toString().contains("/tmp/docs/spec.md"));
+    String output = out.toString();
+    assertTrue(output.contains("/tmp/docs/spec.md | docs=2 | chunks=5 | latest=2026-03-29T00:00:00Z"));
+    assertTrue(output.contains("/tmp/docs/other.md | docs=1 | chunks=1 | latest=2026-03-27T00:00:00Z"));
   }
 
   @Test
