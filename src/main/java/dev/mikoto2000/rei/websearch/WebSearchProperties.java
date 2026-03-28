@@ -12,15 +12,11 @@ public class WebSearchProperties {
 
   private boolean enabled = false;
 
-  private String baseUrl = "https://api.openai.com";
+  private String baseUrl = "https://api.search.brave.com/res/v1/web/search";
 
   private String apiKey = "";
 
-  private String model = "gpt-5";
-
-  private int timeoutSeconds = 30;
+  private int timeoutSeconds = 10;
 
   private int maxResults = 5;
-
-  private int maxOutputTokens = 400;
 }

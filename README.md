@@ -11,7 +11,7 @@ Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API 
 - その日の予定・未完了タスク・関連文書をまとめる日次ブリーフィング
 - 指定日時または予定の何分前かでのリマインド
 - 文書をベクトルストアへ埋め込んだうえでの RAG
-- OpenAI Responses API の Web Search を使った Web 検索ツール
+- Brave Search API を使った Web 検索ツール
 
 ## セットアップ
 
@@ -41,20 +41,17 @@ export REI_GOOGLE_CALENDAR_TIME_ZONE=Asia/Tokyo
 
 ### Web Search
 
-Web 検索を有効にする場合は OpenAI API キーを設定してください。
+Web 検索を有効にする場合は Brave Search API を設定してください。
 
 ```bash
 export REI_WEB_SEARCH_ENABLED=true
-export REI_WEB_SEARCH_API_KEY=your-openai-api-key
+export REI_WEB_SEARCH_API_KEY=your-brave-search-api-key
 ```
-
-`REI_WEB_SEARCH_API_KEY` を省略した場合は `REI_OPENAI_API_KEY` を使います。
 
 必要に応じて次も指定できます。
 
 ```bash
-export REI_WEB_SEARCH_BASE_URL=https://api.openai.com
-export REI_WEB_SEARCH_MODEL=gpt-5
+export REI_WEB_SEARCH_BASE_URL=https://api.search.brave.com/res/v1/web/search
 export REI_WEB_SEARCH_TIMEOUT_SECONDS=10
 export REI_WEB_SEARCH_MAX_RESULTS=5
 ```
@@ -189,8 +186,6 @@ export REI_WEB_SEARCH_MAX_RESULTS=5
 - 日次ブリーフィング生成
 - リマインド作成・一覧
 - Web 検索
-
-`webSearch` ツールは、検索結果の生 JSON 配列ではなく、簡潔な要約と出典一覧を返します。
 
 ## テスト
 

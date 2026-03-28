@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -18,7 +17,6 @@ import org.junit.jupiter.api.Test;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 class WebSearchServiceTest {
@@ -33,35 +31,27 @@ class WebSearchServiceTest {
   }
 
   @Test
-  void searchCallsOpenAiResponsesEndpointAndParsesSummaryAndSources() throws Exception {
-    AtomicReference<String> observedBody = new AtomicReference<>();
+  void searchCallsBraveCompatibleEndpointAndParsesResults() throws Exception {
+    AtomicReference<String> observedQuery = new AtomicReference<>();
     AtomicReference<String> observedHeader = new AtomicReference<>();
     server = HttpServer.create(new InetSocketAddress(0), 0);
-    server.createContext("/v1/responses", exchange -> respondWithSearchResults(exchange, observedBody, observedHeader));
+    server.createContext("/res/v1/web/search", exchange -> respondWithSearchResults(exchange, observedQuery, observedHeader));
     server.start();
 
     WebSearchProperties properties = new WebSearchProperties();
     properties.setEnabled(true);
     properties.setApiKey("test-key");
-    properties.setModel("gpt-5");
     properties.setMaxResults(5);
-    properties.setMaxOutputTokens(400);
-    properties.setBaseUrl("http://localhost:" + server.getAddress().getPort());
+    properties.setBaseUrl("http://localhost:" + server.getAddress().getPort() + "/res/v1/web/search");
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
-    WebSearchResponse response = service.search("spring ai", 2);
+    List<WebSearchResult> results = service.search("spring ai", 2);
 
-    JsonNode requestJson = new JsonMapper().readTree(observedBody.get());
-    assertEquals("Bearer test-key", observedHeader.get());
-    assertEquals("gpt-5", requestJson.path("model").asText());
-    assertEquals(400, requestJson.path("max_output_tokens").asInt());
-    assertEquals("web_search_call.action.sources", requestJson.path("include").get(0).asText());
-    assertEquals("web_search", requestJson.path("tools").get(0).path("type").asText());
-    assertTrue(requestJson.path("input").asText().contains("spring ai"));
-    assertEquals("Spring AI is a framework for building AI apps with Spring.", response.summary());
-    assertEquals(2, response.sources().size());
-    assertEquals("Spring AI", response.sources().getFirst().title());
-    assertEquals("https://example.com/spring-ai", response.sources().getFirst().url());
+    assertEquals("q=spring+ai&count=2", observedQuery.get());
+    assertEquals("test-key", observedHeader.get());
+    assertEquals(2, results.size());
+    assertEquals("Spring AI", results.getFirst().title());
+    assertEquals("https://example.com/spring-ai", results.getFirst().url());
   }
 
   @Test
@@ -87,61 +77,37 @@ class WebSearchServiceTest {
   }
 
   @Test
-  void parseResponseReturnsEmptySourcesWhenWebResultsAreMissing() throws IOException {
+  void parseResultsReturnsEmptyListWhenWebResultsAreMissing() throws IOException {
     WebSearchProperties properties = new WebSearchProperties();
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
-    WebSearchResponse response = service.parseResponse("{}", 3);
+    List<WebSearchResult> results = service.parseResults("{}", 3);
 
-    assertEquals("", response.summary());
-    assertTrue(response.sources().isEmpty());
+    assertTrue(results.isEmpty());
   }
 
-  @Test
-  void responsesUriAcceptsBaseUrlOrFullEndpoint() {
-    assertEquals(URI.create("https://api.openai.com/v1/responses"), WebSearchService.responsesUri("https://api.openai.com"));
-    assertEquals(URI.create("https://api.openai.com/v1/responses"), WebSearchService.responsesUri("https://api.openai.com/v1"));
-    assertEquals(URI.create("https://api.openai.com/v1/responses"),
-        WebSearchService.responsesUri("https://api.openai.com/v1/responses"));
-  }
-
-  private void respondWithSearchResults(HttpExchange exchange, AtomicReference<String> observedBody,
+  private void respondWithSearchResults(HttpExchange exchange, AtomicReference<String> observedQuery,
       AtomicReference<String> observedHeader) throws IOException {
-    observedBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-    observedHeader.set(exchange.getRequestHeaders().getFirst("Authorization"));
+    observedQuery.set(exchange.getRequestURI().getRawQuery());
+    observedHeader.set(exchange.getRequestHeaders().getFirst("X-Subscription-Token"));
     byte[] body = """
         {
-          "output": [
-            {
-              "type": "web_search_call",
-              "action": {
-                "sources": [
-                  {
-                    "title": "Spring AI",
-                    "url": "https://example.com/spring-ai",
-                    "snippet": "Spring AI official documentation",
-                    "published_at": "2026-03-01"
-                  },
-                  {
-                    "title": "OpenAI Responses API",
-                    "url": "https://example.com/openai-responses",
-                    "snippet": "OpenAI Responses API docs",
-                    "published_at": null
-                  }
-                ]
+          "web": {
+            "results": [
+              {
+                "title": "Spring AI",
+                "url": "https://example.com/spring-ai",
+                "description": "Spring AI official documentation",
+                "age": "2026-03-01"
+              },
+              {
+                "title": "Brave Search API",
+                "url": "https://example.com/brave-search",
+                "description": "Brave Search API docs",
+                "age": "2026-03-02"
               }
-            },
-            {
-              "type": "message",
-              "role": "assistant",
-              "content": [
-                {
-                  "type": "output_text",
-                  "text": "Spring AI is a framework for building AI apps with Spring."
-                }
-              ]
-            }
-          ]
+            ]
+          }
         }
         """.getBytes(StandardCharsets.UTF_8);
     exchange.sendResponseHeaders(200, body.length);
