@@ -42,7 +42,9 @@ public class ChatCommand implements Runnable {
       .chatClientResponse();
 
     String thinking = chatClientResponse.chatResponse().getResult().getMetadata().get("thinking");
-    IO.println(thinking);
+    if (thinking != null && !thinking.isBlank()) {
+      IO.println(thinking);
+    }
     String answer = chatClientResponse.chatResponse().getResult().getOutput().getText();
     IO.println(answer);
 
