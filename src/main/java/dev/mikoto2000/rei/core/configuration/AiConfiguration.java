@@ -30,7 +30,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class AiConfiguration {
 
-  @Value("${app.ai.system-prompt}")
+  @Value("${rei.core.system-prompt}")
   private String systemPrompt;
 
   private final ChatModel chatModel;

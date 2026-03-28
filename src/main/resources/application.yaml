@@ -1,6 +1,3 @@
-app:
-  ai:
-    system-prompt: ${REI_AI_SYSTEM_PROMPT:classpath:/system-prompt.md}
 spring:
   application:
     name: rei
@@ -30,6 +27,8 @@ spring:
     restart:
       enabled: false
 rei:
+  core:
+    system-prompt: ${REI_AI_SYSTEM_PROMPT:classpath:/system-prompt.md}
   google-calendar:
     enabled: ${REI_GOOGLE_CALENDAR_ENABLED:false}
     application-name: Rei
