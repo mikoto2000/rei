@@ -1,6 +1,8 @@
 {
   "name": "Java",
-  "image": "mcr.microsoft.com/devcontainers/java:3-25-trixie",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
   "mounts": [
     {
       "type": "bind",
@@ -11,7 +13,7 @@
 
   "features": {
     "ghcr.io/devcontainers/features/java:1": {
-      "version": "none",
+      "version": "25.r25-nik",
       "installMaven": "false",
       "installGradle": "false"
     }
