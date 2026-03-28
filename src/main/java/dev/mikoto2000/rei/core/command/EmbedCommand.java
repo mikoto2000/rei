@@ -1,50 +1,167 @@
 package dev.mikoto2000.rei.core.command;
 
 import java.io.IOException;
-import java.nio.file.Path;
+import java.util.List;
 
-import org.springframework.ai.reader.tika.TikaDocumentReader;
-import org.springframework.ai.transformer.splitter.TextSplitter;
-import org.springframework.ai.transformer.splitter.TokenTextSplitter;
-import org.springframework.ai.vectorstore.SimpleVectorStore;
-import org.springframework.core.io.FileSystemResource;
+import org.springframework.stereotype.Component;
 
-import dev.mikoto2000.rei.core.configuration.VectorStorePaths;
+import dev.mikoto2000.rei.vectordocument.VectorDocumentEntry;
+import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
+import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
-/**
- * EmbedCommand
- */
-@Command(
-name = "embed",
-description = "ドキュメントをベクトルストアに埋め込みます")
+@Component
 @RequiredArgsConstructor
+@Command(
+    name = "embed",
+    description = "文書のベクトルストア操作を行います",
+    subcommands = {
+      EmbedCommand.AddCommand.class,
+      EmbedCommand.SearchCommand.class,
+      EmbedCommand.ListCommand.class,
+      EmbedCommand.DeleteCommand.class
+    })
 public class EmbedCommand implements Runnable {
 
-  private static final Path STORE_FILE = VectorStorePaths.storeFile();
+  private final VectorDocumentService vectorDocumentService;
 
-  private final SimpleVectorStore vectorStore;
-
-  @Parameters(arity = "1..*", paramLabel = "DOCUMENTS...", description = "ドキュメントのパス")
-  private String[] documents;
+  @Parameters(arity = "0..*", paramLabel = "DOCUMENTS...", description = "埋め込み対象ドキュメントのパス")
+  String[] documents;
 
   @Override
   public void run() {
+    if (documents == null || documents.length == 0) {
+      throw new IllegalArgumentException("`embed add <files...>` を使うか、埋め込み対象ファイルを指定してください");
+    }
+
     try {
-      for (String document : documents) {
-        TikaDocumentReader documentReader;
-        documentReader = new TikaDocumentReader(new FileSystemResource(document));
-        TextSplitter textSplitter = TokenTextSplitter.builder()
-            .withChunkSize(500)
-            .build();
-        vectorStore.add(textSplitter.apply(documentReader.get()));
-      }
-      VectorStorePaths.createParentDirectories();
-      vectorStore.save(STORE_FILE.toFile());
+      printAdded(vectorDocumentService.add(List.of(documents)));
     } catch (IOException e) {
-      throw new RuntimeException("ベクトルストアの保存に失敗しました", e);
+      throw new RuntimeException("ドキュメント埋め込みに失敗しました", e);
+    }
+  }
+
+  @Component
+  @RequiredArgsConstructor
+  @Command(name = "add", description = "文書をベクトルストアへ追加します")
+  public static class AddCommand implements Runnable {
+
+    private final VectorDocumentService vectorDocumentService;
+
+    @Parameters(arity = "1..*", paramLabel = "DOCUMENTS...", description = "埋め込み対象ドキュメントのパス")
+    String[] documents;
+
+    @Override
+    public void run() {
+      try {
+        printAdded(vectorDocumentService.add(List.of(documents)));
+      } catch (IOException e) {
+        throw new RuntimeException("ドキュメント埋め込みに失敗しました", e);
+      }
+    }
+  }
+
+  @Component
+  @RequiredArgsConstructor
+  @Command(name = "search", description = "ベクトルストア内の文書を検索します")
+  public static class SearchCommand implements Runnable {
+
+    private final VectorDocumentService vectorDocumentService;
+
+    @Option(names = "--top-k", description = "返却件数")
+    Integer topK;
+
+    @Option(names = "--threshold", description = "類似度しきい値")
+    Double threshold;
+
+    @Option(names = "--source", description = "source で絞り込みます")
+    String source;
+
+    @Parameters(arity = "1..*", paramLabel = "QUERY", description = "検索クエリ")
+    String[] queryParts;
+
+    @Override
+    public void run() {
+      try {
+        List<VectorDocumentSearchResult> results = vectorDocumentService.search(String.join(" ", queryParts), topK, threshold, source);
+        if (results.isEmpty()) {
+          System.out.println("一致する文書はありません");
+          return;
+        }
+        for (VectorDocumentSearchResult result : results) {
+          System.out.println(result.docId() + " | " + result.source() + " | chunk=" + result.chunkIndex()
+              + " | score=" + result.score() + " | " + result.snippet());
+        }
+      } catch (IOException e) {
+        throw new RuntimeException("文書検索に失敗しました", e);
+      }
+    }
+  }
+
+  @Component
+  @RequiredArgsConstructor
+  @Command(name = "list", description = "登録済み文書を一覧します")
+  public static class ListCommand implements Runnable {
+
+    private final VectorDocumentService vectorDocumentService;
+
+    @Override
+    public void run() {
+      try {
+        List<VectorDocumentEntry> entries = vectorDocumentService.list();
+        if (entries.isEmpty()) {
+          System.out.println("登録済み文書はありません");
+          return;
+        }
+        for (VectorDocumentEntry entry : entries) {
+          System.out.println(entry.docId() + " | " + entry.source() + " | chunks=" + entry.chunkCount() + " | "
+              + entry.ingestedAt());
+        }
+      } catch (IOException e) {
+        throw new RuntimeException("文書一覧の取得に失敗しました", e);
+      }
+    }
+  }
+
+  @Component
+  @RequiredArgsConstructor
+  @Command(name = "delete", description = "登録済み文書を削除します")
+  public static class DeleteCommand implements Runnable {
+
+    private final VectorDocumentService vectorDocumentService;
+
+    @Option(names = "--doc-id", description = "削除対象 docId")
+    String docId;
+
+    @Option(names = "--source", description = "削除対象 source")
+    String source;
+
+    @Override
+    public void run() {
+      try {
+        if (docId != null && !docId.isBlank() && (source == null || source.isBlank())) {
+          boolean deleted = vectorDocumentService.deleteByDocId(docId);
+          System.out.println(deleted ? "削除: " + docId : "削除対象が見つかりません: " + docId);
+          return;
+        }
+        if ((docId == null || docId.isBlank()) && source != null && !source.isBlank()) {
+          int deleted = vectorDocumentService.deleteBySource(source);
+          System.out.println("削除: " + deleted + " documents | " + source);
+          return;
+        }
+        throw new IllegalArgumentException("--doc-id か --source のどちらか一方を指定してください");
+      } catch (IOException e) {
+        throw new RuntimeException("文書削除に失敗しました", e);
+      }
+    }
+  }
+
+  private static void printAdded(List<VectorDocumentEntry> entries) {
+    for (VectorDocumentEntry entry : entries) {
+      System.out.println("追加: " + entry.docId() + " | " + entry.source() + " | chunks=" + entry.chunkCount());
     }
   }
 }
