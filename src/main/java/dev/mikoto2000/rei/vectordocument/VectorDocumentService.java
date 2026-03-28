@@ -18,6 +18,7 @@ import org.springframework.ai.transformer.splitter.TextSplitter;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.SimpleVectorStore;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
 
@@ -33,6 +34,7 @@ public class VectorDocumentService {
   private final Path storeFile;
   private final Path indexFile;
 
+  @Autowired
   public VectorDocumentService(SimpleVectorStore vectorStore, JsonMapper objectMapper) {
     this(vectorStore, objectMapper, Clock.systemUTC(), VectorStorePaths.storeFile(), VectorStorePaths.documentIndexFile());
   }

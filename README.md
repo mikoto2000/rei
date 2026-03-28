@@ -170,8 +170,26 @@ export REI_WEB_SEARCH_MAX_RESULTS=5
 
 ### 文書の埋め込み
 
+追加:
+
 ```text
 /embed ./docs/spec.md ./docs/meeting-note.pdf
+/embed add ./docs/spec.md ./docs/meeting-note.pdf
+```
+
+検索:
+
+```text
+/embed search spring ai
+/embed search --top-k 5 --source /absolute/path/to/spec.md spring ai
+```
+
+一覧・削除:
+
+```text
+/embed list
+/embed delete --doc-id <docId>
+/embed delete --source /absolute/path/to/spec.md
 ```
 
 読み込んだ文書はベクトルストアに保存され、対話時の RAG に使われます。
