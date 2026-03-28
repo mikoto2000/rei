@@ -15,10 +15,12 @@ class WebSearchToolsTest {
   void webSearchDelegatesToService() throws Exception {
     WebSearchService service = Mockito.mock(WebSearchService.class);
     WebSearchTools tools = new WebSearchTools(service);
-    List<WebSearchResult> expected = List.of(new WebSearchResult("Title", "https://example.com", "Snippet", null));
+    WebSearchResponse expected = new WebSearchResponse(
+        "summary",
+        List.of(new WebSearchResult("Title", "https://example.com", "Snippet", null)));
     when(service.search("spring ai", 3)).thenReturn(expected);
 
-    List<WebSearchResult> actual = tools.webSearch("spring ai", 3);
+    WebSearchResponse actual = tools.webSearch("spring ai", 3);
 
     assertEquals(expected, actual);
     verify(service).search("spring ai", 3);
