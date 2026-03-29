@@ -1,12 +1,18 @@
 package dev.mikoto2000.rei.vectorstore;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
+
+import javax.sql.DataSource;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -120,6 +126,88 @@ class SqliteVectorStoreTest {
     assertEquals(1, goodStore.list().size());
   }
 
+  @Test
+  void deleteByDocIdCascadesToChunks() {
+    Path dbPath = tempDir.resolve("vector.db");
+    SqliteVectorStore store = newStore(dbPath);
+    store.add(List.of(
+        new Document("doc-1#0", "Spring AI guide", Map.of("docId", "doc-1", "source", "/tmp/spring.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z")),
+        new Document("doc-1#1", "Spring AI appendix", Map.of("docId", "doc-1", "source", "/tmp/spring.md", "chunkIndex", 1, "ingestedAt", "2026-03-29T00:00:00Z"))));
+
+    assertTrue(store.deleteByDocId("doc-1"));
+    assertFalse(store.deleteByDocId("doc-1"));
+    assertEquals(0, countChunks(dbPath, "doc-1"));
+    assertTrue(store.list().isEmpty());
+  }
+
+  @Test
+  void deleteBySourceReturnsZeroWhenSourceDoesNotExist() {
+    SqliteVectorStore store = newStore(tempDir.resolve("vector.db"));
+    assertEquals(0, store.deleteBySource("/tmp/missing.md"));
+  }
+
+  @Test
+  void addRejectsDocumentsWithoutDocId() {
+    SqliteVectorStore store = newStore(tempDir.resolve("vector.db"));
+
+    IllegalStateException error = assertThrows(IllegalStateException.class, () -> store.add(List.of(
+        new Document("doc-1#0", "Spring AI guide", Map.of("source", "/tmp/spring.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z")))));
+
+    assertTrue(error.getMessage().contains("docId"));
+  }
+
+  @Test
+  void storesNormalizedEmbeddings() {
+    Path dbPath = tempDir.resolve("vector.db");
+    SqliteVectorStore store = newStore(dbPath);
+    store.add(List.of(
+        new Document("doc-1#0", "Spring AI guide", Map.of("docId", "doc-1", "source", "/tmp/spring.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z"))));
+
+    float[] embedding = readStoredEmbedding(dbPath, "doc-1#0");
+    double norm = 0.0d;
+    for (float value : embedding) {
+      norm += value * value;
+    }
+
+    assertEquals(1.0d, Math.sqrt(norm), 0.0001d);
+  }
+
+  @Test
+  void constructorReportsCorruptedDatabaseClearly() {
+    IllegalStateException error = assertThrows(IllegalStateException.class,
+        () -> new SqliteVectorStore(new FailingDataSource("file is not a database"), new FakeEmbeddingModel(), new JsonMapper()));
+
+    assertTrue(error.getMessage().contains("SQLite ファイルが破損"));
+  }
+
+  @Test
+  void addReportsLockedDatabaseClearly() {
+    SqliteVectorStore store = new SqliteVectorStore(new FailingDataSource("database is locked", false), new FakeEmbeddingModel(), new JsonMapper());
+
+    IllegalStateException error = assertThrows(IllegalStateException.class, () -> store.add(List.of(
+        new Document("doc-1#0", "Spring AI guide", Map.of("docId", "doc-1", "source", "/tmp/spring.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z")))));
+
+    assertTrue(error.getMessage().contains("SQLite がロック"));
+  }
+
+  @Test
+  void similaritySearchRejectsEmbeddingDimensionMismatch() {
+    Path dbPath = tempDir.resolve("vector.db");
+    SqliteVectorStore writeStore = newStore(dbPath);
+    writeStore.add(List.of(
+        new Document("doc-1#0", "Spring AI guide", Map.of("docId", "doc-1", "source", "/tmp/spring.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z"))));
+
+    SqliteVectorStore readStore = new SqliteVectorStore(newDataSource(dbPath), new ShortEmbeddingModel(), new JsonMapper());
+
+    IllegalStateException error = assertThrows(IllegalStateException.class, () -> readStore.similaritySearch(SearchRequest.builder()
+        .query("spring ai")
+        .topK(3)
+        .similarityThresholdAll()
+        .build()));
+
+    assertTrue(error.getMessage().contains("embedding 次元"));
+  }
+
   private SqliteVectorStore newStore(Path dbPath) {
     return new SqliteVectorStore(newDataSource(dbPath), new FakeEmbeddingModel(), new JsonMapper());
   }
@@ -128,6 +216,33 @@ class SqliteVectorStoreTest {
     SQLiteDataSource dataSource = new SQLiteDataSource();
     dataSource.setUrl("jdbc:sqlite:" + dbPath);
     return dataSource;
+  }
+
+  private float[] readStoredEmbedding(Path dbPath, String chunkId) {
+    try (Connection connection = newDataSource(dbPath).getConnection();
+        var statement = connection.prepareStatement("SELECT embedding_json FROM document_chunks WHERE chunk_id = ?")) {
+      statement.setString(1, chunkId);
+      try (var rs = statement.executeQuery()) {
+        if (!rs.next()) {
+          throw new IllegalStateException("embedding not found: " + chunkId);
+        }
+        return new JsonMapper().readValue(rs.getString("embedding_json"), float[].class);
+      }
+    } catch (Exception e) {
+      throw new IllegalStateException("failed to read embedding", e);
+    }
+  }
+
+  private int countChunks(Path dbPath, String docId) {
+    try (Connection connection = newDataSource(dbPath).getConnection();
+        var statement = connection.prepareStatement("SELECT COUNT(*) FROM document_chunks WHERE doc_id = ?")) {
+      statement.setString(1, docId);
+      try (var rs = statement.executeQuery()) {
+        return rs.next() ? rs.getInt(1) : 0;
+      }
+    } catch (Exception e) {
+      throw new IllegalStateException("failed to count chunks", e);
+    }
   }
 
   private static class FakeEmbeddingModel implements EmbeddingModel {
@@ -173,6 +288,81 @@ class SqliteVectorStoreTest {
         throw new IllegalStateException("embedding failed");
       }
       return super.embed(document);
+    }
+  }
+
+  private static final class FailingDataSource implements DataSource {
+
+    private final String message;
+    private final boolean failOnInit;
+    private int calls;
+
+    private FailingDataSource(String message) {
+      this(message, true);
+    }
+
+    private FailingDataSource(String message, boolean failOnInit) {
+      this.message = message;
+      this.failOnInit = failOnInit;
+    }
+
+    @Override
+    public Connection getConnection() throws SQLException {
+      calls++;
+      if (!failOnInit && calls == 1) {
+        return DriverManager.getConnection("jdbc:sqlite::memory:");
+      }
+      throw new SQLException(message);
+    }
+
+    @Override
+    public Connection getConnection(String username, String password) throws SQLException {
+      return getConnection();
+    }
+
+    @Override
+    public <T> T unwrap(Class<T> iface) throws SQLException {
+      throw new SQLException("unwrap unsupported");
+    }
+
+    @Override
+    public boolean isWrapperFor(Class<?> iface) {
+      return false;
+    }
+
+    @Override
+    public java.io.PrintWriter getLogWriter() {
+      return null;
+    }
+
+    @Override
+    public void setLogWriter(java.io.PrintWriter out) {
+    }
+
+    @Override
+    public void setLoginTimeout(int seconds) {
+    }
+
+    @Override
+    public int getLoginTimeout() {
+      return 0;
+    }
+
+    @Override
+    public java.util.logging.Logger getParentLogger() {
+      return java.util.logging.Logger.getGlobal();
+    }
+  }
+
+  private static final class ShortEmbeddingModel extends FakeEmbeddingModel {
+    @Override
+    public float[] embed(Document document) {
+      return new float[] {1.0f, 0.0f};
+    }
+
+    @Override
+    public int dimensions() {
+      return 2;
     }
   }
 }

@@ -75,7 +75,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
         return entries;
       }
     } catch (SQLException e) {
-      throw new IllegalStateException("文書一覧の取得に失敗しました", e);
+      throw sqliteException("文書一覧の取得に失敗しました", e);
     }
   }
 
@@ -113,7 +113,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
 
   @Override
   public List<Document> similaritySearch(SearchRequest request) {
-    float[] queryEmbedding = embeddingModel.embed(new Document(request.getQuery()));
+    float[] queryEmbedding = normalizeEmbedding(embeddingModel.embed(new Document(request.getQuery())));
     FilterCriteria criteria = request.hasFilterExpression() ? parseFilter(request.getFilterExpression()) : FilterCriteria.empty();
     List<Object> params = new ArrayList<>();
     StringBuilder sql = new StringBuilder("""
@@ -153,7 +153,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
         }
       }
     } catch (SQLException e) {
-      throw new IllegalStateException("ベクトル文書の検索に失敗しました", e);
+      throw sqliteException("ベクトル文書の検索に失敗しました", e);
     }
 
     return scoredDocuments.stream()
@@ -182,11 +182,11 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
             """)) {
       for (Document document : documents) {
         Map<String, Object> metadata = new LinkedHashMap<>(document.getMetadata());
-        String docId = stringValue(metadata.get("docId"), document.getId());
-        String source = stringValue(metadata.get("source"), "");
+        String docId = requiredStringValue(metadata, "docId");
+        String source = requiredStringValue(metadata, "source");
         String ingestedAt = stringValue(metadata.get("ingestedAt"), null);
-        int chunkIndex = intValue(metadata.get("chunkIndex"));
-        float[] embedding = embeddingModel.embed(document);
+        int chunkIndex = requiredIntValue(metadata, "chunkIndex");
+        float[] embedding = normalizeEmbedding(embeddingModel.embed(document));
 
         documentRows.putIfAbsent(docId, new DocumentRow(docId, source, ingestedAt));
 
@@ -352,7 +352,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
       statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_document_chunks_doc_id ON document_chunks(doc_id)");
       statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_documents_source ON documents(source)");
     } catch (SQLException e) {
-      throw new IllegalStateException("vector store テーブルの初期化に失敗しました", e);
+      throw sqliteException("vector store テーブルの初期化に失敗しました", e);
     }
   }
 
@@ -385,8 +385,44 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
     return value == null ? fallback : value.toString();
   }
 
+  private String requiredStringValue(Map<String, Object> metadata, String key) {
+    Object value = metadata.get(key);
+    String stringValue = value == null ? "" : value.toString().trim();
+    if (stringValue.isEmpty()) {
+      throw new IllegalStateException("metadata に必須項目がありません: " + key);
+    }
+    return stringValue;
+  }
+
   private int intValue(Object value) {
     return value instanceof Number number ? number.intValue() : -1;
+  }
+
+  private int requiredIntValue(Map<String, Object> metadata, String key) {
+    Object value = metadata.get(key);
+    if (value instanceof Number number) {
+      return number.intValue();
+    }
+    throw new IllegalStateException("metadata に必須項目がありません: " + key);
+  }
+
+  private float[] normalizeEmbedding(float[] embedding) {
+    if (embedding == null || embedding.length == 0) {
+      throw new IllegalStateException("embedding が空です");
+    }
+    double norm = 0.0d;
+    for (float value : embedding) {
+      norm += value * value;
+    }
+    if (norm == 0.0d) {
+      return embedding.clone();
+    }
+    float[] normalized = new float[embedding.length];
+    double sqrt = Math.sqrt(norm);
+    for (int i = 0; i < embedding.length; i++) {
+      normalized[i] = (float) (embedding[i] / sqrt);
+    }
+    return normalized;
   }
 
   private double cosineSimilarity(float[] left, float[] right) {
@@ -413,13 +449,30 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
         return result;
       } catch (Exception e) {
         connection.rollback();
+        if (e instanceof IllegalStateException illegalStateException) {
+          throw illegalStateException;
+        }
         throw new IllegalStateException("SQLite 更新に失敗しました", e);
       } finally {
         connection.setAutoCommit(true);
       }
     } catch (SQLException e) {
-      throw new IllegalStateException("SQLite への接続に失敗しました", e);
+      throw sqliteException("SQLite への接続に失敗しました", e);
     }
+  }
+
+  private IllegalStateException sqliteException(String fallbackMessage, SQLException exception) {
+    String message = exception.getMessage();
+    if (message != null) {
+      String lower = message.toLowerCase();
+      if (lower.contains("locked")) {
+        return new IllegalStateException("SQLite がロックされています", exception);
+      }
+      if (lower.contains("not a database") || lower.contains("malformed")) {
+        return new IllegalStateException("SQLite ファイルが破損しているか、SQLite 形式ではありません", exception);
+      }
+    }
+    return new IllegalStateException(fallbackMessage, exception);
   }
 
   private record ScoredDocument(Document document, double score) {
