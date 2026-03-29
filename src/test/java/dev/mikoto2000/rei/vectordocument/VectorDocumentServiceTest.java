@@ -111,7 +111,7 @@ class VectorDocumentServiceTest {
     dataSource.setUrl("jdbc:sqlite:" + tempDir.resolve("memory.db"));
     SqliteVectorStore vectorStore = new SqliteVectorStore(dataSource, new FakeEmbeddingModel(), new tools.jackson.databind.json.JsonMapper());
     return new VectorDocumentService(
-        dataSource,
+        vectorStore,
         vectorStore,
         Clock.fixed(Instant.parse("2026-03-28T00:00:00Z"), ZoneOffset.UTC));
   }
