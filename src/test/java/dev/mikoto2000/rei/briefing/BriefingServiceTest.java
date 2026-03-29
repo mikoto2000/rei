@@ -15,7 +15,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.SimpleVectorStore;
+import org.springframework.ai.vectorstore.VectorStore;
 
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarEventSummary;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarService;
@@ -29,7 +29,7 @@ class BriefingServiceTest {
   void briefingForAggregatesEventsTasksAndDocuments() throws Exception {
     GoogleCalendarService calendarService = org.mockito.Mockito.mock(GoogleCalendarService.class);
     TaskService taskService = org.mockito.Mockito.mock(TaskService.class);
-    SimpleVectorStore vectorStore = org.mockito.Mockito.mock(SimpleVectorStore.class);
+    VectorStore vectorStore = org.mockito.Mockito.mock(VectorStore.class);
     BriefingNarrator briefingNarrator = org.mockito.Mockito.mock(BriefingNarrator.class);
     BriefingService service = new BriefingService(calendarService, taskService, vectorStore, briefingNarrator);
 
@@ -62,7 +62,7 @@ class BriefingServiceTest {
 
     when(calendarService.listEventsForDate(date)).thenReturn(List.of(event));
     when(taskService.listOpen()).thenReturn(List.of(overdueTask, todayTask));
-    when(vectorStore.doSimilaritySearch(any())).thenReturn(List.of(
+    when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class))).thenReturn(List.of(
         new Document("顧客向け提案資料の要点", java.util.Map.of("source", "docs/proposal.md"))));
     when(briefingNarrator.narrate(any())).thenReturn(new BriefingNarration(
         "午前は顧客定例、午後は提案書更新のフォローが中心です。",
@@ -90,7 +90,7 @@ class BriefingServiceTest {
   void briefingForUsesFallbackWhenNoEventsAndNoTasks() throws Exception {
     GoogleCalendarService calendarService = org.mockito.Mockito.mock(GoogleCalendarService.class);
     TaskService taskService = org.mockito.Mockito.mock(TaskService.class);
-    SimpleVectorStore vectorStore = org.mockito.Mockito.mock(SimpleVectorStore.class);
+    VectorStore vectorStore = org.mockito.Mockito.mock(VectorStore.class);
     BriefingNarrator briefingNarrator = org.mockito.Mockito.mock(BriefingNarrator.class);
     BriefingService service = new BriefingService(calendarService, taskService, vectorStore, briefingNarrator);
 

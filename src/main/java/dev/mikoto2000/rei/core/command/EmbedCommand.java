@@ -88,18 +88,14 @@ public class EmbedCommand implements Runnable {
 
     @Override
     public void run() {
-      try {
-        List<VectorDocumentSearchResult> results = vectorDocumentService.search(String.join(" ", queryParts), topK, threshold, source);
-        if (results.isEmpty()) {
-          System.out.println("一致する文書はありません");
-          return;
-        }
-        for (VectorDocumentSearchResult result : results) {
-          System.out.println(result.docId() + " | " + result.source() + " | chunk=" + result.chunkIndex()
-              + " | score=" + formatScore(result.score()) + " | " + result.snippet());
-        }
-      } catch (IOException e) {
-        throw new RuntimeException("文書検索に失敗しました", e);
+      List<VectorDocumentSearchResult> results = vectorDocumentService.search(String.join(" ", queryParts), topK, threshold, source);
+      if (results.isEmpty()) {
+        System.out.println("一致する文書はありません");
+        return;
+      }
+      for (VectorDocumentSearchResult result : results) {
+        System.out.println(result.docId() + " | " + result.source() + " | chunk=" + result.chunkIndex()
+            + " | score=" + formatScore(result.score()) + " | " + result.snippet());
       }
     }
   }
@@ -113,27 +109,23 @@ public class EmbedCommand implements Runnable {
 
     @Override
     public void run() {
-      try {
-        List<VectorDocumentEntry> entries = vectorDocumentService.list();
-        if (entries.isEmpty()) {
-          System.out.println("登録済み文書はありません");
-          return;
-        }
+      List<VectorDocumentEntry> entries = vectorDocumentService.list();
+      if (entries.isEmpty()) {
+        System.out.println("登録済み文書はありません");
+        return;
+      }
 
-        LinkedHashMap<String, SourceSummary> grouped = new LinkedHashMap<>();
-        for (VectorDocumentEntry entry : entries) {
-          grouped.compute(entry.source(), (source, current) -> current == null
-              ? new SourceSummary(1, entry.chunkCount(), entry.ingestedAt())
-              : current.add(entry.chunkCount(), entry.ingestedAt()));
-        }
+      LinkedHashMap<String, SourceSummary> grouped = new LinkedHashMap<>();
+      for (VectorDocumentEntry entry : entries) {
+        grouped.compute(entry.source(), (source, current) -> current == null
+            ? new SourceSummary(1, entry.chunkCount(), entry.ingestedAt())
+            : current.add(entry.chunkCount(), entry.ingestedAt()));
+      }
 
-        for (var groupedEntry : grouped.entrySet()) {
-          SourceSummary summary = groupedEntry.getValue();
-          System.out.println(groupedEntry.getKey() + " | docs=" + summary.docCount()
-              + " | chunks=" + summary.chunkCount() + " | latest=" + summary.latestIngestedAt());
-        }
-      } catch (IOException e) {
-        throw new RuntimeException("文書一覧の取得に失敗しました", e);
+      for (var groupedEntry : grouped.entrySet()) {
+        SourceSummary summary = groupedEntry.getValue();
+        System.out.println(groupedEntry.getKey() + " | docs=" + summary.docCount()
+            + " | chunks=" + summary.chunkCount() + " | latest=" + summary.latestIngestedAt());
       }
     }
   }
@@ -153,21 +145,17 @@ public class EmbedCommand implements Runnable {
 
     @Override
     public void run() {
-      try {
-        if (docId != null && !docId.isBlank() && (source == null || source.isBlank())) {
-          boolean deleted = vectorDocumentService.deleteByDocId(docId);
-          System.out.println(deleted ? "削除: " + docId : "削除対象が見つかりません: " + docId);
-          return;
-        }
-        if ((docId == null || docId.isBlank()) && source != null && !source.isBlank()) {
-          int deleted = vectorDocumentService.deleteBySource(source);
-          System.out.println("削除: " + deleted + " documents | " + source);
-          return;
-        }
-        throw new IllegalArgumentException("--doc-id か --source のどちらか一方を指定してください");
-      } catch (IOException e) {
-        throw new RuntimeException("文書削除に失敗しました", e);
+      if (docId != null && !docId.isBlank() && (source == null || source.isBlank())) {
+        boolean deleted = vectorDocumentService.deleteByDocId(docId);
+        System.out.println(deleted ? "削除: " + docId : "削除対象が見つかりません: " + docId);
+        return;
       }
+      if ((docId == null || docId.isBlank()) && source != null && !source.isBlank()) {
+        int deleted = vectorDocumentService.deleteBySource(source);
+        System.out.println("削除: " + deleted + " documents | " + source);
+        return;
+      }
+      throw new IllegalArgumentException("--doc-id か --source のどちらか一方を指定してください");
     }
   }
 

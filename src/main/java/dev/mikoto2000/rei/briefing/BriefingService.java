@@ -7,7 +7,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
-import org.springframework.ai.vectorstore.SimpleVectorStore;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarEventSummary;
@@ -22,7 +22,7 @@ public class BriefingService {
 
   private final GoogleCalendarService googleCalendarService;
   private final TaskService taskService;
-  private final SimpleVectorStore vectorStore;
+  private final VectorStore vectorStore;
   private final BriefingNarrator briefingNarrator;
 
   public DailyBriefing today() throws Exception {
@@ -72,7 +72,7 @@ public class BriefingService {
       return List.of();
     }
 
-    return vectorStore.doSimilaritySearch(SearchRequest.builder()
+    return vectorStore.similaritySearch(SearchRequest.builder()
             .query(query)
             .topK(3)
             .similarityThresholdAll()

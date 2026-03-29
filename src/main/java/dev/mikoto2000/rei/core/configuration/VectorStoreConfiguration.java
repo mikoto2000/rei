@@ -1,27 +1,20 @@
 package dev.mikoto2000.rei.core.configuration;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import javax.sql.DataSource;
 
 import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.ai.vectorstore.SimpleVectorStore;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import dev.mikoto2000.rei.vectorstore.SqliteVectorStore;
+import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
 public class VectorStoreConfiguration {
 
-    private static final Path STORE_FILE = VectorStorePaths.storeFile();
-
-    @Bean
-    public SimpleVectorStore simpleVectorStore(EmbeddingModel embeddingModel) throws IOException {
-        SimpleVectorStore store = SimpleVectorStore.builder(embeddingModel).build();
-
-        if (Files.exists(STORE_FILE)) {
-            store.load(STORE_FILE.toFile());
-        }
-
-        return store;
-    }
+  @Bean
+  public VectorStore vectorStore(DataSource dataSource, EmbeddingModel embeddingModel, JsonMapper objectMapper) {
+    return new SqliteVectorStore(dataSource, embeddingModel, objectMapper);
+  }
 }

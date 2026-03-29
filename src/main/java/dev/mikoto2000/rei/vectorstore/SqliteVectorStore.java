@@ -38,8 +38,8 @@ public class SqliteVectorStore implements VectorStore {
     try (Connection connection = dataSource.getConnection()) {
       connection.setAutoCommit(false);
       try (var documentStatement = connection.prepareStatement("""
-          INSERT OR REPLACE INTO documents (doc_id, source)
-          VALUES (?, ?)
+          INSERT OR REPLACE INTO documents (doc_id, source, ingested_at)
+          VALUES (?, ?, ?)
           """);
           var chunkStatement = connection.prepareStatement("""
               INSERT OR REPLACE INTO document_chunks
@@ -50,11 +50,13 @@ public class SqliteVectorStore implements VectorStore {
           Map<String, Object> metadata = new LinkedHashMap<>(document.getMetadata());
           String docId = stringValue(metadata.get("docId"), document.getId());
           String source = stringValue(metadata.get("source"), "");
+          String ingestedAt = stringValue(metadata.get("ingestedAt"), null);
           int chunkIndex = intValue(metadata.get("chunkIndex"));
           float[] embedding = embeddingModel.embed(document);
 
           documentStatement.setString(1, docId);
           documentStatement.setString(2, source);
+          documentStatement.setString(3, ingestedAt);
           documentStatement.addBatch();
 
           chunkStatement.setString(1, document.getId());
@@ -153,16 +155,19 @@ public class SqliteVectorStore implements VectorStore {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public <T> Optional<T> getNativeClient() {
     return Optional.of((T) dataSource);
   }
 
   private void initializeSchema() {
     try (Connection connection = dataSource.getConnection(); var statement = connection.createStatement()) {
+      statement.executeUpdate("PRAGMA foreign_keys = ON");
       statement.executeUpdate("""
           CREATE TABLE IF NOT EXISTS documents (
             doc_id TEXT PRIMARY KEY,
-            source TEXT NOT NULL
+            source TEXT NOT NULL,
+            ingested_at TEXT
           )
           """);
       statement.executeUpdate("""

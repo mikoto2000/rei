@@ -14,14 +14,14 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.sqlite.SQLiteDataSource;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.Embedding;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
-import org.springframework.ai.vectorstore.SimpleVectorStore;
 
-import tools.jackson.databind.json.JsonMapper;
+import dev.mikoto2000.rei.vectorstore.SqliteVectorStore;
 
 class VectorDocumentServiceTest {
 
@@ -107,13 +107,13 @@ class VectorDocumentServiceTest {
   }
 
   private VectorDocumentService newService() {
-    SimpleVectorStore vectorStore = SimpleVectorStore.builder(new FakeEmbeddingModel()).build();
+    SQLiteDataSource dataSource = new SQLiteDataSource();
+    dataSource.setUrl("jdbc:sqlite:" + tempDir.resolve("memory.db"));
+    SqliteVectorStore vectorStore = new SqliteVectorStore(dataSource, new FakeEmbeddingModel(), new tools.jackson.databind.json.JsonMapper());
     return new VectorDocumentService(
+        dataSource,
         vectorStore,
-        new JsonMapper(),
-        Clock.fixed(Instant.parse("2026-03-28T00:00:00Z"), ZoneOffset.UTC),
-        tempDir.resolve("vector-store.json"),
-        tempDir.resolve("vector-documents.json"));
+        Clock.fixed(Instant.parse("2026-03-28T00:00:00Z"), ZoneOffset.UTC));
   }
 
   private static final class FakeEmbeddingModel implements EmbeddingModel {
