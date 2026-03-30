@@ -2,14 +2,12 @@ package dev.mikoto2000.rei.core.datasource;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Locale;
 
 /**
- * Rei が利用する SQLite データベースの保存先パスを解決するユーティリティです。
+ * Rei が利用する作業用ファイルの保存先パスを解決するユーティリティです。
  * <p>
- * Windows では {@code LOCALAPPDATA}、Linux などの Unix 系 OS では
- * {@code XDG_CACHE_HOME} を優先し、未設定の場合はユーザーホーム配下の一般的な
- * キャッシュディレクトリへフォールバックします。
+ * すべての永続ファイルは、起動時のカレントディレクトリ配下にある
+ * {@code .rei} ディレクトリへ保存します。
  * </p>
  */
 public final class ReiPaths {
@@ -23,28 +21,16 @@ public final class ReiPaths {
    * @return SQLite データベースファイルの保存先パス
    */
   public static Path memoryDbPath() {
-    return memoryDbPath(
-        System.getProperty("os.name"),
-        System.getProperty("user.home"),
-        System.getenv("XDG_CACHE_HOME"),
-        System.getenv("LOCALAPPDATA"));
+    return memoryDbPath(workDirectory());
   }
 
   /**
-   * 指定された OS 名と環境変数相当の値から SQLite データベースの保存先を解決します。
-   * テストから利用しやすいように、実行環境への直接依存を切り出しています。
+   * 現在の実行環境に応じた履歴ファイルの保存先を返します。
    *
-   * @param osName OS 名
-   * @param userHome ユーザーホームディレクトリ
-   * @param xdgCacheHome XDG キャッシュディレクトリ
-   * @param localAppData Windows のローカルアプリケーションデータディレクトリ
-   * @return SQLite データベースファイルの保存先パス
+   * @return 履歴ファイルの保存先パス
    */
-  static Path memoryDbPath(String osName, String userHome, String xdgCacheHome, String localAppData) {
-    if (isWindows(osName)) {
-      return windowsMemoryDbPath(userHome, localAppData);
-    }
-    return linuxMemoryDbPath(userHome, xdgCacheHome);
+  public static Path historyFilePath() {
+    return historyFilePath(workDirectory());
   }
 
   /**
@@ -57,25 +43,15 @@ public final class ReiPaths {
     Files.createDirectories(filePath.getParent());
   }
 
-  private static boolean isWindows(String osName) {
-    return osName != null && osName.toLowerCase(Locale.ROOT).contains("win");
+  static Path workDirectory() {
+    return Path.of("").toAbsolutePath().normalize();
   }
 
-  private static Path linuxMemoryDbPath(String userHome, String xdgCacheHome) {
-    Path baseDir = isBlank(xdgCacheHome)
-        ? Path.of(userHome, ".cache")
-        : Path.of(xdgCacheHome);
-    return baseDir.resolve("rei").resolve("memory.db");
+  static Path memoryDbPath(Path workDirectory) {
+    return workDirectory.resolve(".rei").resolve("memory.db");
   }
 
-  private static Path windowsMemoryDbPath(String userHome, String localAppData) {
-    Path baseDir = isBlank(localAppData)
-        ? Path.of(userHome, "AppData", "Local")
-        : Path.of(localAppData);
-    return baseDir.resolve("rei").resolve("memory.db");
-  }
-
-  private static boolean isBlank(String value) {
-    return value == null || value.isBlank();
+  static Path historyFilePath(Path workDirectory) {
+    return workDirectory.resolve(".rei").resolve("history");
   }
 }

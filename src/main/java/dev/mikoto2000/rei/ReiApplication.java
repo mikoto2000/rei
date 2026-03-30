@@ -16,6 +16,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 import dev.mikoto2000.rei.core.command.RootCommand;
+import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine;
@@ -29,12 +30,7 @@ public class ReiApplication {
   private final CommandLine.IFactory factory;
   private final ModelHolderService currentModelHolder;
 
-  private final Path HISTORY_FILE = Path.of(
-      System.getProperty("user.home"),
-      ".cache",
-      "rei",
-      "history"
-      );
+  private final Path HISTORY_FILE = ReiPaths.historyFilePath();
 
   public  static void main(String[] args) throws IOException {
     var context = SpringApplication.run(ReiApplication.class, args);
@@ -45,6 +41,11 @@ public class ReiApplication {
 
   private void run(String[] args) throws IOException {
     var cmd = new picocli.CommandLine(rootCommand, factory);
+    try {
+      ReiPaths.ensureParentDirectoryExists(HISTORY_FILE);
+    } catch (Exception e) {
+      throw new IOException("履歴ファイル用ディレクトリの作成に失敗しました: " + HISTORY_FILE, e);
+    }
 
     var terminal = TerminalBuilder.builder()
       .system(true)

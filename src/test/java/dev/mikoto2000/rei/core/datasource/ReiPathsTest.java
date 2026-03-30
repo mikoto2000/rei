@@ -9,46 +9,24 @@ import org.junit.jupiter.api.Test;
 class ReiPathsTest {
 
   @Test
-  void memoryDbPathUsesXdgCacheHomeOnLinux() {
+  void memoryDbPathUsesWorkingDirectory() {
+    Path workDirectory = Path.of("/work/rei");
     Path expected = Path.of(
-        "/tmp/cache",
-        "rei",
+        "/work/rei",
+        ".rei",
         "memory.db");
 
-    assertEquals(expected, ReiPaths.memoryDbPath("Linux", "/home/alice", "/tmp/cache", null));
+    assertEquals(expected, ReiPaths.memoryDbPath(workDirectory));
   }
 
   @Test
-  void memoryDbPathFallsBackToUserHomeCacheOnLinux() {
+  void historyFilePathUsesWorkingDirectory() {
+    Path workDirectory = Path.of("/work/rei");
     Path expected = Path.of(
-        "/home/alice",
-        ".cache",
-        "rei",
-        "memory.db");
+        "/work/rei",
+        ".rei",
+        "history");
 
-    assertEquals(expected, ReiPaths.memoryDbPath("Linux", "/home/alice", null, null));
-  }
-
-  @Test
-  void memoryDbPathUsesLocalAppDataOnWindows() {
-    Path expected = Path.of(
-        "C:/Users/Alice/AppData/Local",
-        "rei",
-        "memory.db");
-
-    assertEquals(expected, ReiPaths.memoryDbPath("Windows 11", "C:/Users/Alice", null,
-        "C:/Users/Alice/AppData/Local"));
-  }
-
-  @Test
-  void memoryDbPathFallsBackToUserHomeAppDataOnWindows() {
-    Path expected = Path.of(
-        "C:/Users/Alice",
-        "AppData",
-        "Local",
-        "rei",
-        "memory.db");
-
-    assertEquals(expected, ReiPaths.memoryDbPath("Windows 11", "C:/Users/Alice", null, null));
+    assertEquals(expected, ReiPaths.historyFilePath(workDirectory));
   }
 }

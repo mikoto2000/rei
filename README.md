@@ -39,6 +39,8 @@ export REI_GOOGLE_CALENDAR_CREDENTIALS_PATH=$HOME/.config/rei/google-calendar-cr
 export REI_GOOGLE_CALENDAR_TIME_ZONE=Asia/Tokyo
 ```
 
+Google Calendar の資格情報と OAuth token は、デフォルトではホームディレクトリ配下の `.config/rei` に保存されます。必要に応じて `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` と `REI_GOOGLE_CALENDAR_TOKENS_DIR` で上書きできます。
+
 ### Web Search
 
 Web 検索を有効にする場合は Brave Search API を設定してください。
@@ -63,6 +65,8 @@ export REI_WEB_SEARCH_MAX_RESULTS=5
 ```bash
 ./mvnw spring-boot:run
 ```
+
+アプリが生成する履歴ファイルと SQLite のローカルデータは、起動したカレントディレクトリ配下の `.rei` に保存されます。
 
 対話:
 
@@ -194,7 +198,7 @@ export REI_WEB_SEARCH_MAX_RESULTS=5
 
 読み込んだ文書はベクトルストアに保存され、対話時の RAG に使われます。
 
-現状のベクトルストアは SQLite に保存されます。埋め込みベクトルは JSON 形式で保持しており、初期実装では実装容易性とデバッグ容易性を優先しています。サイズ効率と読み出し性能は BLOB に劣るため、件数が増える場合は将来的な見直し対象です。
+現状のベクトルストアは、起動したカレントディレクトリ配下の `.rei/memory.db` にある SQLite に保存されます。埋め込みベクトルは JSON 形式で保持しており、初期実装では実装容易性とデバッグ容易性を優先しています。サイズ効率と読み出し性能は BLOB に劣るため、件数が増える場合は将来的な見直し対象です。
 
 類似度計算は Java 側で cosine similarity を使って行う暫定実装で、保存時と検索時の両方でベクトルを正規化します。`source` / `docId` の絞り込みは SQL 側で先に適用されます。件数が増えると検索性能は低下するため、大規模データには向きません。
 
