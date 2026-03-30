@@ -7,7 +7,6 @@ import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvi
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,13 +23,11 @@ import dev.mikoto2000.rei.websearch.WebSearchTools;
 import lombok.RequiredArgsConstructor;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({GoogleCalendarProperties.class, WebSearchProperties.class})
+@EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
 
-  @Value("${rei.core.system-prompt}")
-  private String systemPrompt;
-
+  private final CoreProperties coreProperties;
   private final ChatModel chatModel;
   private final ChatMemory chatMemory;
   private final Tools tools;
@@ -45,7 +42,7 @@ public class AiConfiguration {
   @Bean
   public ChatClient chatClient() {
     return ChatClient.builder(chatModel)
-        .defaultSystem(systemPrompt)
+        .defaultSystem(coreProperties.systemPrompt())
         .defaultAdvisors(
             MessageChatMemoryAdvisor.builder(chatMemory)
                 .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
