@@ -46,10 +46,14 @@ public class AiConfiguration {
         .defaultAdvisors(
             MessageChatMemoryAdvisor.builder(chatMemory)
                 .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
-                .build(),
-            QuestionAnswerAdvisor.builder(vectorStore).build())
+                .build())
         .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, reminderTools, webSearchTools,
             vectorDocumentTools)
         .build();
+  }
+
+  @Bean
+  public QuestionAnswerAdvisor questionAnswerAdvisor() {
+    return QuestionAnswerAdvisor.builder(vectorStore).build();
   }
 }

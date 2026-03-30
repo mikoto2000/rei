@@ -6,11 +6,14 @@ import java.util.Set;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.vectordocument.VectorDocumentUsageService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -27,17 +30,23 @@ public class ChatCommand implements Runnable {
   private final ChatClient chatClient;
 
   private final ModelHolderService currentModelHolder;
+  private final QuestionAnswerAdvisor questionAnswerAdvisor;
+  private final VectorDocumentUsageService vectorDocumentUsageService;
 
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
   private String[] prompts;
 
   @Override
   public void run() {
-    ChatClientResponse chatClientResponse = chatClient
+    ChatClientRequestSpec requestSpec = chatClient
       .prompt(new Prompt(String.join(" ", prompts),
-            OpenAiChatOptions.builder()
-              .model(currentModelHolder.get())
-              .build()))
+          OpenAiChatOptions.builder()
+            .model(currentModelHolder.get())
+            .build()));
+    if (vectorDocumentUsageService.isEnabled()) {
+      requestSpec.advisors(questionAnswerAdvisor);
+    }
+    ChatClientResponse chatClientResponse = requestSpec
       .call()
       .chatClientResponse();
 
@@ -65,4 +74,3 @@ public class ChatCommand implements Runnable {
     }
   }
 }
-

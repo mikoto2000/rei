@@ -15,6 +15,7 @@ import org.mockito.Mockito;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentEntry;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
+import dev.mikoto2000.rei.vectordocument.VectorDocumentUsageService;
 import picocli.CommandLine;
 
 class EmbedCommandTest {
@@ -22,11 +23,12 @@ class EmbedCommandTest {
   @Test
   void positionalArgumentsDelegateToAddAlias() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
+    VectorDocumentUsageService usageService = Mockito.mock(VectorDocumentUsageService.class);
     when(service.add(List.of("docs/a.txt", "docs/b.md"))).thenReturn(List.of(
         new VectorDocumentEntry("doc-1", "/tmp/docs/a.txt", 1, "2026-03-28T00:00:00Z"),
         new VectorDocumentEntry("doc-2", "/tmp/docs/b.md", 2, "2026-03-28T00:00:00Z")));
 
-    int exitCode = newCommand(service).execute("docs/a.txt", "docs/b.md");
+    int exitCode = newCommand(service, usageService).execute("docs/a.txt", "docs/b.md");
 
     assertEquals(0, exitCode);
     verify(service).add(List.of("docs/a.txt", "docs/b.md"));
@@ -35,6 +37,7 @@ class EmbedCommandTest {
   @Test
   void addCommandDelegatesToService() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
+    VectorDocumentUsageService usageService = Mockito.mock(VectorDocumentUsageService.class);
     when(service.add(List.of("docs/spec.md"))).thenReturn(List.of(
         new VectorDocumentEntry("doc-1", "/tmp/docs/spec.md", 3, "2026-03-28T00:00:00Z")));
 
@@ -42,7 +45,7 @@ class EmbedCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      int exitCode = newCommand(service).execute("add", "docs/spec.md");
+      int exitCode = newCommand(service, usageService).execute("add", "docs/spec.md");
       assertEquals(0, exitCode);
     } finally {
       System.setOut(originalOut);
@@ -55,6 +58,7 @@ class EmbedCommandTest {
   @Test
   void searchCommandPrintsHits() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
+    VectorDocumentUsageService usageService = Mockito.mock(VectorDocumentUsageService.class);
     when(service.search("spring ai", 2, 0.4d, "/tmp/docs/spec.md")).thenReturn(List.of(
         new VectorDocumentSearchResult("doc-1", "/tmp/docs/spec.md", 0, 0.91d, "Spring AI guide")));
 
@@ -62,7 +66,7 @@ class EmbedCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      int exitCode = newCommand(service).execute("search", "--top-k", "2", "--threshold", "0.4", "--source", "/tmp/docs/spec.md", "spring ai");
+      int exitCode = newCommand(service, usageService).execute("search", "--top-k", "2", "--threshold", "0.4", "--source", "/tmp/docs/spec.md", "spring ai");
       assertEquals(0, exitCode);
     } finally {
       System.setOut(originalOut);
@@ -77,6 +81,7 @@ class EmbedCommandTest {
   @Test
   void listCommandPrintsDocumentsGroupedBySource() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
+    VectorDocumentUsageService usageService = Mockito.mock(VectorDocumentUsageService.class);
     when(service.list()).thenReturn(List.of(
         new VectorDocumentEntry("doc-1", "/tmp/docs/spec.md", 3, "2026-03-28T00:00:00Z"),
         new VectorDocumentEntry("doc-2", "/tmp/docs/spec.md", 2, "2026-03-29T00:00:00Z"),
@@ -86,7 +91,7 @@ class EmbedCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      int exitCode = newCommand(service).execute("list");
+      int exitCode = newCommand(service, usageService).execute("list");
       assertEquals(0, exitCode);
     } finally {
       System.setOut(originalOut);
@@ -101,6 +106,7 @@ class EmbedCommandTest {
   @Test
   void deleteCommandSupportsDocIdAndSource() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
+    VectorDocumentUsageService usageService = Mockito.mock(VectorDocumentUsageService.class);
     when(service.deleteByDocId("doc-1")).thenReturn(true);
     when(service.deleteBySource("/tmp/docs/spec.md")).thenReturn(1);
 
@@ -108,8 +114,8 @@ class EmbedCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      assertEquals(0, newCommand(service).execute("delete", "--doc-id", "doc-1"));
-      assertEquals(0, newCommand(service).execute("delete", "--source", "/tmp/docs/spec.md"));
+      assertEquals(0, newCommand(service, usageService).execute("delete", "--doc-id", "doc-1"));
+      assertEquals(0, newCommand(service, usageService).execute("delete", "--source", "/tmp/docs/spec.md"));
     } finally {
       System.setOut(originalOut);
     }
@@ -119,7 +125,31 @@ class EmbedCommandTest {
     assertTrue(out.toString().contains("削除"));
   }
 
-  private CommandLine newCommand(VectorDocumentService service) {
+  @Test
+  void useCommandPrintsAndUpdatesUsageState() throws Exception {
+    VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
+    VectorDocumentUsageService usageService = Mockito.mock(VectorDocumentUsageService.class);
+    when(usageService.isEnabled()).thenReturn(true, false);
+    when(usageService.setEnabled(false)).thenReturn(false);
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      assertEquals(0, newCommand(service, usageService).execute("use"));
+      assertEquals(0, newCommand(service, usageService).execute("use", "off"));
+      assertEquals(0, newCommand(service, usageService).execute("use"));
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    verify(usageService).setEnabled(false);
+    String output = out.toString();
+    assertTrue(output.contains("on"));
+    assertTrue(output.contains("off"));
+  }
+
+  private CommandLine newCommand(VectorDocumentService service, VectorDocumentUsageService usageService) {
     return new CommandLine(new EmbedCommand(service), new CommandLine.IFactory() {
       @Override
       public <K> K create(Class<K> cls) throws Exception {
@@ -137,6 +167,9 @@ class EmbedCommandTest {
         }
         if (cls == EmbedCommand.DeleteCommand.class) {
           return cls.cast(new EmbedCommand.DeleteCommand(service));
+        }
+        if (cls == EmbedCommand.UseCommand.class) {
+          return cls.cast(new EmbedCommand.UseCommand(usageService));
         }
         return CommandLine.defaultFactory().create(cls);
       }
