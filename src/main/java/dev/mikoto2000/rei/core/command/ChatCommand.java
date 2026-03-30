@@ -43,8 +43,11 @@ public class ChatCommand implements Runnable {
 
     String thinking = chatClientResponse.chatResponse().getResult().getMetadata().get("thinking");
     if (thinking != null && !thinking.isBlank()) {
+      IO.println("=== thinking ===");
       IO.println(thinking);
     }
+
+    IO.println("=== answer ===");
     String answer = chatClientResponse.chatResponse().getResult().getOutput().getText();
     IO.println(answer);
 
