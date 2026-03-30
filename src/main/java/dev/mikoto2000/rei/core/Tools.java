@@ -82,51 +82,70 @@ public class Tools {
 
   @Tool(name = "findFile", description = "ファイルを検索します（.gitignore を尊重）")
   List<String> findFile(String fileName) throws IOException, InterruptedException {
+    return findFile(fileName, Paths.get("."));
+  }
+
+  List<String> findFile(String fileName, java.nio.file.Path workingDirectory) throws IOException, InterruptedException {
     IO.println(String.format("%s のファイルを探すよ（.gitignore を尊重）", fileName));
 
-    // git ls-files でファイルを検索
-    String command = "git";
-    ProcessBuilder pb = new ProcessBuilder(command, "ls-files", "-z", "--full-name");
-    pb.redirectErrorStream(true);
-
-    Process process = pb.start();
-    IO.println("git ls-files コマンドを実行したよ");
-
-    // 出力をパースしてファイル名を抽出
-    String output;
-    try (BufferedReader reader = new BufferedReader(
-          new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-      output = reader.lines().collect(Collectors.joining(System.lineSeparator()));
-          }
-    int exitCode = process.waitFor();
-
-    if (exitCode != 0) {
+    List<String> gitListedFiles = gitLsFiles(List.of(), workingDirectory);
+    if (gitListedFiles == null) {
       IO.println("git ls-files コマンドが失敗しました");
       // git が利用できない場合のフォールバック
-      return Files.find(Paths.get("."), 20, (path, basicFileAttribute) -> 
+      return Files.find(workingDirectory, 20, (path, basicFileAttribute) ->
           path.toFile().getAbsolutePath().endsWith(fileName))
         .map(p -> p.toFile().getAbsolutePath())
         .toList();
     }
 
-    return Arrays.stream(output.split("\0"))
+    return gitListedFiles.stream()
       .filter(s -> s.endsWith(fileName))
       .collect(Collectors.toList());
   }
 
   @Tool(name = "listFile", description = "ファイル一覧を取得します（.gitignore を尊重）")
   List<String> listFile(String baseDir) throws IOException, InterruptedException {
+    return listFile(baseDir, Paths.get("."));
+  }
+
+  List<String> listFile(String baseDir, java.nio.file.Path workingDirectory) throws IOException, InterruptedException {
     IO.println(String.format("%s 以下のファイルを一覧にするよ（.gitignore を尊重）", baseDir));
 
-    // git ls-files でディレクトリを指定してファイル一覧を取得
-    String command = "git";
-    ProcessBuilder pb = new ProcessBuilder(command, "ls-files", "-z", "--full-name", baseDir);
+    List<String> gitListedFiles = gitLsFiles(List.of(baseDir), workingDirectory);
+    if (gitListedFiles == null) {
+      IO.println("git ls-files コマンドが失敗しました");
+      // git が利用できない場合のフォールバック
+      return Files.walk(workingDirectory.resolve(baseDir), 20)
+        .map(p -> p.toFile().getAbsolutePath())
+        .toList();
+    }
+
+    return gitListedFiles.stream()
+      .filter(s -> s.startsWith(baseDir))
+      .collect(Collectors.toList());
+  }
+
+  List<String> gitLsFiles(List<String> pathSpecs, java.nio.file.Path workingDirectory) throws IOException, InterruptedException {
+    List<String> commandLine = new ArrayList<>(List.of(
+        "git",
+        "ls-files",
+        "-z",
+        "--cached",
+        "--others",
+        "--exclude-standard",
+        "--full-name"));
+    if (pathSpecs != null && !pathSpecs.isEmpty()) {
+      commandLine.add("--");
+      commandLine.addAll(pathSpecs);
+    }
+
+    ProcessBuilder pb = new ProcessBuilder(commandLine);
+    pb.directory(workingDirectory.toFile());
     pb.redirectErrorStream(true);
 
     Process process = pb.start();
     IO.println("git ls-files コマンドを実行したよ");
 
-    // 出力をパースしてファイル名を抽出
     String output;
     try (BufferedReader reader = new BufferedReader(
           new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
@@ -135,16 +154,12 @@ public class Tools {
     int exitCode = process.waitFor();
 
     if (exitCode != 0) {
-      IO.println("git ls-files コマンドが失敗しました");
-      // git が利用できない場合のフォールバック
-      return Files.walk(Paths.get(baseDir), 20)
-        .map(p -> p.toFile().getAbsolutePath())
-        .toList();
+      return null;
     }
 
     return Arrays.stream(output.split("\0"))
-      .filter(s -> s.startsWith(baseDir))
-      .collect(Collectors.toList());
+      .filter(s -> !s.isEmpty())
+      .toList();
   }
 
   @Tool(name = "readTextFile", description = "テキストファイルをすべて読み込む。ファイルが存在しない場合は findFile を利用してファイルを探す。")
