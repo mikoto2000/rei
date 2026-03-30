@@ -5,11 +5,18 @@ package dev.mikoto2000.rei;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.List;
 
+import org.jline.reader.Candidate;
+import org.jline.reader.Completer;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.ParsedLine;
+import org.jline.reader.Parser;
+import org.jline.reader.SyntaxError;
 import org.jline.reader.UserInterruptException;
+import org.jline.reader.impl.DefaultParser;
 import org.jline.terminal.TerminalBuilder;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -20,6 +27,7 @@ import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine;
+import picocli.shell.jline3.PicocliJLineCompleter;
 
 @EnableScheduling
 @RequiredArgsConstructor
@@ -41,6 +49,9 @@ public class ReiApplication {
 
   private void run(String[] args) throws IOException {
     var cmd = new picocli.CommandLine(rootCommand, factory);
+    Completer completer = new SlashCommandCompleter(
+        new PicocliJLineCompleter(cmd.getCommandSpec()),
+        cmd.getSubcommands().keySet().stream().sorted().toList());
     try {
       ReiPaths.ensureParentDirectoryExists(HISTORY_FILE);
     } catch (Exception e) {
@@ -53,6 +64,7 @@ public class ReiApplication {
 
     LineReader reader = LineReaderBuilder.builder()
       .terminal(terminal)
+      .completer(completer)
       .variable(LineReader.HISTORY_FILE, HISTORY_FILE)
       .variable(LineReader.HISTORY_SIZE, 1000)
       .variable(LineReader.HISTORY_FILE_SIZE, 1000)
@@ -107,5 +119,63 @@ public class ReiApplication {
 
   private String[] splitCommandLine(String line) {
     return line.split("\\s+");
+  }
+
+  private static final class SlashCommandCompleter implements Completer {
+
+    private static final List<String> BUILTIN_COMMANDS = List.of("/exit", "/quit", "/help", "/version");
+
+    private final Completer delegate;
+    private final List<String> rootCommands;
+    private final Parser parser = new DefaultParser();
+
+    private SlashCommandCompleter(Completer delegate, List<String> rootCommands) {
+      this.delegate = delegate;
+      this.rootCommands = rootCommands;
+    }
+
+    @Override
+    public void complete(LineReader reader, ParsedLine line, List<Candidate> candidates) {
+      String rawLine = line.line();
+      if (rawLine == null || !rawLine.startsWith("/")) {
+        return;
+      }
+
+      if (isCompletingRootCommand(rawLine)) {
+        completeRootCommand(rawLine, candidates);
+        return;
+      }
+
+      try {
+        delegate.complete(reader, stripSlash(line), candidates);
+      } catch (SyntaxError e) {
+        return;
+      }
+    }
+
+    private boolean isCompletingRootCommand(String rawLine) {
+      return !rawLine.substring(1).contains(" ");
+    }
+
+    private void completeRootCommand(String current, List<Candidate> candidates) {
+      for (String builtinCommand : BUILTIN_COMMANDS) {
+        if (builtinCommand.startsWith(current)) {
+          candidates.add(new Candidate(builtinCommand));
+        }
+      }
+      for (String rootCommand : rootCommands) {
+        String slashCommand = "/" + rootCommand;
+        if (slashCommand.startsWith(current)) {
+          candidates.add(new Candidate(slashCommand));
+        }
+      }
+    }
+
+    private ParsedLine stripSlash(ParsedLine line) throws SyntaxError {
+      String rawLine = line.line();
+      String strippedLine = rawLine.length() <= 1 ? "" : rawLine.substring(1);
+      int strippedCursor = Math.max(0, line.cursor() - 1);
+      return parser.parse(strippedLine, strippedCursor, Parser.ParseContext.COMPLETE);
+    }
   }
 }
