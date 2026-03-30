@@ -42,3 +42,5 @@ rei:
     api-key: ${REI_WEB_SEARCH_API_KEY:}
     timeout-seconds: ${REI_WEB_SEARCH_TIMEOUT_SECONDS:10}
     max-results: ${REI_WEB_SEARCH_MAX_RESULTS:5}
+  vector-document:
+    chunk-size: ${REI_VECTOR_DOCUMENT_CHUNK_SIZE:512}
