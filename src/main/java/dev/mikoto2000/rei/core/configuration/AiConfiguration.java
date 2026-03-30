@@ -23,7 +23,7 @@ import dev.mikoto2000.rei.websearch.WebSearchProperties;
 import dev.mikoto2000.rei.websearch.WebSearchTools;
 import lombok.RequiredArgsConstructor;
 
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({GoogleCalendarProperties.class, WebSearchProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
