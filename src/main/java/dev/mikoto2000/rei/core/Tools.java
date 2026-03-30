@@ -16,7 +16,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.springframework.ai.document.Document;
+import org.springframework.ai.reader.tika.TikaDocumentReader;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -148,6 +151,16 @@ public class Tools {
   List<String> readTextFile(String pathStr) throws IOException {
     IO.println(String.format("%s のテキストファイルを読むよ", pathStr));
     return Files.readAllLines(Paths.get(pathStr));
+  }
+
+  @Tool(name = "readPdfFile", description = "PDF ファイルから本文テキストを抽出して読み込む。")
+  String readPdfFile(String pathStr) throws IOException {
+    IO.println(String.format("%s の PDF ファイルを読むよ", pathStr));
+    TikaDocumentReader documentReader = new TikaDocumentReader(new FileSystemResource(pathStr));
+    return documentReader.get().stream()
+      .map(Document::getText)
+      .filter(text -> text != null && !text.isBlank())
+      .collect(Collectors.joining(System.lineSeparator()));
   }
 
   /**
