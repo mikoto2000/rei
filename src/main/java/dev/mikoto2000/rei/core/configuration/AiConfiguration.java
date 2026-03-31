@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.core.configuration;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -44,7 +44,7 @@ public class AiConfiguration {
     return ChatClient.builder(chatModel)
         .defaultSystem(coreProperties.systemPrompt())
         .defaultAdvisors(
-            MessageChatMemoryAdvisor.builder(chatMemory)
+            PromptChatMemoryAdvisor.builder(chatMemory)
                 .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
                 .build())
         .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, reminderTools, webSearchTools,
