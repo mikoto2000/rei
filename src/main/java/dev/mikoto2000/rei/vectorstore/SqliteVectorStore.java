@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.vectorstore;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -117,7 +119,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
     FilterCriteria criteria = request.hasFilterExpression() ? parseFilter(request.getFilterExpression()) : FilterCriteria.empty();
     List<Object> params = new ArrayList<>();
     StringBuilder sql = new StringBuilder("""
-        SELECT c.chunk_id, c.chunk_index, c.text, c.metadata_json, c.embedding_json,
+        SELECT c.chunk_id, c.chunk_index, c.text, c.metadata_json, c.embedding_blob,
                d.doc_id, d.source, d.ingested_at
         FROM document_chunks c
         JOIN documents d ON d.doc_id = c.doc_id
@@ -131,7 +133,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
       bindParams(statement, params);
       try (var rs = statement.executeQuery()) {
         while (rs.next()) {
-          float[] embedding = readEmbedding(rs.getString("embedding_json"));
+          float[] embedding = readEmbedding(rs.getBytes("embedding_blob"));
           if (embedding.length != queryEmbedding.length) {
             throw new IllegalStateException("embedding 次元が一致しません");
           }
@@ -177,7 +179,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
         """);
         var chunkStatement = connection.prepareStatement("""
             INSERT INTO document_chunks
-              (chunk_id, doc_id, chunk_index, text, metadata_json, embedding_json, embedding_dim)
+              (chunk_id, doc_id, chunk_index, text, metadata_json, embedding_blob, embedding_dim)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """)) {
       for (Document document : documents) {
@@ -195,7 +197,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
         chunkStatement.setInt(3, chunkIndex);
         chunkStatement.setString(4, document.getText());
         chunkStatement.setString(5, writeJson(metadata));
-        chunkStatement.setString(6, writeJson(embedding));
+        chunkStatement.setBytes(6, writeEmbedding(embedding));
         chunkStatement.setInt(7, embedding.length);
         chunkStatement.addBatch();
       }
@@ -337,22 +339,98 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
             ingested_at TEXT
           )
           """);
-      statement.executeUpdate("""
-          CREATE TABLE IF NOT EXISTS document_chunks (
-            chunk_id TEXT PRIMARY KEY,
-            doc_id TEXT NOT NULL,
-            chunk_index INTEGER NOT NULL,
-            text TEXT NOT NULL,
-            metadata_json TEXT NOT NULL,
-            embedding_json TEXT NOT NULL,
-            embedding_dim INTEGER NOT NULL,
-            FOREIGN KEY (doc_id) REFERENCES documents(doc_id) ON DELETE CASCADE
-          )
-          """);
+      if (!tableExists(connection, "document_chunks")) {
+        createDocumentChunksTable(statement);
+      } else if (hasColumn(connection, "document_chunks", "embedding_json")
+          && !hasColumn(connection, "document_chunks", "embedding_blob")) {
+        migrateLegacyEmbeddingsToBlob(connection);
+      }
       statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_document_chunks_doc_id ON document_chunks(doc_id)");
       statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_documents_source ON documents(source)");
     } catch (SQLException e) {
       throw sqliteException("vector store テーブルの初期化に失敗しました", e);
+    }
+  }
+
+  private void createDocumentChunksTable(java.sql.Statement statement) throws SQLException {
+    statement.executeUpdate("""
+        CREATE TABLE document_chunks (
+          chunk_id TEXT PRIMARY KEY,
+          doc_id TEXT NOT NULL,
+          chunk_index INTEGER NOT NULL,
+          text TEXT NOT NULL,
+          metadata_json TEXT NOT NULL,
+          embedding_blob BLOB NOT NULL,
+          embedding_dim INTEGER NOT NULL,
+          FOREIGN KEY (doc_id) REFERENCES documents(doc_id) ON DELETE CASCADE
+        )
+        """);
+  }
+
+  private boolean tableExists(Connection connection, String tableName) throws SQLException {
+    try (var statement = connection.prepareStatement("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")) {
+      statement.setString(1, tableName);
+      try (var rs = statement.executeQuery()) {
+        return rs.next();
+      }
+    }
+  }
+
+  private boolean hasColumn(Connection connection, String tableName, String columnName) throws SQLException {
+    try (var statement = connection.prepareStatement("PRAGMA table_info(" + tableName + ")");
+        var rs = statement.executeQuery()) {
+      while (rs.next()) {
+        if (columnName.equals(rs.getString("name"))) {
+          return true;
+        }
+      }
+      return false;
+    }
+  }
+
+  private void migrateLegacyEmbeddingsToBlob(Connection connection) throws SQLException {
+    boolean autoCommit = connection.getAutoCommit();
+    connection.setAutoCommit(false);
+    try (var statement = connection.createStatement()) {
+      statement.executeUpdate("ALTER TABLE document_chunks RENAME TO document_chunks_legacy");
+      createDocumentChunksTable(statement);
+      copyLegacyChunks(connection);
+      statement.executeUpdate("DROP TABLE document_chunks_legacy");
+      connection.commit();
+    } catch (Exception e) {
+      connection.rollback();
+      if (e instanceof SQLException sqlException) {
+        throw sqlException;
+      }
+      throw new SQLException("legacy embedding migration failed", e);
+    } finally {
+      connection.setAutoCommit(autoCommit);
+    }
+  }
+
+  private void copyLegacyChunks(Connection connection) throws SQLException {
+    try (var select = connection.prepareStatement("""
+        SELECT chunk_id, doc_id, chunk_index, text, metadata_json, embedding_json, embedding_dim
+        FROM document_chunks_legacy
+        ORDER BY chunk_id ASC
+        """);
+        var insert = connection.prepareStatement("""
+            INSERT INTO document_chunks
+              (chunk_id, doc_id, chunk_index, text, metadata_json, embedding_blob, embedding_dim)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """);
+        var rs = select.executeQuery()) {
+      while (rs.next()) {
+        insert.setString(1, rs.getString("chunk_id"));
+        insert.setString(2, rs.getString("doc_id"));
+        insert.setInt(3, rs.getInt("chunk_index"));
+        insert.setString(4, rs.getString("text"));
+        insert.setString(5, rs.getString("metadata_json"));
+        insert.setBytes(6, writeEmbedding(readLegacyEmbedding(rs.getString("embedding_json"))));
+        insert.setInt(7, rs.getInt("embedding_dim"));
+        insert.addBatch();
+      }
+      insert.executeBatch();
     }
   }
 
@@ -373,12 +451,32 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
     }
   }
 
-  private float[] readEmbedding(String value) {
+  private float[] readLegacyEmbedding(String value) {
     try {
       return objectMapper.readValue(value, float[].class);
     } catch (Exception e) {
       throw new IllegalStateException("embedding の読み込みに失敗しました", e);
     }
+  }
+
+  private byte[] writeEmbedding(float[] embedding) {
+    ByteBuffer buffer = ByteBuffer.allocate(embedding.length * Float.BYTES).order(ByteOrder.LITTLE_ENDIAN);
+    for (float value : embedding) {
+      buffer.putFloat(value);
+    }
+    return buffer.array();
+  }
+
+  private float[] readEmbedding(byte[] value) {
+    if (value == null || value.length == 0 || value.length % Float.BYTES != 0) {
+      throw new IllegalStateException("embedding の読み込みに失敗しました");
+    }
+    ByteBuffer buffer = ByteBuffer.wrap(value).order(ByteOrder.LITTLE_ENDIAN);
+    float[] embedding = new float[value.length / Float.BYTES];
+    for (int i = 0; i < embedding.length; i++) {
+      embedding[i] = buffer.getFloat();
+    }
+    return embedding;
   }
 
   private String stringValue(Object value, String fallback) {

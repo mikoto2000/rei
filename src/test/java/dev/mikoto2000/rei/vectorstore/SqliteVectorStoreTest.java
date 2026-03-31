@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -173,6 +175,31 @@ class SqliteVectorStoreTest {
   }
 
   @Test
+  void migratesLegacyJsonEmbeddingsToBlob() throws Exception {
+    Path dbPath = tempDir.resolve("vector.db");
+    seedLegacySchema(dbPath, "doc-1#0", "doc-1", "/tmp/spring.md", "2026-03-29T00:00:00Z", """
+        {"docId":"doc-1","source":"/tmp/spring.md","chunkIndex":0,"ingestedAt":"2026-03-29T00:00:00Z"}
+        """, """
+        [0.70710677,0.70710677,0.0,0.0]
+        """);
+
+    SqliteVectorStore store = newStore(dbPath);
+
+    float[] embedding = readStoredEmbedding(dbPath, "doc-1#0");
+    assertEquals(4, embedding.length);
+    assertFalse(hasColumn(dbPath, "document_chunks", "embedding_json"));
+    assertTrue(hasColumn(dbPath, "document_chunks", "embedding_blob"));
+
+    List<Document> results = store.similaritySearch(SearchRequest.builder()
+        .query("spring ai")
+        .topK(3)
+        .similarityThresholdAll()
+        .build());
+    assertEquals(1, results.size());
+    assertEquals("doc-1#0", results.getFirst().getId());
+  }
+
+  @Test
   void constructorReportsCorruptedDatabaseClearly() {
     IllegalStateException error = assertThrows(IllegalStateException.class,
         () -> new SqliteVectorStore(new FailingDataSource("file is not a database"), new FakeEmbeddingModel(), new JsonMapper()));
@@ -220,16 +247,86 @@ class SqliteVectorStoreTest {
 
   private float[] readStoredEmbedding(Path dbPath, String chunkId) {
     try (Connection connection = newDataSource(dbPath).getConnection();
-        var statement = connection.prepareStatement("SELECT embedding_json FROM document_chunks WHERE chunk_id = ?")) {
+        var statement = connection.prepareStatement("SELECT embedding_blob FROM document_chunks WHERE chunk_id = ?")) {
       statement.setString(1, chunkId);
       try (var rs = statement.executeQuery()) {
         if (!rs.next()) {
           throw new IllegalStateException("embedding not found: " + chunkId);
         }
-        return new JsonMapper().readValue(rs.getString("embedding_json"), float[].class);
+        return decodeEmbedding(rs.getBytes("embedding_blob"));
       }
     } catch (Exception e) {
       throw new IllegalStateException("failed to read embedding", e);
+    }
+  }
+
+  private float[] decodeEmbedding(byte[] value) {
+    ByteBuffer buffer = ByteBuffer.wrap(value).order(ByteOrder.LITTLE_ENDIAN);
+    float[] embedding = new float[value.length / Float.BYTES];
+    for (int i = 0; i < embedding.length; i++) {
+      embedding[i] = buffer.getFloat();
+    }
+    return embedding;
+  }
+
+  private boolean hasColumn(Path dbPath, String tableName, String columnName) {
+    try (Connection connection = newDataSource(dbPath).getConnection();
+        var statement = connection.prepareStatement("PRAGMA table_info(" + tableName + ")")) {
+      try (var rs = statement.executeQuery()) {
+        while (rs.next()) {
+          if (columnName.equals(rs.getString("name"))) {
+            return true;
+          }
+        }
+        return false;
+      }
+    } catch (Exception e) {
+      throw new IllegalStateException("failed to inspect table schema", e);
+    }
+  }
+
+  private void seedLegacySchema(Path dbPath, String chunkId, String docId, String source, String ingestedAt, String metadataJson,
+      String embeddingJson) throws Exception {
+    try (Connection connection = newDataSource(dbPath).getConnection(); var statement = connection.createStatement()) {
+      statement.executeUpdate("""
+          CREATE TABLE documents (
+            doc_id TEXT PRIMARY KEY,
+            source TEXT NOT NULL,
+            ingested_at TEXT
+          )
+          """);
+      statement.executeUpdate("""
+          CREATE TABLE document_chunks (
+            chunk_id TEXT PRIMARY KEY,
+            doc_id TEXT NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            metadata_json TEXT NOT NULL,
+            embedding_json TEXT NOT NULL,
+            embedding_dim INTEGER NOT NULL,
+            FOREIGN KEY (doc_id) REFERENCES documents(doc_id) ON DELETE CASCADE
+          )
+          """);
+      try (var documentStatement = connection.prepareStatement("INSERT INTO documents (doc_id, source, ingested_at) VALUES (?, ?, ?)");
+          var chunkStatement = connection.prepareStatement("""
+              INSERT INTO document_chunks
+                (chunk_id, doc_id, chunk_index, text, metadata_json, embedding_json, embedding_dim)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+              """)) {
+        documentStatement.setString(1, docId);
+        documentStatement.setString(2, source);
+        documentStatement.setString(3, ingestedAt);
+        documentStatement.executeUpdate();
+
+        chunkStatement.setString(1, chunkId);
+        chunkStatement.setString(2, docId);
+        chunkStatement.setInt(3, 0);
+        chunkStatement.setString(4, "Spring AI guide");
+        chunkStatement.setString(5, metadataJson.trim());
+        chunkStatement.setString(6, embeddingJson.trim());
+        chunkStatement.setInt(7, 4);
+        chunkStatement.executeUpdate();
+      }
     }
   }
 
