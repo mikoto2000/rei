@@ -19,7 +19,7 @@ spring:
       embedding:
         options:
           # model: ${REI_OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
-          model: ${REI_OPENAI_EMBEDDING_MODEL:mxbai-embed-large:latest}
+          model: ${REI_OPENAI_EMBEDDING_MODEL:qwen3-embedding:8b}
     model:
       chat: openai
       embedding: openai
