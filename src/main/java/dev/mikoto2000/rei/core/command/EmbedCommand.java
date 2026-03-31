@@ -5,14 +5,12 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.vectordocument.VectorDocumentEntry;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
-import dev.mikoto2000.rei.vectordocument.VectorDocumentUsageService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -27,8 +25,7 @@ import picocli.CommandLine.Parameters;
       EmbedCommand.AddCommand.class,
       EmbedCommand.SearchCommand.class,
       EmbedCommand.ListCommand.class,
-      EmbedCommand.DeleteCommand.class,
-      EmbedCommand.UseCommand.class
+      EmbedCommand.DeleteCommand.class
     })
 public class EmbedCommand implements Runnable {
 
@@ -159,33 +156,6 @@ public class EmbedCommand implements Runnable {
         return;
       }
       throw new IllegalArgumentException("--doc-id か --source のどちらか一方を指定してください");
-    }
-  }
-
-  @Component
-  @RequiredArgsConstructor
-  @Command(name = "use", description = "chat で埋め込み文書を参照するかを確認・切り替えます")
-  public static class UseCommand implements Runnable {
-
-    private final VectorDocumentUsageService vectorDocumentUsageService;
-
-    @Parameters(arity = "0..1", paramLabel = "STATE", description = "on または off")
-    Optional<String> state;
-
-    @Override
-    public void run() {
-      if (state.isEmpty()) {
-        System.out.println(vectorDocumentUsageService.isEnabled() ? "on" : "off");
-        return;
-      }
-
-      String normalized = state.get().trim().toLowerCase(Locale.ROOT);
-      if (!normalized.equals("on") && !normalized.equals("off")) {
-        throw new IllegalArgumentException("STATE は on または off を指定してください");
-      }
-
-      boolean enabled = vectorDocumentUsageService.setEnabled(normalized.equals("on"));
-      System.out.println(enabled ? "on" : "off");
     }
   }
 

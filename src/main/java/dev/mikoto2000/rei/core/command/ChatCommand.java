@@ -1,19 +1,12 @@
 package dev.mikoto2000.rei.core.command;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
-import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.document.Document;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
-import dev.mikoto2000.rei.vectordocument.VectorDocumentUsageService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -30,8 +23,6 @@ public class ChatCommand implements Runnable {
   private final ChatClient chatClient;
 
   private final ModelHolderService currentModelHolder;
-  private final QuestionAnswerAdvisor questionAnswerAdvisor;
-  private final VectorDocumentUsageService vectorDocumentUsageService;
 
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
   private String[] prompts;
@@ -43,9 +34,6 @@ public class ChatCommand implements Runnable {
           OpenAiChatOptions.builder()
             .model(currentModelHolder.get())
             .build()));
-    if (vectorDocumentUsageService.isEnabled()) {
-      requestSpec.advisors(questionAnswerAdvisor);
-    }
     ChatClientResponse chatClientResponse = requestSpec
       .call()
       .chatClientResponse();
@@ -59,18 +47,5 @@ public class ChatCommand implements Runnable {
     IO.println("=== answer ===");
     String answer = chatClientResponse.chatResponse().getResult().getOutput().getText();
     IO.println(answer);
-
-    IO.println("=== advisor context ===");
-    List<Document> documents = (List<Document>)chatClientResponse.context().getOrDefault("qa_retrieved_documents", List.of());
-
-    Set<String> documentNames = new HashSet<>();
-    for (Document document : documents) {
-      String documentName = document.getMetadata().get("source").toString();
-      documentNames.add(documentName);
-    }
-
-    for (String documentName : documentNames) {
-      IO.println("- " + documentName);
-    }
   }
 }

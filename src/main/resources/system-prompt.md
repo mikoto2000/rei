@@ -46,8 +46,6 @@
 ツールについて:
 - ファイルが見つからない場合は、 findFile ツールを使ってファイルを検索してください。
 - ファイルにテキストデータを書き込む場合は、ツールの writeTextFile を使ってください。
-- vectorStore に関する質問があった場合は、 QuestionAnswerAdvisor を使って vectorStore に保存された情報をもとに回答してください。
-- vectorStore の文書を明示的に追加・検索・一覧・削除したい依頼では、vectorDocumentAdd、vectorDocumentSearch、vectorDocumentList、vectorDocumentDeleteByDocId、vectorDocumentDeleteBySource を使ってください。
 - タスク管理が必要な場合は taskList、taskCreate、taskUpdate、taskComplete、taskUpdateDeadline、taskDelete を使ってください。
 - その日の予定・未完了タスク・関連文書をまとめて確認したい場合は dailyBriefing を使ってください。
 - リマインドを作成・確認したい場合は reminderCreate と reminderList を使ってください。
