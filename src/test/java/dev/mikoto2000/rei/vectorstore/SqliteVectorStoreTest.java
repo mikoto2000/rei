@@ -210,6 +210,48 @@ class SqliteVectorStoreTest {
     assertTrue(error.getMessage().contains("embedding 次元"));
   }
 
+  @Test
+  void similaritySearchPrefiltersDocumentsByLexicalMatches() {
+    SqliteVectorStore store = new SqliteVectorStore(
+        newDataSource(tempDir.resolve("vector.db")),
+        new ConstantEmbeddingModel(),
+        new JsonMapper());
+    store.add(List.of(
+        new Document("doc-1#0", "alpha beta", Map.of("docId", "doc-1", "source", "/tmp/a.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z")),
+        new Document("doc-2#0", "alpha note", Map.of("docId", "doc-2", "source", "/tmp/b.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z")),
+        new Document("doc-3#0", "weather memo", Map.of("docId", "doc-3", "source", "/tmp/c.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z"))));
+
+    List<Document> results = store.similaritySearch(SearchRequest.builder()
+        .query("alpha beta")
+        .topK(5)
+        .similarityThresholdAll()
+        .build());
+
+    assertEquals(2, results.size());
+    assertEquals(List.of("doc-1#0", "doc-2#0"), results.stream().map(Document::getId).toList());
+  }
+
+  @Test
+  void similaritySearchMixesLexicalScoreIntoRanking() {
+    SqliteVectorStore store = new SqliteVectorStore(
+        newDataSource(tempDir.resolve("vector.db")),
+        new ConstantEmbeddingModel(),
+        new JsonMapper());
+    store.add(List.of(
+        new Document("doc-1#0", "alpha beta", Map.of("docId", "doc-1", "source", "/tmp/a.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z")),
+        new Document("doc-2#0", "alpha note", Map.of("docId", "doc-2", "source", "/tmp/b.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z"))));
+
+    List<Document> results = store.similaritySearch(SearchRequest.builder()
+        .query("alpha beta")
+        .topK(2)
+        .similarityThresholdAll()
+        .build());
+
+    assertEquals(2, results.size());
+    assertEquals("doc-1#0", results.getFirst().getId());
+    assertTrue(results.getFirst().getScore() > results.get(1).getScore());
+  }
+
   private SqliteVectorStore newStore(Path dbPath) {
     return new SqliteVectorStore(newDataSource(dbPath), new FakeEmbeddingModel(), new JsonMapper());
   }
@@ -374,6 +416,13 @@ class SqliteVectorStoreTest {
     @Override
     public int dimensions() {
       return 2;
+    }
+  }
+
+  private static final class ConstantEmbeddingModel extends FakeEmbeddingModel {
+    @Override
+    public float[] embed(Document document) {
+      return new float[] {1.0f, 0.0f, 0.0f, 0.0f};
     }
   }
 }

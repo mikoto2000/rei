@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Locale;
 
 import javax.sql.DataSource;
 
@@ -117,6 +118,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
   public List<Document> similaritySearch(SearchRequest request) {
     float[] queryEmbedding = normalizeEmbedding(embeddingModel.embed(new Document(request.getQuery())));
     FilterCriteria criteria = request.hasFilterExpression() ? parseFilter(request.getFilterExpression()) : FilterCriteria.empty();
+    List<String> queryTerms = lexicalQueryTerms(request.getQuery());
     List<Object> params = new ArrayList<>();
     StringBuilder sql = new StringBuilder("""
         SELECT c.chunk_id, c.chunk_index, c.text, c.metadata_json, c.embedding_blob,
@@ -124,12 +126,13 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
         FROM document_chunks c
         JOIN documents d ON d.doc_id = c.doc_id
         """);
-    appendWhereClause(sql, params, criteria);
-    sql.append(" ORDER BY c.chunk_id ASC");
+    appendWhereClause(sql, params, criteria, queryTerms);
+    appendOrderAndLimitClause(sql, params, queryTerms, request.getTopK());
 
     List<ScoredDocument> scoredDocuments = new ArrayList<>();
     try (Connection connection = dataSource.getConnection();
-        var statement = connection.prepareStatement(sql.toString())) {
+        var statement = connection.prepareStatement(sql.toString());
+        var adjacentStatement = connection.prepareStatement(adjacentLexicalScoreSql(queryTerms))) {
       bindParams(statement, params);
       try (var rs = statement.executeQuery()) {
         while (rs.next()) {
@@ -137,7 +140,12 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
           if (embedding.length != queryEmbedding.length) {
             throw new IllegalStateException("embedding 次元が一致しません");
           }
-          double score = cosineSimilarity(queryEmbedding, embedding);
+          double vectorScore = cosineSimilarity(queryEmbedding, embedding);
+          double lexicalScore = lexicalScore(queryTerms, rs.getString("text"));
+          if (lexicalScore == 0.0d && !queryTerms.isEmpty()) {
+            lexicalScore = adjacentLexicalScore(adjacentStatement, queryTerms, rs.getString("doc_id"), rs.getInt("chunk_index"));
+          }
+          double score = hybridScore(vectorScore, lexicalScore, queryTerms);
           if (score > 0.0d && score >= request.getSimilarityThreshold()) {
             Map<String, Object> metadata = readMetadata(rs.getString("metadata_json"));
             metadata.put("docId", rs.getString("doc_id"));
@@ -308,7 +316,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
     };
   }
 
-  private void appendWhereClause(StringBuilder sql, List<Object> params, FilterCriteria criteria) {
+  private void appendWhereClause(StringBuilder sql, List<Object> params, FilterCriteria criteria, List<String> queryTerms) {
     List<String> conditions = new ArrayList<>();
     if (criteria.source() != null) {
       conditions.add("d.source = ?");
@@ -318,9 +326,56 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
       conditions.add("d.doc_id = ?");
       params.add(criteria.docId());
     }
+    if (!queryTerms.isEmpty()) {
+      String lexicalClause = lexicalClause("c.text", queryTerms, params);
+      String adjacentLexicalClause = lexicalClause("cx.text", queryTerms, params);
+      conditions.add("(" + lexicalClause + " OR EXISTS ("
+          + "SELECT 1 FROM document_chunks cx "
+          + "WHERE cx.doc_id = c.doc_id "
+          + "AND ABS(cx.chunk_index - c.chunk_index) <= 1 "
+          + "AND (" + adjacentLexicalClause + ")))");
+    }
     if (!conditions.isEmpty()) {
       sql.append(" WHERE ").append(String.join(" AND ", conditions));
     }
+  }
+
+  private void appendOrderAndLimitClause(StringBuilder sql, List<Object> params, List<String> queryTerms, int topK) {
+    if (!queryTerms.isEmpty()) {
+      List<String> lexicalMatches = new ArrayList<>();
+      for (String queryTerm : queryTerms) {
+        lexicalMatches.add("CASE WHEN LOWER(c.text) LIKE ? THEN 1 ELSE 0 END");
+        params.add("%" + queryTerm + "%");
+      }
+      sql.append(" ORDER BY (")
+          .append(String.join(" + ", lexicalMatches))
+          .append(") DESC, c.chunk_id ASC");
+      sql.append(" LIMIT ?");
+      params.add(Math.max(topK * 20, 20));
+      return;
+    }
+    sql.append(" ORDER BY c.chunk_id ASC");
+  }
+
+  private String lexicalClause(String textExpression, List<String> queryTerms, List<Object> params) {
+    List<String> lexicalConditions = new ArrayList<>();
+    for (String queryTerm : queryTerms) {
+      lexicalConditions.add("LOWER(" + textExpression + ") LIKE ?");
+      params.add("%" + queryTerm + "%");
+    }
+    return String.join(" OR ", lexicalConditions);
+  }
+
+  private String adjacentLexicalScoreSql(List<String> queryTerms) {
+    if (queryTerms.isEmpty()) {
+      return "SELECT 0";
+    }
+    List<String> lexicalMatches = new ArrayList<>();
+    for (int i = 0; i < queryTerms.size(); i++) {
+      lexicalMatches.add("CASE WHEN LOWER(text) LIKE ? THEN 1 ELSE 0 END");
+    }
+    return "SELECT MAX((" + String.join(" + ", lexicalMatches) + ") * 1.0 / " + queryTerms.size() + ") "
+        + "FROM document_chunks WHERE doc_id = ? AND ABS(chunk_index - ?) <= 1";
   }
 
   private void bindParams(java.sql.PreparedStatement statement, List<Object> params) throws SQLException {
@@ -452,6 +507,57 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
       return 0.0d;
     }
     return dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
+  }
+
+  private List<String> lexicalQueryTerms(String query) {
+    if (query == null || query.isBlank()) {
+      return List.of();
+    }
+    return java.util.Arrays.stream(query.toLowerCase(Locale.ROOT).split("[^\\p{IsAlphabetic}\\p{IsDigit}]+"))
+        .map(String::trim)
+        .filter(term -> term.length() >= 2)
+        .distinct()
+        .toList();
+  }
+
+  private double lexicalScore(List<String> queryTerms, String text) {
+    if (queryTerms.isEmpty() || text == null || text.isBlank()) {
+      return 0.0d;
+    }
+    String lowerText = text.toLowerCase(Locale.ROOT);
+    long matches = queryTerms.stream()
+        .filter(lowerText::contains)
+        .count();
+    return (double) matches / (double) queryTerms.size();
+  }
+
+  private double adjacentLexicalScore(
+      java.sql.PreparedStatement statement,
+      List<String> queryTerms,
+      String docId,
+      int chunkIndex) throws SQLException {
+    if (queryTerms.isEmpty()) {
+      return 0.0d;
+    }
+    int parameterIndex = 1;
+    for (String queryTerm : queryTerms) {
+      statement.setString(parameterIndex++, "%" + queryTerm + "%");
+    }
+    statement.setString(parameterIndex++, docId);
+    statement.setInt(parameterIndex, chunkIndex);
+    try (var rs = statement.executeQuery()) {
+      if (!rs.next()) {
+        return 0.0d;
+      }
+      return rs.getDouble(1) * 0.25d;
+    }
+  }
+
+  private double hybridScore(double vectorScore, double lexicalScore, List<String> queryTerms) {
+    if (queryTerms.isEmpty()) {
+      return vectorScore;
+    }
+    return (vectorScore * 0.8d) + (lexicalScore * 0.2d);
   }
 
   private <T> T withTransaction(SqliteWork<T> work) {

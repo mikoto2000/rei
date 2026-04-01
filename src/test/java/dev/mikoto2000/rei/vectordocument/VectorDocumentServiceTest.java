@@ -13,6 +13,11 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
@@ -108,6 +113,22 @@ class VectorDocumentServiceTest {
   }
 
   @Test
+  void searchRanksDocumentHigherWhenEvidenceIsDistributedAcrossChunks() {
+    TestFixture fixture = newFixture();
+    fixture.vectorStore().add(List.of(
+        new Document("doc-1#0", "Spring AI guide", Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 0, "ingestedAt", "2026-03-28T00:00:00Z")),
+        new Document("doc-1#1", "General appendix", Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 1, "ingestedAt", "2026-03-28T00:00:00Z")),
+        new Document("doc-2#0", "Spring memo", Map.of("docId", "doc-2", "source", "/tmp/doc-2.md", "chunkIndex", 0, "ingestedAt", "2026-03-28T00:00:00Z")),
+        new Document("doc-2#1", "AI memo", Map.of("docId", "doc-2", "source", "/tmp/doc-2.md", "chunkIndex", 1, "ingestedAt", "2026-03-28T00:00:00Z"))));
+
+    List<VectorDocumentSearchResult> results = fixture.service().search("spring ai", 2, null, null);
+
+    assertEquals(2, results.size());
+    assertEquals("doc-2", results.getFirst().docId());
+    assertTrue(results.getFirst().score() > results.get(1).score());
+  }
+
+  @Test
   void searchBuildsSnippetAroundQueryInsteadOfDocumentPrefix() {
     TestFixture fixture = newFixture();
     fixture.vectorStore().add(List.of(
@@ -121,8 +142,41 @@ class VectorDocumentServiceTest {
 
     assertEquals(1, results.size());
     assertTrue(results.getFirst().snippet().contains("Spring AI tools"));
-    assertTrue(results.getFirst().snippet().startsWith("..."));
     assertFalse(results.getFirst().snippet().startsWith("Preface text"));
+  }
+
+  @Test
+  void searchBuildsSnippetFromBestMatchingSentence() {
+    TestFixture fixture = newFixture();
+    fixture.vectorStore().add(List.of(
+        new Document(
+            "doc-1#0",
+            "Intro sentence. Spring AI tools help build assistants. Closing sentence.",
+            Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 0, "ingestedAt", "2026-03-28T00:00:00Z"))));
+
+    List<VectorDocumentSearchResult> results = fixture.service().search("spring ai tools", 1, null, null);
+
+    assertEquals(1, results.size());
+    assertEquals("Spring AI tools help build assistants.", results.getFirst().snippet());
+  }
+
+  @Test
+  void searchMergesAdjacentChunksBeforeBuildingSnippet() {
+    TestFixture fixture = newFixture();
+    fixture.vectorStore().add(List.of(
+        new Document(
+            "doc-1#0",
+            "Spring AI tools help",
+            Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 0, "ingestedAt", "2026-03-28T00:00:00Z")),
+        new Document(
+            "doc-1#1",
+            "build assistants effectively for teams.",
+            Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 1, "ingestedAt", "2026-03-28T00:00:00Z"))));
+
+    List<VectorDocumentSearchResult> results = fixture.service().search("build assistants", 1, null, null);
+
+    assertEquals(1, results.size());
+    assertTrue(results.getFirst().snippet().contains("Spring AI tools help build assistants effectively"));
   }
 
   @Test
@@ -167,6 +221,52 @@ class VectorDocumentServiceTest {
     assertTrue(withOverlap.chunkCount() > withoutOverlap.chunkCount());
   }
 
+  @Test
+  void addStoresMetadataForTitleFileTypeAndMarkdownHeading() throws IOException {
+    Path markdown = tempDir.resolve("architecture-notes.md");
+    Files.writeString(markdown, """
+        # Architecture
+
+        Spring AI tools help build assistants.
+        """);
+
+    TestFixture fixture = newFixture();
+    fixture.service().add(List.of(markdown.toString()));
+
+    Document stored = fixture.vectorStore().similaritySearch(org.springframework.ai.vectorstore.SearchRequest.builder()
+        .query("spring ai")
+        .topK(1)
+        .similarityThresholdAll()
+        .build()).getFirst();
+
+    assertEquals("architecture-notes", stored.getMetadata().get("title"));
+    assertEquals("md", stored.getMetadata().get("fileType"));
+    assertEquals("Architecture", stored.getMetadata().get("sectionHeading"));
+  }
+
+  @Test
+  void addUsesDifferentChunkingStrategiesPerFileType() throws IOException {
+    String repeated = "spring tools ai weather ".repeat(120);
+    Path text = tempDir.resolve("notes.txt");
+    Files.writeString(text, repeated);
+
+    Path markdown = tempDir.resolve("notes.md");
+    Files.writeString(markdown, "# Notes\n\n" + repeated);
+
+    Path pdf = tempDir.resolve("notes.pdf");
+    writePdf(pdf, repeated);
+
+    VectorDocumentService service = newServiceWithChunkSettings(40, 10);
+    List<VectorDocumentEntry> entries = service.add(List.of(text.toString(), markdown.toString(), pdf.toString()));
+
+    int textChunks = findEntry(entries, "notes.txt").chunkCount();
+    int markdownChunks = findEntry(entries, "notes.md").chunkCount();
+    int pdfChunks = findEntry(entries, "notes.pdf").chunkCount();
+
+    assertTrue(markdownChunks > textChunks);
+    assertTrue(pdfChunks < textChunks);
+  }
+
   private VectorDocumentService newService() {
     return newFixture().service();
   }
@@ -200,6 +300,30 @@ class VectorDocumentServiceTest {
   }
 
   private record TestFixture(VectorDocumentService service, SqliteVectorStore vectorStore) {
+  }
+
+  private VectorDocumentEntry findEntry(List<VectorDocumentEntry> entries, String suffix) {
+    return entries.stream()
+        .filter(entry -> entry.source().endsWith(suffix))
+        .findFirst()
+        .orElseThrow();
+  }
+
+  private void writePdf(Path pdf, String text) throws IOException {
+    try (PDDocument document = new PDDocument()) {
+      PDPage page = new PDPage();
+      document.addPage(page);
+
+      try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+        contentStream.beginText();
+        contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
+        contentStream.newLineAtOffset(72, 720);
+        contentStream.showText(text.substring(0, Math.min(text.length(), 2000)));
+        contentStream.endText();
+      }
+
+      document.save(Files.newOutputStream(pdf));
+    }
   }
 
   private static final class FakeEmbeddingModel implements EmbeddingModel {
