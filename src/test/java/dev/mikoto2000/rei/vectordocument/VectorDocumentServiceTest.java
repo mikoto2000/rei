@@ -11,6 +11,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -92,6 +93,39 @@ class VectorDocumentServiceTest {
   }
 
   @Test
+  void searchReturnsDistinctDocumentsEvenWhenTopChunksAreFromSameDocument() {
+    TestFixture fixture = newFixture();
+    fixture.vectorStore().add(List.of(
+        new Document("doc-1#0", "Spring AI guide", Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 0, "ingestedAt", "2026-03-28T00:00:00Z")),
+        new Document("doc-1#1", "Spring AI appendix", Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 1, "ingestedAt", "2026-03-28T00:00:00Z")),
+        new Document("doc-2#0", "Spring tools memo", Map.of("docId", "doc-2", "source", "/tmp/doc-2.md", "chunkIndex", 0, "ingestedAt", "2026-03-28T00:00:00Z"))));
+
+    List<VectorDocumentSearchResult> results = fixture.service().search("spring", 2, null, null);
+
+    assertEquals(2, results.size());
+    assertEquals("doc-1", results.get(0).docId());
+    assertEquals("doc-2", results.get(1).docId());
+  }
+
+  @Test
+  void searchBuildsSnippetAroundQueryInsteadOfDocumentPrefix() {
+    TestFixture fixture = newFixture();
+    fixture.vectorStore().add(List.of(
+        new Document(
+            "doc-1#0",
+            "Preface text that is unrelated and keeps going before the important section begins. "
+                + "Spring AI tools help build assistants with retrieval and search.",
+            Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 0, "ingestedAt", "2026-03-28T00:00:00Z"))));
+
+    List<VectorDocumentSearchResult> results = fixture.service().search("spring ai", 1, null, null);
+
+    assertEquals(1, results.size());
+    assertTrue(results.getFirst().snippet().contains("Spring AI tools"));
+    assertTrue(results.getFirst().snippet().startsWith("..."));
+    assertFalse(results.getFirst().snippet().startsWith("Preface text"));
+  }
+
+  @Test
   void deleteBySourceRemovesMatchingDocument() throws IOException {
     Path springDoc = Files.writeString(tempDir.resolve("spring-ai.txt"), "Spring AI guide for building AI assistants.");
     Path weatherDoc = Files.writeString(tempDir.resolve("weather.txt"), "Weather forecast memo for Ibaraki tomorrow.");
@@ -106,14 +140,43 @@ class VectorDocumentServiceTest {
     assertTrue(service.list().getFirst().source().endsWith("spring-ai.txt"));
   }
 
+  @Test
+  void addUsesConfiguredChunkSize() throws IOException {
+    Path document = tempDir.resolve("long.txt");
+    Files.writeString(document, "spring ".repeat(80));
+
+    VectorDocumentService service = newServiceWithChunkSize(20);
+
+    VectorDocumentEntry added = service.add(List.of(document.toString())).getFirst();
+
+    assertTrue(added.chunkCount() > 1);
+  }
+
   private VectorDocumentService newService() {
+    return newFixture().service();
+  }
+
+  private VectorDocumentService newServiceWithChunkSize(int chunkSize) {
+    return newFixture(chunkSize).service();
+  }
+
+  private TestFixture newFixture() {
+    return newFixture(512);
+  }
+
+  private TestFixture newFixture(int chunkSize) {
     SQLiteDataSource dataSource = new SQLiteDataSource();
     dataSource.setUrl("jdbc:sqlite:" + tempDir.resolve("memory.db"));
     SqliteVectorStore vectorStore = new SqliteVectorStore(dataSource, new FakeEmbeddingModel(), new tools.jackson.databind.json.JsonMapper());
-    return new VectorDocumentService(
+    VectorDocumentService service = new VectorDocumentService(
         vectorStore,
         vectorStore,
-        Clock.fixed(Instant.parse("2026-03-28T00:00:00Z"), ZoneOffset.UTC));
+        Clock.fixed(Instant.parse("2026-03-28T00:00:00Z"), ZoneOffset.UTC),
+        new VectorDocumentProperties(chunkSize));
+    return new TestFixture(service, vectorStore);
+  }
+
+  private record TestFixture(VectorDocumentService service, SqliteVectorStore vectorStore) {
   }
 
   private static final class FakeEmbeddingModel implements EmbeddingModel {

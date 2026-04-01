@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,16 +27,25 @@ public class VectorDocumentService {
   private final VectorStore vectorStore;
   private final VectorDocumentRepository vectorDocumentRepository;
   private final Clock clock;
+  private final VectorDocumentProperties properties;
 
   @Autowired
-  public VectorDocumentService(VectorStore vectorStore, VectorDocumentRepository vectorDocumentRepository) {
-    this(vectorStore, vectorDocumentRepository, Clock.systemUTC());
+  public VectorDocumentService(
+      VectorStore vectorStore,
+      VectorDocumentRepository vectorDocumentRepository,
+      VectorDocumentProperties properties) {
+    this(vectorStore, vectorDocumentRepository, Clock.systemUTC(), properties);
   }
 
-  VectorDocumentService(VectorStore vectorStore, VectorDocumentRepository vectorDocumentRepository, Clock clock) {
+  VectorDocumentService(
+      VectorStore vectorStore,
+      VectorDocumentRepository vectorDocumentRepository,
+      Clock clock,
+      VectorDocumentProperties properties) {
     this.vectorStore = vectorStore;
     this.vectorDocumentRepository = vectorDocumentRepository;
     this.clock = clock;
+    this.properties = properties;
   }
 
   public List<VectorDocumentEntry> add(List<String> documents) throws IOException {
@@ -69,9 +79,10 @@ public class VectorDocumentService {
   }
 
   public List<VectorDocumentSearchResult> search(String query, Integer topK, Double similarityThreshold, String source) {
+    int requestedTopK = topK == null ? 5 : topK;
     SearchRequest.Builder builder = SearchRequest.builder()
         .query(query)
-        .topK(topK == null ? 5 : topK);
+        .topK(expandedTopK(requestedTopK));
     if (similarityThreshold == null) {
       builder.similarityThresholdAll();
     } else {
@@ -82,7 +93,15 @@ public class VectorDocumentService {
     }
 
     return vectorStore.similaritySearch(builder.build()).stream()
-        .map(this::toSearchResult)
+        .collect(java.util.stream.Collectors.toMap(
+            document -> asString(document.getMetadata().get("docId")),
+            document -> document,
+            this::pickHigherScoredDocument,
+            LinkedHashMap::new))
+        .values().stream()
+        .sorted(Comparator.comparing(Document::getScore).reversed().thenComparing(Document::getId))
+        .limit(requestedTopK)
+        .map(document -> toSearchResult(query, document))
         .toList();
   }
 
@@ -97,12 +116,12 @@ public class VectorDocumentService {
   private List<Document> readAndSplit(String documentPath) {
     TikaDocumentReader documentReader = new TikaDocumentReader(new FileSystemResource(documentPath));
     TextSplitter textSplitter = TokenTextSplitter.builder()
-        .withChunkSize(500)
+        .withChunkSize(properties.chunkSize())
         .build();
     return textSplitter.apply(documentReader.get());
   }
 
-  private VectorDocumentSearchResult toSearchResult(Document document) {
+  private VectorDocumentSearchResult toSearchResult(String query, Document document) {
     Map<String, Object> metadata = document.getMetadata();
     Object chunkIndex = metadata.get("chunkIndex");
     return new VectorDocumentSearchResult(
@@ -110,12 +129,60 @@ public class VectorDocumentService {
         asString(metadata.get("source")),
         chunkIndex instanceof Number number ? number.intValue() : -1,
         document.getScore(),
-        snippet(document.getText()));
+        snippet(query, document.getText()));
   }
 
-  private String snippet(String text) {
+  private int expandedTopK(int requestedTopK) {
+    return Math.max(requestedTopK, requestedTopK * 4);
+  }
+
+  private Document pickHigherScoredDocument(Document left, Document right) {
+    double leftScore = left.getScore() == null ? Double.NEGATIVE_INFINITY : left.getScore();
+    double rightScore = right.getScore() == null ? Double.NEGATIVE_INFINITY : right.getScore();
+    if (leftScore != rightScore) {
+      return leftScore >= rightScore ? left : right;
+    }
+    return left.getId().compareTo(right.getId()) <= 0 ? left : right;
+  }
+
+  private String snippet(String query, String text) {
     String normalized = text == null ? "" : text.replaceAll("\\s+", " ").trim();
-    return normalized.length() > 120 ? normalized.substring(0, 120) + "..." : normalized;
+    if (normalized.isEmpty()) {
+      return normalized;
+    }
+    int maxLength = 120;
+    if (normalized.length() <= maxLength) {
+      return normalized;
+    }
+
+    int start = snippetStart(query, normalized, maxLength);
+    int end = Math.min(normalized.length(), start + maxLength);
+
+    String prefix = start > 0 ? "..." : "";
+    String suffix = end < normalized.length() ? "..." : "";
+    return prefix + normalized.substring(start, end).trim() + suffix;
+  }
+
+  private int snippetStart(String query, String normalizedText, int maxLength) {
+    String normalizedQuery = query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase();
+    if (!normalizedQuery.isEmpty()) {
+      int queryIndex = normalizedText.toLowerCase().indexOf(normalizedQuery);
+      if (queryIndex >= 0) {
+        return Math.max(0, queryIndex - 24);
+      }
+
+      for (String token : normalizedQuery.split(" ")) {
+        if (token.isBlank()) {
+          continue;
+        }
+        int tokenIndex = normalizedText.toLowerCase().indexOf(token);
+        if (tokenIndex >= 0) {
+          return Math.max(0, tokenIndex - 24);
+        }
+      }
+    }
+
+    return 0;
   }
 
   private String asString(Object value) {

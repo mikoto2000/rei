@@ -17,12 +17,13 @@ import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
 import dev.mikoto2000.rei.reminder.ReminderTools;
 import dev.mikoto2000.rei.task.TaskTools;
+import dev.mikoto2000.rei.vectordocument.VectorDocumentProperties;
 import dev.mikoto2000.rei.websearch.WebSearchProperties;
 import dev.mikoto2000.rei.websearch.WebSearchTools;
 import lombok.RequiredArgsConstructor;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class})
+@EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
 
