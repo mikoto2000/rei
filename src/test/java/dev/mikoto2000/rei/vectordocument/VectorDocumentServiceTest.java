@@ -152,19 +152,42 @@ class VectorDocumentServiceTest {
     assertTrue(added.chunkCount() > 1);
   }
 
+  @Test
+  void addUsesConfiguredChunkOverlap() throws IOException {
+    Path document = tempDir.resolve("long.txt");
+    Files.writeString(document, "spring tools ai weather ".repeat(80));
+
+    VectorDocumentEntry withoutOverlap = newServiceWithChunkSettings(20, 0)
+        .add(List.of(document.toString()))
+        .getFirst();
+    VectorDocumentEntry withOverlap = newServiceWithChunkSettings(20, 10)
+        .add(List.of(document.toString()))
+        .getFirst();
+
+    assertTrue(withOverlap.chunkCount() > withoutOverlap.chunkCount());
+  }
+
   private VectorDocumentService newService() {
     return newFixture().service();
   }
 
   private VectorDocumentService newServiceWithChunkSize(int chunkSize) {
-    return newFixture(chunkSize).service();
+    return newFixture(chunkSize, 0).service();
+  }
+
+  private VectorDocumentService newServiceWithChunkSettings(int chunkSize, int chunkOverlap) {
+    return newFixture(chunkSize, chunkOverlap).service();
   }
 
   private TestFixture newFixture() {
-    return newFixture(512);
+    return newFixture(512, 0);
   }
 
   private TestFixture newFixture(int chunkSize) {
+    return newFixture(chunkSize, 0);
+  }
+
+  private TestFixture newFixture(int chunkSize, int chunkOverlap) {
     SQLiteDataSource dataSource = new SQLiteDataSource();
     dataSource.setUrl("jdbc:sqlite:" + tempDir.resolve("memory.db"));
     SqliteVectorStore vectorStore = new SqliteVectorStore(dataSource, new FakeEmbeddingModel(), new tools.jackson.databind.json.JsonMapper());
@@ -172,7 +195,7 @@ class VectorDocumentServiceTest {
         vectorStore,
         vectorStore,
         Clock.fixed(Instant.parse("2026-03-28T00:00:00Z"), ZoneOffset.UTC),
-        new VectorDocumentProperties(chunkSize));
+        new VectorDocumentProperties(chunkSize, chunkOverlap));
     return new TestFixture(service, vectorStore);
   }
 

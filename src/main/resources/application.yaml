@@ -54,3 +54,4 @@ rei:
     max-results: ${REI_WEB_SEARCH_MAX_RESULTS:5}
   vector-document:
     chunk-size: ${REI_VECTOR_DOCUMENT_CHUNK_SIZE:512}
+    chunk-overlap: ${REI_VECTOR_DOCUMENT_CHUNK_OVERLAP:64}

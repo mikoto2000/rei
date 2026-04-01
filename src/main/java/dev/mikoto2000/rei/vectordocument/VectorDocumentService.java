@@ -13,7 +13,6 @@ import java.util.UUID;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.reader.tika.TikaDocumentReader;
 import org.springframework.ai.transformer.splitter.TextSplitter;
-import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
@@ -115,9 +114,7 @@ public class VectorDocumentService {
 
   private List<Document> readAndSplit(String documentPath) {
     TikaDocumentReader documentReader = new TikaDocumentReader(new FileSystemResource(documentPath));
-    TextSplitter textSplitter = TokenTextSplitter.builder()
-        .withChunkSize(properties.chunkSize())
-        .build();
+    TextSplitter textSplitter = new OverlappingTokenTextSplitter(properties.chunkSize(), properties.chunkOverlap());
     return textSplitter.apply(documentReader.get());
   }
 
