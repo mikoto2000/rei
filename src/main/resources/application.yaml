@@ -23,6 +23,16 @@ spring:
     model:
       chat: openai
       embedding: openai
+    mcp:
+      client:
+        enabled: ${REI_MCP_ENABLED:false}
+        type: SYNC
+        initialized: true
+        request-timeout: 20s
+        toolcallback:
+          enabled: true
+        stdio:
+          servers-configuration: ${REI_MCP_STDIO_SERVERS_CONFIG:file:.rei/mcp-servers.json}
   devtools:
     restart:
       enabled: false

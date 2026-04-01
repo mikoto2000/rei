@@ -12,6 +12,7 @@ Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API 
 - 指定日時または予定の何分前かでのリマインド
 - 文書をベクトルストアへ埋め込んだうえでの RAG
 - Brave Search API を使った Web 検索ツール
+- JSON 設定で登録した MCP サーバーのツール利用
 
 ## セットアップ
 
@@ -57,6 +58,34 @@ export REI_WEB_SEARCH_BASE_URL=https://api.search.brave.com/res/v1/web/search
 export REI_WEB_SEARCH_TIMEOUT_SECONDS=10
 export REI_WEB_SEARCH_MAX_RESULTS=5
 ```
+
+### MCP
+
+MCP サーバーを有効にする場合は、JSON 設定ファイルを用意してください。
+
+```bash
+export REI_MCP_ENABLED=true
+export REI_MCP_STDIO_SERVERS_CONFIG=file:$PWD/.rei/mcp-servers.json
+```
+
+`.rei/mcp-servers.json` は Claude Desktop 互換形式です。
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/workspaces/rei"
+      ]
+    }
+  }
+}
+```
+
+登録した MCP ツールは起動時に読み込まれ、通常の AI ツールと同様にチャット中に自動利用されます。設定変更の反映には再起動が必要です。
 
 ## 使い方
 
@@ -216,6 +245,7 @@ export REI_WEB_SEARCH_MAX_RESULTS=5
 - 日次ブリーフィング生成
 - リマインド作成・一覧
 - Web 検索
+- MCP サーバー経由のツール
 
 ## テスト
 

@@ -5,6 +5,8 @@ import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.tool.ToolCallbackProvider;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Bean;
@@ -33,16 +35,23 @@ public class AiConfiguration {
   private final BriefingTools briefingTools;
   private final ReminderTools reminderTools;
   private final WebSearchTools webSearchTools;
+  private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
 
   @Bean
   public ChatClient chatClient() {
-    return ChatClient.builder(chatModel)
+    ChatClient.Builder builder = ChatClient.builder(chatModel)
         .defaultSystem(coreProperties.systemPrompt())
         .defaultAdvisors(
             PromptChatMemoryAdvisor.builder(chatMemory)
                 .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
                 .build())
-        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, reminderTools, webSearchTools)
-        .build();
+        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, reminderTools, webSearchTools);
+
+    ToolCallbackProvider toolCallbackProvider = mcpToolCallbackProvider.getIfAvailable();
+    if (toolCallbackProvider != null) {
+      builder.defaultToolCallbacks(toolCallbackProvider);
+    }
+
+    return builder.build();
   }
 }
