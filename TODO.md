@@ -424,6 +424,14 @@ SQLite に文書メタデータと埋め込みベクトルを永続化できる 
 - [x] AI ツール `vectorDocumentAdd` `vectorDocumentSearch` `vectorDocumentList` `vectorDocumentDeleteByDocId` `vectorDocumentDeleteBySource` の回帰テストを追加する
 - [x] `QuestionAnswerAdvisor` の検索結果が載せ替え後も使えることを確認する
 - [x] `dailyBriefing` の関連文書取得が載せ替え後も使えることを確認する
+- [ ] `SqliteVectorStore` の検索で全件走査を避けるため、lexical prefilter か候補件数絞り込みを追加する
+- [ ] `VectorDocumentService` の doc 単位集約を `max score` のみから複合スコア方式へ改善する
+- [ ] snippet 生成を query 近傍切り出しから「最も一致する文」優先へ改善する
+- [ ] 同一文書の近接 `chunkIndex` をまとめて返す前後チャンク統合ロジックを追加する
+- [ ] ベクトル類似度に語句一致を混ぜるハイブリッド検索を検討・実装する
+- [ ] タイトル、見出し、ファイル種別、タグなど検索改善に使うメタデータ拡張を追加する
+- [ ] 文書種別ごとに chunk size / overlap / splitter 戦略を切り替えられるようにする
+- [ ] 上位候補の再ランキング層を追加するか判断し、必要なら rule-based または LLM rerank を実装する
 
 ### 17. 旧 JSON 永続化コードの撤去
 
