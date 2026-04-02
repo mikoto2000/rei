@@ -6,6 +6,8 @@ package dev.mikoto2000.rei;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.jline.reader.Candidate;
 import org.jline.reader.Completer;
@@ -17,6 +19,8 @@ import org.jline.reader.Parser;
 import org.jline.reader.SyntaxError;
 import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.DefaultParser;
+import org.jline.terminal.Attributes;
+import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -24,6 +28,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 import dev.mikoto2000.rei.core.command.RootCommand;
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
+import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine;
@@ -37,6 +42,8 @@ public class ReiApplication {
   private final RootCommand rootCommand;
   private final CommandLine.IFactory factory;
   private final ModelHolderService currentModelHolder;
+  private final EscCancellationMonitor escCancellationMonitor;
+  private final CommandCancellationService commandCancellationService;
 
   private final Path HISTORY_FILE = ReiPaths.historyFilePath();
 
@@ -73,47 +80,63 @@ public class ReiApplication {
     System.out.println("AI Shell");
     System.out.println("通常入力は chat として扱います。/exit で終了します。");
 
-    while (true) {
-      try {
-        String line = reader.readLine(currentModelHolder.get() + "> ");
-        if (line == null) {
-          break;
-        }
+    ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
+    try {
+      while (true) {
+        try {
+          String line = reader.readLine(currentModelHolder.get() + "> ");
+          if (line == null) {
+            break;
+          }
 
-        String trimmed = line.trim();
-        if (trimmed.isEmpty()) {
-          continue;
-        }
-
-        if (trimmed.equals("/exit") || trimmed.equals("/quit")) {
-          break;
-        }
-
-        if (trimmed.equals("/help")) {
-          cmd.execute("--help");
-          continue;
-        }
-
-        if (trimmed.equals("/version")) {
-          cmd.execute("--version");
-          continue;
-        }
-
-        if (trimmed.startsWith("/")) {
-          String commandText = trimmed.substring(1).trim();
-          if (commandText.isEmpty()) {
+          String trimmed = line.trim();
+          if (trimmed.isEmpty()) {
             continue;
           }
-          cmd.execute(splitCommandLine(commandText));
-        } else {
-          cmd.execute("chat", trimmed);
-        }
 
-      } catch (UserInterruptException e) {
-        // Ctrl-C でその行だけキャンセル
-      } catch (EndOfFileException e) {
-        break;
+          if (trimmed.equals("/exit") || trimmed.equals("/quit")) {
+            break;
+          }
+
+          if (trimmed.equals("/help")) {
+            executeInterruptibly(cmd, terminal, commandExecutor, "--help");
+            continue;
+          }
+
+          if (trimmed.equals("/version")) {
+            executeInterruptibly(cmd, terminal, commandExecutor, "--version");
+            continue;
+          }
+
+          if (trimmed.startsWith("/")) {
+            String commandText = trimmed.substring(1).trim();
+            if (commandText.isEmpty()) {
+              continue;
+            }
+            executeInterruptibly(cmd, terminal, commandExecutor, splitCommandLine(commandText));
+          } else {
+            executeInterruptibly(cmd, terminal, commandExecutor, "chat", trimmed);
+          }
+
+        } catch (UserInterruptException e) {
+          // Ctrl-C でその行だけキャンセル
+        } catch (EndOfFileException e) {
+          break;
+        }
       }
+    } finally {
+      commandExecutor.shutdownNow();
+    }
+  }
+
+  private void executeInterruptibly(CommandLine cmd, Terminal terminal, ExecutorService commandExecutor, String... args)
+      throws IOException {
+    Attributes originalAttributes = terminal.enterRawMode();
+    try {
+      var future = commandExecutor.submit(() -> cmd.execute(args));
+      escCancellationMonitor.await(future, timeoutMillis -> terminal.reader().read(timeoutMillis), commandCancellationService::cancel);
+    } finally {
+      terminal.setAttributes(originalAttributes);
     }
   }
 

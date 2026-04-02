@@ -12,6 +12,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Component;
 
+import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
@@ -21,6 +22,10 @@ import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
+import reactor.core.Disposable;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Component
 @RequiredArgsConstructor
@@ -31,6 +36,7 @@ public class SearchCommand implements Runnable {
   private final ModelHolderService currentModelHolder;
   private final VectorDocumentService vectorDocumentService;
   private final WebSearchService webSearchService;
+  private final CommandCancellationService cancellationService;
 
   @Option(names = "--vector-top-k", description = "ベクトル検索の返却件数")
   Integer vectorTopK = 3;
@@ -51,6 +57,7 @@ public class SearchCommand implements Runnable {
   public void run() {
     String query = String.join(" ", queryParts);
     try {
+      cancellationService.begin(Thread.currentThread());
       List<VectorDocumentSearchResult> vectorResults = vectorDocumentService.search(query, vectorTopK, threshold, source);
       List<WebSearchResult> webResults = webSearchService.search(query, webTopK);
 
@@ -60,18 +67,39 @@ public class SearchCommand implements Runnable {
               .build()));
 
       IO.println("=== answer ===");
-      requestSpec.stream()
+      CountDownLatch latch = new CountDownLatch(1);
+      AtomicReference<Throwable> errorRef = new AtomicReference<>();
+      Disposable disposable = requestSpec.stream()
           .content()
           .doOnNext(System.out::print)
-          .blockLast();
+          .doOnComplete(latch::countDown)
+          .doOnError(error -> {
+            errorRef.set(error);
+            latch.countDown();
+          })
+          .subscribe();
+      cancellationService.register(disposable);
+
+      latch.await();
       System.out.println();
+      Throwable error = errorRef.get();
+      if (error != null) {
+        throw new IllegalStateException("回答の取得に失敗しました", error);
+      }
 
       printSources(vectorResults, webResults);
     } catch (IOException e) {
       throw new RuntimeException("検索結果の取得に失敗しました", e);
     } catch (InterruptedException e) {
+      if (cancellationService.consumeCancellationRequested()) {
+        System.out.println();
+        IO.println("[cancelled]");
+        return;
+      }
       Thread.currentThread().interrupt();
       throw new RuntimeException("検索が中断されました", e);
+    } finally {
+      cancellationService.clear();
     }
   }
 
