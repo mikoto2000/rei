@@ -13,6 +13,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentEntry;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
@@ -21,36 +22,42 @@ import picocli.CommandLine;
 class EmbedCommandTest {
 
   @Test
-  void positionalArgumentsDelegateToAddAlias() throws Exception {
+  void positionalArgumentsQueueAsyncEmbedding() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
-    when(service.add(List.of("docs/a.txt", "docs/b.md"))).thenReturn(List.of(
-        new VectorDocumentEntry("doc-1", "/tmp/docs/a.txt", 1, "2026-03-28T00:00:00Z"),
-        new VectorDocumentEntry("doc-2", "/tmp/docs/b.md", 2, "2026-03-28T00:00:00Z")));
+    AsyncVectorDocumentService asyncService = Mockito.mock(AsyncVectorDocumentService.class);
 
-    int exitCode = newCommand(service).execute("docs/a.txt", "docs/b.md");
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    int exitCode;
+    try {
+      exitCode = newCommand(service, asyncService).execute("docs/a.txt", "docs/b.md");
+    } finally {
+      System.setOut(originalOut);
+    }
 
     assertEquals(0, exitCode);
-    verify(service).add(List.of("docs/a.txt", "docs/b.md"));
+    verify(asyncService).addAsync(List.of("docs/a.txt", "docs/b.md"));
+    assertTrue(out.toString().contains("追加処理を開始"));
   }
 
   @Test
-  void addCommandDelegatesToService() throws Exception {
+  void addCommandQueuesAsyncEmbedding() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
-    when(service.add(List.of("docs/spec.md"))).thenReturn(List.of(
-        new VectorDocumentEntry("doc-1", "/tmp/docs/spec.md", 3, "2026-03-28T00:00:00Z")));
+    AsyncVectorDocumentService asyncService = Mockito.mock(AsyncVectorDocumentService.class);
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      int exitCode = newCommand(service).execute("add", "docs/spec.md");
+      int exitCode = newCommand(service, asyncService).execute("add", "docs/spec.md");
       assertEquals(0, exitCode);
     } finally {
       System.setOut(originalOut);
     }
 
-    verify(service).add(List.of("docs/spec.md"));
-    assertTrue(out.toString().contains("doc-1"));
+    verify(asyncService).addAsync(List.of("docs/spec.md"));
+    assertTrue(out.toString().contains("docs/spec.md"));
   }
 
   @Test
@@ -63,7 +70,7 @@ class EmbedCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      int exitCode = newCommand(service).execute("search", "--top-k", "2", "--threshold", "0.4", "--source", "/tmp/docs/spec.md", "spring ai");
+      int exitCode = newCommand(service, Mockito.mock(AsyncVectorDocumentService.class)).execute("search", "--top-k", "2", "--threshold", "0.4", "--source", "/tmp/docs/spec.md", "spring ai");
       assertEquals(0, exitCode);
     } finally {
       System.setOut(originalOut);
@@ -87,7 +94,7 @@ class EmbedCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      int exitCode = newCommand(service).execute("list");
+      int exitCode = newCommand(service, Mockito.mock(AsyncVectorDocumentService.class)).execute("list");
       assertEquals(0, exitCode);
     } finally {
       System.setOut(originalOut);
@@ -109,8 +116,8 @@ class EmbedCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      assertEquals(0, newCommand(service).execute("delete", "--doc-id", "doc-1"));
-      assertEquals(0, newCommand(service).execute("delete", "--source", "/tmp/docs/spec.md"));
+      assertEquals(0, newCommand(service, Mockito.mock(AsyncVectorDocumentService.class)).execute("delete", "--doc-id", "doc-1"));
+      assertEquals(0, newCommand(service, Mockito.mock(AsyncVectorDocumentService.class)).execute("delete", "--source", "/tmp/docs/spec.md"));
     } finally {
       System.setOut(originalOut);
     }
@@ -123,18 +130,18 @@ class EmbedCommandTest {
   @Test
   void useSubcommandIsNotAvailable() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
-    assertFalse(newCommand(service).getSubcommands().containsKey("use"));
+    assertFalse(newCommand(service, Mockito.mock(AsyncVectorDocumentService.class)).getSubcommands().containsKey("use"));
   }
 
-  private CommandLine newCommand(VectorDocumentService service) {
-    return new CommandLine(new EmbedCommand(service), new CommandLine.IFactory() {
+  private CommandLine newCommand(VectorDocumentService service, AsyncVectorDocumentService asyncService) {
+    return new CommandLine(new EmbedCommand(service, asyncService), new CommandLine.IFactory() {
       @Override
       public <K> K create(Class<K> cls) throws Exception {
         if (cls == EmbedCommand.class) {
-          return cls.cast(new EmbedCommand(service));
+          return cls.cast(new EmbedCommand(service, asyncService));
         }
         if (cls == EmbedCommand.AddCommand.class) {
-          return cls.cast(new EmbedCommand.AddCommand(service));
+          return cls.cast(new EmbedCommand.AddCommand(asyncService));
         }
         if (cls == EmbedCommand.SearchCommand.class) {
           return cls.cast(new EmbedCommand.SearchCommand(service));

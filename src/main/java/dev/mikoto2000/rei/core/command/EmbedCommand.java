@@ -8,6 +8,7 @@ import java.util.Locale;
 
 import org.springframework.stereotype.Component;
 
+import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentEntry;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
@@ -30,6 +31,7 @@ import picocli.CommandLine.Parameters;
 public class EmbedCommand implements Runnable {
 
   private final VectorDocumentService vectorDocumentService;
+  private final AsyncVectorDocumentService asyncVectorDocumentService;
 
   @Parameters(arity = "0..*", paramLabel = "DOCUMENTS...", description = "埋め込み対象ドキュメントのパス")
   String[] documents;
@@ -40,11 +42,8 @@ public class EmbedCommand implements Runnable {
       throw new IllegalArgumentException("`embed add <files...>` を使うか、埋め込み対象ファイルを指定してください");
     }
 
-    try {
-      printAdded(vectorDocumentService.add(List.of(documents)));
-    } catch (IOException e) {
-      throw new RuntimeException("ドキュメント埋め込みに失敗しました", e);
-    }
+    asyncVectorDocumentService.addAsync(List.of(documents));
+    printQueued(List.of(documents));
   }
 
   @Component
@@ -52,18 +51,15 @@ public class EmbedCommand implements Runnable {
   @Command(name = "add", description = "文書をベクトルストアへ追加します")
   public static class AddCommand implements Runnable {
 
-    private final VectorDocumentService vectorDocumentService;
+    private final AsyncVectorDocumentService asyncVectorDocumentService;
 
     @Parameters(arity = "1..*", paramLabel = "DOCUMENTS...", description = "埋め込み対象ドキュメントのパス")
     String[] documents;
 
     @Override
     public void run() {
-      try {
-        printAdded(vectorDocumentService.add(List.of(documents)));
-      } catch (IOException e) {
-        throw new RuntimeException("ドキュメント埋め込みに失敗しました", e);
-      }
+      asyncVectorDocumentService.addAsync(List.of(documents));
+      printQueued(List.of(documents));
     }
   }
 
@@ -163,6 +159,10 @@ public class EmbedCommand implements Runnable {
     for (VectorDocumentEntry entry : entries) {
       System.out.println("追加: " + entry.docId() + " | " + entry.source() + " | chunks=" + entry.chunkCount());
     }
+  }
+
+  private static void printQueued(List<String> sources) {
+    System.out.println("追加処理を開始: " + String.join(", ", sources));
   }
 
   private static String formatScore(Double score) {
