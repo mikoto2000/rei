@@ -8,7 +8,6 @@ import java.util.Set;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
-import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Component;
@@ -59,16 +58,13 @@ public class SearchCommand implements Runnable {
           OpenAiChatOptions.builder()
               .model(currentModelHolder.get())
               .build()));
-      ChatClientResponse chatClientResponse = requestSpec.call().chatClientResponse();
-
-      String thinking = chatClientResponse.chatResponse().getResult().getMetadata().get("thinking");
-      if (thinking != null && !thinking.isBlank()) {
-        IO.println("=== thinking ===");
-        IO.println(thinking);
-      }
 
       IO.println("=== answer ===");
-      IO.println(chatClientResponse.chatResponse().getResult().getOutput().getText());
+      requestSpec.stream()
+          .content()
+          .doOnNext(System.out::print)
+          .blockLast();
+      System.out.println();
 
       printSources(vectorResults, webResults);
     } catch (IOException e) {

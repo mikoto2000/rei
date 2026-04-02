@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.core.command;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -34,18 +33,12 @@ public class ChatCommand implements Runnable {
           OpenAiChatOptions.builder()
             .model(currentModelHolder.get())
             .build()));
-    ChatClientResponse chatClientResponse = requestSpec
-      .call()
-      .chatClientResponse();
-
-    String thinking = chatClientResponse.chatResponse().getResult().getMetadata().get("thinking");
-    if (thinking != null && !thinking.isBlank()) {
-      IO.println("=== thinking ===");
-      IO.println(thinking);
-    }
 
     IO.println("=== answer ===");
-    String answer = chatClientResponse.chatResponse().getResult().getOutput().getText();
-    IO.println(answer);
+    requestSpec.stream()
+      .content()
+      .doOnNext(System.out::print)
+      .blockLast();
+    System.out.println();
   }
 }

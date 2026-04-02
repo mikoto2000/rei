@@ -9,18 +9,12 @@ import static org.mockito.Mockito.when;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.List;
-import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
-import org.springframework.ai.chat.client.ChatClientResponse;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
-import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
@@ -29,6 +23,7 @@ import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
 import dev.mikoto2000.rei.websearch.WebSearchResult;
 import dev.mikoto2000.rei.websearch.WebSearchService;
 import picocli.CommandLine;
+import reactor.core.publisher.Flux;
 
 class SearchCommandTest {
 
@@ -39,10 +34,6 @@ class SearchCommandTest {
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     VectorDocumentService vectorDocumentService = Mockito.mock(VectorDocumentService.class);
     WebSearchService webSearchService = Mockito.mock(WebSearchService.class);
-    ChatGenerationMetadata metadata = Mockito.mock(ChatGenerationMetadata.class);
-    ChatClientResponse response = new ChatClientResponse(
-        new ChatResponse(List.of(new Generation(new AssistantMessage("combined answer"), metadata))),
-        Map.of());
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(vectorDocumentService.search("spring ai", 3, 0.4d, "/tmp/docs/spec.md")).thenReturn(List.of(
@@ -50,8 +41,7 @@ class SearchCommandTest {
     when(webSearchService.search("spring ai", 2)).thenReturn(List.of(
         new WebSearchResult("Spring AI News", "https://example.com/news", "latest update", "2026-03-31")));
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.call().chatClientResponse()).thenReturn(response);
-    when(metadata.get("thinking")).thenReturn(null);
+    when(requestSpec.stream().content()).thenReturn(Flux.just("combined ", "answer"));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
@@ -77,6 +67,7 @@ class SearchCommandTest {
     String output = out.toString();
     assertTrue(output.contains("=== answer ==="));
     assertTrue(output.contains("combined answer"));
+    assertTrue(output.contains("=== sources ==="));
   }
 
   @Test
