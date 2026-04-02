@@ -1,6 +1,8 @@
 # Rei
 
-Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API を使った対話に加え、Google Calendar、タスク管理、日次ブリーフィング、リマインド、文書埋め込みを扱えます。
+Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API を使った対話を中心に、Google Calendar、タスク管理、日次ブリーフィング、リマインド、文書埋め込み、Web 検索、MCP ツール連携を 1 つの CLI にまとめています。
+
+日々の確認や調査をターミナル上で完結させたいときに向いています。ローカルファイルや埋め込み済み文書を参照しながら対話でき、必要に応じて外部 API や MCP サーバーのツールも利用できます。
 
 ## 主な機能
 
@@ -16,9 +18,14 @@ Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API 
 
 ## セットアップ
 
+動作要件:
+
+- JDK 25 以上
+- Maven Wrapper を使う場合は `./mvnw`、ローカル Maven を使う場合は `mvn`
+
 ### OpenAI Compatible API
 
-最低限必要な設定:
+必須:
 
 ```bash
 export REI_OPENAI_BASE_URL=https://api.openai.com
@@ -30,21 +37,48 @@ export REI_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 `REI_OPENAI_BASE_URL` には OpenAI 互換 API のベース URL を設定してください。
 サーバーによっては `https://host/v1` まで含める構成が必要です。
 
+環境変数:
+
+| 変数 | 必須 | デフォルト | 説明 |
+|------|------|------------|------|
+| `REI_OPENAI_BASE_URL` | Required | `http://192.168.1.17:11434` | OpenAI 互換 API のベース URL |
+| `REI_OPENAI_API_KEY` | Required | `dummy-key` | API キー |
+| `REI_OPENAI_CHAT_MODEL` | Required | `gpt-oss:120b` | chat 用モデル名 |
+| `REI_OPENAI_EMBEDDING_MODEL` | Required | `qwen3-embedding:8b` | embedding 用モデル名 |
+
 ### Google Calendar
 
-Google Calendar 連携を有効にする場合は、Google Cloud で Desktop app の OAuth クライアントを作成し、資格情報 JSON を `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` に配置してください。
+Google Calendar 連携を使う場合は、Google Cloud で Desktop app の OAuth クライアントを作成し、資格情報 JSON を `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` に配置してください。
+
+手順の概要:
+
+1. Google Cloud Console で対象プロジェクトを作成または選択する
+2. Google Calendar API を有効にする
+3. OAuth 同意画面を設定する
+4. `Credentials` から `OAuth client ID` を作成し、`Desktop app` を選ぶ
+5. ダウンロードした JSON を `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` に配置する
 
 ```bash
 export REI_GOOGLE_CALENDAR_ENABLED=true
 export REI_GOOGLE_CALENDAR_CREDENTIALS_PATH=$HOME/.config/rei/google-calendar-credentials.json
-export REI_GOOGLE_CALENDAR_TIME_ZONE=Asia/Tokyo
+export REI_GOOGLE_CALENDAR_TIME_ZONE=Asia/Tokyo  # タイムゾーン
 ```
 
 Google Calendar の資格情報と OAuth token は、デフォルトではホームディレクトリ配下の `.config/rei` に保存されます。必要に応じて `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` と `REI_GOOGLE_CALENDAR_TOKENS_DIR` で上書きできます。
 
+主な環境変数:
+
+| 変数 | 必須 | デフォルト | 説明 |
+|------|------|------------|------|
+| `REI_GOOGLE_CALENDAR_ENABLED` | Optional | `true` | Google Calendar 連携を有効化 |
+| `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` | Google Calendar を使う場合は Required | `${HOME}/.config/rei/google-calendar-credentials.json` | OAuth クライアント資格情報 JSON |
+| `REI_GOOGLE_CALENDAR_TOKENS_DIR` | Optional | `${HOME}/.config/rei/google-calendar-tokens` | OAuth token 保存先 |
+| `REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID` | Optional | `primary` | 既定カレンダー ID |
+| `REI_GOOGLE_CALENDAR_TIME_ZONE` | Optional | 空 | オフセットなし日時の解釈に使うタイムゾーン |
+
 ### Web Search
 
-Web 検索を有効にする場合は Brave Search API を設定してください。
+Web 検索を使う場合は Brave Search API を設定してください。
 
 ```bash
 export REI_WEB_SEARCH_ENABLED=true
@@ -55,9 +89,19 @@ export REI_WEB_SEARCH_API_KEY=your-brave-search-api-key
 
 ```bash
 export REI_WEB_SEARCH_BASE_URL=https://api.search.brave.com/res/v1/web/search
-export REI_WEB_SEARCH_TIMEOUT_SECONDS=10
+export REI_WEB_SEARCH_TIMEOUT_SECONDS=10  # 秒
 export REI_WEB_SEARCH_MAX_RESULTS=5
 ```
+
+主な環境変数:
+
+| 変数 | 必須 | デフォルト | 説明 |
+|------|------|------------|------|
+| `REI_WEB_SEARCH_ENABLED` | Optional | `true` | Web 検索を有効化 |
+| `REI_WEB_SEARCH_API_KEY` | Web 検索を使う場合は Required | 空 | Brave Search API キー |
+| `REI_WEB_SEARCH_BASE_URL` | Optional | `https://api.search.brave.com/res/v1/web/search` | Brave Search API URL |
+| `REI_WEB_SEARCH_TIMEOUT_SECONDS` | Optional | `10` | API タイムアウト秒数 |
+| `REI_WEB_SEARCH_MAX_RESULTS` | Optional | `5` | 取得する最大件数 |
 
 ### MCP
 
@@ -68,7 +112,7 @@ export REI_MCP_ENABLED=true
 export REI_MCP_STDIO_SERVERS_CONFIG=file:$PWD/.rei/mcp-servers.json
 ```
 
-`.rei/mcp-servers.json` は Claude Desktop 互換形式です。
+`REI_MCP_STDIO_SERVERS_CONFIG` には `file:` 付きの URI を指定します。`.rei/mcp-servers.json` は Claude Desktop 互換形式です。
 
 ```json
 {
@@ -87,12 +131,21 @@ export REI_MCP_STDIO_SERVERS_CONFIG=file:$PWD/.rei/mcp-servers.json
 
 登録した MCP ツールは起動時に読み込まれ、通常の AI ツールと同様にチャット中に自動利用されます。設定変更の反映には再起動が必要です。
 
+主な環境変数:
+
+| 変数 | 必須 | デフォルト | 説明 |
+|------|------|------------|------|
+| `REI_MCP_ENABLED` | Optional | `false` | MCP client を有効化 |
+| `REI_MCP_STDIO_SERVERS_CONFIG` | MCP を使う場合は Required | `file:.rei/mcp-servers.json` | MCP サーバー定義ファイル |
+
 ## 使い方
 
 起動:
 
 ```bash
-./mvnw spring-boot:run
+./mvnw spring-boot:run  # JDK 25+ が必要
+# または
+mvn spring-boot:run
 ```
 
 アプリが生成する履歴ファイルと SQLite のローカルデータは、起動したカレントディレクトリ配下の `.rei` に保存されます。
@@ -104,6 +157,32 @@ export REI_MCP_STDIO_SERVERS_CONFIG=file:$PWD/.rei/mcp-servers.json
 今日の予定を教えて
 明日の朝に確認したいタスクを追加して
 ```
+
+CLI の例:
+
+```text
+$ ./mvnw spring-boot:run
+...
+rei> こんにちは
+=== answer ===
+こんにちは。今日は何を進めますか？
+rei> /model
+gpt-oss:120b
+```
+
+## コマンド一覧
+
+| コマンド | 主なサブコマンド | 説明 |
+|----------|------------------|------|
+| `chat` | なし | 通常の対話 |
+| `model` | なし | 現在の chat モデルの確認・変更 |
+| `models` | なし | OpenAI 互換 API が返すモデル一覧を表示 |
+| `search` | なし | Web 検索とベクトル検索をまとめて回答 |
+| `schedule` | `auth`, `list`, `add` | Google Calendar 認可と予定操作 |
+| `task` | `add`, `list`, `done`, `delete` | タスク管理 |
+| `briefing` | `today` | 日次ブリーフィング表示 |
+| `reminder` | `add`, `list`, `delete` | リマインド管理 |
+| `embed` | `add`, `search`, `list`, `delete` | 文書埋め込みと検索 |
 
 ### モデル
 
@@ -210,6 +289,8 @@ export REI_MCP_STDIO_SERVERS_CONFIG=file:$PWD/.rei/mcp-servers.json
 /embed add ./docs/spec.md ./docs/meeting-note.pdf
 ```
 
+`embed add` は非同期です。コマンド実行後にプロンプトがすぐ返り、読み込み完了または失敗は標準出力に通知されます。
+
 検索:
 
 ```text
@@ -250,8 +331,21 @@ export REI_MCP_STDIO_SERVERS_CONFIG=file:$PWD/.rei/mcp-servers.json
 ## テスト
 
 ```bash
-./mvnw test -q
+./mvnw test -q  # -q は簡易出力
 ```
+
+主にユニットテストと Spring コンポーネントの結合テストを含みます。
+
+## よくあるエラー
+
+- `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH ... not found`
+  - 資格情報 JSON の配置先とパスを確認してください。
+- `No ToolCallback found for tool name: ...`
+  - モデルが存在しない tool 名を生成しているか、MCP 設定が読み込まれていません。`REI_MCP_ENABLED` と `REI_MCP_STDIO_SERVERS_CONFIG` を確認してください。
+- `401 Unauthorized`
+  - `REI_OPENAI_API_KEY` と `REI_OPENAI_BASE_URL` の組み合わせを確認してください。
+- Web 検索結果が空
+  - `REI_WEB_SEARCH_ENABLED=true` と `REI_WEB_SEARCH_API_KEY` を確認してください。
 
 ## License
 
