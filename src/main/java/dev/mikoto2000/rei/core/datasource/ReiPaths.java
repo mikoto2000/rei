@@ -25,6 +25,15 @@ public final class ReiPaths {
   }
 
   /**
+   * 現在の実行環境に応じたベクトルストア用 SQLite データベースファイルの保存先を返します。
+   *
+   * @return ベクトルストア用 SQLite データベースファイルの保存先パス
+   */
+  public static Path vectorStoreDbPath() {
+    return vectorStoreDbPath(workDirectory());
+  }
+
+  /**
    * 現在の実行環境に応じた履歴ファイルの保存先を返します。
    *
    * @return 履歴ファイルの保存先パス
@@ -47,11 +56,15 @@ public final class ReiPaths {
     return Path.of("").toAbsolutePath().normalize();
   }
 
-  static Path memoryDbPath(Path workDirectory) {
+  public static Path memoryDbPath(Path workDirectory) {
     return workDirectory.resolve(".rei").resolve("memory.db");
   }
 
-  static Path historyFilePath(Path workDirectory) {
+  public static Path vectorStoreDbPath(Path workDirectory) {
+    return workDirectory.resolve(".rei").resolve("vectorstore.db");
+  }
+
+  public static Path historyFilePath(Path workDirectory) {
     return workDirectory.resolve(".rei").resolve("history");
   }
 }

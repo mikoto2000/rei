@@ -20,6 +20,17 @@ class ReiPathsTest {
   }
 
   @Test
+  void vectorStoreDbPathUsesWorkingDirectory() {
+    Path workDirectory = Path.of("/work/rei");
+    Path expected = Path.of(
+        "/work/rei",
+        ".rei",
+        "vectorstore.db");
+
+    assertEquals(expected, ReiPaths.vectorStoreDbPath(workDirectory));
+  }
+
+  @Test
   void historyFilePathUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
     Path expected = Path.of(

@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.core.configuration;
 
 import javax.sql.DataSource;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.context.annotation.Bean;
@@ -15,7 +16,7 @@ public class VectorStoreConfiguration {
 
   @Bean
   public VectorStore vectorStore(
-      DataSource dataSource,
+      @Qualifier("vectorStoreDataSource") DataSource dataSource,
       EmbeddingModel embeddingModel,
       JsonMapper objectMapper) {
     return new SqliteVectorStore(dataSource, embeddingModel, objectMapper);
