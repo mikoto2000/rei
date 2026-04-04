@@ -183,7 +183,7 @@ public class EmbedCommand implements Runnable {
     if (!containsWildcard(document)) {
       return List.of(document);
     }
-    PathMatcher matcher = baseDirectory.getFileSystem().getPathMatcher("glob:" + document);
+    PathMatcher matcher = baseDirectory.getFileSystem().getPathMatcher("glob:" + normalizeGlobPattern(document));
     try (Stream<Path> stream = Files.walk(baseDirectory)) {
       List<String> matches = stream
           .filter(Files::isRegularFile)
@@ -205,6 +205,13 @@ public class EmbedCommand implements Runnable {
 
   private static boolean containsWildcard(String document) {
     return document.indexOf('*') >= 0 || document.indexOf('?') >= 0 || document.indexOf('[') >= 0;
+  }
+
+  private static String normalizeGlobPattern(String document) {
+    if (document.startsWith("./")) {
+      return document.substring(2);
+    }
+    return document;
   }
 
   private static String formatScore(Double score) {

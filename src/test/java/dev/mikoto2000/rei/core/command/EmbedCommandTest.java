@@ -94,6 +94,28 @@ class EmbedCommandTest {
   }
 
   @Test
+  void addCommandExpandsWildcardPatternsWithDotSlashPrefix() throws Exception {
+    VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
+    AsyncVectorDocumentService asyncService = Mockito.mock(AsyncVectorDocumentService.class);
+    Path docsDir = Files.createDirectories(tempDir.resolve("docs"));
+    Path markdown = Files.writeString(docsDir.resolve("spec.md"), "# spec");
+    Path text = Files.writeString(docsDir.resolve("note.txt"), "note");
+
+    String originalUserDir = System.getProperty("user.dir");
+    System.setProperty("user.dir", tempDir.toString());
+    try {
+      int exitCode = newCommand(service, asyncService).execute("add", "./docs/*");
+      assertEquals(0, exitCode);
+    } finally {
+      System.setProperty("user.dir", originalUserDir);
+    }
+
+    verify(asyncService).addAsync(List.of(
+        text.toString(),
+        markdown.toString()));
+  }
+
+  @Test
   void searchCommandPrintsHits() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
     when(service.search("spring ai", 2, 0.4d, "/tmp/docs/spec.md")).thenReturn(List.of(
