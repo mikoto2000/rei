@@ -1,10 +1,14 @@
 package dev.mikoto2000.rei.core.command;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.PathMatcher;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Stream;
 
 import org.springframework.stereotype.Component;
 
@@ -42,7 +46,8 @@ public class EmbedCommand implements Runnable {
       throw new IllegalArgumentException("`embed add <files...>` を使うか、埋め込み対象ファイルを指定してください");
     }
 
-    asyncVectorDocumentService.addAsync(List.of(documents));
+    List<String> resolvedDocuments = resolveDocuments(List.of(documents));
+    asyncVectorDocumentService.addAsync(resolvedDocuments);
     printQueued(List.of(documents));
   }
 
@@ -58,7 +63,8 @@ public class EmbedCommand implements Runnable {
 
     @Override
     public void run() {
-      asyncVectorDocumentService.addAsync(List.of(documents));
+      List<String> resolvedDocuments = resolveDocuments(List.of(documents));
+      asyncVectorDocumentService.addAsync(resolvedDocuments);
       printQueued(List.of(documents));
     }
   }
@@ -163,6 +169,42 @@ public class EmbedCommand implements Runnable {
 
   private static void printQueued(List<String> sources) {
     System.out.println("追加処理を開始: " + String.join(", ", sources));
+  }
+
+  static List<String> resolveDocuments(List<String> documents) {
+    Path baseDirectory = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
+    return documents.stream()
+        .flatMap(document -> expandDocument(document, baseDirectory).stream())
+        .distinct()
+        .toList();
+  }
+
+  private static List<String> expandDocument(String document, Path baseDirectory) {
+    if (!containsWildcard(document)) {
+      return List.of(document);
+    }
+    PathMatcher matcher = baseDirectory.getFileSystem().getPathMatcher("glob:" + document);
+    try (Stream<Path> stream = Files.walk(baseDirectory)) {
+      List<String> matches = stream
+          .filter(Files::isRegularFile)
+          .map(baseDirectory::relativize)
+          .filter(matcher::matches)
+          .map(baseDirectory::resolve)
+          .map(Path::normalize)
+          .map(Path::toString)
+          .sorted()
+          .toList();
+      if (matches.isEmpty()) {
+        throw new IllegalArgumentException("ワイルドカードに一致するファイルがありません: " + document);
+      }
+      return matches;
+    } catch (IOException e) {
+      throw new IllegalStateException("ワイルドカードの展開に失敗しました: " + document, e);
+    }
+  }
+
+  private static boolean containsWildcard(String document) {
+    return document.indexOf('*') >= 0 || document.indexOf('?') >= 0 || document.indexOf('[') >= 0;
   }
 
   private static String formatScore(Double score) {

@@ -8,9 +8,12 @@ import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
@@ -20,6 +23,9 @@ import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
 import picocli.CommandLine;
 
 class EmbedCommandTest {
+
+  @TempDir
+  Path tempDir;
 
   @Test
   void positionalArgumentsQueueAsyncEmbedding() throws Exception {
@@ -58,6 +64,33 @@ class EmbedCommandTest {
 
     verify(asyncService).addAsync(List.of("docs/spec.md"));
     assertTrue(out.toString().contains("docs/spec.md"));
+  }
+
+  @Test
+  void addCommandExpandsWildcardPatterns() throws Exception {
+    VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
+    AsyncVectorDocumentService asyncService = Mockito.mock(AsyncVectorDocumentService.class);
+    Path docsDir = Files.createDirectories(tempDir.resolve("docs"));
+    Path markdown = Files.writeString(docsDir.resolve("spec.md"), "# spec");
+    Path text = Files.writeString(docsDir.resolve("note.txt"), "note");
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    String originalUserDir = System.getProperty("user.dir");
+    System.setProperty("user.dir", tempDir.toString());
+    System.setOut(new PrintStream(out));
+    try {
+      int exitCode = newCommand(service, asyncService).execute("add", "docs/*");
+      assertEquals(0, exitCode);
+    } finally {
+      System.setProperty("user.dir", originalUserDir);
+      System.setOut(originalOut);
+    }
+
+    verify(asyncService).addAsync(List.of(
+        text.toString(),
+        markdown.toString()));
+    assertTrue(out.toString().contains("docs/*"));
   }
 
   @Test
