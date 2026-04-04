@@ -21,8 +21,9 @@ import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
-import dev.mikoto2000.rei.websearch.WebSearchResult;
-import dev.mikoto2000.rei.websearch.WebSearchService;
+import dev.mikoto2000.rei.websearch.WebSearchContext;
+import dev.mikoto2000.rei.websearch.WebSearchOrchestrator;
+import dev.mikoto2000.rei.websearch.WebSearchPage;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
 
@@ -34,14 +35,14 @@ class SearchCommandTest {
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     VectorDocumentService vectorDocumentService = Mockito.mock(VectorDocumentService.class);
-    WebSearchService webSearchService = Mockito.mock(WebSearchService.class);
+    WebSearchOrchestrator webSearchOrchestrator = Mockito.mock(WebSearchOrchestrator.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(vectorDocumentService.search("spring ai", 3, 0.4d, "/tmp/docs/spec.md")).thenReturn(List.of(
         new VectorDocumentSearchResult("doc-1", "/tmp/docs/spec.md", 0, 0.91d, "Spring AI guide")));
-    when(webSearchService.search("spring ai", 2)).thenReturn(List.of(
-        new WebSearchResult("Spring AI News", "https://example.com/news", "latest update", "2026-03-31")));
+    when(webSearchOrchestrator.search("spring ai", 2)).thenReturn(WebSearchContext.primaryOnly(List.of(
+        new WebSearchPage("Spring AI News", "https://example.com/news", "latest update", "2026-03-31", "Spring AI fetched content"))));
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.stream().content()).thenReturn(Flux.just("combined ", "answer"));
 
@@ -49,7 +50,7 @@ class SearchCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      int exitCode = new CommandLine(new SearchCommand(chatClient, modelHolderService, vectorDocumentService, webSearchService, cancellationService))
+      int exitCode = new CommandLine(new SearchCommand(chatClient, modelHolderService, vectorDocumentService, webSearchOrchestrator, cancellationService))
           .execute("--vector-top-k", "3", "--web-top-k", "2", "--threshold", "0.4", "--source", "/tmp/docs/spec.md", "spring ai");
       assertEquals(0, exitCode);
     } finally {
@@ -57,7 +58,7 @@ class SearchCommandTest {
     }
 
     verify(vectorDocumentService).search("spring ai", 3, 0.4d, "/tmp/docs/spec.md");
-    verify(webSearchService).search("spring ai", 2);
+    verify(webSearchOrchestrator).search("spring ai", 2);
 
     ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
     verify(chatClient).prompt(promptCaptor.capture());
@@ -65,6 +66,7 @@ class SearchCommandTest {
     assertTrue(promptText.contains("Spring AI guide"));
     assertTrue(promptText.contains("https://example.com/news"));
     assertTrue(promptText.contains("latest update"));
+    assertTrue(promptText.contains("Spring AI fetched content"));
 
     String output = out.toString();
     assertTrue(output.contains("=== answer ==="));
@@ -78,13 +80,13 @@ class SearchCommandTest {
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     VectorDocumentService vectorDocumentService = Mockito.mock(VectorDocumentService.class);
-    WebSearchService webSearchService = Mockito.mock(WebSearchService.class);
+    WebSearchOrchestrator webSearchOrchestrator = Mockito.mock(WebSearchOrchestrator.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(vectorDocumentService.search("spring ai", 3, null, null)).thenReturn(List.of(
         new VectorDocumentSearchResult("doc-1", "/tmp/docs/spec.md", 0, 0.91d, "Spring AI guide")));
-    when(webSearchService.search("spring ai", 5)).thenThrow(new IllegalStateException("Web search is disabled"));
+    when(webSearchOrchestrator.search("spring ai", 5)).thenThrow(new IllegalStateException("Web search is disabled"));
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.stream().content()).thenReturn(Flux.just("vector ", "only"));
 
@@ -92,7 +94,7 @@ class SearchCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      int exitCode = new CommandLine(new SearchCommand(chatClient, modelHolderService, vectorDocumentService, webSearchService, cancellationService))
+      int exitCode = new CommandLine(new SearchCommand(chatClient, modelHolderService, vectorDocumentService, webSearchOrchestrator, cancellationService))
           .execute("spring ai");
       assertEquals(0, exitCode);
     } finally {
@@ -119,13 +121,13 @@ class SearchCommandTest {
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     VectorDocumentService vectorDocumentService = Mockito.mock(VectorDocumentService.class);
-    WebSearchService webSearchService = Mockito.mock(WebSearchService.class);
+    WebSearchOrchestrator webSearchOrchestrator = Mockito.mock(WebSearchOrchestrator.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(vectorDocumentService.search("spring ai", 3, null, null)).thenReturn(List.of(
         new VectorDocumentSearchResult("doc-1", "/tmp/docs/spec.md", 0, 0.91d, "Spring AI guide")));
-    when(webSearchService.search("spring ai", 5))
+    when(webSearchOrchestrator.search("spring ai", 5))
         .thenThrow(new IllegalStateException("Web search failed with status 401: invalid api key"));
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.stream().content()).thenReturn(Flux.just("vector ", "fallback"));
@@ -134,7 +136,7 @@ class SearchCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      int exitCode = new CommandLine(new SearchCommand(chatClient, modelHolderService, vectorDocumentService, webSearchService, cancellationService))
+      int exitCode = new CommandLine(new SearchCommand(chatClient, modelHolderService, vectorDocumentService, webSearchOrchestrator, cancellationService))
           .execute("spring ai");
       assertEquals(0, exitCode);
     } finally {

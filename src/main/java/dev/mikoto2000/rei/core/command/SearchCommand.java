@@ -16,8 +16,9 @@ import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
-import dev.mikoto2000.rei.websearch.WebSearchResult;
-import dev.mikoto2000.rei.websearch.WebSearchService;
+import dev.mikoto2000.rei.websearch.WebSearchContext;
+import dev.mikoto2000.rei.websearch.WebSearchOrchestrator;
+import dev.mikoto2000.rei.websearch.WebSearchPage;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -35,7 +36,7 @@ public class SearchCommand implements Runnable {
   private final ChatClient chatClient;
   private final ModelHolderService currentModelHolder;
   private final VectorDocumentService vectorDocumentService;
-  private final WebSearchService webSearchService;
+  private final WebSearchOrchestrator webSearchOrchestrator;
   private final CommandCancellationService cancellationService;
 
   @Option(names = "--vector-top-k", description = "ベクトル検索の返却件数")
@@ -60,9 +61,9 @@ public class SearchCommand implements Runnable {
       cancellationService.begin(Thread.currentThread());
       List<VectorDocumentSearchResult> vectorResults = vectorDocumentService.search(query, vectorTopK, threshold, source);
       WebSearchOutcome webSearchOutcome = safeWebSearch(query);
-      List<WebSearchResult> webResults = webSearchOutcome.results();
+      WebSearchContext webContext = webSearchOutcome.context();
 
-      ChatClientRequestSpec requestSpec = chatClient.prompt(new Prompt(buildPrompt(query, vectorResults, webResults),
+      ChatClientRequestSpec requestSpec = chatClient.prompt(new Prompt(buildPrompt(query, vectorResults, webContext),
           OpenAiChatOptions.builder()
               .model(currentModelHolder.get())
               .build()));
@@ -91,7 +92,7 @@ public class SearchCommand implements Runnable {
         throw new IllegalStateException("回答の取得に失敗しました", error);
       }
 
-      printSources(vectorResults, webResults);
+      printSources(vectorResults, webContext);
     } catch (IOException e) {
       throw new RuntimeException("検索結果の取得に失敗しました", e);
     } catch (InterruptedException e) {
@@ -109,13 +110,13 @@ public class SearchCommand implements Runnable {
 
   private WebSearchOutcome safeWebSearch(String query) throws IOException, InterruptedException {
     try {
-      return new WebSearchOutcome(webSearchService.search(query, webTopK), null);
+      return new WebSearchOutcome(webSearchOrchestrator.search(query, webTopK), null);
     } catch (IllegalStateException e) {
-      return new WebSearchOutcome(List.of(), e.getMessage());
+      return new WebSearchOutcome(WebSearchContext.primaryOnly(List.of()), e.getMessage());
     }
   }
 
-  private String buildPrompt(String query, List<VectorDocumentSearchResult> vectorResults, List<WebSearchResult> webResults) {
+  private String buildPrompt(String query, List<VectorDocumentSearchResult> vectorResults, WebSearchContext webContext) {
     return """
         次の検索結果を材料に、日本語で回答してください。
         - まず結論を簡潔に示してください。
@@ -131,7 +132,7 @@ public class SearchCommand implements Runnable {
 
         Web 検索結果:
         %s
-        """.formatted(query, formatVectorResults(vectorResults), formatWebResults(webResults));
+        """.formatted(query, formatVectorResults(vectorResults), formatWebResults(webContext.primaryResults()));
   }
 
   private String formatVectorResults(List<VectorDocumentSearchResult> results) {
@@ -150,27 +151,28 @@ public class SearchCommand implements Runnable {
     return builder.toString().trim();
   }
 
-  private String formatWebResults(List<WebSearchResult> results) {
+  private String formatWebResults(List<WebSearchPage> results) {
     if (results.isEmpty()) {
       return "該当なし";
     }
     StringBuilder builder = new StringBuilder();
-    for (WebSearchResult result : results) {
+    for (WebSearchPage result : results) {
       builder.append("- title=").append(result.title())
           .append(" | url=").append(result.url())
           .append(" | publishedAt=").append(result.publishedAt())
           .append(" | snippet=").append(result.snippet())
+          .append(" | content=").append(result.content())
           .append('\n');
     }
     return builder.toString().trim();
   }
 
-  private void printSources(List<VectorDocumentSearchResult> vectorResults, List<WebSearchResult> webResults) {
+  private void printSources(List<VectorDocumentSearchResult> vectorResults, WebSearchContext webContext) {
     Set<String> sources = new LinkedHashSet<>();
     for (VectorDocumentSearchResult result : vectorResults) {
       sources.add(result.source());
     }
-    for (WebSearchResult result : webResults) {
+    for (WebSearchPage result : webContext.allResults()) {
       sources.add(result.url());
     }
     if (sources.isEmpty()) {
@@ -182,6 +184,6 @@ public class SearchCommand implements Runnable {
     }
   }
 
-  private record WebSearchOutcome(List<WebSearchResult> results, String skippedMessage) {
+  private record WebSearchOutcome(WebSearchContext context, String skippedMessage) {
   }
 }

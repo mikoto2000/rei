@@ -22,8 +22,9 @@ import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
-import dev.mikoto2000.rei.websearch.WebSearchResult;
-import dev.mikoto2000.rei.websearch.WebSearchService;
+import dev.mikoto2000.rei.websearch.WebSearchContext;
+import dev.mikoto2000.rei.websearch.WebSearchOrchestrator;
+import dev.mikoto2000.rei.websearch.WebSearchPage;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
 
@@ -35,15 +36,15 @@ class SearchCommandCancellationTest {
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     VectorDocumentService vectorDocumentService = Mockito.mock(VectorDocumentService.class);
-    WebSearchService webSearchService = Mockito.mock(WebSearchService.class);
+    WebSearchOrchestrator webSearchOrchestrator = Mockito.mock(WebSearchOrchestrator.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
     CountDownLatch subscribed = new CountDownLatch(1);
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(vectorDocumentService.search("spring ai", 3, null, null)).thenReturn(List.of(
         new VectorDocumentSearchResult("doc-1", "/tmp/docs/spec.md", 0, 0.91d, "Spring AI guide")));
-    when(webSearchService.search("spring ai", 5)).thenReturn(List.of(
-        new WebSearchResult("Spring AI News", "https://example.com/news", "latest update", "2026-03-31")));
+    when(webSearchOrchestrator.search("spring ai", 5)).thenReturn(WebSearchContext.primaryOnly(List.of(
+        new WebSearchPage("Spring AI News", "https://example.com/news", "latest update", "2026-03-31", "Fetched content"))));
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.stream().content()).thenReturn(Flux.concat(
         Flux.just("partial "),
@@ -59,7 +60,7 @@ class SearchCommandCancellationTest {
               chatClient,
               modelHolderService,
               vectorDocumentService,
-              webSearchService,
+              webSearchOrchestrator,
               cancellationService)).execute("spring ai"));
       assertTrue(subscribed.await(1, TimeUnit.SECONDS));
 
