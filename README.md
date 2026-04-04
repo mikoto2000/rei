@@ -42,7 +42,7 @@ export REI_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 
 | 変数 | 要否 | デフォルト | 説明 |
 | --- | --- | --- | --- |
-| `REI_OPENAI_BASE_URL` | 必須 | `http://192.168.1.17:11434` | OpenAI 互換 API のベース URL |
+| `REI_OPENAI_BASE_URL` | 必須 | `http://localhost:11434` | OpenAI 互換 API のベース URL |
 | `REI_OPENAI_API_KEY` | 必須 | `dummy-key` | API キー |
 | `REI_OPENAI_CHAT_MODEL` | 必須 | `gpt-oss:120b` | chat 用モデル名 |
 | `REI_OPENAI_EMBEDDING_MODEL` | 必須 | `qwen3-embedding:8b` | embedding 用モデル名 |
