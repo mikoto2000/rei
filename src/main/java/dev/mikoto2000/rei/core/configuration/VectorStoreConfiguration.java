@@ -14,7 +14,11 @@ import tools.jackson.databind.json.JsonMapper;
 public class VectorStoreConfiguration {
 
   @Bean
-  public VectorStore vectorStore(DataSource dataSource, EmbeddingModel embeddingModel, JsonMapper objectMapper) {
-    return new SqliteVectorStore(dataSource, embeddingModel, objectMapper);
+  public VectorStore vectorStore(
+      DataSource dataSource,
+      EmbeddingModel embeddingModel,
+      JsonMapper objectMapper,
+      SqliteVecProperties sqliteVecProperties) {
+    return new SqliteVectorStore(dataSource, embeddingModel, objectMapper, sqliteVecProperties.isEnabled());
   }
 }

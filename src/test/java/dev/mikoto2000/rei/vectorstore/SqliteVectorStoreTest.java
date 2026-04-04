@@ -27,6 +27,12 @@ import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 
+import dev.mikoto2000.rei.core.configuration.SqliteVecProperties;
+import dev.mikoto2000.rei.core.sqlitevec.PlatformDetector;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecAssetResolver;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecDataSource;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecInstaller;
 import tools.jackson.databind.json.JsonMapper;
 
 class SqliteVectorStoreTest {
@@ -252,14 +258,100 @@ class SqliteVectorStoreTest {
     assertTrue(results.getFirst().getScore() > results.get(1).getScore());
   }
 
+  @Test
+  void sqliteVecModeAddSearchAndDeleteDocuments() {
+    SqliteVectorStore store = newVecStore(tempDir.resolve("vec.db"));
+    store.add(List.of(
+        new Document("doc-1#0", "Spring AI guide", Map.of("docId", "doc-1", "source", "/tmp/spring.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z")),
+        new Document("doc-2#0", "Weather memo for Ibaraki", Map.of("docId", "doc-2", "source", "/tmp/weather.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z"))));
+
+    List<Document> results = store.similaritySearch(SearchRequest.builder()
+        .query("spring ai")
+        .topK(3)
+        .similarityThresholdAll()
+        .build());
+
+    assertEquals(1, results.size());
+    assertEquals("doc-1#0", results.getFirst().getId());
+    assertTrue(results.getFirst().getScore() > 0.9d);
+
+    store.delete(List.of("doc-1#0"));
+
+    List<Document> remaining = store.similaritySearch(SearchRequest.builder()
+        .query("spring ai")
+        .topK(3)
+        .similarityThresholdAll()
+        .build());
+    assertTrue(remaining.isEmpty());
+  }
+
+  @Test
+  void sqliteVecModeAppliesSourceFilterBeforeRanking() {
+    SqliteVectorStore store = newVecStore(tempDir.resolve("vec.db"));
+    store.add(List.of(
+        new Document("doc-1#0", "Spring memo", Map.of("docId", "doc-1", "source", "/tmp/source-a.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z")),
+        new Document("doc-2#0", "Spring AI memo", Map.of("docId", "doc-2", "source", "/tmp/source-b.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z"))));
+
+    FilterExpressionBuilder filters = new FilterExpressionBuilder();
+    List<Document> results = store.similaritySearch(SearchRequest.builder()
+        .query("spring ai")
+        .topK(1)
+        .similarityThresholdAll()
+        .filterExpression(filters.eq("source", "/tmp/source-a.md").build())
+        .build());
+
+    assertEquals(1, results.size());
+    assertEquals("doc-1#0", results.getFirst().getId());
+  }
+
   private SqliteVectorStore newStore(Path dbPath) {
-    return new SqliteVectorStore(newDataSource(dbPath), new FakeEmbeddingModel(), new JsonMapper());
+    return new SqliteVectorStore(newDataSource(dbPath), new FakeEmbeddingModel(), new JsonMapper(), false);
+  }
+
+  private SqliteVectorStore newVecStore(Path dbPath) {
+    return new SqliteVectorStore(newVecDataSource(dbPath), new FakeEmbeddingModel(), new JsonMapper(), true);
   }
 
   private SQLiteDataSource newDataSource(Path dbPath) {
     SQLiteDataSource dataSource = new SQLiteDataSource();
     dataSource.setUrl("jdbc:sqlite:" + dbPath);
     return dataSource;
+  }
+
+  private DataSource newVecDataSource(Path dbPath) {
+    SQLiteDataSource delegate = newDataSource(dbPath);
+    delegate.setLoadExtension(true);
+
+    SqliteVecProperties properties = new SqliteVecProperties();
+    properties.setEnabled(true);
+    properties.setExtensionPath(vecExtensionPath().toString());
+    SqliteVecInstaller installer = new SqliteVecInstaller(
+        properties,
+        new PlatformDetector(),
+        new SqliteVecAssetResolver(),
+        new JsonMapper());
+    SqliteVecExtensionLoader loader = new SqliteVecExtensionLoader(properties, installer);
+    return new SqliteVecDataSource(delegate, loader);
+  }
+
+  private Path vecExtensionPath() {
+    try {
+      Path cacheDir = tempDir.resolve("sqlite-vec-cache");
+      SqliteVecProperties properties = new SqliteVecProperties();
+      properties.setEnabled(true);
+      properties.setVersion("0.1.9");
+      properties.setAutoDownload(true);
+      properties.setCacheDir(cacheDir.toString());
+      properties.setReleaseBaseUrl("https://github.com/asg017/sqlite-vec/releases/download");
+      SqliteVecInstaller installer = new SqliteVecInstaller(
+          properties,
+          new PlatformDetector(),
+          new SqliteVecAssetResolver(),
+          new JsonMapper());
+      return installer.resolveExtensionPath();
+    } catch (Exception e) {
+      throw new IllegalStateException("failed to prepare sqlite-vec extension", e);
+    }
   }
 
   private float[] readStoredEmbedding(Path dbPath, String chunkId) {

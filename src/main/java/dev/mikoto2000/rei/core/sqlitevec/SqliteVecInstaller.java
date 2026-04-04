@@ -138,7 +138,9 @@ public class SqliteVecInstaller {
 
   private static final class HttpDownloadClient implements DownloadClient {
 
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final HttpClient httpClient = HttpClient.newBuilder()
+        .followRedirects(HttpClient.Redirect.NORMAL)
+        .build();
 
     @Override
     public byte[] download(URI uri) throws IOException {
