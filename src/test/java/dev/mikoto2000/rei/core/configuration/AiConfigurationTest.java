@@ -20,6 +20,7 @@ import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
 import dev.mikoto2000.rei.reminder.ReminderTools;
+import dev.mikoto2000.rei.search.SearchTools;
 import dev.mikoto2000.rei.task.TaskTools;
 import dev.mikoto2000.rei.websearch.WebSearchProperties;
 import dev.mikoto2000.rei.websearch.WebSearchTools;
@@ -40,6 +41,7 @@ class AiConfigurationTest {
         Mockito.mock(TaskTools.class),
         Mockito.mock(BriefingTools.class),
         Mockito.mock(ReminderTools.class),
+        Mockito.mock(SearchTools.class),
         Mockito.mock(WebSearchTools.class),
         provider);
 
@@ -63,6 +65,7 @@ class AiConfigurationTest {
         Mockito.mock(TaskTools.class),
         Mockito.mock(BriefingTools.class),
         Mockito.mock(ReminderTools.class),
+        Mockito.mock(SearchTools.class),
         Mockito.mock(WebSearchTools.class),
         provider);
 

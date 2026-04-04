@@ -16,6 +16,7 @@ import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
 import dev.mikoto2000.rei.reminder.ReminderTools;
+import dev.mikoto2000.rei.search.SearchTools;
 import dev.mikoto2000.rei.task.TaskTools;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentProperties;
 import dev.mikoto2000.rei.websearch.WebSearchProperties;
@@ -35,6 +36,7 @@ public class AiConfiguration {
   private final TaskTools taskTools;
   private final BriefingTools briefingTools;
   private final ReminderTools reminderTools;
+  private final SearchTools searchTools;
   private final WebSearchTools webSearchTools;
   private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
 
@@ -46,7 +48,7 @@ public class AiConfiguration {
             PromptChatMemoryAdvisor.builder(chatMemory)
                 .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
                 .build())
-        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, reminderTools, webSearchTools);
+        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, reminderTools, searchTools, webSearchTools);
 
     ToolCallbackProvider toolCallbackProvider = mcpToolCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {
