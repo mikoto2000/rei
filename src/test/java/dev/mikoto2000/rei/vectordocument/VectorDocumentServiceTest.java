@@ -27,6 +27,12 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 
+import dev.mikoto2000.rei.core.configuration.SqliteVecProperties;
+import dev.mikoto2000.rei.core.sqlitevec.PlatformDetector;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecAssetResolver;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecDataSource;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecInstaller;
 import dev.mikoto2000.rei.vectorstore.SqliteVectorStore;
 
 class VectorDocumentServiceTest {
@@ -290,7 +296,19 @@ class VectorDocumentServiceTest {
   private TestFixture newFixture(int chunkSize, int chunkOverlap) {
     SQLiteDataSource dataSource = new SQLiteDataSource();
     dataSource.setUrl("jdbc:sqlite:" + tempDir.resolve("memory.db"));
-    SqliteVectorStore vectorStore = new SqliteVectorStore(dataSource, new FakeEmbeddingModel(), new tools.jackson.databind.json.JsonMapper());
+    dataSource.setLoadExtension(true);
+    SqliteVecProperties properties = new SqliteVecProperties();
+    properties.setExtensionPath(vecExtensionPath().toString());
+    SqliteVecInstaller installer = new SqliteVecInstaller(
+        properties,
+        new PlatformDetector(),
+        new SqliteVecAssetResolver(),
+        new tools.jackson.databind.json.JsonMapper());
+    SqliteVecExtensionLoader loader = new SqliteVecExtensionLoader(properties, installer);
+    SqliteVectorStore vectorStore = new SqliteVectorStore(
+        new SqliteVecDataSource(dataSource, loader),
+        new FakeEmbeddingModel(),
+        new tools.jackson.databind.json.JsonMapper());
     VectorDocumentService service = new VectorDocumentService(
         vectorStore,
         vectorStore,
@@ -300,6 +318,25 @@ class VectorDocumentServiceTest {
   }
 
   private record TestFixture(VectorDocumentService service, SqliteVectorStore vectorStore) {
+  }
+
+  private Path vecExtensionPath() {
+    try {
+      Path cacheDir = tempDir.resolve("sqlite-vec-cache");
+      SqliteVecProperties properties = new SqliteVecProperties();
+      properties.setVersion("0.1.9");
+      properties.setAutoDownload(true);
+      properties.setCacheDir(cacheDir.toString());
+      properties.setReleaseBaseUrl("https://github.com/asg017/sqlite-vec/releases/download");
+      SqliteVecInstaller installer = new SqliteVecInstaller(
+          properties,
+          new PlatformDetector(),
+          new SqliteVecAssetResolver(),
+          new tools.jackson.databind.json.JsonMapper());
+      return installer.resolveExtensionPath();
+    } catch (Exception e) {
+      throw new IllegalStateException("failed to prepare sqlite-vec extension", e);
+    }
   }
 
   private VectorDocumentEntry findEntry(List<VectorDocumentEntry> entries, String suffix) {

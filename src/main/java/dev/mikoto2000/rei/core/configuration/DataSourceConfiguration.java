@@ -16,19 +16,12 @@ import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
 public class DataSourceConfiguration {
 
   @Bean
-  public DataSource dataSource(SqliteVecProperties sqliteVecProperties, SqliteVecExtensionLoader sqliteVecExtensionLoader) throws Exception {
+  public DataSource dataSource(SqliteVecExtensionLoader sqliteVecExtensionLoader) throws Exception {
     Path dbPath = ReiPaths.memoryDbPath();
     ReiPaths.ensureParentDirectoryExists(dbPath);
 
     SQLiteDataSource dataSource = new SQLiteDataSource();
-    String url = "jdbc:sqlite:" + dbPath.toString();
-    if (sqliteVecProperties.isEnabled()) {
-      url += "?enable_load_extension=true";
-    }
-    dataSource.setUrl(url);
-    if (!sqliteVecProperties.isEnabled()) {
-      return dataSource;
-    }
+    dataSource.setUrl("jdbc:sqlite:" + dbPath.toString() + "?enable_load_extension=true");
     return new SqliteVecDataSource(dataSource, sqliteVecExtensionLoader);
   }
 }

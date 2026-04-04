@@ -17,7 +17,6 @@ class SqliteVecExtensionLoaderTest {
   @Test
   void loadsResolvedExtensionIntoConnection() throws Exception {
     SqliteVecProperties properties = new SqliteVecProperties();
-    properties.setEnabled(true);
     Connection connection = mock(Connection.class);
     PreparedStatement preparedStatement = mock(PreparedStatement.class);
     when(connection.prepareStatement("SELECT load_extension(?)")).thenReturn(preparedStatement);

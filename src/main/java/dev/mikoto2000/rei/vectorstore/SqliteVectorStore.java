@@ -1,16 +1,14 @@
 package dev.mikoto2000.rei.vectorstore;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Locale;
 
 import javax.sql.DataSource;
 
@@ -30,18 +28,12 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
   private final DataSource dataSource;
   private final EmbeddingModel embeddingModel;
   private final JsonMapper objectMapper;
-  private final boolean sqliteVecEnabled;
   private final int embeddingDimensions;
 
   public SqliteVectorStore(DataSource dataSource, EmbeddingModel embeddingModel, JsonMapper objectMapper) {
-    this(dataSource, embeddingModel, objectMapper, false);
-  }
-
-  public SqliteVectorStore(DataSource dataSource, EmbeddingModel embeddingModel, JsonMapper objectMapper, boolean sqliteVecEnabled) {
     this.dataSource = dataSource;
     this.embeddingModel = embeddingModel;
     this.objectMapper = objectMapper;
-    this.sqliteVecEnabled = sqliteVecEnabled;
     this.embeddingDimensions = embeddingModel.dimensions();
     initializeSchema();
   }
@@ -66,15 +58,14 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
 
   @Override
   public List<VectorDocumentEntry> list() {
-    String chunkTable = chunkTableName();
     try (Connection connection = dataSource.getConnection();
-        var statement = connection.prepareStatement(("""
+        var statement = connection.prepareStatement("""
             SELECT d.doc_id, d.source, COUNT(c.chunk_id) AS chunk_count, d.ingested_at
             FROM documents d
-            JOIN %s c ON c.doc_id = d.doc_id
+            JOIN document_chunks_vec c ON c.doc_id = d.doc_id
             GROUP BY d.doc_id, d.source, d.ingested_at
             ORDER BY d.source ASC, d.doc_id ASC
-            """).formatted(chunkTable))) {
+            """)) {
       try (var rs = statement.executeQuery()) {
         List<VectorDocumentEntry> entries = new ArrayList<>();
         while (rs.next()) {
@@ -125,21 +116,31 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
 
   @Override
   public List<Document> similaritySearch(SearchRequest request) {
-    if (sqliteVecEnabled) {
-      return similaritySearchWithSqliteVec(request);
-    }
     float[] queryEmbedding = normalizeEmbedding(embeddingModel.embed(new Document(request.getQuery())));
     FilterCriteria criteria = request.hasFilterExpression() ? parseFilter(request.getFilterExpression()) : FilterCriteria.empty();
     List<String> queryTerms = lexicalQueryTerms(request.getQuery());
-    List<Object> params = new ArrayList<>();
+    if (isZeroEmbedding(queryEmbedding)) {
+      return lexicalOnlySearch(request, criteria, queryTerms);
+    }
+    int candidateLimit = queryTerms.isEmpty() ? request.getTopK() : Math.max(request.getTopK() * 4, 20);
+
     StringBuilder sql = new StringBuilder("""
-        SELECT c.chunk_id, c.chunk_index, c.text, c.metadata_json, c.embedding_blob,
-               d.doc_id, d.source, d.ingested_at
-        FROM document_chunks c
-        JOIN documents d ON d.doc_id = c.doc_id
+        SELECT chunk_id, doc_id, source, chunk_index, ingested_at, chunk_text, metadata_json, distance
+        FROM document_chunks_vec
+        WHERE embedding MATCH ?
+          AND k = ?
         """);
-    appendWhereClause(sql, params, criteria, queryTerms);
-    appendOrderAndLimitClause(sql, params, queryTerms, request.getTopK());
+    List<Object> params = new ArrayList<>();
+    params.add(writeEmbeddingLiteral(queryEmbedding));
+    params.add(candidateLimit);
+    if (criteria.source() != null) {
+      sql.append(" AND source = ?");
+      params.add(criteria.source());
+    }
+    if (criteria.docId() != null) {
+      sql.append(" AND doc_id = ?");
+      params.add(criteria.docId());
+    }
 
     List<ScoredDocument> scoredDocuments = new ArrayList<>();
     try (Connection connection = dataSource.getConnection();
@@ -148,14 +149,17 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
       bindParams(statement, params);
       try (var rs = statement.executeQuery()) {
         while (rs.next()) {
-          float[] embedding = readEmbedding(rs.getBytes("embedding_blob"));
-          if (embedding.length != queryEmbedding.length) {
-            throw new IllegalStateException("embedding 次元が一致しません");
+          Object distanceValue = rs.getObject("distance");
+          if (distanceValue == null) {
+            continue;
           }
-          double vectorScore = cosineSimilarity(queryEmbedding, embedding);
-          double lexicalScore = lexicalScore(queryTerms, rs.getString("text"));
+          double vectorScore = 1.0d - ((Number) distanceValue).doubleValue();
+          double lexicalScore = lexicalScore(queryTerms, rs.getString("chunk_text"));
           if (lexicalScore == 0.0d && !queryTerms.isEmpty()) {
             lexicalScore = adjacentLexicalScore(adjacentStatement, queryTerms, rs.getString("doc_id"), rs.getInt("chunk_index"));
+          }
+          if (!queryTerms.isEmpty() && lexicalScore == 0.0d) {
+            continue;
           }
           double score = hybridScore(vectorScore, lexicalScore, queryTerms);
           if (score > 0.0d && score >= request.getSimilarityThreshold()) {
@@ -164,13 +168,14 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
             metadata.put("source", rs.getString("source"));
             metadata.put("chunkIndex", rs.getInt("chunk_index"));
             metadata.put("ingestedAt", rs.getString("ingested_at"));
-            Document document = Document.builder()
-                .id(rs.getString("chunk_id"))
-                .text(rs.getString("text"))
-                .metadata(metadata)
-                .score(score)
-                .build();
-            scoredDocuments.add(new ScoredDocument(document, score));
+            scoredDocuments.add(new ScoredDocument(
+                Document.builder()
+                    .id(rs.getString("chunk_id"))
+                    .text(rs.getString("chunk_text"))
+                    .metadata(metadata)
+                    .score(score)
+                    .build(),
+                score));
           }
         }
       }
@@ -178,6 +183,75 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
       throw sqliteException("ベクトル文書の検索に失敗しました", e);
     }
 
+    return scoredDocuments.stream()
+        .sorted(Comparator.comparing(ScoredDocument::score).reversed().thenComparing(result -> result.document().getId()))
+        .limit(request.getTopK())
+        .map(ScoredDocument::document)
+        .toList();
+  }
+
+  private List<Document> lexicalOnlySearch(SearchRequest request, FilterCriteria criteria, List<String> queryTerms) {
+    if (queryTerms.isEmpty()) {
+      return List.of();
+    }
+    List<Object> params = new ArrayList<>();
+    StringBuilder sql = new StringBuilder("""
+        SELECT chunk_id, doc_id, source, chunk_index, ingested_at, chunk_text, metadata_json
+        FROM document_chunks_vec
+        WHERE (
+        """);
+    sql.append(lexicalClause("chunk_text", queryTerms, params));
+    sql.append("""
+        OR EXISTS (
+          SELECT 1
+          FROM document_chunks_vec cx
+          WHERE cx.doc_id = document_chunks_vec.doc_id
+            AND ABS(cx.chunk_index - document_chunks_vec.chunk_index) <= 1
+            AND (
+        """);
+    sql.append(lexicalClause("cx.chunk_text", queryTerms, params));
+    sql.append(")))");
+    if (criteria.source() != null) {
+      sql.append(" AND source = ?");
+      params.add(criteria.source());
+    }
+    if (criteria.docId() != null) {
+      sql.append(" AND doc_id = ?");
+      params.add(criteria.docId());
+    }
+
+    List<ScoredDocument> scoredDocuments = new ArrayList<>();
+    try (Connection connection = dataSource.getConnection();
+        var statement = connection.prepareStatement(sql.toString());
+        var adjacentStatement = connection.prepareStatement(adjacentLexicalScoreSql(queryTerms))) {
+      bindParams(statement, params);
+      try (var rs = statement.executeQuery()) {
+        while (rs.next()) {
+          double lexicalScore = lexicalScore(queryTerms, rs.getString("chunk_text"));
+          if (lexicalScore == 0.0d) {
+            lexicalScore = adjacentLexicalScore(adjacentStatement, queryTerms, rs.getString("doc_id"), rs.getInt("chunk_index"));
+          }
+          if (lexicalScore == 0.0d || lexicalScore < request.getSimilarityThreshold()) {
+            continue;
+          }
+          Map<String, Object> metadata = readMetadata(rs.getString("metadata_json"));
+          metadata.put("docId", rs.getString("doc_id"));
+          metadata.put("source", rs.getString("source"));
+          metadata.put("chunkIndex", rs.getInt("chunk_index"));
+          metadata.put("ingestedAt", rs.getString("ingested_at"));
+          scoredDocuments.add(new ScoredDocument(
+              Document.builder()
+                  .id(rs.getString("chunk_id"))
+                  .text(rs.getString("chunk_text"))
+                  .metadata(metadata)
+                  .score(lexicalScore)
+                  .build(),
+              lexicalScore));
+        }
+      }
+    } catch (SQLException e) {
+      throw sqliteException("ベクトル文書の検索に失敗しました", e);
+    }
     return scoredDocuments.stream()
         .sorted(Comparator.comparing(ScoredDocument::score).reversed().thenComparing(result -> result.document().getId()))
         .limit(request.getTopK())
@@ -197,7 +271,11 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
         INSERT INTO documents (doc_id, source, ingested_at)
         VALUES (?, ?, ?)
         """);
-        var chunkStatement = connection.prepareStatement(chunkInsertSql())) {
+        var chunkStatement = connection.prepareStatement("""
+            INSERT INTO document_chunks_vec
+              (chunk_id, doc_id, chunk_index, chunk_text, metadata_json, embedding, source, ingested_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """)) {
       for (Document document : documents) {
         Map<String, Object> metadata = new LinkedHashMap<>(document.getMetadata());
         String docId = requiredStringValue(metadata, "docId");
@@ -211,18 +289,11 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
         chunkStatement.setString(1, document.getId());
         chunkStatement.setString(2, docId);
         chunkStatement.setInt(3, chunkIndex);
-        if (sqliteVecEnabled) {
-          chunkStatement.setString(4, document.getText());
-          chunkStatement.setString(5, writeJson(metadata));
-          chunkStatement.setString(6, writeEmbeddingLiteral(embedding));
-          chunkStatement.setString(7, source);
-          chunkStatement.setString(8, ingestedAt);
-        } else {
-          chunkStatement.setString(4, document.getText());
-          chunkStatement.setString(5, writeJson(metadata));
-          chunkStatement.setBytes(6, writeEmbedding(embedding));
-          chunkStatement.setInt(7, embedding.length);
-        }
+        chunkStatement.setString(4, document.getText());
+        chunkStatement.setString(5, writeJson(metadata));
+        chunkStatement.setString(6, writeEmbeddingLiteral(embedding));
+        chunkStatement.setString(7, source);
+        chunkStatement.setString(8, ingestedAt);
         chunkStatement.addBatch();
       }
 
@@ -239,7 +310,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
   }
 
   private int deleteByDocId(Connection connection, String docId) throws SQLException {
-    try (var deleteChunks = connection.prepareStatement("DELETE FROM " + chunkTableName() + " WHERE doc_id = ?");
+    try (var deleteChunks = connection.prepareStatement("DELETE FROM document_chunks_vec WHERE doc_id = ?");
         var deleteDocument = connection.prepareStatement("DELETE FROM documents WHERE doc_id = ?")) {
       deleteChunks.setString(1, docId);
       deleteChunks.executeUpdate();
@@ -249,23 +320,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
   }
 
   private void deleteBySource(Connection connection, String source) throws SQLException {
-    if (sqliteVecEnabled) {
-      try (var deleteChunks = connection.prepareStatement("""
-          DELETE FROM document_chunks_vec
-          WHERE source = ?
-          """);
-          var deleteDocuments = connection.prepareStatement("DELETE FROM documents WHERE source = ?")) {
-        deleteChunks.setString(1, source);
-        deleteChunks.executeUpdate();
-        deleteDocuments.setString(1, source);
-        deleteDocuments.executeUpdate();
-      }
-      return;
-    }
-    try (var deleteChunks = connection.prepareStatement("""
-        DELETE FROM document_chunks
-        WHERE doc_id IN (SELECT doc_id FROM documents WHERE source = ?)
-        """);
+    try (var deleteChunks = connection.prepareStatement("DELETE FROM document_chunks_vec WHERE source = ?");
         var deleteDocuments = connection.prepareStatement("DELETE FROM documents WHERE source = ?")) {
       deleteChunks.setString(1, source);
       deleteChunks.executeUpdate();
@@ -308,7 +363,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
   }
 
   private void deleteChunks(Connection connection, List<String> ids) throws SQLException {
-    try (var deleteChunks = connection.prepareStatement("DELETE FROM " + chunkTableName() + " WHERE chunk_id = ?")) {
+    try (var deleteChunks = connection.prepareStatement("DELETE FROM document_chunks_vec WHERE chunk_id = ?")) {
       for (String id : ids) {
         deleteChunks.setString(1, id);
         deleteChunks.addBatch();
@@ -320,25 +375,10 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
   private void deleteOrphanDocuments(Connection connection) throws SQLException {
     try (var deleteOrphans = connection.prepareStatement("""
         DELETE FROM documents
-        WHERE doc_id NOT IN (SELECT DISTINCT doc_id FROM %s)
-        """.formatted(chunkTableName()))) {
+        WHERE doc_id NOT IN (SELECT DISTINCT doc_id FROM document_chunks_vec)
+        """)) {
       deleteOrphans.executeUpdate();
     }
-  }
-
-  private String chunkInsertSql() {
-    if (sqliteVecEnabled) {
-      return """
-          INSERT INTO document_chunks_vec
-            (chunk_id, doc_id, chunk_index, chunk_text, metadata_json, embedding, source, ingested_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """;
-    }
-    return """
-        INSERT INTO document_chunks
-          (chunk_id, doc_id, chunk_index, text, metadata_json, embedding_blob, embedding_dim)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """;
   }
 
   private FilterCriteria parseFilter(Filter.Expression expression) {
@@ -360,78 +400,6 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
     };
   }
 
-  private void appendWhereClause(StringBuilder sql, List<Object> params, FilterCriteria criteria, List<String> queryTerms) {
-    List<String> conditions = new ArrayList<>();
-    if (criteria.source() != null) {
-      conditions.add((sqliteVecEnabled ? "c.source" : "d.source") + " = ?");
-      params.add(criteria.source());
-    }
-    if (criteria.docId() != null) {
-      conditions.add((sqliteVecEnabled ? "c.doc_id" : "d.doc_id") + " = ?");
-      params.add(criteria.docId());
-    }
-    if (sqliteVecEnabled) {
-      return;
-    }
-    if (!queryTerms.isEmpty()) {
-      String lexicalClause = lexicalClause("c.text", queryTerms, params);
-      String adjacentLexicalClause = lexicalClause("cx.text", queryTerms, params);
-      conditions.add("(" + lexicalClause + " OR EXISTS ("
-          + "SELECT 1 FROM document_chunks cx "
-          + "WHERE cx.doc_id = c.doc_id "
-          + "AND ABS(cx.chunk_index - c.chunk_index) <= 1 "
-          + "AND (" + adjacentLexicalClause + ")))");
-    }
-    if (!conditions.isEmpty()) {
-      sql.append(" WHERE ").append(String.join(" AND ", conditions));
-    }
-  }
-
-  private void appendOrderAndLimitClause(StringBuilder sql, List<Object> params, List<String> queryTerms, int topK) {
-    if (!queryTerms.isEmpty()) {
-      List<String> lexicalMatches = new ArrayList<>();
-      for (String queryTerm : queryTerms) {
-        lexicalMatches.add("CASE WHEN LOWER(c.text) LIKE ? THEN 1 ELSE 0 END");
-        params.add("%" + queryTerm + "%");
-      }
-      sql.append(" ORDER BY (")
-          .append(String.join(" + ", lexicalMatches))
-          .append(") DESC, c.chunk_id ASC");
-      sql.append(" LIMIT ?");
-      params.add(Math.max(topK * 20, 20));
-      return;
-    }
-    sql.append(" ORDER BY c.chunk_id ASC");
-  }
-
-  private String lexicalClause(String textExpression, List<String> queryTerms, List<Object> params) {
-    List<String> lexicalConditions = new ArrayList<>();
-    for (String queryTerm : queryTerms) {
-      lexicalConditions.add("LOWER(" + textExpression + ") LIKE ?");
-      params.add("%" + queryTerm + "%");
-    }
-    return String.join(" OR ", lexicalConditions);
-  }
-
-  private String adjacentLexicalScoreSql(List<String> queryTerms) {
-    if (queryTerms.isEmpty()) {
-      return "SELECT 0";
-    }
-    List<String> lexicalMatches = new ArrayList<>();
-    String textColumn = sqliteVecEnabled ? "chunk_text" : "text";
-    for (int i = 0; i < queryTerms.size(); i++) {
-      lexicalMatches.add("CASE WHEN LOWER(" + textColumn + ") LIKE ? THEN 1 ELSE 0 END");
-    }
-    return "SELECT MAX((" + String.join(" + ", lexicalMatches) + ") * 1.0 / " + queryTerms.size() + ") "
-        + "FROM " + chunkTableName() + " WHERE doc_id = ? AND ABS(chunk_index - ?) <= 1";
-  }
-
-  private void bindParams(java.sql.PreparedStatement statement, List<Object> params) throws SQLException {
-    for (int i = 0; i < params.size(); i++) {
-      statement.setObject(i + 1, params.get(i));
-    }
-  }
-
   private void initializeSchema() {
     try (Connection connection = dataSource.getConnection(); var statement = connection.createStatement()) {
       statement.executeUpdate("PRAGMA foreign_keys = ON");
@@ -442,37 +410,21 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
             ingested_at TEXT
           )
           """);
-      if (sqliteVecEnabled) {
-        if (embeddingDimensions <= 0) {
-          throw new IllegalStateException("embedding 次元が不正です: " + embeddingDimensions);
-        }
-        statement.executeUpdate("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS document_chunks_vec USING vec0(
-              chunk_id text,
-              doc_id text,
-              chunk_index integer,
-              source text,
-              ingested_at text,
-              embedding float[%d] distance_metric=cosine,
-              +chunk_text text,
-              +metadata_json text
-            )
-            """.formatted(embeddingDimensions));
-      } else {
-        statement.executeUpdate("""
-            CREATE TABLE IF NOT EXISTS document_chunks (
-              chunk_id TEXT PRIMARY KEY,
-              doc_id TEXT NOT NULL,
-              chunk_index INTEGER NOT NULL,
-              text TEXT NOT NULL,
-              metadata_json TEXT NOT NULL,
-              embedding_blob BLOB NOT NULL,
-              embedding_dim INTEGER NOT NULL,
-              FOREIGN KEY (doc_id) REFERENCES documents(doc_id) ON DELETE CASCADE
-            )
-            """);
-        statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_document_chunks_doc_id ON document_chunks(doc_id)");
+      if (embeddingDimensions <= 0) {
+        throw new IllegalStateException("embedding 次元が不正です: " + embeddingDimensions);
       }
+      statement.executeUpdate("""
+          CREATE VIRTUAL TABLE IF NOT EXISTS document_chunks_vec USING vec0(
+            chunk_id text,
+            doc_id text,
+            chunk_index integer,
+            source text,
+            ingested_at text,
+            embedding float[%d] distance_metric=cosine,
+            +chunk_text text,
+            +metadata_json text
+          )
+          """.formatted(embeddingDimensions));
       statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_documents_source ON documents(source)");
     } catch (SQLException e) {
       throw sqliteException("vector store テーブルの初期化に失敗しました", e);
@@ -496,26 +448,6 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
     }
   }
 
-  private byte[] writeEmbedding(float[] embedding) {
-    ByteBuffer buffer = ByteBuffer.allocate(embedding.length * Float.BYTES).order(ByteOrder.LITTLE_ENDIAN);
-    for (float value : embedding) {
-      buffer.putFloat(value);
-    }
-    return buffer.array();
-  }
-
-  private float[] readEmbedding(byte[] value) {
-    if (value == null || value.length == 0 || value.length % Float.BYTES != 0) {
-      throw new IllegalStateException("embedding の読み込みに失敗しました");
-    }
-    ByteBuffer buffer = ByteBuffer.wrap(value).order(ByteOrder.LITTLE_ENDIAN);
-    float[] embedding = new float[value.length / Float.BYTES];
-    for (int i = 0; i < embedding.length; i++) {
-      embedding[i] = buffer.getFloat();
-    }
-    return embedding;
-  }
-
   private String stringValue(Object value, String fallback) {
     return value == null ? fallback : value.toString();
   }
@@ -527,10 +459,6 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
       throw new IllegalStateException("metadata に必須項目がありません: " + key);
     }
     return stringValue;
-  }
-
-  private int intValue(Object value) {
-    return value instanceof Number number ? number.intValue() : -1;
   }
 
   private int requiredIntValue(Map<String, Object> metadata, String key) {
@@ -560,19 +488,13 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
     return normalized;
   }
 
-  private double cosineSimilarity(float[] left, float[] right) {
-    double dot = 0.0d;
-    double leftNorm = 0.0d;
-    double rightNorm = 0.0d;
-    for (int i = 0; i < left.length; i++) {
-      dot += left[i] * right[i];
-      leftNorm += left[i] * left[i];
-      rightNorm += right[i] * right[i];
+  private boolean isZeroEmbedding(float[] embedding) {
+    for (float value : embedding) {
+      if (value != 0.0f) {
+        return false;
+      }
     }
-    if (leftNorm == 0.0d || rightNorm == 0.0d) {
-      return 0.0d;
-    }
-    return dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
+    return true;
   }
 
   private List<String> lexicalQueryTerms(String query) {
@@ -595,6 +517,33 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
         .filter(lowerText::contains)
         .count();
     return (double) matches / (double) queryTerms.size();
+  }
+
+  private String lexicalClause(String textExpression, List<String> queryTerms, List<Object> params) {
+    List<String> lexicalConditions = new ArrayList<>();
+    for (String queryTerm : queryTerms) {
+      lexicalConditions.add("LOWER(" + textExpression + ") LIKE ?");
+      params.add("%" + queryTerm + "%");
+    }
+    return String.join(" OR ", lexicalConditions);
+  }
+
+  private String adjacentLexicalScoreSql(List<String> queryTerms) {
+    if (queryTerms.isEmpty()) {
+      return "SELECT 0";
+    }
+    List<String> lexicalMatches = new ArrayList<>();
+    for (int i = 0; i < queryTerms.size(); i++) {
+      lexicalMatches.add("CASE WHEN LOWER(chunk_text) LIKE ? THEN 1 ELSE 0 END");
+    }
+    return "SELECT MAX((" + String.join(" + ", lexicalMatches) + ") * 1.0 / " + queryTerms.size() + ") "
+        + "FROM document_chunks_vec WHERE doc_id = ? AND ABS(chunk_index - ?) <= 1";
+  }
+
+  private void bindParams(java.sql.PreparedStatement statement, List<Object> params) throws SQLException {
+    for (int i = 0; i < params.size(); i++) {
+      statement.setObject(i + 1, params.get(i));
+    }
   }
 
   private double adjacentLexicalScore(
@@ -637,74 +586,6 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
     return builder.append(']').toString();
   }
 
-  private String chunkTableName() {
-    return sqliteVecEnabled ? "document_chunks_vec" : "document_chunks";
-  }
-
-  private List<Document> similaritySearchWithSqliteVec(SearchRequest request) {
-    float[] queryEmbedding = normalizeEmbedding(embeddingModel.embed(new Document(request.getQuery())));
-    FilterCriteria criteria = request.hasFilterExpression() ? parseFilter(request.getFilterExpression()) : FilterCriteria.empty();
-    List<String> queryTerms = lexicalQueryTerms(request.getQuery());
-    int candidateLimit = queryTerms.isEmpty() ? request.getTopK() : Math.max(request.getTopK() * 4, 20);
-
-    StringBuilder sql = new StringBuilder("""
-        SELECT chunk_id, doc_id, source, chunk_index, ingested_at, chunk_text, metadata_json, distance
-        FROM document_chunks_vec
-        WHERE embedding MATCH ?
-          AND k = ?
-        """);
-    List<Object> params = new ArrayList<>();
-    params.add(writeEmbeddingLiteral(queryEmbedding));
-    params.add(candidateLimit);
-    if (criteria.source() != null) {
-      sql.append(" AND source = ?");
-      params.add(criteria.source());
-    }
-    if (criteria.docId() != null) {
-      sql.append(" AND doc_id = ?");
-      params.add(criteria.docId());
-    }
-
-    List<ScoredDocument> scoredDocuments = new ArrayList<>();
-    try (Connection connection = dataSource.getConnection();
-        var statement = connection.prepareStatement(sql.toString());
-        var adjacentStatement = connection.prepareStatement(adjacentLexicalScoreSql(queryTerms))) {
-      bindParams(statement, params);
-      try (var rs = statement.executeQuery()) {
-        while (rs.next()) {
-          double vectorScore = 1.0d - rs.getDouble("distance");
-          double lexicalScore = lexicalScore(queryTerms, rs.getString("chunk_text"));
-          if (lexicalScore == 0.0d && !queryTerms.isEmpty()) {
-            lexicalScore = adjacentLexicalScore(adjacentStatement, queryTerms, rs.getString("doc_id"), rs.getInt("chunk_index"));
-          }
-          double score = hybridScore(vectorScore, lexicalScore, queryTerms);
-          if (score > 0.0d && score >= request.getSimilarityThreshold()) {
-            Map<String, Object> metadata = readMetadata(rs.getString("metadata_json"));
-            metadata.put("docId", rs.getString("doc_id"));
-            metadata.put("source", rs.getString("source"));
-            metadata.put("chunkIndex", rs.getInt("chunk_index"));
-            metadata.put("ingestedAt", rs.getString("ingested_at"));
-            Document document = Document.builder()
-                .id(rs.getString("chunk_id"))
-                .text(rs.getString("chunk_text"))
-                .metadata(metadata)
-                .score(score)
-                .build();
-            scoredDocuments.add(new ScoredDocument(document, score));
-          }
-        }
-      }
-    } catch (SQLException e) {
-      throw sqliteException("ベクトル文書の検索に失敗しました", e);
-    }
-
-    return scoredDocuments.stream()
-        .sorted(Comparator.comparing(ScoredDocument::score).reversed().thenComparing(result -> result.document().getId()))
-        .limit(request.getTopK())
-        .map(ScoredDocument::document)
-        .toList();
-  }
-
   private <T> T withTransaction(SqliteWork<T> work) {
     try (Connection connection = dataSource.getConnection()) {
       connection.setAutoCommit(false);
@@ -735,6 +616,9 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
       }
       if (lower.contains("not a database") || lower.contains("malformed")) {
         return new IllegalStateException("SQLite ファイルが破損しているか、SQLite 形式ではありません", exception);
+      }
+      if (lower.contains("dimension")) {
+        return new IllegalStateException("embedding 次元が一致しません", exception);
       }
     }
     return new IllegalStateException(fallbackMessage, exception);

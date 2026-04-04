@@ -263,7 +263,7 @@ public class VectorDocumentService {
     double best = topScores.isEmpty() ? 0.0d : topScores.getFirst();
     double second = topScores.size() > 1 ? topScores.get(1) : 0.0d;
     double lexicalCoverage = lexicalCoverage(query, mergeAdjacentChunks(documents, chunkIndex(documents.getFirst())));
-    return best + (second * 0.75d) + (lexicalCoverage * 0.1d);
+    return best + second + (lexicalCoverage * 0.1d);
   }
 
   private double lexicalCoverage(String query, String text) {

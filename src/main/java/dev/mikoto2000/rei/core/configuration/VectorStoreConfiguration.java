@@ -17,8 +17,7 @@ public class VectorStoreConfiguration {
   public VectorStore vectorStore(
       DataSource dataSource,
       EmbeddingModel embeddingModel,
-      JsonMapper objectMapper,
-      SqliteVecProperties sqliteVecProperties) {
-    return new SqliteVectorStore(dataSource, embeddingModel, objectMapper, sqliteVecProperties.isEnabled());
+      JsonMapper objectMapper) {
+    return new SqliteVectorStore(dataSource, embeddingModel, objectMapper);
   }
 }

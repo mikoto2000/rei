@@ -120,7 +120,6 @@ class SqliteVecInstallerTest {
 
   private SqliteVecProperties properties() {
     SqliteVecProperties properties = new SqliteVecProperties();
-    properties.setEnabled(true);
     properties.setVersion("0.1.9");
     properties.setAutoDownload(true);
     properties.setReleaseBaseUrl("https://github.com/asg017/sqlite-vec/releases/download");

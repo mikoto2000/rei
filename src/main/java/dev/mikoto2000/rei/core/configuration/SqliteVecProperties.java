@@ -10,7 +10,6 @@ import lombok.Setter;
 @ConfigurationProperties(prefix = "rei.sqlite-vec")
 public class SqliteVecProperties {
 
-  private boolean enabled = false;
   private String version = "0.1.9";
   private boolean autoDownload = true;
   private String cacheDir = ".rei/extensions/sqlite-vec";

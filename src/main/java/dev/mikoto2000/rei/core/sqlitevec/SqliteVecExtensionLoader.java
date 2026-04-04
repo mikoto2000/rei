@@ -26,9 +26,6 @@ public class SqliteVecExtensionLoader {
   }
 
   public void load(Connection connection) {
-    if (!properties.isEnabled()) {
-      return;
-    }
     Path extensionPath = extensionPathResolver.resolve();
     try (var statement = connection.prepareStatement("SELECT load_extension(?)")) {
       statement.setString(1, extensionPath.toAbsolutePath().toString());

@@ -5,8 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -116,7 +114,7 @@ class SqliteVectorStoreTest {
         "2026-03-29T00:00:00Z",
         List.of(new Document("doc-1#0", "Spring AI guide", Map.of("docId", "doc-1", "source", "/tmp/source-a.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z"))));
 
-    SqliteVectorStore failingStore = new SqliteVectorStore(newDataSource(dbPath), new FailingEmbeddingModel(), new JsonMapper());
+    SqliteVectorStore failingStore = new SqliteVectorStore(newVecDataSource(dbPath), new FailingEmbeddingModel(), new JsonMapper());
 
     assertThrows(IllegalStateException.class, () -> failingStore.replaceBySource(
         "doc-2",
@@ -165,22 +163,6 @@ class SqliteVectorStoreTest {
   }
 
   @Test
-  void storesNormalizedEmbeddings() {
-    Path dbPath = tempDir.resolve("vector.db");
-    SqliteVectorStore store = newStore(dbPath);
-    store.add(List.of(
-        new Document("doc-1#0", "Spring AI guide", Map.of("docId", "doc-1", "source", "/tmp/spring.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z"))));
-
-    float[] embedding = readStoredEmbedding(dbPath, "doc-1#0");
-    double norm = 0.0d;
-    for (float value : embedding) {
-      norm += value * value;
-    }
-
-    assertEquals(1.0d, Math.sqrt(norm), 0.0001d);
-  }
-
-  @Test
   void constructorReportsCorruptedDatabaseClearly() {
     IllegalStateException error = assertThrows(IllegalStateException.class,
         () -> new SqliteVectorStore(new FailingDataSource("file is not a database"), new FakeEmbeddingModel(), new JsonMapper()));
@@ -190,7 +172,60 @@ class SqliteVectorStoreTest {
 
   @Test
   void addReportsLockedDatabaseClearly() {
-    SqliteVectorStore store = new SqliteVectorStore(new FailingDataSource("database is locked", false), new FakeEmbeddingModel(), new JsonMapper());
+    DataSource delegate = newVecDataSource(tempDir.resolve("locked.db"));
+    DataSource lockedDataSource = new DataSource() {
+      private int calls;
+
+      @Override
+      public Connection getConnection() throws SQLException {
+        calls++;
+        if (calls == 1) {
+          return delegate.getConnection();
+        }
+        throw new SQLException("database is locked");
+      }
+
+      @Override
+      public Connection getConnection(String username, String password) throws SQLException {
+        return getConnection();
+      }
+
+      @Override
+      public <T> T unwrap(Class<T> iface) throws SQLException {
+        return delegate.unwrap(iface);
+      }
+
+      @Override
+      public boolean isWrapperFor(Class<?> iface) throws SQLException {
+        return delegate.isWrapperFor(iface);
+      }
+
+      @Override
+      public java.io.PrintWriter getLogWriter() throws SQLException {
+        return delegate.getLogWriter();
+      }
+
+      @Override
+      public void setLogWriter(java.io.PrintWriter out) throws SQLException {
+        delegate.setLogWriter(out);
+      }
+
+      @Override
+      public void setLoginTimeout(int seconds) throws SQLException {
+        delegate.setLoginTimeout(seconds);
+      }
+
+      @Override
+      public int getLoginTimeout() throws SQLException {
+        return delegate.getLoginTimeout();
+      }
+
+      @Override
+      public java.util.logging.Logger getParentLogger() throws java.sql.SQLFeatureNotSupportedException {
+        return delegate.getParentLogger();
+      }
+    };
+    SqliteVectorStore store = new SqliteVectorStore(lockedDataSource, new FakeEmbeddingModel(), new JsonMapper());
 
     IllegalStateException error = assertThrows(IllegalStateException.class, () -> store.add(List.of(
         new Document("doc-1#0", "Spring AI guide", Map.of("docId", "doc-1", "source", "/tmp/spring.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z")))));
@@ -205,7 +240,7 @@ class SqliteVectorStoreTest {
     writeStore.add(List.of(
         new Document("doc-1#0", "Spring AI guide", Map.of("docId", "doc-1", "source", "/tmp/spring.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z"))));
 
-    SqliteVectorStore readStore = new SqliteVectorStore(newDataSource(dbPath), new ShortEmbeddingModel(), new JsonMapper());
+    SqliteVectorStore readStore = new SqliteVectorStore(newVecDataSource(dbPath), new ShortEmbeddingModel(), new JsonMapper());
 
     IllegalStateException error = assertThrows(IllegalStateException.class, () -> readStore.similaritySearch(SearchRequest.builder()
         .query("spring ai")
@@ -219,7 +254,7 @@ class SqliteVectorStoreTest {
   @Test
   void similaritySearchPrefiltersDocumentsByLexicalMatches() {
     SqliteVectorStore store = new SqliteVectorStore(
-        newDataSource(tempDir.resolve("vector.db")),
+        newVecDataSource(tempDir.resolve("vector.db")),
         new ConstantEmbeddingModel(),
         new JsonMapper());
     store.add(List.of(
@@ -240,7 +275,7 @@ class SqliteVectorStoreTest {
   @Test
   void similaritySearchMixesLexicalScoreIntoRanking() {
     SqliteVectorStore store = new SqliteVectorStore(
-        newDataSource(tempDir.resolve("vector.db")),
+        newVecDataSource(tempDir.resolve("vector.db")),
         new ConstantEmbeddingModel(),
         new JsonMapper());
     store.add(List.of(
@@ -260,7 +295,7 @@ class SqliteVectorStoreTest {
 
   @Test
   void sqliteVecModeAddSearchAndDeleteDocuments() {
-    SqliteVectorStore store = newVecStore(tempDir.resolve("vec.db"));
+    SqliteVectorStore store = newStore(tempDir.resolve("vec.db"));
     store.add(List.of(
         new Document("doc-1#0", "Spring AI guide", Map.of("docId", "doc-1", "source", "/tmp/spring.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z")),
         new Document("doc-2#0", "Weather memo for Ibaraki", Map.of("docId", "doc-2", "source", "/tmp/weather.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z"))));
@@ -287,7 +322,7 @@ class SqliteVectorStoreTest {
 
   @Test
   void sqliteVecModeAppliesSourceFilterBeforeRanking() {
-    SqliteVectorStore store = newVecStore(tempDir.resolve("vec.db"));
+    SqliteVectorStore store = newStore(tempDir.resolve("vec.db"));
     store.add(List.of(
         new Document("doc-1#0", "Spring memo", Map.of("docId", "doc-1", "source", "/tmp/source-a.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z")),
         new Document("doc-2#0", "Spring AI memo", Map.of("docId", "doc-2", "source", "/tmp/source-b.md", "chunkIndex", 0, "ingestedAt", "2026-03-29T00:00:00Z"))));
@@ -305,11 +340,7 @@ class SqliteVectorStoreTest {
   }
 
   private SqliteVectorStore newStore(Path dbPath) {
-    return new SqliteVectorStore(newDataSource(dbPath), new FakeEmbeddingModel(), new JsonMapper(), false);
-  }
-
-  private SqliteVectorStore newVecStore(Path dbPath) {
-    return new SqliteVectorStore(newVecDataSource(dbPath), new FakeEmbeddingModel(), new JsonMapper(), true);
+    return new SqliteVectorStore(newVecDataSource(dbPath), new FakeEmbeddingModel(), new JsonMapper());
   }
 
   private SQLiteDataSource newDataSource(Path dbPath) {
@@ -323,7 +354,6 @@ class SqliteVectorStoreTest {
     delegate.setLoadExtension(true);
 
     SqliteVecProperties properties = new SqliteVecProperties();
-    properties.setEnabled(true);
     properties.setExtensionPath(vecExtensionPath().toString());
     SqliteVecInstaller installer = new SqliteVecInstaller(
         properties,
@@ -338,7 +368,6 @@ class SqliteVectorStoreTest {
     try {
       Path cacheDir = tempDir.resolve("sqlite-vec-cache");
       SqliteVecProperties properties = new SqliteVecProperties();
-      properties.setEnabled(true);
       properties.setVersion("0.1.9");
       properties.setAutoDownload(true);
       properties.setCacheDir(cacheDir.toString());
@@ -354,33 +383,9 @@ class SqliteVectorStoreTest {
     }
   }
 
-  private float[] readStoredEmbedding(Path dbPath, String chunkId) {
-    try (Connection connection = newDataSource(dbPath).getConnection();
-        var statement = connection.prepareStatement("SELECT embedding_blob FROM document_chunks WHERE chunk_id = ?")) {
-      statement.setString(1, chunkId);
-      try (var rs = statement.executeQuery()) {
-        if (!rs.next()) {
-          throw new IllegalStateException("embedding not found: " + chunkId);
-        }
-        return decodeEmbedding(rs.getBytes("embedding_blob"));
-      }
-    } catch (Exception e) {
-      throw new IllegalStateException("failed to read embedding", e);
-    }
-  }
-
-  private float[] decodeEmbedding(byte[] value) {
-    ByteBuffer buffer = ByteBuffer.wrap(value).order(ByteOrder.LITTLE_ENDIAN);
-    float[] embedding = new float[value.length / Float.BYTES];
-    for (int i = 0; i < embedding.length; i++) {
-      embedding[i] = buffer.getFloat();
-    }
-    return embedding;
-  }
-
   private int countChunks(Path dbPath, String docId) {
-    try (Connection connection = newDataSource(dbPath).getConnection();
-        var statement = connection.prepareStatement("SELECT COUNT(*) FROM document_chunks WHERE doc_id = ?")) {
+    try (Connection connection = newVecDataSource(dbPath).getConnection();
+        var statement = connection.prepareStatement("SELECT COUNT(*) FROM document_chunks_vec WHERE doc_id = ?")) {
       statement.setString(1, docId);
       try (var rs = statement.executeQuery()) {
         return rs.next() ? rs.getInt(1) : 0;
