@@ -65,6 +65,11 @@
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-advisors-vector-store</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-compress</artifactId>
+			<version>1.28.0</version>
+		</dependency>
 
 		<dependency>
 			<groupId>com.google.api-client</groupId>

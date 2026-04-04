@@ -55,3 +55,10 @@ rei:
   vector-document:
     chunk-size: ${REI_VECTOR_DOCUMENT_CHUNK_SIZE:512}
     chunk-overlap: ${REI_VECTOR_DOCUMENT_CHUNK_OVERLAP:64}
+  sqlite-vec:
+    enabled: ${REI_SQLITE_VEC_ENABLED:false}
+    version: ${REI_SQLITE_VEC_VERSION:0.1.9}
+    auto-download: ${REI_SQLITE_VEC_AUTO_DOWNLOAD:true}
+    cache-dir: ${REI_SQLITE_VEC_CACHE_DIR:${user.dir}/.rei/extensions/sqlite-vec}
+    extension-path: ${REI_SQLITE_VEC_EXTENSION_PATH:}
+    release-base-url: ${REI_SQLITE_VEC_RELEASE_BASE_URL:https://github.com/asg017/sqlite-vec/releases/download}

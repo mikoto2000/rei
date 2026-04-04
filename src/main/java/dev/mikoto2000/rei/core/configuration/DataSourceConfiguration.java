@@ -9,17 +9,26 @@ import org.springframework.context.annotation.Configuration;
 import org.sqlite.SQLiteDataSource;
 
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecDataSource;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
 
 @Configuration
 public class DataSourceConfiguration {
 
   @Bean
-  public DataSource dataSource() throws Exception {
+  public DataSource dataSource(SqliteVecProperties sqliteVecProperties, SqliteVecExtensionLoader sqliteVecExtensionLoader) throws Exception {
     Path dbPath = ReiPaths.memoryDbPath();
     ReiPaths.ensureParentDirectoryExists(dbPath);
 
     SQLiteDataSource dataSource = new SQLiteDataSource();
-    dataSource.setUrl("jdbc:sqlite:" + dbPath.toString());
-    return dataSource;
+    String url = "jdbc:sqlite:" + dbPath.toString();
+    if (sqliteVecProperties.isEnabled()) {
+      url += "?enable_load_extension=true";
+    }
+    dataSource.setUrl(url);
+    if (!sqliteVecProperties.isEnabled()) {
+      return dataSource;
+    }
+    return new SqliteVecDataSource(dataSource, sqliteVecExtensionLoader);
   }
 }
