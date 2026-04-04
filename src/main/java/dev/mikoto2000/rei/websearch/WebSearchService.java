@@ -29,10 +29,10 @@ public class WebSearchService {
 
   public List<WebSearchResult> search(String query, Integer limit) throws IOException, InterruptedException {
     if (!properties.isEnabled()) {
-      throw new IllegalStateException("Web search is disabled. Set rei.web-search.enabled=true to enable it.");
+      throw new IllegalStateException("Web search is disabled. Set REI_WEB_SEARCH_ENABLED=true to enable it.");
     }
     if (properties.getApiKey() == null || properties.getApiKey().isBlank()) {
-      throw new IllegalStateException("Web search API key is not configured. Set rei.web-search.api-key.");
+      throw new IllegalStateException("Web search API key is not configured. Set REI_WEB_SEARCH_API_KEY.");
     }
 
     int requestedLimit = limit == null ? properties.getMaxResults() : limit;

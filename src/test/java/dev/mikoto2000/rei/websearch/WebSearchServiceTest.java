@@ -62,7 +62,7 @@ class WebSearchServiceTest {
 
     IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.search("spring ai", 3));
 
-    assertTrue(error.getMessage().contains("api-key"));
+    assertEquals("Web search API key is not configured. Set REI_WEB_SEARCH_API_KEY.", error.getMessage());
   }
 
   @Test
@@ -73,7 +73,7 @@ class WebSearchServiceTest {
 
     IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.search("spring ai", 3));
 
-    assertTrue(error.getMessage().contains("disabled"));
+    assertEquals("Web search is disabled. Set REI_WEB_SEARCH_ENABLED=true to enable it.", error.getMessage());
   }
 
   @Test
