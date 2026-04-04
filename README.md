@@ -14,6 +14,7 @@ Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API 
 - 指定日時または予定の何分前かでのリマインド
 - 文書をベクトルストアへ埋め込んだうえでの RAG
 - Brave Search API を使った Web 検索ツール
+  - 上位ページの本文取得、クエリ展開、重複 URL 除外、一次情報優先の再ランキングを含む
 - JSON 設定で登録した MCP サーバーのツール利用
 
 ## セットアップ
@@ -287,9 +288,11 @@ gpt-oss:120b
 ```text
 /embed ./docs/spec.md ./docs/meeting-note.pdf
 /embed add ./docs/spec.md ./docs/meeting-note.pdf
+/embed add "./docs/*"
+/embed add "./docs/**/*.md"
 ```
 
-`embed add` は非同期です。コマンド実行後にプロンプトがすぐ返り、読み込み完了または失敗は標準出力に通知されます。
+`embed add` は非同期です。コマンド実行後にプロンプトがすぐ返り、読み込み完了または失敗は標準出力に通知されます。`*`, `?`, `[]` を含む引数は Java 側で glob 展開します。シェルで展開したくない場合は `"./docs/*"` のようにクォートしてください。一致するファイルが 0 件ならエラーになります。
 
 検索:
 
@@ -308,13 +311,24 @@ gpt-oss:120b
 
 読み込んだ文書はベクトルストアに保存され、対話時の RAG に使われます。
 
-現状のベクトルストアは、起動したカレントディレクトリ配下の `.rei/memory.db` にある SQLite に保存されます。埋め込みベクトルは `float32` 配列の `BLOB` として保持します。
+現状のベクトルストアは、起動したカレントディレクトリ配下の `.rei/vectorstore.db` に保存されます。アプリ本体の履歴やタスクなどで使う `.rei/memory.db` とは別ファイルです。
 
-類似度計算は Java 側で cosine similarity を使って行う暫定実装で、保存時と検索時の両方でベクトルを正規化します。`source` / `docId` の絞り込みは SQL 側で先に適用されます。件数が増えると検索性能は低下するため、大規模データには向きません。
+検索には `sqlite-vec` を使います。埋め込みは `vec0` 仮想テーブルに保持し、KNN 検索に lexical prefilter と軽い rerank を組み合わせています。`source` / `docId` の絞り込みも検索時に適用されます。
 
-登録時は `docId` / `source` / `chunkIndex` を必須 metadata として扱い、欠損している文書はエラーにします。検索時に embedding 次元が一致しない場合もエラーにします。`replaceBySource` は source 単位の delete + insert を 1 トランザクションで実行し、途中失敗時はロールバックされます。
+登録時は `docId` / `source` / `chunkIndex` を必須 metadata として扱い、欠損している文書はエラーにします。検索時に embedding 次元が一致しない場合もエラーにします。`replaceBySource` は source 単位の delete + insert を 1 トランザクションで実行し、途中失敗時はロールバックされます。文書一覧や削除も `document_chunks_vec` の集約で処理します。
 
 `similarityThresholdAll()` を使っても score が 0 以下の結果は返しません。現在の実装では「関連性がない候補を除外する」挙動を優先しています。SQLite ファイル破損時は破損として、ロック発生時はロックとして明示的に失敗させます。存在しない `docId` / `source` の削除は 0 件または `false` を返します。
+
+### 検索
+
+```text
+/search spring ai latest
+/search --source /absolute/path/to/spec.md spring ai tools
+```
+
+`/search` はベクトル検索結果と Web 検索結果をまとめて回答します。Web 側は Brave Search API の snippet をそのまま使うのではなく、上位ページの本文を取得したうえで、クエリ展開、重複 URL 除外、一次情報優先の再ランキングを行います。
+
+Web 検索が無効、API キー未設定、不正 API キーなどで失敗した場合は、Web 検索をスキップしてベクトルストアの内容だけで回答します。その場合は出力に `[web search skipped] ...` が表示されます。
 
 ## AI ツール
 
@@ -346,6 +360,10 @@ gpt-oss:120b
   - `REI_OPENAI_API_KEY` と `REI_OPENAI_BASE_URL` の組み合わせを確認してください。
 - Web 検索結果が空
   - `REI_WEB_SEARCH_ENABLED=true` と `REI_WEB_SEARCH_API_KEY` を確認してください。
+- `Web search is disabled. Set REI_WEB_SEARCH_ENABLED=true to enable it.`
+  - Web 検索を使う場合は `REI_WEB_SEARCH_ENABLED=true` を設定してください。設定しなくても `/search` はベクトルストアのみで続行します。
+- `Web search API key is not configured. Set REI_WEB_SEARCH_API_KEY.`
+  - Brave Search API を使う場合は `REI_WEB_SEARCH_API_KEY` を設定してください。未設定でも `/search` はベクトルストアのみで続行します。
 
 ## License
 
