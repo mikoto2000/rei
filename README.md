@@ -40,12 +40,12 @@ export REI_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 
 環境変数:
 
-| 変数 | 必須 | デフォルト | 説明 |
-|------|------|------------|------|
-| `REI_OPENAI_BASE_URL` | Required | `http://192.168.1.17:11434` | OpenAI 互換 API のベース URL |
-| `REI_OPENAI_API_KEY` | Required | `dummy-key` | API キー |
-| `REI_OPENAI_CHAT_MODEL` | Required | `gpt-oss:120b` | chat 用モデル名 |
-| `REI_OPENAI_EMBEDDING_MODEL` | Required | `qwen3-embedding:8b` | embedding 用モデル名 |
+| 変数 | 要否 | デフォルト | 説明 |
+| --- | --- | --- | --- |
+| `REI_OPENAI_BASE_URL` | 必須 | `http://192.168.1.17:11434` | OpenAI 互換 API のベース URL |
+| `REI_OPENAI_API_KEY` | 必須 | `dummy-key` | API キー |
+| `REI_OPENAI_CHAT_MODEL` | 必須 | `gpt-oss:120b` | chat 用モデル名 |
+| `REI_OPENAI_EMBEDDING_MODEL` | 必須 | `qwen3-embedding:8b` | embedding 用モデル名 |
 
 ### Google Calendar
 
@@ -69,13 +69,13 @@ Google Calendar の資格情報と OAuth token は、デフォルトではホー
 
 主な環境変数:
 
-| 変数 | 必須 | デフォルト | 説明 |
-|------|------|------------|------|
-| `REI_GOOGLE_CALENDAR_ENABLED` | Optional | `true` | Google Calendar 連携を有効化 |
-| `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` | Google Calendar を使う場合は Required | `${HOME}/.config/rei/google-calendar-credentials.json` | OAuth クライアント資格情報 JSON |
-| `REI_GOOGLE_CALENDAR_TOKENS_DIR` | Optional | `${HOME}/.config/rei/google-calendar-tokens` | OAuth token 保存先 |
-| `REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID` | Optional | `primary` | 既定カレンダー ID |
-| `REI_GOOGLE_CALENDAR_TIME_ZONE` | Optional | 空 | オフセットなし日時の解釈に使うタイムゾーン |
+| 変数 | 要否 | デフォルト | 説明 |
+| --- | --- | --- | --- |
+| `REI_GOOGLE_CALENDAR_ENABLED` | 任意 | `true` | Google Calendar 連携を有効化 |
+| `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` | 利用時必須 | `${HOME}/.config/rei/google-calendar-credentials.json` | OAuth クライアント資格情報 JSON |
+| `REI_GOOGLE_CALENDAR_TOKENS_DIR` | 任意 | `${HOME}/.config/rei/google-calendar-tokens` | OAuth token 保存先 |
+| `REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID` | 任意 | `primary` | 既定カレンダー ID |
+| `REI_GOOGLE_CALENDAR_TIME_ZONE` | 任意 | 空 | オフセットなし日時の解釈に使うタイムゾーン |
 
 ### Web Search
 
@@ -96,13 +96,13 @@ export REI_WEB_SEARCH_MAX_RESULTS=5
 
 主な環境変数:
 
-| 変数 | 必須 | デフォルト | 説明 |
-|------|------|------------|------|
-| `REI_WEB_SEARCH_ENABLED` | Optional | `true` | Web 検索を有効化 |
-| `REI_WEB_SEARCH_API_KEY` | Web 検索を使う場合は Required | 空 | Brave Search API キー |
-| `REI_WEB_SEARCH_BASE_URL` | Optional | `https://api.search.brave.com/res/v1/web/search` | Brave Search API URL |
-| `REI_WEB_SEARCH_TIMEOUT_SECONDS` | Optional | `10` | API タイムアウト秒数 |
-| `REI_WEB_SEARCH_MAX_RESULTS` | Optional | `5` | 取得する最大件数 |
+| 変数 | 要否 | デフォルト | 説明 |
+| --- | --- | --- | --- |
+| `REI_WEB_SEARCH_ENABLED` | 任意 | `true` | Web 検索を有効化 |
+| `REI_WEB_SEARCH_API_KEY` | 利用時必須 | 空 | Brave Search API キー |
+| `REI_WEB_SEARCH_BASE_URL` | 任意 | `https://api.search.brave.com/res/v1/web/search` | Brave Search API URL |
+| `REI_WEB_SEARCH_TIMEOUT_SECONDS` | 任意 | `10` | API タイムアウト秒数 |
+| `REI_WEB_SEARCH_MAX_RESULTS` | 任意 | `5` | 取得する最大件数 |
 
 ### MCP
 
@@ -134,14 +134,14 @@ export REI_MCP_STDIO_SERVERS_CONFIG=file:$PWD/.rei/mcp-servers.json
 
 主な環境変数:
 
-| 変数 | 必須 | デフォルト | 説明 |
-|------|------|------------|------|
-| `REI_MCP_ENABLED` | Optional | `false` | MCP client を有効化 |
-| `REI_MCP_STDIO_SERVERS_CONFIG` | MCP を使う場合は Required | `file:.rei/mcp-servers.json` | MCP サーバー定義ファイル |
+| 変数 | 要否 | デフォルト | 説明 |
+| --- | --- | --- | --- |
+| `REI_MCP_ENABLED` | 任意 | `false` | MCP client を有効化 |
+| `REI_MCP_STDIO_SERVERS_CONFIG` | 利用時必須 | `file:.rei/mcp-servers.json` | MCP サーバー定義ファイル |
 
 ## 使い方
 
-起動:
+### 起動
 
 ```bash
 ./mvnw spring-boot:run  # JDK 25+ が必要
@@ -151,7 +151,7 @@ mvn spring-boot:run
 
 アプリが生成する履歴ファイルと SQLite のローカルデータは、起動したカレントディレクトリ配下の `.rei` に保存されます。
 
-対話:
+### 対話
 
 ```text
 こんにちは
@@ -159,7 +159,7 @@ mvn spring-boot:run
 明日の朝に確認したいタスクを追加して
 ```
 
-CLI の例:
+### CLI の例
 
 ```text
 $ ./mvnw spring-boot:run
@@ -171,10 +171,10 @@ rei> /model
 gpt-oss:120b
 ```
 
-## コマンド一覧
+### コマンド一覧
 
 | コマンド | 主なサブコマンド | 説明 |
-|----------|------------------|------|
+| --- | --- | --- |
 | `chat` | なし | 通常の対話 |
 | `model` | なし | 現在の chat モデルの確認・変更 |
 | `models` | なし | OpenAI 互換 API が返すモデル一覧を表示 |
