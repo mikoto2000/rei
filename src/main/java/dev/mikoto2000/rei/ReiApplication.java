@@ -30,6 +30,7 @@ import dev.mikoto2000.rei.core.command.RootCommand;
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine;
 import picocli.shell.jline3.PicocliJLineCompleter;
@@ -44,6 +45,7 @@ public class ReiApplication {
   private final ModelHolderService currentModelHolder;
   private final EscCancellationMonitor escCancellationMonitor;
   private final CommandCancellationService commandCancellationService;
+  private final AsyncVectorDocumentService asyncVectorDocumentService;
 
   private final Path HISTORY_FILE = ReiPaths.historyFilePath();
 
@@ -95,7 +97,10 @@ public class ReiApplication {
           }
 
           if (trimmed.equals("/exit") || trimmed.equals("/quit")) {
-            break;
+            if (confirmExitIfNeeded(prompt -> reader.readLine(prompt))) {
+              break;
+            }
+            continue;
           }
 
           if (trimmed.equals("/help")) {
@@ -121,7 +126,9 @@ public class ReiApplication {
         } catch (UserInterruptException e) {
           // Ctrl-C でその行だけキャンセル
         } catch (EndOfFileException e) {
-          break;
+          if (confirmExitIfNeeded(prompt -> reader.readLine(prompt))) {
+            break;
+          }
         }
       }
     } finally {
@@ -142,6 +149,31 @@ public class ReiApplication {
 
   private String[] splitCommandLine(String line) {
     return line.split("\\s+");
+  }
+
+  boolean confirmExitIfNeeded(ConfirmationReader confirmationReader) {
+    if (!asyncVectorDocumentService.hasActiveEmbeddings()) {
+      return true;
+    }
+    System.out.println("警告: embed add の処理が実行中です。");
+    try {
+      String answer = confirmationReader.read("終了しますか? [y/N] ");
+      if (answer != null) {
+        String normalized = answer.trim().toLowerCase();
+        if (normalized.equals("y") || normalized.equals("yes")) {
+          return true;
+        }
+      }
+    } catch (UserInterruptException | EndOfFileException e) {
+      // 終了確認自体が中断された場合は終了を取り消す
+    }
+    System.out.println("終了をキャンセルしました。");
+    return false;
+  }
+
+  @FunctionalInterface
+  interface ConfirmationReader {
+    String read(String prompt) throws UserInterruptException, EndOfFileException;
   }
 
   private static final class SlashCommandCompleter implements Completer {

@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.vectordocument;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -13,9 +14,11 @@ import lombok.RequiredArgsConstructor;
 public class AsyncVectorDocumentService {
 
   private final VectorDocumentService vectorDocumentService;
+  private final AtomicInteger activeEmbeddings = new AtomicInteger();
 
   @Async("embedTaskExecutor")
   public void addAsync(List<String> documents) {
+    activeEmbeddings.incrementAndGet();
     try {
       List<VectorDocumentEntry> entries = vectorDocumentService.add(documents);
       for (VectorDocumentEntry entry : entries) {
@@ -25,6 +28,12 @@ public class AsyncVectorDocumentService {
       System.out.println("追加失敗: " + String.join(", ", documents) + " | " + e.getMessage());
     } catch (RuntimeException e) {
       System.out.println("追加失敗: " + String.join(", ", documents) + " | " + e.getMessage());
+    } finally {
+      activeEmbeddings.decrementAndGet();
     }
+  }
+
+  public boolean hasActiveEmbeddings() {
+    return activeEmbeddings.get() > 0;
   }
 }
