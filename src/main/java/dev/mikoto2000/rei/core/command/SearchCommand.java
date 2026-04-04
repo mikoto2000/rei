@@ -14,10 +14,10 @@ import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.search.SearchKnowledgeResult;
+import dev.mikoto2000.rei.search.SearchKnowledgeService;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
-import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
 import dev.mikoto2000.rei.websearch.WebSearchContext;
-import dev.mikoto2000.rei.websearch.WebSearchOrchestrator;
 import dev.mikoto2000.rei.websearch.WebSearchPage;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
@@ -35,8 +35,7 @@ public class SearchCommand implements Runnable {
 
   private final ChatClient chatClient;
   private final ModelHolderService currentModelHolder;
-  private final VectorDocumentService vectorDocumentService;
-  private final WebSearchOrchestrator webSearchOrchestrator;
+  private final SearchKnowledgeService searchKnowledgeService;
   private final CommandCancellationService cancellationService;
 
   @Option(names = "--vector-top-k", description = "ベクトル検索の返却件数")
@@ -59,9 +58,9 @@ public class SearchCommand implements Runnable {
     String query = String.join(" ", queryParts);
     try {
       cancellationService.begin(Thread.currentThread());
-      List<VectorDocumentSearchResult> vectorResults = vectorDocumentService.search(query, vectorTopK, threshold, source);
-      WebSearchOutcome webSearchOutcome = safeWebSearch(query);
-      WebSearchContext webContext = webSearchOutcome.context();
+      SearchKnowledgeResult result = searchKnowledgeService.search(query, vectorTopK, webTopK, threshold, source);
+      List<VectorDocumentSearchResult> vectorResults = result.vectorResults();
+      WebSearchContext webContext = result.webContext();
 
       ChatClientRequestSpec requestSpec = chatClient.prompt(new Prompt(buildPrompt(query, vectorResults, webContext),
           OpenAiChatOptions.builder()
@@ -69,8 +68,8 @@ public class SearchCommand implements Runnable {
               .build()));
 
       IO.println("=== answer ===");
-      if (webSearchOutcome.skippedMessage() != null) {
-        IO.println("[web search skipped] " + webSearchOutcome.skippedMessage());
+      if (result.webSearchSkippedMessage() != null) {
+        IO.println("[web search skipped] " + result.webSearchSkippedMessage());
       }
       CountDownLatch latch = new CountDownLatch(1);
       AtomicReference<Throwable> errorRef = new AtomicReference<>();
@@ -105,14 +104,6 @@ public class SearchCommand implements Runnable {
       throw new RuntimeException("検索が中断されました", e);
     } finally {
       cancellationService.clear();
-    }
-  }
-
-  private WebSearchOutcome safeWebSearch(String query) throws IOException, InterruptedException {
-    try {
-      return new WebSearchOutcome(webSearchOrchestrator.search(query, webTopK), null);
-    } catch (IllegalStateException e) {
-      return new WebSearchOutcome(WebSearchContext.primaryOnly(List.of()), e.getMessage());
     }
   }
 
@@ -190,8 +181,5 @@ public class SearchCommand implements Runnable {
     for (String value : sources) {
       IO.println("- " + value);
     }
-  }
-
-  private record WebSearchOutcome(WebSearchContext context, String skippedMessage) {
   }
 }
