@@ -14,14 +14,17 @@ public class WebSearchOrchestrator {
   private final WebSearchService webSearchService;
   private final WebPageFetcher webPageFetcher;
   private final WebSearchQueryPlanner webSearchQueryPlanner;
+  private final WebSearchAggregator webSearchAggregator;
 
   public WebSearchOrchestrator(
       WebSearchService webSearchService,
       WebPageFetcher webPageFetcher,
-      WebSearchQueryPlanner webSearchQueryPlanner) {
+      WebSearchQueryPlanner webSearchQueryPlanner,
+      WebSearchAggregator webSearchAggregator) {
     this.webSearchService = webSearchService;
     this.webPageFetcher = webPageFetcher;
     this.webSearchQueryPlanner = webSearchQueryPlanner;
+    this.webSearchAggregator = webSearchAggregator;
   }
 
   public WebSearchContext search(String query, Integer limit) throws IOException, InterruptedException {
@@ -35,7 +38,7 @@ public class WebSearchOrchestrator {
     for (WebSearchResult result : resultsByUrl.values()) {
       pages.add(fetchPage(result));
     }
-    return WebSearchContext.primaryOnly(pages);
+    return webSearchAggregator.aggregate(pages, limit == null ? pages.size() : limit);
   }
 
   private WebSearchPage fetchPage(WebSearchResult result) throws IOException, InterruptedException {

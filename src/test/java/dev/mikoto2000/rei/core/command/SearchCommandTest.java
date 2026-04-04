@@ -41,8 +41,9 @@ class SearchCommandTest {
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(vectorDocumentService.search("spring ai", 3, 0.4d, "/tmp/docs/spec.md")).thenReturn(List.of(
         new VectorDocumentSearchResult("doc-1", "/tmp/docs/spec.md", 0, 0.91d, "Spring AI guide")));
-    when(webSearchOrchestrator.search("spring ai", 2)).thenReturn(WebSearchContext.primaryOnly(List.of(
-        new WebSearchPage("Spring AI News", "https://example.com/news", "latest update", "2026-03-31", "Spring AI fetched content"))));
+    when(webSearchOrchestrator.search("spring ai", 2)).thenReturn(new WebSearchContext(
+        List.of(new WebSearchPage("Spring AI Docs", "https://docs.example.com/news", "latest update", "2026-03-31", "Spring AI fetched content")),
+        List.of(new WebSearchPage("Blog", "https://example.com/blog", "blog snippet", null, "Less trusted content"))));
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.stream().content()).thenReturn(Flux.just("combined ", "answer"));
 
@@ -64,14 +65,18 @@ class SearchCommandTest {
     verify(chatClient).prompt(promptCaptor.capture());
     String promptText = promptCaptor.getValue().getContents();
     assertTrue(promptText.contains("Spring AI guide"));
-    assertTrue(promptText.contains("https://example.com/news"));
+    assertTrue(promptText.contains("https://docs.example.com/news"));
     assertTrue(promptText.contains("latest update"));
     assertTrue(promptText.contains("Spring AI fetched content"));
+    assertTrue(promptText.contains("Web 一次情報:"));
+    assertTrue(promptText.contains("Web 補足情報:"));
+    assertTrue(promptText.contains("Less trusted content"));
 
     String output = out.toString();
     assertTrue(output.contains("=== answer ==="));
     assertTrue(output.contains("combined answer"));
     assertTrue(output.contains("=== sources ==="));
+    assertTrue(output.contains("https://example.com/blog"));
   }
 
   @Test
@@ -105,7 +110,8 @@ class SearchCommandTest {
     verify(chatClient).prompt(promptCaptor.capture());
     String promptText = promptCaptor.getValue().getContents();
     assertTrue(promptText.contains("Spring AI guide"));
-    assertTrue(promptText.contains("Web 検索結果:"));
+    assertTrue(promptText.contains("Web 一次情報:"));
+    assertTrue(promptText.contains("Web 補足情報:"));
     assertTrue(promptText.contains("該当なし"));
 
     String output = out.toString();
@@ -147,7 +153,8 @@ class SearchCommandTest {
     verify(chatClient).prompt(promptCaptor.capture());
     String promptText = promptCaptor.getValue().getContents();
     assertTrue(promptText.contains("Spring AI guide"));
-    assertTrue(promptText.contains("Web 検索結果:"));
+    assertTrue(promptText.contains("Web 一次情報:"));
+    assertTrue(promptText.contains("Web 補足情報:"));
     assertTrue(promptText.contains("該当なし"));
 
     String output = out.toString();
