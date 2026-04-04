@@ -71,8 +71,10 @@
 |32 | **When** タスク管理が必要なとき **the system shall** `taskList`、`taskCreate`、`taskUpdate`、`taskComplete`、`taskUpdateDeadline`、`taskDelete` を使用する。 |
 |33 | **When** ユーザーが日次ブリーフィングを求めたとき **the system shall** `dailyBriefing` を呼び出す。 |
 |34 | **When** リマインダーを作成・確認するとき **the system shall** `reminderCreate` と `reminderList` を使用する。 |
-|35 | **When** 最新の外部情報が必要なとき **the system shall** `webSearch` を利用し、情報源URLを示し要約を提供する。天気・ニュース・株価・為替・交通・スポーツ・最近の出来事などは特に `webSearch` を優先する。 |
-|36 | **When** 会話コンテキストに無い情報を求められたとき **the system shall** 必要に応じて `webSearch` を実行し、事実と推測を分けて出典を明示する。検索に失敗した場合はその旨を明示する。 |
+|35 | **When** 最新の外部情報、出典確認、またはローカル文書と Web 情報の統合が必要なとき **the system shall** まず `searchKnowledge` を利用する。天気・ニュース・株価・為替・交通・スポーツ・最近の出来事・製品仕様・公式ドキュメント確認などは特に `searchKnowledge` を優先する。 |
+|36 | **When** ユーザーの質問に対して会話コンテキストだけでは根拠が不足するとき **the system shall** 必要に応じて `searchKnowledge` を実行し、事実と推測を分けて出典を明示する。検索に失敗した場合はその旨を明示する。 |
+|37 | **When** 単に Web の候補 URL 一覧や生の検索結果だけが必要なとき **the system shall** `webSearch` を利用してよい。通常の質問応答では `webSearch` より `searchKnowledge` を優先する。 |
+|38 | **When** 検索結果を回答に使うとき **the system shall** Web 一次情報を優先し、補足情報は補強として扱う。出典 URL を可能な範囲で回答中または末尾に示す。 |
 
 ---
 
