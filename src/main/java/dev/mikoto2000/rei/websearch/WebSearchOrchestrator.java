@@ -2,7 +2,9 @@ package dev.mikoto2000.rei.websearch;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
@@ -11,16 +13,26 @@ public class WebSearchOrchestrator {
 
   private final WebSearchService webSearchService;
   private final WebPageFetcher webPageFetcher;
+  private final WebSearchQueryPlanner webSearchQueryPlanner;
 
-  public WebSearchOrchestrator(WebSearchService webSearchService, WebPageFetcher webPageFetcher) {
+  public WebSearchOrchestrator(
+      WebSearchService webSearchService,
+      WebPageFetcher webPageFetcher,
+      WebSearchQueryPlanner webSearchQueryPlanner) {
     this.webSearchService = webSearchService;
     this.webPageFetcher = webPageFetcher;
+    this.webSearchQueryPlanner = webSearchQueryPlanner;
   }
 
   public WebSearchContext search(String query, Integer limit) throws IOException, InterruptedException {
-    List<WebSearchResult> results = webSearchService.search(query, limit);
+    Map<String, WebSearchResult> resultsByUrl = new LinkedHashMap<>();
+    for (String plannedQuery : webSearchQueryPlanner.plan(query)) {
+      for (WebSearchResult result : webSearchService.search(plannedQuery, limit)) {
+        resultsByUrl.putIfAbsent(result.url(), result);
+      }
+    }
     List<WebSearchPage> pages = new ArrayList<>();
-    for (WebSearchResult result : results) {
+    for (WebSearchResult result : resultsByUrl.values()) {
       pages.add(fetchPage(result));
     }
     return WebSearchContext.primaryOnly(pages);
