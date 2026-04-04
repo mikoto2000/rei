@@ -73,6 +73,87 @@ class SearchCommandTest {
   }
 
   @Test
+  void searchCommandFallsBackToVectorStoreWhenWebSearchIsDisabled() throws Exception {
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    VectorDocumentService vectorDocumentService = Mockito.mock(VectorDocumentService.class);
+    WebSearchService webSearchService = Mockito.mock(WebSearchService.class);
+    CommandCancellationService cancellationService = new CommandCancellationService();
+
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(vectorDocumentService.search("spring ai", 3, null, null)).thenReturn(List.of(
+        new VectorDocumentSearchResult("doc-1", "/tmp/docs/spec.md", 0, 0.91d, "Spring AI guide")));
+    when(webSearchService.search("spring ai", 5)).thenThrow(new IllegalStateException("Web search is disabled"));
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.stream().content()).thenReturn(Flux.just("vector ", "only"));
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      int exitCode = new CommandLine(new SearchCommand(chatClient, modelHolderService, vectorDocumentService, webSearchService, cancellationService))
+          .execute("spring ai");
+      assertEquals(0, exitCode);
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
+    verify(chatClient).prompt(promptCaptor.capture());
+    String promptText = promptCaptor.getValue().getContents();
+    assertTrue(promptText.contains("Spring AI guide"));
+    assertTrue(promptText.contains("Web 検索結果:"));
+    assertTrue(promptText.contains("該当なし"));
+
+    String output = out.toString();
+    assertTrue(output.contains("vector only"));
+    assertTrue(output.contains("=== sources ==="));
+    assertTrue(output.contains("/tmp/docs/spec.md"));
+    assertTrue(output.contains("[web search skipped]"));
+  }
+
+  @Test
+  void searchCommandFallsBackToVectorStoreWhenWebSearchApiKeyIsInvalid() throws Exception {
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    VectorDocumentService vectorDocumentService = Mockito.mock(VectorDocumentService.class);
+    WebSearchService webSearchService = Mockito.mock(WebSearchService.class);
+    CommandCancellationService cancellationService = new CommandCancellationService();
+
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(vectorDocumentService.search("spring ai", 3, null, null)).thenReturn(List.of(
+        new VectorDocumentSearchResult("doc-1", "/tmp/docs/spec.md", 0, 0.91d, "Spring AI guide")));
+    when(webSearchService.search("spring ai", 5))
+        .thenThrow(new IllegalStateException("Web search failed with status 401: invalid api key"));
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.stream().content()).thenReturn(Flux.just("vector ", "fallback"));
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      int exitCode = new CommandLine(new SearchCommand(chatClient, modelHolderService, vectorDocumentService, webSearchService, cancellationService))
+          .execute("spring ai");
+      assertEquals(0, exitCode);
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
+    verify(chatClient).prompt(promptCaptor.capture());
+    String promptText = promptCaptor.getValue().getContents();
+    assertTrue(promptText.contains("Spring AI guide"));
+    assertTrue(promptText.contains("Web 検索結果:"));
+    assertTrue(promptText.contains("該当なし"));
+
+    String output = out.toString();
+    assertTrue(output.contains("vector fallback"));
+    assertTrue(output.contains("[web search skipped] Web search failed with status 401"));
+  }
+
+  @Test
   void rootCommandIncludesSearchSubcommand() {
     CommandLine commandLine = new CommandLine(new RootCommand());
     assertTrue(commandLine.getSubcommands().containsKey("search"));

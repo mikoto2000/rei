@@ -59,7 +59,8 @@ public class SearchCommand implements Runnable {
     try {
       cancellationService.begin(Thread.currentThread());
       List<VectorDocumentSearchResult> vectorResults = vectorDocumentService.search(query, vectorTopK, threshold, source);
-      List<WebSearchResult> webResults = webSearchService.search(query, webTopK);
+      WebSearchOutcome webSearchOutcome = safeWebSearch(query);
+      List<WebSearchResult> webResults = webSearchOutcome.results();
 
       ChatClientRequestSpec requestSpec = chatClient.prompt(new Prompt(buildPrompt(query, vectorResults, webResults),
           OpenAiChatOptions.builder()
@@ -67,6 +68,9 @@ public class SearchCommand implements Runnable {
               .build()));
 
       IO.println("=== answer ===");
+      if (webSearchOutcome.skippedMessage() != null) {
+        IO.println("[web search skipped] " + webSearchOutcome.skippedMessage());
+      }
       CountDownLatch latch = new CountDownLatch(1);
       AtomicReference<Throwable> errorRef = new AtomicReference<>();
       Disposable disposable = requestSpec.stream()
@@ -100,6 +104,14 @@ public class SearchCommand implements Runnable {
       throw new RuntimeException("検索が中断されました", e);
     } finally {
       cancellationService.clear();
+    }
+  }
+
+  private WebSearchOutcome safeWebSearch(String query) throws IOException, InterruptedException {
+    try {
+      return new WebSearchOutcome(webSearchService.search(query, webTopK), null);
+    } catch (IllegalStateException e) {
+      return new WebSearchOutcome(List.of(), e.getMessage());
     }
   }
 
@@ -168,5 +180,8 @@ public class SearchCommand implements Runnable {
     for (String value : sources) {
       IO.println("- " + value);
     }
+  }
+
+  private record WebSearchOutcome(List<WebSearchResult> results, String skippedMessage) {
   }
 }
