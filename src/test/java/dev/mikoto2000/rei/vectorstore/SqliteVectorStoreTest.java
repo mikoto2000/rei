@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
 
@@ -337,6 +338,34 @@ class SqliteVectorStoreTest {
 
     assertEquals(1, results.size());
     assertEquals("doc-1#0", results.getFirst().getId());
+  }
+
+  @Test
+  void constructorDropsLegacyDocumentsTable() throws Exception {
+    Path dbPath = tempDir.resolve("legacy.db");
+    try (Connection connection = newVecDataSource(dbPath).getConnection();
+        Statement statement = connection.createStatement()) {
+      statement.executeUpdate("""
+          CREATE TABLE documents (
+            doc_id TEXT PRIMARY KEY,
+            source TEXT NOT NULL,
+            ingested_at TEXT
+          )
+          """);
+    }
+
+    newStore(dbPath);
+
+    try (Connection connection = newVecDataSource(dbPath).getConnection();
+        var statement = connection.prepareStatement("""
+            SELECT COUNT(*)
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'documents'
+            """);
+        var rs = statement.executeQuery()) {
+      assertTrue(rs.next());
+      assertEquals(0, rs.getInt(1));
+    }
   }
 
   private SqliteVectorStore newStore(Path dbPath) {

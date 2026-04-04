@@ -60,11 +60,10 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
   public List<VectorDocumentEntry> list() {
     try (Connection connection = dataSource.getConnection();
         var statement = connection.prepareStatement("""
-            SELECT d.doc_id, d.source, COUNT(c.chunk_id) AS chunk_count, d.ingested_at
-            FROM documents d
-            JOIN document_chunks_vec c ON c.doc_id = d.doc_id
-            GROUP BY d.doc_id, d.source, d.ingested_at
-            ORDER BY d.source ASC, d.doc_id ASC
+            SELECT doc_id, source, COUNT(chunk_id) AS chunk_count, ingested_at
+            FROM document_chunks_vec
+            GROUP BY doc_id, source, ingested_at
+            ORDER BY source ASC, doc_id ASC
             """)) {
       try (var rs = statement.executeQuery()) {
         List<VectorDocumentEntry> entries = new ArrayList<>();
@@ -100,7 +99,6 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
   public void delete(List<String> ids) {
     withTransaction(connection -> {
       deleteChunks(connection, ids);
-      deleteOrphanDocuments(connection);
       return null;
     });
   }
@@ -266,12 +264,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
   }
 
   private void insertDocuments(Connection connection, List<Document> documents) throws SQLException {
-    Map<String, DocumentRow> documentRows = new LinkedHashMap<>();
-    try (var documentStatement = connection.prepareStatement("""
-        INSERT INTO documents (doc_id, source, ingested_at)
-        VALUES (?, ?, ?)
-        """);
-        var chunkStatement = connection.prepareStatement("""
+    try (var chunkStatement = connection.prepareStatement("""
             INSERT INTO document_chunks_vec
               (chunk_id, doc_id, chunk_index, chunk_text, metadata_json, embedding, source, ingested_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -284,8 +277,6 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
         int chunkIndex = requiredIntValue(metadata, "chunkIndex");
         float[] embedding = normalizeEmbedding(embeddingModel.embed(document));
 
-        documentRows.putIfAbsent(docId, new DocumentRow(docId, source, ingestedAt));
-
         chunkStatement.setString(1, document.getId());
         chunkStatement.setString(2, docId);
         chunkStatement.setInt(3, chunkIndex);
@@ -296,49 +287,30 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
         chunkStatement.setString(8, ingestedAt);
         chunkStatement.addBatch();
       }
-
-      for (DocumentRow row : documentRows.values()) {
-        documentStatement.setString(1, row.docId());
-        documentStatement.setString(2, row.source());
-        documentStatement.setString(3, row.ingestedAt());
-        documentStatement.addBatch();
-      }
-
-      documentStatement.executeBatch();
       chunkStatement.executeBatch();
     }
   }
 
   private int deleteByDocId(Connection connection, String docId) throws SQLException {
-    try (var deleteChunks = connection.prepareStatement("DELETE FROM document_chunks_vec WHERE doc_id = ?");
-        var deleteDocument = connection.prepareStatement("DELETE FROM documents WHERE doc_id = ?")) {
+    try (var deleteChunks = connection.prepareStatement("DELETE FROM document_chunks_vec WHERE doc_id = ?")) {
       deleteChunks.setString(1, docId);
-      deleteChunks.executeUpdate();
-      deleteDocument.setString(1, docId);
-      return deleteDocument.executeUpdate();
+      return deleteChunks.executeUpdate();
     }
   }
 
   private void deleteBySource(Connection connection, String source) throws SQLException {
-    try (var deleteChunks = connection.prepareStatement("DELETE FROM document_chunks_vec WHERE source = ?");
-        var deleteDocuments = connection.prepareStatement("DELETE FROM documents WHERE source = ?")) {
+    try (var deleteChunks = connection.prepareStatement("DELETE FROM document_chunks_vec WHERE source = ?")) {
       deleteChunks.setString(1, source);
       deleteChunks.executeUpdate();
-      deleteDocuments.setString(1, source);
-      deleteDocuments.executeUpdate();
     }
   }
 
   private void deleteMatching(Connection connection, FilterCriteria criteria) throws SQLException {
     if (criteria.docId() != null && criteria.source() != null) {
-      try (var select = connection.prepareStatement("SELECT doc_id FROM documents WHERE doc_id = ? AND source = ?")) {
-        select.setString(1, criteria.docId());
-        select.setString(2, criteria.source());
-        try (var rs = select.executeQuery()) {
-          if (rs.next()) {
-            deleteByDocId(connection, criteria.docId());
-          }
-        }
+      try (var deleteChunks = connection.prepareStatement("DELETE FROM document_chunks_vec WHERE doc_id = ? AND source = ?")) {
+        deleteChunks.setString(1, criteria.docId());
+        deleteChunks.setString(2, criteria.source());
+        deleteChunks.executeUpdate();
       }
       return;
     }
@@ -354,7 +326,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
   }
 
   private int countDocumentsBySource(Connection connection, String source) throws SQLException {
-    try (var statement = connection.prepareStatement("SELECT COUNT(*) FROM documents WHERE source = ?")) {
+    try (var statement = connection.prepareStatement("SELECT COUNT(DISTINCT doc_id) FROM document_chunks_vec WHERE source = ?")) {
       statement.setString(1, source);
       try (var rs = statement.executeQuery()) {
         return rs.next() ? rs.getInt(1) : 0;
@@ -369,15 +341,6 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
         deleteChunks.addBatch();
       }
       deleteChunks.executeBatch();
-    }
-  }
-
-  private void deleteOrphanDocuments(Connection connection) throws SQLException {
-    try (var deleteOrphans = connection.prepareStatement("""
-        DELETE FROM documents
-        WHERE doc_id NOT IN (SELECT DISTINCT doc_id FROM document_chunks_vec)
-        """)) {
-      deleteOrphans.executeUpdate();
     }
   }
 
@@ -403,13 +366,6 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
   private void initializeSchema() {
     try (Connection connection = dataSource.getConnection(); var statement = connection.createStatement()) {
       statement.executeUpdate("PRAGMA foreign_keys = ON");
-      statement.executeUpdate("""
-          CREATE TABLE IF NOT EXISTS documents (
-            doc_id TEXT PRIMARY KEY,
-            source TEXT NOT NULL,
-            ingested_at TEXT
-          )
-          """);
       if (embeddingDimensions <= 0) {
         throw new IllegalStateException("embedding 次元が不正です: " + embeddingDimensions);
       }
@@ -425,7 +381,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
             +metadata_json text
           )
           """.formatted(embeddingDimensions));
-      statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_documents_source ON documents(source)");
+      statement.executeUpdate("DROP TABLE IF EXISTS documents");
     } catch (SQLException e) {
       throw sqliteException("vector store テーブルの初期化に失敗しました", e);
     }
@@ -625,9 +581,6 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
   }
 
   private record ScoredDocument(Document document, double score) {
-  }
-
-  private record DocumentRow(String docId, String source, String ingestedAt) {
   }
 
   private record FilterCriteria(String source, String docId) {
