@@ -9,7 +9,7 @@ spring:
             initialize-schema: always
     openai:
       # base-url: ${REI_OPENAI_BASE_URL:https://api.openai.com}
-      base-url: ${REI_OPENAI_BASE_URL:http://host.docker.internal:11434}
+      base-url: ${REI_OPENAI_BASE_URL:http://localhost:11434}
       api-key: ${REI_OPENAI_API_KEY:dummy-key}
       chat:
         options:
