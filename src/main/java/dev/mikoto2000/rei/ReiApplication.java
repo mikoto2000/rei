@@ -104,11 +104,13 @@ public class ReiApplication {
           }
 
           if (trimmed.equals("/help")) {
+            printUserInput(trimmed);
             executeInterruptibly(cmd, terminal, commandExecutor, "--help");
             continue;
           }
 
           if (trimmed.equals("/version")) {
+            printUserInput(trimmed);
             executeInterruptibly(cmd, terminal, commandExecutor, "--version");
             continue;
           }
@@ -118,8 +120,10 @@ public class ReiApplication {
             if (commandText.isEmpty()) {
               continue;
             }
+            printUserInput(trimmed);
             executeInterruptibly(cmd, terminal, commandExecutor, splitCommandLine(commandText));
           } else {
+            printUserInput(trimmed);
             executeInterruptibly(cmd, terminal, commandExecutor, "chat", trimmed);
           }
 
@@ -149,6 +153,22 @@ public class ReiApplication {
 
   private String[] splitCommandLine(String line) {
     return line.split("\\s+");
+  }
+
+  void printUserInput(String input) {
+    System.out.print(formatUserInput(input));
+  }
+
+  String formatUserInput(String input) {
+    StringBuilder builder = new StringBuilder();
+    builder.append(System.lineSeparator());
+    builder.append("┌ User").append(System.lineSeparator());
+    for (String line : input.split("\\R", -1)) {
+      builder.append(line).append(System.lineSeparator());
+    }
+    builder.append("└").append(System.lineSeparator());
+    builder.append(System.lineSeparator());
+    return builder.toString();
   }
 
   boolean confirmExitIfNeeded(ConfirmationReader confirmationReader) {
