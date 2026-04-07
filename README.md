@@ -71,7 +71,7 @@ Google Calendar の資格情報と OAuth token は、デフォルトではホー
 
 | 変数 | 要否 | デフォルト | 説明 |
 | --- | --- | --- | --- |
-| `REI_GOOGLE_CALENDAR_ENABLED` | 任意 | `true` | Google Calendar 連携を有効化 |
+| `REI_GOOGLE_CALENDAR_ENABLED` | 任意 | `false` | Google Calendar 連携を有効化 |
 | `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` | 利用時必須 | `${HOME}/.config/rei/google-calendar-credentials.json` | OAuth クライアント資格情報 JSON |
 | `REI_GOOGLE_CALENDAR_TOKENS_DIR` | 任意 | `${HOME}/.config/rei/google-calendar-tokens` | OAuth token 保存先 |
 | `REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID` | 任意 | `primary` | 既定カレンダー ID |
@@ -98,7 +98,7 @@ export REI_WEB_SEARCH_MAX_RESULTS=5
 
 | 変数 | 要否 | デフォルト | 説明 |
 | --- | --- | --- | --- |
-| `REI_WEB_SEARCH_ENABLED` | 任意 | `true` | Web 検索を有効化 |
+| `REI_WEB_SEARCH_ENABLED` | 任意 | `false` | Web 検索を有効化 |
 | `REI_WEB_SEARCH_API_KEY` | 利用時必須 | 空 | Brave Search API キー |
 | `REI_WEB_SEARCH_BASE_URL` | 任意 | `https://api.search.brave.com/res/v1/web/search` | Brave Search API URL |
 | `REI_WEB_SEARCH_TIMEOUT_SECONDS` | 任意 | `10` | API タイムアウト秒数 |
