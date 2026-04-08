@@ -39,6 +39,7 @@ spring:
 rei:
   core:
     system-prompt: ${REI_AI_SYSTEM_PROMPT:classpath:/system-prompt.md}
+    chat-memory-max-messages: ${REI_CHAT_MEMORY_MAX_MESSAGES:100}
   google-calendar:
     enabled: ${REI_GOOGLE_CALENDAR_ENABLED:false}
     application-name: Rei

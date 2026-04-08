@@ -4,5 +4,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "rei.core")
 public record CoreProperties(
-    String systemPrompt
+    String systemPrompt,
+    Integer chatMemoryMaxMessages
 ) {}

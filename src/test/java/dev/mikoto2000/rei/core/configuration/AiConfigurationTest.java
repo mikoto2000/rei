@@ -33,7 +33,7 @@ class AiConfigurationTest {
     ObjectProvider<ToolCallbackProvider> provider = mockProviderReturning(mcpToolCallbackProvider);
 
     AiConfiguration configuration = new AiConfiguration(
-        new CoreProperties("system prompt"),
+        new CoreProperties("system prompt", 100),
         Mockito.mock(ChatModel.class),
         Mockito.mock(ChatMemory.class),
         new Tools(),
@@ -57,7 +57,7 @@ class AiConfigurationTest {
     ObjectProvider<ToolCallbackProvider> provider = mockProviderReturning(null);
 
     AiConfiguration configuration = new AiConfiguration(
-        new CoreProperties("system prompt"),
+        new CoreProperties("system prompt", 100),
         Mockito.mock(ChatModel.class),
         Mockito.mock(ChatMemory.class),
         new Tools(),
