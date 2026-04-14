@@ -10,13 +10,16 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.springframework.stereotype.Service;
 
+import dev.mikoto2000.rei.websearch.WebSearchProperties.ProviderProperties;
 import lombok.RequiredArgsConstructor;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -38,26 +41,81 @@ public class WebSearchService {
 
     int requestedLimit = limit == null ? properties.getMaxResults() : limit;
     int clampedLimit = Math.max(1, Math.min(requestedLimit, properties.getMaxResults()));
-    return switch (normalizedProvider()) {
-      case "duckduckgo" -> searchDuckDuckGo(query, clampedLimit);
-      case "brave" -> searchBrave(query, clampedLimit);
-      default -> throw new IllegalStateException("Unsupported web search provider: " + properties.getProvider());
+    List<ProviderProperties> providers = configuredProviders();
+    Map<String, WebSearchResult> resultsByUrl = new LinkedHashMap<>();
+    Exception firstError = null;
+
+    for (ProviderProperties provider : providers) {
+      try {
+        for (WebSearchResult result : searchWithProvider(provider, query, clampedLimit)) {
+          resultsByUrl.putIfAbsent(result.url(), result);
+          if (resultsByUrl.size() >= clampedLimit) {
+            return new ArrayList<>(resultsByUrl.values());
+          }
+        }
+      } catch (IOException | InterruptedException | RuntimeException e) {
+        if (firstError == null) {
+          firstError = e;
+        }
+      }
+    }
+
+    if (!resultsByUrl.isEmpty()) {
+      return new ArrayList<>(resultsByUrl.values());
+    }
+    if (firstError instanceof IOException ioException) {
+      throw ioException;
+    }
+    if (firstError instanceof InterruptedException interruptedException) {
+      throw interruptedException;
+    }
+    if (firstError instanceof RuntimeException runtimeException) {
+      throw runtimeException;
+    }
+    throw new IllegalStateException("No web search providers are configured.");
+  }
+
+  List<ProviderProperties> configuredProviders() {
+    if (properties.getProviders() == null || properties.getProviders().isEmpty()) {
+      throw new IllegalStateException("No web search providers are configured.");
+    }
+
+    List<ProviderProperties> providers = new ArrayList<>();
+    for (ProviderProperties provider : properties.getProviders()) {
+      if (provider == null || provider.getName() == null || provider.getName().isBlank()) {
+        continue;
+      }
+      providers.add(provider);
+    }
+    if (providers.isEmpty()) {
+      throw new IllegalStateException("No web search providers are configured.");
+    }
+    return providers;
+  }
+
+  private List<WebSearchResult> searchWithProvider(ProviderProperties provider, String query, int limit)
+      throws IOException, InterruptedException {
+    String providerName = provider.getName().trim().toLowerCase();
+    return switch (providerName) {
+      case "duckduckgo" -> searchDuckDuckGo(provider, query, limit);
+      case "brave" -> searchBrave(provider, query, limit);
+      default -> throw new IllegalStateException("Unsupported web search provider: " + provider.getName());
     };
   }
 
-  private List<WebSearchResult> searchBrave(String query, int limit) throws IOException, InterruptedException {
-    if (properties.getApiKey() == null || properties.getApiKey().isBlank()) {
-      throw new IllegalStateException("Web search API key is not configured. Set REI_WEB_SEARCH_API_KEY.");
+  private List<WebSearchResult> searchBrave(ProviderProperties provider, String query, int limit)
+      throws IOException, InterruptedException {
+    if (provider.getApiKey() == null || provider.getApiKey().isBlank()) {
+      throw new IllegalStateException("Web search API key is not configured for provider brave.");
     }
 
     String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
-    URI uri = URI.create(resolveBaseUrl("https://api.search.brave.com/res/v1/web/search")
-        + "?q=" + encodedQuery + "&count=" + limit);
+    URI uri = URI.create(provider.getBaseUrl() + "?q=" + encodedQuery + "&count=" + limit);
 
     HttpRequest request = HttpRequest.newBuilder(uri)
         .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
         .header("Accept", "application/json")
-        .header("X-Subscription-Token", properties.getApiKey())
+        .header("X-Subscription-Token", provider.getApiKey())
         .GET()
         .build();
 
@@ -69,9 +127,10 @@ public class WebSearchService {
     return parseBraveResults(response.body(), limit);
   }
 
-  private List<WebSearchResult> searchDuckDuckGo(String query, int limit) throws IOException, InterruptedException {
+  private List<WebSearchResult> searchDuckDuckGo(ProviderProperties provider, String query, int limit)
+      throws IOException, InterruptedException {
     String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
-    URI uri = URI.create(resolveBaseUrl("https://html.duckduckgo.com/html/") + "?q=" + encodedQuery);
+    URI uri = URI.create(provider.getBaseUrl() + "?q=" + encodedQuery);
 
     HttpRequest request = HttpRequest.newBuilder(uri)
         .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
@@ -86,18 +145,6 @@ public class WebSearchService {
     }
 
     return parseDuckDuckGoResults(response.body(), limit);
-  }
-
-  String normalizedProvider() {
-    return properties.getProvider() == null || properties.getProvider().isBlank()
-        ? "duckduckgo"
-        : properties.getProvider().trim().toLowerCase();
-  }
-
-  String resolveBaseUrl(String defaultUrl) {
-    return properties.getBaseUrl() == null || properties.getBaseUrl().isBlank()
-        ? defaultUrl
-        : properties.getBaseUrl();
   }
 
   List<WebSearchResult> parseBraveResults(String responseBody, int limit) throws IOException {

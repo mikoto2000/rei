@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
+import dev.mikoto2000.rei.websearch.WebSearchProperties.ProviderProperties;
 import tools.jackson.databind.json.JsonMapper;
 
 class WebSearchServiceTest {
@@ -40,10 +41,10 @@ class WebSearchServiceTest {
 
     WebSearchProperties properties = new WebSearchProperties();
     properties.setEnabled(true);
-    properties.setProvider("brave");
-    properties.setApiKey("test-key");
-    properties.setMaxResults(5);
-    properties.setBaseUrl("http://localhost:" + server.getAddress().getPort() + "/res/v1/web/search");
+    properties.setProviders(List.of(provider(
+        "brave",
+        "http://localhost:" + server.getAddress().getPort() + "/res/v1/web/search",
+        "test-key")));
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
     List<WebSearchResult> results = service.search("spring ai", 2);
@@ -65,9 +66,10 @@ class WebSearchServiceTest {
 
     WebSearchProperties properties = new WebSearchProperties();
     properties.setEnabled(true);
-    properties.setProvider("duckduckgo");
-    properties.setMaxResults(5);
-    properties.setBaseUrl("http://localhost:" + server.getAddress().getPort() + "/html/");
+    properties.setProviders(List.of(provider(
+        "duckduckgo",
+        "http://localhost:" + server.getAddress().getPort() + "/html/",
+        "")));
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
     List<WebSearchResult> results = service.search("spring ai", 2);
@@ -81,21 +83,81 @@ class WebSearchServiceTest {
   }
 
   @Test
+  void searchCombinesMultipleProvidersInConfiguredOrder() throws Exception {
+    AtomicReference<String> observedDuckQuery = new AtomicReference<>();
+    AtomicReference<String> observedBraveQuery = new AtomicReference<>();
+    server = HttpServer.create(new InetSocketAddress(0), 0);
+    server.createContext("/duck", exchange -> respondWithDuckDuckGoResults(exchange, observedDuckQuery, new AtomicReference<>()));
+    server.createContext("/brave", exchange -> respondWithSearchResults(exchange, observedBraveQuery, new AtomicReference<>()));
+    server.start();
+
+    WebSearchProperties properties = new WebSearchProperties();
+    properties.setEnabled(true);
+    properties.setProviders(List.of(
+        provider("duckduckgo", "http://localhost:" + server.getAddress().getPort() + "/duck", ""),
+        provider("brave", "http://localhost:" + server.getAddress().getPort() + "/brave", "test-key")));
+    WebSearchService service = new WebSearchService(properties, new JsonMapper());
+
+    List<WebSearchResult> results = service.search("spring ai", 3);
+
+    assertEquals("q=spring+ai", observedDuckQuery.get());
+    assertEquals("q=spring+ai&count=3", observedBraveQuery.get());
+    assertEquals(3, results.size());
+    assertEquals(List.of(
+        "https://example.com/spring-ai",
+        "https://example.com/duck",
+        "https://example.com/brave-search"), results.stream().map(WebSearchResult::url).toList());
+  }
+
+  @Test
+  void searchFallsBackToLaterProviderWhenEarlierOneFails() throws Exception {
+    AtomicReference<String> observedBraveQuery = new AtomicReference<>();
+    AtomicReference<String> observedBraveHeader = new AtomicReference<>();
+    server = HttpServer.create(new InetSocketAddress(0), 0);
+    server.createContext("/brave", exchange -> respondWithSearchResults(exchange, observedBraveQuery, observedBraveHeader));
+    server.start();
+
+    WebSearchProperties properties = new WebSearchProperties();
+    properties.setEnabled(true);
+    properties.setProviders(List.of(
+        provider("unsupported", "http://localhost/unused", ""),
+        provider("brave", "http://localhost:" + server.getAddress().getPort() + "/brave", "test-key")));
+    WebSearchService service = new WebSearchService(properties, new JsonMapper());
+
+    List<WebSearchResult> results = service.search("spring ai", 2);
+
+    assertEquals("q=spring+ai&count=2", observedBraveQuery.get());
+    assertEquals("test-key", observedBraveHeader.get());
+    assertEquals(2, results.size());
+  }
+
+  @Test
+  void configuredProvidersRequiresAtLeastOneValidProvider() {
+    WebSearchProperties properties = new WebSearchProperties();
+    properties.setProviders(List.of(provider("", "", "")));
+    WebSearchService service = new WebSearchService(properties, new JsonMapper());
+
+    IllegalStateException error = assertThrows(IllegalStateException.class, service::configuredProviders);
+
+    assertEquals("No web search providers are configured.", error.getMessage());
+  }
+
+  @Test
   void searchRequiresApiKeyForBrave() {
     WebSearchProperties properties = new WebSearchProperties();
     properties.setEnabled(true);
-    properties.setProvider("brave");
+    properties.setProviders(List.of(provider("brave", "https://api.search.brave.com/res/v1/web/search", "")));
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
     IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.search("spring ai", 3));
 
-    assertEquals("Web search API key is not configured. Set REI_WEB_SEARCH_API_KEY.", error.getMessage());
+    assertEquals("Web search API key is not configured for provider brave.", error.getMessage());
   }
 
   @Test
   void searchRequiresFeatureFlag() {
     WebSearchProperties properties = new WebSearchProperties();
-    properties.setApiKey("test-key");
+    properties.setProviders(List.of(provider("brave", "https://api.search.brave.com/res/v1/web/search", "test-key")));
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
     IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.search("spring ai", 3));
@@ -121,6 +183,14 @@ class WebSearchServiceTest {
     List<WebSearchResult> results = service.parseDuckDuckGoResults("<html></html>", 3);
 
     assertTrue(results.isEmpty());
+  }
+
+  private ProviderProperties provider(String name, String baseUrl, String apiKey) {
+    ProviderProperties provider = new ProviderProperties();
+    provider.setName(name);
+    provider.setBaseUrl(baseUrl);
+    provider.setApiKey(apiKey);
+    return provider;
   }
 
   private void respondWithSearchResults(HttpExchange exchange, AtomicReference<String> observedQuery,

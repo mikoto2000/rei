@@ -49,11 +49,11 @@ rei:
     time-zone: ${REI_GOOGLE_CALENDAR_TIME_ZONE:}
   web-search:
     enabled: ${REI_WEB_SEARCH_ENABLED:true}
-    provider: ${REI_WEB_SEARCH_PROVIDER:duckduckgo}
-    base-url: ${REI_WEB_SEARCH_BASE_URL:}
-    api-key: ${REI_WEB_SEARCH_API_KEY:}
     timeout-seconds: ${REI_WEB_SEARCH_TIMEOUT_SECONDS:10}
     max-results: ${REI_WEB_SEARCH_MAX_RESULTS:5}
+    providers:
+      - name: duckduckgo
+        base-url: ${REI_WEB_SEARCH_DUCKDUCKGO_BASE_URL:https://html.duckduckgo.com/html/}
   vector-document:
     chunk-size: ${REI_VECTOR_DOCUMENT_CHUNK_SIZE:512}
     chunk-overlap: ${REI_VECTOR_DOCUMENT_CHUNK_OVERLAP:64}
