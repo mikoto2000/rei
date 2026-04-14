@@ -40,6 +40,7 @@ class WebSearchServiceTest {
 
     WebSearchProperties properties = new WebSearchProperties();
     properties.setEnabled(true);
+    properties.setProvider("brave");
     properties.setApiKey("test-key");
     properties.setMaxResults(5);
     properties.setBaseUrl("http://localhost:" + server.getAddress().getPort() + "/res/v1/web/search");
@@ -55,9 +56,35 @@ class WebSearchServiceTest {
   }
 
   @Test
-  void searchRequiresApiKey() {
+  void searchCallsDuckDuckGoCompatibleEndpointAndParsesResults() throws Exception {
+    AtomicReference<String> observedQuery = new AtomicReference<>();
+    AtomicReference<String> observedHeader = new AtomicReference<>();
+    server = HttpServer.create(new InetSocketAddress(0), 0);
+    server.createContext("/html/", exchange -> respondWithDuckDuckGoResults(exchange, observedQuery, observedHeader));
+    server.start();
+
     WebSearchProperties properties = new WebSearchProperties();
     properties.setEnabled(true);
+    properties.setProvider("duckduckgo");
+    properties.setMaxResults(5);
+    properties.setBaseUrl("http://localhost:" + server.getAddress().getPort() + "/html/");
+    WebSearchService service = new WebSearchService(properties, new JsonMapper());
+
+    List<WebSearchResult> results = service.search("spring ai", 2);
+
+    assertEquals("q=spring+ai", observedQuery.get());
+    assertEquals("Rei/0.0.1", observedHeader.get());
+    assertEquals(2, results.size());
+    assertEquals("Spring AI", results.getFirst().title());
+    assertEquals("https://example.com/spring-ai", results.getFirst().url());
+    assertEquals("https://example.com/duck", results.get(1).url());
+  }
+
+  @Test
+  void searchRequiresApiKeyForBrave() {
+    WebSearchProperties properties = new WebSearchProperties();
+    properties.setEnabled(true);
+    properties.setProvider("brave");
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
     IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.search("spring ai", 3));
@@ -77,11 +104,21 @@ class WebSearchServiceTest {
   }
 
   @Test
-  void parseResultsReturnsEmptyListWhenWebResultsAreMissing() throws IOException {
+  void parseBraveResultsReturnsEmptyListWhenWebResultsAreMissing() throws IOException {
     WebSearchProperties properties = new WebSearchProperties();
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
-    List<WebSearchResult> results = service.parseResults("{}", 3);
+    List<WebSearchResult> results = service.parseBraveResults("{}", 3);
+
+    assertTrue(results.isEmpty());
+  }
+
+  @Test
+  void parseDuckDuckGoResultsReturnsEmptyListWhenResultsAreMissing() {
+    WebSearchProperties properties = new WebSearchProperties();
+    WebSearchService service = new WebSearchService(properties, new JsonMapper());
+
+    List<WebSearchResult> results = service.parseDuckDuckGoResults("<html></html>", 3);
 
     assertTrue(results.isEmpty());
   }
@@ -109,6 +146,30 @@ class WebSearchServiceTest {
             ]
           }
         }
+        """.getBytes(StandardCharsets.UTF_8);
+    exchange.sendResponseHeaders(200, body.length);
+    try (OutputStream outputStream = exchange.getResponseBody()) {
+      outputStream.write(body);
+    }
+  }
+
+  private void respondWithDuckDuckGoResults(HttpExchange exchange, AtomicReference<String> observedQuery,
+      AtomicReference<String> observedHeader) throws IOException {
+    observedQuery.set(exchange.getRequestURI().getRawQuery());
+    observedHeader.set(exchange.getRequestHeaders().getFirst("User-Agent"));
+    byte[] body = """
+        <html>
+          <body>
+            <div class="result">
+              <a class="result__a" href="https://example.com/spring-ai">Spring AI</a>
+              <a class="result__snippet">Spring AI official documentation</a>
+            </div>
+            <div class="result">
+              <a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fduck">Duck Result</a>
+              <div class="result__snippet">DuckDuckGo redirect result</div>
+            </div>
+          </body>
+        </html>
         """.getBytes(StandardCharsets.UTF_8);
     exchange.sendResponseHeaders(200, body.length);
     try (OutputStream outputStream = exchange.getResponseBody()) {

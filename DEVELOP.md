@@ -54,7 +54,7 @@ Rei の開発者向けドキュメントです。利用手順は [README.md](./R
 主なクラス:
 
 - [`WebSearchService.java`](./src/main/java/dev/mikoto2000/rei/websearch/WebSearchService.java)
-  - Brave Search API 呼び出し
+  - Web 検索プロバイダ呼び出し (`duckduckgo` / `brave`)
 - [`WebSearchQueryPlanner.java`](./src/main/java/dev/mikoto2000/rei/websearch/WebSearchQueryPlanner.java)
   - クエリ展開
 - [`WebPageFetcher.java`](./src/main/java/dev/mikoto2000/rei/websearch/WebPageFetcher.java)

@@ -12,7 +12,9 @@ public class WebSearchProperties {
 
   private boolean enabled = false;
 
-  private String baseUrl = "https://api.search.brave.com/res/v1/web/search";
+  private String provider = "duckduckgo";
+
+  private String baseUrl = "";
 
   private String apiKey = "";
 

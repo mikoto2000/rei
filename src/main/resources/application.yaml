@@ -9,12 +9,12 @@ spring:
             initialize-schema: always
     openai:
       # base-url: ${REI_OPENAI_BASE_URL:https://api.openai.com}
-      base-url: ${REI_OPENAI_BASE_URL:http://localhost:11434}
+      base-url: ${REI_OPENAI_BASE_URL:http://192.168.1.25:11434}
       api-key: ${REI_OPENAI_API_KEY:dummy-key}
       chat:
         options:
           # model: ${REI_OPENAI_CHAT_MODEL:gpt-5.4}
-          model: ${REI_OPENAI_CHAT_MODEL:qwen3.5:9b}
+          model: ${REI_OPENAI_CHAT_MODEL:qwen3.5:122b}
           temperature: 0.3
       embedding:
         options:
@@ -48,8 +48,9 @@ rei:
     default-calendar-id: ${REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID:primary}
     time-zone: ${REI_GOOGLE_CALENDAR_TIME_ZONE:}
   web-search:
-    enabled: ${REI_WEB_SEARCH_ENABLED:false}
-    base-url: ${REI_WEB_SEARCH_BASE_URL:https://api.search.brave.com/res/v1/web/search}
+    enabled: ${REI_WEB_SEARCH_ENABLED:true}
+    provider: ${REI_WEB_SEARCH_PROVIDER:duckduckgo}
+    base-url: ${REI_WEB_SEARCH_BASE_URL:}
     api-key: ${REI_WEB_SEARCH_API_KEY:}
     timeout-seconds: ${REI_WEB_SEARCH_TIMEOUT_SECONDS:10}
     max-results: ${REI_WEB_SEARCH_MAX_RESULTS:5}
