@@ -139,7 +139,7 @@ class WebSearchServiceTest {
 
     IllegalStateException error = assertThrows(IllegalStateException.class, service::configuredProviders);
 
-    assertEquals("No web search providers are configured.", error.getMessage());
+    assertTrue(error.getMessage().startsWith("No web search providers are configured."));
   }
 
   @Test
@@ -181,6 +181,31 @@ class WebSearchServiceTest {
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
     List<WebSearchResult> results = service.parseDuckDuckGoResults("<html></html>", 3);
+
+    assertTrue(results.isEmpty());
+  }
+
+  @Test
+  void searchReturnsEmptyListWhenProvidersAreConfiguredButNoResultsAreFound() throws Exception {
+    server = HttpServer.create(new InetSocketAddress(0), 0);
+    server.createContext("/html/", exchange -> {
+      byte[] body = "<html><body></body></html>".getBytes(StandardCharsets.UTF_8);
+      exchange.sendResponseHeaders(200, body.length);
+      try (OutputStream outputStream = exchange.getResponseBody()) {
+        outputStream.write(body);
+      }
+    });
+    server.start();
+
+    WebSearchProperties properties = new WebSearchProperties();
+    properties.setEnabled(true);
+    properties.setProviders(List.of(provider(
+        "duckduckgo",
+        "http://localhost:" + server.getAddress().getPort() + "/html/",
+        "")));
+    WebSearchService service = new WebSearchService(properties, new JsonMapper());
+
+    List<WebSearchResult> results = service.search("spring ai", 2);
 
     assertTrue(results.isEmpty());
   }

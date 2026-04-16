@@ -17,6 +17,8 @@ import java.util.Map;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import dev.mikoto2000.rei.websearch.WebSearchProperties.ProviderProperties;
@@ -27,6 +29,8 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 @RequiredArgsConstructor
 public class WebSearchService {
+
+  private static final Logger log = LoggerFactory.getLogger(WebSearchService.class);
 
   private final WebSearchProperties properties;
 
@@ -72,12 +76,14 @@ public class WebSearchService {
     if (firstError instanceof RuntimeException runtimeException) {
       throw runtimeException;
     }
-    throw new IllegalStateException("No web search providers are configured.");
+    return List.of();
   }
 
   List<ProviderProperties> configuredProviders() {
     if (properties.getProviders() == null || properties.getProviders().isEmpty()) {
-      throw new IllegalStateException("No web search providers are configured.");
+      String detail = "enabled=%s, rawProviders=%s".formatted(properties.isEnabled(), properties.getProviders());
+      log.warn("Web search providers were empty at execution time: {}", detail);
+      throw new IllegalStateException("No web search providers are configured. " + detail);
     }
 
     List<ProviderProperties> providers = new ArrayList<>();
@@ -88,7 +94,9 @@ public class WebSearchService {
       providers.add(provider);
     }
     if (providers.isEmpty()) {
-      throw new IllegalStateException("No web search providers are configured.");
+      String detail = "enabled=%s, rawProviders=%s".formatted(properties.isEnabled(), properties.getProviders());
+      log.warn("Web search providers were present but all invalid at execution time: {}", detail);
+      throw new IllegalStateException("No web search providers are configured. " + detail);
     }
     return providers;
   }
