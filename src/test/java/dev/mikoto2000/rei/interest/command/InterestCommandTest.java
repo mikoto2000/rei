@@ -8,6 +8,7 @@ import java.io.PrintStream;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.function.Consumer;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -73,7 +74,11 @@ class InterestCommandTest {
     InterestUpdateService service = new InterestUpdateService(
         new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("interest-command-discover.db")));
     InterestDiscoveryJob job = org.mockito.Mockito.mock(InterestDiscoveryJob.class);
-    org.mockito.Mockito.when(job.discoverNow()).thenReturn(List.of(
+    org.mockito.Mockito.doAnswer(invocation -> {
+      Consumer<String> progress = invocation.getArgument(0);
+      progress.accept("候補トピックを抽出しています...");
+      progress.accept("1/2 件目を検索しています: Neovim 開発環境");
+      return List.of(
         new dev.mikoto2000.rei.interest.InterestUpdate(
             1L,
             "Neovim 開発環境",
@@ -89,7 +94,8 @@ class InterestCommandTest {
             "GitHub Actions caching best practices",
             "GitHub Actions docs",
             List.of("https://example.com/actions"),
-            OffsetDateTime.of(2026, 4, 18, 0, 5, 0, 0, ZoneOffset.UTC))));
+            OffsetDateTime.of(2026, 4, 18, 0, 5, 0, 0, ZoneOffset.UTC)));
+    }).when(job).discoverNow(org.mockito.ArgumentMatchers.any());
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
@@ -102,6 +108,8 @@ class InterestCommandTest {
     }
 
     String output = out.toString();
+    assertTrue(output.contains("候補トピックを抽出しています..."));
+    assertTrue(output.contains("1/2 件目を検索しています: Neovim 開発環境"));
     assertTrue(output.contains("興味更新を 2 件追加しました"));
     assertTrue(output.contains("Neovim 開発環境"));
     assertTrue(output.contains("GitHub Actions 最適化"));
