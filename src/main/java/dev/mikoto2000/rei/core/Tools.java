@@ -39,6 +39,13 @@ public class Tools {
   @return コマンドの標準出力の内容
   """)
     String executeExternalProgram(String command, List<String> args) throws IOException, InterruptedException {
+      if (command == null || command.isBlank()) {
+        throw new IllegalArgumentException("command は空にできません");
+      }
+      if (command.isBlank() || command.contains(" ")) {
+        throw new IllegalArgumentException(
+            "外部コマンドの指定が不正です。command には curl のような実行ファイル名だけを指定し、引数は args に分けて指定してください。");
+      }
       List<String> safeArgs = args == null ? List.of() : args;
       IO.println(String.format("%s コマンドを引数 %s で実行するよ", command, safeArgs));
 

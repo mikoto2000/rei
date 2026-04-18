@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -32,6 +34,8 @@ import java.util.concurrent.atomic.AtomicReference;
 @RequiredArgsConstructor
 @Command(name = "search", description = "ベクトルストアと Web 検索の結果をまとめて回答します")
 public class SearchCommand implements Runnable {
+
+  private static final Logger log = LoggerFactory.getLogger(SearchCommand.class);
 
   private final ChatClient chatClient;
   private final ModelHolderService currentModelHolder;
@@ -75,25 +79,28 @@ public class SearchCommand implements Runnable {
       AtomicReference<Throwable> errorRef = new AtomicReference<>();
       Disposable disposable = requestSpec.stream()
           .content()
-          .doOnNext(System.out::print)
-          .doOnComplete(latch::countDown)
-          .doOnError(error -> {
-            errorRef.set(error);
-            latch.countDown();
-          })
-          .subscribe();
+          .subscribe(
+              System.out::print,
+              error -> {
+                errorRef.set(error);
+                latch.countDown();
+              },
+              latch::countDown);
       cancellationService.register(disposable);
 
       latch.await();
       System.out.println();
       Throwable error = errorRef.get();
       if (error != null) {
-        throw new IllegalStateException("回答の取得に失敗しました", error);
+        log.warn("Search response failed", error);
+        IO.println("[error] " + buildUserFacingMessage(error));
+        return;
       }
 
       printSources(vectorResults, webContext);
     } catch (IOException e) {
-      throw new RuntimeException("検索結果の取得に失敗しました", e);
+      log.warn("Search knowledge retrieval failed", e);
+      IO.println("[error] 検索結果の取得に失敗しました: " + safeMessage(e, "原因不明"));
     } catch (InterruptedException e) {
       if (cancellationService.consumeCancellationRequested()) {
         System.out.println();
@@ -101,10 +108,30 @@ public class SearchCommand implements Runnable {
         return;
       }
       Thread.currentThread().interrupt();
-      throw new RuntimeException("検索が中断されました", e);
+      log.warn("Search interrupted", e);
+      IO.println("[error] 検索が中断されました");
     } finally {
       cancellationService.clear();
     }
+  }
+
+  private String buildUserFacingMessage(Throwable error) {
+    Throwable root = rootCause(error);
+    String message = safeMessage(root, "原因不明");
+    return "回答の取得に失敗しました: " + message;
+  }
+
+  private String safeMessage(Throwable error, String fallback) {
+    String message = error.getMessage();
+    return message == null || message.isBlank() ? fallback : message;
+  }
+
+  private Throwable rootCause(Throwable error) {
+    Throwable current = error;
+    while (current.getCause() != null) {
+      current = current.getCause();
+    }
+    return current;
   }
 
   private String buildPrompt(String query, List<VectorDocumentSearchResult> vectorResults, WebSearchContext webContext) {
