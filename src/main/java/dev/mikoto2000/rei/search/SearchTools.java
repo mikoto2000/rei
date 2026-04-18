@@ -20,6 +20,8 @@ public class SearchTools {
   @Tool(name = "searchKnowledge", description = "必要なときだけ Web 検索とベクトル検索をまとめて実行します。最新情報、出典確認、ローカル文書確認が必要な場合に使います。")
   String searchKnowledge(String query, Integer vectorTopK, Integer webTopK, Double threshold, String source)
       throws IOException, InterruptedException {
+    IO.println(String.format("知識検索を実行するよ。query=%s、vectorTopK=%s、webTopK=%s、threshold=%s、source=%s",
+        query, vectorTopK, webTopK, threshold, source));
     SearchKnowledgeResult result = searchKnowledgeService.search(query, vectorTopK, webTopK, threshold, source);
     return """
         質問:

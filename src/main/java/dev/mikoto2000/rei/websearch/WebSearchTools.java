@@ -16,6 +16,7 @@ public class WebSearchTools {
 
   @Tool(name = "webSearch", description = "Web を検索します。外部の最新情報が必要な場合に使います。query と limit を指定できます。")
   List<WebSearchResult> webSearch(String query, Integer limit) throws IOException, InterruptedException {
+    IO.println(String.format("Web を検索するよ。query=%s、limit=%s", query, limit));
     return webSearchService.search(query, limit);
   }
 }
