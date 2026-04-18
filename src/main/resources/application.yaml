@@ -54,6 +54,16 @@ rei:
     providers:
       - name: duckduckgo
         base-url: ${REI_WEB_SEARCH_DUCKDUCKGO_BASE_URL:https://html.duckduckgo.com/html/}
+  interest:
+    enabled: ${REI_INTEREST_ENABLED:false}
+    lookback-days: ${REI_INTEREST_LOOKBACK_DAYS:7}
+    message-limit: ${REI_INTEREST_MESSAGE_LIMIT:200}
+    min-score: ${REI_INTEREST_MIN_SCORE:0.6}
+    max-topics: ${REI_INTEREST_MAX_TOPICS:3}
+    recent-hours: ${REI_INTEREST_RECENT_HOURS:24}
+    vector-top-k: ${REI_INTEREST_VECTOR_TOP_K:3}
+    web-top-k: ${REI_INTEREST_WEB_TOP_K:5}
+    cron: ${REI_INTEREST_CRON:0 0 7 * * *}
   vector-document:
     chunk-size: ${REI_VECTOR_DOCUMENT_CHUNK_SIZE:512}
     chunk-overlap: ${REI_VECTOR_DOCUMENT_CHUNK_OVERLAP:64}

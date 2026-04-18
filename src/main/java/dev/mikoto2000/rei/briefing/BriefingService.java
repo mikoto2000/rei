@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarEventSummary;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarService;
+import dev.mikoto2000.rei.interest.InterestUpdateService;
 import dev.mikoto2000.rei.task.Task;
 import dev.mikoto2000.rei.task.TaskService;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ public class BriefingService {
   private final TaskService taskService;
   private final VectorStore vectorStore;
   private final BriefingNarrator briefingNarrator;
+  private final InterestUpdateService interestUpdateService;
 
   public DailyBriefing today() throws Exception {
     return briefingFor(LocalDate.now(googleCalendarService.zoneId()));
@@ -36,9 +38,15 @@ public class BriefingService {
         .filter(task -> task.dueDate() != null && task.dueDate().isBefore(date))
         .toList();
     List<String> relatedDocuments = findRelatedDocuments(events, openTasks);
+    List<String> interestUpdates = interestUpdateService.listRecent(24).stream()
+        .map(update -> {
+          String url = update.sourceUrls().isEmpty() ? "" : " | " + update.sourceUrls().getFirst();
+          return update.topic() + " | " + update.summary() + url;
+        })
+        .toList();
 
     if (events.isEmpty() && openTasks.isEmpty()) {
-      return fallbackBriefing(date, relatedDocuments);
+      return fallbackBriefing(date, relatedDocuments, interestUpdates);
     }
 
     BriefingContext context = new BriefingContext(date, events, openTasks, overdueTasks, relatedDocuments);
@@ -49,18 +57,20 @@ public class BriefingService {
         openTasks,
         overdueTasks,
         relatedDocuments,
+        interestUpdates,
         narration.overview(),
         narration.cautionPoints(),
         narration.nextActions());
   }
 
-  private DailyBriefing fallbackBriefing(LocalDate date, List<String> relatedDocuments) {
+  private DailyBriefing fallbackBriefing(LocalDate date, List<String> relatedDocuments, List<String> interestUpdates) {
     return new DailyBriefing(
         date,
         List.of(),
         List.of(),
         List.of(),
         relatedDocuments,
+        interestUpdates,
         "今日は予定も未完了タスクもありません。必要なら先回りで準備や整理を進められます。",
         List.of("急ぎの対応は見当たりません。"),
         List.of("新しく着手するタスクや確認事項を整理する。"));

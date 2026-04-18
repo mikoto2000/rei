@@ -45,6 +45,7 @@ class BriefingCommandTest {
             null)),
         List.of(),
         List.of("docs/proposal.md | 顧客向け提案資料の要点"),
+        List.of("Neovim 開発環境 | Neovim docs | https://example.com/nvim"),
         "午前は顧客定例、午後は提案書更新のフォローが中心です。",
         List.of("会議前に提案資料を確認してください。"),
         List.of("顧客定例の前に論点を3つに絞る。")));
@@ -64,6 +65,7 @@ class BriefingCommandTest {
     assertTrue(output.contains("顧客定例"));
     assertTrue(output.contains("提案書更新"));
     assertTrue(output.contains("docs/proposal.md"));
+    assertTrue(output.contains("Neovim 開発環境"));
     assertTrue(output.contains("会議前に提案資料を確認してください。"));
   }
 

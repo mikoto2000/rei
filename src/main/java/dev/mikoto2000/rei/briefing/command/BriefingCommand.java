@@ -66,6 +66,15 @@ public class BriefingCommand {
         }
       }
 
+      System.out.println("気になりそうな話題:");
+      if (briefing.interestUpdates().isEmpty()) {
+        System.out.println("- 該当なし");
+      } else {
+        for (String update : briefing.interestUpdates()) {
+          System.out.println("- " + update);
+        }
+      }
+
       System.out.println("注意点:");
       for (String cautionPoint : briefing.cautionPoints()) {
         System.out.println("- " + cautionPoint);

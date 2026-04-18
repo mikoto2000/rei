@@ -12,6 +12,7 @@ public record DailyBriefing(
     List<Task> openTasks,
     List<Task> overdueTasks,
     List<String> relatedDocuments,
+    List<String> interestUpdates,
     String overview,
     List<String> cautionPoints,
     List<String> nextActions
