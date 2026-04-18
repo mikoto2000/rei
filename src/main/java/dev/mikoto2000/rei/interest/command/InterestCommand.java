@@ -56,8 +56,11 @@ public class InterestCommand {
 
     @Override
     public void run() {
-      int savedCount = interestDiscoveryJob.discoverNow();
-      System.out.println("興味更新を " + savedCount + " 件追加しました");
+      List<InterestUpdate> savedUpdates = interestDiscoveryJob.discoverNow();
+      System.out.println("興味更新を " + savedUpdates.size() + " 件追加しました");
+      for (InterestUpdate update : savedUpdates) {
+        System.out.println("- " + update.topic() + " | " + update.summary());
+      }
     }
   }
 }

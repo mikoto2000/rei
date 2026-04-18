@@ -24,16 +24,16 @@ public class InterestDiscoveryJob {
     discover(false);
   }
 
-  public int discoverNow() {
+  public List<InterestUpdate> discoverNow() {
     return discover(true);
   }
 
-  private int discover(boolean force) {
+  private List<InterestUpdate> discover(boolean force) {
     if (!force && !properties.isEnabled()) {
-      return 0;
+      return List.of();
     }
 
-    int savedCount = 0;
+    java.util.ArrayList<InterestUpdate> savedUpdates = new java.util.ArrayList<>();
 
     for (InterestTopicCandidate candidate : conversationInterestService.discoverCandidates()) {
       if (interestUpdateService.existsBySearchQuery(candidate.searchQuery())) {
@@ -51,18 +51,18 @@ public class InterestDiscoveryJob {
         if (pages.isEmpty()) {
           continue;
         }
-        interestUpdateService.save(
+        InterestUpdate saved = interestUpdateService.save(
             candidate.topic(),
             candidate.reason(),
             candidate.searchQuery(),
             summarize(pages),
             pages.stream().map(WebSearchPage::url).toList());
-        savedCount++;
+        savedUpdates.add(saved);
       } catch (Exception e) {
         // 定期ジョブ全体を止めない
       }
     }
-    return savedCount;
+    return savedUpdates;
   }
 
   private String summarize(List<WebSearchPage> pages) {

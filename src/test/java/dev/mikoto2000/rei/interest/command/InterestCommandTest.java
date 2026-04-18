@@ -69,11 +69,27 @@ class InterestCommandTest {
   }
 
   @Test
-  void discoverRunsInterestDiscoveryJobAndPrintsSavedCount() {
+  void discoverRunsInterestDiscoveryJobAndPrintsSavedTopics() {
     InterestUpdateService service = new InterestUpdateService(
         new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("interest-command-discover.db")));
     InterestDiscoveryJob job = org.mockito.Mockito.mock(InterestDiscoveryJob.class);
-    org.mockito.Mockito.when(job.discoverNow()).thenReturn(2);
+    org.mockito.Mockito.when(job.discoverNow()).thenReturn(List.of(
+        new dev.mikoto2000.rei.interest.InterestUpdate(
+            1L,
+            "Neovim 開発環境",
+            "繰り返し話題になっている",
+            "Neovim devcontainer best practices",
+            "Neovim docs",
+            List.of("https://example.com/nvim"),
+            OffsetDateTime.of(2026, 4, 18, 0, 0, 0, 0, ZoneOffset.UTC)),
+        new dev.mikoto2000.rei.interest.InterestUpdate(
+            2L,
+            "GitHub Actions 最適化",
+            "CI の話題が繰り返し出ている",
+            "GitHub Actions caching best practices",
+            "GitHub Actions docs",
+            List.of("https://example.com/actions"),
+            OffsetDateTime.of(2026, 4, 18, 0, 5, 0, 0, ZoneOffset.UTC))));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
@@ -85,7 +101,10 @@ class InterestCommandTest {
       System.setOut(originalOut);
     }
 
-    assertTrue(out.toString().contains("興味更新を 2 件追加しました"));
+    String output = out.toString();
+    assertTrue(output.contains("興味更新を 2 件追加しました"));
+    assertTrue(output.contains("Neovim 開発環境"));
+    assertTrue(output.contains("GitHub Actions 最適化"));
   }
 
   private CommandLine newCommand(InterestUpdateService service) {
