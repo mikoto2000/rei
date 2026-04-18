@@ -21,9 +21,19 @@ public class InterestDiscoveryJob {
 
   @Scheduled(cron = "${rei.interest.cron:0 0 7 * * *}")
   public void run() {
-    if (!properties.isEnabled()) {
-      return;
+    discover(false);
+  }
+
+  public int discoverNow() {
+    return discover(true);
+  }
+
+  private int discover(boolean force) {
+    if (!force && !properties.isEnabled()) {
+      return 0;
     }
+
+    int savedCount = 0;
 
     for (InterestTopicCandidate candidate : conversationInterestService.discoverCandidates()) {
       if (interestUpdateService.existsBySearchQuery(candidate.searchQuery())) {
@@ -47,10 +57,12 @@ public class InterestDiscoveryJob {
             candidate.searchQuery(),
             summarize(pages),
             pages.stream().map(WebSearchPage::url).toList());
+        savedCount++;
       } catch (Exception e) {
         // 定期ジョブ全体を止めない
       }
     }
+    return savedCount;
   }
 
   private String summarize(List<WebSearchPage> pages) {

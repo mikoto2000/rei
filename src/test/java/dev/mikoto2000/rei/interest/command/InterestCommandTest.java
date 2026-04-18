@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+import dev.mikoto2000.rei.interest.InterestDiscoveryJob;
 import dev.mikoto2000.rei.interest.InterestUpdateService;
 import picocli.CommandLine;
 
@@ -67,12 +68,39 @@ class InterestCommandTest {
     assertTrue(out.toString().contains("興味更新はありません"));
   }
 
+  @Test
+  void discoverRunsInterestDiscoveryJobAndPrintsSavedCount() {
+    InterestUpdateService service = new InterestUpdateService(
+        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("interest-command-discover.db")));
+    InterestDiscoveryJob job = org.mockito.Mockito.mock(InterestDiscoveryJob.class);
+    org.mockito.Mockito.when(job.discoverNow()).thenReturn(2);
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      int exitCode = newCommand(service, job).execute("discover");
+      assertEquals(0, exitCode);
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    assertTrue(out.toString().contains("興味更新を 2 件追加しました"));
+  }
+
   private CommandLine newCommand(InterestUpdateService service) {
+    return newCommand(service, org.mockito.Mockito.mock(InterestDiscoveryJob.class));
+  }
+
+  private CommandLine newCommand(InterestUpdateService service, InterestDiscoveryJob job) {
     return new CommandLine(new InterestCommand(), new CommandLine.IFactory() {
       @Override
       public <K> K create(Class<K> cls) throws Exception {
         if (cls == InterestCommand.ListCommand.class) {
           return cls.cast(new InterestCommand.ListCommand(service));
+        }
+        if (cls == InterestCommand.DiscoverCommand.class) {
+          return cls.cast(new InterestCommand.DiscoverCommand(job));
         }
         return CommandLine.defaultFactory().create(cls);
       }

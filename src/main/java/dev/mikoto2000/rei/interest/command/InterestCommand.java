@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.interest.InterestUpdate;
+import dev.mikoto2000.rei.interest.InterestDiscoveryJob;
 import dev.mikoto2000.rei.interest.InterestUpdateService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
@@ -15,7 +16,8 @@ import picocli.CommandLine.Option;
     name = "interest",
     description = "興味更新を確認します",
     subcommands = {
-      InterestCommand.ListCommand.class
+      InterestCommand.ListCommand.class,
+      InterestCommand.DiscoverCommand.class
     })
 public class InterestCommand {
 
@@ -42,6 +44,20 @@ public class InterestCommand {
         System.out.println(update.id() + " | " + update.createdAt() + " | " + update.topic() + " | "
             + update.summary() + " | " + urls);
       }
+    }
+  }
+
+  @Component
+  @RequiredArgsConstructor
+  @Command(name = "discover", description = "興味更新の抽出と検索を手動実行します")
+  public static class DiscoverCommand implements Runnable {
+
+    private final InterestDiscoveryJob interestDiscoveryJob;
+
+    @Override
+    public void run() {
+      int savedCount = interestDiscoveryJob.discoverNow();
+      System.out.println("興味更新を " + savedCount + " 件追加しました");
     }
   }
 }
