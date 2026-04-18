@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.briefing.command.BriefingCommand;
 import dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand;
+import dev.mikoto2000.rei.interest.command.InterestCommand;
 import dev.mikoto2000.rei.reminder.command.ReminderCommand;
 import dev.mikoto2000.rei.task.command.TaskCommand;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +27,8 @@ subcommands = {
   EmbedCommand.class,
   TaskCommand.class,
   BriefingCommand.class,
-  ReminderCommand.class
+  ReminderCommand.class,
+  InterestCommand.class
 },
 mixinStandardHelpOptions = false)
 @RequiredArgsConstructor
