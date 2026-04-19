@@ -50,7 +50,9 @@ public class ReiApplication {
   private final Path HISTORY_FILE = ReiPaths.historyFilePath();
 
   public  static void main(String[] args) throws IOException {
-    var context = SpringApplication.run(ReiApplication.class, args);
+    SpringApplication application = new SpringApplication(ReiApplication.class);
+    application.setDefaultProperties(ExternalConfigSupport.defaultProperties());
+    var context = application.run(args);
     var app = context.getBean(ReiApplication.class);
     app.run(args);
     context.close();
