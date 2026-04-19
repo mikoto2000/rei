@@ -4,6 +4,8 @@ Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API 
 
 日々の確認や調査をターミナル上で完結させたいときに向いています。ローカルファイルや埋め込み済み文書を参照しながら対話でき、必要に応じて外部 API や MCP サーバーのツールも利用できます。
 
+ユーザー設定は、組み込みの `application.yaml` に加えて、起動ディレクトリ配下の `.rei/application.yaml` から上書きできます。
+
 ## 主な機能
 
 - OpenAI 互換 API を使った対話
@@ -23,6 +25,47 @@ Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API 
 
 - JDK 25 以上
 - Maven Wrapper を使う場合は `./mvnw`、ローカル Maven を使う場合は `mvn`
+
+### 外部設定ファイル
+
+Rei は起動時に、組み込みの `application.yaml` に加えて、起動ディレクトリ配下の `.rei/application.yaml` を自動で読み込みます。ファイルが存在しない場合は無視されます。
+
+設定の優先順位:
+
+1. 環境変数
+2. `.rei/application.yaml`
+3. 組み込み `application.yaml`
+
+外部設定ファイルのパス確認:
+
+```text
+/config path
+```
+
+テンプレート作成:
+
+```text
+/config init
+/config init --force
+```
+
+例:
+
+```yaml
+spring:
+  ai:
+    openai:
+      base-url: http://127.0.0.1:11434
+      chat:
+        options:
+          model: qwen3.5:122b
+
+rei:
+  web-search:
+    enabled: true
+  interest:
+    enabled: true
+```
 
 ### OpenAI Compatible API
 
@@ -187,6 +230,7 @@ gpt-oss:120b
 | `chat` | なし | 通常の対話 |
 | `model` | なし | 現在の chat モデルの確認・変更 |
 | `models` | なし | OpenAI 互換 API が返すモデル一覧を表示 |
+| `config` | `path`, `init` | 外部設定ファイルの確認とテンプレート作成 |
 | `search` | なし | Web 検索とベクトル検索をまとめて回答 |
 | `schedule` | `auth`, `list`, `add` | Google Calendar 認可と予定操作 |
 | `task` | `add`, `list`, `done`, `delete` | タスク管理 |
