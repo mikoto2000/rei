@@ -56,6 +56,12 @@ public class ExternalConfigFileService {
         rei:
           web-search:
             enabled: true
+            providers:
+              - name: duckduckgo
+                base-url: ${REI_WEB_SEARCH_DUCKDUCKGO_BASE_URL:https://html.duckduckgo.com/html/}
+              - name: brave
+                base-url: ${REI_WEB_SEARCH_BRAVE_BASE_URL:https://api.search.brave.com/res/v1/web/search}
+                api-key: ${REI_WEB_SEARCH_BRAVE_API_KEY:}
           interest:
             enabled: true
           google-calendar:
