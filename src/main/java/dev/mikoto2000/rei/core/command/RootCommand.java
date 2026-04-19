@@ -23,6 +23,7 @@ subcommands = {
   SearchCommand.class,
   ModelsCommand.class,
   ModelCommand.class,
+  ConfigCommand.class,
   ScheduleCommand.class,
   EmbedCommand.class,
   TaskCommand.class,
