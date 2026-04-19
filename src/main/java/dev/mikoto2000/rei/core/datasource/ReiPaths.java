@@ -43,6 +43,15 @@ public final class ReiPaths {
   }
 
   /**
+   * 現在の実行環境に応じた外部設定ファイルの保存先を返します。
+   *
+   * @return 外部設定ファイルの保存先パス
+   */
+  public static Path configFilePath() {
+    return configFilePath(workDirectory());
+  }
+
+  /**
    * 指定したファイルパスの親ディレクトリを作成します。
    *
    * @param filePath 親ディレクトリを作成したいファイルパス
@@ -66,5 +75,9 @@ public final class ReiPaths {
 
   public static Path historyFilePath(Path workDirectory) {
     return workDirectory.resolve(".rei").resolve("history");
+  }
+
+  public static Path configFilePath(Path workDirectory) {
+    return workDirectory.resolve(".rei").resolve("application.yaml");
   }
 }

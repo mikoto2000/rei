@@ -40,4 +40,15 @@ class ReiPathsTest {
 
     assertEquals(expected, ReiPaths.historyFilePath(workDirectory));
   }
+
+  @Test
+  void configFilePathUsesWorkingDirectory() {
+    Path workDirectory = Path.of("/work/rei");
+    Path expected = Path.of(
+        "/work/rei",
+        ".rei",
+        "application.yaml");
+
+    assertEquals(expected, ReiPaths.configFilePath(workDirectory));
+  }
 }
