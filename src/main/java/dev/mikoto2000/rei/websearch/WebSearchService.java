@@ -53,9 +53,6 @@ public class WebSearchService {
       try {
         for (WebSearchResult result : searchWithProvider(provider, query, clampedLimit)) {
           resultsByUrl.putIfAbsent(result.url(), result);
-          if (resultsByUrl.size() >= clampedLimit) {
-            return new ArrayList<>(resultsByUrl.values());
-          }
         }
       } catch (IOException | InterruptedException | RuntimeException e) {
         if (firstError == null) {
