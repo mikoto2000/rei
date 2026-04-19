@@ -57,6 +57,8 @@ public class ExternalConfigFileService {
           web-search:
             enabled: true
           interest:
+            enabled: true
+          google-calendar:
             enabled: false
         """;
   }
