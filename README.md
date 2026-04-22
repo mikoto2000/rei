@@ -1,6 +1,6 @@
 # Rei
 
-Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API を使った対話を中心に、Google Calendar、タスク管理、日次ブリーフィング、リマインド、文書埋め込み、Web 検索、MCP ツール連携を 1 つの CLI にまとめています。
+Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API を使った対話を中心に、Google Calendar、タスク管理、RSS 管理、日次ブリーフィング、リマインド、文書埋め込み、Web 検索、MCP ツール連携を 1 つの CLI にまとめています。
 
 日々の確認や調査をターミナル上で完結させたいときに向いています。ローカルファイルや埋め込み済み文書を参照しながら対話でき、必要に応じて外部 API や MCP サーバーのツールも利用できます。
 
@@ -12,7 +12,8 @@ Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API 
 - `model` / `models` による chat モデルの確認・切り替え
 - Google Calendar の認可、予定一覧、予定追加
 - タスクの追加、一覧、完了、削除
-- その日の予定・未完了タスク・関連文書をまとめる日次ブリーフィング
+- RSS/Atom フィードの登録、更新、新着記事の一覧と要約
+- その日の予定・未完了タスク・関連文書・新着記事をまとめる日次ブリーフィング
 - 指定日時または予定の何分前かでのリマインド
 - 文書をベクトルストアへ埋め込んだうえでの RAG
 - Web 検索ツール
@@ -65,6 +66,8 @@ rei:
     enabled: true
   interest:
     enabled: true
+  feed:
+    briefing-max-items: 10
 ```
 
 ### OpenAI Compatible API
@@ -156,6 +159,24 @@ rei:
 | `REI_WEB_SEARCH_BRAVE_BASE_URL` | Brave 利用時任意 | `https://api.search.brave.com/res/v1/web/search` | Brave Search API URL |
 | `REI_WEB_SEARCH_BRAVE_API_KEY` | Brave 利用時必須 | 空 | Brave Search API キー |
 
+### RSS Feed
+
+RSS/Atom フィードは `.rei/application.yaml` または環境変数で設定できます。保存するのは本文ではなく、タイトル、URL、公開日時、取得日時などの最小メタデータだけです。
+
+```yaml
+rei:
+  feed:
+    briefing-max-items: 10
+    poll-interval-ms: 3600000
+```
+
+主な環境変数:
+
+| 変数 | 要否 | デフォルト | 説明 |
+| --- | --- | --- | --- |
+| `REI_FEED_BRIEFING_MAX_ITEMS` | 任意 | `20` | `/briefing today` と `feed summary` で扱う最大記事数 |
+| `REI_FEED_POLL_INTERVAL_MS` | 任意 | `3600000` | 定期更新ジョブ `FeedUpdateJob` の実行間隔ミリ秒 |
+
 ### MCP
 
 MCP サーバーを有効にする場合は、JSON 設定ファイルを用意してください。
@@ -234,6 +255,7 @@ gpt-oss:120b
 | `search` | なし | Web 検索とベクトル検索をまとめて回答 |
 | `schedule` | `auth`, `list`, `add` | Google Calendar 認可と予定操作 |
 | `task` | `add`, `list`, `done`, `delete` | タスク管理 |
+| `feed` | `add`, `list`, `edit`, `delete`, `update`, `summary`, `item list`, `item summarize` | RSS/Atom フィード管理 |
 | `briefing` | `today` | 日次ブリーフィング表示 |
 | `reminder` | `add`, `list`, `delete` | リマインド管理 |
 | `embed` | `add`, `search`, `list`, `delete` | 文書埋め込みと検索 |
@@ -303,13 +325,48 @@ gpt-oss:120b
 /task delete 1
 ```
 
+### RSS Feed
+
+フィード登録:
+
+```text
+/feed add --name Publickey https://www.publickey1.jp/atom.xml
+```
+
+登録済みフィード一覧:
+
+```text
+/feed list
+```
+
+フィード更新:
+
+```text
+/feed update
+/feed update 1
+```
+
+記事 ID 一覧の確認:
+
+```text
+/feed item list
+/feed item list --from 2026-04-21T00:00:00Z --to 2026-04-22T09:00:00Z
+```
+
+記事要約とブリーフィング要約:
+
+```text
+/feed item summarize 42
+/feed summary
+```
+
 ### 日次ブリーフィング
 
 ```text
 /briefing today
 ```
 
-その日の予定、未完了タスク、関連文書、注意点、次アクションをまとめて表示します。
+その日の予定、未完了タスク、関連文書、新着 RSS 記事、注意点、次アクションをまとめて表示します。RSS セクションには、昨日 00:00 から現在までに公開された記事を公開日時の降順で表示し、0 件なら `昨日 00:00 以降の新着記事はありませんでした` と表示します。
 
 ### リマインド
 
