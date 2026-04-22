@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.feed.Feed;
 import dev.mikoto2000.rei.feed.FeedService;
+import dev.mikoto2000.rei.feed.FeedUpdateResult;
+import dev.mikoto2000.rei.feed.FeedUpdateService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -17,7 +19,10 @@ import picocli.CommandLine.Parameters;
     description = "RSS/Atom フィードを操作します",
     subcommands = {
       FeedCommand.AddCommand.class,
-      FeedCommand.ListCommand.class
+      FeedCommand.ListCommand.class,
+      FeedCommand.EditCommand.class,
+      FeedCommand.DeleteCommand.class,
+      FeedCommand.UpdateCommand.class
     })
 public class FeedCommand {
 
@@ -61,6 +66,88 @@ public class FeedCommand {
         String displayName = feed.displayName() == null || feed.displayName().isBlank() ? "-" : feed.displayName();
         String lastFetchedAt = feed.lastFetchedAt() == null ? "-" : feed.lastFetchedAt().toString();
         System.out.println(displayName + " | " + feed.url() + " | " + lastFetchedAt + " | " + (feed.enabled() ? "enabled" : "disabled"));
+      }
+    }
+  }
+
+  @Component
+  @RequiredArgsConstructor
+  @Command(name = "edit", description = "フィード設定を更新します")
+  public static class EditCommand implements Runnable {
+
+    private final FeedService feedService;
+
+    @Option(names = "--name", description = "表示名")
+    String displayName;
+
+    @Option(names = "--enabled", description = "有効にします")
+    boolean enabled;
+
+    @Option(names = "--disabled", description = "無効にします")
+    boolean disabled;
+
+    @Parameters(paramLabel = "ID", description = "フィード ID")
+    long id;
+
+    @Override
+    public void run() {
+      Boolean resolvedEnabled = null;
+      if (enabled == disabled) {
+        resolvedEnabled = null;
+      } else if (enabled) {
+        resolvedEnabled = true;
+      } else {
+        resolvedEnabled = false;
+      }
+      Feed updated = feedService.update(id, displayName, resolvedEnabled);
+      String resolvedName = updated.displayName() == null || updated.displayName().isBlank() ? "-" : updated.displayName();
+      System.out.println("更新: " + updated.id() + " | " + resolvedName + " | " + (updated.enabled() ? "enabled" : "disabled"));
+    }
+  }
+
+  @Component
+  @RequiredArgsConstructor
+  @Command(name = "delete", description = "フィードを削除します")
+  public static class DeleteCommand implements Runnable {
+
+    private final FeedService feedService;
+
+    @Parameters(paramLabel = "ID", description = "フィード ID")
+    long id;
+
+    @Override
+    public void run() {
+      feedService.delete(id);
+      System.out.println("削除: " + id);
+    }
+  }
+
+  @Component
+  @RequiredArgsConstructor
+  @Command(name = "update", description = "フィードを更新します")
+  public static class UpdateCommand implements Runnable {
+
+    private final FeedUpdateService feedUpdateService;
+
+    @Parameters(arity = "0..1", paramLabel = "ID", description = "指定時は単一フィードのみ更新")
+    Long id;
+
+    @Override
+    public void run() {
+      if (id == null) {
+        for (FeedUpdateResult result : feedUpdateService.updateAll()) {
+          print(result);
+        }
+        return;
+      }
+      print(feedUpdateService.update(id));
+    }
+
+    private void print(FeedUpdateResult result) {
+      if (result.errorMessage() == null || result.errorMessage().isBlank()) {
+        System.out.println("更新: " + result.feedName() + " | +" + result.addedItems());
+      } else {
+        System.out.println("更新失敗: " + result.feedName() + " | " + result.errorMessage());
       }
     }
   }
