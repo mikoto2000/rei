@@ -70,6 +70,60 @@ class FeedFetcherTest {
   }
 
   @Test
+  void fetchParsesAtomFeedWithLargeEscapedContent() {
+    String largeContent = "&quot;".repeat(20050);
+    FeedFetcher fetcher = new FeedFetcher(uri -> new FeedHttpResponse(200, """
+        <?xml version="1.0" encoding="utf-8"?>
+        <feed xmlns="http://www.w3.org/2005/Atom">
+          <title>Example Atom</title>
+          <link href="https://example.com/"/>
+          <subtitle>Atom Description</subtitle>
+          <entry>
+            <title>Large Entry</title>
+            <link href="https://example.com/entries/large"/>
+            <published>2026-04-22T01:23:45Z</published>
+            <content type="html">%s</content>
+          </entry>
+        </feed>
+        """.formatted(largeContent)));
+
+    FetchedFeed fetched = fetcher.fetch("https://example.com/atom.xml");
+
+    assertEquals("Example Atom", fetched.title());
+    assertEquals(List.of(
+        new FetchedFeedItem("Large Entry", "https://example.com/entries/large", OffsetDateTime.parse("2026-04-22T01:23:45Z"))),
+        fetched.items());
+  }
+
+  @Test
+  void fetchParsesRssFeedWithLargeEscapedDescription() {
+    String largeDescription = "&quot;".repeat(20050);
+    FeedFetcher fetcher = new FeedFetcher(uri -> new FeedHttpResponse(200, """
+        <?xml version="1.0"?>
+        <rss version="2.0">
+          <channel>
+            <title>Example RSS</title>
+            <link>https://example.com/</link>
+            <description>Example Description</description>
+            <item>
+              <title>Large RSS Entry</title>
+              <link>https://example.com/rss/large</link>
+              <pubDate>Tue, 21 Apr 2026 09:30:00 GMT</pubDate>
+              <description>%s</description>
+            </item>
+          </channel>
+        </rss>
+        """.formatted(largeDescription)));
+
+    FetchedFeed fetched = fetcher.fetch("https://example.com/rss.xml");
+
+    assertEquals("Example RSS", fetched.title());
+    assertEquals(List.of(
+        new FetchedFeedItem("Large RSS Entry", "https://example.com/rss/large", OffsetDateTime.parse("2026-04-21T09:30:00Z"))),
+        fetched.items());
+  }
+
+  @Test
   void fetchRaisesStatusErrorForNonSuccessResponse() {
     FeedFetcher fetcher = new FeedFetcher(uri -> new FeedHttpResponse(502, "bad gateway"));
 

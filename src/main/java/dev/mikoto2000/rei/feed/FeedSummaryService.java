@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.function.Function;
 
 import org.springframework.stereotype.Service;
 
@@ -13,11 +14,11 @@ import dev.mikoto2000.rei.websearch.WebSearchPage;
 public class FeedSummaryService {
 
   private final FeedService feedService;
-  private final FeedArticlePageFetcher feedArticlePageFetcher;
+  private final Function<FeedBriefingItem, WebSearchPage> feedArticlePageFetcher;
   private final FeedSummaryGenerator feedSummaryGenerator;
   private final FeedProperties feedProperties;
 
-  public FeedSummaryService(FeedService feedService, FeedArticlePageFetcher feedArticlePageFetcher,
+  public FeedSummaryService(FeedService feedService, Function<FeedBriefingItem, WebSearchPage> feedArticlePageFetcher,
       FeedSummaryGenerator feedSummaryGenerator, FeedProperties feedProperties) {
     this.feedService = feedService;
     this.feedArticlePageFetcher = feedArticlePageFetcher;
@@ -101,7 +102,7 @@ public class FeedSummaryService {
 
   private WebSearchPage fetchPage(FeedBriefingItem item) {
     try {
-      WebSearchPage page = feedArticlePageFetcher.fetch(item);
+      WebSearchPage page = feedArticlePageFetcher.apply(item);
       if (page == null) {
         return fallbackPage(item);
       }

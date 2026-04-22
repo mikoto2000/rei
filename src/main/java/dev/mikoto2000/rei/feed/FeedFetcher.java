@@ -5,16 +5,13 @@ import java.net.URI;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
 import java.util.List;
 
-import javax.xml.parsers.DocumentBuilderFactory;
-
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.parser.Parser;
 import org.springframework.stereotype.Component;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.xml.sax.InputSource;
 
 @Component
 public class FeedFetcher {
@@ -32,10 +29,11 @@ public class FeedFetcher {
     }
 
     try {
-      DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-      factory.setNamespaceAware(true);
-      Document document = factory.newDocumentBuilder().parse(new InputSource(new StringReader(response.body())));
-      Element root = document.getDocumentElement();
+      Document document = Jsoup.parse(response.body(), "", Parser.xmlParser());
+      Element root = document.children().first();
+      if (root == null) {
+        throw new FeedFetchException("未対応のフィード形式です", response.statusCode());
+      }
       String rootName = localName(root);
       if ("rss".equals(rootName)) {
         return parseRss(root);
@@ -53,39 +51,56 @@ public class FeedFetcher {
 
   private FetchedFeed parseRss(Element root) {
     Element channel = child(root, "channel");
+    if (channel == null) {
+      throw new FeedFetchException("必須要素がありません: channel", null);
+    }
     String title = text(channel, "title");
     String siteUrl = text(channel, "link");
     String description = text(channel, "description");
-    List<FetchedFeedItem> items = children(channel, "item").stream()
-        .map(item -> new FetchedFeedItem(
-            text(item, "title"),
-            text(item, "link"),
-            parseDate(firstNonBlank(text(item, "pubDate"), text(item, "date")))))
+    List<FetchedFeedItem> items = channel.children().stream()
+        .filter(element -> "item".equals(localName(element)))
+        .map(this::parseRssItem)
         .toList();
     return new FetchedFeed(title, siteUrl, description, items);
+  }
+
+  private FetchedFeedItem parseRssItem(Element item) {
+    return new FetchedFeedItem(
+        text(item, "title"),
+        text(item, "link"),
+        parseDate(firstNonBlank(text(item, "pubDate"), text(item, "date"))));
   }
 
   private FetchedFeed parseAtom(Element root) {
     String title = text(root, "title");
     String siteUrl = atomLink(root);
     String description = firstNonBlank(text(root, "subtitle"), text(root, "description"));
-    List<FetchedFeedItem> items = children(root, "entry").stream()
-        .map(entry -> new FetchedFeedItem(
-            text(entry, "title"),
-            atomLink(entry),
-            parseDate(firstNonBlank(text(entry, "published"), text(entry, "updated")))))
+    List<FetchedFeedItem> items = root.children().stream()
+        .filter(element -> "entry".equals(localName(element)))
+        .map(this::parseAtomEntry)
         .toList();
     return new FetchedFeed(title, siteUrl, description, items);
   }
 
+  private FetchedFeedItem parseAtomEntry(Element entry) {
+    return new FetchedFeedItem(
+        text(entry, "title"),
+        atomLink(entry),
+        parseDate(firstNonBlank(text(entry, "published"), text(entry, "updated"))));
+  }
+
   private String atomLink(Element parent) {
-    for (Element link : children(parent, "link")) {
-      String rel = link.getAttribute("rel");
+    for (Element link : parent.children()) {
+      if (!"link".equals(localName(link))) {
+        continue;
+      }
+      String rel = link.attr("rel");
+      String href = link.attr("href");
+      if (href == null || href.isBlank()) {
+        continue;
+      }
       if (rel == null || rel.isBlank() || "alternate".equals(rel)) {
-        String href = link.getAttribute("href");
-        if (href != null && !href.isBlank()) {
-          return href;
-        }
+        return href;
       }
     }
     return null;
@@ -106,30 +121,6 @@ public class FeedFetcher {
     }
   }
 
-  private Element child(Element parent, String name) {
-    return children(parent, name).stream().findFirst().orElseThrow(() -> new FeedFetchException("必須要素がありません: " + name, null));
-  }
-
-  private List<Element> children(Element parent, String name) {
-    List<Element> result = new ArrayList<>();
-    for (Node node = parent.getFirstChild(); node != null; node = node.getNextSibling()) {
-      if (node.getNodeType() == Node.ELEMENT_NODE && name.equals(localName((Element) node))) {
-        result.add((Element) node);
-      }
-    }
-    return result;
-  }
-
-  private String text(Element parent, String name) {
-    return children(parent, name).stream()
-        .findFirst()
-        .map(node -> {
-          String value = node.getTextContent();
-          return value == null ? null : value.trim();
-        })
-        .orElse(null);
-  }
-
   private String firstNonBlank(String first, String second) {
     if (first != null && !first.isBlank()) {
       return first;
@@ -140,7 +131,23 @@ public class FeedFetcher {
     return null;
   }
 
+  private Element child(Element parent, String name) {
+    return parent.children().stream()
+        .filter(element -> name.equals(localName(element)))
+        .findFirst()
+        .orElse(null);
+  }
+
+  private String text(Element parent, String name) {
+    Element child = child(parent, name);
+    if (child == null) {
+      return null;
+    }
+    String value = child.text();
+    return value == null || value.isBlank() ? null : value.trim();
+  }
+
   private String localName(Element element) {
-    return element.getLocalName() == null ? element.getTagName() : element.getLocalName();
+    return element.tagName();
   }
 }
