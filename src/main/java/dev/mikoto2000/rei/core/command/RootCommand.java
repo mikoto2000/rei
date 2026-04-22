@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.core.command;
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.briefing.command.BriefingCommand;
+import dev.mikoto2000.rei.feed.command.FeedCommand;
 import dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand;
 import dev.mikoto2000.rei.interest.command.InterestCommand;
 import dev.mikoto2000.rei.reminder.command.ReminderCommand;
@@ -27,6 +28,7 @@ subcommands = {
   ScheduleCommand.class,
   EmbedCommand.class,
   TaskCommand.class,
+  FeedCommand.class,
   BriefingCommand.class,
   ReminderCommand.class,
   InterestCommand.class
