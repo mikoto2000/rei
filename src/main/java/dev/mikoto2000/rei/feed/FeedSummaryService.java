@@ -7,15 +7,20 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import dev.mikoto2000.rei.websearch.WebSearchPage;
+
 @Service
 public class FeedSummaryService {
 
   private final FeedService feedService;
+  private final FeedArticlePageFetcher feedArticlePageFetcher;
   private final FeedSummaryGenerator feedSummaryGenerator;
   private final FeedProperties feedProperties;
 
-  public FeedSummaryService(FeedService feedService, FeedSummaryGenerator feedSummaryGenerator, FeedProperties feedProperties) {
+  public FeedSummaryService(FeedService feedService, FeedArticlePageFetcher feedArticlePageFetcher,
+      FeedSummaryGenerator feedSummaryGenerator, FeedProperties feedProperties) {
     this.feedService = feedService;
+    this.feedArticlePageFetcher = feedArticlePageFetcher;
     this.feedSummaryGenerator = feedSummaryGenerator;
     this.feedProperties = feedProperties;
   }
@@ -51,8 +56,8 @@ public class FeedSummaryService {
   private String buildBriefingPrompt(OffsetDateTime from, OffsetDateTime to, List<FeedBriefingItem> items) {
     StringBuilder builder = new StringBuilder();
     builder.append("""
-        あなたは RSS/Atom フィードの見出しだけをもとに、新着記事の全体要約を行う。
-        本文は保存されていないため、断定しすぎず、見出しと URL と公開日時から読み取れる範囲で要約する。
+        あなたは RSS/Atom フィードから取得した記事ページ本文をもとに、新着記事の全体要約を行う。
+        本文取得に失敗した記事はメタデータだけが含まれることがある。その場合は断定しすぎない。
         次の形式で日本語で簡潔に返す:
         - 今日の主要トピック
         - 重要そうな記事
@@ -62,6 +67,7 @@ public class FeedSummaryService {
         記事一覧:
         """.formatted(from, to));
     for (FeedBriefingItem item : items) {
+      WebSearchPage page = fetchPage(item);
       builder.append("- ")
           .append(item.publishedAt())
           .append(" | ")
@@ -70,20 +76,51 @@ public class FeedSummaryService {
           .append(item.title())
           .append(" | ")
           .append(item.url())
+          .append(" | content=")
+          .append(page.content())
           .append('\n');
     }
     return builder.toString().trim();
   }
 
   private String buildItemPrompt(FeedBriefingItem item) {
+    WebSearchPage page = fetchPage(item);
     return """
-        あなたは RSS/Atom フィードの見出し要約アシスタントです。
-        本文は保存されていないため、次のメタデータだけを根拠に、分かること・分からないことを分けて日本語で要約してください。
+        あなたは RSS/Atom フィードの記事要約アシスタントです。
+        次の本文とメタデータを根拠に、重要点を日本語で簡潔に要約してください。
+        本文取得に失敗して本文が短い場合は、その旨を踏まえて断定しすぎないこと。
 
         フィード: %s
         公開日時: %s
         タイトル: %s
         URL: %s
-        """.formatted(item.feedName(), item.publishedAt(), item.title(), item.url());
+        本文:
+        %s
+        """.formatted(item.feedName(), item.publishedAt(), item.title(), item.url(), page.content());
+  }
+
+  private WebSearchPage fetchPage(FeedBriefingItem item) {
+    try {
+      WebSearchPage page = feedArticlePageFetcher.fetch(item);
+      if (page == null) {
+        return fallbackPage(item);
+      }
+      String content = page.content();
+      if (content == null || content.isBlank()) {
+        return fallbackPage(item);
+      }
+      return page;
+    } catch (Exception e) {
+      return fallbackPage(item);
+    }
+  }
+
+  private WebSearchPage fallbackPage(FeedBriefingItem item) {
+    return new WebSearchPage(
+        item.title(),
+        item.url(),
+        "",
+        item.publishedAt() == null ? null : item.publishedAt().toString(),
+        "title=" + item.title() + " url=" + item.url());
   }
 }

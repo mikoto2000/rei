@@ -13,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+import dev.mikoto2000.rei.websearch.WebSearchPage;
+
 class FeedSummaryServiceTest {
 
   @TempDir
@@ -28,6 +30,12 @@ class FeedSummaryServiceTest {
     AtomicReference<String> promptRef = new AtomicReference<>();
     FeedSummaryService service = new FeedSummaryService(
         feedService,
+        item -> new WebSearchPage(
+            item.title(),
+            item.url(),
+            "",
+            item.publishedAt().toString(),
+            "Fetched article body"),
         prompt -> {
           promptRef.set(prompt);
           return "briefing summary";
@@ -41,12 +49,14 @@ class FeedSummaryServiceTest {
     assertEquals("briefing summary", summary);
     assertTrue(promptRef.get().contains("Today"));
     assertTrue(promptRef.get().contains("Example Feed"));
+    assertTrue(promptRef.get().contains("Fetched article body"));
   }
 
   @Test
   void summarizeBriefingReturnsNoItemsMessageWhenEmpty() {
     FeedSummaryService service = new FeedSummaryService(
         newService(),
+        item -> new WebSearchPage(item.title(), item.url(), "", item.publishedAt() == null ? null : item.publishedAt().toString(), ""),
         prompt -> "unused",
         new FeedProperties(20));
 
@@ -68,6 +78,40 @@ class FeedSummaryServiceTest {
     AtomicReference<String> promptRef = new AtomicReference<>();
     FeedSummaryService service = new FeedSummaryService(
         feedService,
+        item -> new WebSearchPage(
+            item.title(),
+            item.url(),
+            "",
+            item.publishedAt().toString(),
+            "Fetched item body"),
+        prompt -> {
+          promptRef.set(prompt);
+          return "item summary";
+        },
+        new FeedProperties(20));
+
+    String summary = service.summarizeItem(itemId);
+
+    assertEquals("item summary", summary);
+    assertTrue(promptRef.get().contains("Today"));
+    assertTrue(promptRef.get().contains("https://example.com/today"));
+    assertTrue(promptRef.get().contains("Fetched item body"));
+  }
+
+  @Test
+  void summarizeItemFallsBackToMetadataWhenPageFetchFails() {
+    FeedService feedService = newService();
+    Feed feed = feedService.add("https://example.com/feed.xml", "Example Feed");
+    feedService.saveFetchedItems(feed.id(), List.of(
+        new FetchedFeedItem("Today", "https://example.com/today", OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC))),
+        OffsetDateTime.of(2026, 4, 22, 8, 0, 0, 0, ZoneOffset.UTC));
+    long itemId = feedService.listItemsForFeed(feed.id()).getFirst().id();
+    AtomicReference<String> promptRef = new AtomicReference<>();
+    FeedSummaryService service = new FeedSummaryService(
+        feedService,
+        item -> {
+          throw new IllegalStateException("fetch failed");
+        },
         prompt -> {
           promptRef.set(prompt);
           return "item summary";

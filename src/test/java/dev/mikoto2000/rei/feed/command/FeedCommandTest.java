@@ -22,6 +22,7 @@ import dev.mikoto2000.rei.feed.FeedService;
 import dev.mikoto2000.rei.feed.FeedSummaryService;
 import dev.mikoto2000.rei.feed.FeedUpdateResult;
 import dev.mikoto2000.rei.feed.FeedUpdateService;
+import dev.mikoto2000.rei.websearch.WebSearchPage;
 import picocli.CommandLine;
 
 class FeedCommandTest {
@@ -141,6 +142,7 @@ class FeedCommandTest {
         OffsetDateTime.now(ZoneOffset.UTC));
     FeedSummaryService summaryService = new FeedSummaryService(
         service,
+        item -> new WebSearchPage(item.title(), item.url(), "", item.publishedAt() == null ? null : item.publishedAt().toString(), "Fetched body"),
         prompt -> "briefing summary",
         new FeedProperties(20));
 
@@ -241,6 +243,7 @@ class FeedCommandTest {
   private FeedSummaryService defaultSummaryService(FeedService service) {
     return new FeedSummaryService(
         service,
+        item -> new WebSearchPage(item.title(), item.url(), "", item.publishedAt() == null ? null : item.publishedAt().toString(), "Fetched body"),
         prompt -> "summary",
         new FeedProperties(20));
   }
