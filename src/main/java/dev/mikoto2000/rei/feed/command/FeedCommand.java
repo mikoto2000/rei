@@ -194,7 +194,7 @@ public class FeedCommand {
       @Option(names = "--to", description = "終了日時。形式: 2026-04-22T09:00:00Z")
       OffsetDateTime to;
 
-      @Option(names = "--limit", defaultValue = "20", description = "表示件数")
+      @Option(names = "--limit", defaultValue = "10", description = "表示件数")
       int limit;
 
       @Override
