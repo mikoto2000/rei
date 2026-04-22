@@ -17,6 +17,7 @@ import org.springframework.beans.factory.ObjectProvider;
 
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
+import dev.mikoto2000.rei.feed.FeedTools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
 import dev.mikoto2000.rei.reminder.ReminderTools;
@@ -40,6 +41,7 @@ class AiConfigurationTest {
         Mockito.mock(GoogleCalendarTools.class),
         Mockito.mock(TaskTools.class),
         Mockito.mock(BriefingTools.class),
+        Mockito.mock(FeedTools.class),
         Mockito.mock(ReminderTools.class),
         Mockito.mock(SearchTools.class),
         Mockito.mock(WebSearchTools.class),
@@ -64,6 +66,7 @@ class AiConfigurationTest {
         Mockito.mock(GoogleCalendarTools.class),
         Mockito.mock(TaskTools.class),
         Mockito.mock(BriefingTools.class),
+        Mockito.mock(FeedTools.class),
         Mockito.mock(ReminderTools.class),
         Mockito.mock(SearchTools.class),
         Mockito.mock(WebSearchTools.class),

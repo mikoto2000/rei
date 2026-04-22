@@ -17,6 +17,9 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 
+import dev.mikoto2000.rei.feed.FeedBriefingItem;
+import dev.mikoto2000.rei.feed.FeedProperties;
+import dev.mikoto2000.rei.feed.FeedService;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarEventSummary;
 import dev.mikoto2000.rei.interest.InterestUpdate;
 import dev.mikoto2000.rei.interest.InterestUpdateService;
@@ -34,7 +37,15 @@ class BriefingServiceTest {
     VectorStore vectorStore = org.mockito.Mockito.mock(VectorStore.class);
     BriefingNarrator briefingNarrator = org.mockito.Mockito.mock(BriefingNarrator.class);
     InterestUpdateService interestUpdateService = org.mockito.Mockito.mock(InterestUpdateService.class);
-    BriefingService service = new BriefingService(calendarService, taskService, vectorStore, briefingNarrator, interestUpdateService);
+    FeedService feedService = org.mockito.Mockito.mock(FeedService.class);
+    BriefingService service = new BriefingService(
+        calendarService,
+        taskService,
+        vectorStore,
+        briefingNarrator,
+        interestUpdateService,
+        feedService,
+        new FeedProperties(20));
 
     LocalDate date = LocalDate.of(2026, 3, 27);
     GoogleCalendarEventSummary event = new GoogleCalendarEventSummary(
@@ -76,6 +87,16 @@ class BriefingServiceTest {
             "Neovim docs",
             List.of("https://example.com/nvim"),
             OffsetDateTime.of(2026, 3, 27, 0, 0, 0, 0, ZoneOffset.UTC))));
+    when(feedService.listBriefingItems(
+        OffsetDateTime.of(2026, 3, 26, 0, 0, 0, 0, ZoneOffset.UTC),
+        OffsetDateTime.of(2026, 3, 27, 23, 59, 59, 0, ZoneOffset.UTC),
+        20)).thenReturn(List.of(
+            new FeedBriefingItem(
+                1L,
+                "Spring AI 2.0 M3",
+                "https://example.com/spring-ai",
+                OffsetDateTime.of(2026, 3, 27, 5, 0, 0, 0, ZoneOffset.UTC),
+                "Example Feed")));
     when(briefingNarrator.narrate(any())).thenReturn(new BriefingNarration(
         "午前は顧客定例、午後は提案書更新のフォローが中心です。",
         List.of("期限切れタスクが 1 件あります。"),
@@ -88,6 +109,13 @@ class BriefingServiceTest {
     assertEquals(List.of(overdueTask, todayTask), briefing.openTasks());
     assertEquals(List.of(overdueTask), briefing.overdueTasks());
     assertEquals(List.of("docs/proposal.md | 顧客向け提案資料の要点"), briefing.relatedDocuments());
+    assertEquals(List.of(
+        new FeedBriefingItem(
+            1L,
+            "Spring AI 2.0 M3",
+            "https://example.com/spring-ai",
+            OffsetDateTime.of(2026, 3, 27, 5, 0, 0, 0, ZoneOffset.UTC),
+            "Example Feed")), briefing.feedItems());
     assertEquals(List.of("Neovim 開発環境 | Neovim docs | https://example.com/nvim"), briefing.interestUpdates());
     assertEquals("午前は顧客定例、午後は提案書更新のフォローが中心です。", briefing.overview());
     assertEquals(List.of("期限切れタスクが 1 件あります。"), briefing.cautionPoints());
@@ -106,12 +134,24 @@ class BriefingServiceTest {
     VectorStore vectorStore = org.mockito.Mockito.mock(VectorStore.class);
     BriefingNarrator briefingNarrator = org.mockito.Mockito.mock(BriefingNarrator.class);
     InterestUpdateService interestUpdateService = org.mockito.Mockito.mock(InterestUpdateService.class);
-    BriefingService service = new BriefingService(calendarService, taskService, vectorStore, briefingNarrator, interestUpdateService);
+    FeedService feedService = org.mockito.Mockito.mock(FeedService.class);
+    BriefingService service = new BriefingService(
+        calendarService,
+        taskService,
+        vectorStore,
+        briefingNarrator,
+        interestUpdateService,
+        feedService,
+        new FeedProperties(20));
 
     LocalDate date = LocalDate.of(2026, 3, 27);
     when(calendarService.listEventsForDate(date)).thenReturn(List.of());
     when(taskService.listOpen()).thenReturn(List.of());
     when(interestUpdateService.listRecent(24)).thenReturn(List.of());
+    when(feedService.listBriefingItems(
+        OffsetDateTime.of(2026, 3, 26, 0, 0, 0, 0, ZoneOffset.UTC),
+        OffsetDateTime.of(2026, 3, 27, 23, 59, 59, 0, ZoneOffset.UTC),
+        20)).thenReturn(List.of());
 
     DailyBriefing briefing = service.briefingFor(date);
 
@@ -119,6 +159,7 @@ class BriefingServiceTest {
     assertEquals(List.of(), briefing.events());
     assertEquals(List.of(), briefing.openTasks());
     assertEquals(List.of(), briefing.overdueTasks());
+    assertEquals(List.of(), briefing.feedItems());
     assertEquals(List.of(), briefing.interestUpdates());
     verify(briefingNarrator, never()).narrate(any());
   }

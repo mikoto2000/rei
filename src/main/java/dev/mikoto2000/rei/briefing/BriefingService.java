@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.briefing;
 
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -10,6 +11,9 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 
+import dev.mikoto2000.rei.feed.FeedBriefingItem;
+import dev.mikoto2000.rei.feed.FeedProperties;
+import dev.mikoto2000.rei.feed.FeedService;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarEventSummary;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarService;
 import dev.mikoto2000.rei.interest.InterestUpdateService;
@@ -26,6 +30,8 @@ public class BriefingService {
   private final VectorStore vectorStore;
   private final BriefingNarrator briefingNarrator;
   private final InterestUpdateService interestUpdateService;
+  private final FeedService feedService;
+  private final FeedProperties feedProperties;
 
   public DailyBriefing today() throws Exception {
     return briefingFor(LocalDate.now(googleCalendarService.zoneId()));
@@ -38,6 +44,10 @@ public class BriefingService {
         .filter(task -> task.dueDate() != null && task.dueDate().isBefore(date))
         .toList();
     List<String> relatedDocuments = findRelatedDocuments(events, openTasks);
+    List<FeedBriefingItem> feedItems = feedService.listBriefingItems(
+        date.minusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC),
+        date.plusDays(1).atStartOfDay().minusSeconds(1).atOffset(ZoneOffset.UTC),
+        feedProperties.briefingMaxItems());
     List<String> interestUpdates = interestUpdateService.listRecent(24).stream()
         .map(update -> {
           String url = update.sourceUrls().isEmpty() ? "" : " | " + update.sourceUrls().getFirst();
@@ -46,7 +56,7 @@ public class BriefingService {
         .toList();
 
     if (events.isEmpty() && openTasks.isEmpty()) {
-      return fallbackBriefing(date, relatedDocuments, interestUpdates);
+      return fallbackBriefing(date, relatedDocuments, feedItems, interestUpdates);
     }
 
     BriefingContext context = new BriefingContext(date, events, openTasks, overdueTasks, relatedDocuments);
@@ -57,19 +67,22 @@ public class BriefingService {
         openTasks,
         overdueTasks,
         relatedDocuments,
+        feedItems,
         interestUpdates,
         narration.overview(),
         narration.cautionPoints(),
         narration.nextActions());
   }
 
-  private DailyBriefing fallbackBriefing(LocalDate date, List<String> relatedDocuments, List<String> interestUpdates) {
+  private DailyBriefing fallbackBriefing(LocalDate date, List<String> relatedDocuments, List<FeedBriefingItem> feedItems,
+      List<String> interestUpdates) {
     return new DailyBriefing(
         date,
         List.of(),
         List.of(),
         List.of(),
         relatedDocuments,
+        feedItems,
         interestUpdates,
         "今日は予定も未完了タスクもありません。必要なら先回りで準備や整理を進められます。",
         List.of("急ぎの対応は見当たりません。"),

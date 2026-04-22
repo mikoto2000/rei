@@ -20,6 +20,7 @@ class BriefingToolsTest {
         List.of(),
         List.of(),
         List.of(),
+        List.of(),
         "今日は予定も未完了タスクもありません。必要なら先回りで準備や整理を進められます。",
         List.of("急ぎの対応は見当たりません。"),
         List.of("新しく着手するタスクや確認事項を整理する。"));

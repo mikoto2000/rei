@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.briefing.BriefingService;
 import dev.mikoto2000.rei.briefing.DailyBriefing;
+import dev.mikoto2000.rei.feed.FeedBriefingItem;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarEventSummary;
 import dev.mikoto2000.rei.task.Task;
 import lombok.RequiredArgsConstructor;
@@ -63,6 +64,15 @@ public class BriefingCommand {
       } else {
         for (String document : briefing.relatedDocuments()) {
           System.out.println("- " + document);
+        }
+      }
+
+      System.out.println("新着記事:");
+      if (briefing.feedItems().isEmpty()) {
+        System.out.println("- 昨日 00:00 以降の新着記事はありませんでした");
+      } else {
+        for (FeedBriefingItem item : briefing.feedItems()) {
+          System.out.println("- " + item.publishedAt() + " | " + item.feedName() + " | " + item.title() + " | " + item.url());
         }
       }
 

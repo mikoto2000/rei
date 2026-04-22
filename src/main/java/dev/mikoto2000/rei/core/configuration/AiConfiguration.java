@@ -13,6 +13,8 @@ import org.springframework.context.annotation.Bean;
 
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
+import dev.mikoto2000.rei.feed.FeedProperties;
+import dev.mikoto2000.rei.feed.FeedTools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
 import dev.mikoto2000.rei.interest.InterestProperties;
@@ -25,7 +27,7 @@ import dev.mikoto2000.rei.websearch.WebSearchTools;
 import lombok.RequiredArgsConstructor;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class})
+@EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
 
@@ -36,6 +38,7 @@ public class AiConfiguration {
   private final GoogleCalendarTools googleCalendarTools;
   private final TaskTools taskTools;
   private final BriefingTools briefingTools;
+  private final FeedTools feedTools;
   private final ReminderTools reminderTools;
   private final SearchTools searchTools;
   private final WebSearchTools webSearchTools;
@@ -49,7 +52,7 @@ public class AiConfiguration {
             PromptChatMemoryAdvisor.builder(chatMemory)
                 .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
                 .build())
-        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, reminderTools, searchTools, webSearchTools);
+        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools);
 
     ToolCallbackProvider toolCallbackProvider = mcpToolCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import dev.mikoto2000.rei.briefing.DailyBriefing;
 import dev.mikoto2000.rei.briefing.BriefingService;
+import dev.mikoto2000.rei.feed.FeedBriefingItem;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarEventSummary;
 import dev.mikoto2000.rei.task.Task;
 import dev.mikoto2000.rei.task.TaskStatus;
@@ -45,6 +46,12 @@ class BriefingCommandTest {
             null)),
         List.of(),
         List.of("docs/proposal.md | 顧客向け提案資料の要点"),
+        List.of(new FeedBriefingItem(
+            1L,
+            "Spring AI 2.0 M3",
+            "https://example.com/spring-ai",
+            OffsetDateTime.of(2026, 3, 27, 5, 0, 0, 0, ZoneOffset.UTC),
+            "Example Feed")),
         List.of("Neovim 開発環境 | Neovim docs | https://example.com/nvim"),
         "午前は顧客定例、午後は提案書更新のフォローが中心です。",
         List.of("会議前に提案資料を確認してください。"),
@@ -65,6 +72,7 @@ class BriefingCommandTest {
     assertTrue(output.contains("顧客定例"));
     assertTrue(output.contains("提案書更新"));
     assertTrue(output.contains("docs/proposal.md"));
+    assertTrue(output.contains("Spring AI 2.0 M3"));
     assertTrue(output.contains("Neovim 開発環境"));
     assertTrue(output.contains("会議前に提案資料を確認してください。"));
   }

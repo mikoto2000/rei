@@ -183,6 +183,19 @@ public class FeedService {
         .list();
   }
 
+  public FeedBriefingItem findBriefingItem(long itemId) {
+    return jdbcClient.sql("""
+        SELECT i.id, i.title, i.url, i.published_at,
+               COALESCE(NULLIF(f.display_name, ''), NULLIF(f.title, ''), f.url) AS feed_name
+        FROM feed_items i
+        JOIN feeds f ON f.id = i.feed_id
+        WHERE i.id = ?
+        """)
+        .param(itemId)
+        .query(this::mapFeedBriefingItem)
+        .single();
+  }
+
   public void delete(long id) {
     jdbcClient.sql("DELETE FROM feed_fetch_failures WHERE feed_id = ?")
         .param(id)

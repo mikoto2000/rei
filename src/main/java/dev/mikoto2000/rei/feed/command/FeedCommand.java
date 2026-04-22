@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.feed.Feed;
 import dev.mikoto2000.rei.feed.FeedService;
+import dev.mikoto2000.rei.feed.FeedSummaryService;
 import dev.mikoto2000.rei.feed.FeedUpdateResult;
 import dev.mikoto2000.rei.feed.FeedUpdateService;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +23,9 @@ import picocli.CommandLine.Parameters;
       FeedCommand.ListCommand.class,
       FeedCommand.EditCommand.class,
       FeedCommand.DeleteCommand.class,
-      FeedCommand.UpdateCommand.class
+      FeedCommand.UpdateCommand.class,
+      FeedCommand.SummaryCommand.class,
+      FeedCommand.ItemCommand.class
     })
 public class FeedCommand {
 
@@ -148,6 +151,45 @@ public class FeedCommand {
         System.out.println("更新: " + result.feedName() + " | +" + result.addedItems());
       } else {
         System.out.println("更新失敗: " + result.feedName() + " | " + result.errorMessage());
+      }
+    }
+  }
+
+  @Component
+  @RequiredArgsConstructor
+  @Command(name = "summary", description = "新着記事ブリーフィングを要約します")
+  public static class SummaryCommand implements Runnable {
+
+    private final FeedSummaryService feedSummaryService;
+
+    @Override
+    public void run() {
+      System.out.println(feedSummaryService.summarizeBriefing());
+    }
+  }
+
+  @Component
+  @Command(
+      name = "item",
+      description = "個別記事を操作します",
+      subcommands = {
+        FeedCommand.ItemCommand.SummarizeCommand.class
+      })
+  public static class ItemCommand {
+
+    @Component
+    @RequiredArgsConstructor
+    @Command(name = "summarize", description = "指定した記事を要約します")
+    public static class SummarizeCommand implements Runnable {
+
+      private final FeedSummaryService feedSummaryService;
+
+      @Parameters(paramLabel = "ITEM_ID", description = "記事 ID")
+      long itemId;
+
+      @Override
+      public void run() {
+        System.out.println(feedSummaryService.summarizeItem(itemId));
       }
     }
   }

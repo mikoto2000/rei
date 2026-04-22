@@ -17,7 +17,9 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import dev.mikoto2000.rei.feed.Feed;
 import dev.mikoto2000.rei.feed.FeedFetcher;
 import dev.mikoto2000.rei.feed.FeedHttpResponse;
+import dev.mikoto2000.rei.feed.FeedProperties;
 import dev.mikoto2000.rei.feed.FeedService;
+import dev.mikoto2000.rei.feed.FeedSummaryService;
 import dev.mikoto2000.rei.feed.FeedUpdateResult;
 import dev.mikoto2000.rei.feed.FeedUpdateService;
 import picocli.CommandLine;
@@ -127,18 +129,46 @@ class FeedCommandTest {
     assertEquals(1, service.listItemsForFeed(service.list().getFirst().id()).size());
   }
 
+  @Test
+  void summaryCommandPrintsBriefingSummary() {
+    FeedService service = newService();
+    Feed feed = service.add("https://example.com/feed.xml", "Example Feed");
+    service.saveFetchedItems(feed.id(), List.of(
+        new dev.mikoto2000.rei.feed.FetchedFeedItem(
+            "Today",
+            "https://example.com/today",
+            OffsetDateTime.now(ZoneOffset.UTC))),
+        OffsetDateTime.now(ZoneOffset.UTC));
+    FeedSummaryService summaryService = new FeedSummaryService(
+        service,
+        prompt -> "briefing summary",
+        new FeedProperties(20));
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      assertEquals(0, newCommand(service, defaultUpdateService(service), summaryService).execute("summary"));
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    assertTrue(out.toString().contains("briefing summary"));
+  }
+
   private FeedService newService() {
     return new FeedService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feed-command.db")));
   }
 
   private CommandLine newCommand(FeedService service) {
-    FeedUpdateService updateService = new FeedUpdateService(service, new FeedFetcher(uri -> {
-      throw new UnsupportedOperationException("updateService is not configured for this test");
-    }));
-    return newCommand(service, updateService);
+    return newCommand(service, defaultUpdateService(service), defaultSummaryService(service));
   }
 
   private CommandLine newCommand(FeedService service, FeedUpdateService updateService) {
+    return newCommand(service, updateService, defaultSummaryService(service));
+  }
+
+  private CommandLine newCommand(FeedService service, FeedUpdateService updateService, FeedSummaryService summaryService) {
     return new CommandLine(new FeedCommand(), new CommandLine.IFactory() {
       @Override
       public <K> K create(Class<K> cls) throws Exception {
@@ -157,8 +187,27 @@ class FeedCommandTest {
         if (cls == FeedCommand.UpdateCommand.class) {
           return cls.cast(new FeedCommand.UpdateCommand(updateService));
         }
+        if (cls == FeedCommand.SummaryCommand.class) {
+          return cls.cast(new FeedCommand.SummaryCommand(summaryService));
+        }
+        if (cls == FeedCommand.ItemCommand.SummarizeCommand.class) {
+          return cls.cast(new FeedCommand.ItemCommand.SummarizeCommand(summaryService));
+        }
         return CommandLine.defaultFactory().create(cls);
       }
     });
+  }
+
+  private FeedUpdateService defaultUpdateService(FeedService service) {
+    return new FeedUpdateService(service, new FeedFetcher(uri -> {
+      throw new UnsupportedOperationException("updateService is not configured for this test");
+    }));
+  }
+
+  private FeedSummaryService defaultSummaryService(FeedService service) {
+    return new FeedSummaryService(
+        service,
+        prompt -> "summary",
+        new FeedProperties(20));
   }
 }
