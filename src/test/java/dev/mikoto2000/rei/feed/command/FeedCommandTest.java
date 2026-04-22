@@ -156,6 +156,37 @@ class FeedCommandTest {
     assertTrue(out.toString().contains("briefing summary"));
   }
 
+  @Test
+  void itemListCommandPrintsRecentItemsWithIds() {
+    FeedService service = newService();
+    Feed feed = service.add("https://example.com/feed.xml", "Example Feed");
+    service.saveFetchedItems(feed.id(), List.of(
+        new dev.mikoto2000.rei.feed.FetchedFeedItem(
+            "Today",
+            "https://example.com/today",
+            OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC)),
+        new dev.mikoto2000.rei.feed.FetchedFeedItem(
+            "Yesterday",
+            "https://example.com/yesterday",
+            OffsetDateTime.of(2026, 4, 21, 3, 0, 0, 0, ZoneOffset.UTC))),
+        OffsetDateTime.of(2026, 4, 22, 8, 0, 0, 0, ZoneOffset.UTC));
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      assertEquals(0, newCommand(service).execute("item", "list", "--from", "2026-04-21T00:00:00Z", "--to", "2026-04-22T09:00:00Z"));
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    String output = out.toString();
+    assertTrue(output.contains("Today"));
+    assertTrue(output.contains("Yesterday"));
+    assertTrue(output.contains("Example Feed"));
+    assertTrue(output.contains("https://example.com/today"));
+  }
+
   private FeedService newService() {
     return new FeedService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feed-command.db")));
   }
@@ -192,6 +223,9 @@ class FeedCommandTest {
         }
         if (cls == FeedCommand.ItemCommand.SummarizeCommand.class) {
           return cls.cast(new FeedCommand.ItemCommand.SummarizeCommand(summaryService));
+        }
+        if (cls == FeedCommand.ItemCommand.ListCommand.class) {
+          return cls.cast(new FeedCommand.ItemCommand.ListCommand(service));
         }
         return CommandLine.defaultFactory().create(cls);
       }

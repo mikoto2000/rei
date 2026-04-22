@@ -1,10 +1,13 @@
 package dev.mikoto2000.rei.feed.command;
 
 import java.util.List;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.feed.Feed;
+import dev.mikoto2000.rei.feed.FeedBriefingItem;
 import dev.mikoto2000.rei.feed.FeedService;
 import dev.mikoto2000.rei.feed.FeedSummaryService;
 import dev.mikoto2000.rei.feed.FeedUpdateResult;
@@ -173,9 +176,43 @@ public class FeedCommand {
       name = "item",
       description = "個別記事を操作します",
       subcommands = {
+        FeedCommand.ItemCommand.ListCommand.class,
         FeedCommand.ItemCommand.SummarizeCommand.class
       })
   public static class ItemCommand {
+
+    @Component
+    @RequiredArgsConstructor
+    @Command(name = "list", description = "要約対象の記事 ID 一覧を表示します")
+    public static class ListCommand implements Runnable {
+
+      private final FeedService feedService;
+
+      @Option(names = "--from", description = "開始日時。形式: 2026-04-21T00:00:00Z")
+      OffsetDateTime from;
+
+      @Option(names = "--to", description = "終了日時。形式: 2026-04-22T09:00:00Z")
+      OffsetDateTime to;
+
+      @Option(names = "--limit", defaultValue = "20", description = "表示件数")
+      int limit;
+
+      @Override
+      public void run() {
+        OffsetDateTime resolvedFrom = from == null
+            ? OffsetDateTime.now(ZoneOffset.UTC).toLocalDate().minusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC)
+            : from;
+        OffsetDateTime resolvedTo = to == null ? OffsetDateTime.now(ZoneOffset.UTC) : to;
+        List<FeedBriefingItem> items = feedService.listBriefingItems(resolvedFrom, resolvedTo, limit);
+        if (items.isEmpty()) {
+          System.out.println("対象期間の記事はありません");
+          return;
+        }
+        for (FeedBriefingItem item : items) {
+          System.out.println(item.id() + " | " + item.publishedAt() + " | " + item.feedName() + " | " + item.title() + " | " + item.url());
+        }
+      }
+    }
 
     @Component
     @RequiredArgsConstructor
