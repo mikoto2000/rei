@@ -5,6 +5,10 @@ import static org.mockito.Mockito.verify;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.scheduling.annotation.Scheduled;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FeedUpdateJobTest {
 
@@ -18,5 +22,13 @@ class FeedUpdateJobTest {
     job.run();
 
     verify(service).updateAll();
+  }
+
+  @Test
+  void runUsesDailyFourAmCronByDefault() throws Exception {
+    Scheduled scheduled = FeedUpdateJob.class.getMethod("run").getAnnotation(Scheduled.class);
+
+    assertEquals("${rei.feed.cron:0 0 4 * * *}", scheduled.cron());
+    assertTrue(scheduled.fixedDelayString().isBlank());
   }
 }

@@ -11,7 +11,7 @@ public class FeedUpdateJob {
 
   private final FeedUpdateService feedUpdateService;
 
-  @Scheduled(fixedDelayString = "${rei.feed.poll-interval-ms:3600000}")
+  @Scheduled(cron = "${rei.feed.cron:0 0 4 * * *}")
   public void run() {
     for (FeedUpdateResult result : feedUpdateService.updateAll()) {
       if (result.errorMessage() == null || result.errorMessage().isBlank()) {

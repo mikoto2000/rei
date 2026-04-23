@@ -63,6 +63,9 @@ public class ExternalConfigFileService {
                 api-key: ${REI_WEB_SEARCH_BRAVE_API_KEY:}
           interest:
             enabled: true
+          feed:
+            briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:20}
+            cron: ${REI_FEED_CRON:0 0 4 * * *}
           google-calendar:
             enabled: false
         """;

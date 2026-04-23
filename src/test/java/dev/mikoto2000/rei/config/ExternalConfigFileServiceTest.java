@@ -33,6 +33,9 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("spring:"));
     assertTrue(content.contains("rei:"));
     assertTrue(content.contains("REI_OPENAI_BASE_URL"));
+    assertTrue(content.contains("feed:"));
+    assertTrue(content.contains("REI_FEED_CRON"));
+    assertTrue(content.contains("0 0 4 * * *"));
   }
 
   @Test
