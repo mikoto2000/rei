@@ -27,6 +27,13 @@ public class FeedTools {
     return feedService.add(url, displayName);
   }
 
+  @Tool(name = "feedDelete", description = "登録済み RSS/Atom フィードを削除します。")
+  String feedDelete(Long id) {
+    IO.println("RSS/Atom フィードを削除するよ。id=" + id);
+    feedService.delete(id);
+    return "削除: " + id;
+  }
+
   @Tool(name = "feedUpdate", description = "RSS/Atom フィードを更新します。id が null の場合は全件更新します。")
   String feedUpdate(Long id) {
     if (id == null) {
