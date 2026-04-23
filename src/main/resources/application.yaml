@@ -65,7 +65,7 @@ rei:
     web-top-k: ${REI_INTEREST_WEB_TOP_K:5}
     cron: ${REI_INTEREST_CRON:0 0 7 * * *}
   feed:
-    briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:20}
+    briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:3}
     cron: ${REI_FEED_CRON:0 0 4 * * *}
   vector-document:
     chunk-size: ${REI_VECTOR_DOCUMENT_CHUNK_SIZE:512}

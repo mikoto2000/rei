@@ -64,7 +64,7 @@ public class ExternalConfigFileService {
           interest:
             enabled: true
           feed:
-            briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:20}
+            briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:3}
             cron: ${REI_FEED_CRON:0 0 4 * * *}
           google-calendar:
             enabled: false

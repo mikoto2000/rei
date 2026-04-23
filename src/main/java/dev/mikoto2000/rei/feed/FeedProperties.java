@@ -8,11 +8,11 @@ public record FeedProperties(
 
   public FeedProperties {
     if (briefingMaxItems <= 0) {
-      briefingMaxItems = 20;
+      briefingMaxItems = 3;
     }
   }
 
   public FeedProperties() {
-    this(20);
+    this(3);
   }
 }

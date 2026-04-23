@@ -165,20 +165,24 @@ public class FeedService {
         .list();
   }
 
-  public List<FeedBriefingItem> listBriefingItems(OffsetDateTime from, OffsetDateTime to, int maxItems) {
+  public List<FeedBriefingItem> listBriefingItems(OffsetDateTime from, OffsetDateTime to, int maxItemsPerFeed) {
     return jdbcClient.sql("""
-        SELECT i.id, i.title, i.url, i.published_at,
-               COALESCE(NULLIF(f.display_name, ''), NULLIF(f.title, ''), f.url) AS feed_name
-        FROM feed_items i
-        JOIN feeds f ON f.id = i.feed_id
-        WHERE f.enabled = 1
-          AND i.published_at IS NOT NULL
-          AND i.published_at >= ?
-          AND i.published_at <= ?
-        ORDER BY i.published_at DESC, i.id DESC
-        LIMIT ?
+        SELECT id, title, url, published_at, feed_name
+        FROM (
+          SELECT i.id, i.title, i.url, i.published_at,
+                 COALESCE(NULLIF(f.display_name, ''), NULLIF(f.title, ''), f.url) AS feed_name,
+                 ROW_NUMBER() OVER (PARTITION BY i.feed_id ORDER BY i.published_at DESC, i.id DESC) AS row_num
+          FROM feed_items i
+          JOIN feeds f ON f.id = i.feed_id
+          WHERE f.enabled = 1
+            AND i.published_at IS NOT NULL
+            AND i.published_at >= ?
+            AND i.published_at <= ?
+        )
+        WHERE row_num <= ?
+        ORDER BY published_at DESC, id DESC
         """)
-        .params(from.toString(), to.toString(), maxItems)
+        .params(from.toString(), to.toString(), maxItemsPerFeed)
         .query(this::mapFeedBriefingItem)
         .list();
   }

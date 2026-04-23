@@ -130,6 +130,32 @@ class FeedUpdateServiceTest {
     assertEquals(List.of("Today", "Yesterday"), items.stream().map(FeedBriefingItem::title).toList());
   }
 
+  @Test
+  void listRecentItemsLimitsResultsPerFeed() {
+    FeedService feedService = newService();
+    Feed feedA = feedService.add("https://example.com/a.xml", "Feed A");
+    Feed feedB = feedService.add("https://example.com/b.xml", "Feed B");
+    OffsetDateTime fetchedAt = OffsetDateTime.of(2026, 4, 22, 8, 0, 0, 0, ZoneOffset.UTC);
+
+    feedService.saveFetchedItems(feedA.id(), List.of(
+        new FetchedFeedItem("A-3", "https://example.com/a/3", OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC)),
+        new FetchedFeedItem("A-2", "https://example.com/a/2", OffsetDateTime.of(2026, 4, 22, 6, 0, 0, 0, ZoneOffset.UTC)),
+        new FetchedFeedItem("A-1", "https://example.com/a/1", OffsetDateTime.of(2026, 4, 22, 5, 0, 0, 0, ZoneOffset.UTC))),
+        fetchedAt);
+    feedService.saveFetchedItems(feedB.id(), List.of(
+        new FetchedFeedItem("B-3", "https://example.com/b/3", OffsetDateTime.of(2026, 4, 22, 4, 0, 0, 0, ZoneOffset.UTC)),
+        new FetchedFeedItem("B-2", "https://example.com/b/2", OffsetDateTime.of(2026, 4, 22, 3, 0, 0, 0, ZoneOffset.UTC)),
+        new FetchedFeedItem("B-1", "https://example.com/b/1", OffsetDateTime.of(2026, 4, 22, 2, 0, 0, 0, ZoneOffset.UTC))),
+        fetchedAt);
+
+    List<FeedBriefingItem> items = feedService.listBriefingItems(
+        OffsetDateTime.of(2026, 4, 21, 0, 0, 0, 0, ZoneOffset.UTC),
+        OffsetDateTime.of(2026, 4, 22, 9, 0, 0, 0, ZoneOffset.UTC),
+        2);
+
+    assertEquals(List.of("A-3", "A-2", "B-3", "B-2"), items.stream().map(FeedBriefingItem::title).toList());
+  }
+
   private FeedService newService() {
     return new FeedService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feed-update.db")));
   }
