@@ -52,6 +52,9 @@ class FeedSummaryServiceTest {
     assertTrue(promptRef.get().contains("Today"));
     assertTrue(promptRef.get().contains("Example Feed"));
     assertTrue(promptRef.get().contains("Fetched article body"));
+    assertTrue(promptRef.get().contains("重要そうな記事"));
+    assertTrue(promptRef.get().contains("後で読む価値が高いもの"));
+    assertTrue(promptRef.get().contains("紹介文の直後に対応する URL"));
   }
 
   @Test

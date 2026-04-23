@@ -65,6 +65,12 @@ public class FeedSummaryService {
         - 今日の主要トピック
         - 重要そうな記事
         - 後で読む価値が高いもの
+        「重要そうな記事」と「後で読む価値が高いもの」では、各記事の紹介文の直後に対応する URL を必ず記載すること。
+        例:
+        - 重要そうな記事
+          - LiteLLM Proxy の管理 UI と DB 接続の注意点をまとめた記事。URL: https://example.com/article
+        - 後で読む価値が高いもの
+          - 設定の詰まりどころが具体的で再現時に役立つ。URL: https://example.com/article
 
         対象期間: %s から %s
         記事一覧:
