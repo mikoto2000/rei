@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -161,6 +162,45 @@ class SearchCommandTest {
     String output = out.toString();
     assertTrue(output.contains("vector fallback"));
     assertTrue(output.contains("[web search skipped] Web search failed with status 401"));
+  }
+
+  @Test
+  void searchCommandStopsWaitingWhenStreamDoesNotTerminate() throws Exception {
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    SearchKnowledgeService searchKnowledgeService = Mockito.mock(SearchKnowledgeService.class);
+    CommandCancellationService cancellationService = new CommandCancellationService();
+    AtomicBoolean disposed = new AtomicBoolean(false);
+
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(searchKnowledgeService.search("spring ai", 3, 5, null, null)).thenReturn(new SearchKnowledgeResult(
+        "spring ai",
+        List.of(new VectorDocumentSearchResult("doc-1", "/tmp/docs/spec.md", 0, 0.91d, "Spring AI guide")),
+        WebSearchContext.primaryOnly(List.of()),
+        null));
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.stream().content()).thenReturn(Flux.<String>never().doOnCancel(() -> disposed.set(true)));
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      SearchCommand command = new SearchCommand(chatClient, modelHolderService, searchKnowledgeService, cancellationService) {
+        @Override
+        long streamTimeoutMillis() {
+          return 1L;
+        }
+      };
+      int exitCode = new CommandLine(command).execute("spring ai");
+      assertEquals(0, exitCode);
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    String output = out.toString();
+    assertTrue(output.contains("[error] 回答の取得がタイムアウトしました"));
+    assertTrue(disposed.get());
   }
 
   @Test

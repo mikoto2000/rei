@@ -28,6 +28,7 @@ import picocli.CommandLine.Parameters;
 import reactor.core.Disposable;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Component
@@ -88,7 +89,14 @@ public class SearchCommand implements Runnable {
               latch::countDown);
       cancellationService.register(disposable);
 
-      latch.await();
+      boolean completed = latch.await(streamTimeoutMillis(), TimeUnit.MILLISECONDS);
+      if (!completed) {
+        disposable.dispose();
+        log.warn("Search response timed out after {} ms", streamTimeoutMillis());
+        System.out.println();
+        IO.println("[error] 回答の取得がタイムアウトしました");
+        return;
+      }
       System.out.println();
       Throwable error = errorRef.get();
       if (error != null) {
@@ -119,6 +127,10 @@ public class SearchCommand implements Runnable {
     Throwable root = rootCause(error);
     String message = safeMessage(root, "原因不明");
     return "回答の取得に失敗しました: " + message;
+  }
+
+  long streamTimeoutMillis() {
+    return 30_000L;
   }
 
   private String safeMessage(Throwable error, String fallback) {
