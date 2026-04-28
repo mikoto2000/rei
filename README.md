@@ -66,6 +66,8 @@ rei:
     enabled: true
   interest:
     enabled: true
+    notification-enabled: true
+    notification-cron: "0 0 12 * * *"
   small-talk:
     enabled: true
     cron: "0 0 12 * * *"
@@ -197,6 +199,30 @@ rei:
 | --- | --- | --- | --- |
 | `REI_SMALL_TALK_ENABLED` | 任意 | `true` | 定期雑談トピック通知を有効化 |
 | `REI_SMALL_TALK_CRON` | 任意 | `0 0 12 * * *` | `SmallTalkJob` の cron。既定では毎日 12:00 |
+
+### Interest Notifications
+
+過去の会話履歴から興味がありそうな話題を抽出し、Web 検索した有益情報を定期表示する場合は `InterestNotificationJob` を使います。通知は標準出力へ直接流し、通知文自体は会話メモリに保存されません。
+
+`rei.interest.cron` は興味更新の定期抽出ジョブ、`rei.interest.notification-cron` は通知ジョブです。周期は独立して設定できます。
+
+```yaml
+rei:
+  interest:
+    enabled: true
+    cron: "0 0 7 * * *"
+    notification-enabled: true
+    notification-cron: "0 0 12 * * *"
+```
+
+主な環境変数:
+
+| 変数 | 要否 | デフォルト | 説明 |
+| --- | --- | --- | --- |
+| `REI_INTEREST_ENABLED` | 任意 | `false` | 興味更新の定期抽出ジョブを有効化 |
+| `REI_INTEREST_CRON` | 任意 | `0 0 7 * * *` | `InterestDiscoveryJob` の cron |
+| `REI_INTEREST_NOTIFICATION_ENABLED` | 任意 | `false` | 興味更新通知ジョブを有効化 |
+| `REI_INTEREST_NOTIFICATION_CRON` | 任意 | `0 0 12 * * *` | `InterestNotificationJob` の cron |
 
 ### MCP
 

@@ -63,6 +63,8 @@ public class ExternalConfigFileService {
                 api-key: ${REI_WEB_SEARCH_BRAVE_API_KEY:}
           interest:
             enabled: true
+            notification-enabled: false
+            notification-cron: ${REI_INTEREST_NOTIFICATION_CRON:0 0 12 * * *}
           small-talk:
             enabled: true
             cron: ${REI_SMALL_TALK_CRON:0 0 12 * * *}

@@ -25,4 +25,8 @@ public class InterestProperties {
   private int vectorTopK = 3;
 
   private int webTopK = 5;
+
+  private boolean notificationEnabled = false;
+
+  private String notificationCron = "0 0 12 * * *";
 }
