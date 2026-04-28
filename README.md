@@ -66,6 +66,9 @@ rei:
     enabled: true
   interest:
     enabled: true
+  small-talk:
+    enabled: true
+    cron: "0 0 12 * * *"
   feed:
     briefing-max-items: 3
 ```
@@ -176,6 +179,24 @@ rei:
 | --- | --- | --- | --- |
 | `REI_FEED_BRIEFING_MAX_ITEMS` | 任意 | `3` | `/briefing today` と `feed summary` で各フィードから扱う最大記事数 |
 | `REI_FEED_CRON` | 任意 | `0 0 4 * * *` | 定期更新ジョブ `FeedUpdateJob` の cron。既定では毎日 4:00 |
+
+### Small Talk
+
+定期的な雑談トピック通知は `SmallTalkJob` が担当します。通知は標準出力へ直接流し、`ChatClient` を通さないので会話メモリには保存されません。
+
+```yaml
+rei:
+  small-talk:
+    enabled: true
+    cron: "0 0 12 * * *"
+```
+
+主な環境変数:
+
+| 変数 | 要否 | デフォルト | 説明 |
+| --- | --- | --- | --- |
+| `REI_SMALL_TALK_ENABLED` | 任意 | `true` | 定期雑談トピック通知を有効化 |
+| `REI_SMALL_TALK_CRON` | 任意 | `0 0 12 * * *` | `SmallTalkJob` の cron。既定では毎日 12:00 |
 
 ### MCP
 

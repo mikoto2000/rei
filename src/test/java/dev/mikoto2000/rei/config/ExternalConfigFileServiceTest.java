@@ -36,6 +36,9 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("feed:"));
     assertTrue(content.contains("REI_FEED_CRON"));
     assertTrue(content.contains("0 0 4 * * *"));
+    assertTrue(content.contains("small-talk:"));
+    assertTrue(content.contains("REI_SMALL_TALK_CRON"));
+    assertTrue(content.contains("0 0 12 * * *"));
   }
 
   @Test

@@ -64,6 +64,9 @@ rei:
     vector-top-k: ${REI_INTEREST_VECTOR_TOP_K:3}
     web-top-k: ${REI_INTEREST_WEB_TOP_K:5}
     cron: ${REI_INTEREST_CRON:0 0 7 * * *}
+  small-talk:
+    enabled: ${REI_SMALL_TALK_ENABLED:true}
+    cron: ${REI_SMALL_TALK_CRON:0 0 12 * * *}
   feed:
     briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:3}
     cron: ${REI_FEED_CRON:0 0 4 * * *}
