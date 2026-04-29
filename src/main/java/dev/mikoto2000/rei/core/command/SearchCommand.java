@@ -130,7 +130,7 @@ public class SearchCommand implements Runnable {
   }
 
   long streamTimeoutMillis() {
-    return 30_000L;
+    return 1_800_000L;
   }
 
   private String safeMessage(Throwable error, String fallback) {
