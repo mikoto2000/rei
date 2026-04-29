@@ -15,10 +15,14 @@ public class ConversationInterestService {
   private final InterestProperties properties;
 
   public List<InterestTopicCandidate> discoverCandidates() {
+    return discoverCandidates(List.of());
+  }
+
+  public List<InterestTopicCandidate> discoverCandidates(List<String> pastQueries) {
     List<ConversationSnippet> snippets = conversationHistoryService.findRecentUserMessages(
         properties.getLookbackDays(),
         properties.getMessageLimit());
-    return interestTopicExtractor.extract(snippets, properties.getMaxTopics()).stream()
+    return interestTopicExtractor.extract(snippets, properties.getMaxTopics(), pastQueries).stream()
         .filter(candidate -> candidate.score() >= properties.getMinScore())
         .limit(properties.getMaxTopics())
         .toList();

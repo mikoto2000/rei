@@ -29,4 +29,8 @@ public class InterestProperties {
   private boolean notificationEnabled = false;
 
   private String notificationCron = "0 0 12 * * *";
+
+  private int topicUpdateIntervalHours = 24;
+
+  private int pastQueryLookbackDays = 7;
 }

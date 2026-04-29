@@ -28,8 +28,32 @@ public class InterestUpdateService {
     return count != null && count > 0;
   }
 
-  public InterestUpdate save(String topic, String reason, String searchQuery, String summary, List<String> sourceUrls) {
-    OffsetDateTime createdAt = OffsetDateTime.now(ZoneOffset.UTC);
+  public boolean existsByTopicWithinHours(String topic, int hours) {
+    OffsetDateTime cutoff = utcCutoffHours(hours);
+    Integer count = jdbcClient.sql("""
+        SELECT COUNT(*) FROM interest_updates
+        WHERE topic = ? AND created_at >= ?
+        """)
+        .params(topic, cutoff.toString())
+        .query(Integer.class)
+        .single();
+    return count != null && count > 0;
+  }
+
+  public List<String> listRecentSearchQueries(int days) {
+    OffsetDateTime cutoff = utcCutoffDays(days);
+    return jdbcClient.sql("""
+        SELECT DISTINCT search_query FROM interest_updates
+        WHERE created_at >= ?
+        ORDER BY created_at DESC
+        """)
+        .param(cutoff.toString())
+        .query(String.class)
+        .list();
+  }
+
+  public InterestUpdate saveWithCreatedAt(String topic, String reason, String searchQuery,
+      String summary, List<String> sourceUrls, OffsetDateTime createdAt) {
     Long id = jdbcClient.sql("""
         INSERT INTO interest_updates (topic, reason, search_query, summary, source_urls, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
@@ -38,12 +62,15 @@ public class InterestUpdateService {
         .params(topic, reason, searchQuery, summary, String.join("\n", sourceUrls), createdAt.toString())
         .query(Long.class)
         .single();
-
     return new InterestUpdate(id, topic, reason, searchQuery, summary, sourceUrls, createdAt);
   }
 
+  public InterestUpdate save(String topic, String reason, String searchQuery, String summary, List<String> sourceUrls) {
+    return saveWithCreatedAt(topic, reason, searchQuery, summary, sourceUrls, OffsetDateTime.now(ZoneOffset.UTC));
+  }
+
   public List<InterestUpdate> listRecent(int recentHours) {
-    OffsetDateTime cutoff = OffsetDateTime.now(ZoneOffset.UTC).minusHours(recentHours);
+    OffsetDateTime cutoff = utcCutoffHours(recentHours);
     return jdbcClient.sql("""
         SELECT id, topic, reason, search_query, summary, source_urls, created_at
         FROM interest_updates
@@ -67,6 +94,14 @@ public class InterestUpdateService {
       return List.of();
     }
     return List.of(sourceUrls.split("\\R"));
+  }
+
+  private OffsetDateTime utcCutoffHours(int hours) {
+    return OffsetDateTime.now(ZoneOffset.UTC).minusHours(hours);
+  }
+
+  private OffsetDateTime utcCutoffDays(int days) {
+    return OffsetDateTime.now(ZoneOffset.UTC).minusDays(days);
   }
 
   private void initializeSchema(DataSource dataSource) {

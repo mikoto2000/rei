@@ -1,6 +1,13 @@
 package dev.mikoto2000.rei.interest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.OffsetDateTime;
@@ -31,7 +38,7 @@ class InterestDiscoveryJobTest {
     properties.setEnabled(true);
     InterestDiscoveryJob job = new InterestDiscoveryJob(conversationInterestService, searchKnowledgeService, interestUpdateService, properties);
 
-    when(conversationInterestService.discoverCandidates()).thenReturn(List.of(
+    when(conversationInterestService.discoverCandidates(anyList())).thenReturn(List.of(
         new InterestTopicCandidate(
             "Neovim 開発環境",
             "繰り返し話題になっている",
@@ -51,5 +58,52 @@ class InterestDiscoveryJobTest {
     assertEquals(1, updates.size());
     assertEquals("Neovim 開発環境", updates.getFirst().topic());
     assertEquals(List.of("https://example.com/nvim"), updates.getFirst().sourceUrls());
+  }
+
+  @Test
+  void discoverNowSkipsTopicWhenWithinFrequencyLimit() throws Exception {
+    ConversationInterestService conversationInterestService = org.mockito.Mockito.mock(ConversationInterestService.class);
+    SearchKnowledgeService searchKnowledgeService = org.mockito.Mockito.mock(SearchKnowledgeService.class);
+    InterestUpdateService interestUpdateService = new InterestUpdateService(
+        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("freq-limit.db")));
+    InterestProperties properties = new InterestProperties();
+    properties.setEnabled(true);
+    InterestDiscoveryJob job = new InterestDiscoveryJob(conversationInterestService, searchKnowledgeService, interestUpdateService, properties);
+
+    // 頻度制限内に同一トピックのレコードを事前に保存
+    interestUpdateService.saveWithCreatedAt(
+        "Neovim 開発環境", "reason", "existing-query", "summary", List.of(),
+        OffsetDateTime.now(ZoneOffset.UTC).minusHours(1));
+
+    when(conversationInterestService.discoverCandidates(anyList())).thenReturn(List.of(
+        new InterestTopicCandidate("Neovim 開発環境", "reason", "new-query", 0.9)));
+
+    job.discoverNow();
+
+    // 頻度制限内のため search が呼ばれないこと
+    verify(searchKnowledgeService, never()).search(anyString(), anyInt(), anyInt(), any(), any());
+  }
+
+  @Test
+  void discoverNowPassesPastQueriesToDiscoverCandidates() throws Exception {
+    ConversationInterestService conversationInterestService = org.mockito.Mockito.mock(ConversationInterestService.class);
+    SearchKnowledgeService searchKnowledgeService = org.mockito.Mockito.mock(SearchKnowledgeService.class);
+    InterestUpdateService interestUpdateService = new InterestUpdateService(
+        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("past-queries.db")));
+    InterestProperties properties = new InterestProperties();
+    properties.setEnabled(true);
+    InterestDiscoveryJob job = new InterestDiscoveryJob(conversationInterestService, searchKnowledgeService, interestUpdateService, properties);
+
+    // 過去クエリを事前に保存
+    interestUpdateService.saveWithCreatedAt(
+        "Topic A", "reason", "past-query-1", "summary", List.of(),
+        OffsetDateTime.now(ZoneOffset.UTC).minusDays(1));
+
+    when(conversationInterestService.discoverCandidates(anyList())).thenReturn(List.of());
+
+    job.discoverNow();
+
+    // listRecentSearchQueries の結果が discoverCandidates に渡されること
+    verify(conversationInterestService).discoverCandidates(eq(List.of("past-query-1")));
   }
 }

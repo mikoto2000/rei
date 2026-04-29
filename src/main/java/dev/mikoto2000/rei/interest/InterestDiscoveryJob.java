@@ -40,20 +40,28 @@ public class InterestDiscoveryJob {
       return List.of();
     }
 
-    java.util.ArrayList<InterestUpdate> savedUpdates = new java.util.ArrayList<>();
+    // 過去クエリを取得して LLM コンテキストに渡す（A案）
+    List<String> pastQueries = interestUpdateService.listRecentSearchQueries(properties.getPastQueryLookbackDays());
+
     progressListener.accept("候補トピックを抽出しています...");
-    List<InterestTopicCandidate> candidates = conversationInterestService.discoverCandidates();
+    List<InterestTopicCandidate> candidates = conversationInterestService.discoverCandidates(pastQueries);
     progressListener.accept("候補トピックを " + candidates.size() + " 件抽出しました");
 
-    for (int i = 0; i < candidates.size(); i++) {
+    java.util.ArrayList<InterestUpdate> savedUpdates = new java.util.ArrayList<>();
+    int total = candidates.size();
+
+    for (int i = 0; i < total; i++) {
       InterestTopicCandidate candidate = candidates.get(i);
-      if (interestUpdateService.existsBySearchQuery(candidate.searchQuery())) {
-        progressListener.accept((i + 1) + "/" + candidates.size() + " 件目は既存トピックのためスキップ: " + candidate.topic());
+      String prefix = (i + 1) + "/" + total + " 件目";
+
+      String skipReason = skipReason(candidate);
+      if (skipReason != null) {
+        progressListener.accept(prefix + " はスキップ（" + skipReason + "）: " + candidate.topic());
         continue;
       }
 
       try {
-        progressListener.accept((i + 1) + "/" + candidates.size() + " 件目を検索しています: " + candidate.topic());
+        progressListener.accept(prefix + " を検索しています: " + candidate.topic());
         SearchKnowledgeResult result = searchKnowledgeService.search(
             candidate.searchQuery(),
             properties.getVectorTopK(),
@@ -62,7 +70,7 @@ public class InterestDiscoveryJob {
             null);
         List<WebSearchPage> pages = result.webContext().allResults();
         if (pages.isEmpty()) {
-          progressListener.accept((i + 1) + "/" + candidates.size() + " 件目は結果なし: " + candidate.topic());
+          progressListener.accept(prefix + " は結果なし: " + candidate.topic());
           continue;
         }
         InterestUpdate saved = interestUpdateService.save(
@@ -72,13 +80,27 @@ public class InterestDiscoveryJob {
             summarize(pages),
             pages.stream().map(WebSearchPage::url).toList());
         savedUpdates.add(saved);
-        progressListener.accept((i + 1) + "/" + candidates.size() + " 件目を追加しました: " + candidate.topic());
+        progressListener.accept(prefix + " を追加しました: " + candidate.topic());
       } catch (Exception e) {
         // 定期ジョブ全体を止めない
-        progressListener.accept((i + 1) + "/" + candidates.size() + " 件目の処理に失敗しました: " + candidate.topic());
+        progressListener.accept(prefix + " の処理に失敗しました: " + candidate.topic());
       }
     }
     return savedUpdates;
+  }
+
+  /**
+   * スキップすべき理由を返す。スキップ不要なら null を返す。
+   * 優先順: 1. トピック頻度制限（C案）、2. 検索クエリ重複
+   */
+  private String skipReason(InterestTopicCandidate candidate) {
+    if (interestUpdateService.existsByTopicWithinHours(candidate.topic(), properties.getTopicUpdateIntervalHours())) {
+      return "頻度制限内";
+    }
+    if (interestUpdateService.existsBySearchQuery(candidate.searchQuery())) {
+      return "既存クエリ";
+    }
+    return null;
   }
 
   private String summarize(List<WebSearchPage> pages) {

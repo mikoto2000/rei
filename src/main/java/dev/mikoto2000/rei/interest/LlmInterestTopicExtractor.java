@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.interest;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -22,12 +23,17 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
 
   @Override
   public List<InterestTopicCandidate> extract(List<ConversationSnippet> snippets, int maxTopics) {
+    return extract(snippets, maxTopics, List.of());
+  }
+
+  @Override
+  public List<InterestTopicCandidate> extract(List<ConversationSnippet> snippets, int maxTopics, List<String> pastQueries) {
     if (snippets.isEmpty()) {
       return List.of();
     }
 
     Prompt prompt = new Prompt(
-        buildPrompt(snippets, maxTopics),
+        buildPrompt(snippets, maxTopics, pastQueries),
         OpenAiChatOptions.builder()
             .model(modelHolderService.get())
             .build());
@@ -36,11 +42,10 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
     return parse(response);
   }
 
-  private String buildPrompt(List<ConversationSnippet> snippets, int maxTopics) {
+  private String buildPrompt(List<ConversationSnippet> snippets, int maxTopics, List<String> pastQueries) {
     String conversation = snippets.stream()
         .map(snippet -> "- [%s] %s".formatted(snippet.createdAt(), snippet.text()))
-        .reduce((left, right) -> left + "\n" + right)
-        .orElse("- なし");
+        .collect(Collectors.joining("\n", "", ""));
 
     return """
         あなたはユーザーの過去会話から、今後 Web 検索して知らせる価値のある話題だけを抽出します。
@@ -53,10 +58,24 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
         - 各要素は topic, reason, searchQuery, score を持つ
         - score は 0.0 から 1.0
         - 該当がなければ [] を返す
-
+        %s
         会話:
         %s
-        """.formatted(maxTopics, conversation);
+        """.formatted(maxTopics, buildPastQueriesSection(pastQueries), conversation);
+  }
+
+  private String buildPastQueriesSection(List<String> pastQueries) {
+    if (pastQueries.isEmpty()) {
+      return "";
+    }
+    String queryList = pastQueries.stream()
+        .map(q -> "- " + q)
+        .collect(Collectors.joining("\n"));
+    return """
+
+        過去に使用した検索クエリ（これらと重複・類似しない新しい角度のクエリを生成すること）:
+        %s
+        """.formatted(queryList);
   }
 
   private List<InterestTopicCandidate> parse(String response) {
