@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -34,5 +35,29 @@ class ConversationInterestServiceTest {
 
     // extract(snippets, maxTopics, pastQueries) が呼ばれることを検証
     verify(extractor).extract(eq(snippets), anyInt(), eq(pastQueries));
+  }
+
+  @Test
+  void discoverFallbackCandidatesBroadensMaxTopicsAndThreshold() {
+    ConversationHistoryService historyService = mock(ConversationHistoryService.class);
+    InterestTopicExtractor extractor = mock(InterestTopicExtractor.class);
+    InterestProperties properties = new InterestProperties();
+    properties.setMaxTopics(3);
+    properties.setMinScore(0.6);
+
+    ConversationInterestService service = new ConversationInterestService(historyService, extractor, properties);
+
+    List<ConversationSnippet> snippets = List.of(
+        new ConversationSnippet("c1", "neovim の話", OffsetDateTime.now(ZoneOffset.UTC)));
+    List<String> pastQueries = List.of("old query 1");
+    InterestTopicCandidate broad = new InterestTopicCandidate("topic", "reason", "query", 0.45);
+
+    when(historyService.findRecentUserMessages(anyInt(), anyInt())).thenReturn(snippets);
+    when(extractor.extract(eq(snippets), eq(6), eq(pastQueries))).thenReturn(List.of(broad));
+
+    List<InterestTopicCandidate> candidates = service.discoverFallbackCandidates(pastQueries);
+
+    assertEquals(List.of(broad), candidates);
+    verify(extractor).extract(eq(snippets), eq(6), eq(pastQueries));
   }
 }

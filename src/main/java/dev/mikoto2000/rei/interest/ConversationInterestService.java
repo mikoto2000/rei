@@ -10,6 +10,9 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ConversationInterestService {
 
+  private static final int FALLBACK_MAX_TOPICS_MULTIPLIER = 2;
+  private static final double FALLBACK_MIN_SCORE_DELTA = 0.2d;
+
   private final ConversationHistoryService conversationHistoryService;
   private final InterestTopicExtractor interestTopicExtractor;
   private final InterestProperties properties;
@@ -19,12 +22,22 @@ public class ConversationInterestService {
   }
 
   public List<InterestTopicCandidate> discoverCandidates(List<String> pastQueries) {
+    return discoverCandidates(pastQueries, properties.getMaxTopics(), properties.getMinScore());
+  }
+
+  public List<InterestTopicCandidate> discoverFallbackCandidates(List<String> pastQueries) {
+    int broadenedMaxTopics = Math.max(properties.getMaxTopics() * FALLBACK_MAX_TOPICS_MULTIPLIER, properties.getMaxTopics());
+    double broadenedMinScore = Math.max(0.0d, properties.getMinScore() - FALLBACK_MIN_SCORE_DELTA);
+    return discoverCandidates(pastQueries, broadenedMaxTopics, broadenedMinScore);
+  }
+
+  private List<InterestTopicCandidate> discoverCandidates(List<String> pastQueries, int maxTopics, double minScore) {
     List<ConversationSnippet> snippets = conversationHistoryService.findRecentUserMessages(
         properties.getLookbackDays(),
         properties.getMessageLimit());
-    return interestTopicExtractor.extract(snippets, properties.getMaxTopics(), pastQueries).stream()
-        .filter(candidate -> candidate.score() >= properties.getMinScore())
-        .limit(properties.getMaxTopics())
+    return interestTopicExtractor.extract(snippets, maxTopics, pastQueries).stream()
+        .filter(candidate -> candidate.score() >= minScore)
+        .limit(maxTopics)
         .toList();
   }
 }

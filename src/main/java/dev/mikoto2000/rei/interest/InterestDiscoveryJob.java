@@ -46,10 +46,29 @@ public class InterestDiscoveryJob {
     progressListener.accept("候補トピックを抽出しています...");
     List<InterestTopicCandidate> candidates = conversationInterestService.discoverCandidates(pastQueries);
     progressListener.accept("候補トピックを " + candidates.size() + " 件抽出しました");
+    boolean usedFallbackCandidates = false;
+    if (candidates.isEmpty()) {
+      progressListener.accept("候補が 0 件だったため、条件を広げて再抽出しています...");
+      candidates = conversationInterestService.discoverFallbackCandidates(pastQueries);
+      progressListener.accept("再抽出で候補トピックを " + candidates.size() + " 件抽出しました");
+      usedFallbackCandidates = true;
+    }
 
+    java.util.ArrayList<InterestUpdate> savedUpdates = processCandidates(candidates, progressListener);
+    if (savedUpdates.isEmpty() && !usedFallbackCandidates) {
+      progressListener.accept("更新が 0 件だったため、条件を広げて再抽出しています...");
+      List<InterestTopicCandidate> fallbackCandidates = conversationInterestService.discoverFallbackCandidates(pastQueries);
+      progressListener.accept("再抽出で候補トピックを " + fallbackCandidates.size() + " 件抽出しました");
+      savedUpdates = processCandidates(fallbackCandidates, progressListener);
+    }
+    return savedUpdates;
+  }
+
+  private java.util.ArrayList<InterestUpdate> processCandidates(
+      List<InterestTopicCandidate> candidates,
+      Consumer<String> progressListener) {
     java.util.ArrayList<InterestUpdate> savedUpdates = new java.util.ArrayList<>();
     int total = candidates.size();
-
     for (int i = 0; i < total; i++) {
       InterestTopicCandidate candidate = candidates.get(i);
       String prefix = (i + 1) + "/" + total + " 件目";

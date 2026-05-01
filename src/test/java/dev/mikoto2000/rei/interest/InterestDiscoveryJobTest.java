@@ -106,4 +106,66 @@ class InterestDiscoveryJobTest {
     // listRecentSearchQueries の結果が discoverCandidates に渡されること
     verify(conversationInterestService).discoverCandidates(eq(List.of("past-query-1")));
   }
+
+  @Test
+  void discoverNowBroadensCandidatesWhenInitialDiscoveryFindsNothing() throws Exception {
+    ConversationInterestService conversationInterestService = org.mockito.Mockito.mock(ConversationInterestService.class);
+    SearchKnowledgeService searchKnowledgeService = org.mockito.Mockito.mock(SearchKnowledgeService.class);
+    InterestUpdateService interestUpdateService = new InterestUpdateService(
+        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("fallback-candidates.db")));
+    InterestProperties properties = new InterestProperties();
+    properties.setEnabled(true);
+    InterestDiscoveryJob job = new InterestDiscoveryJob(conversationInterestService, searchKnowledgeService, interestUpdateService, properties);
+
+    when(conversationInterestService.discoverCandidates(anyList())).thenReturn(List.of());
+    when(conversationInterestService.discoverFallbackCandidates(anyList())).thenReturn(List.of(
+        new InterestTopicCandidate("Neovim 開発環境", "繰り返し話題になっている", "Neovim devcontainer best practices", 0.45)));
+    when(searchKnowledgeService.search("Neovim devcontainer best practices", 3, 5, null, null)).thenReturn(
+        new SearchKnowledgeResult(
+            "Neovim devcontainer best practices",
+            List.of(),
+            WebSearchContext.primaryOnly(List.of(
+                new WebSearchPage("Neovim docs", "https://example.com/nvim", "snippet", "2026-04-18", "content"))),
+            null));
+
+    List<InterestUpdate> updates = job.discoverNow();
+
+    assertEquals(1, updates.size());
+    verify(conversationInterestService).discoverFallbackCandidates(eq(List.of()));
+  }
+
+  @Test
+  void discoverNowBroadensCandidatesWhenInitialCandidatesHaveNoSearchResults() throws Exception {
+    ConversationInterestService conversationInterestService = org.mockito.Mockito.mock(ConversationInterestService.class);
+    SearchKnowledgeService searchKnowledgeService = org.mockito.Mockito.mock(SearchKnowledgeService.class);
+    InterestUpdateService interestUpdateService = new InterestUpdateService(
+        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("fallback-no-results.db")));
+    InterestProperties properties = new InterestProperties();
+    properties.setEnabled(true);
+    InterestDiscoveryJob job = new InterestDiscoveryJob(conversationInterestService, searchKnowledgeService, interestUpdateService, properties);
+
+    when(conversationInterestService.discoverCandidates(anyList())).thenReturn(List.of(
+        new InterestTopicCandidate("Candidate A", "reason", "query-a", 0.8)));
+    when(conversationInterestService.discoverFallbackCandidates(anyList())).thenReturn(List.of(
+        new InterestTopicCandidate("Candidate B", "reason", "query-b", 0.45)));
+    when(searchKnowledgeService.search("query-a", 3, 5, null, null)).thenReturn(
+        new SearchKnowledgeResult(
+            "query-a",
+            List.of(),
+            WebSearchContext.primaryOnly(List.of()),
+            null));
+    when(searchKnowledgeService.search("query-b", 3, 5, null, null)).thenReturn(
+        new SearchKnowledgeResult(
+            "query-b",
+            List.of(),
+            WebSearchContext.primaryOnly(List.of(
+                new WebSearchPage("Fallback page", "https://example.com/fallback", "snippet", "2026-04-18", "content"))),
+            null));
+
+    List<InterestUpdate> updates = job.discoverNow();
+
+    assertEquals(1, updates.size());
+    assertEquals("Candidate B", updates.getFirst().topic());
+    verify(conversationInterestService).discoverFallbackCandidates(eq(List.of()));
+  }
 }
