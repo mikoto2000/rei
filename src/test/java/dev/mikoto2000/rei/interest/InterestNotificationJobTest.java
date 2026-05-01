@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.interest;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,7 +23,7 @@ class InterestNotificationJobTest {
 
     job.run();
 
-    verify(discoveryJob, never()).discoverNow();
+    verify(discoveryJob, never()).discoverNow(any());
     verify(notifier, never()).notifyUpdate(org.mockito.ArgumentMatchers.any());
   }
 
@@ -42,11 +43,11 @@ class InterestNotificationJobTest {
         List.of("https://example.com/nvim"),
         OffsetDateTime.of(2026, 4, 28, 0, 0, 0, 0, ZoneOffset.UTC));
 
-    when(discoveryJob.discoverNow()).thenReturn(List.of(update));
+    when(discoveryJob.discoverNow(any())).thenReturn(List.of(update));
 
     job.run();
 
-    verify(discoveryJob).discoverNow();
+    verify(discoveryJob).discoverNow(any());
     verify(notifier).notifyUpdate(update);
   }
 }
