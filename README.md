@@ -112,19 +112,19 @@ Google Calendar 連携を使う場合は、Google Cloud で Desktop app の OAut
 
 ```bash
 export REI_GOOGLE_CALENDAR_ENABLED=true
-export REI_GOOGLE_CALENDAR_CREDENTIALS_PATH=$HOME/.config/rei/google-calendar-credentials.json
+export REI_GOOGLE_CALENDAR_CREDENTIALS_PATH=$PWD/.rei/google-calendar-credentials.json
 export REI_GOOGLE_CALENDAR_TIME_ZONE=Asia/Tokyo  # タイムゾーン
 ```
 
-Google Calendar の資格情報と OAuth token は、デフォルトではホームディレクトリ配下の `.config/rei` に保存されます。必要に応じて `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` と `REI_GOOGLE_CALENDAR_TOKENS_DIR` で上書きできます。
+Google Calendar の資格情報と OAuth token は、デフォルトでは起動ディレクトリ配下の `.rei` に保存されます。必要に応じて `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` と `REI_GOOGLE_CALENDAR_TOKENS_DIR` で上書きできます。
 
 主な環境変数:
 
 | 変数 | 要否 | デフォルト | 説明 |
 | --- | --- | --- | --- |
 | `REI_GOOGLE_CALENDAR_ENABLED` | 任意 | `false` | Google Calendar 連携を有効化 |
-| `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` | 利用時必須 | `${HOME}/.config/rei/google-calendar-credentials.json` | OAuth クライアント資格情報 JSON |
-| `REI_GOOGLE_CALENDAR_TOKENS_DIR` | 任意 | `${HOME}/.config/rei/google-calendar-tokens` | OAuth token 保存先 |
+| `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` | 利用時必須 | `${user.dir}/.rei/google-calendar-credentials.json` | OAuth クライアント資格情報 JSON |
+| `REI_GOOGLE_CALENDAR_TOKENS_DIR` | 任意 | `${user.dir}/.rei/google-calendar-tokens` | OAuth token 保存先 |
 | `REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID` | 任意 | `primary` | 既定カレンダー ID |
 | `REI_GOOGLE_CALENDAR_TIME_ZONE` | 任意 | 空 | オフセットなし日時の解釈に使うタイムゾーン |
 

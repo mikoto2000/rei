@@ -43,8 +43,8 @@ rei:
   google-calendar:
     enabled: ${REI_GOOGLE_CALENDAR_ENABLED:false}
     application-name: Rei
-    credentials-path: ${REI_GOOGLE_CALENDAR_CREDENTIALS_PATH:${user.home}/.config/rei/google-calendar-credentials.json}
-    tokens-directory: ${REI_GOOGLE_CALENDAR_TOKENS_DIR:${user.home}/.config/rei/google-calendar-tokens}
+    credentials-path: ${REI_GOOGLE_CALENDAR_CREDENTIALS_PATH:${user.dir}/.rei/google-calendar-credentials.json}
+    tokens-directory: ${REI_GOOGLE_CALENDAR_TOKENS_DIR:${user.dir}/.rei/google-calendar-tokens}
     default-calendar-id: ${REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID:primary}
     time-zone: ${REI_GOOGLE_CALENDAR_TIME_ZONE:}
   web-search:
