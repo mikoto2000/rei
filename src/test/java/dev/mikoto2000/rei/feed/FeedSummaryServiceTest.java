@@ -46,9 +46,7 @@ class FeedSummaryServiceTest {
         OffsetDateTime.of(2026, 4, 21, 0, 0, 0, 0, ZoneOffset.UTC),
         OffsetDateTime.of(2026, 4, 22, 9, 0, 0, 0, ZoneOffset.UTC));
 
-    assertTrue(summary.startsWith("briefing summary"));
-    assertTrue(summary.contains("参考URL:"));
-    assertTrue(summary.contains("https://example.com/today"));
+    assertEquals("briefing summary", summary);
     assertTrue(promptRef.get().contains("Today"));
     assertTrue(promptRef.get().contains("Example Feed"));
     assertTrue(promptRef.get().contains("Fetched article body"));
@@ -58,7 +56,7 @@ class FeedSummaryServiceTest {
   }
 
   @Test
-  void summarizeBriefingAppendsSourceUrlsToGeneratedSummary() {
+  void summarizeBriefingReturnsGeneratedSummaryAsIs() {
     FeedService feedService = newService();
     Feed feed = feedService.add("https://example.com/feed.xml", "Example Feed");
     feedService.saveFetchedItems(feed.id(), List.of(
@@ -75,10 +73,7 @@ class FeedSummaryServiceTest {
         OffsetDateTime.of(2026, 4, 21, 0, 0, 0, 0, ZoneOffset.UTC),
         OffsetDateTime.of(2026, 4, 22, 9, 0, 0, 0, ZoneOffset.UTC));
 
-    assertTrue(summary.contains("briefing summary"));
-    assertTrue(summary.contains("参考URL:"));
-    assertTrue(summary.contains("https://example.com/today"));
-    assertTrue(summary.contains("https://example.com/yesterday"));
+    assertEquals("briefing summary", summary);
   }
 
   @Test

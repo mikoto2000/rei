@@ -3,7 +3,6 @@ package dev.mikoto2000.rei.feed;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.function.Function;
 
@@ -40,8 +39,7 @@ public class FeedSummaryService {
       return "昨日 00:00 以降の新着記事はありませんでした";
     }
     try {
-      String summary = feedSummaryGenerator.generate(buildBriefingPrompt(from, to, items));
-      return appendSourceUrls(summary, items);
+      return feedSummaryGenerator.generate(buildBriefingPrompt(from, to, items));
     } catch (RuntimeException e) {
       return "新着記事の要約生成に失敗しました。見出し一覧を確認してください。";
     }
@@ -131,25 +129,5 @@ public class FeedSummaryService {
         "",
         item.publishedAt() == null ? null : item.publishedAt().toString(),
         "title=" + item.title() + " url=" + item.url());
-  }
-
-  private String appendSourceUrls(String summary, List<FeedBriefingItem> items) {
-    LinkedHashSet<String> urls = items.stream()
-        .map(FeedBriefingItem::url)
-        .filter(url -> url != null && !url.isBlank())
-        .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
-    if (urls.isEmpty()) {
-      return summary;
-    }
-
-    StringBuilder builder = new StringBuilder(summary == null ? "" : summary.trim());
-    if (!builder.isEmpty()) {
-      builder.append("\n\n");
-    }
-    builder.append("参考URL:\n");
-    for (String url : urls) {
-      builder.append("- ").append(url).append('\n');
-    }
-    return builder.toString().trim();
   }
 }
