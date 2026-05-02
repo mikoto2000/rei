@@ -88,12 +88,14 @@
 
 ---
 
-### 要件 4: 興味関心更新のコンソール通知
+### 要件 4: 興味関心更新の通知
 
-**ユーザーストーリー:** システムとして、新しい興味関心更新情報をコンソールに通知したい。そうすることで、ユーザーが関心のある最新情報をリアルタイムに把握できる。
+**ユーザーストーリー:** システムとして、新しい興味関心更新情報をユーザーに通知したい。そうすることで、ユーザーが関心のある最新情報をリアルタイムに把握できる。
 
 #### 受け入れ基準
 
-1. WHEN 通知スケジュールが実行されたとき、THE InterestNotificationJob SHALL 直近の興味関心更新情報をコンソールに表示する
+1. WHEN 通知スケジュールが実行されたとき、THE InterestNotificationJob SHALL 直近の興味関心更新情報を通知する
 2. WHEN 通知機能が無効のとき、THE InterestNotificationJob SHALL 通知を実行しない
-3. THE ConsoleInterestNotifier SHALL 各更新情報についてトピック名・要約・ソース URL を表示する
+3. THE SoundInterestNotifier SHALL 各更新情報についてトピック名と要約を結合したメッセージを SoundNotificationService を通じて音声通知する
+4. WHEN 音声通知が実行されたとき、THE SoundInterestNotifier SHALL コンソールにも同じ内容を出力する
+5. THE SoundInterestNotifier SHALL `@Primary` として登録され、`ConsoleInterestNotifier` より優先して使用される

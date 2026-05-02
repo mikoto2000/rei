@@ -141,6 +141,30 @@
   - `./mvnw test` を実行してすべてのテストが通ることを確認する
   - 失敗するテストがあればここで修正する
 
+- [x] 14. SoundInterestNotifier を TDD で実装する
+  - [x] 14.1 **Red**: 失敗するテストを書く
+    - `SoundInterestNotifier.notifyUpdate(update)` を呼び出すと `SoundNotificationService.notify()` がトピック名と要約を結合したメッセージで呼ばれることを検証するテストを書く
+    - `ConsoleInterestNotifier.notifyUpdate()` も同じ `update` で呼ばれることを検証するテストを書く
+    - この時点でコンパイルエラーになることを確認する
+  - [x] 14.2 **Green**: `SoundInterestNotifier` を実装してテストを通す
+    - `src/main/java/dev/mikoto2000/rei/sound/SoundInterestNotifier.java` を作成する
+    - `@Primary` + `@Component` + `@RequiredArgsConstructor` で実装する
+    - `notifyUpdate()` で `soundNotificationService.notify(topic + " " + summary)` を呼び出す
+    - その後 `consoleInterestNotifier.notifyUpdate(update)` に委譲する
+    - テストが通ることを確認する
+  - [x] 14.3 **Refactor**: メッセージ生成ロジックを整理する
+  - _Requirements: 7.1, 7.2, 7.3_
+
+- [x] 15. SoundInterestNotifier — プロパティテストを追加する
+  - [x] 15.1 **Property 7: SoundInterestNotifier が音声通知とコンソール通知の両方を実行する**
+    - 様々な `InterestUpdate`（トピック名・要約のバリエーション）で `SoundNotificationService.notify()` と `ConsoleInterestNotifier.notifyUpdate()` の両方が呼ばれることを `@ParameterizedTest` で検証する
+    - **Validates: 要件 7.2, 7.3**
+    - タグ: `sound-notification-property-7-soundInterestNotifier`
+
+- [x] 16. 最終チェックポイント — すべてのテストが通ることを確認する
+  - `./mvnw test` を実行してすべてのテストが通ることを確認する
+  - 失敗するテストがあればここで修正する
+
 ---
 
 ## 注意事項

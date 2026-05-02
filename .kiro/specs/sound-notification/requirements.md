@@ -11,6 +11,7 @@
 - **SoundNotificationService**: 音声通知の実行を担うサービス。設定に基づいて外部プログラムを呼び出し、失敗時は標準出力通知へフォールバックする。
 - **SoundNotificationProperties**: 音声通知の設定プロパティクラス。`rei.sound-notification` 配下の設定値を保持する。
 - **SoundNotificationTools**: AI エージェントから音声通知を呼び出すためのツール群。
+- **SoundInterestNotifier**: 興味関心更新情報を音声通知で伝える `InterestNotifier` 実装。音声通知後にコンソールにも出力する。
 - **外部プログラム**: `rei.sound-notification.command` で定義された、通知メッセージを受け取って音声出力などを行うプログラム。
 - **`{{MESSAGE}}`**: コマンド引数内に記述するプレースホルダー。実行時に通知メッセージに置換される。
 - **標準出力通知**: 音声通知のフォールバック手段。通知メッセージを標準出力に出力する。
@@ -81,3 +82,15 @@
 
 1. THE SoundNotificationTools SHALL メッセージ文字列を受け取り、SoundNotificationService を通じて通知を実行するツールを AI エージェントに提供する
 2. WHEN AI エージェントが音声通知ツールを呼び出したとき、THE SoundNotificationTools SHALL 通知の成否を呼び出し元に返す
+
+---
+
+### 要件 7: 興味関心更新の音声通知
+
+**ユーザーストーリー:** システムとして、興味関心更新情報を音声で通知したい。そうすることで、ユーザーが画面を見ていなくても新しい興味関心情報を把握できる。
+
+#### 受け入れ基準
+
+1. THE SoundInterestNotifier SHALL `InterestNotifier` を実装し、`@Primary` として登録される
+2. WHEN 興味関心更新情報が通知されるとき、THE SoundInterestNotifier SHALL トピック名と要約を結合したメッセージを SoundNotificationService を通じて音声通知する
+3. WHEN 音声通知が実行されたとき、THE SoundInterestNotifier SHALL コンソールにも同じ内容を出力する（`ConsoleInterestNotifier` に委譲する）

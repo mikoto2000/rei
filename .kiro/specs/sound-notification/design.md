@@ -28,6 +28,10 @@ graph TD
     ExternalProgram -->|成功| Done[通知完了]
     SoundNotificationProperties -->|設定値提供| SoundNotificationService
     AiConfiguration -->|Bean 登録| SoundNotificationTools
+
+    InterestNotificationJob -->|notifyUpdate| SoundInterestNotifier
+    SoundInterestNotifier -->|notify(topic + summary)| SoundNotificationService
+    SoundInterestNotifier -->|notifyUpdate| ConsoleInterestNotifier
 ```
 
 ---
@@ -172,6 +176,53 @@ private final SoundNotificationTools soundNotificationTools;
 
 ---
 
+### SoundInterestNotifier
+
+`InterestNotifier` を実装し、興味関心更新情報を音声通知で伝えるクラス。
+`@Primary` として登録することで `ConsoleInterestNotifier` より優先して使用される。
+音声通知後に `ConsoleInterestNotifier` にも委譲してコンソール出力を維持する。
+
+```java
+package dev.mikoto2000.rei.sound;
+
+import org.springframework.context.annotation.Primary;
+import org.springframework.stereotype.Component;
+
+import dev.mikoto2000.rei.interest.ConsoleInterestNotifier;
+import dev.mikoto2000.rei.interest.InterestNotifier;
+import dev.mikoto2000.rei.interest.InterestUpdate;
+import lombok.RequiredArgsConstructor;
+
+@Primary
+@Component
+@RequiredArgsConstructor
+public class SoundInterestNotifier implements InterestNotifier {
+
+    private final SoundNotificationService soundNotificationService;
+    private final ConsoleInterestNotifier consoleInterestNotifier;
+
+    @Override
+    public void notifyUpdate(InterestUpdate update) {
+        String message = update.topic() + " " + update.summary();
+        soundNotificationService.notify(message);
+        consoleInterestNotifier.notifyUpdate(update);
+    }
+}
+```
+
+**メソッドシグネチャ一覧:**
+
+| メソッド | 引数 | 戻り値 | 説明 |
+|---|---|---|---|
+| `notifyUpdate(InterestUpdate update)` | update: 興味関心更新情報 | void | 音声通知後にコンソールにも出力する |
+
+**設計上の注意:**
+- `@Primary` を付与することで Spring が `InterestNotifier` の注入先として `SoundInterestNotifier` を優先する
+- `ConsoleInterestNotifier` は `@Primary` なしで残し、`SoundInterestNotifier` から委譲先として使用する
+- 音声通知の成否に関わらず（`SoundNotificationService` が内部でフォールバック処理するため）コンソール出力は常に実行される
+
+---
+
 ## データモデル
 
 本機能は永続化データを持たない。設定値は `SoundNotificationProperties` が保持し、通知メッセージは `notify()` の引数として渡される。
@@ -277,6 +328,14 @@ flowchart TD
 *任意の* メッセージ文字列に対して、`SoundNotificationTools.notify()` を呼び出したとき、`SoundNotificationService.notify()` が同じメッセージで呼び出され、null でない文字列が返される。
 
 **Validates: 要件 6.1, 6.2**
+
+---
+
+### プロパティ 7: SoundInterestNotifier が音声通知とコンソール通知の両方を実行する
+
+*任意の* `InterestUpdate` に対して、`SoundInterestNotifier.notifyUpdate()` を呼び出したとき、`SoundNotificationService.notify()` がトピック名と要約を結合したメッセージで呼び出され、かつ `ConsoleInterestNotifier.notifyUpdate()` も同じ `InterestUpdate` で呼び出される。
+
+**Validates: 要件 7.2, 7.3**
 
 ---
 
