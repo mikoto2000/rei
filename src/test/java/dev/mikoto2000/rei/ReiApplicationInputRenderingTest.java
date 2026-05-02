@@ -17,28 +17,21 @@ class ReiApplicationInputRenderingTest {
   @Test
   void formatUserInputRendersLeftBarBlock() {
     ReiApplication app = newApp();
+    String ls = System.lineSeparator();
 
-    assertEquals("""
-
-┌ User
-README を要約して
-└
-
-""", app.formatUserInput("README を要約して"));
+    assertEquals(
+        ls + "┌ User" + ls + "README を要約して" + ls + "└" + ls + ls,
+        app.formatUserInput("README を要約して"));
   }
 
   @Test
   void formatUserInputPrefixesEveryLine() {
     ReiApplication app = newApp();
+    String ls = System.lineSeparator();
 
-    assertEquals("""
-
-┌ User
-1行目
-2行目
-└
-
-""", app.formatUserInput("1行目\n2行目"));
+    assertEquals(
+        ls + "┌ User" + ls + "1行目" + ls + "2行目" + ls + "└" + ls + ls,
+        app.formatUserInput("1行目\n2行目"));
   }
 
   private ReiApplication newApp() {

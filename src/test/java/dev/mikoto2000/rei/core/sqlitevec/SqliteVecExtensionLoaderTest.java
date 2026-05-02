@@ -27,7 +27,7 @@ class SqliteVecExtensionLoaderTest {
 
     loader.load(connection);
 
-    verify(preparedStatement).setString(1, "/tmp/vec0.so");
+    verify(preparedStatement).setString(1, Path.of("/tmp/vec0.so").toAbsolutePath().toString());
     verify(preparedStatement).execute();
   }
 }
