@@ -21,6 +21,8 @@ import dev.mikoto2000.rei.interest.InterestProperties;
 import dev.mikoto2000.rei.reminder.ReminderTools;
 import dev.mikoto2000.rei.search.SearchTools;
 import dev.mikoto2000.rei.smalltalk.SmallTalkProperties;
+import dev.mikoto2000.rei.sound.SoundNotificationProperties;
+import dev.mikoto2000.rei.sound.SoundNotificationTools;
 import dev.mikoto2000.rei.task.TaskTools;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentProperties;
 import dev.mikoto2000.rei.websearch.WebSearchProperties;
@@ -28,7 +30,7 @@ import dev.mikoto2000.rei.websearch.WebSearchTools;
 import lombok.RequiredArgsConstructor;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, SmallTalkProperties.class})
+@EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, SmallTalkProperties.class, SoundNotificationProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
 
@@ -43,6 +45,7 @@ public class AiConfiguration {
   private final ReminderTools reminderTools;
   private final SearchTools searchTools;
   private final WebSearchTools webSearchTools;
+  private final SoundNotificationTools soundNotificationTools;
   private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
 
   @Bean
@@ -53,7 +56,7 @@ public class AiConfiguration {
             PromptChatMemoryAdvisor.builder(chatMemory)
                 .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
                 .build())
-        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools);
+        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools, soundNotificationTools);
 
     ToolCallbackProvider toolCallbackProvider = mcpToolCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {
