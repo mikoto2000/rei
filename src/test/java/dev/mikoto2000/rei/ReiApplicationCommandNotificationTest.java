@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,6 +19,7 @@ import org.mockito.Mockito;
 import dev.mikoto2000.rei.core.command.RootCommand;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.sound.SoundNotificationService;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import picocli.CommandLine;
@@ -30,6 +32,7 @@ class ReiApplicationCommandNotificationTest {
 
     private SoundNotificationService soundNotificationService;
     private EscCancellationMonitor escCancellationMonitor;
+    private ChatResponseNarrator chatResponseNarrator;
     private Terminal terminal;
     private ExecutorService commandExecutor;
 
@@ -38,6 +41,7 @@ class ReiApplicationCommandNotificationTest {
         soundNotificationService = mock(SoundNotificationService.class);
         // EscCancellationMonitor: immediately return the future result without blocking
         escCancellationMonitor = mock(EscCancellationMonitor.class);
+        chatResponseNarrator = mock(ChatResponseNarrator.class);
         terminal = TerminalBuilder.builder().dumb(true).build();
         commandExecutor = Executors.newSingleThreadExecutor();
     }
@@ -58,7 +62,8 @@ class ReiApplicationCommandNotificationTest {
                 escCancellationMonitor,
                 Mockito.mock(CommandCancellationService.class),
                 asyncVectorDocumentService,
-                soundNotificationService);
+                soundNotificationService,
+                chatResponseNarrator);
     }
 
     @Test
@@ -126,6 +131,82 @@ class ReiApplicationCommandNotificationTest {
 
         // Assert: notify must still have been called with the completion message
         // (because it is in the finally block)
+        verify(soundNotificationService).notify("コマンド実行が完了しました");
+    }
+
+    /**
+     * Requirement 2.1: When wasNarrated() returns true, the command completion notification
+     * must be skipped.
+     */
+    @Test
+    void skipsCommandCompletionNotificationWhenNarrated() throws IOException {
+        // Arrange: a stub picocli command
+        @CommandLine.Command(name = "stub")
+        class StubCommand implements Runnable {
+            @Override
+            public void run() {
+                // normal completion
+            }
+        }
+
+        CommandLine cmd = new CommandLine(new StubCommand());
+
+        when(escCancellationMonitor.await(
+                Mockito.any(),
+                Mockito.any(),
+                Mockito.any()))
+                .thenAnswer(invocation -> {
+                    var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
+                    return future.get();
+                });
+
+        // wasNarrated() returns true → notification should be skipped
+        when(chatResponseNarrator.wasNarrated()).thenReturn(true);
+
+        ReiApplication app = newApp();
+
+        // Act
+        app.executeInterruptibly(cmd, terminal, commandExecutor, "stub");
+
+        // Assert: notify must NOT have been called with the completion message
+        verify(soundNotificationService, never()).notify("コマンド実行が完了しました");
+    }
+
+    /**
+     * Requirement 2.2: When wasNarrated() returns false, the command completion notification
+     * must be executed as usual.
+     */
+    @Test
+    void executesCommandCompletionNotificationWhenNotNarrated() throws IOException {
+        // Arrange: a stub picocli command
+        @CommandLine.Command(name = "stub")
+        class StubCommand implements Runnable {
+            @Override
+            public void run() {
+                // normal completion
+            }
+        }
+
+        CommandLine cmd = new CommandLine(new StubCommand());
+
+        when(escCancellationMonitor.await(
+                Mockito.any(),
+                Mockito.any(),
+                Mockito.any()))
+                .thenAnswer(invocation -> {
+                    var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
+                    return future.get();
+                });
+
+        // wasNarrated() returns false → notification should be executed
+        when(chatResponseNarrator.wasNarrated()).thenReturn(false);
+
+        ReiApplication app = newApp();
+
+        // Act
+        app.executeInterruptibly(cmd, terminal, commandExecutor, "stub");
+
+        // Assert: notify must have been called with the completion message
         verify(soundNotificationService).notify("コマンド実行が完了しました");
     }
 }

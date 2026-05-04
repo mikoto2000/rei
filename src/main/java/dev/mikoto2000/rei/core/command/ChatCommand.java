@@ -9,6 +9,7 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -35,12 +36,16 @@ public class ChatCommand implements Runnable {
 
   private final CommandCancellationService cancellationService;
 
+  private final ChatResponseNarrator chatResponseNarrator;
+
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
   private String[] prompts;
 
   @Override
   public void run() {
     cancellationService.begin(Thread.currentThread());
+    chatResponseNarrator.reset();
+
     ChatClientRequestSpec requestSpec = chatClient
       .prompt(new Prompt(String.join(" ", prompts),
           OpenAiChatOptions.builder()
@@ -50,10 +55,14 @@ public class ChatCommand implements Runnable {
     IO.println("=== answer ===");
     CountDownLatch latch = new CountDownLatch(1);
     AtomicReference<Throwable> errorRef = new AtomicReference<>();
+    StringBuilder responseBuilder = new StringBuilder();
     Disposable disposable = requestSpec.stream()
       .content()
       .subscribe(
-          System.out::print,
+          chunk -> {
+            System.out.print(chunk);
+            responseBuilder.append(chunk);
+          },
           error -> {
             errorRef.set(error);
             latch.countDown();
@@ -75,7 +84,9 @@ public class ChatCommand implements Runnable {
       if (error != null) {
         log.warn("Chat response failed", error);
         IO.println("[error] " + buildUserFacingMessage(error));
+        return;
       }
+      chatResponseNarrator.narrateIfCompleted(responseBuilder.toString());
     } catch (InterruptedException e) {
       if (cancellationService.consumeCancellationRequested()) {
         System.out.println();

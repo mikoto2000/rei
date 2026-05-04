@@ -17,6 +17,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
 
@@ -37,7 +38,7 @@ class ChatCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService)).execute("hello") == 0);
+      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService, Mockito.mock(ChatResponseNarrator.class))).execute("hello") == 0);
     } finally {
       System.setOut(originalOut);
     }
@@ -64,7 +65,7 @@ class ChatCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      ChatCommand command = new ChatCommand(chatClient, modelHolderService, cancellationService) {
+      ChatCommand command = new ChatCommand(chatClient, modelHolderService, cancellationService, Mockito.mock(ChatResponseNarrator.class)) {
         @Override
         long streamTimeoutMillis() {
           return 1L;

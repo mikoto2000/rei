@@ -21,6 +21,7 @@ import org.mockito.Mockito;
 import dev.mikoto2000.rei.core.command.RootCommand;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.sound.SoundNotificationService;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import picocli.CommandLine;
@@ -64,7 +65,8 @@ class ReiApplicationColorOutputTest {
                 Mockito.mock(EscCancellationMonitor.class),
                 Mockito.mock(CommandCancellationService.class),
                 asyncVectorDocumentService,
-                Mockito.mock(SoundNotificationService.class));
+                Mockito.mock(SoundNotificationService.class),
+                Mockito.mock(ChatResponseNarrator.class));
     }
 
     /**
