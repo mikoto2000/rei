@@ -15,6 +15,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.beans.factory.ObjectProvider;
 
+import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.feed.FeedTools;
@@ -47,6 +48,7 @@ class AiConfigurationTest {
         Mockito.mock(SearchTools.class),
         Mockito.mock(WebSearchTools.class),
         Mockito.mock(SoundNotificationTools.class),
+        Mockito.mock(BlueskyPostTools.class),
         provider);
 
     ChatClient chatClient = configuration.chatClient();
@@ -73,6 +75,7 @@ class AiConfigurationTest {
         Mockito.mock(SearchTools.class),
         Mockito.mock(WebSearchTools.class),
         Mockito.mock(SoundNotificationTools.class),
+        Mockito.mock(BlueskyPostTools.class),
         provider);
 
     ChatClient chatClient = configuration.chatClient();

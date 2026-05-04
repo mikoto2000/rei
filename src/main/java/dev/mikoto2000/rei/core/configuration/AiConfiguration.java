@@ -11,6 +11,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Bean;
 
+import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
+import dev.mikoto2000.rei.bluesky.BlueskyProperties;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.feed.FeedProperties;
@@ -30,7 +32,7 @@ import dev.mikoto2000.rei.websearch.WebSearchTools;
 import lombok.RequiredArgsConstructor;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, SmallTalkProperties.class, SoundNotificationProperties.class})
+@EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, SmallTalkProperties.class, SoundNotificationProperties.class, BlueskyProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
 
@@ -46,6 +48,7 @@ public class AiConfiguration {
   private final SearchTools searchTools;
   private final WebSearchTools webSearchTools;
   private final SoundNotificationTools soundNotificationTools;
+  private final BlueskyPostTools blueskyPostTools;
   private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
 
   @Bean
@@ -56,7 +59,7 @@ public class AiConfiguration {
             PromptChatMemoryAdvisor.builder(chatMemory)
                 .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
                 .build())
-        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools, soundNotificationTools);
+        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools, soundNotificationTools, blueskyPostTools);
 
     ToolCallbackProvider toolCallbackProvider = mcpToolCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {

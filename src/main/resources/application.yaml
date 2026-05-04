@@ -81,3 +81,8 @@ rei:
     cache-dir: ${REI_SQLITE_VEC_CACHE_DIR:${user.dir}/.rei/extensions/sqlite-vec}
     extension-path: ${REI_SQLITE_VEC_EXTENSION_PATH:}
     release-base-url: ${REI_SQLITE_VEC_RELEASE_BASE_URL:https://github.com/asg017/sqlite-vec/releases/download}
+  bluesky:
+    enabled: ${REI_BLUESKY_ENABLED:false}
+    handle: ${REI_BLUESKY_HANDLE:}
+    app-password: ${REI_BLUESKY_APP_PASSWORD:}
+    max-post-length: ${REI_BLUESKY_MAX_POST_LENGTH:300}
