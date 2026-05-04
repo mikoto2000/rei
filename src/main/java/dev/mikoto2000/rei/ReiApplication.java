@@ -16,9 +16,11 @@ import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.ParsedLine;
 import org.jline.reader.Parser;
+import org.jline.reader.Reference;
 import org.jline.reader.SyntaxError;
 import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.DefaultParser;
+import org.jline.keymap.KeyMap;
 import org.jline.terminal.Attributes;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
@@ -56,6 +58,10 @@ public class ReiApplication {
   private final Path HISTORY_FILE = ReiPaths.historyFilePath();
 
   private static final String COMMAND_COMPLETION_MESSAGE = "コマンド実行が完了しました";
+  private static final String MULTILINE_CONTINUATION = "\\";
+  private static final String MULTILINE_PROMPT = "...> ";
+  private static final String PASTE_END_TOKEN = ".";
+  private static final String PASTE_PROMPT = "paste> ";
 
   public  static void main(String[] args) throws IOException {
     SpringApplication application = new SpringApplication(ReiApplication.class);
@@ -88,9 +94,13 @@ public class ReiApplication {
       .variable(LineReader.HISTORY_SIZE, 1000)
       .variable(LineReader.HISTORY_FILE_SIZE, 1000)
       .build();
+    reader.setOpt(LineReader.Option.BRACKETED_PASTE);
+    configureMultilineKeyBinding(reader);
 
     System.out.println("AI Shell");
     System.out.println("通常入力は chat として扱います。/exit で終了します。");
+    System.out.println("複数行入力: 複数行ペースト対応。行末に \\\\ を付けるか、Ctrl+J でも改行できます。");
+    System.out.println("/paste で確実な複数行入力モード（終了は単独行の . ）");
 
     ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
     try {
@@ -100,6 +110,7 @@ public class ReiApplication {
           if (line == null) {
             break;
           }
+          line = readPossiblyMultilineInput(line, reader);
 
           String trimmed = line.trim();
           if (trimmed.isEmpty()) {
@@ -125,6 +136,16 @@ public class ReiApplication {
             continue;
           }
 
+          if (trimmed.equals("/paste")) {
+            String pasted = readPasteBlock(reader);
+            if (pasted.isBlank()) {
+              continue;
+            }
+            printUserInput(pasted, terminal);
+            executeInterruptibly(cmd, terminal, commandExecutor, "chat", pasted);
+            continue;
+          }
+
           if (trimmed.startsWith("/")) {
             String commandText = trimmed.substring(1).trim();
             if (commandText.isEmpty()) {
@@ -133,8 +154,8 @@ public class ReiApplication {
             printUserInput(trimmed, terminal);
             executeInterruptibly(cmd, terminal, commandExecutor, splitCommandLine(commandText));
           } else {
-            printUserInput(trimmed, terminal);
-            executeInterruptibly(cmd, terminal, commandExecutor, "chat", trimmed);
+            printUserInput(line, terminal);
+            executeInterruptibly(cmd, terminal, commandExecutor, "chat", line);
           }
 
         } catch (UserInterruptException e) {
@@ -167,6 +188,57 @@ public class ReiApplication {
 
   private String[] splitCommandLine(String line) {
     return line.split("\\s+");
+  }
+
+  String readPossiblyMultilineInput(String firstLine, LineReader reader) {
+    if (!firstLine.endsWith(MULTILINE_CONTINUATION)) {
+      return firstLine;
+    }
+
+    StringBuilder builder = new StringBuilder();
+    String line = firstLine;
+    while (line.endsWith(MULTILINE_CONTINUATION)) {
+      builder.append(line, 0, line.length() - MULTILINE_CONTINUATION.length());
+      builder.append(System.lineSeparator());
+      line = reader.readLine(MULTILINE_PROMPT);
+      if (line == null) {
+        return builder.toString();
+      }
+    }
+    builder.append(line);
+    return builder.toString();
+  }
+
+  String readPasteBlock(LineReader reader) {
+    StringBuilder builder = new StringBuilder();
+    while (true) {
+      String line = reader.readLine(PASTE_PROMPT);
+      if (line == null || line.equals(PASTE_END_TOKEN)) {
+        break;
+      }
+      if (!builder.isEmpty()) {
+        builder.append(System.lineSeparator());
+      }
+      builder.append(line);
+    }
+    return builder.toString();
+  }
+
+  void configureMultilineKeyBinding(LineReader reader) {
+    reader.getWidgets().put("insert-newline", () -> {
+      reader.getBuffer().write('\n');
+      return true;
+    });
+    Reference insertNewline = new Reference("insert-newline");
+    if (reader.getKeyMaps().containsKey(LineReader.MAIN)) {
+      reader.getKeyMaps().get(LineReader.MAIN).bind(insertNewline, KeyMap.ctrl('J'));
+    }
+    if (reader.getKeyMaps().containsKey(LineReader.EMACS)) {
+      reader.getKeyMaps().get(LineReader.EMACS).bind(insertNewline, KeyMap.ctrl('J'));
+    }
+    if (reader.getKeyMaps().containsKey(LineReader.VIINS)) {
+      reader.getKeyMaps().get(LineReader.VIINS).bind(insertNewline, KeyMap.ctrl('J'));
+    }
   }
 
   void printUserInput(String input) {
@@ -231,7 +303,7 @@ public class ReiApplication {
 
   private static final class SlashCommandCompleter implements Completer {
 
-    private static final List<String> BUILTIN_COMMANDS = List.of("/exit", "/quit", "/help", "/version");
+    private static final List<String> BUILTIN_COMMANDS = List.of("/exit", "/quit", "/help", "/version", "/paste");
 
     private final Completer delegate;
     private final List<String> rootCommands;
