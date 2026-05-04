@@ -22,6 +22,8 @@ import org.jline.reader.impl.DefaultParser;
 import org.jline.terminal.Attributes;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
+import org.jline.utils.AttributedStringBuilder;
+import org.jline.utils.AttributedStyle;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -110,13 +112,13 @@ public class ReiApplication {
           }
 
           if (trimmed.equals("/help")) {
-            printUserInput(trimmed);
+            printUserInput(trimmed, terminal);
             executeInterruptibly(cmd, terminal, commandExecutor, "--help");
             continue;
           }
 
           if (trimmed.equals("/version")) {
-            printUserInput(trimmed);
+            printUserInput(trimmed, terminal);
             executeInterruptibly(cmd, terminal, commandExecutor, "--version");
             continue;
           }
@@ -126,10 +128,10 @@ public class ReiApplication {
             if (commandText.isEmpty()) {
               continue;
             }
-            printUserInput(trimmed);
+            printUserInput(trimmed, terminal);
             executeInterruptibly(cmd, terminal, commandExecutor, splitCommandLine(commandText));
           } else {
-            printUserInput(trimmed);
+            printUserInput(trimmed, terminal);
             executeInterruptibly(cmd, terminal, commandExecutor, "chat", trimmed);
           }
 
@@ -164,6 +166,25 @@ public class ReiApplication {
 
   void printUserInput(String input) {
     System.out.print(formatUserInput(input));
+  }
+
+  void printUserInput(String input, Terminal terminal) {
+    AttributedStringBuilder builder = new AttributedStringBuilder();
+    AttributedStyle style = AttributedStyle.DEFAULT.foreground(AttributedStyle.CYAN);
+
+    builder.append(System.lineSeparator());
+    builder.append("┌ User", style);
+    builder.append(System.lineSeparator());
+    for (String line : input.split("\\R", -1)) {
+      builder.append(line, style);
+      builder.append(System.lineSeparator());
+    }
+    builder.append("└", style);
+    builder.append(System.lineSeparator());
+    builder.append(System.lineSeparator());
+
+    terminal.writer().print(builder.toAnsi(terminal));
+    terminal.writer().flush();
   }
 
   String formatUserInput(String input) {
