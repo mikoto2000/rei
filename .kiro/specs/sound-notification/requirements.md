@@ -69,7 +69,7 @@
 
 #### 受け入れ基準
 
-1. WHEN 外部プログラムの実行が 30 秒以内に完了しないとき、THE SoundNotificationService SHALL 外部プログラムを強制終了して標準出力通知へフォールバックする
+1. WHEN 外部プログラムの実行が 5 分以内に完了しないとき、THE SoundNotificationService SHALL 外部プログラムを強制終了して標準出力通知へフォールバックする
 2. WHEN タイムアウトが発生したとき、THE SoundNotificationService SHALL タイムアウトの旨を warn ログに出力する
 
 ---

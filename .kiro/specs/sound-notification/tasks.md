@@ -78,9 +78,9 @@
 - [x] 7. SoundNotificationService — タイムアウト処理を TDD で追加する
   - [x] 7.1 **Red**: 失敗するテストを書く
     - 外部プログラムがタイムアウトしたとき、プロセスが強制終了されて標準出力にフォールバックすることを検証するテストを書く
-    - タイムアウト値を短く設定するか `Process` をモックして実際に 30 秒待機しないようにする
+    - タイムアウト値を短く設定するか `Process` をモックして実際に 5 分待機しないようにする
     - この時点でテストが失敗することを確認する
-  - [x] 7.2 **Green**: `process.waitFor(30, TimeUnit.SECONDS)` を使ったタイムアウト処理を実装してテストを通す
+  - [x] 7.2 **Green**: `process.waitFor(300, TimeUnit.SECONDS)` を使ったタイムアウト処理を実装してテストを通す
     - タイムアウト時は `process.destroyForcibly()` でプロセスを強制終了する
     - warn ログを出力して `fallbackToConsole()` を呼び出す
     - テストが通ることを確認する

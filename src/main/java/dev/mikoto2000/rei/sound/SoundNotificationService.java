@@ -15,7 +15,7 @@ public class SoundNotificationService {
 
   private static final Logger log = LoggerFactory.getLogger(SoundNotificationService.class);
   private static final String MESSAGE_PLACEHOLDER = "{{MESSAGE}}";
-  private static final long TIMEOUT_SECONDS = 30L;
+  private static final long TIMEOUT_SECONDS = 300L;
 
   private final SoundNotificationProperties properties;
 

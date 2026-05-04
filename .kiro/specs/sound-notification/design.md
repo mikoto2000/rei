@@ -263,7 +263,7 @@ flowchart TD
     ReplaceMessage --> BuildCommand
 
     BuildCommand --> Execute[ProcessBuilder でコマンド実行]
-    Execute --> WaitResult{30 秒以内に完了?}
+    Execute --> WaitResult{5 分以内に完了?}
     WaitResult -- No --> ForceKill[プロセス強制終了]
     ForceKill --> WarnTimeout[warn ログ: タイムアウト]
     WarnTimeout --> FallbackConsole3[標準出力に通知]
@@ -348,7 +348,7 @@ flowchart TD
 | `{{MESSAGE}}` がコマンドに含まれない | warn ログ出力後、そのままコマンド実行 | WARN |
 | 外部プログラムが例外をスロー | 標準出力フォールバック | WARN |
 | 外部プログラムが非ゼロ終了コードで終了 | 標準出力フォールバック | WARN |
-| 外部プログラムが 30 秒以内に完了しない | プロセス強制終了 + 標準出力フォールバック | WARN |
+| 外部プログラムが 5 分以内に完了しない | プロセス強制終了 + 標準出力フォールバック | WARN |
 
 **設計方針:**
 - すべてのフォールバックは `fallbackToConsole()` に集約し、重複コードを排除する
