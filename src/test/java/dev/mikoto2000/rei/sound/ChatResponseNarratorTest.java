@@ -140,7 +140,61 @@ class ChatResponseNarratorTest {
 
   @Test
   void sanitize_preservesInlineCode() {
-    // バッククォート1つのインラインコードは除去しない
-    assertThat(ChatResponseNarrator.sanitize("変数 `x` を使います")).isEqualTo("変数 `x` を使います");
+    // バッククォート1つのインラインコードはテキストを残してバッククォートを除去する
+    assertThat(ChatResponseNarrator.sanitize("変数 `x` を使います")).isEqualTo("変数 x を使います");
+  }
+
+  @Test
+  void sanitize_removesHeading() {
+    assertThat(ChatResponseNarrator.sanitize("# タイトル")).isEqualTo("タイトル");
+    assertThat(ChatResponseNarrator.sanitize("## セクション")).isEqualTo("セクション");
+    assertThat(ChatResponseNarrator.sanitize("### 小見出し")).isEqualTo("小見出し");
+  }
+
+  @Test
+  void sanitize_removesBold() {
+    assertThat(ChatResponseNarrator.sanitize("**太字**テキスト")).isEqualTo("太字テキスト");
+    assertThat(ChatResponseNarrator.sanitize("__太字__テキスト")).isEqualTo("太字テキスト");
+  }
+
+  @Test
+  void sanitize_removesItalic() {
+    assertThat(ChatResponseNarrator.sanitize("*斜体*テキスト")).isEqualTo("斜体テキスト");
+    assertThat(ChatResponseNarrator.sanitize("_斜体_テキスト")).isEqualTo("斜体テキスト");
+  }
+
+  @Test
+  void sanitize_removesBlockquote() {
+    assertThat(ChatResponseNarrator.sanitize("> 引用テキスト")).isEqualTo("引用テキスト");
+  }
+
+  @Test
+  void sanitize_removesHorizontalRule() {
+    assertThat(ChatResponseNarrator.sanitize("前\n---\n後")).isEqualTo("前\n\n後");
+    assertThat(ChatResponseNarrator.sanitize("前\n***\n後")).isEqualTo("前\n\n後");
+  }
+
+  @Test
+  void sanitize_removesTableRows() {
+    assertThat(ChatResponseNarrator.sanitize("前\n| col1 | col2 |\n| --- | --- |\n後"))
+        .isEqualTo("前\n\n\n後");
+  }
+
+  @Test
+  void sanitize_convertsLink() {
+    assertThat(ChatResponseNarrator.sanitize("[リンクテキスト](https://example.com)"))
+        .isEqualTo("リンクテキスト");
+  }
+
+  @Test
+  void sanitize_preservesBulletListWithDash() {
+    // - で始まる箇条書きはそのまま残す
+    assertThat(ChatResponseNarrator.sanitize("- 項目1\n- 項目2")).isEqualTo("- 項目1\n- 項目2");
+  }
+
+  @Test
+  void sanitize_convertsBulletListAsteriskToDash() {
+    // * で始まる箇条書きは - に置換して残す
+    assertThat(ChatResponseNarrator.sanitize("* 項目1\n* 項目2")).isEqualTo("- 項目1\n- 項目2");
   }
 }

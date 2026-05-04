@@ -35,19 +35,28 @@
 
 ### 要件 5: 音声読み上げ前のテキストサニタイズ
 
-**ユーザーストーリー:** システムとして、外部 TTS プログラムが誤動作しないよう、音声読み上げ前に AI 回答テキストから不適切な文字・ブロックを除去したい。そうすることで、絵文字・制御文字・コードブロックが含まれていても読み上げが途中で止まらない。
+**ユーザーストーリー:** システムとして、外部 TTS プログラムが誤動作しないよう、音声読み上げ前に AI 回答テキストから不適切な文字・Markdown 記法を除去したい。そうすることで、絵文字・制御文字・コードブロック・見出しなどが含まれていても読み上げが途中で止まらない。
 
 #### 受け入れ基準
 
 1. WHEN 音声読み上げを実行するとき、THE ChatResponseNarrator SHALL `SoundNotificationService.notify()` を呼び出す前に AI 回答テキストをサニタイズする
 2. THE ChatResponseNarrator SHALL サニタイズ処理で Markdown コードブロック（` ``` ` で囲まれたブロック全体）を除去する
-3. THE ChatResponseNarrator SHALL サニタイズ処理でバッククォート1つのインラインコード（`` `code` ``）は除去しない
-4. THE ChatResponseNarrator SHALL サニタイズ処理で絵文字・記号文字（Unicode So カテゴリ）を除去する
-5. THE ChatResponseNarrator SHALL サニタイズ処理でサロゲートペア文字（Unicode Cs カテゴリ）を除去する
-6. THE ChatResponseNarrator SHALL サニタイズ処理で未割当文字（Unicode Cn カテゴリ）を除去する
-7. THE ChatResponseNarrator SHALL サニタイズ処理で制御文字（U+0000〜U+0008、U+000B、U+000C、U+000E〜U+001F、U+007F）を除去する
-8. THE ChatResponseNarrator SHALL サニタイズ処理でタブ（U+0009）・改行（U+000A）・復帰（U+000D）を保持する
-9. WHEN サニタイズ後のテキストが空またはブランクになったとき、THE ChatResponseNarrator SHALL 音声読み上げを実行しない
+3. THE ChatResponseNarrator SHALL サニタイズ処理でバッククォート1つのインラインコード（`` `code` ``）はバッククォートを除去してテキストを残す
+4. THE ChatResponseNarrator SHALL サニタイズ処理で見出し（`#` 〜 `######`）の記号を除去してテキストを残す
+5. THE ChatResponseNarrator SHALL サニタイズ処理で太字（`**text**`、`__text__`）の記号を除去してテキストを残す
+6. THE ChatResponseNarrator SHALL サニタイズ処理で斜体（`*text*`、`_text_`）の記号を除去してテキストを残す
+7. THE ChatResponseNarrator SHALL サニタイズ処理で引用（`> text`）の `>` を除去してテキストを残す
+8. THE ChatResponseNarrator SHALL サニタイズ処理で水平線（`---`、`***` のみの行）を行ごと除去する
+9. THE ChatResponseNarrator SHALL サニタイズ処理で表（`|` で始まる行）を行ごと除去する
+10. THE ChatResponseNarrator SHALL サニタイズ処理でリンク（`[text](url)`）を `text` のみに変換する
+11. THE ChatResponseNarrator SHALL サニタイズ処理で箇条書き（`- item`）をそのまま残す
+12. THE ChatResponseNarrator SHALL サニタイズ処理で箇条書き（`* item`）の `*` を `-` に置換して残す
+13. THE ChatResponseNarrator SHALL サニタイズ処理で絵文字・記号文字（Unicode So カテゴリ）を除去する
+14. THE ChatResponseNarrator SHALL サニタイズ処理でサロゲートペア文字（Unicode Cs カテゴリ）を除去する
+15. THE ChatResponseNarrator SHALL サニタイズ処理で未割当文字（Unicode Cn カテゴリ）を除去する
+16. THE ChatResponseNarrator SHALL サニタイズ処理で制御文字（U+0000〜U+0008、U+000B、U+000C、U+000E〜U+001F、U+007F）を除去する
+17. THE ChatResponseNarrator SHALL サニタイズ処理でタブ（U+0009）・改行（U+000A）・復帰（U+000D）を保持する
+18. WHEN サニタイズ後のテキストが空またはブランクになったとき、THE ChatResponseNarrator SHALL 音声読み上げを実行しない
 
 ---
 
