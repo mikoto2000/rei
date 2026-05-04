@@ -175,9 +175,9 @@ class ChatResponseNarratorTest {
   }
 
   @Test
-  void sanitize_removesTableRows() {
+  void sanitize_preservesTableRows() {
     assertThat(ChatResponseNarrator.sanitize("前\n| col1 | col2 |\n| --- | --- |\n後"))
-        .isEqualTo("前\n\n\n後");
+        .isEqualTo("前\n| col1 | col2 |\n| --- | --- |\n後");
   }
 
   @Test

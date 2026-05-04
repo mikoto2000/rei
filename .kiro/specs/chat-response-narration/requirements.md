@@ -47,7 +47,7 @@
 6. THE ChatResponseNarrator SHALL サニタイズ処理で斜体（`*text*`、`_text_`）の記号を除去してテキストを残す
 7. THE ChatResponseNarrator SHALL サニタイズ処理で引用（`> text`）の `>` を除去してテキストを残す
 8. THE ChatResponseNarrator SHALL サニタイズ処理で水平線（`---`、`***` のみの行）を行ごと除去する
-9. THE ChatResponseNarrator SHALL サニタイズ処理で表（`|` で始まる行）を行ごと除去する
+9. THE ChatResponseNarrator SHALL サニタイズ処理で表（`|` を含む行）を保持する
 10. THE ChatResponseNarrator SHALL サニタイズ処理でリンク（`[text](url)`）を `text` のみに変換する
 11. THE ChatResponseNarrator SHALL サニタイズ処理で箇条書き（`- item`）をそのまま残す
 12. THE ChatResponseNarrator SHALL サニタイズ処理で箇条書き（`* item`）の `*` を `-` に置換して残す
