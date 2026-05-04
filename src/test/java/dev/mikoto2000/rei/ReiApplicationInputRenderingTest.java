@@ -9,6 +9,7 @@ import org.mockito.Mockito;
 import dev.mikoto2000.rei.core.command.RootCommand;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.sound.SoundNotificationService;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import picocli.CommandLine;
 
@@ -43,6 +44,7 @@ class ReiApplicationInputRenderingTest {
         Mockito.mock(ModelHolderService.class),
         Mockito.mock(EscCancellationMonitor.class),
         Mockito.mock(CommandCancellationService.class),
-        asyncVectorDocumentService);
+        asyncVectorDocumentService,
+        Mockito.mock(SoundNotificationService.class));
   }
 }

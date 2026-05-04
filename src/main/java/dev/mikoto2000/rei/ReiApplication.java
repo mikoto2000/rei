@@ -30,6 +30,7 @@ import dev.mikoto2000.rei.core.command.RootCommand;
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.sound.SoundNotificationService;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine;
@@ -46,8 +47,11 @@ public class ReiApplication {
   private final EscCancellationMonitor escCancellationMonitor;
   private final CommandCancellationService commandCancellationService;
   private final AsyncVectorDocumentService asyncVectorDocumentService;
+  private final SoundNotificationService soundNotificationService;
 
   private final Path HISTORY_FILE = ReiPaths.historyFilePath();
+
+  private static final String COMMAND_COMPLETION_MESSAGE = "コマンド実行が完了しました";
 
   public  static void main(String[] args) throws IOException {
     SpringApplication application = new SpringApplication(ReiApplication.class);
@@ -142,7 +146,7 @@ public class ReiApplication {
     }
   }
 
-  private void executeInterruptibly(CommandLine cmd, Terminal terminal, ExecutorService commandExecutor, String... args)
+  protected void executeInterruptibly(CommandLine cmd, Terminal terminal, ExecutorService commandExecutor, String... args)
       throws IOException {
     Attributes originalAttributes = terminal.enterRawMode();
     try {
@@ -150,6 +154,7 @@ public class ReiApplication {
       escCancellationMonitor.await(future, timeoutMillis -> terminal.reader().read(timeoutMillis), commandCancellationService::cancel);
     } finally {
       terminal.setAttributes(originalAttributes);
+      soundNotificationService.notify(COMMAND_COMPLETION_MESSAGE);
     }
   }
 
