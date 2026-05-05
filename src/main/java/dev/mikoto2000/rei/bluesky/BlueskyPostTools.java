@@ -14,11 +14,15 @@ public class BlueskyPostTools {
 
   private final BlueskyPostService blueskyPostService;
 
-  @Tool(name = "blueskyPost", description = "Post text to Bluesky. Returns success/failure and URL when available.")
+  @Tool(name = "blueskyPost", description = """
+    Bluesky にメッセージを投稿する。
+    @param text 投稿するテキスト(必須)
+    @return 投稿の結果。成功した場合は投稿のURLを含むメッセージ、失敗した場合はエラーメッセージ。
+    """)
   public String post(String text) {
-    log.info("blueskyPost tool called. textLength={}", text == null ? null : text.length());
+    log.debug("blueskyPost tool called. textLength={}", text == null ? null : text.length());
     BlueskyPostResult result = blueskyPostService.post(text);
-    log.info("blueskyPost tool result. success={}, message={}", result.success(), result.message());
+    log.debug("blueskyPost tool result. success={}, message={}", result.success(), result.message());
     if (!result.success()) {
       return result.message();
     }
