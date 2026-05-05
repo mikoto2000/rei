@@ -20,19 +20,23 @@ public class BlueskyPostService {
       log.debug("Bluesky post requested: textLength={}", text == null ? null : text.length());
       if (!properties.isEnabled()) {
         log.debug("Bluesky post skipped: feature disabled");
+        log.warn("Bluesky post skipped: feature disabled");
         return new BlueskyPostResult(false, "Bluesky posting is disabled", null, null);
       }
       if (isBlank(properties.getHandle()) || isBlank(properties.getAppPassword())) {
         log.debug("Bluesky post skipped: credentials missing (handleBlank={}, appPasswordBlank={})",
             isBlank(properties.getHandle()), isBlank(properties.getAppPassword()));
+        log.warn("Bluesky post skipped: credentials missing");
         return new BlueskyPostResult(false, "Bluesky credentials are not configured", null, null);
       }
       if (isBlank(text)) {
         log.debug("Bluesky post skipped: text is blank");
+        log.warn("Bluesky post skipped: text is blank");
         return new BlueskyPostResult(false, "Post text must not be blank", null, null);
       }
       if (text.length() > properties.getMaxPostLength()) {
         log.debug("Bluesky post skipped: text too long (length={}, max={})", text.length(), properties.getMaxPostLength());
+        log.warn("Bluesky post skipped: text too long (length={}, max={})", text.length(), properties.getMaxPostLength());
         return new BlueskyPostResult(false, "Post text exceeds max length: " + properties.getMaxPostLength(), null, null);
       }
 
@@ -41,12 +45,14 @@ public class BlueskyPostService {
       log.debug("Bluesky authenticate result: success={}, hasAccessJwt={}, did={}",
           authResult.success(), authResult.accessJwt() != null, authResult.did());
       if (!authResult.success()) {
+        log.warn("Bluesky post failed: authentication failed");
         return new BlueskyPostResult(false, "Bluesky authentication failed", null, null);
       }
 
       BlueskyApiClient.PostResult postResult = blueskyApiClient.createPost(authResult.accessJwt(), authResult.did(), text);
       log.debug("Bluesky createPost result: success={}, postUri={}", postResult.success(), postResult.postUri());
       if (!postResult.success()) {
+        log.warn("Bluesky post failed: createPost failed");
         return new BlueskyPostResult(false, "Bluesky post failed", null, null);
       }
 
