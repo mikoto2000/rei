@@ -2,28 +2,33 @@ package dev.mikoto2000.rei.bluesky;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Component
 public class DefaultBlueskyApiClient implements BlueskyApiClient {
+  private static final Logger log = LoggerFactory.getLogger(DefaultBlueskyApiClient.class);
 
   private static final URI CREATE_SESSION_URI = URI.create("https://bsky.social/xrpc/com.atproto.server.createSession");
   private static final URI CREATE_RECORD_URI = URI.create("https://bsky.social/xrpc/com.atproto.repo.createRecord");
-  private static final Pattern ACCESS_JWT_PATTERN = Pattern.compile("\"accessJwt\"\\s*:\\s*\"([^\"]+)\"");
-  private static final Pattern DID_PATTERN = Pattern.compile("\"did\"\\s*:\\s*\"([^\"]+)\"");
-  private static final Pattern URI_PATTERN = Pattern.compile("\"uri\"\\s*:\\s*\"([^\"]+)\"");
+  private static final String GET_RECORD_ENDPOINT = "https://bsky.social/xrpc/com.atproto.repo.getRecord";
 
   private final HttpClient httpClient = HttpClient.newBuilder()
       .connectTimeout(Duration.ofSeconds(10))
       .build();
+  private final ObjectMapper objectMapper = new ObjectMapper();
 
   @Override
   public AuthResult authenticate(String handle, String appPassword) {
@@ -34,11 +39,13 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
         .build();
     try {
       HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      log.debug("Bluesky createSession response: status={}, body={}", response.statusCode(), response.body());
       if (response.statusCode() / 100 != 2) {
         return new AuthResult(false, null, null);
       }
-      String accessJwt = matchFirst(ACCESS_JWT_PATTERN, response.body());
-      String did = matchFirst(DID_PATTERN, response.body());
+      JsonNode body = objectMapper.readTree(response.body());
+      String accessJwt = textOrNull(body, "accessJwt");
+      String did = textOrNull(body, "did");
       if (accessJwt == null || did == null) {
         return new AuthResult(false, null, null);
       }
@@ -54,7 +61,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   @Override
   public PostResult createPost(String accessJwt, String did, String text) {
     String requestBody = "{\"repo\":\"" + escapeJson(did) + "\",\"collection\":\"app.bsky.feed.post\","
-        + "\"record\":{\"text\":\"" + escapeJson(text) + "\",\"createdAt\":\"" + OffsetDateTime.now() + "\"}}";
+        + "\"record\":{\"$type\":\"app.bsky.feed.post\",\"text\":\"" + escapeJson(text) + "\",\"createdAt\":\"" + OffsetDateTime.now() + "\"}}";
     HttpRequest request = HttpRequest.newBuilder(CREATE_RECORD_URI)
         .header("Content-Type", "application/json")
         .header("Authorization", "Bearer " + accessJwt)
@@ -62,11 +69,16 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
         .build();
     try {
       HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      log.debug("Bluesky createRecord response: status={}, body={}", response.statusCode(), response.body());
       if (response.statusCode() / 100 != 2) {
         return new PostResult(false, null);
       }
-      String postUri = matchFirst(URI_PATTERN, response.body());
+      JsonNode body = objectMapper.readTree(response.body());
+      String postUri = textOrNull(body, "uri");
       if (postUri == null || postUri.isBlank()) {
+        return new PostResult(false, null);
+      }
+      if (!existsRecord(accessJwt, did, postUri)) {
         return new PostResult(false, null);
       }
       return new PostResult(true, postUri);
@@ -78,12 +90,42 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     }
   }
 
-  private String matchFirst(Pattern pattern, String body) {
-    Matcher matcher = pattern.matcher(body);
-    if (matcher.find()) {
-      return matcher.group(1);
+  private boolean existsRecord(String accessJwt, String did, String postUri) throws IOException, InterruptedException {
+    String[] parts = postUri.split("/");
+    if (parts.length < 5) {
+      return false;
     }
-    return null;
+    String collection = parts[3];
+    String rkey = parts[4];
+    URI getRecordUri = URI.create(GET_RECORD_ENDPOINT
+        + "?repo=" + encode(did)
+        + "&collection=" + encode(collection)
+        + "&rkey=" + encode(rkey));
+    HttpRequest request = HttpRequest.newBuilder(getRecordUri)
+        .header("Authorization", "Bearer " + accessJwt)
+        .GET()
+        .build();
+    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+    log.debug("Bluesky getRecord response: status={}, body={}", response.statusCode(), response.body());
+    if (response.statusCode() / 100 != 2) {
+      return false;
+    }
+    JsonNode body = objectMapper.readTree(response.body());
+    String uri = textOrNull(body, "uri");
+    return postUri.equals(uri);
+  }
+
+  private String textOrNull(JsonNode node, String fieldName) {
+    JsonNode field = node.get(fieldName);
+    if (field == null || field.isNull()) {
+      return null;
+    }
+    String text = field.asText();
+    return text == null || text.isBlank() ? null : text;
+  }
+
+  private String encode(String value) {
+    return URLEncoder.encode(value, StandardCharsets.UTF_8);
   }
 
   private String escapeJson(String input) {

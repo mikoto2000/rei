@@ -17,25 +17,35 @@ public class BlueskyPostService {
 
   public BlueskyPostResult post(String text) {
     try {
+      log.debug("Bluesky post requested: textLength={}", text == null ? null : text.length());
       if (!properties.isEnabled()) {
+        log.debug("Bluesky post skipped: feature disabled");
         return new BlueskyPostResult(false, "Bluesky posting is disabled", null, null);
       }
       if (isBlank(properties.getHandle()) || isBlank(properties.getAppPassword())) {
+        log.debug("Bluesky post skipped: credentials missing (handleBlank={}, appPasswordBlank={})",
+            isBlank(properties.getHandle()), isBlank(properties.getAppPassword()));
         return new BlueskyPostResult(false, "Bluesky credentials are not configured", null, null);
       }
       if (isBlank(text)) {
+        log.debug("Bluesky post skipped: text is blank");
         return new BlueskyPostResult(false, "Post text must not be blank", null, null);
       }
       if (text.length() > properties.getMaxPostLength()) {
+        log.debug("Bluesky post skipped: text too long (length={}, max={})", text.length(), properties.getMaxPostLength());
         return new BlueskyPostResult(false, "Post text exceeds max length: " + properties.getMaxPostLength(), null, null);
       }
 
+      log.debug("Bluesky authenticating: handle={}", properties.getHandle());
       BlueskyApiClient.AuthResult authResult = blueskyApiClient.authenticate(properties.getHandle(), properties.getAppPassword());
+      log.debug("Bluesky authenticate result: success={}, hasAccessJwt={}, did={}",
+          authResult.success(), authResult.accessJwt() != null, authResult.did());
       if (!authResult.success()) {
         return new BlueskyPostResult(false, "Bluesky authentication failed", null, null);
       }
 
       BlueskyApiClient.PostResult postResult = blueskyApiClient.createPost(authResult.accessJwt(), authResult.did(), text);
+      log.debug("Bluesky createPost result: success={}, postUri={}", postResult.success(), postResult.postUri());
       if (!postResult.success()) {
         return new BlueskyPostResult(false, "Bluesky post failed", null, null);
       }
