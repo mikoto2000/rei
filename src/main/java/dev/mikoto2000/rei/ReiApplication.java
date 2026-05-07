@@ -4,6 +4,8 @@ package dev.mikoto2000.rei;
 
 
 import java.io.IOException;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -62,6 +64,7 @@ public class ReiApplication {
   private static final String MULTILINE_PROMPT = "...> ";
   private static final String PASTE_END_TOKEN = ".";
   private static final String PASTE_PROMPT = "paste> ";
+  private static final DateTimeFormatter PROMPT_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
   public  static void main(String[] args) throws IOException {
     SpringApplication application = new SpringApplication(ReiApplication.class);
@@ -106,7 +109,7 @@ public class ReiApplication {
     try {
       while (true) {
         try {
-          String line = reader.readLine(currentModelHolder.get() + "> ");
+          String line = reader.readLine(buildPrompt());
           if (line == null) {
             break;
           }
@@ -188,6 +191,14 @@ public class ReiApplication {
 
   private String[] splitCommandLine(String line) {
     return line.split("\\s+");
+  }
+
+  String buildPrompt() {
+    return now().format(PROMPT_TIME_FORMATTER) + " " + currentModelHolder.get() + "> ";
+  }
+
+  LocalTime now() {
+    return LocalTime.now();
   }
 
   String readPossiblyMultilineInput(String firstLine, LineReader reader) {
