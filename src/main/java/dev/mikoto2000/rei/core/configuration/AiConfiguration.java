@@ -26,6 +26,7 @@ import dev.mikoto2000.rei.smalltalk.SmallTalkProperties;
 import dev.mikoto2000.rei.sound.SoundNotificationProperties;
 import dev.mikoto2000.rei.sound.SoundNotificationTools;
 import dev.mikoto2000.rei.task.TaskTools;
+import dev.mikoto2000.rei.urlfetch.UrlContentFetchTools;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentProperties;
 import dev.mikoto2000.rei.websearch.WebSearchProperties;
 import dev.mikoto2000.rei.websearch.WebSearchTools;
@@ -49,6 +50,7 @@ public class AiConfiguration {
   private final WebSearchTools webSearchTools;
   private final SoundNotificationTools soundNotificationTools;
   private final BlueskyPostTools blueskyPostTools;
+  private final UrlContentFetchTools urlContentFetchTools;
   private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
 
   @Bean
@@ -59,7 +61,8 @@ public class AiConfiguration {
             PromptChatMemoryAdvisor.builder(chatMemory)
                 .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
                 .build())
-        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools, soundNotificationTools, blueskyPostTools);
+        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
+            soundNotificationTools, blueskyPostTools, urlContentFetchTools);
 
     ToolCallbackProvider toolCallbackProvider = mcpToolCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {
