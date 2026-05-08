@@ -47,3 +47,16 @@
 
 1. THE CommandCompletionNotifier SHALL コマンド完了時の通知メッセージとして常に「コマンド実行が完了しました」を使用する
 2. THE CommandCompletionNotifier SHALL 通知メッセージをコマンドの種類や実行結果によって変更しない
+
+---
+
+## 追補 (2026-05-08): 通知スキップ対象コマンド
+
+### 要件 4: model / models コマンドの完了通知スキップ
+
+**ユーザーストーリー:** ユーザーとして、`model` / `models` は状態確認系で短時間に繰り返し実行するため、完了時の音声通知は不要にしたい。
+
+#### 受け入れ基準
+1. WHEN `model` コマンドが完了したとき、THE CommandCompletionNotifier SHALL コマンド完了音声通知を実行しない。
+2. WHEN `models` コマンドが完了したとき、THE CommandCompletionNotifier SHALL コマンド完了音声通知を実行しない。
+3. WHEN 上記以外のコマンドが完了したとき、THE CommandCompletionNotifier SHALL 従来どおり完了音声通知を実行する（既存の読み上げスキップ条件は維持）。

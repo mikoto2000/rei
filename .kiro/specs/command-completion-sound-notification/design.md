@@ -193,3 +193,27 @@ jqwik を使用してプロパティベーステストを実装する。
 - `CommandLine` の実行はスタブ化し、正常完了（`0` を返す）と例外スロー（`RuntimeException` をスロー）の両パターンを生成する
 - `Terminal` は `TerminalBuilder.builder().dumb(true).build()` で生成するか、モック化する
 - 各プロパティテストは最低 100 回実行する（jqwik のデフォルト設定）
+
+---
+
+## 追補設計 (2026-05-08): model / models の通知スキップ
+
+### 設計方針
+- `ReiApplication.executeInterruptibly(..., String... args)` の `finally` で通知する直前に、コマンド名ベースのスキップ判定を追加する。
+- 既存の `chatResponseNarrator.wasNarrated()` 判定はそのまま維持し、条件を合成する。
+
+### 仕様詳細
+- 追加メソッド: `shouldSkipCompletionNotification(String... args)`
+- 判定条件:
+1. `args` が空または先頭が `null` の場合は `false`
+2. 先頭引数が `"model"` または `"models"` の場合は `true`
+3. それ以外は `false`
+
+- 通知実行条件（更新後）:
+- `!chatResponseNarrator.wasNarrated() && !shouldSkipCompletionNotification(args)`
+
+### テスト方針
+- `ReiApplicationCommandNotificationTest` に以下を追加:
+1. `model` 実行時は `notify(COMMAND_COMPLETION_MESSAGE)` が呼ばれない
+2. `models` 実行時は `notify(COMMAND_COMPLETION_MESSAGE)` が呼ばれない
+3. 既存ケース（通常コマンド時の通知、narrated時のスキップ）は回帰しない

@@ -209,4 +209,55 @@ class ReiApplicationCommandNotificationTest {
         // Assert: notify must have been called with the completion message
         verify(soundNotificationService).notify("コマンド実行が完了しました");
     }
+    @Test
+    void skipsCommandCompletionNotificationForModelCommand() throws IOException {
+        @CommandLine.Command(name = "stub")
+        class StubCommand implements Runnable {
+            @Override
+            public void run() {
+            }
+        }
+
+        CommandLine cmd = new CommandLine(new StubCommand());
+        when(escCancellationMonitor.await(
+                Mockito.any(),
+                Mockito.any(),
+                Mockito.any()))
+                .thenAnswer(invocation -> {
+                    var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
+                    return future.get();
+                });
+        when(chatResponseNarrator.wasNarrated()).thenReturn(false);
+        ReiApplication app = newApp();
+
+        app.executeInterruptibly(cmd, terminal, commandExecutor, "model");
+
+        verify(soundNotificationService, never()).notify("ã‚³ãƒžãƒ³ãƒ‰å®Ÿè¡ŒãŒå®Œäº†ã—ã¾ã—ãŸ");
+    }
+
+    @Test
+    void skipsCommandCompletionNotificationForModelsCommand() throws IOException {
+        @CommandLine.Command(name = "stub")
+        class StubCommand implements Runnable {
+            @Override
+            public void run() {
+            }
+        }
+
+        CommandLine cmd = new CommandLine(new StubCommand());
+        when(escCancellationMonitor.await(
+                Mockito.any(),
+                Mockito.any(),
+                Mockito.any()))
+                .thenAnswer(invocation -> {
+                    var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
+                    return future.get();
+                });
+        when(chatResponseNarrator.wasNarrated()).thenReturn(false);
+        ReiApplication app = newApp();
+
+        app.executeInterruptibly(cmd, terminal, commandExecutor, "models");
+
+        verify(soundNotificationService, never()).notify("ã‚³ãƒžãƒ³ãƒ‰å®Ÿè¡ŒãŒå®Œäº†ã—ã¾ã—ãŸ");
+    }
 }

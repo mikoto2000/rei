@@ -182,11 +182,18 @@ public class ReiApplication {
       escCancellationMonitor.await(future, timeoutMillis -> terminal.reader().read(timeoutMillis), commandCancellationService::cancel);
     } finally {
       terminal.setAttributes(originalAttributes);
-      if (!chatResponseNarrator.wasNarrated()) {
+      if (!chatResponseNarrator.wasNarrated() && !shouldSkipCompletionNotification(args)) {
         soundNotificationService.notify(COMMAND_COMPLETION_MESSAGE);
       }
       chatResponseNarrator.reset();
     }
+  }
+
+  boolean shouldSkipCompletionNotification(String... args) {
+    if (args == null || args.length == 0 || args[0] == null) {
+      return false;
+    }
+    return "model".equals(args[0]) || "models".equals(args[0]);
   }
 
   private String[] splitCommandLine(String line) {
