@@ -30,6 +30,7 @@ import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 import dev.mikoto2000.rei.core.command.RootCommand;
@@ -69,10 +70,15 @@ public class ReiApplication {
   public  static void main(String[] args) throws IOException {
     SpringApplication application = new SpringApplication(ReiApplication.class);
     application.setDefaultProperties(ExternalConfigSupport.defaultProperties());
-    var context = application.run(args);
-    var app = context.getBean(ReiApplication.class);
-    app.run(args);
-    context.close();
+    ConfigurableApplicationContext context = application.run(args);
+    int exitCode;
+    try {
+      var app = context.getBean(ReiApplication.class);
+      app.run(args);
+    } finally {
+      exitCode = SpringApplication.exit(context);
+    }
+    System.exit(exitCode);
   }
 
   private void run(String[] args) throws IOException {
@@ -164,9 +170,8 @@ public class ReiApplication {
         } catch (UserInterruptException e) {
           // Ctrl-C でその行だけキャンセル
         } catch (EndOfFileException e) {
-          if (confirmExitIfNeeded(prompt -> reader.readLine(prompt))) {
-            break;
-          }
+          // Ctrl-D (EOF) は即時終了する
+          break;
         }
       }
     } finally {
