@@ -17,7 +17,9 @@ import reactor.core.Disposable;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.Locale;
 
 /**
  * ChatCommand
@@ -43,6 +45,7 @@ public class ChatCommand implements Runnable {
 
   @Override
   public void run() {
+    long startedAtNanos = System.nanoTime();
     cancellationService.begin(Thread.currentThread());
     chatResponseNarrator.reset();
 
@@ -52,14 +55,17 @@ public class ChatCommand implements Runnable {
             .model(currentModelHolder.get())
             .build()));
 
-    IO.println("=== answer ===");
     CountDownLatch latch = new CountDownLatch(1);
     AtomicReference<Throwable> errorRef = new AtomicReference<>();
+    AtomicBoolean headerPrinted = new AtomicBoolean(false);
     StringBuilder responseBuilder = new StringBuilder();
     Disposable disposable = requestSpec.stream()
       .content()
       .subscribe(
           chunk -> {
+            if (headerPrinted.compareAndSet(false, true)) {
+              IO.println(answerHeader(startedAtNanos));
+            }
             System.out.print(chunk);
             responseBuilder.append(chunk);
           },
@@ -120,5 +126,10 @@ public class ChatCommand implements Runnable {
       current = current.getCause();
     }
     return current;
+  }
+
+  String answerHeader(long startedAtNanos) {
+    double elapsedSeconds = (System.nanoTime() - startedAtNanos) / 1_000_000_000.0d;
+    return "=== answer(" + String.format(Locale.ROOT, "%.1f", elapsedSeconds) + " s) ===";
   }
 }

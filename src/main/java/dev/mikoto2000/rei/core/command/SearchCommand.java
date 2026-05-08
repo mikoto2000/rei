@@ -29,6 +29,7 @@ import reactor.core.Disposable;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Component
@@ -60,6 +61,7 @@ public class SearchCommand implements Runnable {
 
   @Override
   public void run() {
+    long startedAtNanos = System.nanoTime();
     String query = String.join(" ", queryParts);
     try {
       cancellationService.begin(Thread.currentThread());
@@ -72,16 +74,21 @@ public class SearchCommand implements Runnable {
               .model(currentModelHolder.get())
               .build()));
 
-      IO.println("=== answer ===");
       if (result.webSearchSkippedMessage() != null) {
         IO.println("[web search skipped] " + result.webSearchSkippedMessage());
       }
       CountDownLatch latch = new CountDownLatch(1);
       AtomicReference<Throwable> errorRef = new AtomicReference<>();
+      AtomicBoolean headerPrinted = new AtomicBoolean(false);
       Disposable disposable = requestSpec.stream()
           .content()
           .subscribe(
-              System.out::print,
+              chunk -> {
+                if (headerPrinted.compareAndSet(false, true)) {
+                  IO.println(answerHeader(startedAtNanos));
+                }
+                System.out.print(chunk);
+              },
               error -> {
                 errorRef.set(error);
                 latch.countDown();
@@ -220,5 +227,10 @@ public class SearchCommand implements Runnable {
     for (String value : sources) {
       IO.println("- " + value);
     }
+  }
+
+  String answerHeader(long startedAtNanos) {
+    double elapsedSeconds = (System.nanoTime() - startedAtNanos) / 1_000_000_000.0d;
+    return "=== answer(" + String.format(Locale.ROOT, "%.1f", elapsedSeconds) + " s) ===";
   }
 }

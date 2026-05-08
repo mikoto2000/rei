@@ -74,7 +74,8 @@ class SearchCommandTest {
     assertTrue(promptText.contains("Less trusted content"));
 
     String output = out.toString();
-    assertTrue(output.contains("=== answer ==="));
+    assertTrue(output.contains("=== answer("));
+    assertTrue(output.contains(" s) ==="));
     assertTrue(output.contains("combined answer"));
     assertTrue(output.contains("=== sources ==="));
     assertTrue(output.contains("https://example.com/blog"));

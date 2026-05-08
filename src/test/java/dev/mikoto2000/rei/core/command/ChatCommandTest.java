@@ -44,7 +44,8 @@ class ChatCommandTest {
     }
 
     String output = out.toString();
-    assertTrue(output.contains("=== answer ==="));
+    assertTrue(output.contains("=== answer("));
+    assertTrue(output.contains(" s) ==="));
     assertTrue(output.contains("answer text"));
     assertTrue(output.endsWith(System.lineSeparator()));
   }
