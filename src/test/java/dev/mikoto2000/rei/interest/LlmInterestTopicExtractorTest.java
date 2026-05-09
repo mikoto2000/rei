@@ -34,8 +34,8 @@ class LlmInterestTopicExtractorTest {
         new Generation(new AssistantMessage("""
             [
               {
-                "topic": "Neovim 開発環境",
-                "reason": "devcontainer と vim 関連の話題が繰り返し出ているため",
+                "topic": "Neovim setup",
+                "reason": "User talked about editor setup",
                 "searchQuery": "Neovim devcontainer best practices",
                 "score": 0.82
               }
@@ -43,18 +43,18 @@ class LlmInterestTopicExtractorTest {
             """)))));
 
     List<InterestTopicCandidate> topics = extractor.extract(List.of(
-        new ConversationSnippet("c1", "vim の devcontainer を改善したい", OffsetDateTime.of(2026, 4, 17, 0, 0, 0, 0, ZoneOffset.UTC)),
-        new ConversationSnippet("c2", "neovim plugin の最近動向が気になる", OffsetDateTime.of(2026, 4, 18, 0, 0, 0, 0, ZoneOffset.UTC))),
+        new ConversationSnippet("c1", "vim in devcontainer", OffsetDateTime.of(2026, 4, 17, 0, 0, 0, 0, ZoneOffset.UTC)),
+        new ConversationSnippet("c2", "neovim plugins", OffsetDateTime.of(2026, 4, 18, 0, 0, 0, 0, ZoneOffset.UTC))),
         3);
 
     assertEquals(1, topics.size());
-    assertEquals("Neovim 開発環境", topics.getFirst().topic());
+    assertEquals("Neovim setup", topics.getFirst().topic());
     assertEquals("Neovim devcontainer best practices", topics.getFirst().searchQuery());
 
     ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
     verify(chatModel).call(promptCaptor.capture());
-    assertTrue(promptCaptor.getValue().getContents().contains("JSON 配列のみ"));
-    assertTrue(promptCaptor.getValue().getContents().contains("vim の devcontainer を改善したい"));
+    assertTrue(promptCaptor.getValue().getContents().contains("Output must be a JSON array only."));
+    assertTrue(promptCaptor.getValue().getContents().contains("vim in devcontainer"));
   }
 
   @Test
@@ -70,7 +70,7 @@ class LlmInterestTopicExtractorTest {
     List<String> pastQueries = List.of("Neovim devcontainer best practices", "vim plugin 2025");
 
     extractor.extract(
-        List.of(new ConversationSnippet("c1", "neovim の話", OffsetDateTime.now(ZoneOffset.UTC))),
+        List.of(new ConversationSnippet("c1", "neovim", OffsetDateTime.now(ZoneOffset.UTC))),
         3,
         pastQueries);
 
@@ -78,14 +78,9 @@ class LlmInterestTopicExtractorTest {
     verify(chatModel).call(promptCaptor.capture());
     String prompt = promptCaptor.getValue().getContents();
 
-    // 過去クエリが両方プロンプトに含まれること
-    assertTrue(prompt.contains("Neovim devcontainer best practices"),
-        "過去クエリ 1 がプロンプトに含まれるべき");
-    assertTrue(prompt.contains("vim plugin 2025"),
-        "過去クエリ 2 がプロンプトに含まれるべき");
-    // 重複回避の指示が含まれること
-    assertTrue(prompt.contains("重複") || prompt.contains("新しい角度"),
-        "重複回避の指示がプロンプトに含まれるべき");
+    assertTrue(prompt.contains("Neovim devcontainer best practices"));
+    assertTrue(prompt.contains("vim plugin 2025"));
+    assertTrue(prompt.contains("Previously used search queries. Avoid duplicates:"));
   }
 
   @Test
@@ -99,16 +94,40 @@ class LlmInterestTopicExtractorTest {
         new Generation(new AssistantMessage("[]")))));
 
     extractor.extract(
-        List.of(new ConversationSnippet("c1", "neovim の話", OffsetDateTime.now(ZoneOffset.UTC))),
+        List.of(new ConversationSnippet("c1", "neovim", OffsetDateTime.now(ZoneOffset.UTC))),
         3,
-        List.of()); // 空の過去クエリ
+        List.of());
 
     ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
     verify(chatModel).call(promptCaptor.capture());
     String prompt = promptCaptor.getValue().getContents();
 
-    // 過去クエリセクションが含まれないこと
-    assertTrue(!prompt.contains("過去に使用した検索クエリ"),
-        "空の過去クエリの場合、過去クエリセクションはプロンプトに含まれないべき");
+    assertTrue(!prompt.contains("Previously used search queries. Avoid duplicates:"));
+  }
+
+  @Test
+  void normalizeJsonArray_stripsCodeFence() {
+    String normalized = LlmInterestTopicExtractor.normalizeJsonArray("""
+        ```json
+        [
+          {"topic":"t","reason":"r","searchQuery":"q","score":0.7}
+        ]
+        ```
+        """);
+    assertTrue(normalized.startsWith("["));
+    assertTrue(normalized.endsWith("]"));
+  }
+
+  @Test
+  void normalizeJsonArray_extractsArrayFromDecoratedText() {
+    String normalized = LlmInterestTopicExtractor.normalizeJsonArray("""
+        Here are candidates:
+        [
+          {"topic":"t","reason":"r","searchQuery":"q","score":0.7}
+        ]
+        Thanks.
+        """);
+    assertTrue(normalized.startsWith("["));
+    assertTrue(normalized.endsWith("]"));
   }
 }

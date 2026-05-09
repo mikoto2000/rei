@@ -1,6 +1,12 @@
 package dev.mikoto2000.rei.interest;
 
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.model.ChatModel;
@@ -16,6 +22,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 @RequiredArgsConstructor
 public class LlmInterestTopicExtractor implements InterestTopicExtractor {
+  private static final long EXTRACT_TIMEOUT_SECONDS = 1200L;
 
   private final ChatModel chatModel;
   private final ModelHolderService modelHolderService;
@@ -38,8 +45,30 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
             .model(modelHolderService.get())
             .build());
 
-    String response = chatModel.call(prompt).getResult().getOutput().getText();
+    String response = callWithTimeout(prompt);
     return parse(response);
+  }
+
+  private String callWithTimeout(Prompt prompt) {
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    Future<String> future = executor.submit(() -> chatModel.call(prompt).getResult().getOutput().getText());
+    try {
+      return future.get(EXTRACT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    } catch (TimeoutException e) {
+      future.cancel(true);
+      throw new IllegalStateException("Interest topic extraction timed out after " + EXTRACT_TIMEOUT_SECONDS + " seconds", e);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("Interest topic extraction was interrupted", e);
+    } catch (ExecutionException e) {
+      Throwable cause = e.getCause();
+      if (cause instanceof RuntimeException runtimeException) {
+        throw runtimeException;
+      }
+      throw new IllegalStateException("Interest topic extraction failed", cause);
+    } finally {
+      executor.shutdownNow();
+    }
   }
 
   private String buildPrompt(List<ConversationSnippet> snippets, int maxTopics, List<String> pastQueries) {
@@ -48,18 +77,15 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
         .collect(Collectors.joining("\n", "", ""));
 
     return """
-        あなたはユーザーの過去会話から、今後 Web 検索して知らせる価値のある話題だけを抽出します。
-
-        制約:
-        - 出力は JSON 配列のみ
-        - 最大 %d 件
-        - 一時的な雑談、単発の依頼、あいさつは除外
-        - private な内容や固有の個人情報は一般化
-        - 各要素は topic, reason, searchQuery, score を持つ
-        - score は 0.0 から 1.0
-        - 該当がなければ [] を返す
+        Extract candidate interest topics from user conversation history for later web search.
+        Requirements:
+        - Output must be a JSON array only.
+        - Maximum %d items.
+        - Each item must contain topic, reason, searchQuery, score.
+        - score must be between 0.0 and 1.0.
+        - Return [] when no candidate exists.
         %s
-        会話:
+        Conversation history:
         %s
         """.formatted(maxTopics, buildPastQueriesSection(pastQueries), conversation);
   }
@@ -73,17 +99,47 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
         .collect(Collectors.joining("\n"));
     return """
 
-        過去に使用した検索クエリ（これらと重複・類似しない新しい角度のクエリを生成すること）:
+        Previously used search queries. Avoid duplicates:
         %s
         """.formatted(queryList);
   }
 
   private List<InterestTopicCandidate> parse(String response) {
     try {
-      return objectMapper.readValue(response, new TypeReference<List<InterestTopicCandidate>>() {
+      return objectMapper.readValue(normalizeJsonArray(response), new TypeReference<List<InterestTopicCandidate>>() {
       });
     } catch (Exception e) {
-      throw new IllegalStateException("興味トピック抽出結果の解析に失敗しました", e);
+      throw new IllegalStateException("Failed to parse interest topic candidates", e);
     }
+  }
+
+  static String normalizeJsonArray(String response) {
+    if (response == null) {
+      return "[]";
+    }
+    String trimmed = response.trim();
+    if (trimmed.isEmpty()) {
+      return "[]";
+    }
+
+    if (trimmed.startsWith("```")) {
+      int firstNewline = trimmed.indexOf('\n');
+      if (firstNewline >= 0) {
+        trimmed = trimmed.substring(firstNewline + 1).trim();
+      } else {
+        return "[]";
+      }
+      int closingFence = trimmed.lastIndexOf("```");
+      if (closingFence >= 0) {
+        trimmed = trimmed.substring(0, closingFence).trim();
+      }
+    }
+
+    int arrayStart = trimmed.indexOf('[');
+    int arrayEnd = trimmed.lastIndexOf(']');
+    if (arrayStart >= 0 && arrayEnd >= arrayStart) {
+      return trimmed.substring(arrayStart, arrayEnd + 1).trim();
+    }
+    return trimmed;
   }
 }
