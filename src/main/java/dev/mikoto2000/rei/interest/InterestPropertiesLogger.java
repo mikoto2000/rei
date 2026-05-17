@@ -20,10 +20,8 @@ public class InterestPropertiesLogger implements ApplicationRunner {
   @Override
   public void run(ApplicationArguments args) {
     log.info(
-        "Interest config: enabled={}, notificationEnabled={}, notificationCron={}, lookbackDays={}, messageLimit={}, maxTopics={}, minScore={}, recentHours={}, vectorTopK={}, webTopK={}, topicUpdateIntervalHours={}, pastQueryLookbackDays={}",
+        "Interest config: enabled={}, lookbackDays={}, messageLimit={}, maxTopics={}, minScore={}, recentHours={}, vectorTopK={}, webTopK={}, topicUpdateIntervalHours={}, pastQueryLookbackDays={}",
         properties.isEnabled(),
-        properties.isNotificationEnabled(),
-        properties.getNotificationCron(),
         properties.getLookbackDays(),
         properties.getMessageLimit(),
         properties.getMaxTopics(),
