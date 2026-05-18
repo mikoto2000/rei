@@ -66,9 +66,6 @@ rei:
     cron: ${REI_INTEREST_CRON:0 0 7 * * *}
     notification-enabled: ${REI_INTEREST_NOTIFICATION_ENABLED:false}
     notification-cron: ${REI_INTEREST_NOTIFICATION_CRON:0 0 12 * * *}
-  small-talk:
-    enabled: ${REI_SMALL_TALK_ENABLED:true}
-    cron: ${REI_SMALL_TALK_CRON:0 0 12 * * *}
   feed:
     briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:3}
     cron: ${REI_FEED_CRON:0 0 4 * * *}

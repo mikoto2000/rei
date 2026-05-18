@@ -22,7 +22,6 @@ import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
 import dev.mikoto2000.rei.interest.InterestProperties;
 import dev.mikoto2000.rei.reminder.ReminderTools;
 import dev.mikoto2000.rei.search.SearchTools;
-import dev.mikoto2000.rei.smalltalk.SmallTalkProperties;
 import dev.mikoto2000.rei.sound.SoundNotificationProperties;
 import dev.mikoto2000.rei.sound.SoundNotificationTools;
 import dev.mikoto2000.rei.task.TaskTools;
@@ -33,7 +32,7 @@ import dev.mikoto2000.rei.websearch.WebSearchTools;
 import lombok.RequiredArgsConstructor;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, SmallTalkProperties.class, SoundNotificationProperties.class, BlueskyProperties.class})
+@EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, SoundNotificationProperties.class, BlueskyProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
 
