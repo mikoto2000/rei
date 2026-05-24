@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
@@ -39,6 +40,7 @@ public class ChatCommand implements Runnable {
   private final CommandCancellationService cancellationService;
 
   private final ChatResponseNarrator chatResponseNarrator;
+  private final InlineFileAttachmentResolver inlineFileAttachmentResolver = new InlineFileAttachmentResolver();
 
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
   private String[] prompts;
@@ -49,8 +51,17 @@ public class ChatCommand implements Runnable {
     cancellationService.begin(Thread.currentThread());
     chatResponseNarrator.reset();
 
+    InlineFileAttachmentResolver.ResolvedPrompt resolvedPrompt = inlineFileAttachmentResolver.resolve(String.join(" ", prompts));
+    for (String warning : resolvedPrompt.warnings()) {
+      IO.println(warning);
+    }
+
     ChatClientRequestSpec requestSpec = chatClient
-      .prompt(new Prompt(String.join(" ", prompts),
+      .prompt(new Prompt(
+          UserMessage.builder()
+              .text(resolvedPrompt.prompt())
+              .media(resolvedPrompt.media())
+              .build(),
           OpenAiChatOptions.builder()
             .model(currentModelHolder.get())
             .build()));
