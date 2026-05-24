@@ -37,6 +37,31 @@ class DefaultBlueskyApiClientTest {
   }
 
   @Test
+  void extractTagFacetsReturnsUtf8ByteIndexes() {
+    String text = "日本語 #ハッシュタグ test";
+    List<DefaultBlueskyApiClient.TagFacet> facets = DefaultBlueskyApiClient.extractTagFacets(text);
+
+    assertEquals(1, facets.size());
+    DefaultBlueskyApiClient.TagFacet facet = facets.getFirst();
+    assertEquals("ハッシュタグ", facet.tag());
+    assertEquals("日本語 ".getBytes(java.nio.charset.StandardCharsets.UTF_8).length, facet.byteStart());
+    assertEquals(facet.byteStart() + "#ハッシュタグ".getBytes(java.nio.charset.StandardCharsets.UTF_8).length,
+        facet.byteEnd());
+  }
+
+  @Test
+  void createRecordRequestBodyIncludesTagFacetWhenHashtagExists() {
+    String body = DefaultBlueskyApiClient.createRecordRequestBody(
+        "did:plc:abc",
+        "Check #Rei",
+        OffsetDateTime.of(2026, 5, 16, 10, 0, 0, 0, ZoneOffset.UTC));
+
+    assertTrue(body.contains("\"facets\":["));
+    assertTrue(body.contains("\"$type\":\"app.bsky.richtext.facet#tag\""));
+    assertTrue(body.contains("\"tag\":\"Rei\""));
+  }
+
+  @Test
   void createRecordRequestBodyOmitsFacetsWhenNoUrl() {
     String body = DefaultBlueskyApiClient.createRecordRequestBody(
         "did:plc:abc",

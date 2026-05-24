@@ -29,6 +29,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   private static final URI CREATE_RECORD_URI = URI.create("https://bsky.social/xrpc/com.atproto.repo.createRecord");
   private static final String GET_RECORD_ENDPOINT = "https://bsky.social/xrpc/com.atproto.repo.getRecord";
   private static final Pattern URL_PATTERN = Pattern.compile("https?://\\S+");
+  private static final Pattern HASHTAG_PATTERN = Pattern.compile("(?<!\\S)#([\\p{L}\\p{N}_]+)");
 
   private final HttpClient httpClient = HttpClient.newBuilder()
       .connectTimeout(Duration.ofSeconds(10))
@@ -148,7 +149,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
         .append("\",\"createdAt\":\"")
         .append(createdAt)
         .append("\"");
-    String facets = buildLinkFacetsJson(text);
+    String facets = buildFacetsJson(text);
     if (!facets.isEmpty()) {
       request.append(",\"facets\":").append(facets);
     }
@@ -156,27 +157,45 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     return request.toString();
   }
 
-  static String buildLinkFacetsJson(String text) {
-    List<LinkFacet> facets = extractLinkFacets(text);
+  static String buildFacetsJson(String text) {
+    List<Facet> facets = extractFacets(text);
     if (facets.isEmpty()) {
       return "";
     }
     StringBuilder json = new StringBuilder("[");
     for (int i = 0; i < facets.size(); i++) {
-      LinkFacet facet = facets.get(i);
+      Facet facet = facets.get(i);
       if (i > 0) {
         json.append(",");
       }
       json.append("{\"index\":{\"byteStart\":")
           .append(facet.byteStart())
           .append(",\"byteEnd\":")
-          .append(facet.byteEnd())
-          .append("},\"features\":[{\"$type\":\"app.bsky.richtext.facet#link\",\"uri\":\"")
-          .append(escapeJsonStatic(facet.uri()))
-          .append("\"}]}");
+          .append(facet.byteEnd());
+      if (facet.type() == FacetType.LINK) {
+        json.append("},\"features\":[{\"$type\":\"app.bsky.richtext.facet#link\",\"uri\":\"")
+            .append(escapeJsonStatic(facet.value()))
+            .append("\"}]}");
+      } else {
+        json.append("},\"features\":[{\"$type\":\"app.bsky.richtext.facet#tag\",\"tag\":\"")
+            .append(escapeJsonStatic(facet.value()))
+            .append("\"}]}");
+      }
     }
     json.append("]");
     return json.toString();
+  }
+
+  static List<Facet> extractFacets(String text) {
+    ArrayList<Facet> facets = new ArrayList<>();
+    facets.addAll(extractLinkFacets(text).stream()
+        .map(f -> new Facet(f.byteStart(), f.byteEnd(), FacetType.LINK, f.uri()))
+        .toList());
+    facets.addAll(extractTagFacets(text).stream()
+        .map(f -> new Facet(f.byteStart(), f.byteEnd(), FacetType.TAG, f.tag()))
+        .toList());
+    facets.sort((a, b) -> Integer.compare(a.byteStart(), b.byteStart()));
+    return facets;
   }
 
   static List<LinkFacet> extractLinkFacets(String text) {
@@ -198,6 +217,22 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
       int byteStart = utf8ByteLength(text.substring(0, start));
       int byteEnd = byteStart + utf8ByteLength(text.substring(start, end));
       facets.add(new LinkFacet(byteStart, byteEnd, url));
+    }
+    return facets;
+  }
+
+  static List<TagFacet> extractTagFacets(String text) {
+    ArrayList<TagFacet> facets = new ArrayList<>();
+    if (text == null || text.isBlank()) {
+      return facets;
+    }
+    Matcher matcher = HASHTAG_PATTERN.matcher(text);
+    while (matcher.find()) {
+      int start = matcher.start();
+      int end = matcher.end();
+      int byteStart = utf8ByteLength(text.substring(0, start));
+      int byteEnd = byteStart + utf8ByteLength(text.substring(start, end));
+      facets.add(new TagFacet(byteStart, byteEnd, matcher.group(1)));
     }
     return facets;
   }
@@ -228,5 +263,16 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   }
 
   record LinkFacet(int byteStart, int byteEnd, String uri) {
+  }
+
+  record TagFacet(int byteStart, int byteEnd, String tag) {
+  }
+
+  private enum FacetType {
+    LINK,
+    TAG
+  }
+
+  record Facet(int byteStart, int byteEnd, FacetType type, String value) {
   }
 }
