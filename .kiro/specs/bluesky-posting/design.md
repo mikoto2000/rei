@@ -156,3 +156,33 @@ rei:
 - `Bluesky authentication failed`
 - `Bluesky post failed`
 - `Bluesky post failed due to unexpected error`
+
+---
+
+## 追加設計: Bluesky hashtag facets
+
+### 1. Facet 生成の責務
+- `DefaultBlueskyApiClient` で投稿本文から facet を抽出する。
+- 既存の URL facet 抽出に加えて、`#tag` を hashtag facet として抽出する。
+- 抽出結果は 1 つの `facets` JSON 配列として `createRecord` リクエストに含める。
+
+### 2. Facet 型
+- URL: `app.bsky.richtext.facet#link`
+  - フィールド: `uri`
+- Hashtag: `app.bsky.richtext.facet#tag`
+  - フィールド: `tag`（`#` を除いた文字列）
+
+### 3. バイト位置
+- `byteStart` / `byteEnd` は UTF-8 バイト長で算出する。
+- マルチバイト文字（日本語含む）でも正しい範囲を指すこと。
+
+### 4. 抽出ルール
+- URL は既存ルールを継続（末尾句読点のトリム含む）。
+- hashtag は本文中の `#` プレフィックス語を対象にし、無効形式は除外する。
+- URL と hashtag が混在する場合は両方を facets に含める。
+
+### 5. テスト観点
+- URL facet が従来どおり生成されること。
+- hashtag facet が生成されること（`tag` 値・UTF-8 byte index）。
+- URL と hashtag の同時生成時に、`facets` 配列へ両方が入ること。
+- URL/hashtag が無い投稿では `facets` を省略すること。

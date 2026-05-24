@@ -68,3 +68,16 @@
 
 1. WHEN Bluesky API 呼び出しで例外が発生したとき、THE BlueskyPostService SHALL 例外を補足し、失敗結果を返す。
 2. WHEN 投稿処理が失敗したとき、THE BlueskyPostService SHALL 原因を識別できるログを出力する（機密情報はログに出力しない）。
+
+---
+
+## 追加要件: Bluesky facets（Hashtag）
+
+### 要件 6: ハッシュタグの facet 付与
+**ユーザーストーリー:** ユーザーとして、投稿文に含めた `#ハッシュタグ` を Bluesky 上でリンク化したい。そうすることで、タグ経由で関連投稿に遷移できる。
+
+#### 受け入れ条件
+1. WHEN 投稿本文に URL が含まれるとき、THE system SHALL `app.bsky.richtext.facet#link` を付与し、URI と UTF-8 バイト位置（byteStart/byteEnd）を設定する。
+2. WHEN 投稿本文に `#tag` 形式のハッシュタグが含まれるとき、THE system SHALL `app.bsky.richtext.facet#tag` を付与し、tag 値（`#` を除いた文字列）と UTF-8 バイト位置（byteStart/byteEnd）を設定する。
+3. WHEN URL facet と hashtag facet が同時に存在するとき、THE system SHALL 両方の facet を同一 `facets` 配列に含める。
+4. WHEN `#` がハッシュタグとして無効な位置・形式のとき、THE system SHALL hashtag facet を付与しない。
