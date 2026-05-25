@@ -1,29 +1,34 @@
 {
   "properties": [
     {
-      "name": "rei.google-calendar.enabled",
+      "name": "rei.google.calendar.enabled",
       "type": "java.lang.Boolean",
       "description": "Enable Google Calendar integration."
     },
     {
-      "name": "rei.google-calendar.application-name",
+      "name": "rei.google.application-name",
       "type": "java.lang.String",
       "description": "Application name used for Google Calendar API requests."
     },
     {
-      "name": "rei.google-calendar.credentials-path",
+      "name": "rei.google.credentials-path",
       "type": "java.lang.String",
       "description": "Path to the Google OAuth desktop client credentials JSON file."
     },
     {
-      "name": "rei.google-calendar.tokens-directory",
+      "name": "rei.google.tokens-directory",
       "type": "java.lang.String",
       "description": "Directory used to cache Google OAuth tokens."
     },
     {
-      "name": "rei.google-calendar.default-calendar-id",
+      "name": "rei.google.calendar.default-calendar-id",
       "type": "java.lang.String",
       "description": "Default Google Calendar identifier."
+    },
+    {
+      "name": "rei.google.task.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable Google Tasks integration."
     }
   ]
 }

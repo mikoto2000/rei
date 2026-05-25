@@ -20,6 +20,7 @@ import picocli.CommandLine.Parameters;
     description = "Google Calendar の予定を操作します",
     subcommands = {
       ScheduleCommand.AuthCommand.class,
+      ScheduleCommand.RefreshTokenCommand.class,
       ScheduleCommand.ListCommand.class,
       ScheduleCommand.AddCommand.class
     })
@@ -39,6 +40,24 @@ public class ScheduleCommand {
         IO.println("Google Calendar の認可が完了しました");
       } catch (Exception e) {
         throw new RuntimeException("Google Calendar の認可に失敗しました", e);
+      }
+    }
+  }
+
+  @Component
+  @RequiredArgsConstructor
+  @Command(name = "refresh-token", description = "Google Calendar の OAuth トークンをリフレッシュします")
+  static class RefreshTokenCommand implements Runnable {
+
+    private final GoogleCalendarService googleCalendarService;
+
+    @Override
+    public void run() {
+      try {
+        googleCalendarService.refreshToken();
+        IO.println("Google Calendar のトークンを更新しました");
+      } catch (Exception e) {
+        throw new RuntimeException("Google Calendar のトークン更新に失敗しました", e);
       }
     }
   }

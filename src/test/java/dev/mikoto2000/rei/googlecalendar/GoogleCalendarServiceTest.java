@@ -12,7 +12,12 @@ class GoogleCalendarServiceTest {
   @Test
   void parseDateTimeUsesConfiguredTimeZoneForLocalDateTime() {
     GoogleCalendarService service = new GoogleCalendarService(
-        new GoogleCalendarProperties(false, "Rei", "", "", "primary", "Asia/Tokyo"));
+        new GoogleCalendarProperties(
+            "Rei",
+            "",
+            "",
+            new GoogleCalendarProperties.CalendarProperties(false, "primary", "Asia/Tokyo"),
+            new GoogleCalendarProperties.TaskProperties(true)));
 
     ZonedDateTime actual = service.parseDateTime("2026-03-23T09:00:00");
 
@@ -22,7 +27,12 @@ class GoogleCalendarServiceTest {
   @Test
   void parseDateTimePreservesExplicitOffset() {
     GoogleCalendarService service = new GoogleCalendarService(
-        new GoogleCalendarProperties(false, "Rei", "", "", "primary", "Asia/Tokyo"));
+        new GoogleCalendarProperties(
+            "Rei",
+            "",
+            "",
+            new GoogleCalendarProperties.CalendarProperties(false, "primary", "Asia/Tokyo"),
+            new GoogleCalendarProperties.TaskProperties(true)));
 
     ZonedDateTime actual = service.parseDateTime("2026-03-23T09:00:00+09:00");
 

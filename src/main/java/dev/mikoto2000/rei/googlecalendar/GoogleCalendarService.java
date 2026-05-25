@@ -21,6 +21,7 @@ import java.util.Objects;
 import org.springframework.stereotype.Service;
 
 import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
+import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
 import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
@@ -34,6 +35,7 @@ import com.google.api.services.calendar.Calendar;
 import com.google.api.services.calendar.CalendarScopes;
 import com.google.api.services.calendar.model.Event;
 import com.google.api.services.calendar.model.EventDateTime;
+import com.google.api.services.tasks.TasksScopes;
 
 import lombok.RequiredArgsConstructor;
 
@@ -42,13 +44,26 @@ import lombok.RequiredArgsConstructor;
 public class GoogleCalendarService {
 
   private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
-  private static final List<String> SCOPES = List.of(CalendarScopes.CALENDAR_EVENTS);
+  private static final List<String> SCOPES = List.of(CalendarScopes.CALENDAR_EVENTS, TasksScopes.TASKS);
   private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
   private final GoogleCalendarProperties properties;
 
   public void authorize() throws Exception {
     getCalendarClient();
+  }
+
+  public void refreshToken() throws Exception {
+    if (!properties.calendar().enabled()) {
+      throw new IllegalStateException("Google Calendar integration is disabled");
+    }
+
+    NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
+    Credential credential = authorizeCredential(httpTransport);
+    boolean refreshed = credential.refreshToken();
+    if (!refreshed) {
+      throw new IllegalStateException("Google Calendar token refresh failed");
+    }
   }
 
   public List<GoogleCalendarEventSummary> listEvents(Instant from, Instant to) throws Exception {
@@ -120,15 +135,15 @@ public class GoogleCalendarService {
   }
 
   public ZoneId zoneId() {
-    if (properties.timeZone() == null || properties.timeZone().isBlank()) {
+    if (properties.calendar().timeZone() == null || properties.calendar().timeZone().isBlank()) {
       return ZoneId.systemDefault();
     }
 
-    return ZoneId.of(properties.timeZone());
+    return ZoneId.of(properties.calendar().timeZone());
   }
 
   private Calendar getCalendarClient() throws Exception {
-    if (!properties.enabled()) {
+    if (!properties.calendar().enabled()) {
       throw new IllegalStateException("Google Calendar integration is disabled");
     }
 
@@ -218,9 +233,9 @@ public class GoogleCalendarService {
   }
 
   private String defaultCalendarId() {
-    return properties.defaultCalendarId() == null || properties.defaultCalendarId().isBlank()
+    return properties.calendar().defaultCalendarId() == null || properties.calendar().defaultCalendarId().isBlank()
         ? "primary"
-        : properties.defaultCalendarId();
+        : properties.calendar().defaultCalendarId();
   }
 
   private String blankToNull(String value) {

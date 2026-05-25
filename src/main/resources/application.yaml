@@ -40,13 +40,16 @@ rei:
   core:
     system-prompt: ${REI_AI_SYSTEM_PROMPT:classpath:/system-prompt.md}
     chat-memory-max-messages: ${REI_CHAT_MEMORY_MAX_MESSAGES:100}
-  google-calendar:
-    enabled: ${REI_GOOGLE_CALENDAR_ENABLED:false}
+  google:
     application-name: Rei
-    credentials-path: ${REI_GOOGLE_CALENDAR_CREDENTIALS_PATH:${user.dir}/.rei/google-calendar-credentials.json}
-    tokens-directory: ${REI_GOOGLE_CALENDAR_TOKENS_DIR:${user.dir}/.rei/google-calendar-tokens}
-    default-calendar-id: ${REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID:primary}
-    time-zone: ${REI_GOOGLE_CALENDAR_TIME_ZONE:}
+    credentials-path: ${REI_GOOGLE_CREDENTIALS_PATH:.rei/google-credentials.json}
+    tokens-directory: ${REI_GOOGLE_TOKENS_DIR:.rei/google-tokens}
+    calendar:
+      enabled: ${REI_GOOGLE_CALENDAR_ENABLED:false}
+      default-calendar-id: ${REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID:primary}
+      time-zone: ${REI_GOOGLE_CALENDAR_TIME_ZONE:}
+    task:
+      enabled: ${REI_GOOGLE_TASK_ENABLED:true}
   web-search:
     enabled: ${REI_WEB_SEARCH_ENABLED:true}
     timeout-seconds: ${REI_WEB_SEARCH_TIMEOUT_SECONDS:10}

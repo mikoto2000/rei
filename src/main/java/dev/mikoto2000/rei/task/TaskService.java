@@ -1,41 +1,73 @@
 package dev.mikoto2000.rei.task;
 
+import java.awt.Desktop;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
-import javax.sql.DataSource;
-
-import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
+import com.google.api.client.auth.oauth2.Credential;
+import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
+import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
+import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
+import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
+import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.JsonFactory;
+import com.google.api.client.json.gson.GsonFactory;
+import com.google.api.client.util.DateTime;
+import com.google.api.client.util.store.FileDataStoreFactory;
+import com.google.api.services.tasks.Tasks;
+import com.google.api.services.tasks.TasksScopes;
+
+import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 
 @Service
 public class TaskService {
 
-  private final JdbcClient jdbcClient;
+  private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
+  private static final List<String> SCOPES = List.of(TasksScopes.TASKS);
+  private static final String DEFAULT_TASK_LIST_ID = "@default";
 
-  public TaskService(DataSource dataSource) {
-    this.jdbcClient = JdbcClient.create(dataSource);
-    initializeSchema(dataSource);
+  private final GoogleCalendarProperties googleCalendarProperties;
+
+  @Autowired
+  public TaskService(GoogleCalendarProperties googleCalendarProperties) {
+    this.googleCalendarProperties = googleCalendarProperties;
+  }
+
+  public TaskService(javax.sql.DataSource ignoredDataSource) {
+    this(new GoogleCalendarProperties(
+        "Rei",
+        "",
+        "",
+        new GoogleCalendarProperties.CalendarProperties(false, "primary", ""),
+        new GoogleCalendarProperties.TaskProperties(true)));
   }
 
   public Task add(String title, LocalDate dueDate, int priority, List<String> tags) {
-    OffsetDateTime createdAt = OffsetDateTime.now(ZoneOffset.UTC);
-    String dueDateValue = dueDate == null ? null : dueDate.toString();
-    String tagsValue = String.join(",", tags);
-
-    Long id = jdbcClient.sql("""
-        INSERT INTO tasks (title, due_date, priority, status, tags, created_at, completed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        RETURNING id
-        """)
-        .params(title, dueDateValue, priority, TaskStatus.OPEN.name(), tagsValue, createdAt.toString(), null)
-        .query(Long.class)
-        .single();
-
-    return new Task(id, title, dueDate, priority, TaskStatus.OPEN, tags, createdAt, null);
+    try {
+      com.google.api.services.tasks.model.Task request = new com.google.api.services.tasks.model.Task();
+      request.setTitle(title);
+      if (dueDate != null) {
+        request.setDue(new DateTime(dueDate.atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()).toStringRfc3339());
+      }
+      com.google.api.services.tasks.model.Task created = getTasksClient().tasks().insert(DEFAULT_TASK_LIST_ID, request).execute();
+      return toTask(created);
+    } catch (Exception e) {
+      throw new IllegalStateException("Google Tasks へのタスク追加に失敗しました", e);
+    }
   }
 
   public List<Task> listOpen() {
@@ -43,130 +75,175 @@ public class TaskService {
   }
 
   public List<Task> listOpen(TaskQuery query) {
-    StringBuilder sql = new StringBuilder("""
-        SELECT id, title, due_date, priority, status, tags, created_at, completed_at
-        FROM tasks
-        WHERE status = ?
-        """);
-    List<Object> params = new ArrayList<>();
-    params.add(TaskStatus.OPEN.name());
-
-    if (query.priority() != null) {
-      sql.append(" AND priority <= ?");
-      params.add(query.priority());
+    try {
+      List<com.google.api.services.tasks.model.Task> items = getTasksClient().tasks().list(DEFAULT_TASK_LIST_ID)
+          .setShowCompleted(false)
+          .setShowHidden(false)
+          .setMaxResults(100)
+          .execute()
+          .getItems();
+      if (items == null) {
+        return List.of();
+      }
+      return items.stream()
+          .map(this::toTask)
+          .filter(task -> query.dueBefore() == null || (task.dueDate() != null && !task.dueDate().isAfter(query.dueBefore())))
+          .toList();
+    } catch (Exception e) {
+      throw new IllegalStateException("Google Tasks の一覧取得に失敗しました", e);
     }
-    if (query.tag() != null && !query.tag().isBlank()) {
-      sql.append(" AND (tags = ? OR tags LIKE ? OR tags LIKE ? OR tags LIKE ?)");
-      params.add(query.tag());
-      params.add(query.tag() + ",%");
-      params.add("%," + query.tag());
-      params.add("%," + query.tag() + ",%");
-    }
-    if (query.dueBefore() != null) {
-      sql.append(" AND due_date IS NOT NULL AND due_date <= ?");
-      params.add(query.dueBefore().toString());
-    }
-    sql.append(" ORDER BY priority ASC, due_date ASC, id ASC");
-
-    return jdbcClient.sql(sql.toString())
-        .params(params)
-        .query(this::mapTask)
-        .list();
   }
 
   public Task complete(long id) {
-    OffsetDateTime completedAt = OffsetDateTime.now(ZoneOffset.UTC);
-
-    jdbcClient.sql("""
-        UPDATE tasks
-        SET status = ?, completed_at = ?
-        WHERE id = ?
-        """)
-        .params(TaskStatus.DONE.name(), completedAt.toString(), id)
-        .update();
-
-    return findById(id);
+    try {
+      com.google.api.services.tasks.model.Task current = fetchByHashId(id, true);
+      current.setStatus("completed");
+      com.google.api.services.tasks.model.Task updated = getTasksClient().tasks()
+          .update(DEFAULT_TASK_LIST_ID, current.getId(), current)
+          .execute();
+      return toTask(updated);
+    } catch (Exception e) {
+      throw new IllegalStateException("Google Tasks の完了更新に失敗しました", e);
+    }
   }
 
   public Task update(long id, String title, LocalDate dueDate, Integer priority, List<String> tags) {
-    Task current = findById(id);
-    String resolvedTitle = title == null || title.isBlank() ? current.title() : title;
-    String resolvedDueDate = dueDate == null ? current.dueDate() == null ? null : current.dueDate().toString() : dueDate.toString();
-    int resolvedPriority = priority == null ? current.priority() : priority;
-    String resolvedTags = tags == null ? String.join(",", current.tags()) : String.join(",", tags);
-
-    jdbcClient.sql("""
-        UPDATE tasks
-        SET title = ?, due_date = ?, priority = ?, tags = ?
-        WHERE id = ?
-        """)
-        .params(resolvedTitle, resolvedDueDate, resolvedPriority, resolvedTags, id)
-        .update();
-
-    return findById(id);
+    try {
+      com.google.api.services.tasks.model.Task current = fetchByHashId(id, true);
+      if (title != null && !title.isBlank()) {
+        current.setTitle(title);
+      }
+      if (dueDate != null) {
+        current.setDue(new DateTime(dueDate.atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()).toStringRfc3339());
+      }
+      com.google.api.services.tasks.model.Task updated = getTasksClient().tasks()
+          .update(DEFAULT_TASK_LIST_ID, current.getId(), current)
+          .execute();
+      return toTask(updated);
+    } catch (Exception e) {
+      throw new IllegalStateException("Google Tasks の更新に失敗しました", e);
+    }
   }
 
   public Task updateDeadline(long id, LocalDate dueDate) {
-    jdbcClient.sql("""
-        UPDATE tasks
-        SET due_date = ?
-        WHERE id = ?
-        """)
-        .params(dueDate == null ? null : dueDate.toString(), id)
-        .update();
-
-    return findById(id);
+    try {
+      com.google.api.services.tasks.model.Task current = fetchByHashId(id, true);
+      current.setDue(dueDate == null ? null
+          : new DateTime(dueDate.atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()).toStringRfc3339());
+      com.google.api.services.tasks.model.Task updated = getTasksClient().tasks()
+          .update(DEFAULT_TASK_LIST_ID, current.getId(), current)
+          .execute();
+      return toTask(updated);
+    } catch (Exception e) {
+      throw new IllegalStateException("Google Tasks の期限更新に失敗しました", e);
+    }
   }
 
   public void delete(long id) {
-    jdbcClient.sql("DELETE FROM tasks WHERE id = ?")
-        .param(id)
-        .update();
+    try {
+      com.google.api.services.tasks.model.Task current = fetchByHashId(id, true);
+      getTasksClient().tasks().delete(DEFAULT_TASK_LIST_ID, current.getId()).execute();
+    } catch (Exception e) {
+      throw new IllegalStateException("Google Tasks の削除に失敗しました", e);
+    }
   }
 
-  private Task findById(long id) {
-    return jdbcClient.sql("""
-        SELECT id, title, due_date, priority, status, tags, created_at, completed_at
-        FROM tasks
-        WHERE id = ?
-        """)
-        .param(id)
-        .query(this::mapTask)
-        .single();
+  public void refreshGoogleToken() throws Exception {
+    Credential credential = authorizeCredential(GoogleNetHttpTransport.newTrustedTransport());
+    boolean refreshed = credential.refreshToken();
+    if (!refreshed) {
+      throw new IllegalStateException("Google token refresh failed");
+    }
   }
 
-  private Task mapTask(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
-    String dueDate = rs.getString("due_date");
-    String tags = rs.getString("tags");
-    String completedAt = rs.getString("completed_at");
+  private com.google.api.services.tasks.model.Task fetchByHashId(long id, boolean includeCompleted) throws Exception {
+    List<com.google.api.services.tasks.model.Task> items = getTasksClient().tasks().list(DEFAULT_TASK_LIST_ID)
+        .setShowCompleted(includeCompleted)
+        .setShowHidden(true)
+        .setMaxResults(100)
+        .execute()
+        .getItems();
+    if (items == null) {
+      throw new IllegalStateException("Task not found: " + id);
+    }
+    return items.stream()
+        .filter(task -> stableTaskId(task.getId()) == id)
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException("Task not found: " + id));
+  }
+
+  private Task toTask(com.google.api.services.tasks.model.Task task) {
+    LocalDate dueDate = task.getDue() == null ? null : OffsetDateTime.parse(task.getDue()).toLocalDate();
+    OffsetDateTime updatedAt = task.getUpdated() == null
+        ? OffsetDateTime.now(ZoneOffset.UTC)
+        : OffsetDateTime.parse(task.getUpdated());
+    OffsetDateTime completedAt = task.getCompleted() == null ? null : OffsetDateTime.parse(task.getCompleted());
+    TaskStatus status = "completed".equalsIgnoreCase(task.getStatus()) ? TaskStatus.DONE : TaskStatus.OPEN;
 
     return new Task(
-        rs.getLong("id"),
-        rs.getString("title"),
-        dueDate == null ? null : LocalDate.parse(dueDate),
-        rs.getInt("priority"),
-        TaskStatus.valueOf(rs.getString("status")),
-        tags == null || tags.isBlank() ? List.of() : List.of(tags.split(",")),
-        OffsetDateTime.parse(rs.getString("created_at")),
-        completedAt == null ? null : OffsetDateTime.parse(completedAt));
+        stableTaskId(task.getId()),
+        Objects.toString(task.getTitle(), "(no title)"),
+        dueDate,
+        3,
+        status,
+        List.of(),
+        updatedAt,
+        completedAt);
   }
 
-  private void initializeSchema(DataSource dataSource) {
-    try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
-      statement.executeUpdate("""
-          CREATE TABLE IF NOT EXISTS tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT NOT NULL,
-            due_date TEXT,
-            priority INTEGER NOT NULL,
-            status TEXT NOT NULL,
-            tags TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            completed_at TEXT
-          )
-          """);
-    } catch (java.sql.SQLException e) {
-      throw new IllegalStateException("tasks テーブルの初期化に失敗しました", e);
+  private long stableTaskId(String taskId) {
+    return Integer.toUnsignedLong(taskId.hashCode());
+  }
+
+  private Tasks getTasksClient() throws Exception {
+    if (!googleCalendarProperties.task().enabled()) {
+      throw new IllegalStateException("Google Task integration is disabled");
+    }
+    if (!googleCalendarProperties.calendar().enabled()) {
+      throw new IllegalStateException("Google Calendar integration is disabled");
+    }
+    NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
+    return new Tasks.Builder(httpTransport, JSON_FACTORY, authorizeCredential(httpTransport))
+        .setApplicationName(googleCalendarProperties.applicationName())
+        .build();
+  }
+
+  private Credential authorizeCredential(NetHttpTransport httpTransport) throws Exception {
+    Path credentialsPath = Path.of(googleCalendarProperties.credentialsPath());
+    if (!Files.exists(credentialsPath)) {
+      throw new IllegalStateException("Google OAuth credentials file was not found: " + credentialsPath);
+    }
+    Files.createDirectories(Path.of(googleCalendarProperties.tokensDirectory()));
+
+    try (InputStream in = Files.newInputStream(credentialsPath)) {
+      GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
+      AuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
+          httpTransport,
+          JSON_FACTORY,
+          clientSecrets,
+          SCOPES)
+          .setDataStoreFactory(new FileDataStoreFactory(Path.of(googleCalendarProperties.tokensDirectory()).toFile()))
+          .setAccessType("offline")
+          .build();
+
+      LocalServerReceiver receiver = new LocalServerReceiver.Builder()
+          .setHost("127.0.0.1")
+          .setPort(8888)
+          .build();
+
+      AuthorizationCodeInstalledApp app = new AuthorizationCodeInstalledApp(flow, receiver, this::browse);
+      return app.authorize("user");
+    }
+  }
+
+  private void browse(String url) throws IOException {
+    IO.println("Google OAuth を開始します。ブラウザが開かない場合は次の URL を開いてください:");
+    IO.println(url);
+    if (Desktop.isDesktopSupported()) {
+      Desktop desktop = Desktop.getDesktop();
+      if (desktop.isSupported(Desktop.Action.BROWSE)) {
+        desktop.browse(URI.create(url));
+      }
     }
   }
 }

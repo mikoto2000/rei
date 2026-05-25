@@ -68,8 +68,16 @@ public class ExternalConfigFileService {
           feed:
             briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:3}
             cron: ${REI_FEED_CRON:0 0 4 * * *}
-          google-calendar:
-            enabled: false
+          google:
+            application-name: Rei
+            credentials-path: ${REI_GOOGLE_CREDENTIALS_PATH:${user.dir}/.rei/google-calendar-credentials.json}
+            tokens-directory: ${REI_GOOGLE_TOKENS_DIR:${user.dir}/.rei/google-calendar-tokens}
+            calendar:
+              enabled: false
+              default-calendar-id: ${REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID:primary}
+              time-zone: ${REI_GOOGLE_CALENDAR_TIME_ZONE:}
+            task:
+              enabled: true
         """;
   }
 }
