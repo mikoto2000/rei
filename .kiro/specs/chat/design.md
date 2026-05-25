@@ -79,3 +79,18 @@
 - `` \`@clipboard` `` が文字列として残ること。
 - `@file` と `@clipboard` の混在時に両方解釈されること。
 - クリップボード取得失敗時に警告を出し、処理継続すること。
+---
+
+## 追加設計: `grep` ツール
+### 1. 目的
+- common tools に `grep(pattern, baseDir)` を追加し、AI からディレクトリ配下の正規表現検索を実行できるようにする。
+
+### 2. 設計
+- `Tools` に `@Tool(name = "grep")` を追加する。
+- `pattern` は Java の正規表現として解釈する。
+- 検索対象ファイルは既存の `listFile(baseDir)` を利用して列挙し、`.gitignore` を尊重する。
+- 各ヒットは `path:line:content` 形式で返す。
+
+### 3. エラー処理
+- `pattern` または `baseDir` が空の場合は `IllegalArgumentException` を返す。
+- 個別ファイル読み込みに失敗した場合は当該ファイルのみスキップし、検索を継続する。

@@ -79,6 +79,25 @@ class ToolsTest {
     assertTrue(files.contains("docs/untracked.txt"));
   }
 
+  @Test
+  void grepFindsMatchesInTrackedAndUntrackedFiles() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/tracked.txt"), "hello spring ai");
+    Files.writeString(tempDir.resolve("docs/untracked.txt"), "spring tools");
+    Files.writeString(tempDir.resolve(".gitignore"), "docs/ignored.txt\n");
+    Files.writeString(tempDir.resolve("docs/ignored.txt"), "spring should be ignored");
+    runGit("add", ".gitignore", "docs/tracked.txt");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<String> results = tools.grep("spring", "docs", tempDir);
+
+    assertTrue(results.stream().anyMatch(line -> line.startsWith("docs/tracked.txt:1:")));
+    assertTrue(results.stream().anyMatch(line -> line.startsWith("docs/untracked.txt:1:")));
+    assertFalse(results.stream().anyMatch(line -> line.contains("ignored.txt")));
+  }
+
   private void writePdf(Path pdf, String text) throws IOException {
     try (PDDocument document = new PDDocument()) {
       PDPage page = new PDPage();

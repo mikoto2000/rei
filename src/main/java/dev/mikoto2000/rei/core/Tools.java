@@ -14,6 +14,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.document.Document;
@@ -130,6 +131,43 @@ public class Tools {
     return gitListedFiles.stream()
       .filter(s -> s.startsWith(baseDir))
       .collect(Collectors.toList());
+  }
+
+  @Tool(name = "grep", description = "指定したディレクトリ配下のテキストを正規表現検索します")
+  List<String> grep(String pattern, String baseDir) throws IOException, InterruptedException {
+    return grep(pattern, baseDir, Paths.get("."));
+  }
+
+  List<String> grep(String pattern, String baseDir, java.nio.file.Path workingDirectory) throws IOException, InterruptedException {
+    if (pattern == null || pattern.isBlank()) {
+      throw new IllegalArgumentException("pattern must not be blank");
+    }
+    if (baseDir == null || baseDir.isBlank()) {
+      throw new IllegalArgumentException("baseDir must not be blank");
+    }
+    Pattern compiled = Pattern.compile(pattern);
+
+    List<String> candidates = listFile(baseDir, workingDirectory);
+    List<String> matches = new ArrayList<>();
+    for (String relativePath : candidates) {
+      java.nio.file.Path filePath = workingDirectory.resolve(relativePath);
+      if (!Files.isRegularFile(filePath)) {
+        continue;
+      }
+      List<String> lines;
+      try {
+        lines = Files.readAllLines(filePath, StandardCharsets.UTF_8);
+      } catch (IOException ex) {
+        continue;
+      }
+      for (int i = 0; i < lines.size(); i++) {
+        String line = lines.get(i);
+        if (compiled.matcher(line).find()) {
+          matches.add(String.format("%s:%d:%s", relativePath, i + 1, line));
+        }
+      }
+    }
+    return matches;
   }
 
   List<String> gitLsFiles(List<String> pathSpecs, java.nio.file.Path workingDirectory) throws IOException, InterruptedException {
