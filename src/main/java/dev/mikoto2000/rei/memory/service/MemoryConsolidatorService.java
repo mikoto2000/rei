@@ -48,13 +48,16 @@ public class MemoryConsolidatorService {
     if (messages.isEmpty()) {
       return List.of();
     }
-    String llmText = null;
+
+    String llmText;
     try {
-      llmText = chatClient.prompt("次の会話から記憶候補を JSON 配列で返してください:\n" + String.join("\n", messages))
+      llmText = chatClient.prompt("次の会話から保存候補をJSON配列で返してください:\n" + String.join("\n", messages))
           .call()
           .content();
-    } catch (Exception ignored) {
+    } catch (Exception e) {
+      throw new IllegalStateException("LLM での候補抽出に失敗しました", e);
     }
+
     List<Memory> llmCandidates = parseCandidates(llmText);
     if (!llmCandidates.isEmpty()) {
       return llmCandidates;
@@ -90,7 +93,8 @@ public class MemoryConsolidatorService {
       return List.of();
     }
     try {
-      List<Map<String, Object>> rows = objectMapper.readValue(trimmed, new TypeReference<>() {});
+      List<Map<String, Object>> rows = objectMapper.readValue(trimmed, new TypeReference<>() {
+      });
       List<Memory> memories = new ArrayList<>();
       for (Map<String, Object> row : rows) {
         String content = stringValue(row.get("content"));
@@ -116,9 +120,9 @@ public class MemoryConsolidatorService {
     String prompt = String.join("\n", conversation);
     String summary;
     try {
-      summary = chatClient.prompt("以下を要約してください:\n" + prompt).call().content();
+      summary = chatClient.prompt("会話を要約してください:\n" + prompt).call().content();
     } catch (Exception e) {
-      summary = prompt;
+      throw new IllegalStateException("LLM での要約に失敗しました", e);
     }
     if (summary == null) {
       summary = "";
@@ -158,6 +162,10 @@ public class MemoryConsolidatorService {
         .sorted(Comparator.comparingDouble(Memory::confidence).reversed())
         .limit(limit)
         .toList();
+  }
+
+  public int conflictTimeoutSeconds() {
+    return memoryProperties.conflictTimeoutSeconds();
   }
 
   private MemoryType parseType(String value) {

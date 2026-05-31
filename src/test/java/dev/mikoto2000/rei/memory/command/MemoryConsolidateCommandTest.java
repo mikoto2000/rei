@@ -67,4 +67,29 @@ class MemoryConsolidateCommandTest {
     assertEquals(0, exitCode);
     verify(memoryService, times(1)).save(any());
   }
+
+  @Test
+  void consolidateSkipsWhenConflictCheckTimesOut() {
+    MemoryConsolidatorService consolidator = Mockito.mock(MemoryConsolidatorService.class);
+    MemoryService memoryService = Mockito.mock(MemoryService.class);
+    SensitiveInfoDetector detector = Mockito.mock(SensitiveInfoDetector.class);
+    MemoryConflictResolver resolver = Mockito.mock(MemoryConflictResolver.class);
+
+    Memory candidate = new Memory("1", "candidate", MemoryType.KNOWLEDGE, MemoryScope.SHORT_TERM,
+        MemoryStatus.CANDIDATE, 0.8d, null, null, null);
+    when(consolidator.extractCandidates()).thenReturn(List.of(candidate));
+    when(consolidator.conflictTimeoutSeconds()).thenReturn(1);
+    when(memoryService.listActiveWithExpiryCheck()).thenReturn(List.of());
+    when(detector.containsSensitiveInfo(any())).thenReturn(false);
+    when(resolver.check(any(), any())).thenAnswer(invocation -> {
+      Thread.sleep(1_200);
+      return new MemoryConflictResolver.ConflictResult(MemoryConflictResolver.ConflictType.NONE, null, 0.2d);
+    });
+
+    var cmd = new CommandLine(new MemoryCommand.ConsolidateCommand(consolidator, memoryService, detector, resolver));
+    int exitCode = cmd.execute("--approve");
+
+    assertEquals(0, exitCode);
+    verify(memoryService, never()).save(any());
+  }
 }

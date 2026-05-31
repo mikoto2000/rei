@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.memory.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
@@ -47,6 +49,32 @@ class MemoryConsolidatorServiceTest {
     MemoryConsolidatorService service = newService();
     assertTrue(service.shouldSuggestConsolidation(20, 0, 0));
     assertFalse(service.shouldSuggestConsolidation(19, 0, 0));
+  }
+
+  @Test
+  void extractCandidatesThrowsWhenChatClientFails() {
+    ChatClient chatClient = Mockito.mock(ChatClient.class, Mockito.RETURNS_DEEP_STUBS);
+    Mockito.when(chatClient.prompt(Mockito.anyString()).call().content()).thenThrow(new RuntimeException("boom"));
+    var ds = new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("consolidator-fail.db"));
+    JdbcClient.create(ds).sql("CREATE TABLE IF NOT EXISTS SPRING_AI_CHAT_MEMORY(type TEXT, content TEXT, timestamp TEXT)").update();
+    JdbcClient.create(ds).sql("INSERT INTO SPRING_AI_CHAT_MEMORY(type, content, timestamp) VALUES('USER','hello',datetime('now'))").update();
+    var props = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60,
+        new MemoryProperties.ExpiryDefaults(30, 365));
+    MemoryConsolidatorService service = new MemoryConsolidatorService(chatClient, ds, props);
+
+    assertThrows(IllegalStateException.class, service::extractCandidates);
+  }
+
+  @Test
+  void summarizeThrowsWhenChatClientFails() {
+    ChatClient chatClient = Mockito.mock(ChatClient.class, Mockito.RETURNS_DEEP_STUBS);
+    Mockito.when(chatClient.prompt(Mockito.anyString()).call().content()).thenThrow(new RuntimeException("boom"));
+    var ds = new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("summarize-fail.db"));
+    var props = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60,
+        new MemoryProperties.ExpiryDefaults(30, 365));
+    MemoryConsolidatorService service = new MemoryConsolidatorService(chatClient, ds, props);
+
+    assertThrows(IllegalStateException.class, () -> service.summarize(List.of("a", "b")));
   }
 
   private MemoryConsolidatorService newService() {

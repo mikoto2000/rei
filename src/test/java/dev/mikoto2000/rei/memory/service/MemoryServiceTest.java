@@ -3,13 +3,16 @@ package dev.mikoto2000.rei.memory.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.sql.SQLException;
 
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -86,5 +89,57 @@ class MemoryServiceTest {
   @Test
   void updateStatusReturnsFalseWhenIdMissing() {
     assertFalse(service.updateStatus("missing", MemoryStatus.DELETED));
+  }
+
+  @Test
+  void initializeSchemaThrowsIllegalStateWhenDataSourceFails() {
+    DataSource badDataSource = new DataSource() {
+      @Override
+      public java.sql.Connection getConnection() throws SQLException {
+        throw new SQLException("broken");
+      }
+
+      @Override
+      public java.sql.Connection getConnection(String username, String password) throws SQLException {
+        throw new SQLException("broken");
+      }
+
+      @Override
+      public <T> T unwrap(Class<T> iface) throws SQLException {
+        throw new SQLException("unsupported");
+      }
+
+      @Override
+      public boolean isWrapperFor(Class<?> iface) {
+        return false;
+      }
+
+      @Override
+      public java.io.PrintWriter getLogWriter() {
+        return null;
+      }
+
+      @Override
+      public void setLogWriter(java.io.PrintWriter out) {
+      }
+
+      @Override
+      public void setLoginTimeout(int seconds) {
+      }
+
+      @Override
+      public int getLoginTimeout() {
+        return 0;
+      }
+
+      @Override
+      public java.util.logging.Logger getParentLogger() {
+        return java.util.logging.Logger.getGlobal();
+      }
+    };
+    var props = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60,
+        new MemoryProperties.ExpiryDefaults(30, 365));
+
+    assertThrows(IllegalStateException.class, () -> new MemoryService(badDataSource, props));
   }
 }
