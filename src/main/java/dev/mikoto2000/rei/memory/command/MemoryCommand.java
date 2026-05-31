@@ -145,6 +145,9 @@ public class MemoryCommand {
     private final MemoryConsolidatorService consolidatorService;
     private final MemoryService memoryService;
 
+    @Option(names = "--save", defaultValue = "false", description = "要約を記憶として保存します")
+    boolean save;
+
     @Override
     public void run() {
       List<Memory> candidates = consolidatorService.extractCandidates();
@@ -154,6 +157,10 @@ public class MemoryCommand {
       }
       String summary = consolidatorService.summarize(candidates.stream().map(Memory::content).toList());
       System.out.println(summary);
+      if (!save) {
+        System.out.println("要約を保存するには --save を指定してください");
+        return;
+      }
       Memory memory = new Memory(null, summary, MemoryType.EPISODE_SUMMARY, MemoryScope.SHORT_TERM,
           MemoryStatus.CANDIDATE, 0.8d, null, OffsetDateTime.now(), OffsetDateTime.now());
       memoryService.save(memory);
@@ -170,6 +177,9 @@ public class MemoryCommand {
     private final SensitiveInfoDetector sensitiveInfoDetector;
     private final MemoryConflictResolver conflictResolver;
 
+    @Option(names = "--save", defaultValue = "false", description = "抽出候補を保存します")
+    boolean save;
+
     @Override
     public void run() {
       List<Memory> candidates = consolidatorService.extractCandidates();
@@ -180,19 +190,29 @@ public class MemoryCommand {
 
       List<Memory> active = memoryService.listActiveWithExpiryCheck();
       int saved = 0;
+      int skipped = 0;
+      if (!save) {
+        System.out.println("候補を保存するには --save を指定してください");
+      }
       for (Memory candidate : candidates) {
         if (sensitiveInfoDetector.containsSensitiveInfo(candidate.content())) {
           System.out.println("[warn] 機密情報を含む可能性: " + candidate.content());
+          skipped++;
           continue;
         }
         var conflict = conflictResolver.check(candidate, active);
         if (conflict.type() == MemoryConflictResolver.ConflictType.DUPLICATE) {
+          skipped++;
+          continue;
+        }
+        if (!save) {
+          System.out.println("[candidate] " + candidate.type() + " | " + candidate.content());
           continue;
         }
         memoryService.save(candidate);
         saved++;
       }
-      System.out.println("整理完了: 保存=" + saved + " / 候補=" + candidates.size());
+      System.out.println("整理完了: 保存=" + saved + " / スキップ=" + skipped + " / 候補=" + candidates.size());
     }
   }
 }

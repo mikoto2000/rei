@@ -124,6 +124,76 @@ public class MemoryService {
     return updated > 0;
   }
 
+  public void saveTags(String memoryId, List<String> tags) {
+    if (tags == null || tags.isEmpty()) {
+      return;
+    }
+    for (String tag : tags) {
+      if (tag == null || tag.isBlank()) {
+        continue;
+      }
+      jdbcClient.sql("INSERT INTO memory_tags(memory_id, tag) VALUES (?, ?)")
+          .params(memoryId, tag)
+          .update();
+    }
+  }
+
+  public List<String> findTags(String memoryId) {
+    return jdbcClient.sql("SELECT tag FROM memory_tags WHERE memory_id = ? ORDER BY tag")
+        .param(memoryId)
+        .query(String.class)
+        .list();
+  }
+
+  public void saveSource(String memoryId, String source) {
+    if (source == null || source.isBlank()) {
+      return;
+    }
+    jdbcClient.sql("INSERT INTO memory_sources(memory_id, source) VALUES (?, ?)")
+        .params(memoryId, source)
+        .update();
+  }
+
+  public List<String> findSources(String memoryId) {
+    return jdbcClient.sql("SELECT source FROM memory_sources WHERE memory_id = ? ORDER BY source")
+        .param(memoryId)
+        .query(String.class)
+        .list();
+  }
+
+  public void saveRelation(String fromMemoryId, String toMemoryId, String relationType) {
+    if (fromMemoryId == null || toMemoryId == null || relationType == null
+        || fromMemoryId.isBlank() || toMemoryId.isBlank() || relationType.isBlank()) {
+      return;
+    }
+    jdbcClient.sql("INSERT INTO memory_relations(from_memory_id, to_memory_id, relation_type) VALUES (?, ?, ?)")
+        .params(fromMemoryId, toMemoryId, relationType)
+        .update();
+  }
+
+  public int relationCount() {
+    Integer count = jdbcClient.sql("SELECT COUNT(*) FROM memory_relations")
+        .query(Integer.class)
+        .single();
+    return count == null ? 0 : count;
+  }
+
+  public void saveSummary(String memoryId, String summary) {
+    if (summary == null || summary.isBlank()) {
+      return;
+    }
+    jdbcClient.sql("INSERT INTO memory_summaries(memory_id, summary) VALUES (?, ?)")
+        .params(memoryId, summary)
+        .update();
+  }
+
+  public Optional<String> findSummary(String memoryId) {
+    return jdbcClient.sql("SELECT summary FROM memory_summaries WHERE memory_id = ? ORDER BY rowid DESC LIMIT 1")
+        .param(memoryId)
+        .query(String.class)
+        .optional();
+  }
+
   private Memory mapMemory(ResultSet rs, int rowNum) throws java.sql.SQLException {
     return new Memory(
         rs.getString("id"),
