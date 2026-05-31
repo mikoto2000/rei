@@ -44,6 +44,16 @@ public class BlueskyReplyConversationRepository {
         .reversed();
   }
 
+  public List<String> listHandles() {
+    return jdbcClient.sql("""
+        SELECT DISTINCT handle
+        FROM bluesky_reply_conversations
+        ORDER BY handle
+        """)
+        .query(String.class)
+        .list();
+  }
+
   private void append(String handle, String role, String content) {
     jdbcClient.sql("""
         INSERT INTO bluesky_reply_conversations(handle, role, content, created_at)

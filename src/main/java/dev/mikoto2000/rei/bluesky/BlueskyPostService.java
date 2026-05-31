@@ -15,6 +15,7 @@ public class BlueskyPostService {
   private final BlueskyProperties properties;
   private final BlueskyApiClient blueskyApiClient;
   private final BlueskyReplyTextGenerator blueskyReplyTextGenerator;
+  private final BlueskyReplyConversationRepository conversationRepository;
 
   public BlueskyPostResult post(String text) {
     try {
@@ -80,6 +81,7 @@ public class BlueskyPostService {
       if (!replyResult.success()) {
         return new BlueskyPostResult(false, "Bluesky reply failed", null, null);
       }
+      appendConversation(target, text);
       String postUrl = toPostUrl(replyResult.postUri());
       return new BlueskyPostResult(true, "Bluesky reply created", replyResult.postUri(), postUrl);
     } catch (Exception e) {
@@ -155,5 +157,25 @@ public class BlueskyPostService {
 
   private boolean isBlank(String text) {
     return text == null || text.isBlank();
+  }
+
+  private void appendConversation(BlueskyApiClient.ReplyTarget target, String replyText) {
+    String handle = conversationHandle(target);
+    if (handle == null || handle.isBlank()) {
+      return;
+    }
+    conversationRepository.appendUserMessage(handle, target.targetText() == null ? "" : target.targetText());
+    conversationRepository.appendAssistantMessage(handle, replyText == null ? "" : replyText);
+  }
+
+  private String conversationHandle(BlueskyApiClient.ReplyTarget target) {
+    if (target == null || target.parentUri() == null || target.parentUri().isBlank()) {
+      return null;
+    }
+    String[] parts = target.parentUri().split("/");
+    if (parts.length < 3) {
+      return null;
+    }
+    return parts[2];
   }
 }

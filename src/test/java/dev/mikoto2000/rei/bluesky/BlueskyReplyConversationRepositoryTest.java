@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.bluesky;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -41,5 +42,18 @@ class BlueskyReplyConversationRepositoryTest {
     assertEquals("hi", alice.get(1).content());
     assertEquals(1, bob.size());
     assertEquals("yo", bob.get(0).content());
+  }
+
+  @Test
+  void listsDistinctHandles() {
+    repository.appendUserMessage("alice.bsky.social", "hello");
+    repository.appendAssistantMessage("alice.bsky.social", "hi");
+    repository.appendUserMessage("bob.bsky.social", "yo");
+
+    List<String> handles = repository.listHandles();
+
+    assertEquals(2, handles.size());
+    assertTrue(handles.contains("alice.bsky.social"));
+    assertTrue(handles.contains("bob.bsky.social"));
   }
 }
