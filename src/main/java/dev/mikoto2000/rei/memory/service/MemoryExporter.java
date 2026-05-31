@@ -10,6 +10,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import dev.mikoto2000.rei.memory.model.Memory;
 
@@ -19,7 +20,7 @@ public class MemoryExporter {
   public record ExportResult(Path latestMd, Path datedMd, Path datedJsonl, int count) {}
 
   private final MemoryService memoryService;
-  private final ObjectMapper objectMapper = new ObjectMapper();
+  private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
   public MemoryExporter(MemoryService memoryService) {
     this.memoryService = memoryService;
