@@ -50,7 +50,7 @@ class MemoryForgetCommandTest {
     } finally {
       System.setOut(originalOut);
     }
-    assertTrue(out.toString().contains("有効な記憶 ID を指定してください"));
+    assertTrue(out.toString().contains("有効な記憶 ID を入力してください"));
   }
 
   @Test

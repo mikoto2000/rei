@@ -1,40 +1,46 @@
 package dev.mikoto2000.rei.task.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 
+import dev.mikoto2000.rei.task.Task;
+import dev.mikoto2000.rei.task.TaskQuery;
 import dev.mikoto2000.rei.task.TaskService;
+import dev.mikoto2000.rei.task.TaskStatus;
 import picocli.CommandLine;
 
 class TaskCommandTest {
 
-  @TempDir
-  Path tempDir;
-
   @Test
-  void addCommandCreatesTask() {
-    TaskService service = newService();
+  void addCommandDelegatesToTaskService() {
+    TaskService service = Mockito.mock(TaskService.class);
+    Task created = task(1L, "設計レビュー", LocalDate.of(2026, 3, 31), 2, TaskStatus.OPEN, List.of("backend", "review"));
+    when(service.add(any(), any(), any(Integer.class), any())).thenReturn(created);
 
     int exitCode = newCommand(service).execute("add", "--due", "2026-03-31", "--priority", "2", "--tag", "backend", "--tag", "review", "設計レビュー");
 
     assertEquals(0, exitCode);
-    assertEquals(1, service.listOpen().size());
-    assertEquals("設計レビュー", service.listOpen().getFirst().title());
+    verify(service).add("設計レビュー", LocalDate.of(2026, 3, 31), 2, List.of("backend", "review"));
   }
 
   @Test
   void listCommandPrintsOpenTasks() {
-    TaskService service = newService();
-    newCommand(service).execute("add", "--priority", "1", "議事録作成");
+    TaskService service = Mockito.mock(TaskService.class);
+    when(service.listOpen(any(TaskQuery.class))).thenReturn(List.of(task(1L, "定例MTG", null, 1, TaskStatus.OPEN, List.of("meeting"))));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
@@ -46,49 +52,39 @@ class TaskCommandTest {
       System.setOut(originalOut);
     }
 
-    assertTrue(out.toString().contains("議事録作成"));
+    assertTrue(out.toString().contains("定例MTG"));
   }
 
   @Test
-  void listCommandFiltersTasks() {
-    TaskService service = newService();
-    newCommand(service).execute("add", "--due", "2026-03-31", "--priority", "2", "--tag", "backend", "設計レビュー");
-    newCommand(service).execute("add", "--due", "2026-04-05", "--priority", "3", "--tag", "sales", "営業資料");
-    newCommand(service).execute("add", "--due", "2026-03-28", "--priority", "1", "--tag", "backend", "バグ修正");
+  void listCommandBuildsQuery() {
+    TaskService service = Mockito.mock(TaskService.class);
+    when(service.listOpen(any(TaskQuery.class))).thenReturn(List.of());
 
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    PrintStream originalOut = System.out;
-    System.setOut(new PrintStream(out));
-    try {
-      int exitCode = newCommand(service).execute("list", "--priority", "2", "--tag", "backend", "--due-before", "2026-03-31");
-      assertEquals(0, exitCode);
-    } finally {
-      System.setOut(originalOut);
-    }
+    int exitCode = newCommand(service).execute("list", "--priority", "2", "--tag", "backend", "--due-before", "2026-03-31");
 
-    String output = out.toString();
-    assertTrue(output.contains("設計レビュー"));
-    assertTrue(output.contains("バグ修正"));
-    assertFalse(output.contains("営業資料"));
+    assertEquals(0, exitCode);
+    ArgumentCaptor<TaskQuery> captor = ArgumentCaptor.forClass(TaskQuery.class);
+    verify(service).listOpen(captor.capture());
+    TaskQuery actual = captor.getValue();
+    assertEquals(2, actual.priority());
+    assertEquals("backend", actual.tag());
+    assertEquals(LocalDate.of(2026, 3, 31), actual.dueBefore());
   }
 
   @Test
-  void doneAndDeleteCommandsUpdateTasks() {
-    TaskService service = newService();
-    newCommand(service).execute("add", "--priority", "1", "メール返信");
-    long id = service.listOpen().getFirst().id();
+  void doneAndDeleteCommandsDelegateToTaskService() {
+    TaskService service = Mockito.mock(TaskService.class);
+    when(service.complete(10L)).thenReturn(task(10L, "メール返信", null, 3, TaskStatus.DONE, List.of()));
 
-    assertEquals(0, newCommand(service).execute("done", Long.toString(id)));
-    assertEquals(0, service.listOpen().size());
+    assertEquals(0, newCommand(service).execute("done", "10"));
+    verify(service).complete(10L);
 
-    newCommand(service).execute("add", "資料作成");
-    long deleteId = service.listOpen().getFirst().id();
-    assertEquals(0, newCommand(service).execute("delete", Long.toString(deleteId)));
-    assertEquals(0, service.listOpen().size());
+    assertEquals(0, newCommand(service).execute("delete", "20"));
+    verify(service).delete(20L);
   }
 
-  private TaskService newService() {
-    return new TaskService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task-command.db")));
+  private Task task(long id, String title, LocalDate dueDate, int priority, TaskStatus status, List<String> tags) {
+    return new Task(id, title, dueDate, priority, status, tags, OffsetDateTime.now(ZoneOffset.UTC), null);
   }
 
   private CommandLine newCommand(TaskService service) {

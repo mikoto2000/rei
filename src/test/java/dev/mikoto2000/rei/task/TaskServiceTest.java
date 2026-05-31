@@ -1,74 +1,60 @@
 package dev.mikoto2000.rei.task;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
+
+import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 
 class TaskServiceTest {
 
-  @TempDir
-  Path tempDir;
-
   @Test
-  void addAndListOpenTasks() {
-    TaskService service = newService();
+  void addThrowsWhenGoogleCalendarIsDisabled() {
+    TaskService service = new TaskService(disabledCalendarProps());
 
-    Task created = service.add("設計レビュー", LocalDate.of(2026, 3, 31), 2, List.of("backend", "review"));
+    IllegalStateException ex = assertThrows(IllegalStateException.class,
+        () -> service.add("設計レビュー", LocalDate.of(2026, 3, 31), 2, List.of("backend")));
 
-    List<Task> tasks = service.listOpen();
-
-    assertEquals(1, tasks.size());
-    assertEquals(created, tasks.getFirst());
-    assertEquals(TaskStatus.OPEN, tasks.getFirst().status());
-    assertEquals(LocalDate.of(2026, 3, 31), tasks.getFirst().dueDate());
-    assertEquals(List.of("backend", "review"), tasks.getFirst().tags());
-    assertNull(tasks.getFirst().completedAt());
+    assertEquals("Google Tasks へのタスク追加に失敗しました", ex.getMessage());
   }
 
   @Test
-  void completeTaskMovesItOutOfOpenList() {
-    TaskService service = newService();
+  void listOpenThrowsWhenGoogleCalendarIsDisabled() {
+    TaskService service = new TaskService(disabledCalendarProps());
 
-    Task created = service.add("議事録作成", LocalDate.of(2026, 4, 1), 1, List.of("meeting"));
+    IllegalStateException ex = assertThrows(IllegalStateException.class, service::listOpen);
 
-    Task completed = service.complete(created.id());
-
-    assertEquals(TaskStatus.DONE, completed.status());
-    assertEquals(0, service.listOpen().size());
+    assertEquals("Google Tasks の一覧取得に失敗しました", ex.getMessage());
   }
 
   @Test
-  void deleteRemovesTask() {
-    TaskService service = newService();
+  void completeThrowsWhenGoogleCalendarIsDisabled() {
+    TaskService service = new TaskService(disabledCalendarProps());
 
-    Task created = service.add("メール返信", null, 3, List.of());
-    service.delete(created.id());
+    IllegalStateException ex = assertThrows(IllegalStateException.class, () -> service.complete(1L));
 
-    assertEquals(0, service.listOpen().size());
+    assertEquals("Google Tasks の完了更新に失敗しました", ex.getMessage());
   }
 
   @Test
-  void listOpenFiltersByPriorityTagAndDueDate() {
-    TaskService service = newService();
-    service.add("設計レビュー", LocalDate.of(2026, 3, 31), 2, List.of("backend", "review"));
-    service.add("営業資料", LocalDate.of(2026, 4, 3), 3, List.of("sales"));
-    service.add("バグ修正", LocalDate.of(2026, 3, 28), 1, List.of("backend", "urgent"));
+  void deleteThrowsWhenGoogleCalendarIsDisabled() {
+    TaskService service = new TaskService(disabledCalendarProps());
 
-    List<Task> filtered = service.listOpen(new TaskQuery(2, "backend", LocalDate.of(2026, 3, 31)));
+    IllegalStateException ex = assertThrows(IllegalStateException.class, () -> service.delete(1L));
 
-    assertEquals(2, filtered.size());
-    assertEquals("バグ修正", filtered.get(0).title());
-    assertEquals("設計レビュー", filtered.get(1).title());
+    assertEquals("Google Tasks の削除に失敗しました", ex.getMessage());
   }
 
-  private TaskService newService() {
-    return new TaskService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task.db")));
+  private GoogleCalendarProperties disabledCalendarProps() {
+    return new GoogleCalendarProperties(
+        "Rei",
+        "",
+        "",
+        new GoogleCalendarProperties.CalendarProperties(false, "primary", ""),
+        new GoogleCalendarProperties.TaskProperties(true));
   }
 }

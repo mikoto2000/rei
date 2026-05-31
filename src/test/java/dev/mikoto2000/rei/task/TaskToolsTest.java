@@ -1,104 +1,113 @@
 package dev.mikoto2000.rei.task;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.mockito.Mockito;
 
 class TaskToolsTest {
 
-  @TempDir
-  Path tempDir;
-
   @Test
-  void taskCreateAndTaskListExposeOpenTasks() {
-    TaskService service = new TaskService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task-tools.db")));
+  void taskCreateAndTaskListDelegateToService() {
+    TaskService service = Mockito.mock(TaskService.class);
     TaskTools tools = new TaskTools(service);
 
-    Task created = tools.taskCreate("提案書作成", "2026-04-03", 2, List.of("sales", "document"));
-    List<Task> tasks = tools.taskList();
+    Task created = task(1L, "資料作成", LocalDate.of(2026, 4, 3), 2, TaskStatus.OPEN, List.of("sales", "document"));
+    when(service.add("資料作成", LocalDate.of(2026, 4, 3), 2, List.of("sales", "document"))).thenReturn(created);
+    when(service.listOpen()).thenReturn(List.of(created));
 
-    assertEquals(created, tasks.getFirst());
-    assertEquals(LocalDate.of(2026, 4, 3), tasks.getFirst().dueDate());
+    Task actual = tools.taskCreate("資料作成", "2026-04-03", 2, List.of("sales", "document"));
+    List<Task> listed = tools.taskList();
+
+    assertSame(created, actual);
+    assertEquals(List.of(created), listed);
   }
 
   @Test
-  void taskCompleteMarksTaskAsDone() {
-    TaskService service = new TaskService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task-tools-done.db")));
+  void taskCompleteDelegatesToService() {
+    TaskService service = Mockito.mock(TaskService.class);
     TaskTools tools = new TaskTools(service);
-    Task created = tools.taskCreate("顧客返信", null, 3, List.of());
+    Task done = task(2L, "会議準備", null, 3, TaskStatus.DONE, List.of());
+    when(service.complete(2L)).thenReturn(done);
 
-    Task completed = tools.taskComplete(created.id());
+    Task actual = tools.taskComplete(2L);
 
-    assertEquals(TaskStatus.DONE, completed.status());
-    assertEquals(0, tools.taskList().size());
+    assertSame(done, actual);
+    verify(service).complete(2L);
   }
 
   @Test
-  void taskUpdateChangesTaskFields() {
-    TaskService service = new TaskService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task-tools-update.db")));
+  void taskUpdateDelegatesToService() {
+    TaskService service = Mockito.mock(TaskService.class);
     TaskTools tools = new TaskTools(service);
-    Task created = tools.taskCreate("見積作成", "2026-04-03", 2, List.of("sales"));
+    Task updated = task(3L, "要件更新", LocalDate.of(2026, 4, 10), 1, TaskStatus.OPEN, List.of("urgent"));
+    when(service.update(3L, "要件更新", LocalDate.of(2026, 4, 10), 1, List.of("urgent"))).thenReturn(updated);
 
-    Task updated = tools.taskUpdate(created.id(), "提案書更新", "2026-04-10", 1, List.of("sales", "urgent"));
+    Task actual = tools.taskUpdate(3L, "要件更新", "2026-04-10", 1, List.of("urgent"));
 
-    assertEquals("提案書更新", updated.title());
-    assertEquals(LocalDate.of(2026, 4, 10), updated.dueDate());
-    assertEquals(1, updated.priority());
-    assertEquals(List.of("sales", "urgent"), updated.tags());
+    assertSame(updated, actual);
+    verify(service).update(3L, "要件更新", LocalDate.of(2026, 4, 10), 1, List.of("urgent"));
   }
 
   @Test
-  void taskUpdateCanPartiallyChangeTaskFields() {
-    TaskService service = new TaskService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task-tools-partial.db")));
+  void taskUpdateDeadlineDelegatesToService() {
+    TaskService service = Mockito.mock(TaskService.class);
     TaskTools tools = new TaskTools(service);
-    Task created = tools.taskCreate("社内共有", "2026-04-03", 2, List.of("team"));
+    Task updated = task(4L, "期限変更", LocalDate.of(2026, 4, 10), 2, TaskStatus.OPEN, List.of());
+    when(service.updateDeadline(4L, LocalDate.of(2026, 4, 10))).thenReturn(updated);
 
-    Task updated = tools.taskUpdate(created.id(), null, null, 1, null);
+    Task actual = tools.taskUpdateDeadline(4L, "2026-04-10");
 
-    assertEquals("社内共有", updated.title());
-    assertEquals(LocalDate.of(2026, 4, 3), updated.dueDate());
-    assertEquals(1, updated.priority());
-    assertEquals(List.of("team"), updated.tags());
+    assertSame(updated, actual);
+    verify(service).updateDeadline(4L, LocalDate.of(2026, 4, 10));
   }
 
   @Test
-  void taskUpdateDeadlineChangesDueDate() {
-    TaskService service = new TaskService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task-tools-deadline.db")));
+  void taskDeleteDelegatesToService() {
+    TaskService service = Mockito.mock(TaskService.class);
     TaskTools tools = new TaskTools(service);
-    Task created = tools.taskCreate("見積作成", "2026-04-03", 2, List.of("sales"));
 
-    Task updated = tools.taskUpdateDeadline(created.id(), "2026-04-10");
+    tools.taskDelete(5L);
 
-    assertEquals(LocalDate.of(2026, 4, 10), updated.dueDate());
-    assertEquals(LocalDate.of(2026, 4, 10), tools.taskList().getFirst().dueDate());
+    verify(service).delete(5L);
   }
 
   @Test
-  void taskUpdateDeadlineCanClearDueDate() {
-    TaskService service = new TaskService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task-tools-clear.db")));
+  void taskCreateUsesEmptyTagListWhenNull() {
+    TaskService service = Mockito.mock(TaskService.class);
     TaskTools tools = new TaskTools(service);
-    Task created = tools.taskCreate("社内共有", "2026-04-03", 2, List.of());
+    Task created = task(6L, "タグなし", null, 3, TaskStatus.OPEN, List.of());
+    when(service.add("タグなし", null, 3, List.of())).thenReturn(created);
 
-    Task updated = tools.taskUpdateDeadline(created.id(), null);
+    Task actual = tools.taskCreate("タグなし", null, 3, null);
 
-    assertNull(updated.dueDate());
+    assertSame(created, actual);
+    verify(service).add("タグなし", null, 3, List.of());
   }
 
   @Test
-  void taskDeleteRemovesTask() {
-    TaskService service = new TaskService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("task-tools-delete.db")));
+  void taskUpdatePassesNullValuesAsIs() {
+    TaskService service = Mockito.mock(TaskService.class);
     TaskTools tools = new TaskTools(service);
-    Task created = tools.taskCreate("削除対象", "2026-04-03", 2, List.of());
+    Task updated = task(7L, "現状維持", LocalDate.of(2026, 4, 3), 2, TaskStatus.OPEN, List.of("team"));
+    when(service.update(7L, null, null, 1, null)).thenReturn(updated);
 
-    tools.taskDelete(created.id());
+    Task actual = tools.taskUpdate(7L, null, null, 1, null);
 
-    assertEquals(0, tools.taskList().size());
+    assertSame(updated, actual);
+    verify(service).update(7L, null, null, 1, null);
+  }
+
+  private Task task(long id, String title, LocalDate dueDate, int priority, TaskStatus status, List<String> tags) {
+    return new Task(id, title, dueDate, priority, status, tags, OffsetDateTime.now(ZoneOffset.UTC), null);
   }
 }
