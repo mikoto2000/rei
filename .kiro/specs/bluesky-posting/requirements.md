@@ -81,3 +81,57 @@
 2. WHEN 投稿本文に `#tag` 形式のハッシュタグが含まれるとき、THE system SHALL `app.bsky.richtext.facet#tag` を付与し、tag 値（`#` を除いた文字列）と UTF-8 バイト位置（byteStart/byteEnd）を設定する。
 3. WHEN URL facet と hashtag facet が同時に存在するとき、THE system SHALL 両方の facet を同一 `facets` 配列に含める。
 4. WHEN `#` がハッシュタグとして無効な位置・形式のとき、THE system SHALL hashtag facet を付与しない。
+## 追加要件: 対象ユーザー投稿への確率リプライ
+
+### 概要
+- リプライ対象は手動指定ではなく、`application.yaml` に定義されたユーザー一覧を使用する。
+- 対象ユーザーの新規投稿を定期確認し、ユーザーごとに設定した確率で返信する。
+
+### 設定要件（application.yaml）
+```yaml
+rei:
+  bluesky:
+    reply:
+      enabled: true
+      dry-run: false
+      check-interval-seconds: 300
+      fetch-limit: 30
+      exclude-replies: true
+      exclude-reposts: true
+      max-post-age-minutes: 120
+      users:
+        - handle: "alice.bsky.social"
+          probability: 0.25
+          max-replies-per-day: 3
+        - handle: "bob.bsky.social"
+          probability: 0.10
+          max-replies-per-day: 1
+```
+
+### 投稿確認方式
+- `app.bsky.feed.getAuthorFeed` を対象ユーザーごとに定期実行する。
+- `handle` は必要に応じて `did` に解決して API を呼び出す。
+- 前回処理済み境界（`lastSeenPostUri` など）を保持し、増分処理で新着のみを判定する。
+
+### 判定・除外ルール
+1. `exclude-reposts=true` の場合は Repost を除外する。
+2. `exclude-replies=true` の場合は Reply を除外する。
+3. `max-post-age-minutes` を超える古い投稿は除外する。
+4. 同一投稿への二重返信は禁止する（既返信記録で判定）。
+5. `rand < probability` の場合のみ返信候補とする。
+6. `max-replies-per-day` を超える場合は返信しない。
+
+### 実行モード
+- `enabled=false` の場合は返信監視・返信投稿を実行しない。
+- `dry-run=true` の場合は投稿 API を呼び出さず、判定結果のみログ出力する。
+
+### ログ・監査
+- INFO: 対象ユーザー、取得件数、判定件数、返信件数
+- DEBUG: 投稿 URI ごとの判定理由（除外理由、確率落選、上限超過）
+- 認証情報（app password 等）はログに出力しない。
+
+### 受け入れ基準
+1. 設定ユーザー投稿に対し、確率・日次上限どおりに返信判定される。
+2. 同一投稿に二重返信しない。
+3. `dry-run=true` で外部投稿が 0 件である。
+4. `enabled=false` で処理が完全停止する。

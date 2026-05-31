@@ -28,6 +28,8 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   private static final URI CREATE_SESSION_URI = URI.create("https://bsky.social/xrpc/com.atproto.server.createSession");
   private static final URI CREATE_RECORD_URI = URI.create("https://bsky.social/xrpc/com.atproto.repo.createRecord");
   private static final String GET_RECORD_ENDPOINT = "https://bsky.social/xrpc/com.atproto.repo.getRecord";
+  private static final String RESOLVE_HANDLE_ENDPOINT = "https://bsky.social/xrpc/com.atproto.identity.resolveHandle";
+  private static final String GET_AUTHOR_FEED_ENDPOINT = "https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed";
   private static final Pattern URL_PATTERN = Pattern.compile("https?://\\S+");
   private static final Pattern HASHTAG_PATTERN = Pattern.compile("(?<!\\S)#([\\p{L}\\p{N}_]+)");
 
@@ -66,7 +68,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
 
   @Override
   public PostResult createPost(String accessJwt, String did, String text) {
-    String requestBody = createRecordRequestBody(did, text, OffsetDateTime.now());
+    String requestBody = createRecordRequestBody(did, text, OffsetDateTime.now(), null);
     HttpRequest request = HttpRequest.newBuilder(CREATE_RECORD_URI)
         .header("Content-Type", "application/json")
         .header("Authorization", "Bearer " + accessJwt)
@@ -92,6 +94,99 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
         Thread.currentThread().interrupt();
       }
       throw new RuntimeException("Bluesky post request failed", e);
+    }
+  }
+
+  @Override
+  public String resolveHandle(String handle) {
+    URI uri = URI.create(RESOLVE_HANDLE_ENDPOINT + "?handle=" + encode(handle));
+    HttpRequest request = HttpRequest.newBuilder(uri).GET().build();
+    try {
+      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      if (response.statusCode() / 100 != 2) {
+        return null;
+      }
+      JsonNode body = objectMapper.readTree(response.body());
+      return textOrNull(body, "did");
+    } catch (IOException | InterruptedException e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
+      throw new RuntimeException("Bluesky resolveHandle request failed", e);
+    }
+  }
+
+  @Override
+  public List<FeedPost> getAuthorFeed(String actorDid, int limit) {
+    URI uri = URI.create(GET_AUTHOR_FEED_ENDPOINT + "?actor=" + encode(actorDid) + "&limit=" + limit);
+    HttpRequest request = HttpRequest.newBuilder(uri).GET().build();
+    try {
+      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      if (response.statusCode() / 100 != 2) {
+        return List.of();
+      }
+      JsonNode body = objectMapper.readTree(response.body());
+      JsonNode feed = body.get("feed");
+      if (feed == null || !feed.isArray()) {
+        return List.of();
+      }
+      List<FeedPost> posts = new ArrayList<>();
+      for (JsonNode item : feed) {
+        JsonNode post = item.get("post");
+        if (post == null || post.isNull()) {
+          continue;
+        }
+        String uriText = textOrNull(post, "uri");
+        String cid = textOrNull(post, "cid");
+        String indexedAt = textOrNull(post, "indexedAt");
+        JsonNode record = post.get("record");
+        String text = record != null ? textOrNull(record, "text") : null;
+        boolean repost = item.get("reason") != null && !item.get("reason").isNull();
+        boolean reply = record != null && record.get("reply") != null && !record.get("reply").isNull();
+        String rootUri = null;
+        String rootCid = null;
+        if (reply) {
+          JsonNode root = record.get("reply").get("root");
+          if (root != null) {
+            rootUri = textOrNull(root, "uri");
+            rootCid = textOrNull(root, "cid");
+          }
+        }
+        posts.add(new FeedPost(uriText, cid, text, indexedAt == null ? null : OffsetDateTime.parse(indexedAt), repost, reply, rootUri,
+            rootCid));
+      }
+      return posts;
+    } catch (IOException | InterruptedException e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
+      throw new RuntimeException("Bluesky getAuthorFeed request failed", e);
+    }
+  }
+
+  @Override
+  public PostResult createReply(String accessJwt, String did, String text, String parentUri, String parentCid, String rootUri,
+      String rootCid) {
+    ReplyRef reply = new ReplyRef(parentUri, parentCid, rootUri, rootCid);
+    String requestBody = createRecordRequestBody(did, text, OffsetDateTime.now(), reply);
+    HttpRequest request = HttpRequest.newBuilder(CREATE_RECORD_URI)
+        .header("Content-Type", "application/json")
+        .header("Authorization", "Bearer " + accessJwt)
+        .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+        .build();
+    try {
+      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      if (response.statusCode() / 100 != 2) {
+        return new PostResult(false, null);
+      }
+      JsonNode body = objectMapper.readTree(response.body());
+      String postUri = textOrNull(body, "uri");
+      return new PostResult(postUri != null && !postUri.isBlank(), postUri);
+    } catch (IOException | InterruptedException e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
+      throw new RuntimeException("Bluesky reply request failed", e);
     }
   }
 
@@ -142,6 +237,10 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   }
 
   static String createRecordRequestBody(String did, String text, OffsetDateTime createdAt) {
+    return createRecordRequestBody(did, text, createdAt, null);
+  }
+
+  static String createRecordRequestBody(String did, String text, OffsetDateTime createdAt, ReplyRef replyRef) {
     StringBuilder request = new StringBuilder();
     request.append("{\"repo\":\"").append(escapeJsonStatic(did)).append("\",\"collection\":\"app.bsky.feed.post\",");
     request.append("\"record\":{\"$type\":\"app.bsky.feed.post\",\"text\":\"")
@@ -152,6 +251,17 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     String facets = buildFacetsJson(text);
     if (!facets.isEmpty()) {
       request.append(",\"facets\":").append(facets);
+    }
+    if (replyRef != null && replyRef.parentUri() != null && replyRef.parentCid() != null) {
+      request.append(",\"reply\":{\"root\":{\"uri\":\"")
+          .append(escapeJsonStatic(replyRef.rootUri() == null ? replyRef.parentUri() : replyRef.rootUri()))
+          .append("\",\"cid\":\"")
+          .append(escapeJsonStatic(replyRef.rootCid() == null ? replyRef.parentCid() : replyRef.rootCid()))
+          .append("\"},\"parent\":{\"uri\":\"")
+          .append(escapeJsonStatic(replyRef.parentUri()))
+          .append("\",\"cid\":\"")
+          .append(escapeJsonStatic(replyRef.parentCid()))
+          .append("\"}}");
     }
     request.append("}}");
     return request.toString();
@@ -274,5 +384,8 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   }
 
   record Facet(int byteStart, int byteEnd, FacetType type, String value) {
+  }
+
+  record ReplyRef(String parentUri, String parentCid, String rootUri, String rootCid) {
   }
 }

@@ -1,188 +1,157 @@
-# 設計書: Bluesky 投稿機能
+# 設計書: Bluesky 投稿・確率リプライ機能
 
-## 概要
+## 1. 目的
+本設計は、既存の Bluesky 投稿機能に加え、`application.yaml` で定義した対象ユーザーの投稿を定期監視し、ユーザーごとの確率で自動リプライする機能を提供する。
 
-本機能は `BlueskyPostTools` から `BlueskyPostService` を呼び出し、Bluesky へテキスト投稿を行う。  
-`rei.bluesky.enabled` による有効/無効制御、認証情報の利用、投稿本文バリデーション、例外処理とログ出力を提供する。
+## 2. スコープ
+- 対象ユーザー投稿の定期確認
+- 確率判定による返信可否決定
+- 日次上限と重複返信防止
+- dry-run モード
+- 監査ログ出力
 
-## 設計方針
+非スコープ:
+- 高度なスパム判定
+- 投稿内容の品質評価モデル
+- 分散実行前提の厳密排他
 
-- 投稿処理は `BlueskyPostService` に集約し、ツール層は委譲に徹する。
-- 設定値は `BlueskyProperties` に集約し、外部依存を最小化する。
-- バリデーションは API 呼び出し前に実施し、失敗理由を明確に返す。
-- ログには機密情報（アプリパスワード、アクセストークン）を含めない。
+## 3. アーキテクチャ
 
----
+### 3.1 コンポーネント
+- `BlueskyReplyProperties`
+  - `rei.bluesky.reply` 配下の設定を保持
+- `BlueskyReplyScheduler`
+  - 定期実行エントリポイント
+- `BlueskyReplyService`
+  - ユーザー巡回、投稿取得、判定、返信実行
+- `BlueskyAuthorFeedClient`
+  - `app.bsky.feed.getAuthorFeed` 呼び出し
+- `BlueskyReplyStateRepository`
+  - 増分境界・既返信・日次件数の永続化
+- `BlueskyPostService`（既存）
+  - 実際の返信投稿 (`reply.root` / `reply.parent` を含む)
 
-## コンポーネント構成
+### 3.2 既存連携
+- 既存の URL facet / hashtag facet 生成は `BlueskyPostService` 側の処理を流用
+- 認証は既存 Bluesky 認証設定（handle/app password）を流用
 
-- **BlueskyProperties**
-  - `rei.bluesky` 配下の設定値を保持する。
-  - 主な設定: `enabled`, `handle`, `appPassword`, `maxPostLength`
-
-- **BlueskyPostService**
-  - 投稿可否判定（enabled / 認証情報 / 本文）を行う。
-  - Bluesky API 認証・投稿呼び出しを行う。
-  - 結果を `BlueskyPostResult` で返す。
-
-- **BlueskyPostTools**
-  - AI ツールの入口。
-  - `post(String text)` を公開し、`BlueskyPostService` に委譲する。
-
----
-
-## クラス設計
-
-### BlueskyProperties
-
-```java
-@Getter
-@Setter
-@ConfigurationProperties(prefix = "rei.bluesky")
-public class BlueskyProperties {
-  private boolean enabled = false;
-  private String handle = "";
-  private String appPassword = "";
-  private int maxPostLength = 300;
-}
-```
-
-### BlueskyPostResult
-
-```java
-public record BlueskyPostResult(
-    boolean success,
-    String message,
-    String postUri,
-    String postUrl
-) {}
-```
-
-### BlueskyPostService
-
-```java
-@Service
-@RequiredArgsConstructor
-public class BlueskyPostService {
-  private final BlueskyProperties properties;
-
-  public BlueskyPostResult post(String text) { ... }
-}
-```
-
-### BlueskyPostTools
-
-```java
-@Component
-@RequiredArgsConstructor
-public class BlueskyPostTools {
-  private final BlueskyPostService blueskyPostService;
-
-  @Tool(name = "blueskyPost", description = "Blueskyへ投稿します")
-  public String post(String text) { ... }
-}
-```
-
----
-
-## 処理フロー
-
-```mermaid
-flowchart TD
-    A[BlueskyPostTools.post(text)] --> B[BlueskyPostService.post(text)]
-    B --> C{enabled=true?}
-    C -- No --> R1[失敗結果: disabled]
-    C -- Yes --> D{handle/appPassword 設定あり?}
-    D -- No --> R2[失敗結果: auth config missing]
-    D -- Yes --> E{text が空/空白?}
-    E -- Yes --> R3[失敗結果: validation error]
-    E -- No --> F{text length <= maxPostLength?}
-    F -- No --> R4[失敗結果: too long]
-    F -- Yes --> G[Bluesky API 認証]
-    G --> H{認証成功?}
-    H -- No --> R5[失敗結果: auth failed]
-    H -- Yes --> I[投稿API実行]
-    I --> J{投稿成功?}
-    J -- Yes --> S1[成功結果: postUri/postUrl]
-    J -- No --> R6[失敗結果: post failed]
-    G -.例外.-> X[例外補足・warnログ]
-    I -.例外.-> X
-    X --> R7[失敗結果: exception]
-```
-
----
-
-## 要件トレーサビリティ
-
-- **要件1（有効/無効制御）**
-  - `BlueskyPostService.post()` 冒頭で `properties.enabled` を判定。
-
-- **要件2（認証情報による投稿）**
-  - `handle/appPassword` の存在確認。
-  - 認証 API 呼び出し、失敗時の明示的エラー返却。
-
-- **要件3（投稿本文バリデーション）**
-  - `isBlank` 判定。
-  - `maxPostLength` 超過判定。
-
-- **要件4（AI ツールからの投稿）**
-  - `BlueskyPostTools.post()` からサービスへ委譲し、成功/失敗結果を文字列化して返却。
-
-- **要件5（例外処理とログ）**
-  - API 呼び出しを `try-catch` で保護。
-  - `warn` ログへ原因分類を出力（機密情報は非出力）。
-
----
-
-## 設定
+## 4. 設定モデル
 
 ```yaml
 rei:
   bluesky:
-    enabled: false
-    handle: ${REI_BLUESKY_HANDLE:}
-    app-password: ${REI_BLUESKY_APP_PASSWORD:}
-    max-post-length: ${REI_BLUESKY_MAX_POST_LENGTH:300}
+    reply:
+      enabled: true
+      dry-run: false
+      check-interval-seconds: 300
+      fetch-limit: 30
+      exclude-replies: true
+      exclude-reposts: true
+      max-post-age-minutes: 120
+      users:
+        - handle: "alice.bsky.social"
+          probability: 0.25
+          max-replies-per-day: 3
 ```
 
----
+### 4.1 バリデーション
+- `users[].handle`: 必須、空禁止
+- `users[].probability`: 必須、`0.0 <= p <= 1.0`
+- `check-interval-seconds`: `>= 10`
+- `fetch-limit`: `1..100`
+- `max-replies-per-day`: `>= 0`
 
-## エラーメッセージ設計
+## 5. データ設計
 
-- `Bluesky posting is disabled`
-- `Bluesky credentials are not configured`
-- `Post text must not be blank`
-- `Post text exceeds max length: {max}`
-- `Bluesky authentication failed`
-- `Bluesky post failed`
-- `Bluesky post failed due to unexpected error`
+### 5.1 `bluesky_reply_user_state`
+- `handle` (PK)
+- `last_seen_post_uri`
+- `last_seen_indexed_at`
+- `updated_at`
 
----
+用途: 増分処理の境界管理
 
-## 追加設計: Bluesky hashtag facets
+### 5.2 `bluesky_replied_posts`
+- `post_uri` (PK)
+- `handle`
+- `replied_post_uri`
+- `replied_at`
 
-### 1. Facet 生成の責務
-- `DefaultBlueskyApiClient` で投稿本文から facet を抽出する。
-- 既存の URL facet 抽出に加えて、`#tag` を hashtag facet として抽出する。
-- 抽出結果は 1 つの `facets` JSON 配列として `createRecord` リクエストに含める。
+用途: 二重返信防止
 
-### 2. Facet 型
-- URL: `app.bsky.richtext.facet#link`
-  - フィールド: `uri`
-- Hashtag: `app.bsky.richtext.facet#tag`
-  - フィールド: `tag`（`#` を除いた文字列）
+### 5.3 `bluesky_reply_daily_count`
+- `handle`
+- `date` (YYYY-MM-DD)
+- `count`
+- PK(`handle`, `date`)
 
-### 3. バイト位置
-- `byteStart` / `byteEnd` は UTF-8 バイト長で算出する。
-- マルチバイト文字（日本語含む）でも正しい範囲を指すこと。
+用途: 日次返信上限管理
 
-### 4. 抽出ルール
-- URL は既存ルールを継続（末尾句読点のトリム含む）。
-- hashtag は本文中の `#` プレフィックス語を対象にし、無効形式は除外する。
-- URL と hashtag が混在する場合は両方を facets に含める。
+## 6. 処理フロー
 
-### 5. テスト観点
-- URL facet が従来どおり生成されること。
-- hashtag facet が生成されること（`tag` 値・UTF-8 byte index）。
-- URL と hashtag の同時生成時に、`facets` 配列へ両方が入ること。
-- URL/hashtag が無い投稿では `facets` を省略すること。
+1. `enabled=false` なら即終了
+2. 設定ユーザーを順次処理
+3. `handle -> did` 解決
+4. `getAuthorFeed(actor=did, limit=fetchLimit)` 取得
+5. 新着投稿のみ抽出（`last_seen_*` 境界で判定）
+6. 除外判定
+   - repost 除外 (`exclude-reposts`)
+   - reply 除外 (`exclude-replies`)
+   - 古い投稿除外 (`max-post-age-minutes`)
+   - 既返信除外 (`bluesky_replied_posts`)
+7. 確率判定（`ThreadLocalRandom.current().nextDouble() < probability`）
+8. 日次上限判定（`count < maxRepliesPerDay`）
+9. `dry-run=true` ならログのみ
+10. `dry-run=false` なら `BlueskyPostService` 経由で返信投稿
+11. 成功時に `replied_posts` と `daily_count` を更新
+12. 最後に `last_seen_*` 更新
+
+## 7. 返信生成
+- 返信対象投稿の `uri` / `cid` を使用
+- `reply.parent` = 対象投稿
+- `reply.root` = 対象が root なら同じ、thread 内なら root を使用
+- 本文は既存生成ロジック（必要なら別途プロンプト）
+- facet は既存実装（URL/hashtag）を適用
+
+## 8. エラーハンドリング
+- ユーザー単位で隔離して処理（1ユーザー失敗で全体停止しない）
+- API エラー時:
+  - WARN ログ
+  - 当該ユーザーのみスキップして次へ
+- 永続化エラー時:
+  - ERROR ログ
+  - 再実行時に整合が崩れないよう、書き込み順序を `投稿成功 -> replied_posts -> daily_count` に固定
+
+## 9. ログ設計
+- INFO
+  - `handle`, `fetched`, `candidates`, `replied`, `skipped`
+- DEBUG
+  - 投稿 URI 単位の除外理由（repost/reply/old/already_replied/probability/daily_limit）
+- 機密情報（app password, token）は出力しない
+
+## 10. テスト戦略
+
+### 10.1 単体テスト
+- 確率判定ロジック
+- 除外条件判定
+- 日次上限判定
+- dry-run 時の未投稿保証
+
+### 10.2 リポジトリテスト
+- `replied_posts` 一意制約
+- `daily_count` upsert
+- `last_seen` 更新
+
+### 10.3 サービステスト（モック）
+- feed API レスポンスから候補抽出
+- 投稿成功/失敗分岐
+- ユーザーごとの障害分離
+
+### 10.4 受け入れ相当
+- 設定2ユーザーで確率と上限どおり動作
+- 同一投稿に二重返信しない
+
+## 11. 将来拡張
+- 返信対象時間帯の設定
+- クールダウン（ユーザーごと最小返信間隔）
+- 返信本文テンプレートのユーザー別設定
