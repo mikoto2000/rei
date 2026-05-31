@@ -39,6 +39,10 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("notification-enabled: false"));
     assertTrue(content.contains("REI_INTEREST_NOTIFICATION_CRON"));
     assertTrue(content.contains("0 0 12 * * *"));
+    assertTrue(content.contains("bluesky:"));
+    assertTrue(content.contains("reply:"));
+    assertTrue(content.contains("REI_BLUESKY_REPLY_CHECK_INTERVAL_SECONDS"));
+    assertTrue(content.contains("alice.bsky.social"));
   }
 
   @Test

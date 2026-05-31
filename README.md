@@ -514,7 +514,7 @@ mikoto2000 <mikoto2000@gmail.com>
 
 ## Bluesky Posting
 
-Set these environment variables to enable Bluesky posting tool.
+Bluesky 投稿機能と、対象ユーザーへの確率リプライ機能を利用できます。
 
 ```bash
 export REI_BLUESKY_ENABLED=true
@@ -522,6 +522,30 @@ export REI_BLUESKY_HANDLE=your-handle.bsky.social
 export REI_BLUESKY_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
 export REI_BLUESKY_MAX_POST_LENGTH=300
 ```
+
+`application.yaml`（または `.rei/application.yaml`）に `rei.bluesky.reply` を定義すると、対象ユーザーの投稿を定期チェックし、条件を満たした投稿に自動返信します。
+
+```yaml
+rei:
+  bluesky:
+    reply:
+      enabled: true
+      dry-run: false
+      check-interval-seconds: 300
+      fetch-limit: 30
+      exclude-replies: true
+      exclude-reposts: true
+      max-post-age-minutes: 120
+      users:
+        - handle: "alice.bsky.social"
+          probability: 0.25
+          max-replies-per-day: 3
+```
+
+補足:
+
+- `dry-run: true` の場合、投稿 API は呼ばずログ出力のみ行います。
+- 除外条件（repost/reply/古い投稿/既返信）と確率判定、日次上限判定を通過した投稿のみ返信します。
 
 ## メモリ統合機能の更新内容
 

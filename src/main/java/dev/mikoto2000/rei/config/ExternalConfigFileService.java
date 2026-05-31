@@ -68,6 +68,23 @@ public class ExternalConfigFileService {
           feed:
             briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:3}
             cron: ${REI_FEED_CRON:0 0 4 * * *}
+          bluesky:
+            enabled: false
+            handle: ${REI_BLUESKY_HANDLE:}
+            app-password: ${REI_BLUESKY_APP_PASSWORD:}
+            max-post-length: ${REI_BLUESKY_MAX_POST_LENGTH:300}
+            reply:
+              enabled: false
+              dry-run: true
+              check-interval-seconds: ${REI_BLUESKY_REPLY_CHECK_INTERVAL_SECONDS:300}
+              fetch-limit: ${REI_BLUESKY_REPLY_FETCH_LIMIT:30}
+              exclude-replies: true
+              exclude-reposts: true
+              max-post-age-minutes: ${REI_BLUESKY_REPLY_MAX_POST_AGE_MINUTES:120}
+              users:
+                - handle: "alice.bsky.social"
+                  probability: 0.25
+                  max-replies-per-day: 3
           google:
             application-name: Rei
             credentials-path: ${REI_GOOGLE_CREDENTIALS_PATH:${user.dir}/.rei/google-calendar-credentials.json}
