@@ -145,8 +145,8 @@ public class MemoryCommand {
     private final MemoryConsolidatorService consolidatorService;
     private final MemoryService memoryService;
 
-    @Option(names = "--save", defaultValue = "false", description = "要約を記憶として保存します")
-    boolean save;
+    @Option(names = {"--approve", "--save"}, defaultValue = "false", description = "要約の保存を承認します")
+    boolean approve;
 
     @Override
     public void run() {
@@ -157,8 +157,8 @@ public class MemoryCommand {
       }
       String summary = consolidatorService.summarize(candidates.stream().map(Memory::content).toList());
       System.out.println(summary);
-      if (!save) {
-        System.out.println("要約を保存するには --save を指定してください");
+      if (!approve) {
+        System.out.println("要約は未保存です。保存するには --approve を指定してください");
         return;
       }
       Memory memory = new Memory(null, summary, MemoryType.EPISODE_SUMMARY, MemoryScope.SHORT_TERM,
@@ -177,8 +177,8 @@ public class MemoryCommand {
     private final SensitiveInfoDetector sensitiveInfoDetector;
     private final MemoryConflictResolver conflictResolver;
 
-    @Option(names = "--save", defaultValue = "false", description = "抽出候補を保存します")
-    boolean save;
+    @Option(names = {"--approve", "--save"}, defaultValue = "false", description = "抽出候補の保存を承認します")
+    boolean approve;
 
     @Override
     public void run() {
@@ -191,8 +191,8 @@ public class MemoryCommand {
       List<Memory> active = memoryService.listActiveWithExpiryCheck();
       int saved = 0;
       int skipped = 0;
-      if (!save) {
-        System.out.println("候補を保存するには --save を指定してください");
+      if (!approve) {
+        System.out.println("候補は未保存です。保存するには --approve を指定してください");
       }
       for (Memory candidate : candidates) {
         if (sensitiveInfoDetector.containsSensitiveInfo(candidate.content())) {
@@ -205,7 +205,7 @@ public class MemoryCommand {
           skipped++;
           continue;
         }
-        if (!save) {
+        if (!approve) {
           System.out.println("[candidate] " + candidate.type() + " | " + candidate.content());
           continue;
         }

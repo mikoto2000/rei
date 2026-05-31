@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -44,6 +45,21 @@ class MemoryCommandTest {
   }
 
   @Test
+  void summarizeSavesWhenApproved() {
+    MemoryConsolidatorService consolidator = Mockito.mock(MemoryConsolidatorService.class);
+    MemoryService memoryService = Mockito.mock(MemoryService.class);
+    when(consolidator.extractCandidates()).thenReturn(List.of(new Memory("1", "msg", MemoryType.KNOWLEDGE,
+        MemoryScope.SHORT_TERM, MemoryStatus.CANDIDATE, 0.8d, null, null, null)));
+    when(consolidator.summarize(any())).thenReturn("summary");
+
+    var cmd = new CommandLine(new MemoryCommand.SummarizeCommand(consolidator, memoryService));
+    int exitCode = cmd.execute("--approve");
+
+    assertEquals(0, exitCode);
+    verify(memoryService, times(1)).save(any());
+  }
+
+  @Test
   void consolidateDoesNotSaveWithoutSaveOption() {
     MemoryConsolidatorService consolidator = Mockito.mock(MemoryConsolidatorService.class);
     MemoryService memoryService = Mockito.mock(MemoryService.class);
@@ -63,6 +79,28 @@ class MemoryCommandTest {
 
     assertEquals(0, exitCode);
     verify(memoryService, never()).save(any());
+  }
+
+  @Test
+  void consolidateSavesWhenApproved() {
+    MemoryConsolidatorService consolidator = Mockito.mock(MemoryConsolidatorService.class);
+    MemoryService memoryService = Mockito.mock(MemoryService.class);
+    SensitiveInfoDetector detector = Mockito.mock(SensitiveInfoDetector.class);
+    MemoryConflictResolver resolver = Mockito.mock(MemoryConflictResolver.class);
+
+    Memory candidate = new Memory("1", "candidate", MemoryType.KNOWLEDGE, MemoryScope.SHORT_TERM,
+        MemoryStatus.CANDIDATE, 0.8d, null, null, null);
+    when(consolidator.extractCandidates()).thenReturn(List.of(candidate));
+    when(memoryService.listActiveWithExpiryCheck()).thenReturn(List.of());
+    when(detector.containsSensitiveInfo(any())).thenReturn(false);
+    when(resolver.check(any(), any())).thenReturn(new MemoryConflictResolver.ConflictResult(
+        MemoryConflictResolver.ConflictType.NONE, null, 0.2d));
+
+    var cmd = new CommandLine(new MemoryCommand.ConsolidateCommand(consolidator, memoryService, detector, resolver));
+    int exitCode = cmd.execute("--approve");
+
+    assertEquals(0, exitCode);
+    verify(memoryService, times(1)).save(any());
   }
 
   @Test
