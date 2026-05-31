@@ -17,6 +17,10 @@ public interface BlueskyApiClient {
     throw new UnsupportedOperationException("getAuthorFeed is not implemented");
   }
 
+  default List<FeedPost> getAuthorFeed(String actorDid, int limit, String accessJwt) {
+    return getAuthorFeed(actorDid, limit);
+  }
+
   default PostResult createReply(String accessJwt, String did, String text, String parentUri, String parentCid, String rootUri,
       String rootCid) {
     throw new UnsupportedOperationException("createReply is not implemented");

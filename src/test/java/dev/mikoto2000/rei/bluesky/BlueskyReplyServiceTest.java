@@ -31,13 +31,16 @@ class BlueskyReplyServiceTest {
   @Mock
   private BlueskyReplyConversationRepository conversationRepository;
   @Mock
+  private BlueskyReplyTextGenerator replyTextGenerator;
+  @Mock
   private BlueskyApiClient blueskyApiClient;
 
   @Test
   void doesNothingWhenReplyDisabled() {
     BlueskyProperties properties = baseProperties(false, false, 1.0d, 0);
     BlueskyReplyService service = new BlueskyReplyService(
-        properties, validator, authorFeedClient, repository, conversationRepository, blueskyApiClient, () -> 0.0d, fixedClock());
+        properties, validator, authorFeedClient, repository, conversationRepository, replyTextGenerator, blueskyApiClient, () -> 0.0d,
+        fixedClock());
 
     service.runOnce();
 
@@ -48,10 +51,13 @@ class BlueskyReplyServiceTest {
   void skipsByExcludeRulesAndProbability() {
     BlueskyProperties properties = baseProperties(true, false, 0.5d, 0);
     BlueskyReplyService service = new BlueskyReplyService(
-        properties, validator, authorFeedClient, repository, conversationRepository, blueskyApiClient, () -> 0.9d, fixedClock());
+        properties, validator, authorFeedClient, repository, conversationRepository, replyTextGenerator, blueskyApiClient, () -> 0.9d,
+        fixedClock());
     OffsetDateTime now = OffsetDateTime.ofInstant(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
     when(authorFeedClient.resolveDid("alice.bsky.social")).thenReturn("did:plc:alice");
-    when(authorFeedClient.getAuthorFeed("did:plc:alice", 30)).thenReturn(List.of(
+    when(blueskyApiClient.authenticate("rei.bsky.social", "app-pass"))
+        .thenReturn(new BlueskyApiClient.AuthResult(true, "jwt", "did:plc:rei"));
+    when(blueskyApiClient.getAuthorFeed("did:plc:alice", 30, "jwt")).thenReturn(List.of(
         new BlueskyApiClient.FeedPost("at://u/a", "cid-a", "t", now.minusMinutes(1), true, false, null, null),
         new BlueskyApiClient.FeedPost("at://u/b", "cid-b", "t", now.minusMinutes(1), false, true, null, null),
         new BlueskyApiClient.FeedPost("at://u/c", "cid-c", "t", now.minusMinutes(1), false, false, null, null)));
@@ -60,7 +66,7 @@ class BlueskyReplyServiceTest {
 
     service.runOnce();
 
-    verify(blueskyApiClient, never()).authenticate(eq("rei.bsky.social"), eq("app-pass"));
+    verify(blueskyApiClient).authenticate(eq("rei.bsky.social"), eq("app-pass"));
     verify(repository, never()).markReplied(eq("at://u/c"), eq("alice.bsky.social"), eq("at://reply"));
   }
 
@@ -68,17 +74,20 @@ class BlueskyReplyServiceTest {
   void runsDryRunWithoutPosting() {
     BlueskyProperties properties = baseProperties(true, true, 1.0d, 0);
     BlueskyReplyService service = new BlueskyReplyService(
-        properties, validator, authorFeedClient, repository, conversationRepository, blueskyApiClient, () -> 0.0d, fixedClock());
+        properties, validator, authorFeedClient, repository, conversationRepository, replyTextGenerator, blueskyApiClient, () -> 0.0d,
+        fixedClock());
     OffsetDateTime now = OffsetDateTime.ofInstant(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
     when(authorFeedClient.resolveDid("alice.bsky.social")).thenReturn("did:plc:alice");
-    when(authorFeedClient.getAuthorFeed("did:plc:alice", 30)).thenReturn(List.of(
+    when(blueskyApiClient.authenticate("rei.bsky.social", "app-pass"))
+        .thenReturn(new BlueskyApiClient.AuthResult(true, "jwt", "did:plc:rei"));
+    when(blueskyApiClient.getAuthorFeed("did:plc:alice", 30, "jwt")).thenReturn(List.of(
         new BlueskyApiClient.FeedPost("at://u/a", "cid-a", "text", now.minusMinutes(1), false, false, null, null)));
     when(repository.findLastSeen("alice.bsky.social")).thenReturn(Optional.empty());
     when(repository.isAlreadyReplied("at://u/a")).thenReturn(false);
 
     service.runOnce();
 
-    verify(blueskyApiClient, never()).authenticate(eq("rei.bsky.social"), eq("app-pass"));
+    verify(blueskyApiClient).authenticate(eq("rei.bsky.social"), eq("app-pass"));
     verify(repository, never()).markReplied(eq("at://u/a"), eq("alice.bsky.social"), eq("at://reply"));
   }
 
@@ -86,19 +95,21 @@ class BlueskyReplyServiceTest {
   void postsReplyAndUpdatesState() {
     BlueskyProperties properties = baseProperties(true, false, 1.0d, 2);
     BlueskyReplyService service = new BlueskyReplyService(
-        properties, validator, authorFeedClient, repository, conversationRepository, blueskyApiClient, () -> 0.0d, fixedClock());
+        properties, validator, authorFeedClient, repository, conversationRepository, replyTextGenerator, blueskyApiClient, () -> 0.0d,
+        fixedClock());
     OffsetDateTime now = OffsetDateTime.ofInstant(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
     BlueskyApiClient.FeedPost post = new BlueskyApiClient.FeedPost(
         "at://u/a", "cid-a", "text", now.minusMinutes(1), false, false, "at://u/root", "cid-root");
     when(authorFeedClient.resolveDid("alice.bsky.social")).thenReturn("did:plc:alice");
-    when(authorFeedClient.getAuthorFeed("did:plc:alice", 30)).thenReturn(List.of(post));
+    when(blueskyApiClient.getAuthorFeed("did:plc:alice", 30, "jwt")).thenReturn(List.of(post));
     when(repository.findLastSeen("alice.bsky.social")).thenReturn(Optional.empty());
     when(repository.isAlreadyReplied("at://u/a")).thenReturn(false);
     when(repository.countToday("alice.bsky.social", LocalDate.of(2026, 6, 1))).thenReturn(0);
     when(conversationRepository.findRecent("alice.bsky.social", 10)).thenReturn(List.of());
+    when(replyTextGenerator.generate(eq("alice.bsky.social"), eq("text"), any())).thenReturn("生成返信");
     when(blueskyApiClient.authenticate("rei.bsky.social", "app-pass"))
         .thenReturn(new BlueskyApiClient.AuthResult(true, "jwt", "did:plc:rei"));
-    when(blueskyApiClient.createReply(eq("jwt"), eq("did:plc:rei"), eq("Thanks for sharing: text"),
+    when(blueskyApiClient.createReply(eq("jwt"), eq("did:plc:rei"), eq("生成返信"),
         eq("at://u/a"), eq("cid-a"), eq("at://u/root"), eq("cid-root")))
         .thenReturn(new BlueskyApiClient.PostResult(true, "at://rei/reply"));
 
@@ -108,17 +119,20 @@ class BlueskyReplyServiceTest {
     verify(repository).incrementToday("alice.bsky.social", LocalDate.of(2026, 6, 1));
     verify(repository).saveLastSeen("alice.bsky.social", "at://u/a", post.indexedAt());
     verify(conversationRepository).appendUserMessage("alice.bsky.social", "text");
-    verify(conversationRepository).appendAssistantMessage("alice.bsky.social", "Thanks for sharing: text");
+    verify(conversationRepository).appendAssistantMessage("alice.bsky.social", "生成返信");
   }
 
   @Test
   void skipsWhenDailyLimitReached() {
     BlueskyProperties properties = baseProperties(true, false, 1.0d, 1);
     BlueskyReplyService service = new BlueskyReplyService(
-        properties, validator, authorFeedClient, repository, conversationRepository, blueskyApiClient, () -> 0.0d, fixedClock());
+        properties, validator, authorFeedClient, repository, conversationRepository, replyTextGenerator, blueskyApiClient, () -> 0.0d,
+        fixedClock());
     OffsetDateTime now = OffsetDateTime.ofInstant(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
     when(authorFeedClient.resolveDid("alice.bsky.social")).thenReturn("did:plc:alice");
-    when(authorFeedClient.getAuthorFeed("did:plc:alice", 30)).thenReturn(List.of(
+    when(blueskyApiClient.authenticate("rei.bsky.social", "app-pass"))
+        .thenReturn(new BlueskyApiClient.AuthResult(true, "jwt", "did:plc:rei"));
+    when(blueskyApiClient.getAuthorFeed("did:plc:alice", 30, "jwt")).thenReturn(List.of(
         new BlueskyApiClient.FeedPost("at://u/a", "cid-a", "text", now.minusMinutes(1), false, false, null, null)));
     when(repository.findLastSeen("alice.bsky.social")).thenReturn(Optional.empty());
     when(repository.isAlreadyReplied("at://u/a")).thenReturn(false);
@@ -126,7 +140,7 @@ class BlueskyReplyServiceTest {
 
     service.runOnce();
 
-    verify(blueskyApiClient, never()).authenticate(eq("rei.bsky.social"), eq("app-pass"));
+    verify(blueskyApiClient).authenticate(eq("rei.bsky.social"), eq("app-pass"));
     verify(repository, never()).incrementToday(eq("alice.bsky.social"), any(LocalDate.class));
   }
 

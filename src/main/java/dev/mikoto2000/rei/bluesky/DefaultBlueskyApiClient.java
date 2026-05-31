@@ -118,16 +118,27 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
 
   @Override
   public List<FeedPost> getAuthorFeed(String actorDid, int limit) {
+    return getAuthorFeed(actorDid, limit, null);
+  }
+
+  @Override
+  public List<FeedPost> getAuthorFeed(String actorDid, int limit, String accessJwt) {
     URI uri = URI.create(GET_AUTHOR_FEED_ENDPOINT + "?actor=" + encode(actorDid) + "&limit=" + limit);
-    HttpRequest request = HttpRequest.newBuilder(uri).GET().build();
+    HttpRequest.Builder builder = HttpRequest.newBuilder(uri).GET();
+    if (accessJwt != null && !accessJwt.isBlank()) {
+      builder.header("Authorization", "Bearer " + accessJwt);
+    }
+    HttpRequest request = builder.build();
     try {
       HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
       if (response.statusCode() / 100 != 2) {
+        log.warn("Bluesky getAuthorFeed failed: actorDid={}, status={}, body={}", actorDid, response.statusCode(), response.body());
         return List.of();
       }
       JsonNode body = objectMapper.readTree(response.body());
       JsonNode feed = body.get("feed");
       if (feed == null || !feed.isArray()) {
+        log.warn("Bluesky getAuthorFeed returned unexpected body: actorDid={}, body={}", actorDid, response.body());
         return List.of();
       }
       List<FeedPost> posts = new ArrayList<>();

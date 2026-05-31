@@ -7,7 +7,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.DoubleSupplier;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +23,7 @@ public class BlueskyReplyService {
   private final BlueskyAuthorFeedClient authorFeedClient;
   private final BlueskyReplyStateRepository repository;
   private final BlueskyReplyConversationRepository conversationRepository;
+  private final BlueskyReplyTextGenerator replyTextGenerator;
   private final BlueskyApiClient blueskyApiClient;
   private final DoubleSupplier randomSupplier;
   private final Clock clock;
@@ -35,8 +35,10 @@ public class BlueskyReplyService {
       BlueskyAuthorFeedClient authorFeedClient,
       BlueskyReplyStateRepository repository,
       BlueskyReplyConversationRepository conversationRepository,
+      BlueskyReplyTextGenerator replyTextGenerator,
       BlueskyApiClient blueskyApiClient) {
-    this(properties, validator, authorFeedClient, repository, conversationRepository, blueskyApiClient, Math::random, Clock.systemUTC());
+    this(properties, validator, authorFeedClient, repository, conversationRepository, replyTextGenerator, blueskyApiClient, Math::random,
+        Clock.systemUTC());
   }
 
   BlueskyReplyService(
@@ -45,6 +47,7 @@ public class BlueskyReplyService {
       BlueskyAuthorFeedClient authorFeedClient,
       BlueskyReplyStateRepository repository,
       BlueskyReplyConversationRepository conversationRepository,
+      BlueskyReplyTextGenerator replyTextGenerator,
       BlueskyApiClient blueskyApiClient,
       DoubleSupplier randomSupplier,
       Clock clock) {
@@ -53,6 +56,7 @@ public class BlueskyReplyService {
     this.authorFeedClient = authorFeedClient;
     this.repository = repository;
     this.conversationRepository = conversationRepository;
+    this.replyTextGenerator = replyTextGenerator;
     this.blueskyApiClient = blueskyApiClient;
     this.randomSupplier = randomSupplier;
     this.clock = clock;
@@ -77,8 +81,12 @@ public class BlueskyReplyService {
         log.warn("Bluesky reply skipped: failed to resolve handle={}", handle);
         return;
       }
-
-      List<BlueskyApiClient.FeedPost> feed = authorFeedClient.getAuthorFeed(did, reply.getFetchLimit());
+      BlueskyApiClient.AuthResult botAuth = authenticateBot();
+      if (!botAuth.success()) {
+        log.warn("Bluesky reply skipped: authentication failed for handle={}", handle);
+        return;
+      }
+      List<BlueskyApiClient.FeedPost> feed = blueskyApiClient.getAuthorFeed(did, reply.getFetchLimit(), botAuth.accessJwt());
       Optional<BlueskyApiClient.FeedPost> newest = feed.stream()
           .filter(p -> p.indexedAt() != null)
           .max(Comparator.comparing(BlueskyApiClient.FeedPost::indexedAt));
@@ -101,17 +109,12 @@ public class BlueskyReplyService {
           log.info("Bluesky reply dry-run: handle={}, postUri={}", handle, post.uri());
           continue;
         }
-        BlueskyApiClient.AuthResult auth = blueskyApiClient.authenticate(properties.getHandle(), properties.getAppPassword());
-        if (!auth.success()) {
-          log.warn("Bluesky reply skipped: authentication failed for handle={}", handle);
-          skipped++;
-          continue;
-        }
         conversationRepository.appendUserMessage(handle, post.text() == null ? "" : post.text());
-        String text = buildReplyText(handle, post);
+        List<BlueskyReplyConversationRepository.ConversationMessage> history = conversationRepository.findRecent(handle, 10);
+        String text = replyTextGenerator.generate(handle, post.text(), history);
         BlueskyApiClient.PostResult result = blueskyApiClient.createReply(
-            auth.accessJwt(),
-            auth.did(),
+            botAuth.accessJwt(),
+            botAuth.did(),
             text,
             post.uri(),
             post.cid(),
@@ -132,6 +135,19 @@ public class BlueskyReplyService {
           handle, feed.size(), candidates.size(), replied, skipped);
     } catch (Exception e) {
       log.warn("Bluesky reply failed for handle={}: {}", user.getHandle(), e.getMessage(), e);
+    }
+  }
+
+  private BlueskyApiClient.AuthResult authenticateBot() {
+    if (properties.getHandle() == null || properties.getHandle().isBlank()
+        || properties.getAppPassword() == null || properties.getAppPassword().isBlank()) {
+      return new BlueskyApiClient.AuthResult(false, null, null);
+    }
+    try {
+      return blueskyApiClient.authenticate(properties.getHandle(), properties.getAppPassword());
+    } catch (Exception e) {
+      log.warn("Bluesky reply bot authentication failed before processing: {}", e.getMessage());
+      return new BlueskyApiClient.AuthResult(false, null, null);
     }
   }
 
@@ -181,17 +197,4 @@ public class BlueskyReplyService {
     return null;
   }
 
-  private String buildReplyText(String handle, BlueskyApiClient.FeedPost post) {
-    List<BlueskyReplyConversationRepository.ConversationMessage> history = conversationRepository.findRecent(handle, 10);
-    String summary = history.stream()
-        .map(message -> message.role() + ": " + message.content())
-        .collect(Collectors.joining(" | "));
-    if (post.text() == null || post.text().isBlank()) {
-      return "Thanks for your post.";
-    }
-    if (!summary.isBlank()) {
-      log.debug("Bluesky reply history summary: handle={}, history={}", handle, summary);
-    }
-    return "Thanks for sharing: " + post.text();
-  }
 }
