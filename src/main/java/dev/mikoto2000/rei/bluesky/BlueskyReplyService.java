@@ -3,11 +3,11 @@ package dev.mikoto2000.rei.bluesky;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.DoubleSupplier;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +23,7 @@ public class BlueskyReplyService {
   private final BlueskyReplyPropertiesValidator validator;
   private final BlueskyAuthorFeedClient authorFeedClient;
   private final BlueskyReplyStateRepository repository;
+  private final BlueskyReplyConversationRepository conversationRepository;
   private final BlueskyApiClient blueskyApiClient;
   private final DoubleSupplier randomSupplier;
   private final Clock clock;
@@ -33,8 +34,9 @@ public class BlueskyReplyService {
       BlueskyReplyPropertiesValidator validator,
       BlueskyAuthorFeedClient authorFeedClient,
       BlueskyReplyStateRepository repository,
+      BlueskyReplyConversationRepository conversationRepository,
       BlueskyApiClient blueskyApiClient) {
-    this(properties, validator, authorFeedClient, repository, blueskyApiClient, Math::random, Clock.systemUTC());
+    this(properties, validator, authorFeedClient, repository, conversationRepository, blueskyApiClient, Math::random, Clock.systemUTC());
   }
 
   BlueskyReplyService(
@@ -42,6 +44,7 @@ public class BlueskyReplyService {
       BlueskyReplyPropertiesValidator validator,
       BlueskyAuthorFeedClient authorFeedClient,
       BlueskyReplyStateRepository repository,
+      BlueskyReplyConversationRepository conversationRepository,
       BlueskyApiClient blueskyApiClient,
       DoubleSupplier randomSupplier,
       Clock clock) {
@@ -49,6 +52,7 @@ public class BlueskyReplyService {
     this.validator = validator;
     this.authorFeedClient = authorFeedClient;
     this.repository = repository;
+    this.conversationRepository = conversationRepository;
     this.blueskyApiClient = blueskyApiClient;
     this.randomSupplier = randomSupplier;
     this.clock = clock;
@@ -103,7 +107,8 @@ public class BlueskyReplyService {
           skipped++;
           continue;
         }
-        String text = buildReplyText(post);
+        conversationRepository.appendUserMessage(handle, post.text() == null ? "" : post.text());
+        String text = buildReplyText(handle, post);
         BlueskyApiClient.PostResult result = blueskyApiClient.createReply(
             auth.accessJwt(),
             auth.did(),
@@ -115,6 +120,7 @@ public class BlueskyReplyService {
         if (result.success()) {
           repository.markReplied(post.uri(), handle, result.postUri());
           repository.incrementToday(handle, LocalDate.now(clock));
+          conversationRepository.appendAssistantMessage(handle, text);
           replied++;
         } else {
           skipped++;
@@ -175,9 +181,16 @@ public class BlueskyReplyService {
     return null;
   }
 
-  private String buildReplyText(BlueskyApiClient.FeedPost post) {
+  private String buildReplyText(String handle, BlueskyApiClient.FeedPost post) {
+    List<BlueskyReplyConversationRepository.ConversationMessage> history = conversationRepository.findRecent(handle, 10);
+    String summary = history.stream()
+        .map(message -> message.role() + ": " + message.content())
+        .collect(Collectors.joining(" | "));
     if (post.text() == null || post.text().isBlank()) {
       return "Thanks for your post.";
+    }
+    if (!summary.isBlank()) {
+      log.debug("Bluesky reply history summary: handle={}, history={}", handle, summary);
     }
     return "Thanks for sharing: " + post.text();
   }
