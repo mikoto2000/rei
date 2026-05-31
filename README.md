@@ -522,3 +522,24 @@ export REI_BLUESKY_HANDLE=your-handle.bsky.social
 export REI_BLUESKY_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
 export REI_BLUESKY_MAX_POST_LENGTH=300
 ```
+
+## メモリ統合機能の更新内容
+
+### 変更点
+
+- `/memory consolidate` と `/memory summarize` で LLM 呼び出しに失敗した場合、異常終了せず `[error] ...` を表示します。
+- `/memory consolidate` の競合判定にタイムアウト制御を追加しました。
+- 競合判定がタイムアウトした候補は保存せず、以下の警告を表示します。
+  - `[warn] 競合判定がタイムアウトしたためスキップしました`
+- メモリ関連の DB 例外は `IllegalStateException` に変換し、ユーザー向けメッセージとして扱います。
+
+### 関連設定
+
+- `REI_MEMORY_CONFLICT_TIMEOUT_SECONDS`
+  - デフォルト値: `60`
+  - `/memory consolidate` の競合判定タイムアウト秒数として使用されます。
+
+### 補足
+
+- タイムアウトした候補は保存されません。
+- `extractCandidates` / `summarize` で LLM エラーが発生した場合、`MemoryService.save()` は実行されません。
