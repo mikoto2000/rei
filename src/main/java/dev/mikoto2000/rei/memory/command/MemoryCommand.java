@@ -14,6 +14,7 @@ import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 import dev.mikoto2000.rei.memory.service.MemoryConflictResolver;
 import dev.mikoto2000.rei.memory.service.MemoryExporter;
 import dev.mikoto2000.rei.memory.service.MemoryService;
+import dev.mikoto2000.rei.memory.service.ConsolidationReport;
 import dev.mikoto2000.rei.memory.util.SensitiveInfoDetector;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
@@ -216,7 +217,8 @@ public class MemoryCommand {
         memoryService.save(candidate);
         saved++;
       }
-      System.out.println("整理完了: 保存=" + saved + " / スキップ=" + skipped + " / 候補=" + candidates.size());
+      ConsolidationReport report = ConsolidationReport.of(candidates.size(), saved, skipped);
+      System.out.println("整理完了: 保存=" + report.savedCount() + " / スキップ=" + report.skippedCount() + " / 候補=" + report.totalCandidates());
     }
   }
 }
