@@ -50,11 +50,15 @@ public class MemoryCommand {
     }
 
     private String preview(String content) {
-      if (content == null) {
-        return "";
-      }
-      return content.length() <= 100 ? content : content.substring(0, 100) + "…";
+      return contentPreview(content);
     }
+  }
+
+  static String contentPreview(String content) {
+    if (content == null) {
+      return "";
+    }
+    return content.length() <= 100 ? content : content.substring(0, 100) + "…";
   }
 
   @Component

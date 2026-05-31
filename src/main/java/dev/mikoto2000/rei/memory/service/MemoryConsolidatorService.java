@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.memory.service;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -145,6 +146,18 @@ public class MemoryConsolidatorService {
         .query(Integer.class)
         .single();
     return shouldSuggestConsolidation(messageCount == null ? 0 : messageCount, 0, 0);
+  }
+
+  public List<Memory> selectPromptMemories(List<Memory> memories) {
+    if (memories == null || memories.isEmpty()) {
+      return List.of();
+    }
+    int limit = Math.max(1, memoryProperties.searchMaxInjected());
+    return memories.stream()
+        .filter(m -> m != null && m.status() == MemoryStatus.ACTIVE)
+        .sorted(Comparator.comparingDouble(Memory::confidence).reversed())
+        .limit(limit)
+        .toList();
   }
 
   private MemoryType parseType(String value) {
