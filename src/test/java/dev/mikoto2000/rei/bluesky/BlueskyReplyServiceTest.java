@@ -144,6 +144,26 @@ class BlueskyReplyServiceTest {
     verify(repository, never()).incrementToday(eq("alice.bsky.social"), any(LocalDate.class));
   }
 
+  @Test
+  void alwaysSkipsReplyPostEvenWhenExcludeRepliesFalse() {
+    BlueskyProperties properties = baseProperties(true, false, 1.0d, 0);
+    properties.getReply().setExcludeReplies(false);
+    BlueskyReplyService service = new BlueskyReplyService(
+        properties, validator, authorFeedClient, repository, conversationRepository, replyTextGenerator, blueskyApiClient, () -> 0.0d,
+        fixedClock());
+    OffsetDateTime now = OffsetDateTime.ofInstant(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
+    when(authorFeedClient.resolveDid("alice.bsky.social")).thenReturn("did:plc:alice");
+    when(blueskyApiClient.authenticate("rei.bsky.social", "app-pass"))
+        .thenReturn(new BlueskyApiClient.AuthResult(true, "jwt", "did:plc:rei"));
+    when(blueskyApiClient.getAuthorFeed("did:plc:alice", 30, "jwt")).thenReturn(List.of(
+        new BlueskyApiClient.FeedPost("at://u/r1", "cid-r1", "reply text", now.minusMinutes(1), false, true, null, null)));
+    when(repository.findLastSeen("alice.bsky.social")).thenReturn(Optional.empty());
+
+    service.runOnce();
+
+    verify(blueskyApiClient, never()).createReply(any(), any(), any(), any(), any(), any(), any());
+  }
+
   private BlueskyProperties baseProperties(boolean replyEnabled, boolean dryRun, double probability, int maxRepliesPerDay) {
     BlueskyProperties properties = new BlueskyProperties();
     properties.setEnabled(true);

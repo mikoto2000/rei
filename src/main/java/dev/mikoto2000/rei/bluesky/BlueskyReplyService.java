@@ -173,11 +173,11 @@ public class BlueskyReplyService {
       BlueskyApiClient.FeedPost post,
       BlueskyProperties.ReplyUser user,
       BlueskyProperties.BlueskyReplyProperties reply) {
+    if (post.reply()) {
+      return "reply";
+    }
     if (reply.isExcludeReposts() && post.repost()) {
       return "repost";
-    }
-    if (reply.isExcludeReplies() && post.reply()) {
-      return "reply";
     }
     OffsetDateTime cutoff = OffsetDateTime.now(clock).minusMinutes(reply.getMaxPostAgeMinutes());
     if (post.indexedAt().isBefore(cutoff)) {
