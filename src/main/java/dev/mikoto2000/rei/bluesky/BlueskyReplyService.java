@@ -98,7 +98,8 @@ public class BlueskyReplyService {
       int replied = 0;
       int skipped = 0;
       for (BlueskyApiClient.FeedPost post : candidates) {
-        String skipReason = skipReason(post, user, reply);
+        boolean forceReply = post.reply();
+        String skipReason = skipReason(post, user, reply, forceReply);
         if (skipReason != null) {
           skipped++;
           log.debug("Bluesky reply skipped: handle={}, postUri={}, reason={}", handle, post.uri(), skipReason);
@@ -172,27 +173,30 @@ public class BlueskyReplyService {
   private String skipReason(
       BlueskyApiClient.FeedPost post,
       BlueskyProperties.ReplyUser user,
-      BlueskyProperties.BlueskyReplyProperties reply) {
-    if (post.reply()) {
+      BlueskyProperties.BlueskyReplyProperties reply,
+      boolean forceReply) {
+    if (!forceReply && reply.isExcludeReplies() && post.reply()) {
       return "reply";
     }
     if (reply.isExcludeReposts() && post.repost()) {
       return "repost";
     }
     OffsetDateTime cutoff = OffsetDateTime.now(clock).minusMinutes(reply.getMaxPostAgeMinutes());
-    if (post.indexedAt().isBefore(cutoff)) {
+    if (!forceReply && post.indexedAt().isBefore(cutoff)) {
       return "old";
     }
     if (repository.isAlreadyReplied(post.uri())) {
       return "already_replied";
     }
-    double random = randomSupplier.getAsDouble();
-    if (random >= user.getProbability()) {
-      return "probability";
-    }
-    int maxRepliesPerDay = user.getMaxRepliesPerDay();
-    if (maxRepliesPerDay > 0 && repository.countToday(user.getHandle(), LocalDate.now(clock)) >= maxRepliesPerDay) {
-      return "daily_limit";
+    if (!forceReply) {
+      double random = randomSupplier.getAsDouble();
+      if (random >= user.getProbability()) {
+        return "probability";
+      }
+      int maxRepliesPerDay = user.getMaxRepliesPerDay();
+      if (maxRepliesPerDay > 0 && repository.countToday(user.getHandle(), LocalDate.now(clock)) >= maxRepliesPerDay) {
+        return "daily_limit";
+      }
     }
     return null;
   }

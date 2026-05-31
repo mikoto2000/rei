@@ -107,5 +107,7 @@ rei:
       long-term-days: ${REI_MEMORY_EXPIRY_LONG_TERM_DAYS:365}
 
 logging:
+  file:
+    name: ${REI_LOG_FILE:${user.dir}/.rei/rei.log}
   level:
     dev.mikoto2000.rei.bluesky: DEBUG
