@@ -45,7 +45,7 @@ class ChatCommandCancellationTest {
     System.setOut(new PrintStream(out));
     try {
       var future = executor.submit(() ->
-          new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService, Mockito.mock(ChatResponseNarrator.class))).execute("hello"));
+          new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService, Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty())).execute("hello"));
       assertTrue(subscribed.await(1, TimeUnit.SECONDS));
 
       cancellationService.cancel();

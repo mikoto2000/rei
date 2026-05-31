@@ -33,6 +33,10 @@ public final class ReiPaths {
     return vectorStoreDbPath(workDirectory());
   }
 
+  public static Path memoryConsolidationDbPath() {
+    return memoryConsolidationDbPath(workDirectory());
+  }
+
   /**
    * 現在の実行環境に応じた履歴ファイルの保存先を返します。
    *
@@ -71,6 +75,10 @@ public final class ReiPaths {
 
   public static Path vectorStoreDbPath(Path workDirectory) {
     return workDirectory.resolve(".rei").resolve("vectorstore.db");
+  }
+
+  public static Path memoryConsolidationDbPath(Path workDirectory) {
+    return workDirectory.resolve(".rei").resolve("memory-consolidation.db");
   }
 
   public static Path historyFilePath(Path workDirectory) {

@@ -21,6 +21,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Locale;
+import java.util.Optional;
+
+import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 
 /**
  * ChatCommand
@@ -40,6 +43,7 @@ public class ChatCommand implements Runnable {
   private final CommandCancellationService cancellationService;
 
   private final ChatResponseNarrator chatResponseNarrator;
+  private final Optional<MemoryConsolidatorService> memoryConsolidatorService;
   private final InlineFileAttachmentResolver inlineFileAttachmentResolver = new InlineFileAttachmentResolver();
 
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
@@ -104,6 +108,7 @@ public class ChatCommand implements Runnable {
         return;
       }
       chatResponseNarrator.narrateIfCompleted(responseBuilder.toString());
+      maybeSuggestConsolidation();
     } catch (InterruptedException e) {
       if (cancellationService.consumeCancellationRequested()) {
         System.out.println();
@@ -116,6 +121,17 @@ public class ChatCommand implements Runnable {
     } finally {
       cancellationService.clear();
     }
+  }
+
+  private void maybeSuggestConsolidation() {
+    memoryConsolidatorService.ifPresent(service -> {
+      try {
+        if (service.shouldSuggestConsolidationNow()) {
+          IO.println("[memory] 記憶整理を実行することをお勧めします。/memory consolidate を実行してください。");
+        }
+      } catch (Exception ignored) {
+      }
+    });
   }
 
   long streamTimeoutMillis() {

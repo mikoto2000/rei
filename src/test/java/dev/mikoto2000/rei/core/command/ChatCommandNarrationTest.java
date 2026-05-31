@@ -37,7 +37,7 @@ class ChatCommandNarrationTest {
         PrintStream originalOut = System.out;
         System.setOut(new PrintStream(out));
         try {
-            new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService, chatResponseNarrator))
+            new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService, chatResponseNarrator, java.util.Optional.empty()))
                     .execute("hello");
         } finally {
             System.setOut(originalOut);
@@ -62,7 +62,7 @@ class ChatCommandNarrationTest {
         PrintStream originalOut = System.out;
         System.setOut(new PrintStream(out));
         try {
-            new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService, chatResponseNarrator))
+            new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService, chatResponseNarrator, java.util.Optional.empty()))
                     .execute("hello");
         } finally {
             System.setOut(originalOut);

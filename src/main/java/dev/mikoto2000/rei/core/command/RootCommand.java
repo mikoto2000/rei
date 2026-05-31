@@ -6,6 +6,7 @@ import dev.mikoto2000.rei.briefing.command.BriefingCommand;
 import dev.mikoto2000.rei.feed.command.FeedCommand;
 import dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand;
 import dev.mikoto2000.rei.interest.command.InterestCommand;
+import dev.mikoto2000.rei.memory.command.MemoryCommand;
 import dev.mikoto2000.rei.reminder.command.ReminderCommand;
 import dev.mikoto2000.rei.task.command.TaskCommand;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +32,8 @@ subcommands = {
   FeedCommand.class,
   BriefingCommand.class,
   ReminderCommand.class,
-  InterestCommand.class
+  InterestCommand.class,
+  MemoryCommand.class
 },
 mixinStandardHelpOptions = false)
 @RequiredArgsConstructor

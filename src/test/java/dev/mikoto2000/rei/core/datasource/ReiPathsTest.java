@@ -31,6 +31,17 @@ class ReiPathsTest {
   }
 
   @Test
+  void memoryConsolidationDbPathUsesWorkingDirectory() {
+    Path workDirectory = Path.of("/work/rei");
+    Path expected = Path.of(
+        "/work/rei",
+        ".rei",
+        "memory-consolidation.db");
+
+    assertEquals(expected, ReiPaths.memoryConsolidationDbPath(workDirectory));
+  }
+
+  @Test
   void historyFilePathUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
     Path expected = Path.of(

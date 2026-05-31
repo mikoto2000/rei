@@ -86,6 +86,17 @@ rei:
     handle: ${REI_BLUESKY_HANDLE:}
     app-password: ${REI_BLUESKY_APP_PASSWORD:}
     max-post-length: ${REI_BLUESKY_MAX_POST_LENGTH:300}
+  memory:
+    enabled: ${REI_MEMORY_ENABLED:true}
+    auto-trigger-message-threshold: ${REI_MEMORY_AUTO_TRIGGER_MSG_THRESHOLD:20}
+    auto-trigger-context-percent: ${REI_MEMORY_AUTO_TRIGGER_CTX_PERCENT:80}
+    search-max-results: ${REI_MEMORY_SEARCH_MAX_RESULTS:10}
+    search-max-injected: ${REI_MEMORY_SEARCH_MAX_INJECTED:3}
+    summarize-max-length: ${REI_MEMORY_SUMMARIZE_MAX_LENGTH:2000}
+    conflict-timeout-seconds: ${REI_MEMORY_CONFLICT_TIMEOUT_SECONDS:60}
+    expiry:
+      short-term-days: ${REI_MEMORY_EXPIRY_SHORT_TERM_DAYS:30}
+      long-term-days: ${REI_MEMORY_EXPIRY_LONG_TERM_DAYS:365}
 
 logging:
   level:
