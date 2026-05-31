@@ -39,6 +39,23 @@ class MemorySearchCommandTest {
   }
 
   @Test
+  void searchShowsValidationForEmptyQuery() {
+    MemoryService service = Mockito.mock(MemoryService.class);
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      int exitCode = new CommandLine(new MemoryCommand.SearchCommand(service)).execute("");
+      assertEquals(0, exitCode);
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    assertTrue(out.toString().contains("検索クエリを入力してください"));
+  }
+
+  @Test
   void searchShowsResultWhenFound() {
     MemoryService service = Mockito.mock(MemoryService.class);
     when(service.search("java", 10)).thenReturn(List.of(
@@ -55,5 +72,23 @@ class MemorySearchCommandTest {
     }
 
     assertTrue(out.toString().contains("1 | KNOWLEDGE | java tips"));
+  }
+
+  @Test
+  void searchShowsNoResultMessageWhenEmpty() {
+    MemoryService service = Mockito.mock(MemoryService.class);
+    when(service.search("java", 10)).thenReturn(List.of());
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      int exitCode = new CommandLine(new MemoryCommand.SearchCommand(service)).execute("java");
+      assertEquals(0, exitCode);
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    assertTrue(out.toString().contains("該当する記憶が見つかりませんでした"));
   }
 }
