@@ -26,6 +26,10 @@ public interface BlueskyApiClient {
     throw new UnsupportedOperationException("createReply is not implemented");
   }
 
+  default ReplyTarget resolveReplyTarget(String accessJwt, String targetPostUriOrUrl) {
+    throw new UnsupportedOperationException("resolveReplyTarget is not implemented");
+  }
+
   record AuthResult(boolean success, String accessJwt, String did) {
   }
 
@@ -41,5 +45,8 @@ public interface BlueskyApiClient {
       boolean reply,
       String rootUri,
       String rootCid) {
+  }
+
+  record ReplyTarget(String parentUri, String parentCid, String rootUri, String rootCid, String targetText) {
   }
 }

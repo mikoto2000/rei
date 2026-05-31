@@ -14,30 +14,14 @@ public class BlueskyPostService {
 
   private final BlueskyProperties properties;
   private final BlueskyApiClient blueskyApiClient;
+  private final BlueskyReplyTextGenerator blueskyReplyTextGenerator;
 
   public BlueskyPostResult post(String text) {
     try {
       log.debug("Bluesky post requested: textLength={}", text == null ? null : text.length());
-      if (!properties.isEnabled()) {
-        log.debug("Bluesky post skipped: feature disabled");
-        log.warn("Bluesky post skipped: feature disabled");
-        return new BlueskyPostResult(false, "Bluesky posting is disabled", null, null);
-      }
-      if (isBlank(properties.getHandle()) || isBlank(properties.getAppPassword())) {
-        log.debug("Bluesky post skipped: credentials missing (handleBlank={}, appPasswordBlank={})",
-            isBlank(properties.getHandle()), isBlank(properties.getAppPassword()));
-        log.warn("Bluesky post skipped: credentials missing");
-        return new BlueskyPostResult(false, "Bluesky credentials are not configured", null, null);
-      }
-      if (isBlank(text)) {
-        log.debug("Bluesky post skipped: text is blank");
-        log.warn("Bluesky post skipped: text is blank");
-        return new BlueskyPostResult(false, "Post text must not be blank", null, null);
-      }
-      if (text.length() > properties.getMaxPostLength()) {
-        log.debug("Bluesky post skipped: text too long (length={}, max={})", text.length(), properties.getMaxPostLength());
-        log.warn("Bluesky post skipped: text too long (length={}, max={})", text.length(), properties.getMaxPostLength());
-        return new BlueskyPostResult(false, "Post text exceeds max length: " + properties.getMaxPostLength(), null, null);
+      BlueskyPostResult validation = validatePostRequest(text);
+      if (validation != null) {
+        return validation;
       }
 
       log.debug("Bluesky authenticating: handle={}", properties.getHandle());
@@ -62,6 +46,98 @@ public class BlueskyPostService {
       log.warn("Bluesky post failed due to unexpected error: {}", e.getMessage(), e);
       return new BlueskyPostResult(false, "Bluesky post failed due to unexpected error", null, null);
     }
+  }
+
+  public BlueskyPostResult reply(String targetPostUriOrUrl, String text) {
+    try {
+      log.debug("Bluesky reply requested: target={}, textLength={}", targetPostUriOrUrl, text == null ? null : text.length());
+      BlueskyPostResult validation = validatePostRequest(text);
+      if (validation != null) {
+        return validation;
+      }
+      if (isBlank(targetPostUriOrUrl)) {
+        return new BlueskyPostResult(false, "Target post URI/URL must not be blank", null, null);
+      }
+
+      BlueskyApiClient.AuthResult authResult = blueskyApiClient.authenticate(properties.getHandle(), properties.getAppPassword());
+      if (!authResult.success()) {
+        return new BlueskyPostResult(false, "Bluesky authentication failed", null, null);
+      }
+
+      BlueskyApiClient.ReplyTarget target = blueskyApiClient.resolveReplyTarget(authResult.accessJwt(), targetPostUriOrUrl);
+      if (target == null || isBlank(target.parentUri()) || isBlank(target.parentCid()) || isBlank(target.rootUri()) || isBlank(target.rootCid())) {
+        return new BlueskyPostResult(false, "Failed to resolve reply target", null, null);
+      }
+
+      BlueskyApiClient.PostResult replyResult = blueskyApiClient.createReply(
+          authResult.accessJwt(),
+          authResult.did(),
+          text,
+          target.parentUri(),
+          target.parentCid(),
+          target.rootUri(),
+          target.rootCid());
+      if (!replyResult.success()) {
+        return new BlueskyPostResult(false, "Bluesky reply failed", null, null);
+      }
+      String postUrl = toPostUrl(replyResult.postUri());
+      return new BlueskyPostResult(true, "Bluesky reply created", replyResult.postUri(), postUrl);
+    } catch (Exception e) {
+      log.warn("Bluesky reply failed due to unexpected error: {}", e.getMessage(), e);
+      return new BlueskyPostResult(false, "Bluesky reply failed due to unexpected error", null, null);
+    }
+  }
+
+  public BlueskyPostResult reply(String targetPostUriOrUrl) {
+    try {
+      if (!properties.isEnabled()) {
+        return new BlueskyPostResult(false, "Bluesky posting is disabled", null, null);
+      }
+      if (isBlank(properties.getHandle()) || isBlank(properties.getAppPassword())) {
+        return new BlueskyPostResult(false, "Bluesky credentials are not configured", null, null);
+      }
+      if (isBlank(targetPostUriOrUrl)) {
+        return new BlueskyPostResult(false, "Target post URI/URL must not be blank", null, null);
+      }
+      BlueskyApiClient.AuthResult authResult = blueskyApiClient.authenticate(properties.getHandle(), properties.getAppPassword());
+      if (!authResult.success()) {
+        return new BlueskyPostResult(false, "Bluesky authentication failed", null, null);
+      }
+      BlueskyApiClient.ReplyTarget target = blueskyApiClient.resolveReplyTarget(authResult.accessJwt(), targetPostUriOrUrl);
+      if (target == null || isBlank(target.parentUri()) || isBlank(target.parentCid()) || isBlank(target.rootUri()) || isBlank(target.rootCid())) {
+        return new BlueskyPostResult(false, "Failed to resolve reply target", null, null);
+      }
+      String generatedText = blueskyReplyTextGenerator.generateForManualReply(target.targetText());
+      return reply(targetPostUriOrUrl, generatedText);
+    } catch (Exception e) {
+      log.warn("Bluesky auto-reply failed due to unexpected error: {}", e.getMessage(), e);
+      return new BlueskyPostResult(false, "Bluesky reply failed due to unexpected error", null, null);
+    }
+  }
+
+  private BlueskyPostResult validatePostRequest(String text) {
+    if (!properties.isEnabled()) {
+      log.debug("Bluesky post skipped: feature disabled");
+      log.warn("Bluesky post skipped: feature disabled");
+      return new BlueskyPostResult(false, "Bluesky posting is disabled", null, null);
+    }
+    if (isBlank(properties.getHandle()) || isBlank(properties.getAppPassword())) {
+      log.debug("Bluesky post skipped: credentials missing (handleBlank={}, appPasswordBlank={})",
+          isBlank(properties.getHandle()), isBlank(properties.getAppPassword()));
+      log.warn("Bluesky post skipped: credentials missing");
+      return new BlueskyPostResult(false, "Bluesky credentials are not configured", null, null);
+    }
+    if (isBlank(text)) {
+      log.debug("Bluesky post skipped: text is blank");
+      log.warn("Bluesky post skipped: text is blank");
+      return new BlueskyPostResult(false, "Post text must not be blank", null, null);
+    }
+    if (text.length() > properties.getMaxPostLength()) {
+      log.debug("Bluesky post skipped: text too long (length={}, max={})", text.length(), properties.getMaxPostLength());
+      log.warn("Bluesky post skipped: text too long (length={}, max={})", text.length(), properties.getMaxPostLength());
+      return new BlueskyPostResult(false, "Post text exceeds max length: " + properties.getMaxPostLength(), null, null);
+    }
+    return null;
   }
 
   private String toPostUrl(String postUri) {

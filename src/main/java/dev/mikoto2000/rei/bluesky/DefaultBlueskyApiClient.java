@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -32,6 +33,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   private static final String GET_AUTHOR_FEED_ENDPOINT = "https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed";
   private static final Pattern URL_PATTERN = Pattern.compile("https?://\\S+");
   private static final Pattern HASHTAG_PATTERN = Pattern.compile("(?<!\\S)#([\\p{L}\\p{N}_]+)");
+  private static final Pattern BSKY_POST_URL_PATTERN = Pattern.compile("^https://bsky\\.app/profile/([^/]+)/post/([^/?#]+).*$");
 
   private final HttpClient httpClient = HttpClient.newBuilder()
       .connectTimeout(Duration.ofSeconds(10))
@@ -198,6 +200,50 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
         Thread.currentThread().interrupt();
       }
       throw new RuntimeException("Bluesky reply request failed", e);
+    }
+  }
+
+  @Override
+  public ReplyTarget resolveReplyTarget(String accessJwt, String targetPostUriOrUrl) {
+    PostRef postRef = toPostRef(targetPostUriOrUrl);
+    URI getRecordUri = URI.create(GET_RECORD_ENDPOINT
+        + "?repo=" + encode(postRef.repo())
+        + "&collection=" + encode(postRef.collection())
+        + "&rkey=" + encode(postRef.rkey()));
+    HttpRequest request = HttpRequest.newBuilder(getRecordUri)
+        .header("Authorization", "Bearer " + accessJwt)
+        .GET()
+        .build();
+    try {
+      HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      if (response.statusCode() / 100 != 2) {
+        log.warn("Bluesky resolveReplyTarget failed: target={}, status={}, body={}", targetPostUriOrUrl, response.statusCode(),
+            response.body());
+        return null;
+      }
+      JsonNode body = objectMapper.readTree(response.body());
+      String parentUri = textOrNull(body, "uri");
+      String parentCid = textOrNull(body, "cid");
+      if (parentUri == null || parentCid == null) {
+        return null;
+      }
+      JsonNode value = body.get("value");
+      String targetText = value != null ? textOrNull(value, "text") : null;
+      String rootUri = parentUri;
+      String rootCid = parentCid;
+      if (value != null && value.get("reply") != null && !value.get("reply").isNull()) {
+        JsonNode root = value.get("reply").get("root");
+        if (root != null) {
+          rootUri = textOrNull(root, "uri") == null ? parentUri : textOrNull(root, "uri");
+          rootCid = textOrNull(root, "cid") == null ? parentCid : textOrNull(root, "cid");
+        }
+      }
+      return new ReplyTarget(parentUri, parentCid, rootUri, rootCid, targetText);
+    } catch (IOException | InterruptedException e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
+      throw new RuntimeException("Bluesky resolveReplyTarget request failed", e);
     }
   }
 
@@ -398,5 +444,31 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   }
 
   record ReplyRef(String parentUri, String parentCid, String rootUri, String rootCid) {
+  }
+
+  private PostRef toPostRef(String targetPostUriOrUrl) {
+    if (targetPostUriOrUrl == null || targetPostUriOrUrl.isBlank()) {
+      throw new IllegalArgumentException("target post is blank");
+    }
+    String value = targetPostUriOrUrl.strip();
+    if (value.startsWith("at://")) {
+      String[] parts = value.split("/");
+      if (parts.length < 5) {
+        throw new IllegalArgumentException("invalid at-uri: " + value);
+      }
+      return new PostRef(parts[2], parts[3], parts[4]);
+    }
+    String lower = value.toLowerCase(Locale.ROOT);
+    if (lower.startsWith("https://bsky.app/profile/")) {
+      Matcher matcher = BSKY_POST_URL_PATTERN.matcher(value);
+      if (!matcher.matches()) {
+        throw new IllegalArgumentException("invalid bsky post url: " + value);
+      }
+      return new PostRef(matcher.group(1), "app.bsky.feed.post", matcher.group(2));
+    }
+    throw new IllegalArgumentException("unsupported post target format: " + value);
+  }
+
+  record PostRef(String repo, String collection, String rkey) {
   }
 }

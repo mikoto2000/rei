@@ -45,4 +45,26 @@ public class BlueskyReplyTextGenerator {
     }
     return content.strip();
   }
+
+  public String generateForManualReply(String postText) {
+    if (postText == null || postText.isBlank()) {
+      return "ありがとうございます。";
+    }
+    String promptText = """
+        次のBluesky投稿に対する返信文を日本語で1つ作成してください。
+        条件:
+        - 120文字以内
+        - 自然で丁寧
+        - Markdownや箇条書きは使わない
+
+        投稿本文:
+        %s
+        """.formatted(postText);
+    Prompt prompt = new Prompt(promptText, OpenAiChatOptions.builder().model(modelHolderService.get()).build());
+    String content = chatModel.call(prompt).getResult().getOutput().getText();
+    if (content == null || content.isBlank()) {
+      return "ありがとうございます。";
+    }
+    return content.strip();
+  }
 }

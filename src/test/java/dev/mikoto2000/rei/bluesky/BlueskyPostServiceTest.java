@@ -17,7 +17,7 @@ class BlueskyPostServiceTest {
     BlueskyProperties props = configuredProperties();
     props.setEnabled(false);
     BlueskyApiClient client = mock(BlueskyApiClient.class);
-    BlueskyPostService service = new BlueskyPostService(props, client);
+    BlueskyPostService service = createService(props, client);
 
     BlueskyPostResult result = service.post("hello");
 
@@ -31,7 +31,7 @@ class BlueskyPostServiceTest {
     BlueskyProperties props = configuredProperties();
     props.setHandle("");
     BlueskyApiClient client = mock(BlueskyApiClient.class);
-    BlueskyPostService service = new BlueskyPostService(props, client);
+    BlueskyPostService service = createService(props, client);
 
     BlueskyPostResult result = service.post("hello");
 
@@ -43,7 +43,7 @@ class BlueskyPostServiceTest {
   void returnsValidationErrorWhenBlank() {
     BlueskyProperties props = configuredProperties();
     BlueskyApiClient client = mock(BlueskyApiClient.class);
-    BlueskyPostService service = new BlueskyPostService(props, client);
+    BlueskyPostService service = createService(props, client);
 
     BlueskyPostResult result = service.post("   ");
 
@@ -56,7 +56,7 @@ class BlueskyPostServiceTest {
     BlueskyProperties props = configuredProperties();
     props.setMaxPostLength(5);
     BlueskyApiClient client = mock(BlueskyApiClient.class);
-    BlueskyPostService service = new BlueskyPostService(props, client);
+    BlueskyPostService service = createService(props, client);
 
     BlueskyPostResult result = service.post("123456");
 
@@ -70,7 +70,7 @@ class BlueskyPostServiceTest {
     BlueskyApiClient client = mock(BlueskyApiClient.class);
     when(client.authenticate(props.getHandle(), props.getAppPassword()))
         .thenReturn(new BlueskyApiClient.AuthResult(false, null, null));
-    BlueskyPostService service = new BlueskyPostService(props, client);
+    BlueskyPostService service = createService(props, client);
 
     BlueskyPostResult result = service.post("hello");
 
@@ -86,7 +86,7 @@ class BlueskyPostServiceTest {
         .thenReturn(new BlueskyApiClient.AuthResult(true, "jwt", "did:plc:abc"));
     when(client.createPost("jwt", "did:plc:abc", "hello"))
         .thenReturn(new BlueskyApiClient.PostResult(false, null));
-    BlueskyPostService service = new BlueskyPostService(props, client);
+    BlueskyPostService service = createService(props, client);
 
     BlueskyPostResult result = service.post("hello");
 
@@ -102,7 +102,7 @@ class BlueskyPostServiceTest {
         .thenReturn(new BlueskyApiClient.AuthResult(true, "jwt", "did:plc:abc"));
     when(client.createPost("jwt", "did:plc:abc", "hello"))
         .thenReturn(new BlueskyApiClient.PostResult(true, "at://did:plc:abc/app.bsky.feed.post/3kxyz"));
-    BlueskyPostService service = new BlueskyPostService(props, client);
+    BlueskyPostService service = createService(props, client);
 
     BlueskyPostResult result = service.post("hello");
 
@@ -118,12 +118,81 @@ class BlueskyPostServiceTest {
     BlueskyApiClient client = mock(BlueskyApiClient.class);
     when(client.authenticate(props.getHandle(), props.getAppPassword()))
         .thenThrow(new RuntimeException("network"));
-    BlueskyPostService service = new BlueskyPostService(props, client);
+    BlueskyPostService service = createService(props, client);
 
     BlueskyPostResult result = service.post("hello");
 
     assertFalse(result.success());
     assertEquals("Bluesky post failed due to unexpected error", result.message());
+  }
+
+  @Test
+  void returnsReplyCreatedWhenReplySuccess() {
+    BlueskyProperties props = configuredProperties();
+    BlueskyApiClient client = mock(BlueskyApiClient.class);
+    when(client.authenticate(props.getHandle(), props.getAppPassword()))
+        .thenReturn(new BlueskyApiClient.AuthResult(true, "jwt", "did:plc:abc"));
+    when(client.resolveReplyTarget("jwt", "at://did:plc:target/app.bsky.feed.post/xyz"))
+        .thenReturn(new BlueskyApiClient.ReplyTarget(
+            "at://did:plc:target/app.bsky.feed.post/xyz",
+            "cid-parent",
+            "at://did:plc:target/app.bsky.feed.post/xyz",
+            "cid-parent",
+            "target text"));
+    when(client.createReply("jwt", "did:plc:abc", "hello",
+        "at://did:plc:target/app.bsky.feed.post/xyz", "cid-parent",
+        "at://did:plc:target/app.bsky.feed.post/xyz", "cid-parent"))
+        .thenReturn(new BlueskyApiClient.PostResult(true, "at://did:plc:abc/app.bsky.feed.post/reply1"));
+    BlueskyPostService service = createService(props, client);
+
+    BlueskyPostResult result = service.reply("at://did:plc:target/app.bsky.feed.post/xyz", "hello");
+
+    assertTrue(result.success());
+    assertEquals("Bluesky reply created", result.message());
+    assertEquals("https://bsky.app/profile/did:plc:abc/post/reply1", result.postUrl());
+  }
+
+  @Test
+  void returnsErrorWhenReplyTargetCannotBeResolved() {
+    BlueskyProperties props = configuredProperties();
+    BlueskyApiClient client = mock(BlueskyApiClient.class);
+    when(client.authenticate(props.getHandle(), props.getAppPassword()))
+        .thenReturn(new BlueskyApiClient.AuthResult(true, "jwt", "did:plc:abc"));
+    when(client.resolveReplyTarget("jwt", "https://bsky.app/profile/a/post/b")).thenReturn(null);
+    BlueskyPostService service = createService(props, client);
+
+    BlueskyPostResult result = service.reply("https://bsky.app/profile/a/post/b", "hello");
+
+    assertFalse(result.success());
+    assertEquals("Failed to resolve reply target", result.message());
+  }
+
+  @Test
+  void generatesReplyTextWhenTextOmitted() {
+    BlueskyProperties props = configuredProperties();
+    BlueskyApiClient client = mock(BlueskyApiClient.class);
+    BlueskyReplyTextGenerator generator = mock(BlueskyReplyTextGenerator.class);
+    when(client.authenticate(props.getHandle(), props.getAppPassword()))
+        .thenReturn(new BlueskyApiClient.AuthResult(true, "jwt", "did:plc:abc"));
+    when(client.resolveReplyTarget("jwt", "at://did:plc:target/app.bsky.feed.post/xyz"))
+        .thenReturn(new BlueskyApiClient.ReplyTarget(
+            "at://did:plc:target/app.bsky.feed.post/xyz",
+            "cid-parent",
+            "at://did:plc:target/app.bsky.feed.post/xyz",
+            "cid-parent",
+            "元投稿本文"));
+    when(generator.generateForManualReply("元投稿本文")).thenReturn("生成返信");
+    when(client.createReply("jwt", "did:plc:abc", "生成返信",
+        "at://did:plc:target/app.bsky.feed.post/xyz", "cid-parent",
+        "at://did:plc:target/app.bsky.feed.post/xyz", "cid-parent"))
+        .thenReturn(new BlueskyApiClient.PostResult(true, "at://did:plc:abc/app.bsky.feed.post/reply2"));
+    BlueskyPostService service = new BlueskyPostService(props, client, generator);
+
+    BlueskyPostResult result = service.reply("at://did:plc:target/app.bsky.feed.post/xyz");
+
+    assertTrue(result.success());
+    assertEquals("Bluesky reply created", result.message());
+    verify(generator).generateForManualReply("元投稿本文");
   }
 
   private BlueskyProperties configuredProperties() {
@@ -133,5 +202,9 @@ class BlueskyPostServiceTest {
     props.setAppPassword("app-password");
     props.setMaxPostLength(300);
     return props;
+  }
+
+  private BlueskyPostService createService(BlueskyProperties props, BlueskyApiClient client) {
+    return new BlueskyPostService(props, client, mock(BlueskyReplyTextGenerator.class));
   }
 }
