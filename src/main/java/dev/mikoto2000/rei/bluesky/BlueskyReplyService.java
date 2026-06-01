@@ -7,6 +7,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.DoubleSupplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -98,7 +100,7 @@ public class BlueskyReplyService {
       int replied = 0;
       int skipped = 0;
       for (BlueskyApiClient.FeedPost post : candidates) {
-        boolean forceReply = post.reply();
+        boolean forceReply = post.reply() || mentionsRei(post.text());
         String skipReason = skipReason(post, user, reply, forceReply);
         if (skipReason != null) {
           skipped++;
@@ -168,6 +170,18 @@ public class BlueskyReplyService {
       return true;
     }
     return post.indexedAt().isEqual(last.lastSeenIndexedAt()) && !post.uri().equals(last.lastSeenPostUri());
+  }
+
+  private boolean mentionsRei(String text) {
+    if (text == null || text.isBlank() || properties.getHandle() == null || properties.getHandle().isBlank()) {
+      return false;
+    }
+    String handle = properties.getHandle().toLowerCase();
+    String shortHandle = handle.contains(".") ? handle.substring(0, handle.indexOf('.')) : handle;
+    String patternText = "(?i)(?<![\\p{Alnum}_])@(" + Pattern.quote(handle) + "|" + Pattern.quote(shortHandle) + ")(?![\\p{Alnum}_])";
+    Pattern mentionPattern = Pattern.compile(patternText);
+    Matcher matcher = mentionPattern.matcher(text);
+    return matcher.find();
   }
 
   private String skipReason(
