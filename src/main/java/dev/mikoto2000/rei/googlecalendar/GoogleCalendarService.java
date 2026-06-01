@@ -46,11 +46,20 @@ public class GoogleCalendarService {
   private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
   private static final List<String> SCOPES = List.of(CalendarScopes.CALENDAR_EVENTS, TasksScopes.TASKS);
   private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+  private static final String OAUTH_USER_ID = "user";
 
   private final GoogleCalendarProperties properties;
 
   public void authorize() throws Exception {
-    getCalendarClient();
+    authorize(true);
+  }
+
+  public void authorize(boolean forceReauthorize) throws Exception {
+    if (!properties.calendar().enabled()) {
+      throw new IllegalStateException("Google Calendar integration is disabled");
+    }
+    NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
+    authorizeCredential(httpTransport, forceReauthorize);
   }
 
   public void refreshToken() throws Exception {
@@ -59,7 +68,7 @@ public class GoogleCalendarService {
     }
 
     NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
-    Credential credential = authorizeCredential(httpTransport);
+    Credential credential = authorizeCredential(httpTransport, false);
     boolean refreshed = credential.refreshToken();
     if (!refreshed) {
       throw new IllegalStateException("Google Calendar token refresh failed");
@@ -148,12 +157,14 @@ public class GoogleCalendarService {
     }
 
     NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
-    return new Calendar.Builder(httpTransport, JSON_FACTORY, authorizeCredential(httpTransport))
+    return new Calendar.Builder(httpTransport, JSON_FACTORY, authorizeCredential(httpTransport, false))
       .setApplicationName(properties.applicationName())
       .build();
   }
 
-  private com.google.api.client.auth.oauth2.Credential authorizeCredential(NetHttpTransport httpTransport) throws Exception {
+  private com.google.api.client.auth.oauth2.Credential authorizeCredential(
+      NetHttpTransport httpTransport,
+      boolean forceReauthorize) throws Exception {
     Path credentialsPath = Path.of(properties.credentialsPath());
     if (!Files.exists(credentialsPath)) {
       throw new IllegalStateException("Google OAuth credentials file was not found: " + credentialsPath);
@@ -172,6 +183,9 @@ public class GoogleCalendarService {
         .setDataStoreFactory(new FileDataStoreFactory(Path.of(properties.tokensDirectory()).toFile()))
         .setAccessType("offline")
         .build();
+      if (forceReauthorize) {
+        flow.getCredentialDataStore().delete(OAUTH_USER_ID);
+      }
 
       LocalServerReceiver receiver = new LocalServerReceiver.Builder()
         .setHost("127.0.0.1")
@@ -179,7 +193,7 @@ public class GoogleCalendarService {
         .build();
 
       AuthorizationCodeInstalledApp app = new AuthorizationCodeInstalledApp(flow, receiver, this::browse);
-      return app.authorize("user");
+      return app.authorize(OAUTH_USER_ID);
     }
   }
 
