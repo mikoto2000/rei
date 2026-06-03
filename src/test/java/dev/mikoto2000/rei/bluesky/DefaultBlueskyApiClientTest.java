@@ -50,6 +50,16 @@ class DefaultBlueskyApiClientTest {
   }
 
   @Test
+  void extractTagFacetsRecognizesHashtagAfterMultibyteTextWithoutSpace() {
+    String text = "メッセージ送信可能。#MicrosoftTeams";
+    List<DefaultBlueskyApiClient.TagFacet> facets = DefaultBlueskyApiClient.extractTagFacets(text);
+
+    assertEquals(1, facets.size());
+    DefaultBlueskyApiClient.TagFacet facet = facets.getFirst();
+    assertEquals("MicrosoftTeams", facet.tag());
+  }
+
+  @Test
   void createRecordRequestBodyIncludesTagFacetWhenHashtagExists() {
     String body = DefaultBlueskyApiClient.createRecordRequestBody(
         "did:plc:abc",

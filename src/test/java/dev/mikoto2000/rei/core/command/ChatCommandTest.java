@@ -84,6 +84,32 @@ class ChatCommandTest {
   }
 
   @Test
+  void runPrintsChatFailureToStandardError() {
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    CommandCancellationService cancellationService = new CommandCancellationService();
+
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.stream().content()).thenReturn(Flux.error(new java.net.ConnectException("Connection refused")));
+
+    ByteArrayOutputStream err = new ByteArrayOutputStream();
+    PrintStream originalErr = System.err;
+    System.setErr(new PrintStream(err));
+    try {
+      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
+          Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty())).execute("hello") == 0);
+    } finally {
+      System.setErr(originalErr);
+    }
+
+    String errorOutput = err.toString();
+    assertTrue(errorOutput.contains("[error]"));
+    assertTrue(errorOutput.contains("Connection refused"));
+  }
+
+  @Test
   void runSendsPromptContainingAttachmentToken() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);

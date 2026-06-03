@@ -74,21 +74,29 @@ public class ChatCommand implements Runnable {
     AtomicReference<Throwable> errorRef = new AtomicReference<>();
     AtomicBoolean headerPrinted = new AtomicBoolean(false);
     StringBuilder responseBuilder = new StringBuilder();
-    Disposable disposable = requestSpec.stream()
-      .content()
-      .subscribe(
-          chunk -> {
-            if (headerPrinted.compareAndSet(false, true)) {
-              IO.println(answerHeader(startedAtNanos));
-            }
-            System.out.print(chunk);
-            responseBuilder.append(chunk);
-          },
-          error -> {
-            errorRef.set(error);
-            latch.countDown();
-          },
-          latch::countDown);
+    Disposable disposable;
+    try {
+      disposable = requestSpec.stream()
+        .content()
+        .subscribe(
+            chunk -> {
+              if (headerPrinted.compareAndSet(false, true)) {
+                IO.println(answerHeader(startedAtNanos));
+              }
+              System.out.print(chunk);
+              responseBuilder.append(chunk);
+            },
+            error -> {
+              errorRef.set(error);
+              latch.countDown();
+            },
+            latch::countDown);
+    } catch (RuntimeException e) {
+      log.warn("Chat response stream failed to start", e);
+      System.err.println("[error] " + buildUserFacingMessage(e));
+      cancellationService.clear();
+      return;
+    }
     cancellationService.register(disposable);
 
     try {
@@ -104,7 +112,7 @@ public class ChatCommand implements Runnable {
       Throwable error = errorRef.get();
       if (error != null) {
         log.warn("Chat response failed", error);
-        IO.println("[error] " + buildUserFacingMessage(error));
+        System.err.println("[error] " + buildUserFacingMessage(error));
         return;
       }
       chatResponseNarrator.narrateIfCompleted(responseBuilder.toString());

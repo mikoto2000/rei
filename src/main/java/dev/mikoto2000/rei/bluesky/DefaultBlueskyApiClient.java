@@ -32,7 +32,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   private static final String RESOLVE_HANDLE_ENDPOINT = "https://bsky.social/xrpc/com.atproto.identity.resolveHandle";
   private static final String GET_AUTHOR_FEED_ENDPOINT = "https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed";
   private static final Pattern URL_PATTERN = Pattern.compile("https?://\\S+");
-  private static final Pattern HASHTAG_PATTERN = Pattern.compile("(?<!\\S)#([\\p{L}\\p{N}_]+)");
+  private static final Pattern HASHTAG_PATTERN = Pattern.compile("(?<![A-Za-z0-9_])#([\\p{L}\\p{N}_]+)");
   private static final Pattern BSKY_POST_URL_PATTERN = Pattern.compile("^https://bsky\\.app/profile/([^/]+)/post/([^/?#]+).*$");
 
   private final HttpClient httpClient = HttpClient.newBuilder()
