@@ -285,6 +285,7 @@ gpt-oss:120b
 | `briefing` | `today` | 日次ブリーフィング表示 |
 | `reminder` | `add`, `list`, `delete` | リマインド管理 |
 | `embed` | `add`, `search`, `list`, `delete` | 文書埋め込みと検索 |
+| `memory` | `list`, `search`, `forget`, `export`, `summarize`, `consolidate` | 記憶の一覧・検索・削除・エクスポート・会話履歴からの記憶化 |
 
 ### モデル
 
@@ -454,6 +455,54 @@ gpt-oss:120b
 登録時は `docId` / `source` / `chunkIndex` を必須 metadata として扱い、欠損している文書はエラーにします。検索時に embedding 次元が一致しない場合もエラーにします。`replaceBySource` は source 単位の delete + insert を 1 トランザクションで実行し、途中失敗時はロールバックされます。文書一覧や削除も `document_chunks_vec` の集約で処理します。
 
 `similarityThresholdAll()` を使っても score が 0 以下の結果は返しません。現在の実装では「関連性がない候補を除外する」挙動を優先しています。SQLite ファイル破損時は破損として、ロック発生時はロックとして明示的に失敗させます。存在しない `docId` / `source` の削除は 0 件または `false` を返します。
+
+### 記憶管理
+
+`/memory` は、会話履歴から抽出した記憶の確認・検索・削除・エクスポートを行うコマンドです。
+
+保存済みの記憶を一覧表示:
+
+```text
+/memory list
+```
+
+記憶を検索:
+
+```text
+/memory search "Google Task"
+/memory search --limit 5 "Bluesky"
+```
+
+不要な記憶を論理削除:
+
+```text
+/memory forget <memory-id>
+```
+
+記憶を Markdown と JSONL でエクスポート:
+
+```text
+/memory export
+/memory export --dir .rei/memory-export
+```
+
+会話履歴から記憶候補を抽出:
+
+```text
+/memory consolidate
+/memory consolidate --approve
+```
+
+`/memory consolidate` は、`--approve` を付けない場合は候補を表示するだけで保存しません。保存する場合は `--approve` または `--save` を付けて実行します。
+
+会話履歴から要約を作成:
+
+```text
+/memory summarize
+/memory summarize --approve
+```
+
+`/memory summarize` も `--approve` を付けない場合は要約を表示するだけです。保存する場合は `--approve` または `--save` を付けて実行します。
 
 ### 検索
 
