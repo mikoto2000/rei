@@ -12,6 +12,7 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -33,6 +34,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   private static final String GET_AUTHOR_FEED_ENDPOINT = "https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed";
   private static final Pattern URL_PATTERN = Pattern.compile("https?://\\S+");
   private static final Pattern HASHTAG_PATTERN = Pattern.compile("(?<![A-Za-z0-9_])#([\\p{L}\\p{N}_]+)");
+  private static final Pattern MENTION_PATTERN = Pattern.compile("(?<![A-Za-z0-9_])@([A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)");
   private static final Pattern BSKY_POST_URL_PATTERN = Pattern.compile("^https://bsky\\.app/profile/([^/]+)/post/([^/?#]+).*$");
 
   private final HttpClient httpClient = HttpClient.newBuilder()
@@ -70,7 +72,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
 
   @Override
   public PostResult createPost(String accessJwt, String did, String text) {
-    String requestBody = createRecordRequestBody(did, text, OffsetDateTime.now(), null);
+    String requestBody = createRecordRequestBody(did, text, OffsetDateTime.now(), null, this::resolveMentionHandle);
     HttpRequest request = HttpRequest.newBuilder(CREATE_RECORD_URI)
         .header("Content-Type", "application/json")
         .header("Authorization", "Bearer " + accessJwt)
@@ -181,7 +183,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   public PostResult createReply(String accessJwt, String did, String text, String parentUri, String parentCid, String rootUri,
       String rootCid) {
     ReplyRef reply = new ReplyRef(parentUri, parentCid, rootUri, rootCid);
-    String requestBody = createRecordRequestBody(did, text, OffsetDateTime.now(), reply);
+    String requestBody = createRecordRequestBody(did, text, OffsetDateTime.now(), reply, this::resolveMentionHandle);
     HttpRequest request = HttpRequest.newBuilder(CREATE_RECORD_URI)
         .header("Content-Type", "application/json")
         .header("Authorization", "Bearer " + accessJwt)
@@ -298,6 +300,15 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   }
 
   static String createRecordRequestBody(String did, String text, OffsetDateTime createdAt, ReplyRef replyRef) {
+    return createRecordRequestBody(did, text, createdAt, replyRef, handle -> null);
+  }
+
+  static String createRecordRequestBody(
+      String did,
+      String text,
+      OffsetDateTime createdAt,
+      ReplyRef replyRef,
+      Function<String, String> mentionResolver) {
     StringBuilder request = new StringBuilder();
     request.append("{\"repo\":\"").append(escapeJsonStatic(did)).append("\",\"collection\":\"app.bsky.feed.post\",");
     request.append("\"record\":{\"$type\":\"app.bsky.feed.post\",\"text\":\"")
@@ -305,7 +316,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
         .append("\",\"createdAt\":\"")
         .append(createdAt)
         .append("\"");
-    String facets = buildFacetsJson(text);
+    String facets = buildFacetsJson(text, mentionResolver);
     if (!facets.isEmpty()) {
       request.append(",\"facets\":").append(facets);
     }
@@ -325,7 +336,11 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   }
 
   static String buildFacetsJson(String text) {
-    List<Facet> facets = extractFacets(text);
+    return buildFacetsJson(text, handle -> null);
+  }
+
+  static String buildFacetsJson(String text, Function<String, String> mentionResolver) {
+    List<Facet> facets = extractFacets(text, mentionResolver);
     if (facets.isEmpty()) {
       return "";
     }
@@ -343,8 +358,12 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
         json.append("},\"features\":[{\"$type\":\"app.bsky.richtext.facet#link\",\"uri\":\"")
             .append(escapeJsonStatic(facet.value()))
             .append("\"}]}");
-      } else {
+      } else if (facet.type() == FacetType.TAG) {
         json.append("},\"features\":[{\"$type\":\"app.bsky.richtext.facet#tag\",\"tag\":\"")
+            .append(escapeJsonStatic(facet.value()))
+            .append("\"}]}");
+      } else {
+        json.append("},\"features\":[{\"$type\":\"app.bsky.richtext.facet#mention\",\"did\":\"")
             .append(escapeJsonStatic(facet.value()))
             .append("\"}]}");
       }
@@ -354,12 +373,19 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   }
 
   static List<Facet> extractFacets(String text) {
+    return extractFacets(text, handle -> null);
+  }
+
+  static List<Facet> extractFacets(String text, Function<String, String> mentionResolver) {
     ArrayList<Facet> facets = new ArrayList<>();
     facets.addAll(extractLinkFacets(text).stream()
         .map(f -> new Facet(f.byteStart(), f.byteEnd(), FacetType.LINK, f.uri()))
         .toList());
     facets.addAll(extractTagFacets(text).stream()
         .map(f -> new Facet(f.byteStart(), f.byteEnd(), FacetType.TAG, f.tag()))
+        .toList());
+    facets.addAll(extractMentionFacets(text, mentionResolver).stream()
+        .map(f -> new Facet(f.byteStart(), f.byteEnd(), FacetType.MENTION, f.did()))
         .toList());
     facets.sort((a, b) -> Integer.compare(a.byteStart(), b.byteStart()));
     return facets;
@@ -404,6 +430,36 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     return facets;
   }
 
+  static List<MentionFacet> extractMentionFacets(String text, Function<String, String> mentionResolver) {
+    ArrayList<MentionFacet> facets = new ArrayList<>();
+    if (text == null || text.isBlank()) {
+      return facets;
+    }
+    Matcher matcher = MENTION_PATTERN.matcher(text);
+    while (matcher.find()) {
+      String handle = matcher.group(1);
+      String did = mentionResolver.apply(handle);
+      if (did == null || did.isBlank()) {
+        continue;
+      }
+      int start = matcher.start();
+      int end = matcher.end();
+      int byteStart = utf8ByteLength(text.substring(0, start));
+      int byteEnd = byteStart + utf8ByteLength(text.substring(start, end));
+      facets.add(new MentionFacet(byteStart, byteEnd, handle, did));
+    }
+    return facets;
+  }
+
+  private String resolveMentionHandle(String handle) {
+    try {
+      return resolveHandle(handle);
+    } catch (RuntimeException e) {
+      log.warn("Bluesky mention handle resolution failed: handle={}, message={}", handle, e.getMessage());
+      return null;
+    }
+  }
+
   private static int trimTrailingPunctuation(String url) {
     int end = url.length();
     while (end > 0) {
@@ -435,9 +491,13 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
   record TagFacet(int byteStart, int byteEnd, String tag) {
   }
 
+  record MentionFacet(int byteStart, int byteEnd, String handle, String did) {
+  }
+
   private enum FacetType {
     LINK,
-    TAG
+    TAG,
+    MENTION
   }
 
   record Facet(int byteStart, int byteEnd, FacetType type, String value) {

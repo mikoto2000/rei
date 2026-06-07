@@ -72,6 +72,36 @@ class DefaultBlueskyApiClientTest {
   }
 
   @Test
+  void extractMentionFacetsReturnsUtf8ByteIndexesWhenHandleCanBeResolved() {
+    String text = "日本語 @alice.bsky.social hello";
+    List<DefaultBlueskyApiClient.MentionFacet> facets = DefaultBlueskyApiClient.extractMentionFacets(
+        text,
+        handle -> "did:plc:alice");
+
+    assertEquals(1, facets.size());
+    DefaultBlueskyApiClient.MentionFacet facet = facets.getFirst();
+    assertEquals("alice.bsky.social", facet.handle());
+    assertEquals("did:plc:alice", facet.did());
+    assertEquals("日本語 ".getBytes(java.nio.charset.StandardCharsets.UTF_8).length, facet.byteStart());
+    assertEquals(facet.byteStart() + "@alice.bsky.social".getBytes(java.nio.charset.StandardCharsets.UTF_8).length,
+        facet.byteEnd());
+  }
+
+  @Test
+  void createRecordRequestBodyIncludesMentionFacetWhenMentionHandleCanBeResolved() {
+    String body = DefaultBlueskyApiClient.createRecordRequestBody(
+        "did:plc:abc",
+        "Reply to @alice.bsky.social",
+        OffsetDateTime.of(2026, 5, 16, 10, 0, 0, 0, ZoneOffset.UTC),
+        null,
+        handle -> "did:plc:alice");
+
+    assertTrue(body.contains("\"facets\":["));
+    assertTrue(body.contains("\"$type\":\"app.bsky.richtext.facet#mention\""));
+    assertTrue(body.contains("\"did\":\"did:plc:alice\""));
+  }
+
+  @Test
   void createRecordRequestBodyOmitsFacetsWhenNoUrl() {
     String body = DefaultBlueskyApiClient.createRecordRequestBody(
         "did:plc:abc",
