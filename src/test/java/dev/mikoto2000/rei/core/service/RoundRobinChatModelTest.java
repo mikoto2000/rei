@@ -9,8 +9,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
-import org.mockito.ArgumentCaptor;
 
 class RoundRobinChatModelTest {
 
@@ -43,26 +41,5 @@ class RoundRobinChatModelTest {
 
     verify(first).stream(prompt);
     verify(second).stream(prompt);
-  }
-
-  @Test
-  void callOverridesPromptModelWithSelectedDelegateModel() {
-    ChatModel first = mock(ChatModel.class);
-    ChatModel second = mock(ChatModel.class);
-    Prompt prompt = new Prompt("hello", OpenAiChatOptions.builder().model("global-model").build());
-    RoundRobinChatModel model = new RoundRobinChatModel(List.of(
-        new RoundRobinChatModel.Delegate(first, "server-a-model"),
-        new RoundRobinChatModel.Delegate(second, "server-b-model")),
-        true);
-
-    model.call(prompt);
-    model.call(prompt);
-
-    ArgumentCaptor<Prompt> firstPrompt = ArgumentCaptor.forClass(Prompt.class);
-    ArgumentCaptor<Prompt> secondPrompt = ArgumentCaptor.forClass(Prompt.class);
-    verify(first).call(firstPrompt.capture());
-    verify(second).call(secondPrompt.capture());
-    org.junit.jupiter.api.Assertions.assertEquals("server-a-model", firstPrompt.getValue().getOptions().getModel());
-    org.junit.jupiter.api.Assertions.assertEquals("server-b-model", secondPrompt.getValue().getOptions().getModel());
   }
 }

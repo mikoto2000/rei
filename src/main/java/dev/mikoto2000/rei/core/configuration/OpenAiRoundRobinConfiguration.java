@@ -10,16 +10,13 @@ import org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiConnectionProperties;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingProperties;
 import org.springframework.ai.openai.OpenAiChatModel;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
-import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
 import org.springframework.core.retry.RetryTemplate;
 import org.springframework.web.client.ResponseErrorHandler;
 import org.springframework.web.client.RestClient;
@@ -35,7 +32,6 @@ import io.micrometer.observation.ObservationRegistry;
 public class OpenAiRoundRobinConfiguration {
 
   @Bean
-  @Primary
   ChatModel roundRobinChatModel(
       ReiOpenAiProperties reiOpenAiProperties,
       OpenAiConnectionProperties connectionProperties,
@@ -44,23 +40,21 @@ public class OpenAiRoundRobinConfiguration {
       ObjectProvider<RetryTemplate> retryTemplate,
       ObjectProvider<ObservationRegistry> observationRegistry,
       ObjectProvider<ResponseErrorHandler> responseErrorHandler) {
-    List<RoundRobinChatModel.Delegate> delegates = servers(reiOpenAiProperties, connectionProperties).stream()
-        .map(server -> new RoundRobinChatModel.Delegate(chatModel(
-            server.baseUrl(),
-            server.chatModel(),
+    List<ChatModel> delegates = baseUrls(reiOpenAiProperties, connectionProperties).stream()
+        .map(baseUrl -> chatModel(
+            baseUrl,
             connectionProperties,
             chatProperties,
             toolCallingManager,
             retryTemplate,
             observationRegistry,
-            responseErrorHandler),
-            server.chatModel()))
+            responseErrorHandler))
+        .map(ChatModel.class::cast)
         .toList();
-    return new RoundRobinChatModel(delegates, true);
+    return new RoundRobinChatModel(delegates);
   }
 
   @Bean
-  @Primary
   EmbeddingModel roundRobinEmbeddingModel(
       ReiOpenAiProperties reiOpenAiProperties,
       OpenAiConnectionProperties connectionProperties,
@@ -68,23 +62,21 @@ public class OpenAiRoundRobinConfiguration {
       ObjectProvider<RetryTemplate> retryTemplate,
       ObjectProvider<ObservationRegistry> observationRegistry,
       ObjectProvider<ResponseErrorHandler> responseErrorHandler) {
-    List<RoundRobinEmbeddingModel.Delegate> delegates = servers(reiOpenAiProperties, connectionProperties).stream()
-        .map(server -> new RoundRobinEmbeddingModel.Delegate(embeddingModel(
-            server.baseUrl(),
-            server.embeddingModel(),
+    List<EmbeddingModel> delegates = baseUrls(reiOpenAiProperties, connectionProperties).stream()
+        .map(baseUrl -> embeddingModel(
+            baseUrl,
             connectionProperties,
             embeddingProperties,
             retryTemplate,
             observationRegistry,
-            responseErrorHandler),
-            server.embeddingModel()))
+            responseErrorHandler))
+        .map(EmbeddingModel.class::cast)
         .toList();
-    return new RoundRobinEmbeddingModel(delegates, true);
+    return new RoundRobinEmbeddingModel(delegates);
   }
 
   private OpenAiEmbeddingModel embeddingModel(
       String baseUrl,
-      String embeddingModel,
       OpenAiConnectionProperties connectionProperties,
       OpenAiEmbeddingProperties embeddingProperties,
       ObjectProvider<RetryTemplate> retryTemplate,
@@ -99,19 +91,17 @@ public class OpenAiRoundRobinConfiguration {
     MetadataMode metadataMode = embeddingProperties.getMetadataMode() == null ? MetadataMode.EMBED : embeddingProperties.getMetadataMode();
     RetryTemplate retry = retryTemplate.getIfUnique();
     ObservationRegistry registry = observationRegistry.getIfUnique();
-    OpenAiEmbeddingOptions options = embeddingOptions(embeddingProperties.getOptions(), embeddingModel);
     if (retry != null && registry != null) {
-      return new OpenAiEmbeddingModel(openAiApi, metadataMode, options, retry, registry);
+      return new OpenAiEmbeddingModel(openAiApi, metadataMode, embeddingProperties.getOptions(), retry, registry);
     }
     if (retry != null) {
-      return new OpenAiEmbeddingModel(openAiApi, metadataMode, options, retry);
+      return new OpenAiEmbeddingModel(openAiApi, metadataMode, embeddingProperties.getOptions(), retry);
     }
-    return new OpenAiEmbeddingModel(openAiApi, metadataMode, options);
+    return new OpenAiEmbeddingModel(openAiApi, metadataMode, embeddingProperties.getOptions());
   }
 
   private OpenAiChatModel chatModel(
       String baseUrl,
-      String chatModel,
       OpenAiConnectionProperties connectionProperties,
       OpenAiChatProperties chatProperties,
       ToolCallingManager toolCallingManager,
@@ -125,7 +115,7 @@ public class OpenAiRoundRobinConfiguration {
             chatProperties.getCompletionsPath(),
             "/v1/embeddings",
             responseErrorHandler))
-        .defaultOptions(chatOptions(chatProperties.getOptions(), chatModel))
+        .defaultOptions(chatProperties.getOptions())
         .toolCallingManager(toolCallingManager);
     RetryTemplate retry = retryTemplate.getIfUnique();
     if (retry != null) {
@@ -136,28 +126,6 @@ public class OpenAiRoundRobinConfiguration {
       builder.observationRegistry(registry);
     }
     return builder.build();
-  }
-
-  private OpenAiChatOptions chatOptions(OpenAiChatOptions baseOptions, String model) {
-    OpenAiChatOptions options = baseOptions == null ? OpenAiChatOptions.builder().build() : baseOptions.copy();
-    if (model != null && !model.isBlank()) {
-      options.setModel(model);
-    }
-    return options;
-  }
-
-  private OpenAiEmbeddingOptions embeddingOptions(OpenAiEmbeddingOptions baseOptions, String model) {
-    OpenAiEmbeddingOptions options = new OpenAiEmbeddingOptions();
-    if (baseOptions != null) {
-      options.setModel(baseOptions.getModel());
-      options.setEncodingFormat(baseOptions.getEncodingFormat());
-      options.setDimensions(baseOptions.getDimensions());
-      options.setUser(baseOptions.getUser());
-    }
-    if (model != null && !model.isBlank()) {
-      options.setModel(model);
-    }
-    return options;
   }
 
   private OpenAiApi openAiApi(
@@ -177,28 +145,14 @@ public class OpenAiRoundRobinConfiguration {
         .build();
   }
 
-  private List<Server> servers(ReiOpenAiProperties reiOpenAiProperties, OpenAiConnectionProperties connectionProperties) {
-    List<Server> configuredServers = reiOpenAiProperties.getServers() == null ? List.of() : reiOpenAiProperties.getServers().stream()
-        .filter(server -> server != null && server.getBaseUrl() != null && !server.getBaseUrl().isBlank())
-        .map(server -> new Server(server.getBaseUrl().strip(), blankToNull(server.getChatModel()), blankToNull(server.getEmbeddingModel())))
-        .toList();
-    if (!configuredServers.isEmpty()) {
-      return configuredServers;
-    }
-    List<Server> configuredUrls = reiOpenAiProperties.getBaseUrls() == null ? List.of() : reiOpenAiProperties.getBaseUrls().stream()
+  private List<String> baseUrls(ReiOpenAiProperties reiOpenAiProperties, OpenAiConnectionProperties connectionProperties) {
+    List<String> configured = reiOpenAiProperties.getBaseUrls() == null ? List.of() : reiOpenAiProperties.getBaseUrls().stream()
         .filter(value -> value != null && !value.isBlank())
-        .map(value -> new Server(value.strip(), null, null))
+        .map(String::strip)
         .toList();
-    if (!configuredUrls.isEmpty()) {
-      return configuredUrls;
+    if (!configured.isEmpty()) {
+      return configured;
     }
-    return List.of(new Server(connectionProperties.getBaseUrl(), null, null));
-  }
-
-  private String blankToNull(String value) {
-    return value == null || value.isBlank() ? null : value.strip();
-  }
-
-  private record Server(String baseUrl, String chatModel, String embeddingModel) {
+    return List.of(connectionProperties.getBaseUrl());
   }
 }
