@@ -39,6 +39,9 @@ spring:
     restart:
       enabled: false
 rei:
+  openai:
+    round-robin-enabled: ${REI_OPENAI_ROUND_ROBIN_ENABLED:false}
+    base-urls: ${REI_OPENAI_BASE_URLS:}
   core:
     system-prompt: ${REI_AI_SYSTEM_PROMPT:classpath:/system-prompt.md}
     chat-memory-max-messages: ${REI_CHAT_MEMORY_MAX_MESSAGES:100}
