@@ -56,6 +56,13 @@ public class ExternalConfigFileService {
           openai:
             round-robin-enabled: ${REI_OPENAI_ROUND_ROBIN_ENABLED:false}
             base-urls: ${REI_OPENAI_BASE_URLS:}
+            servers:
+              # - base-url: http://127.0.0.1:11434
+              #   chat-model: qwen3.5:122b
+              #   embedding-model: qwen3-embedding:8b
+              # - base-url: http://127.0.0.2:11434
+              #   chat-model: qwen3.5:32b
+              #   embedding-model: qwen3-embedding:8b
           web-search:
             enabled: true
             providers:
