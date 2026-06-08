@@ -100,7 +100,7 @@ public class BlueskyReplyService {
       int replied = 0;
       int skipped = 0;
       for (BlueskyApiClient.FeedPost post : candidates) {
-        boolean forceReply = post.reply() || mentionsRei(post.text());
+        boolean forceReply = mentionsRei(post.text());
         String skipReason = skipReason(post, user, reply, forceReply);
         if (skipReason != null) {
           skipped++;
@@ -189,7 +189,7 @@ public class BlueskyReplyService {
       BlueskyProperties.ReplyUser user,
       BlueskyProperties.BlueskyReplyProperties reply,
       boolean forceReply) {
-    if (!forceReply && reply.isExcludeReplies() && post.reply()) {
+    if (reply.isExcludeReplies() && post.reply()) {
       return "reply";
     }
     if (reply.isExcludeReposts() && post.repost()) {

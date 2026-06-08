@@ -146,7 +146,7 @@ class BlueskyReplyServiceTest {
   }
 
   @Test
-  void alwaysRepliesToReplyPostFromConfiguredUser() {
+  void skipsReplyPostFromConfiguredUser() {
     BlueskyProperties properties = baseProperties(true, false, 1.0d, 0);
     properties.getReply().setExcludeReplies(true);
     BlueskyReplyService service = new BlueskyReplyService(
@@ -159,17 +159,10 @@ class BlueskyReplyServiceTest {
     when(blueskyApiClient.getAuthorFeed("did:plc:alice", 30, "jwt")).thenReturn(List.of(
         new BlueskyApiClient.FeedPost("at://u/r1", "cid-r1", "reply text", now.minusMinutes(1), false, true, "at://u/root", "cid-root")));
     when(repository.findLastSeen("alice.bsky.social")).thenReturn(Optional.empty());
-    when(repository.isAlreadyReplied("at://u/r1")).thenReturn(false);
-    when(conversationRepository.findRecent("alice.bsky.social", 10)).thenReturn(List.of());
-    when(replyTextGenerator.generate(eq("alice.bsky.social"), eq("reply text"), any())).thenReturn("返信します");
-    when(blueskyApiClient.createReply(eq("jwt"), eq("did:plc:rei"), eq("返信します"),
-        eq("at://u/r1"), eq("cid-r1"), eq("at://u/root"), eq("cid-root")))
-        .thenReturn(new BlueskyApiClient.PostResult(true, "at://did:plc:rei/app.bsky.feed.post/r1"));
 
     service.runOnce();
 
-    verify(blueskyApiClient).createReply(eq("jwt"), eq("did:plc:rei"), eq("返信します"),
-        eq("at://u/r1"), eq("cid-r1"), eq("at://u/root"), eq("cid-root"));
+    verify(blueskyApiClient, never()).createReply(any(), any(), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -197,6 +190,26 @@ class BlueskyReplyServiceTest {
 
     verify(blueskyApiClient).createReply(eq("jwt"), eq("did:plc:rei"), eq("返信します"),
         eq("at://u/m1"), eq("cid-m1"), eq("at://u/root"), eq("cid-root"));
+  }
+
+  @Test
+  void skipsReplyPostEvenWhenItMentionsRei() {
+    BlueskyProperties properties = baseProperties(true, false, 0.0d, 1);
+    properties.setHandle("rei.bsky.social");
+    BlueskyReplyService service = new BlueskyReplyService(
+        properties, validator, authorFeedClient, repository, conversationRepository, replyTextGenerator, blueskyApiClient, () -> 0.0d,
+        fixedClock());
+    OffsetDateTime now = OffsetDateTime.ofInstant(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
+    when(authorFeedClient.resolveDid("alice.bsky.social")).thenReturn("did:plc:alice");
+    when(blueskyApiClient.authenticate("rei.bsky.social", "app-pass"))
+        .thenReturn(new BlueskyApiClient.AuthResult(true, "jwt", "did:plc:rei"));
+    when(blueskyApiClient.getAuthorFeed("did:plc:alice", 30, "jwt")).thenReturn(List.of(
+        new BlueskyApiClient.FeedPost("at://u/m2", "cid-m2", "@rei こんにちは", now.minusMinutes(1), false, true, "at://u/root", "cid-root")));
+    when(repository.findLastSeen("alice.bsky.social")).thenReturn(Optional.empty());
+
+    service.runOnce();
+
+    verify(blueskyApiClient, never()).createReply(any(), any(), any(), any(), any(), any(), any());
   }
 
   private BlueskyProperties baseProperties(boolean replyEnabled, boolean dryRun, double probability, int maxRepliesPerDay) {
