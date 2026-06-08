@@ -53,9 +53,6 @@ public class ExternalConfigFileService {
                   model: ${REI_OPENAI_EMBEDDING_MODEL:qwen3-embedding:8b}
 
         rei:
-          openai:
-            round-robin-enabled: ${REI_OPENAI_ROUND_ROBIN_ENABLED:false}
-            base-urls: ${REI_OPENAI_BASE_URLS:}
           web-search:
             enabled: true
             providers:
