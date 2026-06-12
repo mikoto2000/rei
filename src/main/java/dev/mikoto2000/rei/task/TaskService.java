@@ -28,6 +28,7 @@ import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.client.util.DateTime;
 import com.google.api.client.util.store.FileDataStoreFactory;
+import com.google.api.services.calendar.CalendarScopes;
 import com.google.api.services.tasks.Tasks;
 import com.google.api.services.tasks.TasksScopes;
 
@@ -37,7 +38,7 @@ import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 public class TaskService {
 
   private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
-  private static final List<String> SCOPES = List.of(TasksScopes.TASKS);
+  private static final List<String> SCOPES = List.of(CalendarScopes.CALENDAR_EVENTS, TasksScopes.TASKS);
   private static final String DEFAULT_TASK_LIST_ID = "@default";
 
   private final GoogleCalendarProperties googleCalendarProperties;
@@ -198,9 +199,6 @@ public class TaskService {
   private Tasks getTasksClient() throws Exception {
     if (!googleCalendarProperties.task().enabled()) {
       throw new IllegalStateException("Google Task integration is disabled");
-    }
-    if (!googleCalendarProperties.calendar().enabled()) {
-      throw new IllegalStateException("Google Calendar integration is disabled");
     }
     NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
     return new Tasks.Builder(httpTransport, JSON_FACTORY, authorizeCredential(httpTransport))

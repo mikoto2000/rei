@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -14,6 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
@@ -34,9 +38,9 @@ class ChatCommandCancellationTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.stream().content()).thenReturn(Flux.concat(
-        Flux.just("partial "),
-        Flux.<String>never()
+    when(requestSpec.stream().chatResponse()).thenReturn(Flux.concat(
+        Flux.just(response("partial ")),
+        Flux.<ChatResponse>never()
             .doOnSubscribe(ignored -> subscribed.countDown())));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -59,5 +63,9 @@ class ChatCommandCancellationTest {
     String output = out.toString();
     assertTrue(output.contains("partial "));
     assertTrue(output.contains("[cancelled]"));
+  }
+
+  private static ChatResponse response(String text) {
+    return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
   }
 }
