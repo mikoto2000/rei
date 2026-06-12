@@ -27,11 +27,16 @@ public class TaskTools {
         dueDate,
         priority,
         tags == null ? List.of() : tags));
-    return taskService.add(
-        title,
-        dueDate == null || dueDate.isBlank() ? null : LocalDate.parse(dueDate),
-        priority,
-        tags == null ? List.of() : tags);
+    try {
+      return taskService.add(
+          title,
+          dueDate == null || dueDate.isBlank() ? null : LocalDate.parse(dueDate),
+          priority,
+          tags == null ? List.of() : tags);
+    } catch (RuntimeException e) {
+      IO.println("[error] " + userFacingMessage(e, "Google Tasks へのタスク追加に失敗しました"));
+      throw e;
+    }
   }
 
   @Tool(name = "taskUpdate", description = "タスクを更新します。title, dueDate, priority, tags のうち必要な項目だけ指定できます。dueDate は yyyy-MM-dd 形式です。")
@@ -64,5 +69,28 @@ public class TaskTools {
   void taskDelete(long id) {
     IO.println(String.format("タスク %d を削除するよ", id));
     taskService.delete(id);
+  }
+
+  private String userFacingMessage(Throwable error, String fallback) {
+    Throwable root = rootCause(error);
+    String message = root.getMessage();
+    if (message == null || message.isBlank()) {
+      message = error.getMessage();
+    }
+    if (message == null || message.isBlank()) {
+      return fallback;
+    }
+    if (fallback.equals(message) || message.startsWith(fallback + ":")) {
+      return message;
+    }
+    return fallback + ": " + message;
+  }
+
+  private Throwable rootCause(Throwable error) {
+    Throwable current = error;
+    while (current.getCause() != null) {
+      current = current.getCause();
+    }
+    return current;
   }
 }

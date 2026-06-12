@@ -48,6 +48,26 @@ class TaskCommandTest {
   }
 
   @Test
+  void addCommandPrintsErrorWhenTaskCreationFails() {
+    TaskService service = Mockito.mock(TaskService.class);
+    when(service.add(any(), any(), any(Integer.class), any()))
+        .thenThrow(new IllegalStateException("Google Tasks へのタスク追加に失敗しました",
+            new IllegalStateException("Google Task integration is disabled")));
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      int exitCode = newCommand(service).execute("add", "設計レビュー");
+      assertEquals(0, exitCode);
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    assertTrue(out.toString().contains("[error] Google Tasks へのタスク追加に失敗しました: Google Task integration is disabled"));
+  }
+
+  @Test
   void listCommandPrintsOpenTasks() {
     TaskService service = Mockito.mock(TaskService.class);
     when(service.listOpen(any(TaskQuery.class))).thenReturn(List.of(task(1L, "定例MTG", null, 1, TaskStatus.OPEN, List.of("meeting"))));

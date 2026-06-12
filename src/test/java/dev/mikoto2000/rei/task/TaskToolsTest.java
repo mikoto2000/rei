@@ -2,10 +2,13 @@ package dev.mikoto2000.rei.task;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.mockito.ArgumentMatchers.any;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -30,6 +33,28 @@ class TaskToolsTest {
 
     assertSame(created, actual);
     assertEquals(List.of(created), listed);
+  }
+
+  @Test
+  void taskCreatePrintsErrorAndRethrowsWhenServiceFails() {
+    TaskService service = Mockito.mock(TaskService.class);
+    TaskTools tools = new TaskTools(service);
+    IllegalStateException failure = new IllegalStateException("Google Tasks へのタスク追加に失敗しました",
+        new IllegalStateException("Google Task integration is disabled"));
+    when(service.add("資料作成", null, 3, List.of())).thenThrow(failure);
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      IllegalStateException actual = assertThrows(IllegalStateException.class,
+          () -> tools.taskCreate("資料作成", null, 3, null));
+      assertSame(failure, actual);
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    assertTrue(out.toString().contains("[error] Google Tasks へのタスク追加に失敗しました: Google Task integration is disabled"));
   }
 
   @Test

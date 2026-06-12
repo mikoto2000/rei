@@ -65,8 +65,12 @@ public class TaskCommand {
 
     @Override
     public void run() {
-      Task created = taskService.add(String.join(" ", titleParts), dueDate, priority, tags);
-      System.out.println("追加: " + created.id() + " | " + created.title());
+      try {
+        Task created = taskService.add(String.join(" ", titleParts), dueDate, priority, tags);
+        System.out.println("追加: " + created.id() + " | " + created.title());
+      } catch (RuntimeException e) {
+        System.out.println("[error] " + userFacingMessage(e, "Google Tasks へのタスク追加に失敗しました"));
+      }
     }
   }
 
@@ -134,5 +138,28 @@ public class TaskCommand {
       taskService.delete(id);
       System.out.println("削除: " + id);
     }
+  }
+
+  private static String userFacingMessage(Throwable error, String fallback) {
+    Throwable root = rootCause(error);
+    String message = root.getMessage();
+    if (message == null || message.isBlank()) {
+      message = error.getMessage();
+    }
+    if (message == null || message.isBlank()) {
+      return fallback;
+    }
+    if (fallback.equals(message) || message.startsWith(fallback + ":")) {
+      return message;
+    }
+    return fallback + ": " + message;
+  }
+
+  private static Throwable rootCause(Throwable error) {
+    Throwable current = error;
+    while (current.getCause() != null) {
+      current = current.getCause();
+    }
+    return current;
   }
 }
