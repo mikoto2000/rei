@@ -26,6 +26,16 @@ import picocli.CommandLine;
 class TaskCommandTest {
 
   @Test
+  void authCommandDelegatesToTaskService() throws Exception {
+    TaskService service = Mockito.mock(TaskService.class);
+
+    int exitCode = newCommand(service).execute("auth");
+
+    assertEquals(0, exitCode);
+    verify(service).authorize();
+  }
+
+  @Test
   void addCommandDelegatesToTaskService() {
     TaskService service = Mockito.mock(TaskService.class);
     Task created = task(1L, "設計レビュー", LocalDate.of(2026, 3, 31), 2, TaskStatus.OPEN, List.of("backend", "review"));
@@ -91,6 +101,9 @@ class TaskCommandTest {
     return new CommandLine(new TaskCommand(), new CommandLine.IFactory() {
       @Override
       public <K> K create(Class<K> cls) throws Exception {
+        if (cls == TaskCommand.AuthCommand.class) {
+          return cls.cast(new TaskCommand.AuthCommand(service));
+        }
         if (cls == TaskCommand.AddCommand.class) {
           return cls.cast(new TaskCommand.AddCommand(service));
         }

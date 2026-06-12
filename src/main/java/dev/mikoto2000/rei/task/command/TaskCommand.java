@@ -18,12 +18,31 @@ import picocli.CommandLine.Parameters;
     name = "task",
     description = "タスクを操作します",
     subcommands = {
+      TaskCommand.AuthCommand.class,
       TaskCommand.AddCommand.class,
       TaskCommand.ListCommand.class,
       TaskCommand.DoneCommand.class,
       TaskCommand.DeleteCommand.class
     })
 public class TaskCommand {
+
+  @Component
+  @RequiredArgsConstructor
+  @Command(name = "auth", description = "Google Tasks への OAuth 認可を実行します")
+  public static class AuthCommand implements Runnable {
+
+    private final TaskService taskService;
+
+    @Override
+    public void run() {
+      try {
+        taskService.authorize();
+        System.out.println("Google Tasks の認可が完了しました");
+      } catch (Exception e) {
+        throw new RuntimeException("Google Tasks の認可に失敗しました", e);
+      }
+    }
+  }
 
   @Component
   @RequiredArgsConstructor
