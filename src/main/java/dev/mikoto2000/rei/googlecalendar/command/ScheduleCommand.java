@@ -158,8 +158,31 @@ public class ScheduleCommand {
             DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(resolvedStart)
         ));
       } catch (Exception e) {
-        throw new RuntimeException("Google Calendar への予定追加に失敗しました", e);
+        IO.println("[error] " + userFacingMessage(e, "Google Calendar への予定追加に失敗しました"));
       }
     }
+  }
+
+  private static String userFacingMessage(Throwable error, String fallback) {
+    Throwable root = rootCause(error);
+    String message = root.getMessage();
+    if (message == null || message.isBlank()) {
+      message = error.getMessage();
+    }
+    if (message == null || message.isBlank()) {
+      return fallback;
+    }
+    if (fallback.equals(message) || message.startsWith(fallback + ":")) {
+      return message;
+    }
+    return fallback + ": " + message;
+  }
+
+  private static Throwable rootCause(Throwable error) {
+    Throwable current = error;
+    while (current.getCause() != null) {
+      current = current.getCause();
+    }
+    return current;
   }
 }

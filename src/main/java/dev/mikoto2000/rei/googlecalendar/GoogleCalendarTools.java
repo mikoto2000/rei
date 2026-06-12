@@ -31,12 +31,40 @@ public class GoogleCalendarTools {
   @Tool(name = "googleCalendarCreateEvent", description = "Google Calendar に予定を作成します。日時は ISO-8601 形式で指定します。")
   GoogleCalendarEventSummary createEvent(String summary, String start, String end, String location, String description) throws Exception {
     IO.println(String.format("Google Calendar に予定 %s を作成するよ", summary));
-    return googleCalendarService.createEvent(
-        summary,
-        googleCalendarService.parseDateTime(start),
-        googleCalendarService.parseDateTime(end),
-        location,
-        description
-    );
+    try {
+      return googleCalendarService.createEvent(
+          summary,
+          googleCalendarService.parseDateTime(start),
+          googleCalendarService.parseDateTime(end),
+          location,
+          description
+      );
+    } catch (Exception e) {
+      IO.println("[error] " + userFacingMessage(e, "Google Calendar への予定追加に失敗しました"));
+      throw e;
+    }
+  }
+
+  private String userFacingMessage(Throwable error, String fallback) {
+    Throwable root = rootCause(error);
+    String message = root.getMessage();
+    if (message == null || message.isBlank()) {
+      message = error.getMessage();
+    }
+    if (message == null || message.isBlank()) {
+      return fallback;
+    }
+    if (fallback.equals(message) || message.startsWith(fallback + ":")) {
+      return message;
+    }
+    return fallback + ": " + message;
+  }
+
+  private Throwable rootCause(Throwable error) {
+    Throwable current = error;
+    while (current.getCause() != null) {
+      current = current.getCause();
+    }
+    return current;
   }
 }
