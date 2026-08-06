@@ -42,6 +42,7 @@ import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
+import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.sound.SoundNotificationService;
@@ -61,6 +62,7 @@ public class ReiApplication {
   private final EscCancellationMonitor escCancellationMonitor;
   private final CommandCancellationService commandCancellationService;
   private final CommandCompletionNotificationPolicy commandCompletionNotificationPolicy;
+  private final CommandUserInputDisplayPolicy commandUserInputDisplayPolicy;
   private final AsyncVectorDocumentService asyncVectorDocumentService;
   private final SoundNotificationService soundNotificationService;
   private final ChatResponseNarrator chatResponseNarrator;
@@ -168,8 +170,9 @@ public class ReiApplication {
             if (commandText.isEmpty()) {
               continue;
             }
-            printUserInput(trimmed, terminal);
-            executeInterruptibly(cmd, terminal, commandExecutor, splitCommandLine(commandText));
+            String[] commandArgs = splitCommandLine(commandText);
+            printUserInputIfNeeded(trimmed, terminal, commandArgs);
+            executeInterruptibly(cmd, terminal, commandExecutor, commandArgs);
           } else {
             printUserInput(line, terminal);
             executeInterruptibly(cmd, terminal, commandExecutor, "chat", line);
@@ -325,6 +328,12 @@ public class ReiApplication {
 
     terminal.writer().print(builder.toAnsi(terminal));
     terminal.writer().flush();
+  }
+
+  void printUserInputIfNeeded(String input, Terminal terminal, String... commandArgs) {
+    if (commandUserInputDisplayPolicy.shouldDisplay(commandArgs)) {
+      printUserInput(input, terminal);
+    }
   }
 
   String formatUserInput(String input) {

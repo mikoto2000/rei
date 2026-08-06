@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,6 +22,7 @@ import org.mockito.Mockito;
 import dev.mikoto2000.rei.core.command.RootCommand;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
+import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.sound.SoundNotificationService;
@@ -66,6 +68,7 @@ class ReiApplicationColorOutputTest {
                 Mockito.mock(EscCancellationMonitor.class),
                 Mockito.mock(CommandCancellationService.class),
                 new CommandCompletionNotificationPolicy(),
+                new CommandUserInputDisplayPolicy(),
                 asyncVectorDocumentService,
                 Mockito.mock(SoundNotificationService.class),
                 Mockito.mock(ChatResponseNarrator.class));
@@ -87,6 +90,19 @@ class ReiApplicationColorOutputTest {
 
         verify(mockWriter, atLeastOnce()).print(anyString());
         verify(mockWriter, atLeastOnce()).flush();
+    }
+
+    @Test
+    void printUserInputIfNeededSkipsProjectCommand() {
+        ReiApplication app = newApp();
+        Terminal terminal = mock(Terminal.class);
+        PrintWriter mockWriter = mock(PrintWriter.class);
+        when(terminal.writer()).thenReturn(mockWriter);
+
+        app.printUserInputIfNeeded("/project list", terminal, "project", "list");
+
+        verify(mockWriter, never()).print(anyString());
+        verify(mockWriter, never()).flush();
     }
 
     /**
