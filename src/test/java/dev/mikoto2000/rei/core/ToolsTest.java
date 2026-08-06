@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -154,6 +155,16 @@ class ToolsTest {
     Tools tools = new Tools(projectService);
 
     assertEquals(List.of("project note"), tools.readTextFile("note.txt"));
+  }
+
+  @Test
+  void readTextFileFallsBackToCp932() throws Exception {
+    Path csv = tempDir.resolve("gantt.csv");
+    Files.write(csv, List.of("タスク,開始日", "設計,2026-08-07"), Charset.forName("windows-31j"));
+
+    Tools tools = new Tools();
+
+    assertEquals(List.of("タスク,開始日", "設計,2026-08-07"), tools.readTextFile(csv.toString()));
   }
 
   private void writePdf(Path pdf, String text) throws IOException {

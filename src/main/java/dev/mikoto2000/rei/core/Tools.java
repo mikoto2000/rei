@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.core;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.Charset;
+import java.nio.charset.MalformedInputException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
@@ -34,6 +36,7 @@ import dev.mikoto2000.rei.core.service.SystemShellService;
 public class Tools {
   private static final int DEFAULT_SHELL_TIMEOUT_SECONDS = 30;
   private static final int MAX_SHELL_TIMEOUT_SECONDS = 600;
+  private static final Charset CP932 = Charset.forName("windows-31j");
   private final ProjectService projectService;
   private final SystemShellService systemShellService;
 
@@ -311,7 +314,13 @@ public class Tools {
   @Tool(name = "readTextFile", description = "テキストファイルをすべて読み込む。ファイルが存在しない場合は findFile を利用してファイルを探す。")
   List<String> readTextFile(String pathStr) throws IOException {
     IO.println(String.format("%s のテキストファイルを読むよ", pathStr));
-    return Files.readAllLines(resolveProjectPath(pathStr));
+    java.nio.file.Path path = resolveProjectPath(pathStr);
+    try {
+      return Files.readAllLines(path, StandardCharsets.UTF_8);
+    } catch (MalformedInputException e) {
+      IO.println(String.format("%s は UTF-8 として読めなかったため CP932 で読み直すよ", pathStr));
+      return Files.readAllLines(path, CP932);
+    }
   }
 
   @Tool(name = "readPdfFile", description = "PDF ファイルから本文テキストを抽出して読み込む。")
