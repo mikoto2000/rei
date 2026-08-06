@@ -167,6 +167,28 @@ class ToolsTest {
     assertEquals(List.of("タスク,開始日", "設計,2026-08-07"), tools.readTextFile(csv.toString()));
   }
 
+  @Test
+  void writeTextFileUsesSpecifiedCharset() throws Exception {
+    Path csv = tempDir.resolve("gantt.csv");
+    Tools tools = new Tools();
+
+    tools.writeTextFile(csv.toString(), "タスク,開始日", false, "windows-31j");
+
+    byte[] bytes = Files.readAllBytes(csv);
+    assertEquals("タスク,開始日", new String(bytes, Charset.forName("windows-31j")));
+    assertFalse(new String(bytes, Charset.forName("UTF-8")).equals("タスク,開始日"));
+  }
+
+  @Test
+  void writeTextFileDefaultsToUtf8WhenCharsetIsBlank() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Tools tools = new Tools();
+
+    tools.writeTextFile(text.toString(), "メモ", false, "");
+
+    assertEquals("メモ", Files.readString(text, Charset.forName("UTF-8")));
+  }
+
   private void writePdf(Path pdf, String text) throws IOException {
     try (PDDocument document = new PDDocument()) {
       PDPage page = new PDPage();

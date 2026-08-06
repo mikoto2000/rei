@@ -346,9 +346,11 @@ public class Tools {
   @param pathStr ファイルのパス
   @param contents 書き込む内容
   @param append 既存の内容に追記するかどうか。true の場合は追記、false の場合は上書きします。
+  @param charset 書き込み文字コード。null または空の場合は UTF-8。例: UTF-8, windows-31j
   """)
-    void writeTextFile(String pathStr, String contents, boolean append) throws IOException {
-      IO.println(String.format("%s のテキストファイルに %s を書き込むよ", pathStr, contents));
+    void writeTextFile(String pathStr, String contents, boolean append, String charset) throws IOException {
+      Charset resolvedCharset = resolveCharset(charset);
+      IO.println(String.format("%s のテキストファイルに %s を %s で書き込むよ", pathStr, contents, resolvedCharset.name()));
 
       OpenOption[] options = null;
       if (append) {
@@ -363,7 +365,7 @@ public class Tools {
         };
       }
 
-      Files.writeString(resolveProjectPath(pathStr), contents, options);
+      Files.writeString(resolveProjectPath(pathStr), contents, resolvedCharset, options);
     }
 
   @Tool(name = "readBinaryFile", description = "バイナリファイルをすべて読み込む。ファイルが存在しない場合は findFile を利用してファイルを探す。")
@@ -439,5 +441,16 @@ public class Tools {
       return path.normalize();
     }
     return currentWorkingDirectory().resolve(path).normalize();
+  }
+
+  private Charset resolveCharset(String charset) {
+    if (charset == null || charset.isBlank()) {
+      return StandardCharsets.UTF_8;
+    }
+    try {
+      return Charset.forName(charset);
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("Unsupported charset: " + charset, e);
+    }
   }
 }
