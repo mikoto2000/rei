@@ -28,20 +28,27 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.core.service.SystemShellService;
 
 @Component
 public class Tools {
   private static final int DEFAULT_SHELL_TIMEOUT_SECONDS = 30;
   private static final int MAX_SHELL_TIMEOUT_SECONDS = 600;
   private final ProjectService projectService;
+  private final SystemShellService systemShellService;
 
   public Tools() {
-    this(null);
+    this(null, new SystemShellService());
+  }
+
+  public Tools(ProjectService projectService) {
+    this(projectService, new SystemShellService());
   }
 
   @Autowired
-  public Tools(ProjectService projectService) {
+  public Tools(ProjectService projectService, SystemShellService systemShellService) {
     this.projectService = projectService;
+    this.systemShellService = systemShellService;
   }
 
   /**
@@ -134,27 +141,11 @@ public class Tools {
   }
 
   String resolveShell(Map<String, String> environment, String osName) {
-    String shell = environment == null ? null : environment.get("SHELL");
-    if (shell != null && !shell.isBlank()) {
-      return shell;
-    }
-    String normalizedOsName = osName == null ? "" : osName.toLowerCase();
-    if (normalizedOsName.contains("win")) {
-      return "powershell";
-    }
-    return "bash";
+    return systemShellService.resolveShell(environment, osName);
   }
 
   List<String> shellCommandLine(String shell, String command) {
-    String shellName = Paths.get(shell).getFileName().toString().toLowerCase();
-    if (shellName.equals("powershell") || shellName.equals("powershell.exe") || shellName.equals("pwsh")
-        || shellName.equals("pwsh.exe")) {
-      return List.of(shell, "-NoProfile", "-Command", command);
-    }
-    if (shellName.equals("cmd") || shellName.equals("cmd.exe")) {
-      return List.of(shell, "/C", command);
-    }
-    return List.of(shell, "-lc", command);
+    return systemShellService.shellCommandLine(shell, command);
   }
 
   int normalizeShellTimeout(Integer timeoutSeconds) {

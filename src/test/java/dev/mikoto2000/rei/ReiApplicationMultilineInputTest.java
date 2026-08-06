@@ -67,6 +67,14 @@ class ReiApplicationMultilineInputTest {
     assertNotNull(commandLine.getErr());
   }
 
+  @Test
+  void detectsInteractiveShellCommand() {
+    ReiApplication app = newApp();
+
+    assertEquals(true, app.isInteractiveShellCommand("sh"));
+    assertEquals(false, app.isInteractiveShellCommand("chat"));
+  }
+
   private ReiApplication newApp() {
     AsyncVectorDocumentService asyncVectorDocumentService = Mockito.mock(AsyncVectorDocumentService.class);
     when(asyncVectorDocumentService.hasActiveEmbeddings()).thenReturn(false);

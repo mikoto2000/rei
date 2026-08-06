@@ -10,7 +10,8 @@ public class CommandCompletionNotificationPolicy {
   private static final Set<String> DISABLED_ROOT_COMMANDS = Set.of(
       "model",
       "models",
-      "project");
+      "project",
+      "sh");
 
   public boolean shouldNotify(String... args) {
     if (args == null || args.length == 0 || args[0] == null) {

@@ -26,6 +26,7 @@ subcommands = {
   SearchCommand.class,
   ModelsCommand.class,
   ModelCommand.class,
+  ShCommand.class,
   ProjectCommand.class,
   ConfigCommand.class,
   ScheduleCommand.class,

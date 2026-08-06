@@ -14,6 +14,7 @@ class CommandCompletionNotificationPolicyTest {
     assertThat(policy.shouldNotify("model")).isFalse();
     assertThat(policy.shouldNotify("models")).isFalse();
     assertThat(policy.shouldNotify("project")).isFalse();
+    assertThat(policy.shouldNotify("sh")).isFalse();
   }
 
   @Test

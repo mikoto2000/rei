@@ -172,6 +172,10 @@ public class ReiApplication {
             }
             String[] commandArgs = splitCommandLine(commandText);
             printUserInputIfNeeded(trimmed, terminal, commandArgs);
+            if (isInteractiveShellCommand(commandArgs)) {
+              cmd.execute(commandArgs);
+              continue;
+            }
             executeInterruptibly(cmd, terminal, commandExecutor, commandArgs);
           } else {
             printUserInput(line, terminal);
@@ -216,6 +220,10 @@ public class ReiApplication {
       }
       chatResponseNarrator.reset();
     }
+  }
+
+  boolean isInteractiveShellCommand(String... args) {
+    return args != null && args.length > 0 && "sh".equals(args[0]);
   }
 
   String[] splitCommandLine(String line) {

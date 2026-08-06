@@ -14,6 +14,7 @@ class CommandUserInputDisplayPolicyTest {
     assertThat(policy.shouldDisplay("feed")).isTrue();
     assertThat(policy.shouldDisplay("project")).isFalse();
     assertThat(policy.shouldDisplay("project", "list")).isFalse();
+    assertThat(policy.shouldDisplay("sh")).isFalse();
   }
 
   @Test
