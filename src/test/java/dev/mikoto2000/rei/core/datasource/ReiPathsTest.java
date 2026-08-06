@@ -62,4 +62,15 @@ class ReiPathsTest {
 
     assertEquals(expected, ReiPaths.configFilePath(workDirectory));
   }
+
+  @Test
+  void projectsFilePathUsesWorkingDirectory() {
+    Path workDirectory = Path.of("/work/rei");
+    Path expected = Path.of(
+        "/work/rei",
+        ".rei",
+        "projects");
+
+    assertEquals(expected, ReiPaths.projectsFilePath(workDirectory));
+  }
 }

@@ -201,8 +201,34 @@ public class ReiApplication {
     return "model".equals(args[0]) || "models".equals(args[0]);
   }
 
-  private String[] splitCommandLine(String line) {
-    return line.split("\\s+");
+  String[] splitCommandLine(String line) {
+    List<String> words = new java.util.ArrayList<>();
+    StringBuilder current = new StringBuilder();
+    boolean inSingleQuote = false;
+    boolean inDoubleQuote = false;
+    for (int i = 0; i < line.length(); i++) {
+      char c = line.charAt(i);
+      if (c == '\'' && !inDoubleQuote) {
+        inSingleQuote = !inSingleQuote;
+        continue;
+      }
+      if (c == '"' && !inSingleQuote) {
+        inDoubleQuote = !inDoubleQuote;
+        continue;
+      }
+      if (Character.isWhitespace(c) && !inSingleQuote && !inDoubleQuote) {
+        if (current.length() > 0) {
+          words.add(current.toString());
+          current = new StringBuilder();
+        }
+        continue;
+      }
+      current.append(c);
+    }
+    if (current.length() > 0) {
+      words.add(current.toString());
+    }
+    return words.toArray(String[]::new);
   }
 
   String buildPrompt() {

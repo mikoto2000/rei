@@ -45,6 +45,15 @@ class ReiApplicationMultilineInputTest {
         app.readPossiblyMultilineInput("line1\\", reader));
   }
 
+  @Test
+  void splitCommandLineSupportsQuotedArguments() {
+    ReiApplication app = newApp();
+
+    assertEquals(
+        java.util.List.of("project", "add", "C:\\path with space"),
+        java.util.List.of(app.splitCommandLine("project add \"C:\\path with space\"")));
+  }
+
   private ReiApplication newApp() {
     AsyncVectorDocumentService asyncVectorDocumentService = Mockito.mock(AsyncVectorDocumentService.class);
     when(asyncVectorDocumentService.hasActiveEmbeddings()).thenReturn(false);

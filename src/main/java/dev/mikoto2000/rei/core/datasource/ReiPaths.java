@@ -11,8 +11,13 @@ import java.nio.file.Path;
  * </p>
  */
 public final class ReiPaths {
+  private static final Path STARTUP_DIRECTORY = Path.of("").toAbsolutePath().normalize();
 
   private ReiPaths() {
+  }
+
+  public static Path startupDirectory() {
+    return STARTUP_DIRECTORY;
   }
 
   /**
@@ -55,6 +60,10 @@ public final class ReiPaths {
     return configFilePath(workDirectory());
   }
 
+  public static Path projectsFilePath() {
+    return projectsFilePath(startupDirectory());
+  }
+
   /**
    * 指定したファイルパスの親ディレクトリを作成します。
    *
@@ -66,7 +75,7 @@ public final class ReiPaths {
   }
 
   static Path workDirectory() {
-    return Path.of("").toAbsolutePath().normalize();
+    return startupDirectory();
   }
 
   public static Path memoryDbPath(Path workDirectory) {
@@ -87,5 +96,9 @@ public final class ReiPaths {
 
   public static Path configFilePath(Path workDirectory) {
     return workDirectory.resolve(".rei").resolve("application.yaml");
+  }
+
+  public static Path projectsFilePath(Path workDirectory) {
+    return workDirectory.resolve(".rei").resolve("projects");
   }
 }

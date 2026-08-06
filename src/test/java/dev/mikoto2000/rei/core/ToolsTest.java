@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -7,6 +8,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -15,6 +17,8 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import dev.mikoto2000.rei.core.project.ProjectService;
 
 class ToolsTest {
 
@@ -96,6 +100,60 @@ class ToolsTest {
     assertTrue(results.stream().anyMatch(line -> line.startsWith("docs/tracked.txt:1:")));
     assertTrue(results.stream().anyMatch(line -> line.startsWith("docs/untracked.txt:1:")));
     assertFalse(results.stream().anyMatch(line -> line.contains("ignored.txt")));
+  }
+
+  @Test
+  void resolveShellUsesShellEnvironmentVariableWhenConfigured() {
+    Tools tools = new Tools();
+
+    String actual = tools.resolveShell(Map.of("SHELL", "/bin/zsh"), "Windows 11");
+
+    assertEquals("/bin/zsh", actual);
+  }
+
+  @Test
+  void resolveShellFallsBackToOperatingSystemDefault() {
+    Tools tools = new Tools();
+
+    assertEquals("powershell", tools.resolveShell(Map.of(), "Windows 11"));
+    assertEquals("bash", tools.resolveShell(Map.of(), "Linux"));
+    assertEquals("bash", tools.resolveShell(Map.of(), "Mac OS X"));
+  }
+
+  @Test
+  void shellCommandLineUsesShellSpecificExecutionOption() {
+    Tools tools = new Tools();
+
+    assertEquals(List.of("powershell", "-NoProfile", "-Command", "Write-Output hello"),
+        tools.shellCommandLine("powershell", "Write-Output hello"));
+    assertEquals(List.of("cmd", "/C", "echo hello"), tools.shellCommandLine("cmd", "echo hello"));
+    assertEquals(List.of("/bin/bash", "-lc", "printf hello"), tools.shellCommandLine("/bin/bash", "printf hello"));
+  }
+
+  @Test
+  void executeShellCommandRunsWithDefaultShell() throws Exception {
+    Tools tools = new Tools();
+    String osName = System.getProperty("os.name").toLowerCase();
+    String command = osName.contains("win") ? "Write-Output hello" : "printf hello";
+
+    Tools.ShellCommandResult result = tools.executeShellCommand(command, 10, tempDir);
+
+    assertEquals(0, result.exitCode());
+    assertEquals("hello", result.stdout().trim());
+    assertFalse(result.timedOut());
+  }
+
+  @Test
+  void readTextFileUsesCurrentProjectForRelativePath() throws Exception {
+    Path project = Files.createDirectories(tempDir.resolve("project-a"));
+    Files.writeString(project.resolve("note.txt"), "project note");
+    ProjectService projectService = new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects"));
+    projectService.add(project.toString());
+    projectService.cd(project.toString());
+
+    Tools tools = new Tools(projectService);
+
+    assertEquals(List.of("project note"), tools.readTextFile("note.txt"));
   }
 
   private void writePdf(Path pdf, String text) throws IOException {
