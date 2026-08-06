@@ -4,8 +4,6 @@ package dev.mikoto2000.rei;
 
 
 import java.io.IOException;
-import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.nio.file.Path;
@@ -72,7 +70,6 @@ public class ReiApplication {
   private static final DateTimeFormatter PROMPT_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
   public  static void main(String[] args) throws IOException {
-    configureStandardOutputEncoding();
     SpringApplication application = new SpringApplication(ReiApplication.class);
     application.setDefaultProperties(ExternalConfigSupport.defaultProperties());
     ConfigurableApplicationContext context = application.run(args);
@@ -84,11 +81,6 @@ public class ReiApplication {
       exitCode = SpringApplication.exit(context);
     }
     System.exit(exitCode);
-  }
-
-  static void configureStandardOutputEncoding() {
-    System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
-    System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
   }
 
   private void run(String[] args) throws IOException {

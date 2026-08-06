@@ -3,10 +3,6 @@ package dev.mikoto2000.rei;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
-
 import org.jline.reader.LineReader;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -56,24 +52,6 @@ class ReiApplicationMultilineInputTest {
     assertEquals(
         java.util.List.of("project", "add", "C:\\path with space"),
         java.util.List.of(app.splitCommandLine("project add \"C:\\path with space\"")));
-  }
-
-  @Test
-  void configureStandardOutputEncodingUsesUtf8() {
-    PrintStream originalOut = System.out;
-    PrintStream originalErr = System.err;
-    try {
-      System.setOut(new PrintStream(new ByteArrayOutputStream()));
-      System.setErr(new PrintStream(new ByteArrayOutputStream()));
-
-      ReiApplication.configureStandardOutputEncoding();
-
-      assertEquals(StandardCharsets.UTF_8, System.out.charset());
-      assertEquals(StandardCharsets.UTF_8, System.err.charset());
-    } finally {
-      System.setOut(originalOut);
-      System.setErr(originalErr);
-    }
   }
 
   private ReiApplication newApp() {
