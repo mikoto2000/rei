@@ -232,7 +232,7 @@ class ReiApplicationCommandNotificationTest {
 
         app.executeInterruptibly(cmd, terminal, commandExecutor, "model");
 
-        verify(soundNotificationService, never()).notify("ã‚³ãƒžãƒ³ãƒ‰å®Ÿè¡ŒãŒå®Œäº†ã—ã¾ã—ãŸ");
+        verify(soundNotificationService, never()).notify("コマンド実行が完了しました");
     }
 
     @Test
@@ -258,6 +258,6 @@ class ReiApplicationCommandNotificationTest {
 
         app.executeInterruptibly(cmd, terminal, commandExecutor, "models");
 
-        verify(soundNotificationService, never()).notify("ã‚³ãƒžãƒ³ãƒ‰å®Ÿè¡ŒãŒå®Œäº†ã—ã¾ã—ãŸ");
+        verify(soundNotificationService, never()).notify("コマンド実行が完了しました");
     }
 }
