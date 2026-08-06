@@ -40,6 +40,7 @@ import dev.mikoto2000.rei.core.command.ProjectAddDirectoryCompletion;
 import dev.mikoto2000.rei.core.command.RootCommand;
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
@@ -59,6 +60,7 @@ public class ReiApplication {
   private final ModelHolderService currentModelHolder;
   private final EscCancellationMonitor escCancellationMonitor;
   private final CommandCancellationService commandCancellationService;
+  private final CommandCompletionNotificationPolicy commandCompletionNotificationPolicy;
   private final AsyncVectorDocumentService asyncVectorDocumentService;
   private final SoundNotificationService soundNotificationService;
   private final ChatResponseNarrator chatResponseNarrator;
@@ -206,18 +208,11 @@ public class ReiApplication {
       escCancellationMonitor.await(future, timeoutMillis -> terminal.reader().read(timeoutMillis), commandCancellationService::cancel);
     } finally {
       terminal.setAttributes(originalAttributes);
-      if (!chatResponseNarrator.wasNarrated() && !shouldSkipCompletionNotification(args)) {
+      if (!chatResponseNarrator.wasNarrated() && commandCompletionNotificationPolicy.shouldNotify(args)) {
         soundNotificationService.notify(COMMAND_COMPLETION_MESSAGE);
       }
       chatResponseNarrator.reset();
     }
-  }
-
-  boolean shouldSkipCompletionNotification(String... args) {
-    if (args == null || args.length == 0 || args[0] == null) {
-      return false;
-    }
-    return "model".equals(args[0]) || "models".equals(args[0]);
   }
 
   String[] splitCommandLine(String line) {

@@ -10,6 +10,7 @@ import org.mockito.Mockito;
 
 import dev.mikoto2000.rei.core.command.RootCommand;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
+import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.sound.SoundNotificationService;
@@ -60,6 +61,7 @@ class ReiApplicationInputRenderingTest {
         modelHolderService,
         Mockito.mock(EscCancellationMonitor.class),
         Mockito.mock(CommandCancellationService.class),
+        new CommandCompletionNotificationPolicy(),
         asyncVectorDocumentService,
         Mockito.mock(SoundNotificationService.class),
         Mockito.mock(ChatResponseNarrator.class));
@@ -76,6 +78,7 @@ class ReiApplicationInputRenderingTest {
         modelHolderService,
         Mockito.mock(EscCancellationMonitor.class),
         Mockito.mock(CommandCancellationService.class),
+        new CommandCompletionNotificationPolicy(),
         asyncVectorDocumentService,
         Mockito.mock(SoundNotificationService.class),
         Mockito.mock(ChatResponseNarrator.class)) {

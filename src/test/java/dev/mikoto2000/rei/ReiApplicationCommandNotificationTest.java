@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import dev.mikoto2000.rei.core.command.RootCommand;
+import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
@@ -61,6 +62,7 @@ class ReiApplicationCommandNotificationTest {
                 Mockito.mock(ModelHolderService.class),
                 escCancellationMonitor,
                 Mockito.mock(CommandCancellationService.class),
+                new CommandCompletionNotificationPolicy(),
                 asyncVectorDocumentService,
                 soundNotificationService,
                 chatResponseNarrator);
@@ -257,6 +259,32 @@ class ReiApplicationCommandNotificationTest {
         ReiApplication app = newApp();
 
         app.executeInterruptibly(cmd, terminal, commandExecutor, "models");
+
+        verify(soundNotificationService, never()).notify("コマンド実行が完了しました");
+    }
+
+    @Test
+    void skipsCommandCompletionNotificationForProjectCommand() throws IOException {
+        @CommandLine.Command(name = "stub")
+        class StubCommand implements Runnable {
+            @Override
+            public void run() {
+            }
+        }
+
+        CommandLine cmd = new CommandLine(new StubCommand());
+        when(escCancellationMonitor.await(
+                Mockito.any(),
+                Mockito.any(),
+                Mockito.any()))
+                .thenAnswer(invocation -> {
+                    var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
+                    return future.get();
+                });
+        when(chatResponseNarrator.wasNarrated()).thenReturn(false);
+        ReiApplication app = newApp();
+
+        app.executeInterruptibly(cmd, terminal, commandExecutor, "project", "list");
 
         verify(soundNotificationService, never()).notify("コマンド実行が完了しました");
     }
