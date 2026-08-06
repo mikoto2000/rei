@@ -1,11 +1,13 @@
 package dev.mikoto2000.rei.bluesky;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
@@ -15,7 +17,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class BlueskyReplyTextGenerator {
 
-  private final ChatModel chatModel;
+  private final ObjectProvider<ChatClient> chatClientProvider;
   private final ModelHolderService modelHolderService;
 
   public String generate(String handle, String postText, List<BlueskyReplyConversationRepository.ConversationMessage> history) {
@@ -39,7 +41,7 @@ public class BlueskyReplyTextGenerator {
         """.formatted(handle, historyBlock.isBlank() ? "(none)" : historyBlock, postText);
 
     Prompt prompt = new Prompt(promptText, OpenAiChatOptions.builder().model(modelHolderService.get()).build());
-    String content = chatModel.call(prompt).getResult().getOutput().getText();
+    String content = generateContent(prompt);
     if (content == null || content.isBlank()) {
       return "Thanks for sharing.";
     }
@@ -61,10 +63,20 @@ public class BlueskyReplyTextGenerator {
         %s
         """.formatted(postText);
     Prompt prompt = new Prompt(promptText, OpenAiChatOptions.builder().model(modelHolderService.get()).build());
-    String content = chatModel.call(prompt).getResult().getOutput().getText();
+    String content = generateContent(prompt);
     if (content == null || content.isBlank()) {
       return "ありがとうございます。";
     }
     return content.strip();
+  }
+
+  private String generateContent(Prompt prompt) {
+    return chatClientProvider.getObject()
+        .prompt(prompt)
+        .stream()
+        .content()
+        .collectList()
+        .map(parts -> String.join("", parts))
+        .block(Duration.ofMinutes(20));
   }
 }
