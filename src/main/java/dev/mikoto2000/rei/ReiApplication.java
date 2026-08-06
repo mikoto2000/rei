@@ -33,8 +33,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
+import dev.mikoto2000.rei.core.command.ProjectAddDirectoryCompletion;
 import dev.mikoto2000.rei.core.command.RootCommand;
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
+import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
@@ -375,6 +377,12 @@ public class ReiApplication {
         return;
       }
 
+      if (isCompletingProjectAddDirectory(rawLine)) {
+        ProjectAddDirectoryCompletion.complete(rawLine, ProjectService.currentProjectOrStartupDirectory())
+            .forEach(candidate -> candidates.add(new Candidate(candidate)));
+        return;
+      }
+
       try {
         delegate.complete(reader, stripSlash(line), candidates);
       } catch (SyntaxError e) {
@@ -384,6 +392,10 @@ public class ReiApplication {
 
     private boolean isCompletingRootCommand(String rawLine) {
       return !rawLine.substring(1).contains(" ");
+    }
+
+    private boolean isCompletingProjectAddDirectory(String rawLine) {
+      return rawLine.equals("/project add") || rawLine.startsWith("/project add ");
     }
 
     private void completeRootCommand(String current, List<Candidate> candidates) {

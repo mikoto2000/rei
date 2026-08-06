@@ -1,9 +1,7 @@
 package dev.mikoto2000.rei.core.command;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
-import java.util.List;
 
 import org.springframework.stereotype.Component;
 
@@ -30,7 +28,7 @@ public class ProjectCommand {
   public static class AddCommand implements Runnable {
     private final ProjectService projectService;
 
-    @Parameters(index = "0", paramLabel = "DIR", completionCandidates = DirectoryCandidates.class)
+    @Parameters(index = "0", paramLabel = "DIR")
     String directory;
 
     @Override
@@ -92,23 +90,6 @@ public class ProjectCommand {
     @Override
     public Iterator<String> iterator() {
       return ProjectService.registeredProjectPathStrings().iterator();
-    }
-  }
-
-  public static class DirectoryCandidates implements Iterable<String> {
-    @Override
-    public Iterator<String> iterator() {
-      Path base = ProjectService.currentProjectOrStartupDirectory();
-      try (var stream = Files.list(base)) {
-        List<String> directories = stream
-            .filter(Files::isDirectory)
-            .map(Path::toString)
-            .sorted()
-            .toList();
-        return directories.iterator();
-      } catch (Exception e) {
-        return List.<String>of().iterator();
-      }
     }
   }
 }
