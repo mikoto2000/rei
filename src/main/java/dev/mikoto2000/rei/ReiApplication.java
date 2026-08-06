@@ -31,6 +31,7 @@ import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
+import org.jline.utils.NonBlockingReader;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -173,7 +174,7 @@ public class ReiApplication {
             String[] commandArgs = splitCommandLine(commandText);
             printUserInputIfNeeded(trimmed, terminal, commandArgs);
             if (isInteractiveShellCommand(commandArgs)) {
-              cmd.execute(commandArgs);
+              executeInteractiveShellCommand(cmd, reader, terminal, commandArgs);
               continue;
             }
             executeInterruptibly(cmd, terminal, commandExecutor, commandArgs);
@@ -224,6 +225,39 @@ public class ReiApplication {
 
   boolean isInteractiveShellCommand(String... args) {
     return args != null && args.length > 0 && "sh".equals(args[0]);
+  }
+
+  void executeInteractiveShellCommand(CommandLine cmd, LineReader reader, Terminal terminal, String... args) {
+    boolean paused = false;
+    try {
+      if (terminal.canPauseResume()) {
+        terminal.pause(true);
+        paused = true;
+      }
+      cmd.execute(args);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("システムシェルの起動待機が中断されました", e);
+    } finally {
+      if (paused) {
+        terminal.resume();
+      }
+      clearPendingInputAfterInteractiveShell(reader, terminal);
+    }
+  }
+
+  void clearPendingInputAfterInteractiveShell(LineReader reader, Terminal terminal) {
+    reader.getBuffer().clear();
+    try {
+      while (true) {
+        int read = terminal.reader().read(10);
+        if (read == NonBlockingReader.READ_EXPIRED || read == NonBlockingReader.EOF) {
+          break;
+        }
+      }
+    } catch (IOException e) {
+      // 次の readLine で自然に復旧できるため、残留入力の掃除失敗は無視する。
+    }
   }
 
   String[] splitCommandLine(String line) {
