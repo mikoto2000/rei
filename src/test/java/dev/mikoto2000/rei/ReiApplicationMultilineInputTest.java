@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.when;
 
 import org.jline.reader.LineReader;
@@ -52,6 +53,16 @@ class ReiApplicationMultilineInputTest {
     assertEquals(
         java.util.List.of("project", "add", "C:\\path with space"),
         java.util.List.of(app.splitCommandLine("project add \"C:\\path with space\"")));
+  }
+
+  @Test
+  void configureCommandOutputSetsPicocliWriters() {
+    CommandLine commandLine = new CommandLine(new RootCommand());
+
+    ReiApplication.configureCommandOutput(commandLine);
+
+    assertNotNull(commandLine.getOut());
+    assertNotNull(commandLine.getErr());
   }
 
   private ReiApplication newApp() {

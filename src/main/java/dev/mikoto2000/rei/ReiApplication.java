@@ -3,7 +3,10 @@
 package dev.mikoto2000.rei;
 
 
+import java.io.Console;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.io.PrintWriter;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.nio.file.Path;
@@ -85,6 +88,7 @@ public class ReiApplication {
 
   private void run(String[] args) throws IOException {
     var cmd = new picocli.CommandLine(rootCommand, factory);
+    configureCommandOutput(cmd);
     Completer completer = new SlashCommandCompleter(
         new PicocliJLineCompleter(cmd.getCommandSpec()),
         cmd.getSubcommands().keySet().stream().sorted().toList());
@@ -179,6 +183,19 @@ public class ReiApplication {
     } finally {
       commandExecutor.shutdownNow();
     }
+  }
+
+  static void configureCommandOutput(CommandLine cmd) {
+    cmd.setOut(consoleWriterOrFallback(System.out));
+    cmd.setErr(consoleWriterOrFallback(System.err));
+  }
+
+  private static PrintWriter consoleWriterOrFallback(PrintStream fallback) {
+    Console console = System.console();
+    if (console != null) {
+      return new PrintWriter(console.writer(), true);
+    }
+    return new PrintWriter(fallback, true);
   }
 
   protected void executeInterruptibly(CommandLine cmd, Terminal terminal, ExecutorService commandExecutor, String... args)
