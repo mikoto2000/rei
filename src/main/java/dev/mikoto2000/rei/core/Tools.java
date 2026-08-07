@@ -17,11 +17,14 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.document.Document;
@@ -239,19 +242,53 @@ public class Tools {
       .collect(Collectors.toList());
   }
 
-  @Tool(name = "grep", description = "指定したディレクトリ配下のテキストを正規表現検索します")
+  @Tool(name = "grep", description =
+  """
+  指定したディレクトリ配下のテキストを検索します。Linux grep の主要な使い方をマルチプラットフォームに実行します。
+  @param pattern 検索パターン。fixedString=false の場合は Java 正規表現です。
+  @param baseDir 検索対象ディレクトリ。相対パスは現在の project 基準です。
+  @param ignoreCase true の場合は大文字小文字を無視します。grep -i 相当。
+  @param fixedString true の場合は pattern を正規表現ではなく固定文字列として扱います。grep -F 相当。
+  @param invertMatch true の場合は一致しない行を返します。grep -v 相当。
+  @param fileNamesOnly true の場合は一致したファイル名だけを返します。grep -l 相当。
+  @param beforeContext 一致行の前に含める行数。grep -B 相当。
+  @param afterContext 一致行の後に含める行数。grep -A 相当。
+  @param maxMatches 最大結果数。null または 0 以下の場合は 1000 件。
+  @param includeLineNumber true の場合は path:line:text、false の場合は path:text で返します。
+  """)
+  List<String> grep(String pattern, String baseDir, Boolean ignoreCase, Boolean fixedString, Boolean invertMatch,
+      Boolean fileNamesOnly, Integer beforeContext, Integer afterContext, Integer maxMatches,
+      Boolean includeLineNumber) throws IOException, InterruptedException {
+    return grep(pattern, baseDir, ignoreCase, fixedString, invertMatch, fileNamesOnly, beforeContext, afterContext,
+        maxMatches, includeLineNumber, currentWorkingDirectory());
+  }
+
   List<String> grep(String pattern, String baseDir) throws IOException, InterruptedException {
     return grep(pattern, baseDir, currentWorkingDirectory());
   }
 
   List<String> grep(String pattern, String baseDir, java.nio.file.Path workingDirectory) throws IOException, InterruptedException {
+    return grep(pattern, baseDir, false, false, false, false, 0, 0, 1000, true, workingDirectory);
+  }
+
+  List<String> grep(String pattern, String baseDir, Boolean ignoreCase, Boolean fixedString, Boolean invertMatch,
+      Boolean fileNamesOnly, Integer beforeContext, Integer afterContext, Integer maxMatches,
+      Boolean includeLineNumber, java.nio.file.Path workingDirectory) throws IOException, InterruptedException {
     if (pattern == null || pattern.isBlank()) {
       throw new IllegalArgumentException("pattern must not be blank");
     }
     if (baseDir == null || baseDir.isBlank()) {
       throw new IllegalArgumentException("baseDir must not be blank");
     }
-    Pattern compiled = Pattern.compile(pattern);
+    boolean effectiveIgnoreCase = Boolean.TRUE.equals(ignoreCase);
+    boolean effectiveFixedString = Boolean.TRUE.equals(fixedString);
+    boolean effectiveInvertMatch = Boolean.TRUE.equals(invertMatch);
+    boolean effectiveFileNamesOnly = Boolean.TRUE.equals(fileNamesOnly);
+    boolean effectiveIncludeLineNumber = !Boolean.FALSE.equals(includeLineNumber);
+    int effectiveBeforeContext = Math.max(0, beforeContext == null ? 0 : beforeContext);
+    int effectiveAfterContext = Math.max(0, afterContext == null ? 0 : afterContext);
+    int effectiveMaxMatches = maxMatches == null || maxMatches <= 0 ? 1000 : maxMatches;
+    Pattern compiled = compileGrepPattern(pattern, effectiveIgnoreCase, effectiveFixedString);
 
     List<String> candidates = listFile(baseDir, workingDirectory);
     List<String> matches = new ArrayList<>();
@@ -262,18 +299,71 @@ public class Tools {
       }
       List<String> lines;
       try {
-        lines = Files.readAllLines(filePath, StandardCharsets.UTF_8);
+        lines = readTextFileLines(filePath, relativePath, "");
       } catch (IOException ex) {
         continue;
       }
+      Set<Integer> contextLineIndexes = new LinkedHashSet<>();
+      boolean fileMatched = false;
       for (int i = 0; i < lines.size(); i++) {
         String line = lines.get(i);
-        if (compiled.matcher(line).find()) {
-          matches.add(String.format("%s:%d:%s", relativePath, i + 1, line));
+        boolean matched = compiled.matcher(line).find();
+        if (effectiveInvertMatch) {
+          matched = !matched;
         }
+        if (matched) {
+          if (effectiveFileNamesOnly) {
+            if (!fileMatched) {
+              matches.add(relativePath);
+              fileMatched = true;
+            }
+            break;
+          }
+          int from = Math.max(0, i - effectiveBeforeContext);
+          int to = Math.min(lines.size() - 1, i + effectiveAfterContext);
+          for (int contextIndex = from; contextIndex <= to; contextIndex++) {
+            contextLineIndexes.add(contextIndex);
+          }
+        }
+      }
+
+      if (!effectiveFileNamesOnly) {
+        for (Integer lineIndex : contextLineIndexes) {
+          String separator = isMatchedLine(compiled, lines.get(lineIndex), effectiveInvertMatch) ? ":" : "-";
+          matches.add(formatGrepLine(relativePath, lineIndex + 1, lines.get(lineIndex), separator,
+              effectiveIncludeLineNumber));
+          if (matches.size() >= effectiveMaxMatches) {
+            return matches;
+          }
+        }
+      }
+      if (matches.size() >= effectiveMaxMatches) {
+        return matches;
       }
     }
     return matches;
+  }
+
+  private Pattern compileGrepPattern(String pattern, boolean ignoreCase, boolean fixedString) {
+    int flags = ignoreCase ? Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE : 0;
+    String effectivePattern = fixedString ? Pattern.quote(pattern) : pattern;
+    try {
+      return Pattern.compile(effectivePattern, flags);
+    } catch (PatternSyntaxException e) {
+      throw new IllegalArgumentException("Invalid grep pattern: " + pattern, e);
+    }
+  }
+
+  private boolean isMatchedLine(Pattern pattern, String line, boolean invertMatch) {
+    boolean matched = pattern.matcher(line).find();
+    return invertMatch ? !matched : matched;
+  }
+
+  private String formatGrepLine(String path, int lineNumber, String line, String separator, boolean includeLineNumber) {
+    if (includeLineNumber) {
+      return path + separator + lineNumber + separator + line;
+    }
+    return path + separator + line;
   }
 
   List<String> gitLsFiles(List<String> pathSpecs, java.nio.file.Path workingDirectory) throws IOException, InterruptedException {

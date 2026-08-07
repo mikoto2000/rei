@@ -83,14 +83,24 @@
 
 ## 追加設計: `grep` ツール
 ### 1. 目的
-- common tools に `grep(pattern, baseDir)` を追加し、AI からディレクトリ配下の正規表現検索を実行できるようにする。
+- common tools に `grep` を追加し、AI からディレクトリ配下のテキスト検索をマルチプラットフォームに実行できるようにする。
+- OS の `grep` コマンドには依存せず、Java 実装で Linux `grep` の主要オプション相当を提供する。
 
 ### 2. 設計
 - `Tools` に `@Tool(name = "grep")` を追加する。
-- `pattern` は Java の正規表現として解釈する。
+- `pattern` は既定で Java の正規表現として解釈する。
+- `fixedString=true` の場合は `pattern` を固定文字列として扱う。
+- `ignoreCase=true` の場合は大文字小文字を無視する。
+- `invertMatch=true` の場合は一致しない行を返す。
+- `fileNamesOnly=true` の場合は一致したファイル名のみを返す。
+- `beforeContext` と `afterContext` で一致行の前後文脈行数を指定できる。
+- `maxMatches` で最大結果数を制限する。未指定または 0 以下の場合は既定値を使う。
+- `includeLineNumber=false` の場合は行番号を省略する。
 - 検索対象ファイルは既存の `listFile(baseDir)` を利用して列挙し、`.gitignore` を尊重する。
 - 各ヒットは `path:line:content` 形式で返す。
+- 文脈行は Linux grep と同様に `path-line-content` 形式で返す。
 
 ### 3. エラー処理
 - `pattern` または `baseDir` が空の場合は `IllegalArgumentException` を返す。
+- 正規表現が不正な場合は `IllegalArgumentException` を返す。
 - 個別ファイル読み込みに失敗した場合は当該ファイルのみスキップし、検索を継続する。

@@ -109,11 +109,12 @@
 2. THE Tools SHALL PDF ファイルからテキストを抽出して読み込む操作を提供する
 3. THE Tools SHALL 外部プログラムをコマンドと引数を指定して実行し、標準出力を返す操作を提供する
 4. THE Tools SHALL `.gitignore` を尊重したファイル検索・一覧取得操作を提供する
-5. THE Tools SHALL `grep(pattern, baseDir)` 操作を提供し、`.gitignore` を尊重した対象ファイルに対して正規表現検索できる
-6. THE Tools SHALL 今日の日付を `yyyy-MM-dd` 形式で返す操作を提供する
-7. THE Tools SHALL 現在時刻を ISO-8601 形式で返す操作を提供する
-8. THE Tools SHALL 指定した面数のサイコロを振って結果を返す操作を提供する
-9. WHEN 外部プログラムのコマンドが空白を含むとき、THE Tools SHALL エラーを返す
+5. THE Tools SHALL `grep` 操作を提供し、`.gitignore` を尊重した対象ファイルに対して正規表現検索できる
+6. THE Tools SHALL `grep` 操作で大文字小文字無視、固定文字列検索、反転一致、ファイル名のみ表示、前後文脈行、最大結果数、行番号表示有無を指定できる
+7. THE Tools SHALL 今日の日付を `yyyy-MM-dd` 形式で返す操作を提供する
+8. THE Tools SHALL 現在時刻を ISO-8601 形式で返す操作を提供する
+9. THE Tools SHALL 指定した面数のサイコロを振って結果を返す操作を提供する
+10. WHEN 外部プログラムのコマンドが空白を含むとき、THE Tools SHALL エラーを返す
 
 ---
 

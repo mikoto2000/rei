@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.core;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -101,6 +102,54 @@ class ToolsTest {
     assertTrue(results.stream().anyMatch(line -> line.startsWith("docs/tracked.txt:1:")));
     assertTrue(results.stream().anyMatch(line -> line.startsWith("docs/untracked.txt:1:")));
     assertFalse(results.stream().anyMatch(line -> line.contains("ignored.txt")));
+  }
+
+  @Test
+  void grepSupportsIgnoreCaseAndFixedString() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/note.txt"), "Hello [Spring]\nregex spring\n");
+
+    Tools tools = new Tools();
+    List<String> results = tools.grep("[spring]", "docs", true, true, false, false, 0, 0, 100, true, tempDir);
+
+    assertEquals(List.of("docs/note.txt:1:Hello [Spring]"), results);
+  }
+
+  @Test
+  void grepSupportsFileNamesOnly() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/first.txt"), "spring\nspring\n");
+    Files.writeString(tempDir.resolve("docs/second.txt"), "spring\n");
+
+    Tools tools = new Tools();
+    List<String> results = tools.grep("spring", "docs", false, false, false, true, 0, 0, 100, true, tempDir);
+
+    assertEquals(List.of("docs/first.txt", "docs/second.txt"), results);
+  }
+
+  @Test
+  void grepSupportsInvertMatchAndContext() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/note.txt"), "alpha\nbeta\ngamma\n");
+
+    Tools tools = new Tools();
+    List<String> results = tools.grep("beta", "docs", false, false, true, false, 1, 1, 100, true, tempDir);
+
+    assertEquals(List.of(
+        "docs/note.txt:1:alpha",
+        "docs/note.txt-2-beta",
+        "docs/note.txt:3:gamma"), results);
+  }
+
+  @Test
+  void grepRejectsInvalidRegex() throws Exception {
+    Tools tools = new Tools();
+
+    assertThrows(IllegalArgumentException.class,
+        () -> tools.grep("[", "docs", false, false, false, false, 0, 0, 100, true, tempDir));
   }
 
   @Test
