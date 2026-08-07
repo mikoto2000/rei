@@ -66,65 +66,65 @@ Agent Skills は、`.rei/skills/<skill-name>/SKILL.md` に配置された Markdo
   - [x] 3.7 **Refactor**: front matter 解析処理を private メソッドへ整理する
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-- [ ] 4. AgentSkillExplicitSelector を実装する（Red → Green → Refactor）
-  - [ ] 4.1 **Red**: `@skill:<name>` 抽出の失敗テストを書く
+- [x] 4. AgentSkillExplicitSelector を実装する（Red → Green → Refactor）
+  - [x] 4.1 **Red**: `@skill:<name>` 抽出の失敗テストを書く
     - `src/test/java/dev/mikoto2000/rei/skills/AgentSkillExplicitSelectorTest.java` を新規作成する
     - `@skill:gantt-rescheduler` を抽出できることを検証する
     - 抽出後の prompt text から token が除去されることを検証する
     - この時点でコンパイルエラーになることを確認する
-  - [ ] 4.2 **Green**: 明示選択の最小実装を行う
+  - [x] 4.2 **Green**: 明示選択の最小実装を行う
     - `AgentSkillExplicitSelector` を作成する
     - `@skill:<name>` の正規表現抽出を実装する
     - `sanitizedPrompt` を返す結果型を作成する
-  - [ ] 4.3 **Red**: 複数指定、不存在、disabled のテストを追加する
+  - [x] 4.3 **Red**: 複数指定、不存在、disabled のテストを追加する
     - 複数 Skill が指定順に返ることを検証する
     - 存在しない Skill は warning になることを検証する
     - disabled Skill は warning になることを検証する
-  - [ ] 4.4 **Green**: 複数指定と warning を実装する
-  - [ ] 4.5 **Refactor**: token 正規表現と warning メッセージを定数化する
+  - [x] 4.4 **Green**: 複数指定と warning を実装する
+  - [x] 4.5 **Refactor**: token 正規表現と warning メッセージを定数化する
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 5. AgentSkillImplicitSelector を実装する（Red → Green → Refactor）
-  - [ ] 5.1 **Red**: LLM JSON 配列選択の失敗テストを書く
+- [x] 5. AgentSkillImplicitSelector を実装する（Red → Green → Refactor）
+  - [x] 5.1 **Red**: LLM JSON 配列選択の失敗テストを書く
     - `src/test/java/dev/mikoto2000/rei/skills/AgentSkillImplicitSelectorTest.java` を新規作成する
     - mock `ChatClient` が `["skill-a"]` を返すと該当 Skill が選択されることを検証する
     - この時点でコンパイルエラーになることを確認する
-  - [ ] 5.2 **Green**: LLM 選択の最小実装を行う
+  - [x] 5.2 **Green**: LLM 選択の最小実装を行う
     - `AgentSkillImplicitSelector` を作成する
     - `ObjectProvider<ChatClient>` を使って循環依存を避ける
     - Skill 名、説明、短い excerpt を含む選択プロンプトを作る
     - JSON 配列を parse して Skill 一覧へ変換する
-  - [ ] 5.3 **Red**: 該当なし、未知 Skill、JSON parse 失敗のテストを追加する
+  - [x] 5.3 **Red**: 該当なし、未知 Skill、JSON parse 失敗のテストを追加する
     - `[]` は空選択になることを検証する
     - 未知 Skill 名は無視されることを検証する
     - JSON parse 失敗時に空選択で継続することを検証する
-  - [ ] 5.4 **Green**: 異常系を実装する
-  - [ ] 5.5 **Refactor**: 選択プロンプト構築と JSON parse を private メソッドへ分離する
+  - [x] 5.4 **Green**: 異常系を実装する
+  - [x] 5.5 **Refactor**: 選択プロンプト構築と JSON parse を private メソッドへ分離する
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-- [ ] 6. AgentSkillSelectionService を実装する（Red → Green → Refactor）
-  - [ ] 6.1 **Red**: 明示選択優先の失敗テストを書く
+- [x] 6. AgentSkillSelectionService を実装する（Red → Green → Refactor）
+  - [x] 6.1 **Red**: 明示選択優先の失敗テストを書く
     - `src/test/java/dev/mikoto2000/rei/skills/AgentSkillSelectionServiceTest.java` を新規作成する
     - 明示選択された Skill が暗黙選択より先に採用されることを検証する
     - この時点でコンパイルエラーになることを確認する
-  - [ ] 6.2 **Green**: 選択統合の最小実装を行う
+  - [x] 6.2 **Green**: 選択統合の最小実装を行う
     - `AgentSkillSelectionService` を作成する
     - 明示選択結果と暗黙選択結果を統合する
     - 重複を除外する
-  - [ ] 6.3 **Red**: `max-selected` と disabled のテストを追加する
+  - [x] 6.3 **Red**: `max-selected` と disabled のテストを追加する
     - `max-selected` 件までに制限されることを検証する
     - `rei.skills.enabled=false` の場合は Skill 選択を行わないことを検証する
-  - [ ] 6.4 **Green**: `max-selected` と enabled 制御を実装する
-  - [ ] 6.5 **Refactor**: 統合ロジックを読みやすく整理する
+  - [x] 6.4 **Green**: `max-selected` と enabled 制御を実装する
+  - [x] 6.5 **Refactor**: 統合ロジックを読みやすく整理する
   - _Requirements: 2.4, 3.3, 4.4_
 
-- [ ] 7. AgentSkillPromptRenderer を実装する（Red → Green）
-  - [ ] 7.1 **Red**: Skill 注入 prompt の失敗テストを書く
+- [x] 7. AgentSkillPromptRenderer を実装する（Red → Green）
+  - [x] 7.1 **Red**: Skill 注入 prompt の失敗テストを書く
     - `src/test/java/dev/mikoto2000/rei/skills/AgentSkillPromptRendererTest.java` を新規作成する
     - 選択 Skill の name, description, instructions が prompt text に含まれることを検証する
     - 元のユーザー依頼が `--- User request ---` 以降に含まれることを検証する
     - この時点でコンパイルエラーになることを確認する
-  - [ ] 7.2 **Green**: renderer を実装してテストを通す
+  - [x] 7.2 **Green**: renderer を実装してテストを通す
     - `AgentSkillPromptRenderer` を作成する
     - Skill 未選択時は元 prompt をそのまま返す
   - _Requirements: 5.1, 5.4_
