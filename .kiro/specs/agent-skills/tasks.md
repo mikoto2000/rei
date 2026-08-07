@@ -19,51 +19,51 @@ Agent Skills は、`.rei/skills/<skill-name>/SKILL.md` に配置された Markdo
 
 ## Tasks
 
-- [ ] 1. AgentSkillsProperties を実装する（Red → Green）
-  - [ ] 1.1 **Red**: 設定プロパティの失敗テストを書く
+- [x] 1. AgentSkillsProperties を実装する（Red → Green）
+  - [x] 1.1 **Red**: 設定プロパティの失敗テストを書く
     - `src/test/java/dev/mikoto2000/rei/skills/AgentSkillsPropertiesTest.java` を新規作成する
     - デフォルト値として `enabled=true`、`directories` が `.rei/skills` 相当、`maxSelected=3` になることを検証する
     - この時点でコンパイルエラーになることを確認する
-  - [ ] 1.2 **Green**: `AgentSkillsProperties` を実装してテストを通す
+  - [x] 1.2 **Green**: `AgentSkillsProperties` を実装してテストを通す
     - `src/main/java/dev/mikoto2000/rei/skills/AgentSkillsProperties.java` を作成する
     - `@ConfigurationProperties(prefix = "rei.skills")` を付与する
     - `enabled`, `directories`, `maxSelected` を持たせる
     - `maxSelected` が 1 未満の場合は 1 として扱う補正を実装する
-  - [ ] 1.3 **Refactor**: プロパティ名とデフォルト値を読みやすく整理する
+  - [x] 1.3 **Refactor**: プロパティ名とデフォルト値を読みやすく整理する
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
-- [ ] 2. AgentSkill モデルを実装する（Red → Green）
-  - [ ] 2.1 **Red**: Skill モデルの失敗テストを書く
+- [x] 2. AgentSkill モデルを実装する（Red → Green）
+  - [x] 2.1 **Red**: Skill モデルの失敗テストを書く
     - `src/test/java/dev/mikoto2000/rei/skills/AgentSkillTest.java` を新規作成する
     - `name`, `description`, `enabled`, `directory`, `skillFile`, `instructions` を保持できることを検証する
     - 空の description や instructions を許容するかを要件に合わせて固定する
     - この時点でコンパイルエラーになることを確認する
-  - [ ] 2.2 **Green**: `AgentSkill` record を実装してテストを通す
+  - [x] 2.2 **Green**: `AgentSkill` record を実装してテストを通す
     - `src/main/java/dev/mikoto2000/rei/skills/AgentSkill.java` を作成する
     - 必要な全フィールドを record として定義する
   - _Requirements: 1.1, 1.2, 1.3_
 
-- [ ] 3. FileSystemAgentSkillRepository を実装する（Red → Green → Refactor）
-  - [ ] 3.1 **Red**: 正常な `SKILL.md` を読み込む失敗テストを書く
+- [x] 3. FileSystemAgentSkillRepository を実装する（Red → Green → Refactor）
+  - [x] 3.1 **Red**: 正常な `SKILL.md` を読み込む失敗テストを書く
     - `src/test/java/dev/mikoto2000/rei/skills/FileSystemAgentSkillRepositoryTest.java` を新規作成する
     - 一時ディレクトリに `.rei/skills/sample/SKILL.md` を作成する
     - YAML front matter の `name`, `description`, `enabled` と Markdown 本文を読み込めることを検証する
     - この時点でコンパイルエラーになることを確認する
-  - [ ] 3.2 **Green**: 最小の repository 実装で正常系テストを通す
+  - [x] 3.2 **Green**: 最小の repository 実装で正常系テストを通す
     - `AgentSkillRepository` インターフェースを作成する
     - `FileSystemAgentSkillRepository` を作成する
     - `findAll()`, `findEnabled()`, `findByName(String)`, `reload()` を実装する
-  - [ ] 3.3 **Red**: disabled Skill と壊れた Skill のテストを追加する
+  - [x] 3.3 **Red**: disabled Skill と壊れた Skill のテストを追加する
     - `enabled=false` は `findAll()` に含まれ、`findEnabled()` から除外されることを検証する
     - front matter が壊れた `SKILL.md` は読み飛ばされることを検証する
     - 1 件の壊れた Skill があっても他の Skill を読み込めることを検証する
-  - [ ] 3.4 **Green**: disabled と読み込み失敗の扱いを実装する
+  - [x] 3.4 **Green**: disabled と読み込み失敗の扱いを実装する
     - 読み込み失敗は `warn` ログへ出し、全体は継続する
     - `enabled` 省略時は `true` とする
-  - [ ] 3.5 **Red**: `.kiro` 配下を Skill として読み込まないテストを追加する
+  - [x] 3.5 **Red**: `.kiro` 配下を Skill として読み込まないテストを追加する
     - 設定ディレクトリに `.kiro` を指定しても Skill として扱わないことを検証する
-  - [ ] 3.6 **Green**: `.kiro` 配下の除外を実装する
-  - [ ] 3.7 **Refactor**: front matter 解析処理を private メソッドへ整理する
+  - [x] 3.6 **Green**: `.kiro` 配下の除外を実装する
+  - [x] 3.7 **Refactor**: front matter 解析処理を private メソッドへ整理する
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
 - [ ] 4. AgentSkillExplicitSelector を実装する（Red → Green → Refactor）
