@@ -4,8 +4,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.MalformedInputException;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.CodingErrorAction;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
 import java.nio.file.Paths;
@@ -368,12 +370,80 @@ public class Tools {
       Files.writeString(resolveProjectPath(pathStr), contents, resolvedCharset, options);
     }
 
+  @Tool(name = "applyTextDiff", description =
+  """
+  テキストファイルに小さな差分を適用し、任意のゲートコマンドで検証します。
+  oldText がファイル内に一意に存在する場合だけ newText に置換します。
+  gateCommand が指定され、終了コードが 0 以外の場合は自動で元内容へロールバックします。
+  @param pathStr 対象ファイルのパス
+  @param oldText 置換前の期待文字列
+  @param newText 置換後の文字列
+  @param charset 読み書き文字コード。null または空の場合は UTF-8、UTF-8 で読めない場合は CP932
+  @param gateCommand 適用後に実行するシェルコマンド。null または空の場合は実行しません
+  @param timeoutSeconds ゲートコマンドのタイムアウト秒数。null の場合は 30 秒、最大 600 秒
+  @return 適用結果、ゲート結果、ロールバック有無
+  """)
+    TextDiffApplyResult applyTextDiff(String pathStr, String oldText, String newText, String charset,
+        String gateCommand, Integer timeoutSeconds) throws IOException, InterruptedException {
+      IO.println(String.format("applyTextDiff を実行するよ: %s", pathStr));
+      if (oldText == null || oldText.isEmpty()) {
+        throw new IllegalArgumentException("oldText は空にできません");
+      }
+      if (newText == null) {
+        throw new IllegalArgumentException("newText は null にできません");
+      }
+
+      java.nio.file.Path path = resolveProjectPath(pathStr);
+      ResolvedTextFile original = readTextFileContent(path, charset);
+      String originalContent = original.content();
+      int firstIndex = originalContent.indexOf(oldText);
+      if (firstIndex < 0) {
+        return new TextDiffApplyResult(false, false, false, null, "", "", "oldText が見つかりません");
+      }
+      int secondIndex = originalContent.indexOf(oldText, firstIndex + oldText.length());
+      if (secondIndex >= 0) {
+        return new TextDiffApplyResult(false, false, false, null, "", "", "oldText が複数箇所に一致しました");
+      }
+
+      String updatedContent = originalContent.substring(0, firstIndex)
+          + newText
+          + originalContent.substring(firstIndex + oldText.length());
+      if (updatedContent.equals(originalContent)) {
+        return new TextDiffApplyResult(true, false, false, null, "", "", "変更はありません");
+      }
+
+      Files.writeString(path, updatedContent, original.charset(), StandardOpenOption.TRUNCATE_EXISTING);
+
+      if (gateCommand == null || gateCommand.isBlank()) {
+        return new TextDiffApplyResult(true, true, false, null, "", "", "差分を適用しました");
+      }
+
+      ShellCommandResult gateResult = executeShellCommand(gateCommand, timeoutSeconds, currentWorkingDirectory());
+      if (gateResult.exitCode() == 0 && !gateResult.timedOut()) {
+        return new TextDiffApplyResult(true, true, false, gateResult.exitCode(), gateResult.stdout(),
+            gateResult.stderr(), "差分を適用し、ゲートに成功しました");
+      }
+
+      Files.writeString(path, originalContent, original.charset(), StandardOpenOption.TRUNCATE_EXISTING);
+      return new TextDiffApplyResult(false, true, true, gateResult.exitCode(), gateResult.stdout(),
+          gateResult.stderr(), "ゲートに失敗したためロールバックしました");
+    }
+
+  public record TextDiffApplyResult(
+      boolean success,
+      boolean changed,
+      boolean rolledBack,
+      Integer gateExitCode,
+      String gateStdout,
+      String gateStderr,
+      String message) {
+  }
+
   @Tool(name = "readBinaryFile", description = "バイナリファイルをすべて読み込む。ファイルが存在しない場合は findFile を利用してファイルを探す。")
   byte[] readBinaryFile(String pathStr) throws IOException {
     IO.println(String.format("%s のバイナリファイルを読むよ", pathStr));
     return Files.readAllBytes(resolveProjectPath(pathStr));
   }
-
 
   @Tool(name = "createDirectories", description = "指定したパスまでのディレクトリをすべて作成します。既に存在するディレクトリは成功扱いです。")
   String createDirectories(String pathStr) throws IOException {
@@ -384,6 +454,7 @@ public class Tools {
     java.nio.file.Path createdPath = Files.createDirectories(resolveProjectPath(pathStr));
     return createdPath.toAbsolutePath().normalize().toString();
   }
+
   @Tool(name = "writeBinaryFile", description = "バイナリファイルに書き込みます。ファイルが存在しない場合は作成します。")
   void writeBinaryFile(String pathStr, byte[] contents, boolean append) throws IOException {
     IO.println(String.format("%s のバイナリファイルに %s を書き込むよ", pathStr, contents));
@@ -462,5 +533,29 @@ public class Tools {
     } catch (IllegalArgumentException e) {
       throw new IllegalArgumentException("Unsupported charset: " + charset, e);
     }
+  }
+
+  private ResolvedTextFile readTextFileContent(java.nio.file.Path path, String charset) throws IOException {
+    if (charset != null && !charset.isBlank()) {
+      Charset resolvedCharset = resolveCharset(charset);
+      return new ResolvedTextFile(Files.readString(path, resolvedCharset), resolvedCharset);
+    }
+    try {
+      return new ResolvedTextFile(readStringStrict(path, StandardCharsets.UTF_8), StandardCharsets.UTF_8);
+    } catch (CharacterCodingException e) {
+      return new ResolvedTextFile(Files.readString(path, CP932), CP932);
+    }
+  }
+
+  private String readStringStrict(java.nio.file.Path path, Charset charset) throws IOException {
+    byte[] bytes = Files.readAllBytes(path);
+    return charset.newDecoder()
+        .onMalformedInput(CodingErrorAction.REPORT)
+        .onUnmappableCharacter(CodingErrorAction.REPORT)
+        .decode(java.nio.ByteBuffer.wrap(bytes))
+        .toString();
+  }
+
+  private record ResolvedTextFile(String content, Charset charset) {
   }
 }
