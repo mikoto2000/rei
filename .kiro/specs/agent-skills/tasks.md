@@ -145,26 +145,26 @@ Agent Skills は、`.rei/skills/<skill-name>/SKILL.md` に配置された Markdo
   - [x] 8.5 **Refactor**: `ChatCommand` の prompt 準備処理を小さな private メソッドへ整理する
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 8.1, 8.2_
 
-- [ ] 9. `/skill` コマンドを実装する（Red → Green）
-  - [ ] 9.1 **Red**: `/skill list` の失敗テストを書く
+- [x] 9. `/skill` コマンドを実装する（Red → Green）
+  - [x] 9.1 **Red**: `/skill list` の失敗テストを書く
     - `src/test/java/dev/mikoto2000/rei/skills/command/SkillCommandTest.java` を新規作成する
     - repository mock から返した Skill 一覧が表示されることを検証する
     - この時点でコンパイルエラーになることを確認する
-  - [ ] 9.2 **Green**: `SkillCommand` と `list` サブコマンドを実装する
+  - [x] 9.2 **Green**: `SkillCommand` と `list` サブコマンドを実装する
     - `src/main/java/dev/mikoto2000/rei/skills/command/SkillCommand.java` を作成する
     - `list` で name, enabled, description, directory を表示する
-  - [ ] 9.3 **Red**: `/skill show <name>` と `/skill reload` のテストを追加する
+  - [x] 9.3 **Red**: `/skill show <name>` と `/skill reload` のテストを追加する
     - `show` が instructions を含む詳細を表示することを検証する
     - 存在しない Skill でエラー表示することを検証する
     - `reload` が repository.reload() を呼ぶことを検証する
-  - [ ] 9.4 **Green**: `show` と `reload` を実装する
+  - [x] 9.4 **Green**: `show` と `reload` を実装する
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-- [ ] 10. Spring 設定と root command 登録を実装する（Red → Green）
-  - [ ] 10.1 **Red**: Spring context の失敗テストを書く
+- [x] 10. Spring 設定と root command 登録を実装する（Red → Green）
+  - [x] 10.1 **Red**: Spring context の失敗テストを書く
     - `ReiApplicationTests` または専用 configuration test で `AgentSkillsProperties`, repository, selector, renderer, `/skill` command が Bean 登録されることを検証する
     - この時点で不足 Bean により失敗することを確認する
-  - [ ] 10.2 **Green**: Bean 登録を実装する
+  - [x] 10.2 **Green**: Bean 登録を実装する
     - `@EnableConfigurationProperties(AgentSkillsProperties.class)` を追加する
     - repository / selector / selection service / renderer を `@Component` または `@Service` として登録する
     - root command に `SkillCommand` を追加する
