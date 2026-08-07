@@ -168,6 +168,40 @@ class ToolsTest {
   }
 
   @Test
+  void readTextFileRangeReadsInclusiveLineRange() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Files.write(text, List.of("line1", "line2", "line3", "line4"));
+    Tools tools = new Tools();
+
+    List<String> lines = tools.readTextFileRange(text.toString(), 2, 3);
+
+    assertEquals(List.of("line2", "line3"), lines);
+  }
+
+  @Test
+  void readTextFileRangeClampsEndLineToFileEnd() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Files.write(text, List.of("line1", "line2"));
+    Tools tools = new Tools();
+
+    List<String> lines = tools.readTextFileRange(text.toString(), 2, 99);
+
+    assertEquals(List.of("line2"), lines);
+  }
+
+  @Test
+  void readTextFileRangeFallsBackToCp932() throws Exception {
+    Path csv = tempDir.resolve("gantt.csv");
+    Files.write(csv, List.of("タスク,開始日", "設計,2026-08-07", "実装,2026-08-08"),
+        Charset.forName("windows-31j"));
+    Tools tools = new Tools();
+
+    List<String> lines = tools.readTextFileRange(csv.toString(), 2, 2);
+
+    assertEquals(List.of("設計,2026-08-07"), lines);
+  }
+
+  @Test
   void writeTextFileUsesSpecifiedCharset() throws Exception {
     Path csv = tempDir.resolve("gantt.csv");
     Tools tools = new Tools();

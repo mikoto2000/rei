@@ -316,13 +316,26 @@ public class Tools {
   @Tool(name = "readTextFile", description = "テキストファイルをすべて読み込む。ファイルが存在しない場合は findFile を利用してファイルを探す。")
   List<String> readTextFile(String pathStr) throws IOException {
     IO.println(String.format("%s のテキストファイルを読むよ", pathStr));
-    java.nio.file.Path path = resolveProjectPath(pathStr);
-    try {
-      return Files.readAllLines(path, StandardCharsets.UTF_8);
-    } catch (MalformedInputException e) {
-      IO.println(String.format("%s は UTF-8 として読めなかったため CP932 で読み直すよ", pathStr));
-      return Files.readAllLines(path, CP932);
+    return readTextFileLines(resolveProjectPath(pathStr), pathStr, "");
+  }
+
+  @Tool(name = "readTextFileRange", description = "テキストファイルの指定行範囲を読み込みます。startLine と endLine は 1 始まりで、両端を含みます。")
+  List<String> readTextFileRange(String pathStr, int startLine, int endLine) throws IOException {
+    if (startLine < 1) {
+      throw new IllegalArgumentException("startLine は 1 以上である必要があります");
     }
+    if (endLine < startLine) {
+      throw new IllegalArgumentException("endLine は startLine 以上である必要があります");
+    }
+
+    IO.println(String.format("%s の %d 行目から %d 行目を読むよ", pathStr, startLine, endLine));
+    List<String> lines = readTextFileLines(resolveProjectPath(pathStr), pathStr, "");
+    int fromIndex = startLine - 1;
+    if (fromIndex >= lines.size()) {
+      return List.of();
+    }
+    int toIndex = Math.min(endLine, lines.size());
+    return lines.subList(fromIndex, toIndex);
   }
 
   @Tool(name = "readPdfFile", description = "PDF ファイルから本文テキストを抽出して読み込む。")
@@ -544,6 +557,18 @@ public class Tools {
       return new ResolvedTextFile(readStringStrict(path, StandardCharsets.UTF_8), StandardCharsets.UTF_8);
     } catch (CharacterCodingException e) {
       return new ResolvedTextFile(Files.readString(path, CP932), CP932);
+    }
+  }
+
+  private List<String> readTextFileLines(java.nio.file.Path path, String displayPath, String charset) throws IOException {
+    if (charset != null && !charset.isBlank()) {
+      return Files.readAllLines(path, resolveCharset(charset));
+    }
+    try {
+      return Files.readAllLines(path, StandardCharsets.UTF_8);
+    } catch (MalformedInputException e) {
+      IO.println(String.format("%s は UTF-8 として読めなかったため CP932 で読み直すよ", displayPath));
+      return Files.readAllLines(path, CP932);
     }
   }
 
