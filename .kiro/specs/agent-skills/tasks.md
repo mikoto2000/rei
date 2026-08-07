@@ -129,20 +129,20 @@ Agent Skills は、`.rei/skills/<skill-name>/SKILL.md` に配置された Markdo
     - Skill 未選択時は元 prompt をそのまま返す
   - _Requirements: 5.1, 5.4_
 
-- [ ] 8. ChatCommand に Agent Skills を統合する（Red → Green → Refactor）
-  - [ ] 8.1 **Red**: 明示 Skill 注入の ChatCommand テストを書く
+- [x] 8. ChatCommand に Agent Skills を統合する（Red → Green → Refactor）
+  - [x] 8.1 **Red**: 明示 Skill 注入の ChatCommand テストを書く
     - 既存 `ChatCommandTest` または新規 `ChatCommandAgentSkillsTest` に追加する
     - `@skill:sample hello` 実行時に `ChatClient.prompt(Prompt)` へ渡る UserMessage text に Skill instructions が含まれることを検証する
     - `@skill:sample` が最終ユーザー依頼から除去されることを検証する
-  - [ ] 8.2 **Green**: `ChatCommand` に Skill 選択と prompt rendering を統合する
+  - [x] 8.2 **Green**: `ChatCommand` に Skill 選択と prompt rendering を統合する
     - `Optional<AgentSkillSelectionService>` と `Optional<AgentSkillPromptRenderer>` を constructor 引数に追加する
     - Skill 機能 Bean がない場合は従来挙動にする
     - inline file / clipboard resolver より前に `@skill` を処理する
-  - [ ] 8.3 **Red**: 暗黙 Skill 注入と disabled の ChatCommand テストを追加する
+  - [x] 8.3 **Red**: 暗黙 Skill 注入と disabled の ChatCommand テストを追加する
     - 暗黙選択された Skill が prompt に入ることを検証する
     - Skill 機能 disabled 相当では従来 prompt になることを検証する
-  - [ ] 8.4 **Green**: 暗黙選択と disabled 経路を通す
-  - [ ] 8.5 **Refactor**: `ChatCommand` の prompt 準備処理を小さな private メソッドへ整理する
+  - [x] 8.4 **Green**: 暗黙選択と disabled 経路を通す
+  - [x] 8.5 **Refactor**: `ChatCommand` の prompt 準備処理を小さな private メソッドへ整理する
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 8.1, 8.2_
 
 - [ ] 9. `/skill` コマンドを実装する（Red → Green）

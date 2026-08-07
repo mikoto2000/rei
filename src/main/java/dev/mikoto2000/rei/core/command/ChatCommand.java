@@ -13,8 +13,10 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.skills.AgentSkillPromptRenderer;
+import dev.mikoto2000.rei.skills.AgentSkillSelection;
+import dev.mikoto2000.rei.skills.AgentSkillSelectionService;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
-import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 import reactor.core.Disposable;
@@ -23,6 +25,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -35,7 +38,6 @@ import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 @Command(
 name = "chat",
 description = "Chat with AI")
-@RequiredArgsConstructor
 public class ChatCommand implements Runnable {
 
   private static final Logger log = LoggerFactory.getLogger(ChatCommand.class);
@@ -48,7 +50,30 @@ public class ChatCommand implements Runnable {
 
   private final ChatResponseNarrator chatResponseNarrator;
   private final Optional<MemoryConsolidatorService> memoryConsolidatorService;
+  private final Optional<AgentSkillSelectionService> agentSkillSelectionService;
+  private final Optional<AgentSkillPromptRenderer> agentSkillPromptRenderer;
   private final InlineFileAttachmentResolver inlineFileAttachmentResolver = new InlineFileAttachmentResolver();
+
+  public ChatCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
+      CommandCancellationService cancellationService, ChatResponseNarrator chatResponseNarrator,
+      Optional<MemoryConsolidatorService> memoryConsolidatorService) {
+    this(chatClient, currentModelHolder, cancellationService, chatResponseNarrator, memoryConsolidatorService,
+        Optional.empty(), Optional.empty());
+  }
+
+  public ChatCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
+      CommandCancellationService cancellationService, ChatResponseNarrator chatResponseNarrator,
+      Optional<MemoryConsolidatorService> memoryConsolidatorService,
+      Optional<AgentSkillSelectionService> agentSkillSelectionService,
+      Optional<AgentSkillPromptRenderer> agentSkillPromptRenderer) {
+    this.chatClient = chatClient;
+    this.currentModelHolder = currentModelHolder;
+    this.cancellationService = cancellationService;
+    this.chatResponseNarrator = chatResponseNarrator;
+    this.memoryConsolidatorService = memoryConsolidatorService;
+    this.agentSkillSelectionService = agentSkillSelectionService;
+    this.agentSkillPromptRenderer = agentSkillPromptRenderer;
+  }
 
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
   private String[] prompts;
@@ -59,15 +84,22 @@ public class ChatCommand implements Runnable {
     cancellationService.begin(Thread.currentThread());
     chatResponseNarrator.reset();
 
-    InlineFileAttachmentResolver.ResolvedPrompt resolvedPrompt = inlineFileAttachmentResolver.resolve(String.join(" ", prompts));
+    String promptText = String.join(" ", prompts);
+    AgentSkillSelection skillSelection = selectAgentSkills(promptText);
+    for (String warning : skillSelection.warnings()) {
+      IO.println(warning);
+    }
+
+    InlineFileAttachmentResolver.ResolvedPrompt resolvedPrompt = inlineFileAttachmentResolver.resolve(skillSelection.sanitizedPrompt());
     for (String warning : resolvedPrompt.warnings()) {
       IO.println(warning);
     }
+    String renderedPrompt = renderAgentSkills(resolvedPrompt.prompt(), skillSelection);
 
     ChatClientRequestSpec requestSpec = chatClient
       .prompt(new Prompt(
           UserMessage.builder()
-              .text(resolvedPrompt.prompt())
+              .text(renderedPrompt)
               .media(resolvedPrompt.media())
               .build(),
           OpenAiChatOptions.builder()
@@ -145,6 +177,18 @@ public class ChatCommand implements Runnable {
     } finally {
       cancellationService.clear();
     }
+  }
+
+  private AgentSkillSelection selectAgentSkills(String promptText) {
+    return agentSkillSelectionService
+        .map(service -> service.select(promptText))
+        .orElseGet(() -> new AgentSkillSelection(List.of(), List.of(), List.of(), promptText));
+  }
+
+  private String renderAgentSkills(String promptText, AgentSkillSelection selection) {
+    return agentSkillPromptRenderer
+        .map(renderer -> renderer.render(promptText, selection.selectedSkills()))
+        .orElse(promptText);
   }
 
   private void maybeSuggestConsolidation() {
