@@ -10,6 +10,8 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
@@ -38,6 +40,7 @@ import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 @Command(
 name = "chat",
 description = "Chat with AI")
+@Component
 public class ChatCommand implements Runnable {
 
   private static final Logger log = LoggerFactory.getLogger(ChatCommand.class);
@@ -61,6 +64,7 @@ public class ChatCommand implements Runnable {
         Optional.empty(), Optional.empty());
   }
 
+  @Autowired
   public ChatCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
       CommandCancellationService cancellationService, ChatResponseNarrator chatResponseNarrator,
       Optional<MemoryConsolidatorService> memoryConsolidatorService,
