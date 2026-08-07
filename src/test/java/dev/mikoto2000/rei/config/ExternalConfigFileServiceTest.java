@@ -32,6 +32,9 @@ class ExternalConfigFileServiceTest {
     String content = Files.readString(created);
     assertTrue(content.contains("spring:"));
     assertTrue(content.contains("rei:"));
+    assertTrue(content.contains("skills:"));
+    assertTrue(content.contains("${user.dir}/.rei/skills"));
+    assertTrue(content.contains("max-selected: 3"));
     assertTrue(content.contains("REI_OPENAI_BASE_URL"));
     assertTrue(content.contains("feed:"));
     assertTrue(content.contains("REI_FEED_CRON"));

@@ -170,10 +170,10 @@ Agent Skills は、`.rei/skills/<skill-name>/SKILL.md` に配置された Markdo
     - root command に `SkillCommand` を追加する
   - _Requirements: 2.1, 6.1, 8.1_
 
-- [ ] 11. チェックポイント — Agent Skills 関連テストを実行する
-  - [ ] 11.1 `./mvnw test "-Dtest=AgentSkill*Test,FileSystemAgentSkillRepositoryTest,SkillCommandTest,ChatCommandAgentSkillsTest"` を実行する
-  - [ ] 11.2 失敗したテストがあれば Red/Green の粒度に戻して修正する
-  - [ ] 11.3 Agent Skills 関連の変更がコミット可能な状態であることを確認する
+- [x] 11. チェックポイント — Agent Skills 関連テストを実行する
+  - [x] 11.1 `./mvnw test "-Dtest=AgentSkill*Test,FileSystemAgentSkillRepositoryTest,SkillCommandTest,ChatCommandAgentSkillsTest"` を実行する
+  - [x] 11.2 失敗したテストがあれば Red/Green の粒度に戻して修正する
+  - [x] 11.3 Agent Skills 関連の変更がコミット可能な状態であることを確認する
 
 - [ ] 12. 回帰チェックポイント — 主要既存テストを実行する
   - [ ] 12.1 `./mvnw test "-Dtest=ChatCommandTest,ChatCommandNarrationTest,ToolsTest,ReiApplicationTests"` を実行する

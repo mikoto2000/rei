@@ -53,6 +53,11 @@ public class ExternalConfigFileService {
                   model: ${REI_OPENAI_EMBEDDING_MODEL:qwen3-embedding:8b}
 
         rei:
+          skills:
+            enabled: true
+            directories:
+              - ${user.dir}/.rei/skills
+            max-selected: 3
           web-search:
             enabled: true
             providers:

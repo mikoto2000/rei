@@ -42,6 +42,11 @@ rei:
   core:
     system-prompt: ${REI_AI_SYSTEM_PROMPT:classpath:/system-prompt.md}
     chat-memory-max-messages: ${REI_CHAT_MEMORY_MAX_MESSAGES:100}
+  skills:
+    enabled: ${REI_SKILLS_ENABLED:true}
+    directories:
+      - ${REI_SKILLS_DIRECTORY:${user.dir}/.rei/skills}
+    max-selected: ${REI_SKILLS_MAX_SELECTED:3}
   google:
     application-name: Rei
     credentials-path: ${REI_GOOGLE_CREDENTIALS_PATH:.rei/google-credentials.json}
