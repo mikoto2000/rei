@@ -93,6 +93,7 @@ public class ChatCommand implements Runnable {
     for (String warning : skillSelection.warnings()) {
       IO.println(warning);
     }
+    printSelectedAgentSkills(skillSelection);
 
     InlineFileAttachmentResolver.ResolvedPrompt resolvedPrompt = inlineFileAttachmentResolver.resolve(skillSelection.sanitizedPrompt());
     for (String warning : resolvedPrompt.warnings()) {
@@ -193,6 +194,15 @@ public class ChatCommand implements Runnable {
     return agentSkillPromptRenderer
         .map(renderer -> renderer.render(promptText, selection.selectedSkills()))
         .orElse(promptText);
+  }
+
+  private void printSelectedAgentSkills(AgentSkillSelection selection) {
+    List<String> skillNames = selection.selectedSkills().stream()
+        .map(skill -> skill.name())
+        .toList();
+    if (!skillNames.isEmpty()) {
+      IO.println("実行スキル: " + String.join(", ", skillNames));
+    }
   }
 
   private void maybeSuggestConsolidation() {

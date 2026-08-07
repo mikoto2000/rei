@@ -83,6 +83,26 @@ class ChatCommandAgentSkillsTest {
     assertThat(out.toString()).contains("[warn] Skill が見つかりません: missing");
   }
 
+  @Test
+  void printsSelectedSkillNames() {
+    AgentSkill explicit = skill("explicit");
+    AgentSkill implicit = skill("implicit");
+    AgentSkillSelectionService selectionService = Mockito.mock(AgentSkillSelectionService.class);
+    when(selectionService.select("hello")).thenReturn(
+        new AgentSkillSelection(List.of(explicit), List.of(implicit), List.of(), "hello"));
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      executeAndCapturePrompt("hello", selectionService);
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    assertThat(out.toString()).contains("実行スキル: explicit, implicit");
+  }
+
   private Prompt executeAndCapturePrompt(String prompt, AgentSkillSelectionService selectionService) {
     return executeAndCapturePrompt(new String[] { prompt }, selectionService);
   }
