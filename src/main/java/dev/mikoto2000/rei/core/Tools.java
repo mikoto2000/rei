@@ -374,6 +374,16 @@ public class Tools {
     return Files.readAllBytes(resolveProjectPath(pathStr));
   }
 
+
+  @Tool(name = "createDirectories", description = "指定したパスまでのディレクトリをすべて作成します。既に存在するディレクトリは成功扱いです。")
+  String createDirectories(String pathStr) throws IOException {
+    if (pathStr == null || pathStr.isBlank()) {
+      throw new IllegalArgumentException("pathStr は空にできません");
+    }
+    IO.println(String.format("%s までのディレクトリを作成するよ", pathStr));
+    java.nio.file.Path createdPath = Files.createDirectories(resolveProjectPath(pathStr));
+    return createdPath.toAbsolutePath().normalize().toString();
+  }
   @Tool(name = "writeBinaryFile", description = "バイナリファイルに書き込みます。ファイルが存在しない場合は作成します。")
   void writeBinaryFile(String pathStr, byte[] contents, boolean append) throws IOException {
     IO.println(String.format("%s のバイナリファイルに %s を書き込むよ", pathStr, contents));

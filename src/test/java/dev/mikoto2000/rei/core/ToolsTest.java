@@ -189,6 +189,32 @@ class ToolsTest {
     assertEquals("メモ", Files.readString(text, Charset.forName("UTF-8")));
   }
 
+
+  @Test
+  void createDirectoriesCreatesNestedDirectories() throws Exception {
+    Path nested = tempDir.resolve("a").resolve("b").resolve("c");
+    Tools tools = new Tools();
+
+    String createdPath = tools.createDirectories(nested.toString());
+
+    assertTrue(Files.isDirectory(nested));
+    assertEquals(nested.toAbsolutePath().normalize().toString(), createdPath);
+  }
+
+  @Test
+  void createDirectoriesUsesCurrentProjectForRelativePath() throws Exception {
+    Path project = Files.createDirectories(tempDir.resolve("project-a"));
+    ProjectService projectService = new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects"));
+    projectService.add(project.toString());
+    projectService.cd(project.toString());
+    Tools tools = new Tools(projectService);
+
+    String createdPath = tools.createDirectories("docs/specs");
+
+    Path expected = project.resolve("docs").resolve("specs").toAbsolutePath().normalize();
+    assertTrue(Files.isDirectory(expected));
+    assertEquals(expected.toString(), createdPath);
+  }
   private void writePdf(Path pdf, String text) throws IOException {
     try (PDDocument document = new PDDocument()) {
       PDPage page = new PDPage();
