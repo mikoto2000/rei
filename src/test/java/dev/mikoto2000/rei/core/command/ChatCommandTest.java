@@ -7,7 +7,6 @@ import static org.mockito.Mockito.when;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -54,38 +53,6 @@ class ChatCommandTest {
     assertTrue(output.contains(" s) ==="));
     assertTrue(output.contains("answer text"));
     assertTrue(output.endsWith(System.lineSeparator()));
-  }
-
-  @Test
-  void runStopsWaitingWhenStreamDoesNotTerminate() {
-    ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
-    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
-    CommandCancellationService cancellationService = new CommandCancellationService();
-    AtomicBoolean disposed = new AtomicBoolean(false);
-
-    when(modelHolderService.get()).thenReturn("gpt-test");
-    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.stream().chatResponse()).thenReturn(Flux.<ChatResponse>never().doOnCancel(() -> disposed.set(true)));
-
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    PrintStream originalOut = System.out;
-    System.setOut(new PrintStream(out));
-    try {
-      ChatCommand command = new ChatCommand(chatClient, modelHolderService, cancellationService, Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty()) {
-        @Override
-        long streamTimeoutMillis() {
-          return 1L;
-        }
-      };
-      assertTrue(new CommandLine(command).execute("hello") == 0);
-    } finally {
-      System.setOut(originalOut);
-    }
-
-    String output = out.toString();
-    assertTrue(output.contains("[error]"));
-    assertTrue(disposed.get());
   }
 
   @Test

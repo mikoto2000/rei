@@ -21,7 +21,6 @@ import picocli.CommandLine.Parameters;
 import reactor.core.Disposable;
 
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Locale;
@@ -129,14 +128,7 @@ public class ChatCommand implements Runnable {
     cancellationService.register(disposable);
 
     try {
-      boolean completed = latch.await(streamTimeoutMillis(), TimeUnit.MILLISECONDS);
-      if (!completed) {
-        disposable.dispose();
-        log.warn("Chat response timed out after {} ms", streamTimeoutMillis());
-        System.out.println();
-        IO.println("[error] 回答の取得がタイムアウトしました");
-        return;
-      }
+      latch.await();
       System.out.println();
       Throwable error = errorRef.get();
       if (error != null) {
@@ -169,10 +161,6 @@ public class ChatCommand implements Runnable {
       } catch (Exception ignored) {
       }
     });
-  }
-
-  long streamTimeoutMillis() {
-    return 1_800_000L;
   }
 
   private String buildUserFacingMessage(Throwable error) {
