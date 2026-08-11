@@ -15,9 +15,6 @@ import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
-import dev.mikoto2000.rei.skills.AgentSkillPromptRenderer;
-import dev.mikoto2000.rei.skills.AgentSkillSelection;
-import dev.mikoto2000.rei.skills.AgentSkillSelectionService;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -27,7 +24,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -53,30 +49,17 @@ public class ChatCommand implements Runnable {
 
   private final ChatResponseNarrator chatResponseNarrator;
   private final Optional<MemoryConsolidatorService> memoryConsolidatorService;
-  private final Optional<AgentSkillSelectionService> agentSkillSelectionService;
-  private final Optional<AgentSkillPromptRenderer> agentSkillPromptRenderer;
   private final InlineFileAttachmentResolver inlineFileAttachmentResolver = new InlineFileAttachmentResolver();
-
-  public ChatCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
-      CommandCancellationService cancellationService, ChatResponseNarrator chatResponseNarrator,
-      Optional<MemoryConsolidatorService> memoryConsolidatorService) {
-    this(chatClient, currentModelHolder, cancellationService, chatResponseNarrator, memoryConsolidatorService,
-        Optional.empty(), Optional.empty());
-  }
 
   @Autowired
   public ChatCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
       CommandCancellationService cancellationService, ChatResponseNarrator chatResponseNarrator,
-      Optional<MemoryConsolidatorService> memoryConsolidatorService,
-      Optional<AgentSkillSelectionService> agentSkillSelectionService,
-      Optional<AgentSkillPromptRenderer> agentSkillPromptRenderer) {
+      Optional<MemoryConsolidatorService> memoryConsolidatorService) {
     this.chatClient = chatClient;
     this.currentModelHolder = currentModelHolder;
     this.cancellationService = cancellationService;
     this.chatResponseNarrator = chatResponseNarrator;
     this.memoryConsolidatorService = memoryConsolidatorService;
-    this.agentSkillSelectionService = agentSkillSelectionService;
-    this.agentSkillPromptRenderer = agentSkillPromptRenderer;
   }
 
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
@@ -89,22 +72,15 @@ public class ChatCommand implements Runnable {
     chatResponseNarrator.reset();
 
     String promptText = String.join(" ", prompts);
-    AgentSkillSelection skillSelection = selectAgentSkills(promptText);
-    for (String warning : skillSelection.warnings()) {
-      IO.println(warning);
-    }
-    printSelectedAgentSkills(skillSelection);
-
-    InlineFileAttachmentResolver.ResolvedPrompt resolvedPrompt = inlineFileAttachmentResolver.resolve(skillSelection.sanitizedPrompt());
+    InlineFileAttachmentResolver.ResolvedPrompt resolvedPrompt = inlineFileAttachmentResolver.resolve(promptText);
     for (String warning : resolvedPrompt.warnings()) {
       IO.println(warning);
     }
-    String renderedPrompt = renderAgentSkills(resolvedPrompt.prompt(), skillSelection);
 
     ChatClientRequestSpec requestSpec = chatClient
       .prompt(new Prompt(
           UserMessage.builder()
-              .text(renderedPrompt)
+              .text(resolvedPrompt.prompt())
               .media(resolvedPrompt.media())
               .build(),
           OpenAiChatOptions.builder()
@@ -181,27 +157,6 @@ public class ChatCommand implements Runnable {
       IO.println("[error] 回答待機が中断されました");
     } finally {
       cancellationService.clear();
-    }
-  }
-
-  private AgentSkillSelection selectAgentSkills(String promptText) {
-    return agentSkillSelectionService
-        .map(service -> service.select(promptText))
-        .orElseGet(() -> new AgentSkillSelection(List.of(), List.of(), List.of(), promptText));
-  }
-
-  private String renderAgentSkills(String promptText, AgentSkillSelection selection) {
-    return agentSkillPromptRenderer
-        .map(renderer -> renderer.render(promptText, selection.selectedSkills()))
-        .orElse(promptText);
-  }
-
-  private void printSelectedAgentSkills(AgentSkillSelection selection) {
-    List<String> skillNames = selection.selectedSkills().stream()
-        .map(skill -> skill.name())
-        .toList();
-    if (!skillNames.isEmpty()) {
-      IO.println("実行スキル: " + String.join(", ", skillNames));
     }
   }
 

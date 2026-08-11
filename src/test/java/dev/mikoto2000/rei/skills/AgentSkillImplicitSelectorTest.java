@@ -10,9 +10,7 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.ai.chat.model.ChatModel;
 
 class AgentSkillImplicitSelectorTest {
 
@@ -48,13 +46,9 @@ class AgentSkillImplicitSelectorTest {
   }
 
   private AgentSkillImplicitSelector selector(String llmResponse, AgentSkill... skills) {
-    ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
-    ObjectProvider<ChatClient> provider = Mockito.mock(ObjectProvider.class);
-    when(provider.getObject()).thenReturn(chatClient);
-    when(chatClient.prompt(anyString())).thenReturn(requestSpec);
-    when(requestSpec.call().content()).thenReturn(llmResponse);
-    return new AgentSkillImplicitSelector(provider, new InMemoryAgentSkillRepository(List.of(skills)));
+    ChatModel chatModel = Mockito.mock(ChatModel.class);
+    when(chatModel.call(anyString())).thenReturn(llmResponse);
+    return new AgentSkillImplicitSelector(chatModel, new InMemoryAgentSkillRepository(List.of(skills)));
   }
 
   private AgentSkill skill(String name) {

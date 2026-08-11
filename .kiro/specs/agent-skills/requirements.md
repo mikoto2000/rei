@@ -8,7 +8,7 @@ Rei は既にローカルファイル操作、シェル実行、Web 検索、Goo
 - Codex 風のローカル Skill 格納ディレクトリ
 - Skill メタデータと本文の読み込み
 - LLM を使った Skill 選択
-- ChatCommand 側での prompt text 組み立て
+- Spring AI Advisor による prompt text 組み立て
 - 最低限の `/skill` コマンド
 - 明示的選択と暗黙的選択
 - 最低限の設定項目
@@ -25,7 +25,7 @@ Rei は既にローカルファイル操作、シェル実行、Web 検索、Goo
 - **SKILL.md**: Skill の主ファイル。メタデータと本文を含む。
 - **明示的選択**: ユーザーが `@skill:<name>` で利用する Skill を指定すること。
 - **暗黙的選択**: ユーザー入力を基に、システムが LLM に候補 Skill を選択させること。
-- **Skill 注入**: 選択された Skill の内容を ChatCommand の prompt text に追加すること。
+- **Skill 注入**: 選択された Skill の内容を Spring AI Advisor で prompt text に追加すること。
 
 ## 要件
 
@@ -69,14 +69,15 @@ Rei は既にローカルファイル操作、シェル実行、Web 検索、Goo
 4. THE システム SHALL 明示的に選択された Skill を暗黙的選択より優先する。
 5. THE システム SHALL `@skill:<name>` トークンを最終ユーザー依頼文から除去する。
 
-### 要件 5: ChatCommand 側での prompt text 組み立て
-**ユーザーストーリー:** 開発者として、既存の ChatClient 構成を大きく変えずに Skill を導入したいので、ChatCommand 側で prompt text を組み立ててほしい。
+### 要件 5: Advisor による prompt text 組み立て
+**ユーザーストーリー:** 開発者として、チャットコマンド本体を肥大化させずに Skill を導入したいので、Spring AI Advisor として prompt text を組み立ててほしい。
 
 #### 受け入れ条件
-1. THE システム SHALL 選択された Skill instructions を ChatCommand の prompt text に追加する。
+1. THE システム SHALL 選択された Skill instructions を Spring AI Advisor で UserMessage の prompt text に追加する。
 2. THE システム SHALL 既存の ChatClient、ChatMemory、ツール登録構成を維持する。
 3. THE システム SHALL Skill 注入後もファイル添付、クリップボード添付、モデル指定、回答開始時間表示の既存挙動を維持する。
 4. WHEN Skill が選択されない THEN システムは従来通りの prompt text でチャットを実行する。
+5. THE システム SHALL 暗黙 Skill 選択用の LLM 呼び出しが Agent Skills Advisor を再帰的に通らないようにする。
 
 ### 要件 6: `/skill` コマンド
 **ユーザーストーリー:** ユーザーとして、利用可能な Skill を確認したいので、最低限の Skill 管理コマンドがほしい。

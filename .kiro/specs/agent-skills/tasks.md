@@ -2,7 +2,7 @@
 
 ## Overview
 
-Agent Skills は、`.rei/skills/<skill-name>/SKILL.md` に配置された Markdown 指示書を読み込み、ユーザー入力に対して明示的または LLM による暗黙的選択を行い、`ChatCommand` が組み立てる prompt text に注入する機能である。
+Agent Skills は、`.rei/skills/<skill-name>/SKILL.md` に配置された Markdown 指示書を読み込み、ユーザー入力に対して明示的または LLM による暗黙的選択を行い、Spring AI Advisor が UserMessage の prompt text に注入する機能である。
 
 実装は t_wada の TDD に則り、各タスクを Red → Green → Refactor の小さいサイクルで進める。コンパイルエラーも Red として扱う。各チェックポイントでは対象テストを実行し、必要に応じてコミット可能な単位に整理する。
 
@@ -11,7 +11,7 @@ Agent Skills は、`.rei/skills/<skill-name>/SKILL.md` に配置された Markdo
 ```text
 1 (properties) → 2 (model) → 3 (repository)
                                    ↓
-4 (explicit selector) → 6 (selection service) → 7 (prompt renderer) → 8 (ChatCommand integration)
+4 (explicit selector) → 6 (selection service) → 7 (prompt renderer) → 8 (Advisor integration)
 5 (implicit selector) ─────────────┘
                                    ↓
 9 (/skill command) → 10 (configuration/root registration) → 11 (integration checkpoint)
@@ -87,11 +87,11 @@ Agent Skills は、`.rei/skills/<skill-name>/SKILL.md` に配置された Markdo
 - [x] 5. AgentSkillImplicitSelector を実装する（Red → Green → Refactor）
   - [x] 5.1 **Red**: LLM JSON 配列選択の失敗テストを書く
     - `src/test/java/dev/mikoto2000/rei/skills/AgentSkillImplicitSelectorTest.java` を新規作成する
-    - mock `ChatClient` が `["skill-a"]` を返すと該当 Skill が選択されることを検証する
+    - mock `ChatModel` が `["skill-a"]` を返すと該当 Skill が選択されることを検証する
     - この時点でコンパイルエラーになることを確認する
   - [x] 5.2 **Green**: LLM 選択の最小実装を行う
     - `AgentSkillImplicitSelector` を作成する
-    - `ObjectProvider<ChatClient>` を使って循環依存を避ける
+    - `ChatModel` を直接使い、Agent Skills Advisor の再帰実行を避ける
     - Skill 名、説明、短い excerpt を含む選択プロンプトを作る
     - JSON 配列を parse して Skill 一覧へ変換する
   - [x] 5.3 **Red**: 該当なし、未知 Skill、JSON parse 失敗のテストを追加する
@@ -129,20 +129,19 @@ Agent Skills は、`.rei/skills/<skill-name>/SKILL.md` に配置された Markdo
     - Skill 未選択時は元 prompt をそのまま返す
   - _Requirements: 5.1, 5.4_
 
-- [x] 8. ChatCommand に Agent Skills を統合する（Red → Green → Refactor）
-  - [x] 8.1 **Red**: 明示 Skill 注入の ChatCommand テストを書く
-    - 既存 `ChatCommandTest` または新規 `ChatCommandAgentSkillsTest` に追加する
-    - `@skill:sample hello` 実行時に `ChatClient.prompt(Prompt)` へ渡る UserMessage text に Skill instructions が含まれることを検証する
+- [x] 8. Spring AI Advisor に Agent Skills を統合する（Red → Green → Refactor）
+  - [x] 8.1 **Red**: 明示 Skill 注入の Advisor テストを書く
+    - `AgentSkillAdvisorTest` を追加する
+    - `@skill:sample hello` 実行時に Advisor 後の UserMessage text に Skill instructions が含まれることを検証する
     - `@skill:sample` が最終ユーザー依頼から除去されることを検証する
-  - [x] 8.2 **Green**: `ChatCommand` に Skill 選択と prompt rendering を統合する
-    - `Optional<AgentSkillSelectionService>` と `Optional<AgentSkillPromptRenderer>` を constructor 引数に追加する
-    - Skill 機能 Bean がない場合は従来挙動にする
-    - inline file / clipboard resolver より前に `@skill` を処理する
-  - [x] 8.3 **Red**: 暗黙 Skill 注入と disabled の ChatCommand テストを追加する
-    - 暗黙選択された Skill が prompt に入ることを検証する
-    - Skill 機能 disabled 相当では従来 prompt になることを検証する
-  - [x] 8.4 **Green**: 暗黙選択と disabled 経路を通す
-  - [x] 8.5 **Refactor**: `ChatCommand` の prompt 準備処理を小さな private メソッドへ整理する
+  - [x] 8.2 **Green**: `AgentSkillAdvisor` に Skill 選択と prompt rendering を統合する
+    - `AgentSkillSelectionService` と `AgentSkillPromptRenderer` を constructor 引数に追加する
+    - UserMessage text を差し替え、media と ChatOptions を維持する
+  - [x] 8.3 **Red**: 警告表示、実行 Skill 表示、未選択時の Advisor テストを追加する
+    - Skill 選択警告と実行 Skill 名が標準出力に表示されることを検証する
+    - Skill 未選択時は元 request を返すことを検証する
+  - [x] 8.4 **Green**: 警告表示、実行 Skill 表示、未選択経路を通す
+  - [x] 8.5 **Refactor**: `ChatCommand` から Agent Skills 依存を削除し、Advisor へ責務を移す
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 8.1, 8.2_
 
 - [x] 9. `/skill` コマンドを実装する（Red → Green）
@@ -167,11 +166,13 @@ Agent Skills は、`.rei/skills/<skill-name>/SKILL.md` に配置された Markdo
   - [x] 10.2 **Green**: Bean 登録を実装する
     - `@EnableConfigurationProperties(AgentSkillsProperties.class)` を追加する
     - repository / selector / selection service / renderer を `@Component` または `@Service` として登録する
+    - `AgentSkillAdvisor` を `@Component` として登録する
+    - `AiConfiguration` に `AgentSkillAdvisor` を default advisor として追加する
     - root command に `SkillCommand` を追加する
   - _Requirements: 2.1, 6.1, 8.1_
 
 - [x] 11. チェックポイント — Agent Skills 関連テストを実行する
-  - [x] 11.1 `./mvnw test "-Dtest=AgentSkill*Test,FileSystemAgentSkillRepositoryTest,SkillCommandTest,ChatCommandAgentSkillsTest"` を実行する
+  - [x] 11.1 `./mvnw test "-Dtest=AgentSkill*Test,FileSystemAgentSkillRepositoryTest,SkillCommandTest,AiConfigurationTest"` を実行する
   - [x] 11.2 失敗したテストがあれば Red/Green の粒度に戻して修正する
   - [x] 11.3 Agent Skills 関連の変更がコミット可能な状態であることを確認する
 

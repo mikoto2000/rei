@@ -10,6 +10,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallbackProvider;
@@ -23,6 +24,7 @@ import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
 import dev.mikoto2000.rei.reminder.ReminderTools;
 import dev.mikoto2000.rei.search.SearchTools;
+import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
 import dev.mikoto2000.rei.sound.SoundNotificationTools;
 import dev.mikoto2000.rei.task.TaskTools;
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchTools;
@@ -51,6 +53,7 @@ class AiConfigurationTest {
         Mockito.mock(SoundNotificationTools.class),
         Mockito.mock(BlueskyPostTools.class),
         Mockito.mock(UrlContentFetchTools.class),
+        mockProviderReturning(null),
         provider);
 
     ChatClient chatClient = configuration.chatClient();
@@ -79,12 +82,41 @@ class AiConfigurationTest {
         Mockito.mock(SoundNotificationTools.class),
         Mockito.mock(BlueskyPostTools.class),
         Mockito.mock(UrlContentFetchTools.class),
+        mockProviderReturning(null),
         provider);
 
     ChatClient chatClient = configuration.chatClient();
 
     List<?> toolCallbackProviders = getDefaultToolCallbackProviders(chatClient);
     assertEquals(0, toolCallbackProviders.size());
+  }
+
+  @Test
+  void chatClientIncludesAgentSkillAdvisorWhenAvailable() throws Exception {
+    AgentSkillAdvisor agentSkillAdvisor = Mockito.mock(AgentSkillAdvisor.class);
+
+    AiConfiguration configuration = new AiConfiguration(
+        new CoreProperties("system prompt", 100),
+        Mockito.mock(ChatModel.class),
+        Mockito.mock(ChatMemory.class),
+        new Tools(),
+        Mockito.mock(GoogleCalendarTools.class),
+        Mockito.mock(TaskTools.class),
+        Mockito.mock(BriefingTools.class),
+        Mockito.mock(FeedTools.class),
+        Mockito.mock(ReminderTools.class),
+        Mockito.mock(SearchTools.class),
+        Mockito.mock(WebSearchTools.class),
+        Mockito.mock(SoundNotificationTools.class),
+        Mockito.mock(BlueskyPostTools.class),
+        Mockito.mock(UrlContentFetchTools.class),
+        mockProviderReturning(agentSkillAdvisor),
+        mockProviderReturning(null));
+
+    ChatClient chatClient = configuration.chatClient();
+
+    List<?> advisors = getDefaultAdvisors(chatClient);
+    assertSame(agentSkillAdvisor, advisors.getLast());
   }
 
   @SuppressWarnings("unchecked")
@@ -98,10 +130,21 @@ class AiConfigurationTest {
     return (List<?>) toolCallbackProvidersField.get(defaultRequest);
   }
 
-  private ObjectProvider<ToolCallbackProvider> mockProviderReturning(ToolCallbackProvider toolCallbackProvider) {
+  @SuppressWarnings("unchecked")
+  private List<?> getDefaultAdvisors(ChatClient chatClient) throws Exception {
+    Field defaultRequestField = chatClient.getClass().getDeclaredField("defaultChatClientRequest");
+    defaultRequestField.setAccessible(true);
+    Object defaultRequest = defaultRequestField.get(chatClient);
+
+    Field advisorsField = defaultRequest.getClass().getDeclaredField("advisors");
+    advisorsField.setAccessible(true);
+    return (List<Advisor>) advisorsField.get(defaultRequest);
+  }
+
+  private <T> ObjectProvider<T> mockProviderReturning(T value) {
     @SuppressWarnings("unchecked")
-    ObjectProvider<ToolCallbackProvider> provider = Mockito.mock(ObjectProvider.class);
-    when(provider.getIfAvailable()).thenReturn(toolCallbackProvider);
+    ObjectProvider<T> provider = Mockito.mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(value);
     return provider;
   }
 }

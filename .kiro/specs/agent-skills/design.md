@@ -1,7 +1,7 @@
 # 設計: Agent Skills
 
 ## 概要
-Agent Skills は、ローカルに配置した Markdown 形式の作業指示書をチャット時に自動または明示的に選択し、`ChatCommand` が組み立てる prompt text に注入する機能である。
+Agent Skills は、ローカルに配置した Markdown 形式の作業指示書をチャット時に自動または明示的に選択し、Spring AI Advisor が UserMessage の prompt text に注入する機能である。
 
 初期実装では Skill を権限制御の仕組みとして扱わない。既存の ChatClient、ChatMemory、Tool 登録構成は維持し、Skill は「選択可能な追加指示」として扱う。
 
@@ -13,7 +13,7 @@ Agent Skills は、ローカルに配置した Markdown 形式の作業指示書
 - 有効 Skill 一覧の管理
 - LLM による暗黙的 Skill 選択
 - `@skill:<name>` による明示的 Skill 選択
-- `ChatCommand` での prompt text 組み立て
+- Spring AI Advisor での prompt text 組み立て
 - `/skill list`, `/skill show <name>`, `/skill reload`
 - 最低限の設定プロパティ
 
@@ -188,11 +188,11 @@ public interface AgentSkillRepository {
 - ユーザー入力に合う Skill を LLM に選ばせる
 
 依存:
-- `ChatClient` または `ChatModel`
+- `ChatModel`
 - `AgentSkillRepository`
 - `AgentSkillsProperties`
 
-循環依存を避けるため、実装では `ObjectProvider<ChatClient>` を使う。
+Agent Skills は ChatClient の default Advisor として登録されるため、暗黙選択で ChatClient を呼び出すと Advisor が再帰する。実装では `ChatModel` を直接呼び出し、暗黙選択用の LLM 呼び出しが Agent Skills Advisor を通らないようにする。
 
 選択プロンプト例:
 
@@ -228,7 +228,7 @@ Return format:
 - 明示的選択と暗黙的選択を統合する
 - 重複 Skill を除外する
 - `max-selected` を適用する
-- `ChatCommand` に渡す `AgentSkillSelection` を返す
+- `AgentSkillAdvisor` に渡す `AgentSkillSelection` を返す
 
 処理順:
 1. Skill 機能が無効なら何もしない
@@ -241,7 +241,7 @@ Return format:
 ### AgentSkillPromptRenderer
 
 役割:
-- 選択された Skill を ChatCommand 用 prompt text に変換する
+- 選択された Skill を Advisor 用 prompt text に変換する
 
 出力例:
 
@@ -261,7 +261,7 @@ gantt.csv を今日基準で再スケジュールして
 
 初期実装では、Skill 注入は prompt text のみを変更する。ChatClient の Tool セットは変更しない。
 
-## ChatCommand 統合
+## Advisor 統合
 
 既存フロー:
 1. ユーザー入力を結合
@@ -271,16 +271,18 @@ gantt.csv を今日基準で再スケジュールして
 
 変更後フロー:
 1. ユーザー入力を結合
-2. `AgentSkillSelectionService` で Skill 選択と prompt sanitization
-3. inline file / clipboard 添付を解決
-4. `AgentSkillPromptRenderer` で Skill instructions を prompt text に注入
-5. `Prompt(UserMessage...)` を作成
-6. `ChatClient` へ送信
+2. inline file / clipboard 添付を解決
+3. `Prompt(UserMessage...)` を作成
+4. `ChatClient` へ送信
+5. `AgentSkillAdvisor` が UserMessage text に対して Skill 選択と prompt sanitization を実行
+6. `AgentSkillPromptRenderer` で Skill instructions を prompt text に注入
+7. Advisor が Prompt の UserMessage text を差し替え、media と ChatOptions は維持する
 
 注意:
-- `@skill:<name>` は添付記法ではないため、inline file resolver より前に処理する
+- `@skill:<name>` は UserMessage text に残したまま ChatCommand から ChatClient へ渡し、Advisor で処理する
 - Skill が未選択なら prompt text は従来と同じ
-- Skill 選択警告は `IO.println` で表示する
+- Skill 選択警告と実行 Skill 名は Advisor で標準出力へ表示する
+- 暗黙選択は ChatModel 直呼び出しとし、AgentSkillAdvisor の再帰実行を避ける
 
 ## `/skill` コマンド
 
@@ -404,10 +406,11 @@ gantt-rescheduler | enabled | ガントチャート CSV を今日基準で再ス
 - `/skill reload` が repository を再読み込みする
 - 存在しない Skill をエラー表示する
 
-### ChatCommand 統合テスト
+### AgentSkillAdvisorTest
 - `@skill:<name>` 指定時に Skill instructions が prompt に入る
-- 暗黙選択された Skill instructions が prompt に入る
-- Skill 機能 disabled 時に従来 prompt になる
+- Skill 選択警告と実行 Skill 名を表示する
+- Skill 未選択時は元 request を返す
+- media と ChatOptions を維持する
 
 ## 実装順序
 1. `AgentSkillsProperties` を追加
@@ -417,9 +420,9 @@ gantt-rescheduler | enabled | ガントチャート CSV を今日基準で再ス
 5. `AgentSkillImplicitSelector` を追加
 6. `AgentSkillSelectionService` を追加
 7. `AgentSkillPromptRenderer` を追加
-8. `ChatCommand` に Skill 注入を統合
+8. `AgentSkillAdvisor` に Skill 注入を統合
 9. `/skill` コマンドを追加
-10. `AiConfiguration` または root command 登録に `/skill` を追加
+10. `AiConfiguration` に `AgentSkillAdvisor` を default advisor として追加し、root command 登録に `/skill` を追加
 11. テストを追加・更新
 12. 既存テストを実行
 

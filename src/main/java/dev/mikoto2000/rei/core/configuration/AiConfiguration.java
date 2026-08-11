@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.core.configuration;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
@@ -10,6 +11,9 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Bean;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.bluesky.BlueskyProperties;
@@ -22,6 +26,7 @@ import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
 import dev.mikoto2000.rei.interest.InterestProperties;
 import dev.mikoto2000.rei.reminder.ReminderTools;
 import dev.mikoto2000.rei.search.SearchTools;
+import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
 import dev.mikoto2000.rei.skills.AgentSkillsProperties;
 import dev.mikoto2000.rei.sound.SoundNotificationProperties;
 import dev.mikoto2000.rei.sound.SoundNotificationTools;
@@ -51,16 +56,23 @@ public class AiConfiguration {
   private final SoundNotificationTools soundNotificationTools;
   private final BlueskyPostTools blueskyPostTools;
   private final UrlContentFetchTools urlContentFetchTools;
+  private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
   private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
 
   @Bean
   public ChatClient chatClient() {
+    List<Advisor> advisors = new ArrayList<>();
+    advisors.add(PromptChatMemoryAdvisor.builder(chatMemory)
+        .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
+        .build());
+    AgentSkillAdvisor skillAdvisor = agentSkillAdvisor.getIfAvailable();
+    if (skillAdvisor != null) {
+      advisors.add(skillAdvisor);
+    }
+
     ChatClient.Builder builder = ChatClient.builder(chatModel)
         .defaultSystem(coreProperties.systemPrompt())
-        .defaultAdvisors(
-            PromptChatMemoryAdvisor.builder(chatMemory)
-                .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
-                .build())
+        .defaultAdvisors(advisors)
         .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
             soundNotificationTools, blueskyPostTools, urlContentFetchTools);
 

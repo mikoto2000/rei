@@ -9,8 +9,7 @@ import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -20,11 +19,11 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
   private static final Pattern JSON_STRING = Pattern.compile("\"((?:\\\\.|[^\"])*)\"");
   private static final int EXCERPT_LENGTH = 240;
 
-  private final ObjectProvider<ChatClient> chatClientProvider;
+  private final ChatModel chatModel;
   private final AgentSkillRepository repository;
 
-  public AgentSkillImplicitSelector(ObjectProvider<ChatClient> chatClientProvider, AgentSkillRepository repository) {
-    this.chatClientProvider = chatClientProvider;
+  public AgentSkillImplicitSelector(ChatModel chatModel, AgentSkillRepository repository) {
+    this.chatModel = chatModel;
     this.repository = repository;
   }
 
@@ -37,7 +36,7 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
       return List.of();
     }
     try {
-      String content = chatClientProvider.getObject().prompt(buildSelectionPrompt(prompt, candidates)).call().content();
+      String content = chatModel.call(buildSelectionPrompt(prompt, candidates));
       return resolveSelectedSkills(parseJsonStringArray(content), candidates);
     } catch (Exception e) {
       log.debug("Agent Skill implicit selection failed", e);
