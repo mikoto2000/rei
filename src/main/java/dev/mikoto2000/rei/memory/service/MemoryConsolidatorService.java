@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -14,6 +15,8 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import dev.mikoto2000.rei.llm.LlmChatClientProvider;
+import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 import dev.mikoto2000.rei.memory.model.Memory;
 import dev.mikoto2000.rei.memory.model.MemoryScope;
@@ -23,7 +26,7 @@ import dev.mikoto2000.rei.memory.model.MemoryType;
 @Service
 public class MemoryConsolidatorService {
 
-  private final ChatClient chatClient;
+  private final LlmChatClientProvider chatClientProvider;
   private final JdbcClient jdbcClient;
   private final MemoryProperties memoryProperties;
   private final ObjectMapper objectMapper = new ObjectMapper();
@@ -31,7 +34,15 @@ public class MemoryConsolidatorService {
   public MemoryConsolidatorService(ChatClient chatClient,
       @Qualifier("dataSource") javax.sql.DataSource dataSource,
       MemoryProperties memoryProperties) {
-    this.chatClient = chatClient;
+    this(new dev.mikoto2000.rei.core.command.ChatCommand.FixedLlmChatClientProvider(chatClient), dataSource,
+        memoryProperties);
+  }
+
+  @Autowired
+  public MemoryConsolidatorService(LlmChatClientProvider chatClientProvider,
+      @Qualifier("dataSource") javax.sql.DataSource dataSource,
+      MemoryProperties memoryProperties) {
+    this.chatClientProvider = chatClientProvider;
     this.jdbcClient = JdbcClient.create(dataSource);
     this.memoryProperties = memoryProperties;
   }
@@ -51,7 +62,8 @@ public class MemoryConsolidatorService {
 
     String llmText;
     try {
-      llmText = chatClient.prompt("次の会話から保存候補をJSON配列で返してください:\n" + String.join("\n", messages))
+      llmText = chatClientProvider.chatClient(LlmFeature.MEMORY)
+          .prompt("次の会話から保存候補をJSON配列で返してください:\n" + String.join("\n", messages))
           .call()
           .content();
     } catch (Exception e) {
@@ -120,7 +132,7 @@ public class MemoryConsolidatorService {
     String prompt = String.join("\n", conversation);
     String summary;
     try {
-      summary = chatClient.prompt("会話を要約してください:\n" + prompt).call().content();
+      summary = chatClientProvider.chatClient(LlmFeature.MEMORY).prompt("会話を要約してください:\n" + prompt).call().content();
     } catch (Exception e) {
       throw new IllegalStateException("LLM での要約に失敗しました", e);
     }

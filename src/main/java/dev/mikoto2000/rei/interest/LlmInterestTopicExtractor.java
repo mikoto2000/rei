@@ -12,21 +12,35 @@ import java.util.stream.Collectors;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
-import lombok.RequiredArgsConstructor;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
 @Component
-@RequiredArgsConstructor
 public class LlmInterestTopicExtractor implements InterestTopicExtractor {
   private static final long EXTRACT_TIMEOUT_SECONDS = 1200L;
 
-  private final ChatModel chatModel;
+  private final LlmModelProvider modelProvider;
   private final ModelHolderService modelHolderService;
   private final JsonMapper objectMapper;
+
+  public LlmInterestTopicExtractor(ChatModel chatModel, ModelHolderService modelHolderService,
+      JsonMapper objectMapper) {
+    this(new FixedLlmModelProvider(chatModel), modelHolderService, objectMapper);
+  }
+
+  @Autowired
+  public LlmInterestTopicExtractor(LlmModelProvider modelProvider, ModelHolderService modelHolderService,
+      JsonMapper objectMapper) {
+    this.modelProvider = modelProvider;
+    this.modelHolderService = modelHolderService;
+    this.objectMapper = objectMapper;
+  }
 
   @Override
   public List<InterestTopicCandidate> extract(List<ConversationSnippet> snippets, int maxTopics) {
@@ -42,7 +56,7 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
     Prompt prompt = new Prompt(
         buildPrompt(snippets, maxTopics, pastQueries),
         OpenAiChatOptions.builder()
-            .model(modelHolderService.get())
+            .model(modelProvider.model(LlmFeature.INTEREST_DISCOVERY, modelHolderService.get()))
             .build());
 
     String response = callWithTimeout(prompt);
@@ -51,7 +65,8 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
 
   private String callWithTimeout(Prompt prompt) {
     ExecutorService executor = Executors.newSingleThreadExecutor();
-    Future<String> future = executor.submit(() -> chatModel.call(prompt).getResult().getOutput().getText());
+    Future<String> future = executor.submit(() -> modelProvider.chatModel(LlmFeature.INTEREST_DISCOVERY)
+        .call(prompt).getResult().getOutput().getText());
     try {
       return future.get(EXTRACT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     } catch (TimeoutException e) {
@@ -141,5 +156,24 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
       return trimmed.substring(arrayStart, arrayEnd + 1).trim();
     }
     return trimmed;
+  }
+
+  private static class FixedLlmModelProvider extends LlmModelProvider {
+    private final ChatModel chatModel;
+
+    FixedLlmModelProvider(ChatModel chatModel) {
+      super(chatModel, new dev.mikoto2000.rei.llm.LlmProperties());
+      this.chatModel = chatModel;
+    }
+
+    @Override
+    public ChatModel chatModel(String feature) {
+      return chatModel;
+    }
+
+    @Override
+    public String model(String feature, String defaultModel) {
+      return defaultModel;
+    }
   }
 }

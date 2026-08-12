@@ -6,27 +6,38 @@ import java.util.List;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
-import lombok.RequiredArgsConstructor;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
 
 @Component
-@RequiredArgsConstructor
 public class AiBriefingNarrator implements BriefingNarrator {
 
-  private final ChatModel chatModel;
+  private final LlmModelProvider modelProvider;
   private final ModelHolderService modelHolderService;
+
+  public AiBriefingNarrator(ChatModel chatModel, ModelHolderService modelHolderService) {
+    this(new FixedLlmModelProvider(chatModel), modelHolderService);
+  }
+
+  @Autowired
+  public AiBriefingNarrator(LlmModelProvider modelProvider, ModelHolderService modelHolderService) {
+    this.modelProvider = modelProvider;
+    this.modelHolderService = modelHolderService;
+  }
 
   @Override
   public BriefingNarration narrate(BriefingContext context) {
     Prompt prompt = new Prompt(
         buildPrompt(context),
         OpenAiChatOptions.builder()
-            .model(modelHolderService.get())
+            .model(modelProvider.model(LlmFeature.BRIEFING, modelHolderService.get()))
             .build());
 
-    String response = chatModel.call(prompt).getResult().getOutput().getText();
+    String response = modelProvider.chatModel(LlmFeature.BRIEFING).call(prompt).getResult().getOutput().getText();
     return parse(response);
   }
 
@@ -139,5 +150,24 @@ public class AiBriefingNarrator implements BriefingNarrator {
     OVERVIEW,
     CAUTIONS,
     NEXT_ACTIONS
+  }
+
+  private static class FixedLlmModelProvider extends LlmModelProvider {
+    private final ChatModel chatModel;
+
+    FixedLlmModelProvider(ChatModel chatModel) {
+      super(chatModel, new dev.mikoto2000.rei.llm.LlmProperties());
+      this.chatModel = chatModel;
+    }
+
+    @Override
+    public ChatModel chatModel(String feature) {
+      return chatModel;
+    }
+
+    @Override
+    public String model(String feature, String defaultModel) {
+      return defaultModel;
+    }
   }
 }

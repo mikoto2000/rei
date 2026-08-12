@@ -7,18 +7,36 @@ import java.util.stream.Collectors;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
+import dev.mikoto2000.rei.core.command.ChatCommand;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
-import lombok.RequiredArgsConstructor;
+import dev.mikoto2000.rei.llm.LlmChatClientProvider;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
 
 @Component
-@RequiredArgsConstructor
 public class BlueskyReplyTextGenerator {
 
-  private final ObjectProvider<ChatClient> chatClientProvider;
+  private final LlmChatClientProvider chatClientProvider;
   private final ModelHolderService modelHolderService;
+  private final LlmModelProvider modelProvider;
+
+  public BlueskyReplyTextGenerator(ObjectProvider<ChatClient> chatClientProvider,
+      ModelHolderService modelHolderService) {
+    this(new ChatCommand.FixedLlmChatClientProvider(chatClientProvider.getObject()), modelHolderService,
+        new ChatCommand.FixedLlmModelProvider());
+  }
+
+  @Autowired
+  public BlueskyReplyTextGenerator(LlmChatClientProvider chatClientProvider, ModelHolderService modelHolderService,
+      LlmModelProvider modelProvider) {
+    this.chatClientProvider = chatClientProvider;
+    this.modelHolderService = modelHolderService;
+    this.modelProvider = modelProvider;
+  }
 
   public String generate(String handle, String postText, List<BlueskyReplyConversationRepository.ConversationMessage> history) {
     if (postText == null || postText.isBlank()) {
@@ -40,7 +58,9 @@ public class BlueskyReplyTextGenerator {
         %s
         """.formatted(handle, historyBlock.isBlank() ? "(none)" : historyBlock, postText);
 
-    Prompt prompt = new Prompt(promptText, OpenAiChatOptions.builder().model(modelHolderService.get()).build());
+    Prompt prompt = new Prompt(promptText, OpenAiChatOptions.builder()
+        .model(modelProvider.model(LlmFeature.BLUESKY_REPLY, modelHolderService.get()))
+        .build());
     String content = generateContent(prompt);
     if (content == null || content.isBlank()) {
       return "Thanks for sharing.";
@@ -62,7 +82,9 @@ public class BlueskyReplyTextGenerator {
         投稿本文:
         %s
         """.formatted(postText);
-    Prompt prompt = new Prompt(promptText, OpenAiChatOptions.builder().model(modelHolderService.get()).build());
+    Prompt prompt = new Prompt(promptText, OpenAiChatOptions.builder()
+        .model(modelProvider.model(LlmFeature.BLUESKY_REPLY, modelHolderService.get()))
+        .build());
     String content = generateContent(prompt);
     if (content == null || content.isBlank()) {
       return "ありがとうございます。";
@@ -71,7 +93,7 @@ public class BlueskyReplyTextGenerator {
   }
 
   private String generateContent(Prompt prompt) {
-    return chatClientProvider.getObject()
+    return chatClientProvider.chatClient(LlmFeature.BLUESKY_REPLY)
         .prompt(prompt)
         .stream()
         .content()

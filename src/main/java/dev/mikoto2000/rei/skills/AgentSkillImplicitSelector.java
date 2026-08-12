@@ -10,7 +10,11 @@ import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
 
 @Component
 public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
@@ -19,11 +23,16 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
   private static final Pattern JSON_STRING = Pattern.compile("\"((?:\\\\.|[^\"])*)\"");
   private static final int EXCERPT_LENGTH = 240;
 
-  private final ChatModel chatModel;
+  private final LlmModelProvider modelProvider;
   private final AgentSkillRepository repository;
 
   public AgentSkillImplicitSelector(ChatModel chatModel, AgentSkillRepository repository) {
-    this.chatModel = chatModel;
+    this(new FixedLlmModelProvider(chatModel), repository);
+  }
+
+  @Autowired
+  public AgentSkillImplicitSelector(LlmModelProvider modelProvider, AgentSkillRepository repository) {
+    this.modelProvider = modelProvider;
     this.repository = repository;
   }
 
@@ -36,7 +45,7 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
       return List.of();
     }
     try {
-      String content = chatModel.call(buildSelectionPrompt(prompt, candidates));
+      String content = modelProvider.chatModel(LlmFeature.AGENT_SKILLS).call(buildSelectionPrompt(prompt, candidates));
       return resolveSelectedSkills(parseJsonStringArray(content), candidates);
     } catch (Exception e) {
       log.debug("Agent Skill implicit selection failed", e);
@@ -98,5 +107,19 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
           .ifPresent(selected::add);
     }
     return List.copyOf(selected);
+  }
+
+  private static class FixedLlmModelProvider extends LlmModelProvider {
+    private final ChatModel chatModel;
+
+    FixedLlmModelProvider(ChatModel chatModel) {
+      super(chatModel, new dev.mikoto2000.rei.llm.LlmProperties());
+      this.chatModel = chatModel;
+    }
+
+    @Override
+    public ChatModel chatModel(String feature) {
+      return chatModel;
+    }
   }
 }

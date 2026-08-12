@@ -12,16 +12,19 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.llm.LlmChatClientProvider;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.search.SearchKnowledgeResult;
 import dev.mikoto2000.rei.search.SearchKnowledgeService;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.websearch.WebSearchContext;
 import dev.mikoto2000.rei.websearch.WebSearchPage;
-import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -33,16 +36,33 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 @Component
-@RequiredArgsConstructor
 @Command(name = "search", description = "ベクトルストアと Web 検索の結果をまとめて回答します")
 public class SearchCommand implements Runnable {
 
   private static final Logger log = LoggerFactory.getLogger(SearchCommand.class);
 
-  private final ChatClient chatClient;
+  private final LlmChatClientProvider chatClientProvider;
   private final ModelHolderService currentModelHolder;
+  private final LlmModelProvider modelProvider;
   private final SearchKnowledgeService searchKnowledgeService;
   private final CommandCancellationService cancellationService;
+
+  public SearchCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
+      SearchKnowledgeService searchKnowledgeService, CommandCancellationService cancellationService) {
+    this(new ChatCommand.FixedLlmChatClientProvider(chatClient), currentModelHolder,
+        new ChatCommand.FixedLlmModelProvider(), searchKnowledgeService, cancellationService);
+  }
+
+  @Autowired
+  public SearchCommand(LlmChatClientProvider chatClientProvider, ModelHolderService currentModelHolder,
+      LlmModelProvider modelProvider, SearchKnowledgeService searchKnowledgeService,
+      CommandCancellationService cancellationService) {
+    this.chatClientProvider = chatClientProvider;
+    this.currentModelHolder = currentModelHolder;
+    this.modelProvider = modelProvider;
+    this.searchKnowledgeService = searchKnowledgeService;
+    this.cancellationService = cancellationService;
+  }
 
   @Option(names = "--vector-top-k", description = "ベクトル検索の返却件数")
   Integer vectorTopK = 3;
@@ -69,9 +89,9 @@ public class SearchCommand implements Runnable {
       List<VectorDocumentSearchResult> vectorResults = result.vectorResults();
       WebSearchContext webContext = result.webContext();
 
-      ChatClientRequestSpec requestSpec = chatClient.prompt(new Prompt(buildPrompt(query, vectorResults, webContext),
+      ChatClientRequestSpec requestSpec = chatClientProvider.chatClient(LlmFeature.SEARCH).prompt(new Prompt(buildPrompt(query, vectorResults, webContext),
           OpenAiChatOptions.builder()
-              .model(currentModelHolder.get())
+              .model(modelProvider.model(LlmFeature.SEARCH, currentModelHolder.get()))
               .build()));
 
       if (result.webSearchSkippedMessage() != null) {

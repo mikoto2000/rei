@@ -4,7 +4,6 @@ import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.skills.AgentSkill;
 import dev.mikoto2000.rei.skills.AgentSkillRepository;
-import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Parameters;
@@ -17,13 +16,20 @@ import picocli.CommandLine.Spec;
     SkillCommand.ShowCommand.class,
     SkillCommand.ReloadCommand.class
 })
-@RequiredArgsConstructor
 public class SkillCommand implements Runnable {
 
   private final AgentSkillRepository repository;
 
   @Spec
   CommandSpec spec;
+
+  public SkillCommand() {
+    this(new EmptyAgentSkillRepository());
+  }
+
+  public SkillCommand(AgentSkillRepository repository) {
+    this.repository = repository;
+  }
 
   @Override
   public void run() {
@@ -99,6 +105,27 @@ public class SkillCommand implements Runnable {
     @Override
     public void run() {
       parent.reload();
+    }
+  }
+
+  private static class EmptyAgentSkillRepository implements AgentSkillRepository {
+    @Override
+    public java.util.List<AgentSkill> findAll() {
+      return java.util.List.of();
+    }
+
+    @Override
+    public java.util.List<AgentSkill> findEnabled() {
+      return java.util.List.of();
+    }
+
+    @Override
+    public java.util.Optional<AgentSkill> findByName(String name) {
+      return java.util.Optional.empty();
+    }
+
+    @Override
+    public void reload() {
     }
   }
 }

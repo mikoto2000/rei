@@ -36,6 +36,11 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("${user.dir}/.rei/skills"));
     assertTrue(content.contains("max-selected: 3"));
     assertTrue(content.contains("REI_OPENAI_BASE_URL"));
+    assertTrue(content.contains("llm:"));
+    assertTrue(content.contains("REI_LLM_CHAT_BASE_URL"));
+    assertTrue(content.contains("REI_LLM_SEARCH_BASE_URL"));
+    assertTrue(content.contains("REI_LLM_BLUESKY_REPLY_BASE_URL"));
+    assertTrue(content.contains("REI_LLM_AGENT_SKILLS_BASE_URL"));
     assertTrue(content.contains("feed:"));
     assertTrue(content.contains("REI_FEED_CRON"));
     assertTrue(content.contains("0 0 4 * * *"));

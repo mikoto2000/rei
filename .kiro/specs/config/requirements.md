@@ -48,8 +48,9 @@
 
 1. THE ExternalConfigFileService SHALL テンプレートに OpenAI 互換 API のベース URL・API キー・チャットモデル・埋め込みモデルの設定を含める
 2. THE ExternalConfigFileService SHALL テンプレートに Web 検索の有効フラグ・プロバイダー設定（DuckDuckGo・Brave）を含める
-3. THE ExternalConfigFileService SHALL テンプレートに興味関心機能・スモールトーク機能・フィード機能・Google カレンダー機能の設定を含める
+3. THE ExternalConfigFileService SHALL テンプレートに興味関心機能・フィード機能・Google カレンダー機能の設定を含める
 4. THE ExternalConfigFileService SHALL テンプレートの各設定値を環境変数で上書き可能な形式（`${ENV_VAR:デフォルト値}`）で記述する
+5. THE ExternalConfigFileService SHALL テンプレートに LLM が必要な機能ごとの接続先設定（`rei.llm.features`）を含める
 
 ---
 

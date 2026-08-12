@@ -53,6 +53,40 @@ public class ExternalConfigFileService {
                   model: ${REI_OPENAI_EMBEDDING_MODEL:qwen3-embedding:8b}
 
         rei:
+          llm:
+            features:
+              chat:
+                base-url: ${REI_LLM_CHAT_BASE_URL:}
+                api-key: ${REI_LLM_CHAT_API_KEY:}
+                model: ${REI_LLM_CHAT_MODEL:}
+              search:
+                base-url: ${REI_LLM_SEARCH_BASE_URL:}
+                api-key: ${REI_LLM_SEARCH_API_KEY:}
+                model: ${REI_LLM_SEARCH_MODEL:}
+              memory:
+                base-url: ${REI_LLM_MEMORY_BASE_URL:}
+                api-key: ${REI_LLM_MEMORY_API_KEY:}
+                model: ${REI_LLM_MEMORY_MODEL:}
+              bluesky-reply:
+                base-url: ${REI_LLM_BLUESKY_REPLY_BASE_URL:}
+                api-key: ${REI_LLM_BLUESKY_REPLY_API_KEY:}
+                model: ${REI_LLM_BLUESKY_REPLY_MODEL:}
+              feed-summary:
+                base-url: ${REI_LLM_FEED_SUMMARY_BASE_URL:}
+                api-key: ${REI_LLM_FEED_SUMMARY_API_KEY:}
+                model: ${REI_LLM_FEED_SUMMARY_MODEL:}
+              briefing:
+                base-url: ${REI_LLM_BRIEFING_BASE_URL:}
+                api-key: ${REI_LLM_BRIEFING_API_KEY:}
+                model: ${REI_LLM_BRIEFING_MODEL:}
+              interest-discovery:
+                base-url: ${REI_LLM_INTEREST_DISCOVERY_BASE_URL:}
+                api-key: ${REI_LLM_INTEREST_DISCOVERY_API_KEY:}
+                model: ${REI_LLM_INTEREST_DISCOVERY_MODEL:}
+              agent-skills:
+                base-url: ${REI_LLM_AGENT_SKILLS_BASE_URL:}
+                api-key: ${REI_LLM_AGENT_SKILLS_API_KEY:}
+                model: ${REI_LLM_AGENT_SKILLS_MODEL:}
           skills:
             enabled: true
             directories:

@@ -15,6 +15,9 @@ import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.llm.LlmChatClientProvider;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -40,9 +43,10 @@ public class ChatCommand implements Runnable {
 
   private static final Logger log = LoggerFactory.getLogger(ChatCommand.class);
 
-  private final ChatClient chatClient;
+  private final LlmChatClientProvider chatClientProvider;
 
   private final ModelHolderService currentModelHolder;
+  private final LlmModelProvider modelProvider;
 
   private final CommandCancellationService cancellationService;
 
@@ -50,12 +54,20 @@ public class ChatCommand implements Runnable {
   private final Optional<MemoryConsolidatorService> memoryConsolidatorService;
   private final InlineFileAttachmentResolver inlineFileAttachmentResolver = new InlineFileAttachmentResolver();
 
-  @Autowired
   public ChatCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
       CommandCancellationService cancellationService, ChatResponseNarrator chatResponseNarrator,
       Optional<MemoryConsolidatorService> memoryConsolidatorService) {
-    this.chatClient = chatClient;
+    this(new FixedLlmChatClientProvider(chatClient), currentModelHolder, new FixedLlmModelProvider(),
+        cancellationService, chatResponseNarrator, memoryConsolidatorService);
+  }
+
+  @Autowired
+  public ChatCommand(LlmChatClientProvider chatClientProvider, ModelHolderService currentModelHolder,
+      LlmModelProvider modelProvider, CommandCancellationService cancellationService,
+      ChatResponseNarrator chatResponseNarrator, Optional<MemoryConsolidatorService> memoryConsolidatorService) {
+    this.chatClientProvider = chatClientProvider;
     this.currentModelHolder = currentModelHolder;
+    this.modelProvider = modelProvider;
     this.cancellationService = cancellationService;
     this.chatResponseNarrator = chatResponseNarrator;
     this.memoryConsolidatorService = memoryConsolidatorService;
@@ -76,14 +88,14 @@ public class ChatCommand implements Runnable {
       IO.println(warning);
     }
 
-    ChatClientRequestSpec requestSpec = chatClient
+    ChatClientRequestSpec requestSpec = chatClientProvider.chatClient(LlmFeature.CHAT)
       .prompt(new Prompt(
           UserMessage.builder()
               .text(resolvedPrompt.prompt())
               .media(resolvedPrompt.media())
               .build(),
           OpenAiChatOptions.builder()
-            .model(currentModelHolder.get())
+            .model(modelProvider.model(LlmFeature.CHAT, currentModelHolder.get()))
             .build()));
 
     CountDownLatch latch = new CountDownLatch(1);
@@ -291,5 +303,30 @@ public class ChatCommand implements Runnable {
       return current.substring(previous.length());
     }
     return current;
+  }
+
+  public static class FixedLlmChatClientProvider extends LlmChatClientProvider {
+    private final ChatClient chatClient;
+
+    public FixedLlmChatClientProvider(ChatClient chatClient) {
+      super(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+      this.chatClient = chatClient;
+    }
+
+    @Override
+    public ChatClient chatClient(String feature) {
+      return chatClient;
+    }
+  }
+
+  public static class FixedLlmModelProvider extends LlmModelProvider {
+    public FixedLlmModelProvider() {
+      super(null, new dev.mikoto2000.rei.llm.LlmProperties());
+    }
+
+    @Override
+    public String model(String feature, String defaultModel) {
+      return defaultModel;
+    }
   }
 }

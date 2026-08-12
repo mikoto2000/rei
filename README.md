@@ -10,6 +10,7 @@ Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API 
 
 - OpenAI 互換 API を使った対話
 - `model` / `models` による chat モデルの確認・切り替え
+- LLM 利用機能ごとの接続先サーバー・モデル切り替え
 - Google Calendar の認可、予定一覧、予定追加
 - タスクの追加、一覧、完了、削除
 - RSS/Atom フィードの登録、更新、新着記事の一覧と要約
@@ -94,6 +95,55 @@ export REI_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 | `REI_OPENAI_API_KEY` | 必須 | `dummy-key` | API キー |
 | `REI_OPENAI_CHAT_MODEL` | 必須 | `qwen3.5:9b` | chat 用モデル名 |
 | `REI_OPENAI_EMBEDDING_MODEL` | 必須 | `qwen3-embedding:8b` | embedding 用モデル名 |
+
+### 機能別 LLM 設定
+
+LLM を利用する機能ごとに、既定の `spring.ai.openai` とは別の OpenAI 互換 API サーバーとモデルを指定できます。
+`base-url` を空にした機能は、従来どおり既定の LLM 設定を使います。
+
+```yaml
+rei:
+  llm:
+    features:
+      chat:
+        base-url: ${REI_LLM_CHAT_BASE_URL:}
+        api-key: ${REI_LLM_CHAT_API_KEY:}
+        model: ${REI_LLM_CHAT_MODEL:}
+      search:
+        base-url: ${REI_LLM_SEARCH_BASE_URL:}
+        api-key: ${REI_LLM_SEARCH_API_KEY:}
+        model: ${REI_LLM_SEARCH_MODEL:}
+      bluesky-reply:
+        base-url: ${REI_LLM_BLUESKY_REPLY_BASE_URL:}
+        api-key: ${REI_LLM_BLUESKY_REPLY_API_KEY:}
+        model: ${REI_LLM_BLUESKY_REPLY_MODEL:}
+```
+
+対応している機能キー:
+
+| 機能キー | 対象 |
+| --- | --- |
+| `chat` | 通常チャット |
+| `search` | `/search` の回答生成 |
+| `memory` | `/memory consolidate`、`/memory summarize` |
+| `bluesky-reply` | Bluesky リプライ文生成 |
+| `feed-summary` | RSS/Atom フィード要約 |
+| `briefing` | 日次ブリーフィング生成 |
+| `interest-discovery` | `/interest discover` の候補抽出 |
+| `agent-skills` | Agent Skills の暗黙選択 |
+
+主な環境変数:
+
+| 変数 | 説明 |
+| --- | --- |
+| `REI_LLM_CHAT_BASE_URL` / `REI_LLM_CHAT_API_KEY` / `REI_LLM_CHAT_MODEL` | 通常チャット用 |
+| `REI_LLM_SEARCH_BASE_URL` / `REI_LLM_SEARCH_API_KEY` / `REI_LLM_SEARCH_MODEL` | 検索回答生成用 |
+| `REI_LLM_MEMORY_BASE_URL` / `REI_LLM_MEMORY_API_KEY` / `REI_LLM_MEMORY_MODEL` | メモリ統合用 |
+| `REI_LLM_BLUESKY_REPLY_BASE_URL` / `REI_LLM_BLUESKY_REPLY_API_KEY` / `REI_LLM_BLUESKY_REPLY_MODEL` | Bluesky リプライ用 |
+| `REI_LLM_FEED_SUMMARY_BASE_URL` / `REI_LLM_FEED_SUMMARY_API_KEY` / `REI_LLM_FEED_SUMMARY_MODEL` | フィード要約用 |
+| `REI_LLM_BRIEFING_BASE_URL` / `REI_LLM_BRIEFING_API_KEY` / `REI_LLM_BRIEFING_MODEL` | ブリーフィング用 |
+| `REI_LLM_INTEREST_DISCOVERY_BASE_URL` / `REI_LLM_INTEREST_DISCOVERY_API_KEY` / `REI_LLM_INTEREST_DISCOVERY_MODEL` | 興味候補抽出用 |
+| `REI_LLM_AGENT_SKILLS_BASE_URL` / `REI_LLM_AGENT_SKILLS_API_KEY` / `REI_LLM_AGENT_SKILLS_MODEL` | Agent Skills 選択用 |
 
 ### Google Calendar
 
