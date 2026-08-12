@@ -12,6 +12,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 
 import dev.mikoto2000.rei.core.command.ChatCommand;
@@ -34,7 +37,7 @@ class MemoryAutoTriggerTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.stream().content()).thenReturn(Flux.just("ok"));
+    when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("ok")));
     when(memoryConsolidatorService.shouldSuggestConsolidationNow()).thenReturn(true);
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -59,7 +62,7 @@ class MemoryAutoTriggerTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.stream().content()).thenReturn(Flux.just("ok"));
+    when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("ok")));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
@@ -72,5 +75,9 @@ class MemoryAutoTriggerTest {
     }
 
     assertTrue(!out.toString().contains("[memory]"));
+  }
+
+  private static ChatResponse response(String text) {
+    return new ChatResponse(java.util.List.of(new Generation(new AssistantMessage(text))));
   }
 }
