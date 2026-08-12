@@ -30,7 +30,8 @@ public class LlmModelProvider {
     if (server == null || !server.hasCustomServer()) {
       return defaultChatModel;
     }
-    return cache.computeIfAbsent(feature, ignored -> createOpenAiCompatibleChatModel(server));
+    return cache.computeIfAbsent(feature, ignored -> new FallbackChatModel(feature,
+        createOpenAiCompatibleChatModel(server), defaultChatModel, server.getModel()));
   }
 
   public String model(String feature, String defaultModel) {

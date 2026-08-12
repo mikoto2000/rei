@@ -31,8 +31,12 @@ rei:
   - 機能キーの定数を定義する。
 - **LlmModelProvider**
   - 機能キーごとに `ChatModel` を返す。
-  - 機能別 `base-url` がある場合は OpenAI 互換 `OpenAiChatModel` を生成してキャッシュする。
+  - 機能別 `base-url` がある場合は OpenAI 互換 `OpenAiChatModel` を生成し、既定 `ChatModel` へのフォールバック付き `FallbackChatModel` としてキャッシュする。
   - 機能別 `model` がある場合はリクエストオプションのモデル名として返す。
+- **FallbackChatModel**
+  - 機能別 `ChatModel` の `call` / `stream` が失敗した場合、`spring.ai.openai` で構成された既定 `ChatModel` へ再実行する。
+  - フォールバック時、Prompt の `model` が機能別 `model` と一致する場合は `model` を外し、既定 `ChatModel` のデフォルトモデルを使わせる。
+  - フォールバック発生時は WARN ログを出力する。
 - **LlmChatClientProvider**
   - 機能キーごとに `ChatClient` を返す。
   - Tool Bean は `ObjectProvider` で遅延取得し、機能サービスとの循環依存を避ける。
@@ -52,6 +56,7 @@ rei:
 
 - 機能別 `base-url` が未設定なら既定 `ChatModel` を使う。
 - 機能別 `model` が未設定なら既存の `ModelHolderService` または既定モデルを使う。
+- 機能別 LLM が接続失敗した場合は既定 `ChatModel` へフォールバックする。
 - 既存テスト向けの旧コンストラクタは維持し、Spring DI では Provider 経由のコンストラクタを使用する。
 
 ## テスト方針
@@ -59,4 +64,6 @@ rei:
 - 機能別 `base-url` 未指定時に既定 `ChatModel` が返ること。
 - 機能別 `base-url` 指定時に OpenAI 互換 `ChatModel` が生成され、同一機能ではキャッシュされること。
 - 機能別 `model` 指定時に指定モデルが優先されること。
+- 機能別 `call` / `stream` 失敗時に既定 `ChatModel` へフォールバックすること。
+- フォールバック時に機能別モデル名を既定 `ChatModel` へ引き継がないこと。
 - Spring Context 起動時に `LlmChatClientProvider` と Tool 系 Bean の循環依存が発生しないこと。

@@ -100,6 +100,8 @@ export REI_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 
 LLM を利用する機能ごとに、既定の `spring.ai.openai` とは別の OpenAI 互換 API サーバーとモデルを指定できます。
 `base-url` を空にした機能は、従来どおり既定の LLM 設定を使います。
+機能別に指定した LLM サーバーへの `call` / `stream` が失敗した場合は、`spring.ai.openai` の既定 LLM へフォールバックします。
+機能別 `model` を指定している場合、フォールバック時はそのモデル名を既定 LLM へ引き継がず、既定 LLM 側のデフォルトモデルを使います。
 
 ```yaml
 rei:

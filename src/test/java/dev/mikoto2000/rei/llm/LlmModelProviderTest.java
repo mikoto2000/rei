@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.openai.OpenAiChatModel;
 
 class LlmModelProviderTest {
 
@@ -30,7 +29,7 @@ class LlmModelProviderTest {
 
     LlmModelProvider provider = new LlmModelProvider(defaultModel, properties);
 
-    assertThat(provider.chatModel(LlmFeature.SEARCH)).isInstanceOf(OpenAiChatModel.class);
+    assertThat(provider.chatModel(LlmFeature.SEARCH)).isInstanceOf(FallbackChatModel.class);
     assertThat(provider.chatModel(LlmFeature.SEARCH)).isSameAs(provider.chatModel(LlmFeature.SEARCH));
     assertThat(provider.model(LlmFeature.SEARCH, "default-model")).isEqualTo("feature-model");
   }
