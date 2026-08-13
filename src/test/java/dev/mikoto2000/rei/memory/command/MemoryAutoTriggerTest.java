@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.memory.command;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
@@ -37,6 +38,7 @@ class MemoryAutoTriggerTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("ok")));
     when(memoryConsolidatorService.shouldSuggestConsolidationNow()).thenReturn(true);
 
@@ -62,6 +64,7 @@ class MemoryAutoTriggerTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("ok")));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
