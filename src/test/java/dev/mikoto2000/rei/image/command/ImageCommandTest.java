@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
+import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.image.ImageGenerationRequest;
 import dev.mikoto2000.rei.image.ImageGenerationResult;
 import dev.mikoto2000.rei.image.ImageGenerationService;
@@ -66,11 +67,12 @@ class ImageCommandTest {
 
   private CommandLine newCommand(ImageGenerationService service) {
     ImageProperties properties = new ImageProperties();
+    CommandCancellationService cancellationService = new CommandCancellationService();
     CommandLine commandLine = new CommandLine(new ImageCommand(), new CommandLine.IFactory() {
       @Override
       public <K> K create(Class<K> cls) throws Exception {
         if (cls.equals(GenerateCommand.class)) {
-          return cls.cast(new GenerateCommand(service, properties));
+          return cls.cast(new GenerateCommand(service, properties, cancellationService));
         }
         return CommandLine.defaultFactory().create(cls);
       }

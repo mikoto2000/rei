@@ -6,6 +6,7 @@ import java.util.concurrent.Callable;
 
 import org.springframework.stereotype.Component;
 
+import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.image.ImageGenerationRequest;
 import dev.mikoto2000.rei.image.ImageGenerationResult;
 import dev.mikoto2000.rei.image.ImageGenerationService;
@@ -23,6 +24,7 @@ public class GenerateCommand implements Callable<Integer> {
 
   private final ImageGenerationService service;
   private final ImageProperties properties;
+  private final CommandCancellationService cancellationService;
 
   @Option(names = "--output", description = "保存先ファイルパス")
   Path outputPath;
@@ -38,21 +40,41 @@ public class GenerateCommand implements Callable<Integer> {
 
   @Override
   public Integer call() {
-    ImageSize imageSize;
     try {
+      cancellationService.begin(Thread.currentThread());
+      ImageSize imageSize;
       imageSize = ImageSize.parse(size == null || size.isBlank() ? properties.getSize() : size);
+      if (cancellationService.isCancellationRequested()) {
+        return cancelled();
+      }
+      ImageGenerationResult result = service.generate(new ImageGenerationRequest(
+          String.join(" ", promptParts), outputPath, model, imageSize));
+      if (cancellationService.consumeCancellationRequested()
+          || Thread.currentThread().isInterrupted()
+          || isCancelledResult(result)) {
+        return cancelled();
+      }
+      if (result.success()) {
+        System.out.println("画像を保存しました: " + result.savedPath());
+        return 0;
+      }
+      System.out.println("[error] 画像生成に失敗しました: " + result.message());
+      return 1;
     } catch (IllegalArgumentException e) {
       System.out.println("[error] 画像生成に失敗しました: " + e.getMessage());
       return 1;
+    } finally {
+      cancellationService.clear();
     }
+  }
 
-    ImageGenerationResult result = service.generate(new ImageGenerationRequest(
-        String.join(" ", promptParts), outputPath, model, imageSize));
-    if (result.success()) {
-      System.out.println("画像を保存しました: " + result.savedPath());
-      return 0;
-    }
-    System.out.println("[error] 画像生成に失敗しました: " + result.message());
-    return 1;
+  private boolean isCancelledResult(ImageGenerationResult result) {
+    return !result.success() && "cancelled".equals(result.message());
+  }
+
+  private int cancelled() {
+    System.out.println();
+    System.out.println("[cancelled]");
+    return 130;
   }
 }

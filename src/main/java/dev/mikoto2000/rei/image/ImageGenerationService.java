@@ -7,29 +7,45 @@ import java.util.Base64;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import dev.mikoto2000.rei.core.service.CommandCancellationService;
+
 @Service
 public class ImageGenerationService {
 
   private final ImageGenerationClient client;
   private final ImageOutputPathResolver outputPathResolver;
+  private final CommandCancellationService cancellationService;
 
   @Autowired
-  public ImageGenerationService(ImageGenerationClient client, ImageProperties properties) {
+  public ImageGenerationService(ImageGenerationClient client, ImageProperties properties,
+      CommandCancellationService cancellationService) {
     this(client, new ImageOutputPathResolver(Path.of("").toAbsolutePath().normalize(), properties,
-        java.time.Clock.systemDefaultZone()));
+        java.time.Clock.systemDefaultZone()), cancellationService);
   }
 
   ImageGenerationService(ImageGenerationClient client, ImageOutputPathResolver outputPathResolver) {
+    this(client, outputPathResolver, null);
+  }
+
+  ImageGenerationService(ImageGenerationClient client, ImageOutputPathResolver outputPathResolver,
+      CommandCancellationService cancellationService) {
     this.client = client;
     this.outputPathResolver = outputPathResolver;
+    this.cancellationService = cancellationService;
   }
 
   public ImageGenerationResult generate(ImageGenerationRequest request) {
     if (request.prompt() == null || request.prompt().isBlank()) {
       return ImageGenerationResult.failure("画像生成プロンプトを指定してください");
     }
+    if (isCancellationRequested()) {
+      return ImageGenerationResult.failure("cancelled");
+    }
     try {
       String base64 = client.generate(request);
+      if (isCancellationRequested()) {
+        return ImageGenerationResult.failure("cancelled");
+      }
       if (base64 == null || base64.isBlank()) {
         return ImageGenerationResult.failure("画像データが空です");
       }
@@ -53,5 +69,10 @@ public class ImageGenerationService {
       return e.getClass().getSimpleName();
     }
     return message;
+  }
+
+  private boolean isCancellationRequested() {
+    return Thread.currentThread().isInterrupted()
+        || cancellationService != null && cancellationService.isCancellationRequested();
   }
 }
