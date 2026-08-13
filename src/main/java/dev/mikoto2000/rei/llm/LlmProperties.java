@@ -60,7 +60,7 @@ public class LlmProperties {
       this.temperature = temperature;
     }
 
-    boolean hasCustomServer() {
+    public boolean hasCustomServer() {
       return baseUrl != null && !baseUrl.isBlank();
     }
   }

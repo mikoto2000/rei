@@ -23,6 +23,7 @@ import dev.mikoto2000.rei.feed.FeedProperties;
 import dev.mikoto2000.rei.feed.FeedTools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
+import dev.mikoto2000.rei.image.ImageProperties;
 import dev.mikoto2000.rei.interest.InterestProperties;
 import dev.mikoto2000.rei.llm.LlmProperties;
 import dev.mikoto2000.rei.reminder.ReminderTools;
@@ -39,7 +40,7 @@ import dev.mikoto2000.rei.websearch.WebSearchTools;
 import lombok.RequiredArgsConstructor;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, SoundNotificationProperties.class, BlueskyProperties.class, AgentSkillsProperties.class, LlmProperties.class})
+@EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, SoundNotificationProperties.class, BlueskyProperties.class, AgentSkillsProperties.class, LlmProperties.class, ImageProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
 

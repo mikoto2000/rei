@@ -6,6 +6,7 @@ import dev.mikoto2000.rei.bluesky.command.BskyCommand;
 import dev.mikoto2000.rei.briefing.command.BriefingCommand;
 import dev.mikoto2000.rei.feed.command.FeedCommand;
 import dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand;
+import dev.mikoto2000.rei.image.command.ImageCommand;
 import dev.mikoto2000.rei.interest.command.InterestCommand;
 import dev.mikoto2000.rei.memory.command.MemoryCommand;
 import dev.mikoto2000.rei.reminder.command.ReminderCommand;
@@ -39,7 +40,8 @@ subcommands = {
   BskyCommand.class,
   InterestCommand.class,
   MemoryCommand.class,
-  SkillCommand.class
+  SkillCommand.class,
+  ImageCommand.class
 },
 mixinStandardHelpOptions = false)
 @RequiredArgsConstructor

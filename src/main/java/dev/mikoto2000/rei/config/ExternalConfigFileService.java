@@ -51,6 +51,13 @@ public class ExternalConfigFileService {
               embedding:
                 options:
                   model: ${REI_OPENAI_EMBEDDING_MODEL:qwen3-embedding:8b}
+              image:
+                options:
+                  model: ${REI_OPENAI_IMAGE_MODEL:gpt-image-1}
+            model:
+              chat: openai
+              embedding: openai
+              image: openai
 
         rei:
           llm:
@@ -91,6 +98,9 @@ public class ExternalConfigFileService {
                 base-url: ${REI_LLM_IMAGE_GENERATION_BASE_URL:}
                 api-key: ${REI_LLM_IMAGE_GENERATION_API_KEY:}
                 model: ${REI_LLM_IMAGE_GENERATION_MODEL:}
+          image:
+            output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:${user.dir}/.rei/images}
+            size: ${REI_IMAGE_SIZE:1024x1024}
           skills:
             enabled: true
             directories:

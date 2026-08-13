@@ -11,6 +11,7 @@ Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API 
 - OpenAI 互換 API を使った対話
 - `model` / `models` による chat モデルの確認・切り替え
 - LLM 利用機能ごとの接続先サーバー・モデル切り替え
+- `/image generate` による画像生成とローカル保存
 - Google Calendar の認可、予定一覧、予定追加
 - タスクの追加、一覧、完了、削除
 - RSS/Atom フィードの登録、更新、新着記事の一覧と要約
@@ -61,8 +62,14 @@ spring:
       chat:
         options:
           model: qwen3.5:122b
+      image:
+        options:
+          model: gpt-image-1
 
 rei:
+  image:
+    output-directory: ${user.dir}/.rei/images
+    size: 1024x1024
   web-search:
     enabled: true
   interest:
@@ -82,6 +89,7 @@ export REI_OPENAI_BASE_URL=https://api.openai.com
 export REI_OPENAI_API_KEY=your-api-key
 export REI_OPENAI_CHAT_MODEL=gpt-5.4
 export REI_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+export REI_OPENAI_IMAGE_MODEL=gpt-image-1
 ```
 
 `REI_OPENAI_BASE_URL` には OpenAI 互換 API のベース URL を設定してください。
@@ -95,6 +103,7 @@ export REI_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 | `REI_OPENAI_API_KEY` | 必須 | `dummy-key` | API キー |
 | `REI_OPENAI_CHAT_MODEL` | 必須 | `qwen3.5:9b` | chat 用モデル名 |
 | `REI_OPENAI_EMBEDDING_MODEL` | 必須 | `qwen3-embedding:8b` | embedding 用モデル名 |
+| `REI_OPENAI_IMAGE_MODEL` | 画像生成時必須 | `gpt-image-1` | 既定接続先で使う画像生成モデル名 |
 
 ### 機能別 LLM 設定
 
@@ -337,6 +346,7 @@ gpt-oss:120b
 | `models` | なし | OpenAI 互換 API が返すモデル一覧を表示 |
 | `config` | `path`, `init` | 外部設定ファイルの確認とテンプレート作成 |
 | `search` | なし | Web 検索とベクトル検索をまとめて回答 |
+| `image` | `generate` | プロンプトから画像を生成して保存 |
 | `schedule` | `auth`, `list`, `add` | Google Calendar 認可と予定操作 |
 | `task` | `add`, `list`, `done`, `delete` | タスク管理 |
 | `feed` | `add`, `list`, `edit`, `delete`, `update`, `summary`, `item list`, `item summarize` | RSS/Atom フィード管理 |
@@ -361,6 +371,29 @@ gpt-oss:120b
 ```
 
 `models` は接続先の OpenAI 互換 API が `/v1/models` を実装している前提です。
+
+### 画像生成
+
+プロンプトから画像を生成してローカルファイルへ保存します。
+
+```text
+/image generate 猫がキーボードを叩いているイラスト
+/image generate --size 1024x1024 --output ./out/cat.png 猫がキーボードを叩いているイラスト
+/image generate --model gpt-image-1 夕暮れの港の水彩画
+```
+
+`--output` を省略した場合は `rei.image.output-directory` 配下に `image-<yyyyMMdd-HHmmss>.png` として保存します。
+`--size` を省略した場合は `rei.image.size` を使用します。
+
+```yaml
+rei:
+  image:
+    output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:${user.dir}/.rei/images}
+    size: ${REI_IMAGE_SIZE:1024x1024}
+```
+
+画像生成だけ別サーバーを使う場合は `rei.llm.features.image-generation` を設定します。
+未設定の場合は `spring.ai.openai` の既定接続先を使い、機能別接続先が失敗した場合は既定接続先へフォールバックします。
 
 ### Google Calendar
 

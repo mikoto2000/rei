@@ -1,0 +1,98 @@
+package dev.mikoto2000.rei.image;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.springframework.ai.image.ImageModel;
+import org.springframework.ai.openai.OpenAiImageModel;
+import org.springframework.ai.openai.OpenAiImageOptions;
+import org.springframework.ai.openai.api.OpenAiImageApi;
+import org.springframework.ai.retry.RetryUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Component;
+
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmProperties;
+import io.micrometer.observation.ObservationRegistry;
+
+@Component
+public class ImageModelProvider {
+
+  private final ObjectProvider<ImageModel> defaultImageModelProvider;
+  private final LlmProperties properties;
+  private final Map<String, ImageModel> cache = new ConcurrentHashMap<>();
+
+  @Autowired
+  public ImageModelProvider(ObjectProvider<ImageModel> defaultImageModelProvider, LlmProperties properties) {
+    this.defaultImageModelProvider = defaultImageModelProvider;
+    this.properties = properties;
+  }
+
+  ImageModelProvider(ImageModel defaultImageModel, LlmProperties properties) {
+    this(new FixedObjectProvider<>(defaultImageModel), properties);
+  }
+
+  public ImageModel imageModel() {
+    ImageModel defaultImageModel = defaultImageModel();
+    LlmProperties.Server server = properties.feature(LlmFeature.IMAGE_GENERATION);
+    if (server == null || !server.hasCustomServer()) {
+      return defaultImageModel;
+    }
+    return cache.computeIfAbsent(LlmFeature.IMAGE_GENERATION, ignored -> new FallbackImageModel(
+        LlmFeature.IMAGE_GENERATION, createOpenAiCompatibleImageModel(server), defaultImageModel, server.getModel()));
+  }
+
+  public String model(String overrideModel) {
+    if (overrideModel != null && !overrideModel.isBlank()) {
+      return overrideModel;
+    }
+    LlmProperties.Server server = properties.feature(LlmFeature.IMAGE_GENERATION);
+    if (server != null && server.getModel() != null && !server.getModel().isBlank()) {
+      return server.getModel();
+    }
+    return null;
+  }
+
+  private ImageModel defaultImageModel() {
+    ImageModel imageModel = defaultImageModelProvider.getIfAvailable();
+    if (imageModel == null) {
+      throw new IllegalStateException("画像生成用 ImageModel が構成されていません");
+    }
+    return imageModel;
+  }
+
+  private ImageModel createOpenAiCompatibleImageModel(LlmProperties.Server server) {
+    OpenAiImageApi api = OpenAiImageApi.builder()
+        .baseUrl(server.getBaseUrl())
+        .apiKey(server.getApiKey() == null || server.getApiKey().isBlank() ? "dummy-key" : server.getApiKey())
+        .build();
+    OpenAiImageOptions.Builder options = OpenAiImageOptions.builder();
+    if (server.getModel() != null && !server.getModel().isBlank()) {
+      options.model(server.getModel());
+    }
+    return new OpenAiImageModel(api, options.build(), RetryUtils.DEFAULT_RETRY_TEMPLATE, ObservationRegistry.NOOP);
+  }
+
+  private record FixedObjectProvider<T>(T value) implements ObjectProvider<T> {
+    @Override
+    public T getObject(Object... args) {
+      return value;
+    }
+
+    @Override
+    public T getIfAvailable() {
+      return value;
+    }
+
+    @Override
+    public T getIfUnique() {
+      return value;
+    }
+
+    @Override
+    public T getObject() {
+      return value;
+    }
+  }
+}

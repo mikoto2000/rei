@@ -42,6 +42,9 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("REI_LLM_BLUESKY_REPLY_BASE_URL"));
     assertTrue(content.contains("REI_LLM_AGENT_SKILLS_BASE_URL"));
     assertTrue(content.contains("REI_LLM_IMAGE_GENERATION_BASE_URL"));
+    assertTrue(content.contains("image:"));
+    assertTrue(content.contains("REI_IMAGE_OUTPUT_DIRECTORY"));
+    assertTrue(content.contains("REI_IMAGE_SIZE"));
     assertTrue(content.contains("feed:"));
     assertTrue(content.contains("REI_FEED_CRON"));
     assertTrue(content.contains("0 0 4 * * *"));
