@@ -65,3 +65,4 @@
 6. THE system SHALL `briefing` 機能で機能別 LLM 設定を利用できる。
 7. THE system SHALL `interest-discovery` 機能で機能別 LLM 設定を利用できる。
 8. THE system SHALL `agent-skills` 機能で機能別 LLM 設定を利用できる。
+9. THE system SHALL `image-generation` 機能で機能別 LLM 設定を利用できる。

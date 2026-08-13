@@ -119,6 +119,10 @@ rei:
         base-url: ${REI_LLM_BLUESKY_REPLY_BASE_URL:}
         api-key: ${REI_LLM_BLUESKY_REPLY_API_KEY:}
         model: ${REI_LLM_BLUESKY_REPLY_MODEL:}
+      image-generation:
+        base-url: ${REI_LLM_IMAGE_GENERATION_BASE_URL:}
+        api-key: ${REI_LLM_IMAGE_GENERATION_API_KEY:}
+        model: ${REI_LLM_IMAGE_GENERATION_MODEL:}
 ```
 
 対応している機能キー:
@@ -133,6 +137,7 @@ rei:
 | `briefing` | 日次ブリーフィング生成 |
 | `interest-discovery` | `/interest discover` の候補抽出 |
 | `agent-skills` | Agent Skills の暗黙選択 |
+| `image-generation` | 画像生成 |
 
 主な環境変数:
 
@@ -146,6 +151,7 @@ rei:
 | `REI_LLM_BRIEFING_BASE_URL` / `REI_LLM_BRIEFING_API_KEY` / `REI_LLM_BRIEFING_MODEL` | ブリーフィング用 |
 | `REI_LLM_INTEREST_DISCOVERY_BASE_URL` / `REI_LLM_INTEREST_DISCOVERY_API_KEY` / `REI_LLM_INTEREST_DISCOVERY_MODEL` | 興味候補抽出用 |
 | `REI_LLM_AGENT_SKILLS_BASE_URL` / `REI_LLM_AGENT_SKILLS_API_KEY` / `REI_LLM_AGENT_SKILLS_MODEL` | Agent Skills 選択用 |
+| `REI_LLM_IMAGE_GENERATION_BASE_URL` / `REI_LLM_IMAGE_GENERATION_API_KEY` / `REI_LLM_IMAGE_GENERATION_MODEL` | 画像生成用 |
 
 ### Google Calendar
 

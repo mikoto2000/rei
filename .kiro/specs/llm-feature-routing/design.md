@@ -19,6 +19,10 @@ rei:
         base-url: ${REI_LLM_SEARCH_BASE_URL:}
         api-key: ${REI_LLM_SEARCH_API_KEY:}
         model: ${REI_LLM_SEARCH_MODEL:}
+      image-generation:
+        base-url: ${REI_LLM_IMAGE_GENERATION_BASE_URL:}
+        api-key: ${REI_LLM_IMAGE_GENERATION_API_KEY:}
+        model: ${REI_LLM_IMAGE_GENERATION_MODEL:}
 ```
 
 `base-url` が空の場合、その機能は `spring.ai.openai` で構成された既定 LLM を使用する。
@@ -51,6 +55,7 @@ rei:
 - `AiBriefingNarrator`: `briefing`
 - `LlmInterestTopicExtractor`: `interest-discovery`
 - `AgentSkillImplicitSelector`: `agent-skills`
+- 画像生成コマンド: `image-generation`
 
 ## 後方互換
 
