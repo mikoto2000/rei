@@ -16,6 +16,7 @@ public class BlueskyPostService {
   private final BlueskyApiClient blueskyApiClient;
   private final BlueskyReplyTextGenerator blueskyReplyTextGenerator;
   private final BlueskyReplyConversationRepository conversationRepository;
+  private final BlueskyReplyStateRepository replyStateRepository;
 
   public BlueskyPostResult post(String text) {
     try {
@@ -82,6 +83,7 @@ public class BlueskyPostService {
         return new BlueskyPostResult(false, "Bluesky reply failed", null, null);
       }
       appendConversation(target, text);
+      replyStateRepository.markReplied(target.parentUri(), conversationHandle(target), replyResult.postUri());
       String postUrl = toPostUrl(replyResult.postUri());
       return new BlueskyPostResult(true, "Bluesky reply created", replyResult.postUri(), postUrl);
     } catch (Exception e) {

@@ -144,7 +144,9 @@ class BlueskyPostServiceTest {
         "at://did:plc:target/app.bsky.feed.post/xyz", "cid-parent"))
         .thenReturn(new BlueskyApiClient.PostResult(true, "at://did:plc:abc/app.bsky.feed.post/reply1"));
     BlueskyReplyConversationRepository conversationRepository = mock(BlueskyReplyConversationRepository.class);
-    BlueskyPostService service = createService(props, client, conversationRepository, mock(BlueskyReplyTextGenerator.class));
+    BlueskyReplyStateRepository stateRepository = mock(BlueskyReplyStateRepository.class);
+    BlueskyPostService service = createService(props, client, conversationRepository, mock(BlueskyReplyTextGenerator.class),
+        stateRepository);
 
     BlueskyPostResult result = service.reply("at://did:plc:target/app.bsky.feed.post/xyz", "hello");
 
@@ -153,6 +155,10 @@ class BlueskyPostServiceTest {
     assertEquals("https://bsky.app/profile/did:plc:abc/post/reply1", result.postUrl());
     verify(conversationRepository).appendUserMessage("did:plc:target", "target text");
     verify(conversationRepository).appendAssistantMessage("did:plc:target", "hello");
+    verify(stateRepository).markReplied(
+        "at://did:plc:target/app.bsky.feed.post/xyz",
+        "did:plc:target",
+        "at://did:plc:abc/app.bsky.feed.post/reply1");
   }
 
   @Test
@@ -190,7 +196,8 @@ class BlueskyPostServiceTest {
         "at://did:plc:target/app.bsky.feed.post/xyz", "cid-parent"))
         .thenReturn(new BlueskyApiClient.PostResult(true, "at://did:plc:abc/app.bsky.feed.post/reply2"));
     BlueskyReplyConversationRepository conversationRepository = mock(BlueskyReplyConversationRepository.class);
-    BlueskyPostService service = createService(props, client, conversationRepository, generator);
+    BlueskyReplyStateRepository stateRepository = mock(BlueskyReplyStateRepository.class);
+    BlueskyPostService service = createService(props, client, conversationRepository, generator, stateRepository);
 
     BlueskyPostResult result = service.reply("at://did:plc:target/app.bsky.feed.post/xyz");
 
@@ -199,6 +206,10 @@ class BlueskyPostServiceTest {
     verify(generator).generateForManualReply("元投稿本文");
     verify(conversationRepository).appendUserMessage("did:plc:target", "元投稿本文");
     verify(conversationRepository).appendAssistantMessage("did:plc:target", "生成返信");
+    verify(stateRepository).markReplied(
+        "at://did:plc:target/app.bsky.feed.post/xyz",
+        "did:plc:target",
+        "at://did:plc:abc/app.bsky.feed.post/reply2");
   }
 
   private BlueskyProperties configuredProperties() {
@@ -211,7 +222,12 @@ class BlueskyPostServiceTest {
   }
 
   private BlueskyPostService createService(BlueskyProperties props, BlueskyApiClient client) {
-    return createService(props, client, mock(BlueskyReplyConversationRepository.class), mock(BlueskyReplyTextGenerator.class));
+    return createService(
+        props,
+        client,
+        mock(BlueskyReplyConversationRepository.class),
+        mock(BlueskyReplyTextGenerator.class),
+        mock(BlueskyReplyStateRepository.class));
   }
 
   private BlueskyPostService createService(
@@ -219,6 +235,15 @@ class BlueskyPostServiceTest {
       BlueskyApiClient client,
       BlueskyReplyConversationRepository conversationRepository,
       BlueskyReplyTextGenerator generator) {
-    return new BlueskyPostService(props, client, generator, conversationRepository);
+    return createService(props, client, conversationRepository, generator, mock(BlueskyReplyStateRepository.class));
+  }
+
+  private BlueskyPostService createService(
+      BlueskyProperties props,
+      BlueskyApiClient client,
+      BlueskyReplyConversationRepository conversationRepository,
+      BlueskyReplyTextGenerator generator,
+      BlueskyReplyStateRepository stateRepository) {
+    return new BlueskyPostService(props, client, generator, conversationRepository, stateRepository);
   }
 }
