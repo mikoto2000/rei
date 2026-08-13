@@ -19,8 +19,6 @@ import io.micrometer.observation.ObservationRegistry;
 @Component
 public class ImageModelProvider {
 
-  static final String IMAGES_PATH_WITHOUT_V1 = "images/generations";
-
   private final ObjectProvider<ImageModel> defaultImageModelProvider;
   private final LlmProperties properties;
   private final Map<String, ImageModel> cache = new ConcurrentHashMap<>();
@@ -67,7 +65,6 @@ public class ImageModelProvider {
   private ImageModel createOpenAiCompatibleImageModel(LlmProperties.Server server) {
     OpenAiImageApi api = OpenAiImageApi.builder()
         .baseUrl(server.getBaseUrl())
-        .imagesPath(IMAGES_PATH_WITHOUT_V1)
         .apiKey(server.getApiKey() == null || server.getApiKey().isBlank() ? "dummy-key" : server.getApiKey())
         .build();
     OpenAiImageOptions.Builder options = OpenAiImageOptions.builder();

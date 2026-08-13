@@ -134,7 +134,6 @@ picocli の `/image` ルートコマンド。
 
 - `rei.llm.features.image-generation` の `base-url` が未指定なら既定の `ImageModel` を返す。
 - `base-url` が指定されている場合は `OpenAiImageModel` を生成して返す。
-- 機能別画像生成サーバーでは Spring AI 既定の `v1/images/generations` ではなく、`images/generations` を使用する。
 - 機能別接続先の呼び出しに失敗した場合は既定 `ImageModel` にフォールバックする。
 
 ### FallbackImageModel

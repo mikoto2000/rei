@@ -37,9 +37,4 @@ class ImageModelProviderTest {
     assertThat(provider.imageModel()).isSameAs(provider.imageModel());
     assertThat(provider.model(null)).isEqualTo("feature-model");
   }
-
-  @Test
-  void usesImageEndpointWithoutV1ForFeatureServer() {
-    assertThat(ImageModelProvider.IMAGES_PATH_WITHOUT_V1).isEqualTo("images/generations");
-  }
 }
