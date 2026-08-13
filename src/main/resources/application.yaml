@@ -46,6 +46,10 @@ rei:
   core:
     system-prompt: ${REI_AI_SYSTEM_PROMPT:classpath:/system-prompt.md}
     chat-memory-max-messages: ${REI_CHAT_MEMORY_MAX_MESSAGES:100}
+  agent:
+    progress:
+      enabled: ${REI_AGENT_PROGRESS_ENABLED:true}
+      max-no-progress-iterations: ${REI_AGENT_PROGRESS_MAX_NO_PROGRESS_ITERATIONS:3}
   llm:
     features:
       chat:

@@ -6,6 +6,9 @@ import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.support.ToolCallbacks;
+import org.springframework.ai.tool.StaticToolCallbackProvider;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -16,6 +19,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
+import dev.mikoto2000.rei.agent.progress.AgentProgressProperties;
+import dev.mikoto2000.rei.agent.progress.AgentProgressToolCallbackFactory;
 import dev.mikoto2000.rei.bluesky.BlueskyProperties;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
@@ -40,7 +45,7 @@ import dev.mikoto2000.rei.websearch.WebSearchTools;
 import lombok.RequiredArgsConstructor;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, SoundNotificationProperties.class, BlueskyProperties.class, AgentSkillsProperties.class, LlmProperties.class, ImageProperties.class})
+@EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, SoundNotificationProperties.class, BlueskyProperties.class, AgentSkillsProperties.class, LlmProperties.class, ImageProperties.class, AgentProgressProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
 
@@ -58,6 +63,7 @@ public class AiConfiguration {
   private final SoundNotificationTools soundNotificationTools;
   private final BlueskyPostTools blueskyPostTools;
   private final UrlContentFetchTools urlContentFetchTools;
+  private final AgentProgressToolCallbackFactory progressToolCallbackFactory;
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
   private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
 
@@ -72,15 +78,19 @@ public class AiConfiguration {
       advisors.add(skillAdvisor);
     }
 
+    ToolCallback[] localToolCallbacks = progressToolCallbackFactory.wrap(ToolCallbacks.from(
+        tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
+        soundNotificationTools, blueskyPostTools, urlContentFetchTools));
+
     ChatClient.Builder builder = ChatClient.builder(chatModel)
         .defaultSystem(coreProperties.systemPrompt())
         .defaultAdvisors(advisors)
-        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
-            soundNotificationTools, blueskyPostTools, urlContentFetchTools);
+        .defaultToolCallbacks(localToolCallbacks);
 
     ToolCallbackProvider toolCallbackProvider = mcpToolCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {
-      builder.defaultToolCallbacks(toolCallbackProvider);
+      builder.defaultToolCallbacks(new StaticToolCallbackProvider(
+          progressToolCallbackFactory.wrap(toolCallbackProvider.getToolCallbacks())));
     }
 
     return builder.build();
