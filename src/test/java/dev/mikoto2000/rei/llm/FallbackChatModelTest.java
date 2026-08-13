@@ -15,6 +15,7 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatOptions;
 
 import reactor.core.publisher.Flux;
 
@@ -71,7 +72,93 @@ class FallbackChatModelTest {
     assertThat(promptCaptor.getValue().getOptions().getModel()).isEqualTo("current-default-model");
   }
 
+  @Test
+  void callFallsBackWithoutCallingMutateWhenOptionsDoNotSupportMutate() {
+    ChatModel primary = Mockito.mock(ChatModel.class);
+    ChatModel fallback = Mockito.mock(ChatModel.class);
+    Prompt prompt = new Prompt("hello", new MinimalChatOptions("feature-model", 0.4));
+
+    when(primary.call(prompt)).thenThrow(new RuntimeException("connection failed"));
+    when(fallback.call(Mockito.any(Prompt.class))).thenReturn(response("fallback"));
+
+    FallbackChatModel model = new FallbackChatModel("chat", primary, fallback, "feature-model");
+    model.call(prompt);
+
+    ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
+    verify(fallback).call(promptCaptor.capture());
+    assertThat(promptCaptor.getValue().getOptions().getModel()).isNull();
+    assertThat(promptCaptor.getValue().getOptions().getTemperature()).isEqualTo(0.4);
+  }
+
+  @Test
+  void callRemovesPrimaryModelFromOpenAiOptionsWhenFallingBack() {
+    ChatModel primary = Mockito.mock(ChatModel.class);
+    ChatModel fallback = Mockito.mock(ChatModel.class);
+    Prompt prompt = new Prompt("hello", OpenAiChatOptions.builder()
+        .model("feature-model")
+        .temperature(0.5)
+        .build());
+
+    when(primary.call(prompt)).thenThrow(new RuntimeException("connection failed"));
+    when(fallback.call(Mockito.any(Prompt.class))).thenReturn(response("fallback"));
+
+    FallbackChatModel model = new FallbackChatModel("chat", primary, fallback, "feature-model");
+    model.call(prompt);
+
+    ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
+    verify(fallback).call(promptCaptor.capture());
+    assertThat(promptCaptor.getValue().getOptions().getModel()).isNull();
+    assertThat(promptCaptor.getValue().getOptions().getTemperature()).isEqualTo(0.5);
+  }
+
   private static ChatResponse response(String text) {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
+  }
+
+  private record MinimalChatOptions(String model, Double temperature) implements ChatOptions {
+    @Override
+    public String getModel() {
+      return model;
+    }
+
+    @Override
+    public Double getTemperature() {
+      return temperature;
+    }
+
+    @Override
+    public Double getFrequencyPenalty() {
+      return null;
+    }
+
+    @Override
+    public Integer getMaxTokens() {
+      return null;
+    }
+
+    @Override
+    public Double getPresencePenalty() {
+      return null;
+    }
+
+    @Override
+    public List<String> getStopSequences() {
+      return null;
+    }
+
+    @Override
+    public Integer getTopK() {
+      return null;
+    }
+
+    @Override
+    public Double getTopP() {
+      return null;
+    }
+
+    @Override
+    public ChatOptions copy() {
+      return this;
+    }
   }
 }
