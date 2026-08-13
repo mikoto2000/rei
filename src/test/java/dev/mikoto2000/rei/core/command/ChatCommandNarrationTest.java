@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.command;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,6 +36,7 @@ class ChatCommandNarrationTest {
 
         when(modelHolderService.get()).thenReturn("gpt-test");
         when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+        when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
         when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("answer "), response("text")));
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -60,6 +62,7 @@ class ChatCommandNarrationTest {
 
         when(modelHolderService.get()).thenReturn("gpt-test");
         when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+        when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
         when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("answer "), response("text")));
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();

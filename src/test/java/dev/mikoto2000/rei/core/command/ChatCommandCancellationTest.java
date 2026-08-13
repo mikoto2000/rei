@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.core.command;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
@@ -38,6 +39,7 @@ class ChatCommandCancellationTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.concat(
         Flux.just(response("partial ")),
         Flux.<ChatResponse>never()
