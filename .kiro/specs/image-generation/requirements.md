@@ -71,6 +71,11 @@
 4. WHEN `rei.llm.features.image-generation.base-url` が未指定または空文字のとき、THE system SHALL `spring.ai.openai` で構成された既定接続先を使用する。
 5. WHEN 画像生成用接続先への呼び出しが失敗したとき、THE system SHALL 既定接続先へフォールバックする。
 6. WHEN フォールバックが発生したとき、THE system SHALL フォールバック発生をログに記録する。
+7. THE system SHALL `rei.image.response-format` で画像生成 API へ `response_format` を送信するか制御できる。
+8. WHEN `rei.image.response-format` が `auto` のとき、THE system SHALL `gpt-image-*` モデルまたは既定 OpenAI 接続先では `response_format` を送信しない。
+9. WHEN `rei.image.response-format` が `b64_json` のとき、THE system SHALL ローカル OpenAI 互換サーバー向けに `response_format: b64_json` を送信する。
+10. WHEN `rei.image.response-format` が `none` または `off` のとき、THE system SHALL モデル名に関わらず `response_format` を送信しない。
+11. THE system SHALL `rei.image.timeout-seconds` で画像生成 API の読み取りタイムアウトを指定できる。
 
 ---
 
@@ -95,7 +100,7 @@
 #### 受け入れ基準
 
 1. THE ExternalConfigFileService SHALL テンプレートに `rei.llm.features.image-generation` の設定を含める。
-2. THE ExternalConfigFileService SHALL テンプレートに画像生成の既定出力ディレクトリと既定サイズの設定を含める。
+2. THE ExternalConfigFileService SHALL テンプレートに画像生成の既定出力ディレクトリ、既定サイズ、レスポンス形式制御、読み取りタイムアウトの設定を含める。
 3. THE ExternalConfigFileService SHALL 画像生成関連の設定値を環境変数で上書き可能な形式で記述する。
 
 ---

@@ -34,6 +34,46 @@ class OpenAiImageGenerationClientTest {
   }
 
   @Test
+  void omitsResponseFormatForGptImageModelInAutoMode() {
+    ImageModel imageModel = Mockito.mock(ImageModel.class);
+    ImageModelProvider provider = Mockito.mock(ImageModelProvider.class);
+    when(provider.imageModel()).thenReturn(imageModel);
+    when(provider.model("gpt-image-1")).thenReturn("gpt-image-1");
+    OpenAiImageGenerationClient client = new OpenAiImageGenerationClient(provider);
+
+    ImagePrompt prompt = client.buildPrompt(new ImageGenerationRequest("a cat", null, "gpt-image-1", new ImageSize(640, 480)));
+
+    assertThat(prompt.getOptions().getModel()).isEqualTo("gpt-image-1");
+    assertThat(prompt.getOptions().getResponseFormat()).isNull();
+  }
+
+  @Test
+  void omitsResponseFormatWhenConfiguredAsNone() {
+    ImageModelProvider provider = Mockito.mock(ImageModelProvider.class);
+    when(provider.model("local-model")).thenReturn("local-model");
+    ImageProperties properties = new ImageProperties();
+    properties.setResponseFormat("none");
+    OpenAiImageGenerationClient client = new OpenAiImageGenerationClient(provider, properties);
+
+    ImagePrompt prompt = client.buildPrompt(new ImageGenerationRequest("a cat", null, "local-model", new ImageSize(640, 480)));
+
+    assertThat(prompt.getOptions().getResponseFormat()).isNull();
+  }
+
+  @Test
+  void sendsResponseFormatWhenConfiguredAsBase64Json() {
+    ImageModelProvider provider = Mockito.mock(ImageModelProvider.class);
+    when(provider.model(null)).thenReturn(null);
+    ImageProperties properties = new ImageProperties();
+    properties.setResponseFormat("b64_json");
+    OpenAiImageGenerationClient client = new OpenAiImageGenerationClient(provider, properties);
+
+    ImagePrompt prompt = client.buildPrompt(new ImageGenerationRequest("a cat", null, null, new ImageSize(640, 480)));
+
+    assertThat(prompt.getOptions().getResponseFormat()).isEqualTo("b64_json");
+  }
+
+  @Test
   void returnsBase64ImageDataFromImageModel() {
     ImageModel imageModel = Mockito.mock(ImageModel.class);
     ImageModelProvider provider = Mockito.mock(ImageModelProvider.class);

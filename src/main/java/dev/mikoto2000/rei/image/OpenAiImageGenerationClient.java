@@ -6,15 +6,23 @@ import org.springframework.ai.image.ImageModel;
 import org.springframework.ai.image.ImagePrompt;
 import org.springframework.ai.image.ImageResponse;
 import org.springframework.ai.openai.OpenAiImageOptions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 @Component
 public class OpenAiImageGenerationClient implements ImageGenerationClient {
 
   private final ImageModelProvider imageModelProvider;
+  private final ImageProperties properties;
 
   public OpenAiImageGenerationClient(ImageModelProvider imageModelProvider) {
+    this(imageModelProvider, new ImageProperties());
+  }
+
+  @Autowired
+  public OpenAiImageGenerationClient(ImageModelProvider imageModelProvider, ImageProperties properties) {
     this.imageModelProvider = imageModelProvider;
+    this.properties = properties;
   }
 
   @Override
@@ -36,13 +44,33 @@ public class OpenAiImageGenerationClient implements ImageGenerationClient {
   ImagePrompt buildPrompt(ImageGenerationRequest request) {
     OpenAiImageOptions.Builder options = OpenAiImageOptions.builder()
         .N(1)
-        .responseFormat("b64_json")
         .width(request.size().width())
         .height(request.size().height());
     String model = imageModelProvider.model(request.model());
     if (model != null && !model.isBlank()) {
       options.model(model);
     }
+    if (shouldSendResponseFormat(model)) {
+      options.responseFormat("b64_json");
+    }
     return new ImagePrompt(request.prompt(), options.build());
+  }
+
+  private boolean shouldSendResponseFormat(String model) {
+    String responseFormat = properties.getResponseFormat();
+    if (responseFormat == null || responseFormat.isBlank() || responseFormat.equalsIgnoreCase("auto")) {
+      return model != null && !model.isBlank() && !isGptImageModel(model);
+    }
+    if (responseFormat.equalsIgnoreCase("none") || responseFormat.equalsIgnoreCase("off")) {
+      return false;
+    }
+    if (responseFormat.equalsIgnoreCase("b64_json")) {
+      return true;
+    }
+    throw new IllegalArgumentException("Unsupported rei.image.response-format: " + responseFormat);
+  }
+
+  private boolean isGptImageModel(String model) {
+    return model.toLowerCase(java.util.Locale.ROOT).startsWith("gpt-image-");
   }
 }

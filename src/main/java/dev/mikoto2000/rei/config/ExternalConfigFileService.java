@@ -101,6 +101,8 @@ public class ExternalConfigFileService {
           image:
             output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:${user.dir}/.rei/images}
             size: ${REI_IMAGE_SIZE:1024x1024}
+            response-format: ${REI_IMAGE_RESPONSE_FORMAT:auto}
+            timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
           skills:
             enabled: true
             directories:

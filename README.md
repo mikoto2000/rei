@@ -70,6 +70,8 @@ rei:
   image:
     output-directory: ${user.dir}/.rei/images
     size: 1024x1024
+    response-format: auto
+    timeout-seconds: 300
   web-search:
     enabled: true
   interest:
@@ -104,6 +106,8 @@ export REI_OPENAI_IMAGE_MODEL=gpt-image-1
 | `REI_OPENAI_CHAT_MODEL` | 必須 | `qwen3.5:9b` | chat 用モデル名 |
 | `REI_OPENAI_EMBEDDING_MODEL` | 必須 | `qwen3-embedding:8b` | embedding 用モデル名 |
 | `REI_OPENAI_IMAGE_MODEL` | 画像生成時必須 | `gpt-image-1` | 既定接続先で使う画像生成モデル名 |
+| `REI_IMAGE_RESPONSE_FORMAT` | 任意 | `auto` | 画像生成 API に `response_format` を送るかを制御。`auto`, `b64_json`, `none` |
+| `REI_IMAGE_TIMEOUT_SECONDS` | 任意 | `300` | 画像生成 API の読み取りタイムアウト秒数 |
 
 ### 機能別 LLM 設定
 
@@ -390,10 +394,14 @@ rei:
   image:
     output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:${user.dir}/.rei/images}
     size: ${REI_IMAGE_SIZE:1024x1024}
+    response-format: ${REI_IMAGE_RESPONSE_FORMAT:auto}
+    timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
 ```
 
 画像生成だけ別サーバーを使う場合は `rei.llm.features.image-generation` を設定します。
 未設定の場合は `spring.ai.openai` の既定接続先を使い、機能別接続先が失敗した場合は既定接続先へフォールバックします。
+`response-format` は `auto` の場合、`gpt-image-*` モデルや既定 OpenAI 経路では `response_format` を送らず、ローカル OpenAI 互換サーバーで必要な場合は `b64_json` を指定します。
+`timeout-seconds` は画像生成 API の読み取りタイムアウトです。OpenAI 公式や重いローカルモデルで時間がかかる場合は大きくしてください。
 
 ### Google Calendar
 

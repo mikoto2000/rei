@@ -69,6 +69,22 @@ rei:
 
 `base-url` が空の場合は `spring.ai.openai` で構成された既定接続先を使用する。
 
+### 画像生成設定
+
+```yaml
+rei:
+  image:
+    output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:./images}
+    size: ${REI_IMAGE_SIZE:1024x1024}
+    response-format: ${REI_IMAGE_RESPONSE_FORMAT:auto}
+    timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
+```
+
+`response-format` は `auto`, `b64_json`, `none`, `off` を受け付ける。
+`auto` では `gpt-image-*` モデルまたはモデル未指定の既定 OpenAI 接続先に対して `response_format` を送信しない。
+ローカル OpenAI 互換画像サーバーが `response_format: b64_json` を要求する場合は `b64_json` を明示する。
+`timeout-seconds` は画像生成 API の読み取りタイムアウト秒数として使用する。
+
 ## コンポーネント
 
 ### ImageProperties
@@ -79,11 +95,15 @@ rei:
 
 - `Path outputDirectory`
 - `String size`
+- `String responseFormat`
+- `int timeoutSeconds`
 
 責務:
 
 - 出力ディレクトリの既定値を提供する。
 - 既定サイズを提供する。
+- 画像生成 API へ送信する `response_format` の制御値を提供する。
+- 画像生成 API の読み取りタイムアウト秒数を提供する。
 
 ### ImageCommand
 
@@ -123,7 +143,9 @@ picocli の `/image` ルートコマンド。
 実装方針:
 
 - Spring AI の `ImageModel` を利用する。
-- `OpenAiImageOptions` を使い、model / width / height / response format を指定する。
+- `OpenAiImageOptions` を使い、model / width / height を指定する。
+- `rei.image.response-format` に基づき、必要な場合のみ `response_format: b64_json` を指定する。
+- `auto` では `gpt-image-*` モデルまたはモデル未指定時に `response_format` を送信しない。
 - 画像データは base64 レスポンスを基本とする。
 
 ### ImageModelProvider
@@ -134,6 +156,7 @@ picocli の `/image` ルートコマンド。
 
 - `rei.llm.features.image-generation` の `base-url` が未指定なら既定の `ImageModel` を返す。
 - `base-url` が指定されている場合は `OpenAiImageModel` を生成して返す。
+- 機能別接続先用 `OpenAiImageApi` には `rei.image.timeout-seconds` を適用した `RestClient` を使用する。
 - 機能別接続先の呼び出しに失敗した場合は既定 `ImageModel` にフォールバックする。
 
 ### FallbackImageModel

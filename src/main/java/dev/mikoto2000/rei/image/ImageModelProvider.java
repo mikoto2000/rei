@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.image;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -11,26 +12,33 @@ import org.springframework.ai.retry.RetryUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+import org.springframework.http.client.ReactorClientHttpRequestFactory;
+import org.springframework.web.client.RestClient;
 
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmProperties;
 import io.micrometer.observation.ObservationRegistry;
+import io.netty.resolver.DefaultAddressResolverGroup;
+import reactor.netty.http.client.HttpClient;
 
 @Component
 public class ImageModelProvider {
 
   private final ObjectProvider<ImageModel> defaultImageModelProvider;
   private final LlmProperties properties;
+  private final ImageProperties imageProperties;
   private final Map<String, ImageModel> cache = new ConcurrentHashMap<>();
 
   @Autowired
-  public ImageModelProvider(ObjectProvider<ImageModel> defaultImageModelProvider, LlmProperties properties) {
+  public ImageModelProvider(ObjectProvider<ImageModel> defaultImageModelProvider, LlmProperties properties,
+      ImageProperties imageProperties) {
     this.defaultImageModelProvider = defaultImageModelProvider;
     this.properties = properties;
+    this.imageProperties = imageProperties;
   }
 
   ImageModelProvider(ImageModel defaultImageModel, LlmProperties properties) {
-    this(new FixedObjectProvider<>(defaultImageModel), properties);
+    this(new FixedObjectProvider<>(defaultImageModel), properties, new ImageProperties());
   }
 
   public ImageModel imageModel() {
@@ -66,12 +74,21 @@ public class ImageModelProvider {
     OpenAiImageApi api = OpenAiImageApi.builder()
         .baseUrl(server.getBaseUrl())
         .apiKey(server.getApiKey() == null || server.getApiKey().isBlank() ? "dummy-key" : server.getApiKey())
+        .restClientBuilder(imageRestClientBuilder())
         .build();
     OpenAiImageOptions.Builder options = OpenAiImageOptions.builder();
     if (server.getModel() != null && !server.getModel().isBlank()) {
       options.model(server.getModel());
     }
     return new OpenAiImageModel(api, options.build(), RetryUtils.DEFAULT_RETRY_TEMPLATE, ObservationRegistry.NOOP);
+  }
+
+  private RestClient.Builder imageRestClientBuilder() {
+    HttpClient httpClient = HttpClient.create()
+        .resolver(DefaultAddressResolverGroup.INSTANCE)
+        .responseTimeout(Duration.ofSeconds(Math.max(1, imageProperties.getTimeoutSeconds())));
+    return RestClient.builder()
+        .requestFactory(new ReactorClientHttpRequestFactory(httpClient));
   }
 
   private record FixedObjectProvider<T>(T value) implements ObjectProvider<T> {

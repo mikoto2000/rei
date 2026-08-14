@@ -45,6 +45,8 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("image:"));
     assertTrue(content.contains("REI_IMAGE_OUTPUT_DIRECTORY"));
     assertTrue(content.contains("REI_IMAGE_SIZE"));
+    assertTrue(content.contains("REI_IMAGE_RESPONSE_FORMAT"));
+    assertTrue(content.contains("REI_IMAGE_TIMEOUT_SECONDS"));
     assertTrue(content.contains("feed:"));
     assertTrue(content.contains("REI_FEED_CRON"));
     assertTrue(content.contains("0 0 4 * * *"));
