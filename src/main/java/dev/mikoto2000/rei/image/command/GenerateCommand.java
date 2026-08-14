@@ -35,6 +35,9 @@ public class GenerateCommand implements Callable<Integer> {
   @Option(names = "--size", description = "画像サイズ。例: 1024x1024")
   String size;
 
+  @Option(names = "--raw", description = "入力を AI で画像生成プロンプト化せず、そのまま画像生成 API に渡します")
+  boolean raw;
+
   @Parameters(arity = "1..*", description = "画像生成プロンプト")
   List<String> promptParts;
 
@@ -48,13 +51,16 @@ public class GenerateCommand implements Callable<Integer> {
         return cancelled();
       }
       ImageGenerationResult result = service.generate(new ImageGenerationRequest(
-          String.join(" ", promptParts), outputPath, model, imageSize));
+          String.join(" ", promptParts), outputPath, model, imageSize, !raw));
       if (cancellationService.consumeCancellationRequested()
           || Thread.currentThread().isInterrupted()
           || isCancelledResult(result)) {
         return cancelled();
       }
       if (result.success()) {
+        if (result.prompt() != null && !result.prompt().isBlank()) {
+          System.out.println("画像生成プロンプト: " + result.prompt());
+        }
         System.out.println("画像を保存しました: " + result.savedPath());
         return 0;
       }

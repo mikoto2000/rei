@@ -15,23 +15,32 @@ public class ImageGenerationService {
   private final ImageGenerationClient client;
   private final ImageOutputPathResolver outputPathResolver;
   private final CommandCancellationService cancellationService;
+  private final ImagePromptEnhancer promptEnhancer;
+  private final ImageProperties properties;
 
   @Autowired
   public ImageGenerationService(ImageGenerationClient client, ImageProperties properties,
-      CommandCancellationService cancellationService) {
+      CommandCancellationService cancellationService, ImagePromptEnhancer promptEnhancer) {
     this(client, new ImageOutputPathResolver(Path.of("").toAbsolutePath().normalize(), properties,
-        java.time.Clock.systemDefaultZone()), cancellationService);
+        java.time.Clock.systemDefaultZone()), cancellationService, promptEnhancer, properties);
   }
 
   ImageGenerationService(ImageGenerationClient client, ImageOutputPathResolver outputPathResolver) {
-    this(client, outputPathResolver, null);
+    this(client, outputPathResolver, null, new NoOpImagePromptEnhancer(), new ImageProperties());
   }
 
   ImageGenerationService(ImageGenerationClient client, ImageOutputPathResolver outputPathResolver,
       CommandCancellationService cancellationService) {
+    this(client, outputPathResolver, cancellationService, new NoOpImagePromptEnhancer(), new ImageProperties());
+  }
+
+  ImageGenerationService(ImageGenerationClient client, ImageOutputPathResolver outputPathResolver,
+      CommandCancellationService cancellationService, ImagePromptEnhancer promptEnhancer, ImageProperties properties) {
     this.client = client;
     this.outputPathResolver = outputPathResolver;
     this.cancellationService = cancellationService;
+    this.promptEnhancer = promptEnhancer;
+    this.properties = properties;
   }
 
   public ImageGenerationResult generate(ImageGenerationRequest request) {
@@ -42,7 +51,11 @@ public class ImageGenerationService {
       return ImageGenerationResult.failure("cancelled");
     }
     try {
-      String base64 = client.generate(request);
+      ImageGenerationRequest effectiveRequest = effectiveRequest(request);
+      if (isCancellationRequested()) {
+        return ImageGenerationResult.failure("cancelled");
+      }
+      String base64 = client.generate(effectiveRequest);
       if (isCancellationRequested()) {
         return ImageGenerationResult.failure("cancelled");
       }
@@ -55,7 +68,7 @@ public class ImageGenerationService {
         Files.createDirectories(outputPath.getParent());
       }
       Files.write(outputPath, bytes);
-      return ImageGenerationResult.success(outputPath);
+      return ImageGenerationResult.success(outputPath, effectiveRequest.prompt());
     } catch (IllegalArgumentException e) {
       return ImageGenerationResult.failure("画像データのデコードに失敗しました");
     } catch (Exception e) {
@@ -69,6 +82,17 @@ public class ImageGenerationService {
       return e.getClass().getSimpleName();
     }
     return message;
+  }
+
+  private ImageGenerationRequest effectiveRequest(ImageGenerationRequest request) {
+    if (!properties.isPromptEnhancementEnabled() || !request.enhancePrompt()) {
+      return request;
+    }
+    String enhancedPrompt = promptEnhancer.enhance(request.prompt());
+    if (enhancedPrompt == null || enhancedPrompt.isBlank()) {
+      throw new IllegalStateException("画像生成プロンプト生成結果が空です");
+    }
+    return new ImageGenerationRequest(enhancedPrompt.strip(), request.outputPath(), request.model(), request.size(), false);
   }
 
   private boolean isCancellationRequested() {

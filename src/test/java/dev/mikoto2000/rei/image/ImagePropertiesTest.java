@@ -12,5 +12,6 @@ class ImagePropertiesTest {
 
     assertThat(properties.getResponseFormat()).isEqualTo("auto");
     assertThat(properties.getTimeoutSeconds()).isEqualTo(300);
+    assertThat(properties.isPromptEnhancementEnabled()).isTrue();
   }
 }

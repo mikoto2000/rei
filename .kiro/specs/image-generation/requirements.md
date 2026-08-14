@@ -24,10 +24,13 @@
 
 #### 受け入れ基準
 
-1. WHEN ユーザーが `/image generate <prompt>` を実行したとき、THE system SHALL `<prompt>` を画像生成プロンプトとして扱う。
+1. WHEN ユーザーが `/image generate <prompt>` を実行したとき、THE system SHALL `<prompt>` を画像生成リクエストとして受け取る。
 2. THE system SHALL 画像生成機能を `ChatCommand` に統合せず、画像生成専用コマンドとして実装する。
 3. THE system SHALL `/image generate` 実行時に通常チャットの会話メモリへ画像生成プロンプトまたは結果を追加しない。
 4. THE system SHALL `/image generate` 実行時に通常チャット用のストリーミング回答表示を使用しない。
+5. WHEN `--raw` が指定されないとき、THE system SHALL `<prompt>` をチャット LLM で画像生成向けプロンプトへ変換してから画像生成 API に渡す。
+6. WHEN `--raw` が指定されたとき、THE system SHALL `<prompt>` を変換せず画像生成 API に渡す。
+7. THE system SHALL 実際に画像生成 API へ渡したプロンプトを標準出力へ表示する。
 
 ---
 
@@ -76,6 +79,8 @@
 9. WHEN `rei.image.response-format` が `b64_json` のとき、THE system SHALL ローカル OpenAI 互換サーバー向けに `response_format: b64_json` を送信する。
 10. WHEN `rei.image.response-format` が `none` または `off` のとき、THE system SHALL モデル名に関わらず `response_format` を送信しない。
 11. THE system SHALL `rei.image.timeout-seconds` で画像生成 API の読み取りタイムアウトを指定できる。
+12. THE system SHALL `rei.llm.features.image-prompt` で画像生成プロンプト生成用チャット LLM の接続先を指定できる。
+13. THE system SHALL `rei.image.prompt-enhancement.enabled` で既定のプロンプト生成処理を有効化または無効化できる。
 
 ---
 

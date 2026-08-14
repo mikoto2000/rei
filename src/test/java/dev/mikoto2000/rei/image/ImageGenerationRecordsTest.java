@@ -19,6 +19,7 @@ class ImageGenerationRecordsTest {
     assertThat(request.outputPath()).isEqualTo(output);
     assertThat(request.model()).isEqualTo("image-model");
     assertThat(request.size()).isEqualTo(size);
+    assertThat(request.enhancePrompt()).isTrue();
   }
 
   @Test
@@ -27,6 +28,7 @@ class ImageGenerationRecordsTest {
 
     assertThat(ImageGenerationResult.success(output).success()).isTrue();
     assertThat(ImageGenerationResult.success(output).savedPath()).isEqualTo(output);
+    assertThat(ImageGenerationResult.success(output, "prompt").prompt()).isEqualTo("prompt");
     assertThat(ImageGenerationResult.failure("failed").success()).isFalse();
     assertThat(ImageGenerationResult.failure("failed").message()).isEqualTo("failed");
   }

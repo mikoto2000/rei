@@ -35,10 +35,27 @@ class ImageCommandTest {
     ArgumentCaptor<ImageGenerationRequest> captor = ArgumentCaptor.forClass(ImageGenerationRequest.class);
     verify(service).generate(captor.capture());
     assertThat(captor.getValue().prompt()).isEqualTo("a cat");
+    assertThat(captor.getValue().enhancePrompt()).isTrue();
     assertThat(captor.getValue().outputPath()).isEqualTo(Path.of("out.png"));
     assertThat(captor.getValue().model()).isEqualTo("image-model");
     assertThat(captor.getValue().size().width()).isEqualTo(640);
     assertThat(captor.getValue().size().height()).isEqualTo(480);
+  }
+
+  @Test
+  void generateRawDisablesPromptEnhancement() {
+    ImageGenerationService service = Mockito.mock(ImageGenerationService.class);
+    Path output = Path.of("out.png").toAbsolutePath();
+    when(service.generate(Mockito.any())).thenReturn(ImageGenerationResult.success(output));
+    CommandLine commandLine = newCommand(service);
+
+    ExecutionResult execution = execute(commandLine, "generate", "--raw", "a", "cat");
+
+    assertThat(execution.exitCode()).isZero();
+    ArgumentCaptor<ImageGenerationRequest> captor = ArgumentCaptor.forClass(ImageGenerationRequest.class);
+    verify(service).generate(captor.capture());
+    assertThat(captor.getValue().prompt()).isEqualTo("a cat");
+    assertThat(captor.getValue().enhancePrompt()).isFalse();
   }
 
   @Test

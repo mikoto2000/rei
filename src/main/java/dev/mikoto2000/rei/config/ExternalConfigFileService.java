@@ -94,6 +94,10 @@ public class ExternalConfigFileService {
                 base-url: ${REI_LLM_AGENT_SKILLS_BASE_URL:}
                 api-key: ${REI_LLM_AGENT_SKILLS_API_KEY:}
                 model: ${REI_LLM_AGENT_SKILLS_MODEL:}
+              image-prompt:
+                base-url: ${REI_LLM_IMAGE_PROMPT_BASE_URL:}
+                api-key: ${REI_LLM_IMAGE_PROMPT_API_KEY:}
+                model: ${REI_LLM_IMAGE_PROMPT_MODEL:}
               image-generation:
                 base-url: ${REI_LLM_IMAGE_GENERATION_BASE_URL:}
                 api-key: ${REI_LLM_IMAGE_GENERATION_API_KEY:}
@@ -103,6 +107,8 @@ public class ExternalConfigFileService {
             size: ${REI_IMAGE_SIZE:1024x1024}
             response-format: ${REI_IMAGE_RESPONSE_FORMAT:auto}
             timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
+            prompt-enhancement:
+              enabled: ${REI_IMAGE_PROMPT_ENHANCEMENT_ENABLED:true}
           skills:
             enabled: true
             directories:

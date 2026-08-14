@@ -35,6 +35,41 @@ class ImageGenerationServiceTest {
   }
 
   @Test
+  void enhancesPromptBeforeCallingClient() {
+    byte[] png = new byte[] {4, 5, 6};
+    RecordingClient client = new RecordingClient(Base64.getEncoder().encodeToString(png));
+    ImageProperties properties = new ImageProperties();
+    properties.setOutputDirectory(tempDir.resolve("images"));
+    ImageOutputPathResolver resolver = new ImageOutputPathResolver(tempDir, properties,
+        Clock.fixed(Instant.parse("2026-08-14T12:34:56Z"), ZoneOffset.UTC));
+    ImageGenerationService service = new ImageGenerationService(client, resolver, null,
+        userRequest -> "enhanced " + userRequest, properties);
+
+    ImageGenerationResult result = service.generate(new ImageGenerationRequest("cat", null, null, new ImageSize(1, 1)));
+
+    assertThat(result.success()).isTrue();
+    assertThat(client.request.prompt()).isEqualTo("enhanced cat");
+    assertThat(client.request.enhancePrompt()).isFalse();
+    assertThat(result.prompt()).isEqualTo("enhanced cat");
+  }
+
+  @Test
+  void skipsPromptEnhancementWhenRequestDisablesIt() {
+    RecordingClient client = new RecordingClient(Base64.getEncoder().encodeToString(new byte[] {7}));
+    ImageProperties properties = new ImageProperties();
+    properties.setOutputDirectory(tempDir.resolve("images"));
+    ImageOutputPathResolver resolver = new ImageOutputPathResolver(tempDir, properties,
+        Clock.fixed(Instant.parse("2026-08-14T12:34:56Z"), ZoneOffset.UTC));
+    ImageGenerationService service = new ImageGenerationService(client, resolver, null,
+        userRequest -> "enhanced " + userRequest, properties);
+
+    ImageGenerationResult result = service.generate(new ImageGenerationRequest("cat", null, null, new ImageSize(1, 1), false));
+
+    assertThat(result.success()).isTrue();
+    assertThat(client.request.prompt()).isEqualTo("cat");
+  }
+
+  @Test
   void savesGeneratedImageToDefaultOutputDirectory() {
     RecordingClient client = new RecordingClient(Base64.getEncoder().encodeToString(new byte[] {9}));
     ImageGenerationService service = service(client);

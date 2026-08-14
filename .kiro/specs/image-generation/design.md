@@ -25,16 +25,20 @@
 - `--output <path>`: 保存先ファイルパス。未指定時は既定出力ディレクトリへ保存する。
 - `--model <model>`: 画像生成モデル名。未指定時は `rei.llm.features.image-generation.model` を使用する。
 - `--size <width>x<height>`: 画像サイズ。未指定時は `rei.image.size` を使用する。
+- `--raw`: 入力文を AI で画像生成向けプロンプト化せず、そのまま画像生成 API に渡す。
 
 入力ルール:
 
-- `<prompt>` は `arity = "1..*"` とし、複数引数を空白連結して画像生成プロンプトにする。
+- `<prompt>` は `arity = "1..*"` とし、複数引数を空白連結して画像生成リクエストにする。
+- 既定では `<prompt>` を `ImagePromptEnhancer` で画像生成向けプロンプトへ変換する。
+- `--raw` 指定時は `ImagePromptEnhancer` を使わない。
 - `--size` は `1024x1024` のような形式のみ受け付ける。
 - `--output` が相対パスの場合は現在の作業ディレクトリ基準で解決する。
 
 出力:
 
 ```text
+画像生成プロンプト: <effective-prompt>
 画像を保存しました: <absolute-path>
 ```
 
@@ -65,6 +69,10 @@ rei:
         base-url: ${REI_LLM_IMAGE_GENERATION_BASE_URL:}
         api-key: ${REI_LLM_IMAGE_GENERATION_API_KEY:}
         model: ${REI_LLM_IMAGE_GENERATION_MODEL:}
+      image-prompt:
+        base-url: ${REI_LLM_IMAGE_PROMPT_BASE_URL:}
+        api-key: ${REI_LLM_IMAGE_PROMPT_API_KEY:}
+        model: ${REI_LLM_IMAGE_PROMPT_MODEL:}
 ```
 
 `base-url` が空の場合は `spring.ai.openai` で構成された既定接続先を使用する。
@@ -78,12 +86,15 @@ rei:
     size: ${REI_IMAGE_SIZE:1024x1024}
     response-format: ${REI_IMAGE_RESPONSE_FORMAT:auto}
     timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
+    prompt-enhancement:
+      enabled: ${REI_IMAGE_PROMPT_ENHANCEMENT_ENABLED:true}
 ```
 
 `response-format` は `auto`, `b64_json`, `none`, `off` を受け付ける。
 `auto` では `gpt-image-*` モデルまたはモデル未指定の既定 OpenAI 接続先に対して `response_format` を送信しない。
 ローカル OpenAI 互換画像サーバーが `response_format: b64_json` を要求する場合は `b64_json` を明示する。
 `timeout-seconds` は画像生成 API の読み取りタイムアウト秒数として使用する。
+`prompt-enhancement.enabled` は `/image generate` の既定プロンプト生成処理を制御する。
 
 ## コンポーネント
 
@@ -97,6 +108,7 @@ rei:
 - `String size`
 - `String responseFormat`
 - `int timeoutSeconds`
+- `boolean promptEnhancementEnabled`
 
 責務:
 
@@ -104,6 +116,7 @@ rei:
 - 既定サイズを提供する。
 - 画像生成 API へ送信する `response_format` の制御値を提供する。
 - 画像生成 API の読み取りタイムアウト秒数を提供する。
+- 既定プロンプト生成処理の有効状態を提供する。
 
 ### ImageCommand
 
@@ -121,7 +134,9 @@ picocli の `/image` ルートコマンド。
 責務:
 
 - prompt / output / model / size を受け取る。
+- `--raw` を受け取り、プロンプト生成をスキップするかを決定する。
 - `ImageGenerationService` へ処理を委譲する。
+- 成功時に実際に使用した画像生成プロンプトを表示する。
 - 成功時に保存パスを表示する。
 - 失敗時にユーザー向けエラーを表示する。
 
@@ -132,9 +147,20 @@ picocli の `/image` ルートコマンド。
 責務:
 
 - `ImageGenerationRequest` を受け取り、入力検証を行う。
+- 必要に応じて `ImagePromptEnhancer` で画像生成向けプロンプトを生成する。
 - `ImageGenerationClient` を呼び出す。
 - 返却された画像データを保存する。
 - `ImageGenerationResult` を返す。
+
+### ImagePromptEnhancer
+
+ユーザー入力から画像生成 API 向けプロンプトを生成する。
+
+実装方針:
+
+- `LlmImagePromptEnhancer` が `LlmModelProvider` 経由で `rei.llm.features.image-prompt` を使用する。
+- 通常チャットの会話メモリや Tool 呼び出しには依存しない。
+- 生成結果が空の場合は失敗扱いにする。
 
 ### ImageGenerationClient
 

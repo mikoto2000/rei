@@ -132,6 +132,10 @@ rei:
         base-url: ${REI_LLM_BLUESKY_REPLY_BASE_URL:}
         api-key: ${REI_LLM_BLUESKY_REPLY_API_KEY:}
         model: ${REI_LLM_BLUESKY_REPLY_MODEL:}
+      image-prompt:
+        base-url: ${REI_LLM_IMAGE_PROMPT_BASE_URL:}
+        api-key: ${REI_LLM_IMAGE_PROMPT_API_KEY:}
+        model: ${REI_LLM_IMAGE_PROMPT_MODEL:}
       image-generation:
         base-url: ${REI_LLM_IMAGE_GENERATION_BASE_URL:}
         api-key: ${REI_LLM_IMAGE_GENERATION_API_KEY:}
@@ -150,7 +154,8 @@ rei:
 | `briefing` | 日次ブリーフィング生成 |
 | `interest-discovery` | `/interest discover` の候補抽出 |
 | `agent-skills` | Agent Skills の暗黙選択 |
-| `image-generation` | 画像生成 |
+| `image-prompt` | 画像生成プロンプト生成 |
+| `image-generation` | 画像生成 API |
 
 主な環境変数:
 
@@ -164,7 +169,8 @@ rei:
 | `REI_LLM_BRIEFING_BASE_URL` / `REI_LLM_BRIEFING_API_KEY` / `REI_LLM_BRIEFING_MODEL` | ブリーフィング用 |
 | `REI_LLM_INTEREST_DISCOVERY_BASE_URL` / `REI_LLM_INTEREST_DISCOVERY_API_KEY` / `REI_LLM_INTEREST_DISCOVERY_MODEL` | 興味候補抽出用 |
 | `REI_LLM_AGENT_SKILLS_BASE_URL` / `REI_LLM_AGENT_SKILLS_API_KEY` / `REI_LLM_AGENT_SKILLS_MODEL` | Agent Skills 選択用 |
-| `REI_LLM_IMAGE_GENERATION_BASE_URL` / `REI_LLM_IMAGE_GENERATION_API_KEY` / `REI_LLM_IMAGE_GENERATION_MODEL` | 画像生成用 |
+| `REI_LLM_IMAGE_PROMPT_BASE_URL` / `REI_LLM_IMAGE_PROMPT_API_KEY` / `REI_LLM_IMAGE_PROMPT_MODEL` | 画像生成プロンプト生成用 |
+| `REI_LLM_IMAGE_GENERATION_BASE_URL` / `REI_LLM_IMAGE_GENERATION_API_KEY` / `REI_LLM_IMAGE_GENERATION_MODEL` | 画像生成 API 用 |
 
 ### Google Calendar
 
@@ -384,10 +390,13 @@ gpt-oss:120b
 /image generate 猫がキーボードを叩いているイラスト
 /image generate --size 1024x1024 --output ./out/cat.png 猫がキーボードを叩いているイラスト
 /image generate --model gpt-image-1 夕暮れの港の水彩画
+/image generate --raw "A watercolor painting of a harbor at dusk"
 ```
 
 `--output` を省略した場合は `rei.image.output-directory` 配下に `image-<yyyyMMdd-HHmmss>.png` として保存します。
 `--size` を省略した場合は `rei.image.size` を使用します。
+既定では入力文を `rei.llm.features.image-prompt` のチャット LLM で画像生成向けプロンプトへ変換してから画像生成 API に渡します。
+`--raw` を指定すると、入力文を変換せずそのまま画像生成 API に渡します。
 
 ```yaml
 rei:
@@ -396,12 +405,16 @@ rei:
     size: ${REI_IMAGE_SIZE:1024x1024}
     response-format: ${REI_IMAGE_RESPONSE_FORMAT:auto}
     timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
+    prompt-enhancement:
+      enabled: ${REI_IMAGE_PROMPT_ENHANCEMENT_ENABLED:true}
 ```
 
-画像生成だけ別サーバーを使う場合は `rei.llm.features.image-generation` を設定します。
+プロンプト生成だけ別サーバーを使う場合は `rei.llm.features.image-prompt` を設定します。
+画像生成 API だけ別サーバーを使う場合は `rei.llm.features.image-generation` を設定します。
 未設定の場合は `spring.ai.openai` の既定接続先を使い、機能別接続先が失敗した場合は既定接続先へフォールバックします。
 `response-format` は `auto` の場合、`gpt-image-*` モデルや既定 OpenAI 経路では `response_format` を送らず、ローカル OpenAI 互換サーバーで必要な場合は `b64_json` を指定します。
 `timeout-seconds` は画像生成 API の読み取りタイムアウトです。OpenAI 公式や重いローカルモデルで時間がかかる場合は大きくしてください。
+`prompt-enhancement.enabled` を `false` にすると、既定でも入力文をそのまま画像生成 API に渡します。
 
 ### Google Calendar
 

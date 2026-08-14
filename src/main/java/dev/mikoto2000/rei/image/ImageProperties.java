@@ -11,6 +11,7 @@ public class ImageProperties {
   private String size = "1024x1024";
   private String responseFormat = "auto";
   private int timeoutSeconds = 300;
+  private boolean promptEnhancementEnabled = true;
 
   public Path getOutputDirectory() {
     return outputDirectory;
@@ -42,5 +43,13 @@ public class ImageProperties {
 
   public void setTimeoutSeconds(int timeoutSeconds) {
     this.timeoutSeconds = timeoutSeconds;
+  }
+
+  public boolean isPromptEnhancementEnabled() {
+    return promptEnhancementEnabled;
+  }
+
+  public void setPromptEnhancementEnabled(boolean promptEnhancementEnabled) {
+    this.promptEnhancementEnabled = promptEnhancementEnabled;
   }
 }

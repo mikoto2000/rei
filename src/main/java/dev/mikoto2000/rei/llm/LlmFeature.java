@@ -10,6 +10,7 @@ public final class LlmFeature {
   public static final String BRIEFING = "briefing";
   public static final String INTEREST_DISCOVERY = "interest-discovery";
   public static final String AGENT_SKILLS = "agent-skills";
+  public static final String IMAGE_PROMPT = "image-prompt";
   public static final String IMAGE_GENERATION = "image-generation";
 
   private LlmFeature() {
