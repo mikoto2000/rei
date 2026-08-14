@@ -124,6 +124,32 @@ class BlueskyReplyServiceTest {
   }
 
   @Test
+  void skipsPostWhenReplyTextGenerationFails() {
+    BlueskyProperties properties = baseProperties(true, false, 1.0d, 0);
+    BlueskyReplyService service = new BlueskyReplyService(
+        properties, validator, authorFeedClient, repository, conversationRepository, replyTextGenerator, blueskyApiClient, () -> 0.0d,
+        fixedClock());
+    OffsetDateTime now = OffsetDateTime.ofInstant(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
+    BlueskyApiClient.FeedPost post = new BlueskyApiClient.FeedPost(
+        "at://u/a", "cid-a", "text", now.minusMinutes(1), false, false, null, null);
+    when(authorFeedClient.resolveDid("alice.bsky.social")).thenReturn("did:plc:alice");
+    when(blueskyApiClient.getAuthorFeed("did:plc:alice", 30, "jwt")).thenReturn(List.of(post));
+    when(repository.findLastSeen("alice.bsky.social")).thenReturn(Optional.empty());
+    when(repository.isAlreadyReplied("at://u/a")).thenReturn(false);
+    when(conversationRepository.findRecent("alice.bsky.social", 10)).thenReturn(List.of());
+    when(replyTextGenerator.generate(eq("alice.bsky.social"), eq("text"), any()))
+        .thenThrow(new IllegalStateException("blank content"));
+    when(blueskyApiClient.authenticate("rei.bsky.social", "app-pass"))
+        .thenReturn(new BlueskyApiClient.AuthResult(true, "jwt", "did:plc:rei"));
+
+    service.runOnce();
+
+    verify(blueskyApiClient, never()).createReply(any(), any(), any(), any(), any(), any(), any());
+    verify(repository, never()).markReplied(anyString(), anyString(), anyString());
+    verify(repository).saveLastSeen("alice.bsky.social", "at://u/a", post.indexedAt());
+  }
+
+  @Test
   void skipsWhenDailyLimitReached() {
     BlueskyProperties properties = baseProperties(true, false, 1.0d, 1);
     BlueskyReplyService service = new BlueskyReplyService(

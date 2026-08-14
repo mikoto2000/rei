@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,7 +42,7 @@ public class BlueskyReplyTextGenerator {
 
   public String generate(String handle, String postText, List<BlueskyReplyConversationRepository.ConversationMessage> history) {
     if (postText == null || postText.isBlank()) {
-      return "Thanks for your post.";
+      throw new IllegalArgumentException("Bluesky reply target post text is blank");
     }
     String historyBlock = history.stream()
         .map(m -> "- " + m.role() + ": " + m.content())
@@ -63,14 +65,14 @@ public class BlueskyReplyTextGenerator {
         .build());
     String content = generateContent(prompt);
     if (content == null || content.isBlank()) {
-      return "Thanks for sharing.";
+      throw new IllegalStateException("Bluesky reply text generation returned blank content");
     }
     return content.strip();
   }
 
   public String generateForManualReply(String postText) {
     if (postText == null || postText.isBlank()) {
-      return "ありがとうございます。";
+      throw new IllegalArgumentException("Bluesky manual reply target post text is blank");
     }
     String promptText = """
         次のBluesky投稿に対する返信文を日本語で1つ作成してください。
@@ -87,7 +89,7 @@ public class BlueskyReplyTextGenerator {
         .build());
     String content = generateContent(prompt);
     if (content == null || content.isBlank()) {
-      return "ありがとうございます。";
+      throw new IllegalStateException("Bluesky manual reply text generation returned blank content");
     }
     return content.strip();
   }
@@ -96,9 +98,19 @@ public class BlueskyReplyTextGenerator {
     return chatClientProvider.chatClient(LlmFeature.BLUESKY_REPLY)
         .prompt(prompt)
         .stream()
-        .content()
+        .chatResponse()
+        .map(this::answerText)
         .collectList()
         .map(parts -> String.join("", parts))
         .block(Duration.ofMinutes(20));
+  }
+
+  private String answerText(ChatResponse response) {
+    Generation generation = response.getResult();
+    if (generation == null || generation.getOutput() == null) {
+      return "";
+    }
+    String text = generation.getOutput().getText();
+    return text == null ? "" : text;
   }
 }

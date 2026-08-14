@@ -114,15 +114,24 @@ public class BlueskyReplyService {
         }
         conversationRepository.appendUserMessage(handle, post.text() == null ? "" : post.text());
         List<BlueskyReplyConversationRepository.ConversationMessage> history = conversationRepository.findRecent(handle, 10);
-        String text = replyTextGenerator.generate(handle, post.text(), history);
-        BlueskyApiClient.PostResult result = blueskyApiClient.createReply(
-            botAuth.accessJwt(),
-            botAuth.did(),
-            text,
-            post.uri(),
-            post.cid(),
-            post.rootUri() == null ? post.uri() : post.rootUri(),
-            post.rootCid() == null ? post.cid() : post.rootCid());
+        String text;
+        BlueskyApiClient.PostResult result;
+        try {
+          text = replyTextGenerator.generate(handle, post.text(), history);
+          result = blueskyApiClient.createReply(
+              botAuth.accessJwt(),
+              botAuth.did(),
+              text,
+              post.uri(),
+              post.cid(),
+              post.rootUri() == null ? post.uri() : post.rootUri(),
+              post.rootCid() == null ? post.cid() : post.rootCid());
+        } catch (Exception e) {
+          skipped++;
+          log.warn("Bluesky reply skipped: handle={}, postUri={}, reason=reply_generation_failed, message={}",
+              handle, post.uri(), e.getMessage(), e);
+          continue;
+        }
         if (result.success()) {
           repository.markReplied(post.uri(), handle, result.postUri());
           repository.incrementToday(handle, LocalDate.now(clock));
