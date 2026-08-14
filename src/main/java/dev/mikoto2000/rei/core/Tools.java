@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.charset.CodingErrorAction;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
+import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -255,12 +256,14 @@ public class Tools {
   @param afterContext 一致行の後に含める行数。grep -A 相当。
   @param maxMatches 最大結果数。null または 0 以下の場合は 1000 件。
   @param includeLineNumber true の場合は path:line:text、false の場合は path:text で返します。
+  @param includeGlob 検索対象に含めるファイルの glob。例: **/*.java。null または空の場合は全ファイル対象。
+  @param excludeGlob 検索対象から除外するファイルの glob。例: **/target/**。null または空の場合は除外なし。
   """)
   List<String> grep(String pattern, String baseDir, Boolean ignoreCase, Boolean fixedString, Boolean invertMatch,
       Boolean fileNamesOnly, Integer beforeContext, Integer afterContext, Integer maxMatches,
-      Boolean includeLineNumber) throws IOException, InterruptedException {
+      Boolean includeLineNumber, String includeGlob, String excludeGlob) throws IOException, InterruptedException {
     return grep(pattern, baseDir, ignoreCase, fixedString, invertMatch, fileNamesOnly, beforeContext, afterContext,
-        maxMatches, includeLineNumber, currentWorkingDirectory());
+        maxMatches, includeLineNumber, includeGlob, excludeGlob, currentWorkingDirectory());
   }
 
   List<String> grep(String pattern, String baseDir) throws IOException, InterruptedException {
@@ -268,12 +271,20 @@ public class Tools {
   }
 
   List<String> grep(String pattern, String baseDir, java.nio.file.Path workingDirectory) throws IOException, InterruptedException {
-    return grep(pattern, baseDir, false, false, false, false, 0, 0, 1000, true, workingDirectory);
+    return grep(pattern, baseDir, false, false, false, false, 0, 0, 1000, true, null, null, workingDirectory);
   }
 
   List<String> grep(String pattern, String baseDir, Boolean ignoreCase, Boolean fixedString, Boolean invertMatch,
       Boolean fileNamesOnly, Integer beforeContext, Integer afterContext, Integer maxMatches,
       Boolean includeLineNumber, java.nio.file.Path workingDirectory) throws IOException, InterruptedException {
+    return grep(pattern, baseDir, ignoreCase, fixedString, invertMatch, fileNamesOnly, beforeContext, afterContext,
+        maxMatches, includeLineNumber, null, null, workingDirectory);
+  }
+
+  List<String> grep(String pattern, String baseDir, Boolean ignoreCase, Boolean fixedString, Boolean invertMatch,
+      Boolean fileNamesOnly, Integer beforeContext, Integer afterContext, Integer maxMatches,
+      Boolean includeLineNumber, String includeGlob, String excludeGlob, java.nio.file.Path workingDirectory)
+      throws IOException, InterruptedException {
     if (pattern == null || pattern.isBlank()) {
       throw new IllegalArgumentException("pattern must not be blank");
     }
@@ -289,10 +300,15 @@ public class Tools {
     int effectiveAfterContext = Math.max(0, afterContext == null ? 0 : afterContext);
     int effectiveMaxMatches = maxMatches == null || maxMatches <= 0 ? 1000 : maxMatches;
     Pattern compiled = compileGrepPattern(pattern, effectiveIgnoreCase, effectiveFixedString);
+    PathMatcher includeMatcher = globMatcher(includeGlob, workingDirectory);
+    PathMatcher excludeMatcher = globMatcher(excludeGlob, workingDirectory);
 
     List<String> candidates = listFile(baseDir, workingDirectory);
     List<String> matches = new ArrayList<>();
     for (String relativePath : candidates) {
+      if (!matchesGlob(relativePath, includeMatcher, excludeMatcher, workingDirectory)) {
+        continue;
+      }
       java.nio.file.Path filePath = workingDirectory.resolve(relativePath);
       if (!Files.isRegularFile(filePath)) {
         continue;
@@ -342,6 +358,22 @@ public class Tools {
       }
     }
     return matches;
+  }
+
+  private PathMatcher globMatcher(String glob, java.nio.file.Path workingDirectory) {
+    if (glob == null || glob.isBlank()) {
+      return null;
+    }
+    return workingDirectory.getFileSystem().getPathMatcher("glob:" + glob);
+  }
+
+  private boolean matchesGlob(String relativePath, PathMatcher includeMatcher, PathMatcher excludeMatcher,
+      java.nio.file.Path workingDirectory) {
+    java.nio.file.Path normalizedPath = Paths.get(relativePath.replace('\\', '/'));
+    if (includeMatcher != null && !includeMatcher.matches(normalizedPath)) {
+      return false;
+    }
+    return excludeMatcher == null || !excludeMatcher.matches(normalizedPath);
   }
 
   private Pattern compileGrepPattern(String pattern, boolean ignoreCase, boolean fixedString) {

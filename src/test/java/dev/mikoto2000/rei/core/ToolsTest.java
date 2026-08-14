@@ -145,6 +145,34 @@ class ToolsTest {
   }
 
   @Test
+  void grepSupportsIncludeGlob() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/App.java"), "class App { String value = \"spring\"; }\n");
+    Files.writeString(tempDir.resolve("docs/note.txt"), "spring in text\n");
+
+    Tools tools = new Tools();
+    List<String> results = tools.grep("spring", "docs", false, false, false, false, 0, 0, 100, true,
+        "**/*.java", null, tempDir);
+
+    assertEquals(List.of("docs/App.java:1:class App { String value = \"spring\"; }"), results);
+  }
+
+  @Test
+  void grepSupportsExcludeGlob() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs").resolve("target"));
+    Files.writeString(tempDir.resolve("docs/App.java"), "spring source\n");
+    Files.writeString(tempDir.resolve("docs/target/Generated.java"), "spring generated\n");
+
+    Tools tools = new Tools();
+    List<String> results = tools.grep("spring", "docs", false, false, false, false, 0, 0, 100, true,
+        "**/*.java", "**/target/**", tempDir);
+
+    assertEquals(List.of("docs/App.java:1:spring source"), results);
+  }
+
+  @Test
   void grepRejectsInvalidRegex() throws Exception {
     Tools tools = new Tools();
 
