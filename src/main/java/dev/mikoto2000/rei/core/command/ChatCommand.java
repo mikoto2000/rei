@@ -8,6 +8,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
+import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +26,8 @@ import reactor.core.Disposable;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Locale;
 import java.util.Map;
@@ -96,6 +99,7 @@ public class ChatCommand implements Runnable {
               .build(),
           OpenAiChatOptions.builder()
             .model(modelProvider.model(LlmFeature.CHAT, currentModelHolder.get()))
+            .streamUsage(true)
             .build()));
 
     CountDownLatch latch = new CountDownLatch(1);
@@ -103,6 +107,8 @@ public class ChatCommand implements Runnable {
     AtomicBoolean headerPrinted = new AtomicBoolean(false);
     AtomicBoolean thinkingHeaderPrinted = new AtomicBoolean(false);
     AtomicReference<String> previousThinking = new AtomicReference<>("");
+    AtomicLong answerStartedAtNanos = new AtomicLong(0L);
+    AtomicInteger completionTokens = new AtomicInteger(0);
     StringBuilder responseBuilder = new StringBuilder();
     Disposable disposable;
     try {
@@ -110,6 +116,7 @@ public class ChatCommand implements Runnable {
         .chatResponse()
         .subscribe(
             response -> {
+              captureCompletionTokens(response, completionTokens);
               if (!headerPrinted.get()) {
                 printThinking(response, thinkingHeaderPrinted, previousThinking);
               }
@@ -122,6 +129,7 @@ public class ChatCommand implements Runnable {
                   System.out.println();
                 }
                 IO.println(answerHeader(startedAtNanos));
+                answerStartedAtNanos.compareAndSet(0L, System.nanoTime());
               }
               System.out.print(chunk);
               responseBuilder.append(chunk);
@@ -148,6 +156,7 @@ public class ChatCommand implements Runnable {
         System.err.println("[error] " + buildUserFacingMessage(error));
         return;
       }
+      printGenerationSpeed(answerStartedAtNanos.get(), completionTokens.get());
       chatResponseNarrator.narrateIfCompleted(responseBuilder.toString());
       maybeSuggestConsolidation();
     } catch (InterruptedException e) {
@@ -195,6 +204,26 @@ public class ChatCommand implements Runnable {
   String answerHeader(long startedAtNanos) {
     double elapsedSeconds = (System.nanoTime() - startedAtNanos) / 1_000_000_000.0d;
     return "=== answer(" + String.format(Locale.ROOT, "%.1f", elapsedSeconds) + " s) ===";
+  }
+
+  private void captureCompletionTokens(ChatResponse response, AtomicInteger completionTokens) {
+    if (response == null || response.getMetadata() == null) {
+      return;
+    }
+    Usage usage = response.getMetadata().getUsage();
+    if (usage == null || usage.getCompletionTokens() == null || usage.getCompletionTokens() <= 0) {
+      return;
+    }
+    completionTokens.set(usage.getCompletionTokens());
+  }
+
+  private void printGenerationSpeed(long answerStartedAtNanos, int completionTokens) {
+    if (answerStartedAtNanos <= 0L || completionTokens <= 0) {
+      return;
+    }
+    double elapsedSeconds = Math.max((System.nanoTime() - answerStartedAtNanos) / 1_000_000_000.0d, 0.001d);
+    double tokensPerSecond = completionTokens / elapsedSeconds;
+    IO.println("=== speed(" + String.format(Locale.ROOT, "%.1f", tokensPerSecond) + " tok/s) ===");
   }
 
   private void printThinking(ChatResponse response, AtomicBoolean thinkingHeaderPrinted,

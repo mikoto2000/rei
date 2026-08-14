@@ -15,6 +15,8 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
+import org.springframework.ai.chat.metadata.DefaultUsage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -53,6 +55,59 @@ class ChatCommandTest {
     assertTrue(output.contains(" s) ==="));
     assertTrue(output.contains("answer text"));
     assertTrue(output.endsWith(System.lineSeparator()));
+  }
+
+  @Test
+  void runPrintsTokensPerSecondWhenCompletionUsageIsAvailable() {
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    CommandCancellationService cancellationService = new CommandCancellationService();
+
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(
+        response("answer "),
+        responseWithUsage("", 12)));
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
+          Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty())).execute("hello") == 0);
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    String output = out.toString();
+    assertTrue(output.contains("answer "));
+    assertTrue(output.contains("=== speed("));
+    assertTrue(output.contains(" tok/s) ==="));
+  }
+
+  @Test
+  void runDoesNotPrintTokensPerSecondWhenCompletionUsageIsUnavailable() {
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    CommandCancellationService cancellationService = new CommandCancellationService();
+
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("answer")));
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
+          Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty())).execute("hello") == 0);
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    assertTrue(!out.toString().contains(" tok/s"));
   }
 
   @Test
@@ -200,5 +255,12 @@ class ChatCommandTest {
         .metadata("reasoning_content", thinking)
         .build();
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text), metadata)));
+  }
+
+  private static ChatResponse responseWithUsage(String text, int completionTokens) {
+    ChatResponseMetadata metadata = ChatResponseMetadata.builder()
+        .usage(new DefaultUsage(0, completionTokens))
+        .build();
+    return new ChatResponse(List.of(new Generation(new AssistantMessage(text))), metadata);
   }
 }
