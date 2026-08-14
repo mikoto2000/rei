@@ -13,9 +13,6 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import dev.mikoto2000.rei.agent.progress.AgentNoProgressException;
-import dev.mikoto2000.rei.agent.progress.AgentProgressProperties;
-import dev.mikoto2000.rei.agent.progress.AgentProgressSessionRegistry;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
@@ -30,7 +27,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Locale;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -56,31 +52,25 @@ public class ChatCommand implements Runnable {
 
   private final ChatResponseNarrator chatResponseNarrator;
   private final Optional<MemoryConsolidatorService> memoryConsolidatorService;
-  private final AgentProgressSessionRegistry progressSessionRegistry;
-  private final AgentProgressProperties progressProperties;
   private final InlineFileAttachmentResolver inlineFileAttachmentResolver = new InlineFileAttachmentResolver();
 
   public ChatCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
       CommandCancellationService cancellationService, ChatResponseNarrator chatResponseNarrator,
       Optional<MemoryConsolidatorService> memoryConsolidatorService) {
     this(new FixedLlmChatClientProvider(chatClient), currentModelHolder, new FixedLlmModelProvider(),
-        cancellationService, chatResponseNarrator, memoryConsolidatorService,
-        new AgentProgressSessionRegistry(), new AgentProgressProperties());
+        cancellationService, chatResponseNarrator, memoryConsolidatorService);
   }
 
   @Autowired
   public ChatCommand(LlmChatClientProvider chatClientProvider, ModelHolderService currentModelHolder,
       LlmModelProvider modelProvider, CommandCancellationService cancellationService,
-      ChatResponseNarrator chatResponseNarrator, Optional<MemoryConsolidatorService> memoryConsolidatorService,
-      AgentProgressSessionRegistry progressSessionRegistry, AgentProgressProperties progressProperties) {
+      ChatResponseNarrator chatResponseNarrator, Optional<MemoryConsolidatorService> memoryConsolidatorService) {
     this.chatClientProvider = chatClientProvider;
     this.currentModelHolder = currentModelHolder;
     this.modelProvider = modelProvider;
     this.cancellationService = cancellationService;
     this.chatResponseNarrator = chatResponseNarrator;
     this.memoryConsolidatorService = memoryConsolidatorService;
-    this.progressSessionRegistry = progressSessionRegistry;
-    this.progressProperties = progressProperties;
   }
 
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
@@ -97,9 +87,6 @@ public class ChatCommand implements Runnable {
     for (String warning : resolvedPrompt.warnings()) {
       IO.println(warning);
     }
-    String progressSessionId = progressSessionRegistry.start(
-        resolvedPrompt.prompt(),
-        progressProperties.getMaxNoProgressIterations());
 
     ChatClientRequestSpec requestSpec = chatClientProvider.chatClient(LlmFeature.CHAT)
       .prompt(new Prompt(
@@ -109,8 +96,7 @@ public class ChatCommand implements Runnable {
               .build(),
           OpenAiChatOptions.builder()
             .model(modelProvider.model(LlmFeature.CHAT, currentModelHolder.get()))
-            .build()))
-      .toolContext(Map.of(AgentProgressSessionRegistry.TOOL_CONTEXT_SESSION_ID, progressSessionId));
+            .build()));
 
     CountDownLatch latch = new CountDownLatch(1);
     AtomicReference<Throwable> errorRef = new AtomicReference<>();
@@ -159,10 +145,6 @@ public class ChatCommand implements Runnable {
       Throwable error = errorRef.get();
       if (error != null) {
         log.warn("Chat response failed", error);
-        if (noProgressException(error) != null) {
-          printNoProgressFinalAnswer(resolvedPrompt, startedAtNanos);
-          return;
-        }
         System.err.println("[error] " + buildUserFacingMessage(error));
         return;
       }
@@ -178,63 +160,8 @@ public class ChatCommand implements Runnable {
       log.warn("Chat response wait interrupted", e);
       IO.println("[error] 回答待機が中断されました");
     } finally {
-      progressSessionRegistry.finish(progressSessionId);
       cancellationService.clear();
     }
-  }
-
-  private void printNoProgressFinalAnswer(InlineFileAttachmentResolver.ResolvedPrompt resolvedPrompt, long startedAtNanos) {
-    try {
-      String finalPrompt = resolvedPrompt.prompt()
-          + """
-
-              The agent has made no meaningful progress for several iterations.
-
-              Do not call additional tools.
-              Using the information already available:
-              - summarize what has been established,
-              - explain what remains unresolved,
-              - explain why further progress could not be made,
-              - provide the best possible answer to the user.
-              """;
-      String content = chatClientProvider.chatClient(LlmFeature.CHAT)
-          .prompt(new Prompt(
-              UserMessage.builder()
-                  .text(finalPrompt)
-                  .media(resolvedPrompt.media())
-                  .build(),
-              OpenAiChatOptions.builder()
-                  .model(modelProvider.model(LlmFeature.CHAT, currentModelHolder.get()))
-                  .build()))
-          .toolCallbacks(List.of())
-          .call()
-          .content();
-      IO.println(answerHeader(startedAtNanos));
-      if (content != null && !content.isBlank()) {
-        IO.println(content);
-      }
-      chatResponseNarrator.narrateIfCompleted(content == null ? "" : content);
-    } catch (RuntimeException e) {
-      log.warn("No-progress final answer generation failed", e);
-      System.err.println("[error] " + buildUserFacingMessage(e));
-    }
-  }
-
-  private AgentNoProgressException noProgressException(Throwable error) {
-    Throwable current = error;
-    while (current != null) {
-      if (current instanceof AgentNoProgressException noProgressException) {
-        return noProgressException;
-      }
-      for (Throwable suppressed : current.getSuppressed()) {
-        AgentNoProgressException suppressedNoProgress = noProgressException(suppressed);
-        if (suppressedNoProgress != null) {
-          return suppressedNoProgress;
-        }
-      }
-      current = current.getCause();
-    }
-    return null;
   }
 
   private void maybeSuggestConsolidation() {

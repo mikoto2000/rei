@@ -2,9 +2,6 @@ package dev.mikoto2000.rei.core.command;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
@@ -22,11 +19,6 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 
-import dev.mikoto2000.rei.agent.progress.AgentNoProgressException;
-import dev.mikoto2000.rei.agent.progress.AgentProgressState;
-import dev.mikoto2000.rei.agent.progress.ProgressEvaluation;
-import dev.mikoto2000.rei.agent.progress.ProgressLevel;
-import dev.mikoto2000.rei.agent.progress.ProgressTrackerSnapshot;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
@@ -45,7 +37,6 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("answer "), response("text")));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -73,7 +64,6 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.error(new java.net.ConnectException("Connection refused")));
 
     ByteArrayOutputStream err = new ByteArrayOutputStream();
@@ -100,7 +90,6 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("ok")));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -128,7 +117,6 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("ok")));
     when(memoryConsolidatorService.shouldSuggestConsolidationNow()).thenReturn(true);
 
@@ -156,7 +144,6 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("ok")));
     when(memoryConsolidatorService.shouldSuggestConsolidationNow()).thenReturn(false);
 
@@ -183,7 +170,6 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.toolContext(anyMap())).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(
         responseWithThinking("", "考えています"),
         response("answer")));
@@ -203,41 +189,6 @@ class ChatCommandTest {
     assertTrue(output.contains("考えています"));
     assertTrue(output.contains("=== answer("));
     assertTrue(output.indexOf("=== thinking ===") < output.indexOf("=== answer("));
-  }
-
-  @Test
-  void runGeneratesFinalAnswerWithoutToolsWhenNoProgressStopsStream() {
-    ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec initialSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
-    ChatClientRequestSpec finalSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
-    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
-    CommandCancellationService cancellationService = new CommandCancellationService();
-
-    ProgressTrackerSnapshot snapshot = new ProgressTrackerSnapshot(
-        AgentProgressState.empty("goal"),
-        new ProgressEvaluation(ProgressLevel.NONE, List.of("no progress")),
-        3,
-        3,
-        true);
-    when(modelHolderService.get()).thenReturn("gpt-test");
-    when(chatClient.prompt(any(Prompt.class))).thenReturn(initialSpec, finalSpec);
-    when(initialSpec.toolContext(anyMap())).thenReturn(initialSpec);
-    when(initialSpec.stream().chatResponse()).thenReturn(Flux.error(new AgentNoProgressException(snapshot)));
-    when(finalSpec.toolCallbacks(anyList())).thenReturn(finalSpec);
-    when(finalSpec.call().content()).thenReturn("final answer");
-
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    PrintStream originalOut = System.out;
-    System.setOut(new PrintStream(out));
-    try {
-      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-          Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty())).execute("hello") == 0);
-    } finally {
-      System.setOut(originalOut);
-    }
-
-    Mockito.verify(finalSpec).toolCallbacks(eq(List.of()));
-    assertTrue(out.toString().contains("final answer"));
   }
 
   private static ChatResponse response(String text) {

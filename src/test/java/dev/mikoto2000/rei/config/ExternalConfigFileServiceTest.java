@@ -32,8 +32,6 @@ class ExternalConfigFileServiceTest {
     String content = Files.readString(created);
     assertTrue(content.contains("spring:"));
     assertTrue(content.contains("rei:"));
-    assertTrue(content.contains("agent:"));
-    assertTrue(content.contains("max-no-progress-iterations: ${REI_AGENT_PROGRESS_MAX_NO_PROGRESS_ITERATIONS:3}"));
     assertTrue(content.contains("skills:"));
     assertTrue(content.contains("${user.dir}/.rei/skills"));
     assertTrue(content.contains("max-selected: 3"));

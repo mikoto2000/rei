@@ -60,10 +60,6 @@ public class ExternalConfigFileService {
               image: openai
 
         rei:
-          agent:
-            progress:
-              enabled: ${REI_AGENT_PROGRESS_ENABLED:true}
-              max-no-progress-iterations: ${REI_AGENT_PROGRESS_MAX_NO_PROGRESS_ITERATIONS:3}
           llm:
             features:
               chat:

@@ -14,13 +14,8 @@ import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallbackProvider;
-import org.springframework.ai.tool.StaticToolCallbackProvider;
 import org.springframework.beans.factory.ObjectProvider;
 
-import dev.mikoto2000.rei.agent.progress.NoProgressToolCallback;
-import dev.mikoto2000.rei.agent.progress.AgentProgressProperties;
-import dev.mikoto2000.rei.agent.progress.AgentProgressSessionRegistry;
-import dev.mikoto2000.rei.agent.progress.AgentProgressToolCallbackFactory;
 import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
@@ -58,7 +53,6 @@ class AiConfigurationTest {
         Mockito.mock(SoundNotificationTools.class),
         Mockito.mock(BlueskyPostTools.class),
         Mockito.mock(UrlContentFetchTools.class),
-        progressToolCallbackFactory(),
         mockProviderReturning(null),
         provider);
 
@@ -66,7 +60,7 @@ class AiConfigurationTest {
 
     List<?> toolCallbackProviders = getDefaultToolCallbackProviders(chatClient);
     assertEquals(1, toolCallbackProviders.size());
-    assertEquals(StaticToolCallbackProvider.class, toolCallbackProviders.getFirst().getClass());
+    assertSame(mcpToolCallbackProvider, toolCallbackProviders.getFirst());
   }
 
   @Test
@@ -88,7 +82,6 @@ class AiConfigurationTest {
         Mockito.mock(SoundNotificationTools.class),
         Mockito.mock(BlueskyPostTools.class),
         Mockito.mock(UrlContentFetchTools.class),
-        progressToolCallbackFactory(),
         mockProviderReturning(null),
         provider);
 
@@ -96,34 +89,6 @@ class AiConfigurationTest {
 
     List<?> toolCallbackProviders = getDefaultToolCallbackProviders(chatClient);
     assertEquals(0, toolCallbackProviders.size());
-  }
-
-  @Test
-  void chatClientWrapsLocalToolsWithProgressCallbacks() throws Exception {
-    AiConfiguration configuration = new AiConfiguration(
-        new CoreProperties("system prompt", 100),
-        Mockito.mock(ChatModel.class),
-        Mockito.mock(ChatMemory.class),
-        new Tools(),
-        Mockito.mock(GoogleCalendarTools.class),
-        Mockito.mock(TaskTools.class),
-        Mockito.mock(BriefingTools.class),
-        Mockito.mock(FeedTools.class),
-        Mockito.mock(ReminderTools.class),
-        Mockito.mock(SearchTools.class),
-        Mockito.mock(WebSearchTools.class),
-        Mockito.mock(SoundNotificationTools.class),
-        Mockito.mock(BlueskyPostTools.class),
-        Mockito.mock(UrlContentFetchTools.class),
-        progressToolCallbackFactory(),
-        mockProviderReturning(null),
-        mockProviderReturning(null));
-
-    ChatClient chatClient = configuration.chatClient();
-
-    List<?> toolCallbacks = getDefaultToolCallbacks(chatClient);
-    org.junit.jupiter.api.Assertions.assertFalse(toolCallbacks.isEmpty());
-    org.junit.jupiter.api.Assertions.assertTrue(toolCallbacks.stream().allMatch(NoProgressToolCallback.class::isInstance));
   }
 
   @Test
@@ -145,7 +110,6 @@ class AiConfigurationTest {
         Mockito.mock(SoundNotificationTools.class),
         Mockito.mock(BlueskyPostTools.class),
         Mockito.mock(UrlContentFetchTools.class),
-        progressToolCallbackFactory(),
         mockProviderReturning(agentSkillAdvisor),
         mockProviderReturning(null));
 
@@ -167,17 +131,6 @@ class AiConfigurationTest {
   }
 
   @SuppressWarnings("unchecked")
-  private List<?> getDefaultToolCallbacks(ChatClient chatClient) throws Exception {
-    Field defaultRequestField = chatClient.getClass().getDeclaredField("defaultChatClientRequest");
-    defaultRequestField.setAccessible(true);
-    Object defaultRequest = defaultRequestField.get(chatClient);
-
-    Field toolCallbacksField = defaultRequest.getClass().getDeclaredField("toolCallbacks");
-    toolCallbacksField.setAccessible(true);
-    return (List<?>) toolCallbacksField.get(defaultRequest);
-  }
-
-  @SuppressWarnings("unchecked")
   private List<?> getDefaultAdvisors(ChatClient chatClient) throws Exception {
     Field defaultRequestField = chatClient.getClass().getDeclaredField("defaultChatClientRequest");
     defaultRequestField.setAccessible(true);
@@ -193,9 +146,5 @@ class AiConfigurationTest {
     ObjectProvider<T> provider = Mockito.mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(value);
     return provider;
-  }
-
-  private AgentProgressToolCallbackFactory progressToolCallbackFactory() {
-    return new AgentProgressToolCallbackFactory(new AgentProgressSessionRegistry(), new AgentProgressProperties());
   }
 }
