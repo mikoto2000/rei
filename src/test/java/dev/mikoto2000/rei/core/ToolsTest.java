@@ -86,6 +86,15 @@ class ToolsTest {
   }
 
   @Test
+  void listFileReturnsEmptyWhenBaseDirectoryDoesNotExistWithoutGit() throws Exception {
+    Tools tools = new Tools();
+
+    List<String> files = tools.listFile("missing", tempDir);
+
+    assertEquals(List.of(), files);
+  }
+
+  @Test
   void grepFindsMatchesInTrackedAndUntrackedFiles() throws Exception {
     initGitRepo();
     Files.createDirectories(tempDir.resolve("docs"));

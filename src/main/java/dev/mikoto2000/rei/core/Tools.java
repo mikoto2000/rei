@@ -233,7 +233,12 @@ public class Tools {
     if (gitListedFiles == null) {
       IO.println("git ls-files コマンドが失敗しました");
       // git が利用できない場合のフォールバック
-      return Files.walk(workingDirectory.resolve(baseDir), 20)
+      java.nio.file.Path resolvedBaseDir = workingDirectory.resolve(baseDir);
+      if (!Files.exists(resolvedBaseDir)) {
+        IO.println(String.format("%s は存在しません", resolvedBaseDir));
+        return List.of();
+      }
+      return Files.walk(resolvedBaseDir, 20)
         .map(p -> p.toFile().getAbsolutePath())
         .toList();
     }
