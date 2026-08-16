@@ -67,6 +67,12 @@ spring:
           model: gpt-image-1
 
 rei:
+  llm:
+    max-output-tokens: 8192
+    output-limit:
+      max-replans-per-goal: 2
+      max-subgoals-per-replan: 8
+      max-llm-calls-per-run: 30
   image:
     output-directory: ${user.dir}/.rei/images
     size: 1024x1024
@@ -119,6 +125,11 @@ LLM を利用する機能ごとに、既定の `spring.ai.openai` とは別の O
 ```yaml
 rei:
   llm:
+    max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}
+    output-limit:
+      max-replans-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL:2}
+      max-subgoals-per-replan: ${REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN:8}
+      max-llm-calls-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN:30}
     features:
       chat:
         base-url: ${REI_LLM_CHAT_BASE_URL:}
@@ -140,7 +151,16 @@ rei:
         base-url: ${REI_LLM_IMAGE_GENERATION_BASE_URL:}
         api-key: ${REI_LLM_IMAGE_GENERATION_API_KEY:}
         model: ${REI_LLM_IMAGE_GENERATION_MODEL:}
+      output-limit-planner:
+        base-url: ${REI_LLM_OUTPUT_LIMIT_PLANNER_BASE_URL:}
+        api-key: ${REI_LLM_OUTPUT_LIMIT_PLANNER_API_KEY:}
+        model: ${REI_LLM_OUTPUT_LIMIT_PLANNER_MODEL:}
 ```
+
+`max-output-tokens` は 1 回の LLM 呼び出しで生成させる最大トークン数です。
+LLM 応答の `finish_reason` が `length` の場合は正常完了扱いせず、`output-limit-planner` の LLM に元のゴールをサブゴールへ再計画させます。
+再計画後は各サブゴールを通常チャットと同じ実行経路で順次処理し、最後にサブゴール結果を統合して元の要求への最終回答を作ります。
+`output-limit` の各値は、再計画ループを防ぐための決定論的な上限です。
 
 対応している機能キー:
 
@@ -154,6 +174,7 @@ rei:
 | `briefing` | 日次ブリーフィング生成 |
 | `interest-discovery` | `/interest discover` の候補抽出 |
 | `agent-skills` | Agent Skills の暗黙選択 |
+| `output-limit-planner` | 出力上限到達時のサブゴール再計画 |
 | `image-prompt` | 画像生成プロンプト生成 |
 | `image-generation` | 画像生成 API |
 
@@ -169,8 +190,18 @@ rei:
 | `REI_LLM_BRIEFING_BASE_URL` / `REI_LLM_BRIEFING_API_KEY` / `REI_LLM_BRIEFING_MODEL` | ブリーフィング用 |
 | `REI_LLM_INTEREST_DISCOVERY_BASE_URL` / `REI_LLM_INTEREST_DISCOVERY_API_KEY` / `REI_LLM_INTEREST_DISCOVERY_MODEL` | 興味候補抽出用 |
 | `REI_LLM_AGENT_SKILLS_BASE_URL` / `REI_LLM_AGENT_SKILLS_API_KEY` / `REI_LLM_AGENT_SKILLS_MODEL` | Agent Skills 選択用 |
+| `REI_LLM_OUTPUT_LIMIT_PLANNER_BASE_URL` / `REI_LLM_OUTPUT_LIMIT_PLANNER_API_KEY` / `REI_LLM_OUTPUT_LIMIT_PLANNER_MODEL` | 出力上限到達時の再計画用 |
 | `REI_LLM_IMAGE_PROMPT_BASE_URL` / `REI_LLM_IMAGE_PROMPT_API_KEY` / `REI_LLM_IMAGE_PROMPT_MODEL` | 画像生成プロンプト生成用 |
 | `REI_LLM_IMAGE_GENERATION_BASE_URL` / `REI_LLM_IMAGE_GENERATION_API_KEY` / `REI_LLM_IMAGE_GENERATION_MODEL` | 画像生成 API 用 |
+
+出力上限・再計画の環境変数:
+
+| 変数 | デフォルト | 説明 |
+| --- | --- | --- |
+| `REI_LLM_MAX_OUTPUT_TOKENS` | `8192` | 1 回の LLM 呼び出しの最大出力トークン数 |
+| `REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL` | `2` | 1 回の要求内で許可する再計画回数 |
+| `REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN` | `8` | Planner が返せる最大サブゴール数 |
+| `REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN` | `30` | 1 回の要求内で許可する LLM 呼び出し回数 |
 
 ### Google Calendar
 
