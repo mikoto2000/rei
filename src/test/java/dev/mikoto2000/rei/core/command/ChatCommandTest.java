@@ -25,6 +25,11 @@ import org.springframework.ai.chat.prompt.Prompt;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.llm.LlmProperties;
+import dev.mikoto2000.rei.llm.OutputLimitReplanPlan;
+import dev.mikoto2000.rei.llm.OutputLimitReplanRequest;
+import dev.mikoto2000.rei.llm.OutputLimitReplanSubgoal;
+import dev.mikoto2000.rei.llm.OutputLimitReplanner;
 import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import picocli.CommandLine;
@@ -162,6 +167,142 @@ class ChatCommandTest {
 
     assertTrue(err.toString().contains("output token limit"));
     verify(narrator, never()).narrateIfCompleted(any());
+  }
+
+  @Test
+  void runReplansAndExecutesSubgoalsWhenOutputLimitIsReached() {
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    CommandCancellationService cancellationService = new CommandCancellationService();
+    ChatResponseNarrator narrator = Mockito.mock(ChatResponseNarrator.class);
+    OutputLimitReplanner replanner = Mockito.mock(OutputLimitReplanner.class);
+    LlmProperties properties = new LlmProperties();
+
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.stream().chatResponse()).thenReturn(
+        Flux.just(responseWithFinishReason("partial", "length")),
+        Flux.just(response("subgoal-1 result")),
+        Flux.just(response("subgoal-2 result")),
+        Flux.just(response("final result")));
+    when(replanner.replan(any(OutputLimitReplanRequest.class))).thenReturn(new OutputLimitReplanPlan(List.of(
+        new OutputLimitReplanSubgoal("one", "first subgoal"),
+        new OutputLimitReplanSubgoal("two", "second subgoal")),
+        "integrate results"));
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      assertTrue(new CommandLine(new ChatCommand(
+          new ChatCommand.FixedLlmChatClientProvider(chatClient),
+          modelHolderService,
+          new ChatCommand.FixedLlmModelProvider(),
+          properties,
+          cancellationService,
+          narrator,
+          java.util.Optional.empty(),
+          java.util.Optional.of(replanner))).execute("original goal") == 0);
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
+    verify(chatClient, Mockito.times(4)).prompt(promptCaptor.capture());
+    assertTrue(promptCaptor.getAllValues().get(0).getContents().contains("original goal"));
+    assertTrue(promptCaptor.getAllValues().get(1).getContents().contains("first subgoal"));
+    assertTrue(promptCaptor.getAllValues().get(2).getContents().contains("second subgoal"));
+    assertTrue(promptCaptor.getAllValues().get(3).getContents().contains("integrate results"));
+    assertTrue(promptCaptor.getAllValues().get(3).getContents().contains("subgoal-1 result"));
+    assertTrue(promptCaptor.getAllValues().get(3).getContents().contains("subgoal-2 result"));
+    verify(narrator).narrateIfCompleted("final result");
+  }
+
+  @Test
+  void runCountsInitialPromptAgainstOutputLimitLlmCallBudget() {
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    CommandCancellationService cancellationService = new CommandCancellationService();
+    ChatResponseNarrator narrator = Mockito.mock(ChatResponseNarrator.class);
+    OutputLimitReplanner replanner = Mockito.mock(OutputLimitReplanner.class);
+    LlmProperties properties = new LlmProperties();
+    properties.getOutputLimit().setMaxLlmCallsPerRun(1);
+
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(responseWithFinishReason("partial", "length")));
+
+    ByteArrayOutputStream err = new ByteArrayOutputStream();
+    PrintStream originalErr = System.err;
+    System.setErr(new PrintStream(err));
+    try {
+      assertTrue(new CommandLine(new ChatCommand(
+          new ChatCommand.FixedLlmChatClientProvider(chatClient),
+          modelHolderService,
+          new ChatCommand.FixedLlmModelProvider(),
+          properties,
+          cancellationService,
+          narrator,
+          java.util.Optional.empty(),
+          java.util.Optional.of(replanner))).execute("original goal") == 0);
+    } finally {
+      System.setErr(originalErr);
+    }
+
+    verify(replanner, never()).replan(any());
+    verify(chatClient, Mockito.times(1)).prompt(any(Prompt.class));
+    assertTrue(err.toString().contains("LLM call budget exhausted"));
+    verify(narrator, never()).narrateIfCompleted(any());
+  }
+
+  @Test
+  void runReplansSubgoalAgainWhenSubgoalHitsOutputLimit() {
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    CommandCancellationService cancellationService = new CommandCancellationService();
+    ChatResponseNarrator narrator = Mockito.mock(ChatResponseNarrator.class);
+    OutputLimitReplanner replanner = Mockito.mock(OutputLimitReplanner.class);
+    LlmProperties properties = new LlmProperties();
+
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.stream().chatResponse()).thenReturn(
+        Flux.just(responseWithFinishReason("partial", "length")),
+        Flux.just(responseWithFinishReason("large subgoal partial", "length")),
+        Flux.just(response("nested subgoal result")),
+        Flux.just(response("nested final result")),
+        Flux.just(response("final result")));
+    when(replanner.replan(any(OutputLimitReplanRequest.class))).thenReturn(
+        new OutputLimitReplanPlan(List.of(new OutputLimitReplanSubgoal("one", "large subgoal")), "integrate large"),
+        new OutputLimitReplanPlan(List.of(new OutputLimitReplanSubgoal("one-a", "small subgoal")), "integrate small"));
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      assertTrue(new CommandLine(new ChatCommand(
+          new ChatCommand.FixedLlmChatClientProvider(chatClient),
+          modelHolderService,
+          new ChatCommand.FixedLlmModelProvider(),
+          properties,
+          cancellationService,
+          narrator,
+          java.util.Optional.empty(),
+          java.util.Optional.of(replanner))).execute("original goal") == 0);
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
+    verify(chatClient, Mockito.times(5)).prompt(promptCaptor.capture());
+    assertTrue(promptCaptor.getAllValues().get(1).getContents().contains("large subgoal"));
+    assertTrue(promptCaptor.getAllValues().get(2).getContents().contains("small subgoal"));
+    assertTrue(promptCaptor.getAllValues().get(4).getContents().contains("nested final result"));
+    verify(replanner, Mockito.times(2)).replan(any());
+    verify(narrator).narrateIfCompleted("final result");
   }
 
   @Test

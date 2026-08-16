@@ -35,4 +35,8 @@ public class OutputLimitRunBudget {
   public int remainingLlmCalls() {
     return Math.max(0, maxLlmCalls - llmCalls);
   }
+
+  public boolean hasRemainingLlmCalls() {
+    return remainingLlmCalls() > 0;
+  }
 }

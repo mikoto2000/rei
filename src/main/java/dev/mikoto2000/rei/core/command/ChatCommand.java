@@ -18,7 +18,13 @@ import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
+import dev.mikoto2000.rei.llm.LlmProperties;
 import dev.mikoto2000.rei.llm.OutputLimitDetector;
+import dev.mikoto2000.rei.llm.OutputLimitReplanPlan;
+import dev.mikoto2000.rei.llm.OutputLimitReplanRequest;
+import dev.mikoto2000.rei.llm.OutputLimitReplanSubgoal;
+import dev.mikoto2000.rei.llm.OutputLimitReplanner;
+import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -50,30 +56,35 @@ public class ChatCommand implements Runnable {
 
   private final ModelHolderService currentModelHolder;
   private final LlmModelProvider modelProvider;
+  private final LlmProperties llmProperties;
 
   private final CommandCancellationService cancellationService;
 
   private final ChatResponseNarrator chatResponseNarrator;
   private final Optional<MemoryConsolidatorService> memoryConsolidatorService;
+  private final Optional<OutputLimitReplanner> outputLimitReplanner;
   private final InlineFileAttachmentResolver inlineFileAttachmentResolver = new InlineFileAttachmentResolver();
 
   public ChatCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
       CommandCancellationService cancellationService, ChatResponseNarrator chatResponseNarrator,
       Optional<MemoryConsolidatorService> memoryConsolidatorService) {
     this(new FixedLlmChatClientProvider(chatClient), currentModelHolder, new FixedLlmModelProvider(),
-        cancellationService, chatResponseNarrator, memoryConsolidatorService);
+        new LlmProperties(), cancellationService, chatResponseNarrator, memoryConsolidatorService, Optional.empty());
   }
 
   @Autowired
   public ChatCommand(LlmChatClientProvider chatClientProvider, ModelHolderService currentModelHolder,
-      LlmModelProvider modelProvider, CommandCancellationService cancellationService,
-      ChatResponseNarrator chatResponseNarrator, Optional<MemoryConsolidatorService> memoryConsolidatorService) {
+      LlmModelProvider modelProvider, LlmProperties llmProperties, CommandCancellationService cancellationService,
+      ChatResponseNarrator chatResponseNarrator, Optional<MemoryConsolidatorService> memoryConsolidatorService,
+      Optional<OutputLimitReplanner> outputLimitReplanner) {
     this.chatClientProvider = chatClientProvider;
     this.currentModelHolder = currentModelHolder;
     this.modelProvider = modelProvider;
+    this.llmProperties = llmProperties;
     this.cancellationService = cancellationService;
     this.chatResponseNarrator = chatResponseNarrator;
     this.memoryConsolidatorService = memoryConsolidatorService;
+    this.outputLimitReplanner = outputLimitReplanner;
   }
 
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
@@ -85,8 +96,102 @@ public class ChatCommand implements Runnable {
     cancellationService.begin(Thread.currentThread());
     chatResponseNarrator.reset();
 
-    String promptText = String.join(" ", prompts);
-    InlineFileAttachmentResolver.ResolvedPrompt resolvedPrompt = inlineFileAttachmentResolver.resolve(promptText);
+    try {
+      String promptText = String.join(" ", prompts);
+      OutputLimitRunBudget budget = new OutputLimitRunBudget(
+          llmProperties.getOutputLimit().getMaxReplansPerGoal(),
+          llmProperties.getOutputLimit().getMaxLlmCallsPerRun());
+      if (!budget.tryConsumeLlmCall()) {
+        log.warn("Chat skipped: LLM call budget exhausted before initial prompt");
+        System.err.println("[error] LLM call budget exhausted before initial prompt");
+        return;
+      }
+      ChatRunResult result = executePrompt(promptText, true, startedAtNanos, budget);
+      if (result.status() == ChatRunStatus.OUTPUT_LIMIT) {
+        result = handleOutputLimit(promptText, promptText, "", result.text(), budget, startedAtNanos);
+      }
+      if (result.status() == ChatRunStatus.SUCCESS) {
+        chatResponseNarrator.narrateIfCompleted(result.text());
+        maybeSuggestConsolidation();
+      }
+    } finally {
+      cancellationService.clear();
+    }
+  }
+
+  private ChatRunResult handleOutputLimit(String originalUserRequest, String currentGoal, String progressSoFar,
+      String partialOutput, OutputLimitRunBudget budget, long startedAtNanos) {
+    if (outputLimitReplanner.isEmpty()) {
+      System.err.println("[error] output token limit reached");
+      return ChatRunResult.outputLimit(partialOutput);
+    }
+    if (!budget.hasRemainingLlmCalls()) {
+      log.warn("Output limit replan skipped: LLM call budget exhausted before planner");
+      System.err.println("[error] output token limit reached and LLM call budget exhausted");
+      return ChatRunResult.outputLimit(partialOutput);
+    }
+    if (!budget.tryConsumeReplan()) {
+      log.warn("Output limit replan skipped: replan budget exhausted");
+      System.err.println("[error] output token limit reached and replan budget exhausted");
+      return ChatRunResult.outputLimit(partialOutput);
+    }
+    if (!budget.tryConsumeLlmCall()) {
+      log.warn("Output limit replan skipped: LLM call budget exhausted before planner");
+      System.err.println("[error] output token limit reached and LLM call budget exhausted");
+      return ChatRunResult.outputLimit(partialOutput);
+    }
+
+    OutputLimitReplanPlan plan;
+    try {
+      plan = outputLimitReplanner.get().replan(new OutputLimitReplanRequest(
+          originalUserRequest,
+          currentGoal,
+          progressSoFar,
+          partialOutput,
+          budget.replanCount(),
+          llmProperties.getOutputLimit().getMaxReplansPerGoal(),
+          budget.remainingLlmCalls()));
+    } catch (Exception e) {
+      log.warn("Output limit replan failed", e);
+      System.err.println("[error] output token limit reached and replan failed: " + e.getMessage());
+      return ChatRunResult.outputLimit(partialOutput);
+    }
+
+    StringBuilder subgoalResults = new StringBuilder();
+    for (OutputLimitReplanSubgoal subgoal : plan.subgoals()) {
+      if (!budget.tryConsumeLlmCall()) {
+        log.warn("Output limit subgoal skipped: LLM call budget exhausted");
+        System.err.println("[error] LLM call budget exhausted before subgoal: " + subgoal.id());
+        return ChatRunResult.outputLimit(subgoalResults.toString());
+      }
+      log.info("Output limit subgoal started: id={}, goal={}", subgoal.id(), subgoal.goal());
+      ChatRunResult subgoalResult = executePrompt(subgoal.goal(), false, startedAtNanos, budget);
+      log.info("Output limit subgoal finished: id={}, status={}", subgoal.id(), subgoalResult.status());
+      if (subgoalResult.status() == ChatRunStatus.OUTPUT_LIMIT) {
+        subgoalResult = handleOutputLimit(originalUserRequest, subgoal.goal(), subgoalResults.toString(),
+            subgoalResult.text(), budget, startedAtNanos);
+      }
+      if (subgoalResult.status() != ChatRunStatus.SUCCESS) {
+        return subgoalResult;
+      }
+      subgoalResults.append("## ").append(subgoal.id()).append("\n")
+          .append(subgoalResult.text()).append("\n\n");
+    }
+
+    if (!budget.tryConsumeLlmCall()) {
+      log.warn("Output limit final integration skipped: LLM call budget exhausted");
+      System.err.println("[error] LLM call budget exhausted before final integration");
+      return ChatRunResult.outputLimit(subgoalResults.toString());
+    }
+    return executePrompt(buildIntegrationPrompt(originalUserRequest, plan.finalGoal(), subgoalResults.toString()),
+        false, startedAtNanos, budget);
+  }
+
+  private ChatRunResult executePrompt(String promptText, boolean resolveAttachments, long startedAtNanos,
+      OutputLimitRunBudget budget) {
+    InlineFileAttachmentResolver.ResolvedPrompt resolvedPrompt = resolveAttachments
+        ? inlineFileAttachmentResolver.resolve(promptText)
+        : new InlineFileAttachmentResolver.ResolvedPrompt(promptText, java.util.List.of(), java.util.List.of());
     for (String warning : resolvedPrompt.warnings()) {
       IO.println(warning);
     }
@@ -143,8 +248,7 @@ public class ChatCommand implements Runnable {
     } catch (RuntimeException e) {
       log.warn("Chat response stream failed to start", e);
       System.err.println("[error] " + buildUserFacingMessage(e));
-      cancellationService.clear();
-      return;
+      return ChatRunResult.failed();
     }
     cancellationService.register(disposable);
 
@@ -155,29 +259,41 @@ public class ChatCommand implements Runnable {
       if (error != null) {
         log.warn("Chat response failed", error);
         System.err.println("[error] " + buildUserFacingMessage(error));
-        return;
+        return ChatRunResult.failed();
       }
       if (outputLimitReached.get()) {
         log.warn("Chat output token limit reached: promptLength={}, generatedLength={}",
             promptText.length(), responseBuilder.length());
-        System.err.println("[error] output token limit reached");
-        return;
+        return ChatRunResult.outputLimit(responseBuilder.toString());
       }
       printGenerationSpeed(answerStartedAtNanos.get(), completionTokens.get());
-      chatResponseNarrator.narrateIfCompleted(responseBuilder.toString());
-      maybeSuggestConsolidation();
+      return ChatRunResult.success(responseBuilder.toString());
     } catch (InterruptedException e) {
       if (cancellationService.consumeCancellationRequested()) {
         System.out.println();
         IO.println("[cancelled]");
-        return;
+        return ChatRunResult.cancelled();
       }
       Thread.currentThread().interrupt();
       log.warn("Chat response wait interrupted", e);
       IO.println("[error] 回答待機が中断されました");
-    } finally {
-      cancellationService.clear();
+      return ChatRunResult.failed();
     }
+  }
+
+  private String buildIntegrationPrompt(String originalUserRequest, String finalGoal, String subgoalResults) {
+    return """
+        元のユーザー要求に対する最終回答を作成してください。
+
+        元のユーザー要求:
+        %s
+
+        統合ゴール:
+        %s
+
+        サブゴール結果:
+        %s
+        """.formatted(originalUserRequest, finalGoal, subgoalResults);
   }
 
   private void maybeSuggestConsolidation() {
@@ -339,6 +455,31 @@ public class ChatCommand implements Runnable {
       return current.substring(previous.length());
     }
     return current;
+  }
+
+  private enum ChatRunStatus {
+    SUCCESS,
+    OUTPUT_LIMIT,
+    FAILED,
+    CANCELLED
+  }
+
+  private record ChatRunResult(ChatRunStatus status, String text) {
+    static ChatRunResult success(String text) {
+      return new ChatRunResult(ChatRunStatus.SUCCESS, text);
+    }
+
+    static ChatRunResult outputLimit(String text) {
+      return new ChatRunResult(ChatRunStatus.OUTPUT_LIMIT, text);
+    }
+
+    static ChatRunResult failed() {
+      return new ChatRunResult(ChatRunStatus.FAILED, "");
+    }
+
+    static ChatRunResult cancelled() {
+      return new ChatRunResult(ChatRunStatus.CANCELLED, "");
+    }
   }
 
   public static class FixedLlmChatClientProvider extends LlmChatClientProvider {

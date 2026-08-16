@@ -14,6 +14,7 @@ class OutputLimitRunBudgetTest {
     assertThat(budget.tryConsumeLlmCall()).isTrue();
     assertThat(budget.tryConsumeLlmCall()).isFalse();
     assertThat(budget.remainingLlmCalls()).isZero();
+    assertThat(budget.hasRemainingLlmCalls()).isFalse();
   }
 
   @Test
