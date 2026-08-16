@@ -39,6 +39,9 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("llm:"));
     assertTrue(content.contains("REI_LLM_MAX_OUTPUT_TOKENS"));
     assertTrue(content.contains("max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}"));
+    assertTrue(content.contains("REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL"));
+    assertTrue(content.contains("REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN"));
+    assertTrue(content.contains("REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN"));
     assertTrue(content.contains("REI_LLM_CHAT_BASE_URL"));
     assertTrue(content.contains("REI_LLM_SEARCH_BASE_URL"));
     assertTrue(content.contains("REI_LLM_BLUESKY_REPLY_BASE_URL"));

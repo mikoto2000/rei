@@ -11,6 +11,7 @@ public class LlmProperties {
   private static final int DEFAULT_MAX_OUTPUT_TOKENS = 8192;
 
   private Integer maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS;
+  private OutputLimit outputLimit = new OutputLimit();
   private Map<String, Server> features = new LinkedHashMap<>();
 
   public Integer getMaxOutputTokens() {
@@ -22,6 +23,14 @@ public class LlmProperties {
 
   public void setMaxOutputTokens(Integer maxOutputTokens) {
     this.maxOutputTokens = maxOutputTokens;
+  }
+
+  public OutputLimit getOutputLimit() {
+    return outputLimit;
+  }
+
+  public void setOutputLimit(OutputLimit outputLimit) {
+    this.outputLimit = outputLimit == null ? new OutputLimit() : outputLimit;
   }
 
   public Map<String, Server> getFeatures() {
@@ -76,6 +85,44 @@ public class LlmProperties {
 
     public boolean hasCustomServer() {
       return baseUrl != null && !baseUrl.isBlank();
+    }
+  }
+
+  public static class OutputLimit {
+    private static final int DEFAULT_MAX_REPLANS_PER_GOAL = 2;
+    private static final int DEFAULT_MAX_SUBGOALS_PER_REPLAN = 8;
+    private static final int DEFAULT_MAX_LLM_CALLS_PER_RUN = 30;
+
+    private Integer maxReplansPerGoal = DEFAULT_MAX_REPLANS_PER_GOAL;
+    private Integer maxSubgoalsPerReplan = DEFAULT_MAX_SUBGOALS_PER_REPLAN;
+    private Integer maxLlmCallsPerRun = DEFAULT_MAX_LLM_CALLS_PER_RUN;
+
+    public Integer getMaxReplansPerGoal() {
+      return positiveOrDefault(maxReplansPerGoal, DEFAULT_MAX_REPLANS_PER_GOAL);
+    }
+
+    public void setMaxReplansPerGoal(Integer maxReplansPerGoal) {
+      this.maxReplansPerGoal = maxReplansPerGoal;
+    }
+
+    public Integer getMaxSubgoalsPerReplan() {
+      return positiveOrDefault(maxSubgoalsPerReplan, DEFAULT_MAX_SUBGOALS_PER_REPLAN);
+    }
+
+    public void setMaxSubgoalsPerReplan(Integer maxSubgoalsPerReplan) {
+      this.maxSubgoalsPerReplan = maxSubgoalsPerReplan;
+    }
+
+    public Integer getMaxLlmCallsPerRun() {
+      return positiveOrDefault(maxLlmCallsPerRun, DEFAULT_MAX_LLM_CALLS_PER_RUN);
+    }
+
+    public void setMaxLlmCallsPerRun(Integer maxLlmCallsPerRun) {
+      this.maxLlmCallsPerRun = maxLlmCallsPerRun;
+    }
+
+    private int positiveOrDefault(Integer value, int defaultValue) {
+      return value == null || value <= 0 ? defaultValue : value;
     }
   }
 }
