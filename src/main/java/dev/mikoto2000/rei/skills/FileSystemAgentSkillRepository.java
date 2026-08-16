@@ -104,9 +104,25 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
 
   private Map<String, String> parseFrontMatter(String frontMatter) {
     Map<String, String> metadata = new LinkedHashMap<>();
-    for (String line : frontMatter.split("\n")) {
+    String blockKey = null;
+    String blockStyle = null;
+    StringBuilder blockValue = new StringBuilder();
+    for (String line : frontMatter.split("\n", -1)) {
       if (line.isBlank()) {
+        if (blockKey != null && "|".equals(blockStyle)) {
+          blockValue.append('\n');
+        }
         continue;
+      }
+      if (blockKey != null && isIndented(line)) {
+        appendBlockLine(blockValue, blockStyle, line.strip());
+        continue;
+      }
+      if (blockKey != null) {
+        metadata.put(blockKey, blockValue.toString().stripTrailing());
+        blockKey = null;
+        blockStyle = null;
+        blockValue = new StringBuilder();
       }
       int separator = line.indexOf(':');
       if (separator <= 0) {
@@ -114,9 +130,35 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
       }
       String key = line.substring(0, separator).strip().toLowerCase(Locale.ROOT);
       String value = line.substring(separator + 1).strip();
-      metadata.put(key, unquote(value));
+      if (value.equals(">") || value.equals("|")) {
+        blockKey = key;
+        blockStyle = value;
+      } else {
+        metadata.put(key, unquote(value));
+      }
+    }
+    if (blockKey != null) {
+      metadata.put(blockKey, blockValue.toString().stripTrailing());
     }
     return metadata;
+  }
+
+  private boolean isIndented(String line) {
+    return line.startsWith(" ") || line.startsWith("\t");
+  }
+
+  private void appendBlockLine(StringBuilder blockValue, String blockStyle, String line) {
+    if ("|".equals(blockStyle)) {
+      if (!blockValue.isEmpty()) {
+        blockValue.append('\n');
+      }
+      blockValue.append(line);
+      return;
+    }
+    if (!blockValue.isEmpty()) {
+      blockValue.append(' ');
+    }
+    blockValue.append(line);
   }
 
   private String unquote(String value) {

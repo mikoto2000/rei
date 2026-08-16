@@ -67,6 +67,30 @@ class FileSystemAgentSkillRepositoryTest {
   }
 
   @Test
+  void loadsSkillMdWithFoldedDescription() throws Exception {
+    Path skillsDir = tempDir.resolve(".rei").resolve("skills");
+    writeSkill(skillsDir.resolve("powershell"), """
+        ---
+        name: powershell
+        description: >
+          Use this skill when working in PowerShell on Windows or cross-platform PowerShell.
+          It provides guidance for correct PowerShell syntax.
+        enabled: true
+        ---
+
+        Use PowerShell according to PowerShell semantics.
+        """);
+    FileSystemAgentSkillRepository repository = new FileSystemAgentSkillRepository(properties(skillsDir));
+
+    List<AgentSkill> skills = repository.findAll();
+
+    assertThat(skills).hasSize(1);
+    assertThat(skills.get(0).name()).isEqualTo("powershell");
+    assertThat(skills.get(0).description())
+        .isEqualTo("Use this skill when working in PowerShell on Windows or cross-platform PowerShell. It provides guidance for correct PowerShell syntax.");
+  }
+
+  @Test
   void skipsBrokenSkillButKeepsOtherSkills() throws Exception {
     Path skillsDir = tempDir.resolve(".rei").resolve("skills");
     writeSkill(skillsDir.resolve("valid"), """
