@@ -99,6 +99,10 @@ public class ExternalConfigFileService {
                 base-url: ${REI_LLM_AGENT_SKILLS_BASE_URL:}
                 api-key: ${REI_LLM_AGENT_SKILLS_API_KEY:}
                 model: ${REI_LLM_AGENT_SKILLS_MODEL:}
+              output-limit-planner:
+                base-url: ${REI_LLM_OUTPUT_LIMIT_PLANNER_BASE_URL:}
+                api-key: ${REI_LLM_OUTPUT_LIMIT_PLANNER_API_KEY:}
+                model: ${REI_LLM_OUTPUT_LIMIT_PLANNER_MODEL:}
               image-prompt:
                 base-url: ${REI_LLM_IMAGE_PROMPT_BASE_URL:}
                 api-key: ${REI_LLM_IMAGE_PROMPT_API_KEY:}
