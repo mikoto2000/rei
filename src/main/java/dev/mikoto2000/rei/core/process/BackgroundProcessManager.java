@@ -7,6 +7,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -15,6 +16,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -26,6 +28,7 @@ import jakarta.annotation.PreDestroy;
 public class BackgroundProcessManager {
   private static final int LOG_LINE_CAPACITY = 200;
   private static final int DEFAULT_TAIL_LINES = 100;
+  private static final Duration KILL_GRACE_PERIOD = Duration.ofSeconds(5);
 
   private final SystemShellService systemShellService;
   private final ConcurrentMap<String, ManagedBackgroundProcess> processes = new ConcurrentHashMap<>();
@@ -77,14 +80,23 @@ public class BackgroundProcessManager {
     return snapshot(managedProcess, normalizeTailLines(tailLines), "ok");
   }
 
+  public BackgroundProcessSnapshot kill(String processId) {
+    ManagedBackgroundProcess managedProcess = processes.get(processId);
+    if (managedProcess == null) {
+      return new BackgroundProcessSnapshot(processId, -1, BackgroundProcessStatus.FAILED, null, null, null,
+          List.of(), List.of(), false, "process not found");
+    }
+    managedProcess.status.set(BackgroundProcessStatus.KILLED);
+    terminateProcessTree(managedProcess.process.toHandle());
+    if (!managedProcess.process.isAlive()) {
+      managedProcess.endedAt = managedProcess.endedAt == null ? Instant.now() : managedProcess.endedAt;
+    }
+    return snapshot(managedProcess, DEFAULT_TAIL_LINES, "killed");
+  }
+
   @PreDestroy
   public void shutdown() {
-    processes.values().forEach(managedProcess -> {
-      if (managedProcess.process.isAlive()) {
-        managedProcess.status.set(BackgroundProcessStatus.KILLED);
-        managedProcess.process.destroyForcibly();
-      }
-    });
+    processes.keySet().forEach(this::kill);
     executor.shutdownNow();
   }
 
@@ -93,10 +105,44 @@ public class BackgroundProcessManager {
       int exitCode = managedProcess.process.waitFor();
       managedProcess.exitCode.set(exitCode);
       managedProcess.endedAt = Instant.now();
+      if (managedProcess.status.get() == BackgroundProcessStatus.KILLED) {
+        return;
+      }
       managedProcess.status.compareAndSet(BackgroundProcessStatus.RUNNING, BackgroundProcessStatus.EXITED);
       managedProcess.status.compareAndSet(BackgroundProcessStatus.STARTING, BackgroundProcessStatus.EXITED);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+    }
+  }
+
+  private void terminateProcessTree(ProcessHandle root) {
+    List<ProcessHandle> handles = Stream.concat(root.descendants(), Stream.of(root)).distinct().toList();
+    handles.forEach(handle -> {
+      if (handle.isAlive()) {
+        handle.destroy();
+      }
+    });
+    waitForExit(handles, KILL_GRACE_PERIOD);
+    handles.forEach(handle -> {
+      if (handle.isAlive()) {
+        handle.destroyForcibly();
+      }
+    });
+    waitForExit(handles, Duration.ofSeconds(1));
+  }
+
+  private void waitForExit(List<ProcessHandle> handles, Duration timeout) {
+    long deadline = System.nanoTime() + timeout.toNanos();
+    while (System.nanoTime() < deadline) {
+      if (handles.stream().noneMatch(ProcessHandle::isAlive)) {
+        return;
+      }
+      try {
+        Thread.sleep(50);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        return;
+      }
     }
   }
 

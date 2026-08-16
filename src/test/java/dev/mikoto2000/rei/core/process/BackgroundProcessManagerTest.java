@@ -52,6 +52,27 @@ class BackgroundProcessManagerTest {
     assertTrue(actual.stderr().contains("fixture stderr"));
   }
 
+  @Test
+  void killTerminatesManagedProcessOnly() throws Exception {
+    BackgroundProcessSnapshot spawned = manager.spawnCommandLine(javaCommand("run"), tempDir);
+    awaitStdout(spawned.processId(), "ready");
+
+    BackgroundProcessSnapshot killed = manager.kill(spawned.processId());
+    BackgroundProcessSnapshot actual = awaitStatus(spawned.processId(), BackgroundProcessStatus.KILLED);
+
+    assertEquals(BackgroundProcessStatus.KILLED, killed.status());
+    assertEquals(BackgroundProcessStatus.KILLED, actual.status());
+    assertTrue(killed.message().contains("killed"));
+  }
+
+  @Test
+  void killReturnsNotFoundForUnknownProcess() {
+    BackgroundProcessSnapshot actual = manager.kill("proc-missing");
+
+    assertEquals(BackgroundProcessStatus.FAILED, actual.status());
+    assertEquals(false, actual.found());
+  }
+
   private BackgroundProcessSnapshot awaitStdout(String processId, String expectedLine) throws Exception {
     long deadline = System.currentTimeMillis() + 5000;
     BackgroundProcessSnapshot snapshot;
