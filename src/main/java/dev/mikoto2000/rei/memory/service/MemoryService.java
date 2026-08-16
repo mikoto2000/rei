@@ -3,7 +3,6 @@ package dev.mikoto2000.rei.memory.service;
 import java.sql.ResultSet;
 import java.time.Clock;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -12,6 +11,7 @@ import java.util.function.Supplier;
 import javax.sql.DataSource;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
@@ -32,6 +32,7 @@ public class MemoryService {
     this(dataSource, memoryProperties, Clock.systemUTC());
   }
 
+  @Autowired
   public MemoryService(@Qualifier("memoryConsolidationDataSource") DataSource dataSource,
       MemoryProperties memoryProperties, Clock clock) {
     this.jdbcClient = JdbcClient.create(dataSource);
