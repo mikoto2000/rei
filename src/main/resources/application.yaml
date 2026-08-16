@@ -146,6 +146,7 @@ rei:
     handle: ${REI_BLUESKY_HANDLE:}
     app-password: ${REI_BLUESKY_APP_PASSWORD:}
     max-post-length: ${REI_BLUESKY_MAX_POST_LENGTH:300}
+    timeout-seconds: ${REI_BLUESKY_TIMEOUT_SECONDS:30}
     reply:
       enabled: ${REI_BLUESKY_REPLY_ENABLED:false}
       dry-run: ${REI_BLUESKY_REPLY_DRY_RUN:false}

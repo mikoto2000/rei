@@ -134,6 +134,7 @@ public class ExternalConfigFileService {
             handle: ${REI_BLUESKY_HANDLE:}
             app-password: ${REI_BLUESKY_APP_PASSWORD:}
             max-post-length: ${REI_BLUESKY_MAX_POST_LENGTH:300}
+            timeout-seconds: ${REI_BLUESKY_TIMEOUT_SECONDS:30}
             reply:
               enabled: false
               dry-run: true

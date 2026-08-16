@@ -17,6 +17,7 @@ public class BlueskyProperties {
   private String handle = "";
   private String appPassword = "";
   private int maxPostLength = 300;
+  private int timeoutSeconds = 30;
 
   private BlueskyReplyProperties reply = new BlueskyReplyProperties();
 
