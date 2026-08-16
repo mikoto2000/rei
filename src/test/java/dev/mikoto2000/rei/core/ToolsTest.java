@@ -6,6 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,7 +25,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
 import dev.mikoto2000.rei.core.process.BackgroundProcessStatus;
+import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.core.service.SystemShellService;
 
 class ToolsTest {
 
@@ -230,6 +235,16 @@ class ToolsTest {
     assertEquals(0, result.exitCode());
     assertEquals("hello", result.stdout().trim());
     assertFalse(result.timedOut());
+  }
+
+  @Test
+  void todayAndNowUseInjectedClock() {
+    Clock fixed = Clock.fixed(Instant.parse("2026-08-16T16:35:42Z"), ZoneId.of("Asia/Tokyo"));
+    SystemShellService shellService = new SystemShellService();
+    Tools tools = new Tools(null, shellService, new BackgroundProcessManager(shellService), fixed);
+
+    assertEquals("2026-08-17", tools.today());
+    assertEquals("2026-08-17T01:35:42+09:00", tools.now());
   }
 
   @Test

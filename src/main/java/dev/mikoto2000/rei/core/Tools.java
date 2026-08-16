@@ -16,6 +16,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
@@ -48,6 +49,7 @@ public class Tools {
   private final ProjectService projectService;
   private final SystemShellService systemShellService;
   private final BackgroundProcessManager backgroundProcessManager;
+  private final Clock clock;
 
   public Tools() {
     this(null, new SystemShellService());
@@ -58,15 +60,21 @@ public class Tools {
   }
 
   public Tools(ProjectService projectService, SystemShellService systemShellService) {
-    this(projectService, systemShellService, new BackgroundProcessManager(systemShellService));
+    this(projectService, systemShellService, new BackgroundProcessManager(systemShellService), Clock.systemDefaultZone());
+  }
+
+  public Tools(ProjectService projectService, SystemShellService systemShellService,
+      BackgroundProcessManager backgroundProcessManager) {
+    this(projectService, systemShellService, backgroundProcessManager, Clock.systemDefaultZone());
   }
 
   @Autowired
   public Tools(ProjectService projectService, SystemShellService systemShellService,
-      BackgroundProcessManager backgroundProcessManager) {
+      BackgroundProcessManager backgroundProcessManager, Clock clock) {
     this.projectService = projectService;
     this.systemShellService = systemShellService;
     this.backgroundProcessManager = backgroundProcessManager;
+    this.clock = clock;
   }
 
   /**
@@ -233,13 +241,13 @@ public class Tools {
   @Tool(name = "today", description = "今日の日付を yyyy-MM-dd 形式で取得します")
   String today() {
     IO.println("今日の日付を取得するよ");
-    return LocalDate.now().toString();
+    return LocalDate.now(clock).toString();
   }
 
   @Tool(name = "now", description = "現在時刻を ISO-8601 形式で取得します")
   String now() {
     IO.println("現在時刻を取得するよ");
-    return OffsetDateTime.now().toString();
+    return OffsetDateTime.now(clock).toString();
   }
 
   @Tool(name = "findFile", description = "ファイルを検索します（.gitignore を尊重）")
