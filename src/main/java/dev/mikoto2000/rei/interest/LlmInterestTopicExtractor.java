@@ -11,7 +11,6 @@ import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -55,9 +54,7 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
 
     Prompt prompt = new Prompt(
         buildPrompt(snippets, maxTopics, pastQueries),
-        OpenAiChatOptions.builder()
-            .model(modelProvider.model(LlmFeature.INTEREST_DISCOVERY, modelHolderService.get()))
-            .build());
+        modelProvider.chatOptions(LlmFeature.INTEREST_DISCOVERY, modelHolderService.get()));
 
     String response = callWithTimeout(prompt);
     return parse(response);

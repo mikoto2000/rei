@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.image;
 
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
@@ -23,9 +22,7 @@ public class LlmImagePromptEnhancer implements ImagePromptEnhancer {
   public String enhance(String userRequest) {
     Prompt prompt = new Prompt(
         buildPrompt(userRequest),
-        OpenAiChatOptions.builder()
-            .model(modelProvider.model(LlmFeature.IMAGE_PROMPT, modelHolderService.get()))
-            .build());
+        modelProvider.chatOptions(LlmFeature.IMAGE_PROMPT, modelHolderService.get()));
     String content = modelProvider.chatModel(LlmFeature.IMAGE_PROMPT).call(prompt).getResult().getOutput().getText();
     if (content == null || content.isBlank()) {
       throw new IllegalStateException("画像生成プロンプト生成結果が空です");

@@ -8,7 +8,21 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "rei.llm")
 public class LlmProperties {
 
+  private static final int DEFAULT_MAX_OUTPUT_TOKENS = 8192;
+
+  private Integer maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS;
   private Map<String, Server> features = new LinkedHashMap<>();
+
+  public Integer getMaxOutputTokens() {
+    if (maxOutputTokens == null || maxOutputTokens <= 0) {
+      return DEFAULT_MAX_OUTPUT_TOKENS;
+    }
+    return maxOutputTokens;
+  }
+
+  public void setMaxOutputTokens(Integer maxOutputTokens) {
+    this.maxOutputTokens = maxOutputTokens;
+  }
 
   public Map<String, Server> getFeatures() {
     return features;

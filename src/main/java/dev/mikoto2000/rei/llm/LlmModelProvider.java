@@ -42,18 +42,24 @@ public class LlmModelProvider {
     return server.getModel();
   }
 
+  public OpenAiChatOptions chatOptions(String feature, String defaultModel) {
+    return chatOptions(feature, defaultModel, false);
+  }
+
+  public OpenAiChatOptions chatOptions(String feature, String defaultModel, boolean streamUsage) {
+    OpenAiChatOptions.Builder options = chatOptionsBuilder(feature, defaultModel);
+    if (streamUsage) {
+      options.streamUsage(true);
+    }
+    return options.build();
+  }
+
   private ChatModel createOpenAiCompatibleChatModel(LlmProperties.Server server) {
     OpenAiApi api = OpenAiApi.builder()
         .baseUrl(server.getBaseUrl())
         .apiKey(server.getApiKey() == null || server.getApiKey().isBlank() ? "dummy-key" : server.getApiKey())
         .build();
-    OpenAiChatOptions.Builder options = OpenAiChatOptions.builder();
-    if (server.getModel() != null && !server.getModel().isBlank()) {
-      options.model(server.getModel());
-    }
-    if (server.getTemperature() != null) {
-      options.temperature(server.getTemperature());
-    }
+    OpenAiChatOptions.Builder options = chatOptionsBuilder(server, server.getModel());
     return OpenAiChatModel.builder()
         .openAiApi(api)
         .defaultOptions(options.build())
@@ -63,5 +69,22 @@ public class LlmModelProvider {
         .retryTemplate(RetryUtils.DEFAULT_RETRY_TEMPLATE)
         .observationRegistry(ObservationRegistry.NOOP)
         .build();
+  }
+
+  private OpenAiChatOptions.Builder chatOptionsBuilder(String feature, String defaultModel) {
+    LlmProperties.Server server = properties.feature(feature);
+    return chatOptionsBuilder(server, model(feature, defaultModel));
+  }
+
+  private OpenAiChatOptions.Builder chatOptionsBuilder(LlmProperties.Server server, String model) {
+    OpenAiChatOptions.Builder options = OpenAiChatOptions.builder()
+        .maxTokens(properties.getMaxOutputTokens());
+    if (model != null && !model.isBlank()) {
+      options.model(model);
+    }
+    if (server != null && server.getTemperature() != null) {
+      options.temperature(server.getTemperature());
+    }
+    return options;
   }
 }

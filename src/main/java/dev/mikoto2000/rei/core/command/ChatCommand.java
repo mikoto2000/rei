@@ -10,7 +10,6 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -97,10 +96,7 @@ public class ChatCommand implements Runnable {
               .text(resolvedPrompt.prompt())
               .media(resolvedPrompt.media())
               .build(),
-          OpenAiChatOptions.builder()
-            .model(modelProvider.model(LlmFeature.CHAT, currentModelHolder.get()))
-            .streamUsage(true)
-            .build()));
+          modelProvider.chatOptions(LlmFeature.CHAT, currentModelHolder.get(), true)));
 
     CountDownLatch latch = new CountDownLatch(1);
     AtomicReference<Throwable> errorRef = new AtomicReference<>();

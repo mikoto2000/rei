@@ -15,6 +15,7 @@ class LlmModelProviderTest {
 
     assertThat(provider.chatModel(LlmFeature.CHAT)).isSameAs(defaultModel);
     assertThat(provider.model(LlmFeature.CHAT, "default-model")).isEqualTo("default-model");
+    assertThat(provider.chatOptions(LlmFeature.CHAT, "default-model").getMaxTokens()).isEqualTo(8192);
   }
 
   @Test
@@ -32,5 +33,26 @@ class LlmModelProviderTest {
     assertThat(provider.chatModel(LlmFeature.SEARCH)).isInstanceOf(FallbackChatModel.class);
     assertThat(provider.chatModel(LlmFeature.SEARCH)).isSameAs(provider.chatModel(LlmFeature.SEARCH));
     assertThat(provider.model(LlmFeature.SEARCH, "default-model")).isEqualTo("feature-model");
+    assertThat(provider.chatOptions(LlmFeature.SEARCH, "default-model").getMaxTokens()).isEqualTo(8192);
+  }
+
+  @Test
+  void appliesConfiguredMaxOutputTokensToChatOptions() {
+    ChatModel defaultModel = Mockito.mock(ChatModel.class);
+    LlmProperties properties = new LlmProperties();
+    properties.setMaxOutputTokens(2048);
+    LlmModelProvider provider = new LlmModelProvider(defaultModel, properties);
+
+    assertThat(provider.chatOptions(LlmFeature.CHAT, "default-model").getMaxTokens()).isEqualTo(2048);
+  }
+
+  @Test
+  void fallsBackToDefaultMaxOutputTokensWhenConfiguredValueIsInvalid() {
+    ChatModel defaultModel = Mockito.mock(ChatModel.class);
+    LlmProperties properties = new LlmProperties();
+    properties.setMaxOutputTokens(0);
+    LlmModelProvider provider = new LlmModelProvider(defaultModel, properties);
+
+    assertThat(provider.chatOptions(LlmFeature.CHAT, "default-model").getMaxTokens()).isEqualTo(8192);
   }
 }

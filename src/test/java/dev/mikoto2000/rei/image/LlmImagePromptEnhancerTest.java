@@ -15,6 +15,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatOptions;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.llm.LlmFeature;
@@ -28,7 +29,8 @@ class LlmImagePromptEnhancerTest {
     LlmModelProvider modelProvider = mock(LlmModelProvider.class);
     ModelHolderService modelHolderService = mock(ModelHolderService.class);
     when(modelHolderService.get()).thenReturn("default-chat-model");
-    when(modelProvider.model(LlmFeature.IMAGE_PROMPT, "default-chat-model")).thenReturn("prompt-model");
+    when(modelProvider.chatOptions(LlmFeature.IMAGE_PROMPT, "default-chat-model"))
+        .thenReturn(OpenAiChatOptions.builder().model("prompt-model").maxTokens(8192).build());
     when(modelProvider.chatModel(LlmFeature.IMAGE_PROMPT)).thenReturn(chatModel);
     when(chatModel.call(any(Prompt.class)))
         .thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("  enhanced prompt  ")))));

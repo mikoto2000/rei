@@ -11,7 +11,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -89,10 +88,9 @@ public class SearchCommand implements Runnable {
       List<VectorDocumentSearchResult> vectorResults = result.vectorResults();
       WebSearchContext webContext = result.webContext();
 
-      ChatClientRequestSpec requestSpec = chatClientProvider.chatClient(LlmFeature.SEARCH).prompt(new Prompt(buildPrompt(query, vectorResults, webContext),
-          OpenAiChatOptions.builder()
-              .model(modelProvider.model(LlmFeature.SEARCH, currentModelHolder.get()))
-              .build()));
+      ChatClientRequestSpec requestSpec = chatClientProvider.chatClient(LlmFeature.SEARCH).prompt(new Prompt(
+          buildPrompt(query, vectorResults, webContext),
+          modelProvider.chatOptions(LlmFeature.SEARCH, currentModelHolder.get())));
 
       if (result.webSearchSkippedMessage() != null) {
         IO.println("[web search skipped] " + result.webSearchSkippedMessage());

@@ -6,6 +6,7 @@ import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -64,6 +65,7 @@ public class AiConfiguration {
   private final ClockTools clockTools;
   private final SchedulerTools schedulerTools;
   private final RuntimeContextAdvisor runtimeContextAdvisor;
+  private final LlmProperties llmProperties;
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
   private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
 
@@ -81,6 +83,9 @@ public class AiConfiguration {
 
     ChatClient.Builder builder = ChatClient.builder(chatModel)
         .defaultSystem(coreProperties.systemPrompt())
+        .defaultOptions(OpenAiChatOptions.builder()
+            .maxTokens(llmProperties.getMaxOutputTokens())
+            .build())
         .defaultAdvisors(advisors)
         .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
             soundNotificationTools, blueskyPostTools, urlContentFetchTools, clockTools, schedulerTools);

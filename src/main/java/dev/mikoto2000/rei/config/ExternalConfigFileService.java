@@ -61,6 +61,7 @@ public class ExternalConfigFileService {
 
         rei:
           llm:
+            max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}
             features:
               chat:
                 base-url: ${REI_LLM_CHAT_BASE_URL:}

@@ -91,6 +91,7 @@ public class LlmChatClientProvider {
 
     ChatClient.Builder builder = ChatClient.builder(modelProvider.chatModel(feature))
         .defaultSystem(coreProperties.systemPrompt())
+        .defaultOptions(modelProvider.chatOptions(feature, null))
         .defaultAdvisors(advisors);
 
     List<Object> toolObjects = new ArrayList<>();

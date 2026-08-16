@@ -13,6 +13,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.beans.factory.ObjectProvider;
 
@@ -22,6 +23,7 @@ import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.feed.FeedTools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
+import dev.mikoto2000.rei.llm.LlmProperties;
 import dev.mikoto2000.rei.reminder.ReminderTools;
 import dev.mikoto2000.rei.search.SearchTools;
 import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
@@ -59,6 +61,7 @@ class AiConfigurationTest {
         Mockito.mock(ClockTools.class),
         Mockito.mock(SchedulerTools.class),
         Mockito.mock(RuntimeContextAdvisor.class),
+        new LlmProperties(),
         mockProviderReturning(null),
         provider);
 
@@ -91,6 +94,7 @@ class AiConfigurationTest {
         Mockito.mock(ClockTools.class),
         Mockito.mock(SchedulerTools.class),
         Mockito.mock(RuntimeContextAdvisor.class),
+        new LlmProperties(),
         mockProviderReturning(null),
         provider);
 
@@ -122,6 +126,7 @@ class AiConfigurationTest {
         Mockito.mock(ClockTools.class),
         Mockito.mock(SchedulerTools.class),
         Mockito.mock(RuntimeContextAdvisor.class),
+        new LlmProperties(),
         mockProviderReturning(agentSkillAdvisor),
         mockProviderReturning(null));
 
@@ -131,11 +136,41 @@ class AiConfigurationTest {
     assertSame(agentSkillAdvisor, advisors.getLast());
   }
 
+  @Test
+  void chatClientUsesConfiguredMaxOutputTokensAsDefaultOption() throws Exception {
+    LlmProperties llmProperties = new LlmProperties();
+    llmProperties.setMaxOutputTokens(4096);
+
+    AiConfiguration configuration = new AiConfiguration(
+        new CoreProperties("system prompt", 100),
+        Mockito.mock(ChatModel.class),
+        Mockito.mock(ChatMemory.class),
+        new Tools(),
+        Mockito.mock(GoogleCalendarTools.class),
+        Mockito.mock(TaskTools.class),
+        Mockito.mock(BriefingTools.class),
+        Mockito.mock(FeedTools.class),
+        Mockito.mock(ReminderTools.class),
+        Mockito.mock(SearchTools.class),
+        Mockito.mock(WebSearchTools.class),
+        Mockito.mock(SoundNotificationTools.class),
+        Mockito.mock(BlueskyPostTools.class),
+        Mockito.mock(UrlContentFetchTools.class),
+        Mockito.mock(ClockTools.class),
+        Mockito.mock(SchedulerTools.class),
+        Mockito.mock(RuntimeContextAdvisor.class),
+        llmProperties,
+        mockProviderReturning(null),
+        mockProviderReturning(null));
+
+    ChatOptions options = getDefaultChatOptions(configuration.chatClient());
+
+    assertEquals(4096, options.getMaxTokens());
+  }
+
   @SuppressWarnings("unchecked")
   private List<?> getDefaultToolCallbackProviders(ChatClient chatClient) throws Exception {
-    Field defaultRequestField = chatClient.getClass().getDeclaredField("defaultChatClientRequest");
-    defaultRequestField.setAccessible(true);
-    Object defaultRequest = defaultRequestField.get(chatClient);
+    Object defaultRequest = getDefaultChatClientRequest(chatClient);
 
     Field toolCallbackProvidersField = defaultRequest.getClass().getDeclaredField("toolCallbackProviders");
     toolCallbackProvidersField.setAccessible(true);
@@ -144,13 +179,24 @@ class AiConfigurationTest {
 
   @SuppressWarnings("unchecked")
   private List<?> getDefaultAdvisors(ChatClient chatClient) throws Exception {
-    Field defaultRequestField = chatClient.getClass().getDeclaredField("defaultChatClientRequest");
-    defaultRequestField.setAccessible(true);
-    Object defaultRequest = defaultRequestField.get(chatClient);
+    Object defaultRequest = getDefaultChatClientRequest(chatClient);
 
     Field advisorsField = defaultRequest.getClass().getDeclaredField("advisors");
     advisorsField.setAccessible(true);
     return (List<Advisor>) advisorsField.get(defaultRequest);
+  }
+
+  private ChatOptions getDefaultChatOptions(ChatClient chatClient) throws Exception {
+    Object defaultRequest = getDefaultChatClientRequest(chatClient);
+    Field chatOptionsField = defaultRequest.getClass().getDeclaredField("chatOptions");
+    chatOptionsField.setAccessible(true);
+    return (ChatOptions) chatOptionsField.get(defaultRequest);
+  }
+
+  private Object getDefaultChatClientRequest(ChatClient chatClient) throws Exception {
+    Field defaultRequestField = chatClient.getClass().getDeclaredField("defaultChatClientRequest");
+    defaultRequestField.setAccessible(true);
+    return defaultRequestField.get(chatClient);
   }
 
   private <T> ObjectProvider<T> mockProviderReturning(T value) {

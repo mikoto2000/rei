@@ -8,7 +8,6 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
@@ -62,9 +61,8 @@ public class BlueskyReplyTextGenerator {
         %s
         """.formatted(handle, historyBlock.isBlank() ? "(none)" : historyBlock, postText);
 
-    Prompt prompt = new Prompt(promptText, OpenAiChatOptions.builder()
-        .model(modelProvider.model(LlmFeature.BLUESKY_REPLY, modelHolderService.get()))
-        .build());
+    Prompt prompt = new Prompt(promptText,
+        modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, modelHolderService.get()));
     String content = generateContent(prompt);
     if (content == null || content.isBlank()) {
       throw new IllegalStateException("Bluesky reply text generation returned blank content");
@@ -86,9 +84,8 @@ public class BlueskyReplyTextGenerator {
         投稿本文:
         %s
         """.formatted(postText);
-    Prompt prompt = new Prompt(promptText, OpenAiChatOptions.builder()
-        .model(modelProvider.model(LlmFeature.BLUESKY_REPLY, modelHolderService.get()))
-        .build());
+    Prompt prompt = new Prompt(promptText,
+        modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, modelHolderService.get()));
     String content = generateContent(prompt);
     if (content == null || content.isBlank()) {
       throw new IllegalStateException("Bluesky manual reply text generation returned blank content");

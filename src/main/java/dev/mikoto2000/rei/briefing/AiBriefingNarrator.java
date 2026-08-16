@@ -5,7 +5,6 @@ import java.util.List;
 
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -33,9 +32,7 @@ public class AiBriefingNarrator implements BriefingNarrator {
   public BriefingNarration narrate(BriefingContext context) {
     Prompt prompt = new Prompt(
         buildPrompt(context),
-        OpenAiChatOptions.builder()
-            .model(modelProvider.model(LlmFeature.BRIEFING, modelHolderService.get()))
-            .build());
+        modelProvider.chatOptions(LlmFeature.BRIEFING, modelHolderService.get()));
 
     String response = modelProvider.chatModel(LlmFeature.BRIEFING).call(prompt).getResult().getOutput().getText();
     return parse(response);
