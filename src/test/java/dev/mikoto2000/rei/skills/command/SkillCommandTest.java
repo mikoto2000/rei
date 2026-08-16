@@ -11,6 +11,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import dev.mikoto2000.rei.skills.AgentSkill;
 import dev.mikoto2000.rei.skills.AgentSkillRepository;
@@ -60,6 +61,12 @@ class SkillCommandTest {
 
     verify(repository).reload();
     assertThat(output).contains("Agent Skills を再読み込みしました: 1 件");
+  }
+
+  @Test
+  void repositoryConstructorIsAutowired() throws Exception {
+    assertThat(SkillCommand.class.getConstructor(AgentSkillRepository.class).isAnnotationPresent(Autowired.class))
+        .isTrue();
   }
 
   private String execute(AgentSkillRepository repository, String... args) {

@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.skills.command;
 
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import dev.mikoto2000.rei.skills.AgentSkill;
 import dev.mikoto2000.rei.skills.AgentSkillRepository;
@@ -27,6 +28,7 @@ public class SkillCommand implements Runnable {
     this(new EmptyAgentSkillRepository());
   }
 
+  @Autowired
   public SkillCommand(AgentSkillRepository repository) {
     this.repository = repository;
   }
