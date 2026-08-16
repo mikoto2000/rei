@@ -16,16 +16,18 @@ class ManagedBackgroundProcess {
       new AtomicReference<>(BackgroundProcessStatus.STARTING);
   final AtomicReference<Integer> exitCode = new AtomicReference<>();
   final Instant startedAt;
+  final long startedAtNanos;
   volatile Instant endedAt;
 
   ManagedBackgroundProcess(String processId, Process process, List<String> commandLine, Path workingDirectory,
-      int logLineCapacity) {
+      int logLineCapacity, Instant startedAt, long startedAtNanos) {
     this.processId = processId;
     this.process = process;
     this.commandLine = List.copyOf(commandLine);
     this.workingDirectory = workingDirectory;
     this.stdout = new BoundedLineBuffer(logLineCapacity);
     this.stderr = new BoundedLineBuffer(logLineCapacity);
-    this.startedAt = Instant.now();
+    this.startedAt = startedAt;
+    this.startedAtNanos = startedAtNanos;
   }
 }

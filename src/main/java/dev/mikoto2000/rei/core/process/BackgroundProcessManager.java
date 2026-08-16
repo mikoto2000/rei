@@ -6,8 +6,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.time.Instant;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -22,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.service.SystemShellService;
+import dev.mikoto2000.rei.temporal.MonotonicTimeSource;
 import jakarta.annotation.PreDestroy;
 
 @Component
@@ -31,6 +33,8 @@ public class BackgroundProcessManager {
   private static final Duration KILL_GRACE_PERIOD = Duration.ofSeconds(5);
 
   private final SystemShellService systemShellService;
+  private final Clock clock;
+  private final MonotonicTimeSource monotonicTimeSource;
   private final ConcurrentMap<String, ManagedBackgroundProcess> processes = new ConcurrentHashMap<>();
   private final ExecutorService executor = Executors.newCachedThreadPool(r -> {
     Thread thread = new Thread(r, "rei-background-process");
@@ -39,8 +43,15 @@ public class BackgroundProcessManager {
   });
 
   @Autowired
-  public BackgroundProcessManager(SystemShellService systemShellService) {
+  public BackgroundProcessManager(SystemShellService systemShellService, Clock clock,
+      MonotonicTimeSource monotonicTimeSource) {
     this.systemShellService = systemShellService;
+    this.clock = clock;
+    this.monotonicTimeSource = monotonicTimeSource;
+  }
+
+  public BackgroundProcessManager(SystemShellService systemShellService) {
+    this(systemShellService, Clock.systemDefaultZone(), MonotonicTimeSource.system());
   }
 
   public BackgroundProcessSnapshot spawnShell(String command, Path workingDirectory) {
@@ -58,7 +69,8 @@ public class BackgroundProcessManager {
           .directory(workingDirectory.toFile())
           .start();
       ManagedBackgroundProcess managedProcess = new ManagedBackgroundProcess(
-          processId, process, commandLine, workingDirectory, LOG_LINE_CAPACITY);
+          processId, process, commandLine, workingDirectory, LOG_LINE_CAPACITY, Instant.now(clock),
+          monotonicTimeSource.nanoTime());
       processes.put(processId, managedProcess);
       managedProcess.status.set(BackgroundProcessStatus.RUNNING);
       executor.submit(() -> readLines(process.getInputStream(), managedProcess.stdout));
@@ -66,8 +78,8 @@ public class BackgroundProcessManager {
       CompletableFuture.runAsync(() -> watchProcess(managedProcess), executor);
       return snapshot(managedProcess, DEFAULT_TAIL_LINES, "started");
     } catch (IOException e) {
-      return new BackgroundProcessSnapshot(processId, -1, BackgroundProcessStatus.FAILED, null, null, Instant.now(),
-          List.of(), List.of(), false, e.getMessage());
+      return new BackgroundProcessSnapshot(processId, -1, BackgroundProcessStatus.FAILED, null, null, null,
+          0.0d, List.of(), List.of(), false, e.getMessage());
     }
   }
 
@@ -75,7 +87,7 @@ public class BackgroundProcessManager {
     ManagedBackgroundProcess managedProcess = processes.get(processId);
     if (managedProcess == null) {
       return new BackgroundProcessSnapshot(processId, -1, BackgroundProcessStatus.FAILED, null, null, null,
-          List.of(), List.of(), false, "process not found");
+          0.0d, List.of(), List.of(), false, "process not found");
     }
     return snapshot(managedProcess, normalizeTailLines(tailLines), "ok");
   }
@@ -84,13 +96,13 @@ public class BackgroundProcessManager {
     ManagedBackgroundProcess managedProcess = processes.get(processId);
     if (managedProcess == null) {
       return new BackgroundProcessSnapshot(processId, -1, BackgroundProcessStatus.FAILED, null, null, null,
-          List.of(), List.of(), false, "process not found");
+          0.0d, List.of(), List.of(), false, "process not found");
     }
     managedProcess.status.set(BackgroundProcessStatus.KILLED);
     terminateProcessTree(managedProcess.process.toHandle());
     waitForMainProcess(managedProcess, Duration.ofSeconds(2));
     if (!managedProcess.process.isAlive()) {
-      managedProcess.endedAt = managedProcess.endedAt == null ? Instant.now() : managedProcess.endedAt;
+      managedProcess.endedAt = managedProcess.endedAt == null ? Instant.now(clock) : managedProcess.endedAt;
     }
     return snapshot(managedProcess, DEFAULT_TAIL_LINES, "killed");
   }
@@ -105,7 +117,7 @@ public class BackgroundProcessManager {
     try {
       int exitCode = managedProcess.process.waitFor();
       managedProcess.exitCode.set(exitCode);
-      managedProcess.endedAt = Instant.now();
+      managedProcess.endedAt = Instant.now(clock);
       if (managedProcess.status.get() == BackgroundProcessStatus.KILLED) {
         return;
       }
@@ -176,10 +188,15 @@ public class BackgroundProcessManager {
         managedProcess.exitCode.get(),
         managedProcess.startedAt,
         managedProcess.endedAt,
+        elapsedSeconds(managedProcess),
         managedProcess.stdout.tail(tailLines),
         managedProcess.stderr.tail(tailLines),
         true,
         message);
+  }
+
+  private double elapsedSeconds(ManagedBackgroundProcess managedProcess) {
+    return Math.max(0.0d, (monotonicTimeSource.nanoTime() - managedProcess.startedAtNanos) / 1_000_000_000.0d);
   }
 
   private int normalizeTailLines(Integer tailLines) {

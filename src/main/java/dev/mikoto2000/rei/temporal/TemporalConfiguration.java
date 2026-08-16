@@ -12,4 +12,9 @@ public class TemporalConfiguration {
   Clock clock() {
     return Clock.systemDefaultZone();
   }
+
+  @Bean
+  MonotonicTimeSource monotonicTimeSource() {
+    return MonotonicTimeSource.system();
+  }
 }

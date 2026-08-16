@@ -10,6 +10,7 @@ public record BackgroundProcessSnapshot(
     Integer exitCode,
     Instant startedAt,
     Instant endedAt,
+    double elapsedSeconds,
     List<String> stdout,
     List<String> stderr,
     boolean found,

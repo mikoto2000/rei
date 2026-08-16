@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
@@ -12,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import dev.mikoto2000.rei.core.service.SystemShellService;
+import dev.mikoto2000.rei.temporal.ManualMonotonicTimeSource;
 
 class BackgroundProcessManagerTest {
   private final BackgroundProcessManager manager = new BackgroundProcessManager(new SystemShellService());
@@ -88,7 +92,33 @@ class BackgroundProcessManagerTest {
     assertEquals(BackgroundProcessStatus.RUNNING, stillRunning.status());
   }
 
+  @Test
+  void elapsedSecondsUsesMonotonicClockInsteadOfWallClock() throws Exception {
+    ManualMonotonicTimeSource monotonic = new ManualMonotonicTimeSource(1_000_000_000L);
+    BackgroundProcessManager manager = new BackgroundProcessManager(
+        new SystemShellService(),
+        Clock.fixed(Instant.parse("2026-08-16T16:30:00Z"), ZoneId.of("Asia/Tokyo")),
+        monotonic);
+    try {
+      BackgroundProcessSnapshot spawned = manager.spawnCommandLine(javaCommand("run"), tempDir);
+      awaitStdout(spawned.processId(), "ready", manager);
+
+      monotonic.advanceNanos(2_500_000_000L);
+      BackgroundProcessSnapshot actual = manager.status(spawned.processId(), 100);
+
+      assertEquals(2.5d, actual.elapsedSeconds(), 0.001d);
+      assertEquals(Instant.parse("2026-08-16T16:30:00Z"), actual.startedAt());
+    } finally {
+      manager.shutdown();
+    }
+  }
+
   private BackgroundProcessSnapshot awaitStdout(String processId, String expectedLine) throws Exception {
+    return awaitStdout(processId, expectedLine, manager);
+  }
+
+  private BackgroundProcessSnapshot awaitStdout(String processId, String expectedLine, BackgroundProcessManager manager)
+      throws Exception {
     long deadline = System.currentTimeMillis() + 5000;
     BackgroundProcessSnapshot snapshot;
     do {
