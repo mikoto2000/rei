@@ -31,6 +31,7 @@ public class BlueskyProperties {
     private boolean excludeReplies = true;
     private boolean excludeReposts = true;
     private int maxPostAgeMinutes = 120;
+    private int generationTimeoutSeconds = 1200;
     private List<ReplyUser> users = new ArrayList<>();
   }
 

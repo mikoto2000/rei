@@ -59,6 +59,7 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("REI_BLUESKY_TIMEOUT_SECONDS"));
     assertTrue(content.contains("reply:"));
     assertTrue(content.contains("REI_BLUESKY_REPLY_CHECK_INTERVAL_SECONDS"));
+    assertTrue(content.contains("REI_BLUESKY_REPLY_GENERATION_TIMEOUT_SECONDS"));
     assertTrue(content.contains("alice.bsky.social"));
   }
 

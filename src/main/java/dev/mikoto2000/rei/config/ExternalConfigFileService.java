@@ -143,6 +143,7 @@ public class ExternalConfigFileService {
               exclude-replies: true
               exclude-reposts: true
               max-post-age-minutes: ${REI_BLUESKY_REPLY_MAX_POST_AGE_MINUTES:120}
+              generation-timeout-seconds: ${REI_BLUESKY_REPLY_GENERATION_TIMEOUT_SECONDS:1200}
               users:
                 - handle: "alice.bsky.social"
                   probability: 0.25

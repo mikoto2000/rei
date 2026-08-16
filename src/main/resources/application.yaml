@@ -155,6 +155,7 @@ rei:
       exclude-replies: ${REI_BLUESKY_REPLY_EXCLUDE_REPLIES:true}
       exclude-reposts: ${REI_BLUESKY_REPLY_EXCLUDE_REPOSTS:true}
       max-post-age-minutes: ${REI_BLUESKY_REPLY_MAX_POST_AGE_MINUTES:120}
+      generation-timeout-seconds: ${REI_BLUESKY_REPLY_GENERATION_TIMEOUT_SECONDS:1200}
   memory:
     enabled: ${REI_MEMORY_ENABLED:true}
     auto-trigger-message-threshold: ${REI_MEMORY_AUTO_TRIGGER_MSG_THRESHOLD:20}

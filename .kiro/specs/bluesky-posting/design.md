@@ -40,6 +40,7 @@
 ```yaml
 rei:
   bluesky:
+    timeout-seconds: 30
     reply:
       enabled: true
       dry-run: false
@@ -48,6 +49,7 @@ rei:
       exclude-replies: true
       exclude-reposts: true
       max-post-age-minutes: 120
+      generation-timeout-seconds: 1200
       users:
         - handle: "alice.bsky.social"
           probability: 0.25
@@ -60,6 +62,8 @@ rei:
 - `check-interval-seconds`: `>= 10`
 - `fetch-limit`: `1..100`
 - `max-replies-per-day`: `>= 0`
+- `timeout-seconds`: `>= 1`
+- `generation-timeout-seconds`: `>= 1`
 
 ## 5. データ設計
 
@@ -89,28 +93,30 @@ rei:
 
 ## 6. 処理フロー
 
-1. `enabled=false` なら即終了
-2. 設定ユーザーを順次処理
-3. `handle -> did` 解決
-4. `getAuthorFeed(actor=did, limit=fetchLimit)` 取得
-5. 新着投稿のみ抽出（`last_seen_*` 境界で判定）
-6. 除外判定
+1. 前回実行中なら重複実行せず WARN ログを出力して終了
+2. `enabled=false` なら即終了
+3. 設定ユーザーを順次処理
+4. `handle -> did` 解決
+5. `getAuthorFeed(actor=did, limit=fetchLimit)` 取得
+6. 新着投稿のみ抽出（`last_seen_*` 境界で判定）
+7. 除外判定
    - repost 除外 (`exclude-reposts`)
    - reply 除外 (`exclude-replies`)
    - 古い投稿除外 (`max-post-age-minutes`)
    - 既返信除外 (`bluesky_replied_posts`)
-7. 確率判定（`ThreadLocalRandom.current().nextDouble() < probability`）
-8. 日次上限判定（`count < maxRepliesPerDay`）
-9. `dry-run=true` ならログのみ
-10. `dry-run=false` なら `BlueskyPostService` 経由で返信投稿
-11. 成功時に `replied_posts` と `daily_count` を更新
-12. 最後に `last_seen_*` 更新
+8. 確率判定（`ThreadLocalRandom.current().nextDouble() < probability`）
+9. 日次上限判定（`count < maxRepliesPerDay`）
+10. `dry-run=true` ならログのみ
+11. `dry-run=false` なら `BlueskyPostService` 経由で返信投稿
+12. 成功時に `replied_posts` と `daily_count` を更新
+13. 最後に `last_seen_*` 更新
 
 ## 7. 返信生成
 - 返信対象投稿の `uri` / `cid` を使用
 - `reply.parent` = 対象投稿
 - `reply.root` = 対象が root なら同じ、thread 内なら root を使用
 - 本文は既存生成ロジック（必要なら別途プロンプト）
+- 返信文生成は `generation-timeout-seconds` の範囲で待機し、超過時は当該返信を失敗扱いとする
 - facet は既存実装（URL/hashtag）を適用
 
 ## 8. エラーハンドリング
@@ -118,6 +124,12 @@ rei:
 - API エラー時:
   - WARN ログ
   - 当該ユーザーのみスキップして次へ
+- API 応答待ちが `timeout-seconds` を超過した場合:
+  - WARN ログ
+  - 当該処理を失敗扱いにして次へ
+- 返信生成待ちが `generation-timeout-seconds` を超過した場合:
+  - WARN ログ
+  - 当該投稿への返信をスキップして次へ
 - 永続化エラー時:
   - ERROR ログ
   - 再実行時に整合が崩れないよう、書き込み順序を `投稿成功 -> replied_posts -> daily_count` に固定

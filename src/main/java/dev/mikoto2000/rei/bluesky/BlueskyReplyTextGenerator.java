@@ -25,19 +25,21 @@ public class BlueskyReplyTextGenerator {
   private final LlmChatClientProvider chatClientProvider;
   private final ModelHolderService modelHolderService;
   private final LlmModelProvider modelProvider;
+  private final BlueskyProperties properties;
 
   public BlueskyReplyTextGenerator(ObjectProvider<ChatClient> chatClientProvider,
       ModelHolderService modelHolderService) {
     this(new ChatCommand.FixedLlmChatClientProvider(chatClientProvider.getObject()), modelHolderService,
-        new ChatCommand.FixedLlmModelProvider());
+        new ChatCommand.FixedLlmModelProvider(), new BlueskyProperties());
   }
 
   @Autowired
   public BlueskyReplyTextGenerator(LlmChatClientProvider chatClientProvider, ModelHolderService modelHolderService,
-      LlmModelProvider modelProvider) {
+      LlmModelProvider modelProvider, BlueskyProperties properties) {
     this.chatClientProvider = chatClientProvider;
     this.modelHolderService = modelHolderService;
     this.modelProvider = modelProvider;
+    this.properties = properties;
   }
 
   public String generate(String handle, String postText, List<BlueskyReplyConversationRepository.ConversationMessage> history) {
@@ -102,7 +104,13 @@ public class BlueskyReplyTextGenerator {
         .map(this::answerText)
         .collectList()
         .map(parts -> String.join("", parts))
-        .block(Duration.ofMinutes(20));
+        .block(generationTimeout());
+  }
+
+  Duration generationTimeout() {
+    BlueskyProperties.BlueskyReplyProperties replyProperties = properties.getReply();
+    int timeoutSeconds = replyProperties == null ? 1200 : replyProperties.getGenerationTimeoutSeconds();
+    return Duration.ofSeconds(Math.max(1, timeoutSeconds));
   }
 
   private String answerText(ChatResponse response) {

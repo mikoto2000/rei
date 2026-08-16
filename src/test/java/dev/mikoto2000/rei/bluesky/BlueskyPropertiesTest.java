@@ -15,5 +15,6 @@ class BlueskyPropertiesTest {
     assertEquals("", props.getAppPassword());
     assertEquals(300, props.getMaxPostLength());
     assertEquals(30, props.getTimeoutSeconds());
+    assertEquals(1200, props.getReply().getGenerationTimeoutSeconds());
   }
 }

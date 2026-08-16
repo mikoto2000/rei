@@ -91,6 +91,7 @@
 ```yaml
 rei:
   bluesky:
+    timeout-seconds: 30
     reply:
       enabled: true
       dry-run: false
@@ -99,6 +100,7 @@ rei:
       exclude-replies: true
       exclude-reposts: true
       max-post-age-minutes: 120
+      generation-timeout-seconds: 1200
       users:
         - handle: "alice.bsky.social"
           probability: 0.25
@@ -124,6 +126,9 @@ rei:
 ### 実行モード
 - `enabled=false` の場合は返信監視・返信投稿を実行しない。
 - `dry-run=true` の場合は投稿 API を呼び出さず、判定結果のみログ出力する。
+- `timeout-seconds` は Bluesky API への各 HTTP リクエストのタイムアウト秒数とする。
+- `generation-timeout-seconds` は LLM による返信文生成のタイムアウト秒数とする。
+- 前回の自動返信チェックが実行中の場合、次回チェックは重複実行せずスキップする。
 
 ### ログ・監査
 - INFO: 対象ユーザー、取得件数、判定件数、返信件数
@@ -135,3 +140,6 @@ rei:
 2. 同一投稿に二重返信しない。
 3. `dry-run=true` で外部投稿が 0 件である。
 4. `enabled=false` で処理が完全停止する。
+5. Bluesky API が応答しない場合、設定された `timeout-seconds` で処理が失敗する。
+6. LLM による返信文生成が応答しない場合、設定された `generation-timeout-seconds` で当該返信を失敗扱いにする。
+7. 前回チェックが実行中の場合、重複実行せずスキップログを出力する。

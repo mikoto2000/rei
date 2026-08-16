@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -22,6 +23,8 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.ObjectProvider;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.llm.LlmChatClientProvider;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
 import reactor.core.publisher.Flux;
 
 class BlueskyReplyTextGeneratorTest {
@@ -101,6 +104,19 @@ class BlueskyReplyTextGeneratorTest {
     assertThatThrownBy(() -> generator.generate("alice.bsky.social", " ", List.of()))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("target post text is blank");
+  }
+
+  @Test
+  void generationTimeoutUsesConfiguredSeconds() {
+    BlueskyProperties properties = new BlueskyProperties();
+    properties.getReply().setGenerationTimeoutSeconds(5);
+    BlueskyReplyTextGenerator generator = new BlueskyReplyTextGenerator(
+        Mockito.mock(LlmChatClientProvider.class),
+        Mockito.mock(ModelHolderService.class),
+        Mockito.mock(LlmModelProvider.class),
+        properties);
+
+    assertThat(generator.generationTimeout()).isEqualTo(Duration.ofSeconds(5));
   }
 
   private static ChatResponse response(String text) {
