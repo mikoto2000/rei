@@ -88,6 +88,7 @@ public class BackgroundProcessManager {
     }
     managedProcess.status.set(BackgroundProcessStatus.KILLED);
     terminateProcessTree(managedProcess.process.toHandle());
+    waitForMainProcess(managedProcess, Duration.ofSeconds(2));
     if (!managedProcess.process.isAlive()) {
       managedProcess.endedAt = managedProcess.endedAt == null ? Instant.now() : managedProcess.endedAt;
     }
@@ -143,6 +144,16 @@ public class BackgroundProcessManager {
         Thread.currentThread().interrupt();
         return;
       }
+    }
+  }
+
+  private void waitForMainProcess(ManagedBackgroundProcess managedProcess, Duration timeout) {
+    try {
+      if (managedProcess.process.waitFor(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)) {
+        managedProcess.exitCode.compareAndSet(null, managedProcess.process.exitValue());
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
     }
   }
 

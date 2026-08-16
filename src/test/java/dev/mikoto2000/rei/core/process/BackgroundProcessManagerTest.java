@@ -73,6 +73,21 @@ class BackgroundProcessManagerTest {
     assertEquals(false, actual.found());
   }
 
+  @Test
+  void managesMultipleProcessesIndependently() throws Exception {
+    BackgroundProcessSnapshot first = manager.spawnCommandLine(javaCommand("run"), tempDir);
+    BackgroundProcessSnapshot second = manager.spawnCommandLine(javaCommand("run"), tempDir);
+    awaitStdout(first.processId(), "ready");
+    awaitStdout(second.processId(), "ready");
+
+    manager.kill(first.processId());
+    BackgroundProcessSnapshot killed = awaitStatus(first.processId(), BackgroundProcessStatus.KILLED);
+    BackgroundProcessSnapshot stillRunning = manager.status(second.processId(), 100);
+
+    assertEquals(BackgroundProcessStatus.KILLED, killed.status());
+    assertEquals(BackgroundProcessStatus.RUNNING, stillRunning.status());
+  }
+
   private BackgroundProcessSnapshot awaitStdout(String processId, String expectedLine) throws Exception {
     long deadline = System.currentTimeMillis() + 5000;
     BackgroundProcessSnapshot snapshot;
