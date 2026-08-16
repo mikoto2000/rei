@@ -35,6 +35,7 @@ import dev.mikoto2000.rei.sound.SoundNotificationTools;
 import dev.mikoto2000.rei.task.TaskTools;
 import dev.mikoto2000.rei.temporal.ClockTools;
 import dev.mikoto2000.rei.temporal.RuntimeContextAdvisor;
+import dev.mikoto2000.rei.temporal.SchedulerTools;
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchTools;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentProperties;
 import dev.mikoto2000.rei.websearch.WebSearchProperties;
@@ -61,6 +62,7 @@ public class AiConfiguration {
   private final BlueskyPostTools blueskyPostTools;
   private final UrlContentFetchTools urlContentFetchTools;
   private final ClockTools clockTools;
+  private final SchedulerTools schedulerTools;
   private final RuntimeContextAdvisor runtimeContextAdvisor;
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
   private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
@@ -81,7 +83,7 @@ public class AiConfiguration {
         .defaultSystem(coreProperties.systemPrompt())
         .defaultAdvisors(advisors)
         .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
-            soundNotificationTools, blueskyPostTools, urlContentFetchTools, clockTools);
+            soundNotificationTools, blueskyPostTools, urlContentFetchTools, clockTools, schedulerTools);
 
     ToolCallbackProvider toolCallbackProvider = mcpToolCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {

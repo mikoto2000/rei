@@ -29,6 +29,7 @@ import dev.mikoto2000.rei.sound.SoundNotificationTools;
 import dev.mikoto2000.rei.task.TaskTools;
 import dev.mikoto2000.rei.temporal.ClockTools;
 import dev.mikoto2000.rei.temporal.RuntimeContextAdvisor;
+import dev.mikoto2000.rei.temporal.SchedulerTools;
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchTools;
 import dev.mikoto2000.rei.websearch.WebSearchProperties;
 import dev.mikoto2000.rei.websearch.WebSearchTools;
@@ -56,6 +57,7 @@ class AiConfigurationTest {
         Mockito.mock(BlueskyPostTools.class),
         Mockito.mock(UrlContentFetchTools.class),
         Mockito.mock(ClockTools.class),
+        Mockito.mock(SchedulerTools.class),
         Mockito.mock(RuntimeContextAdvisor.class),
         mockProviderReturning(null),
         provider);
@@ -87,6 +89,7 @@ class AiConfigurationTest {
         Mockito.mock(BlueskyPostTools.class),
         Mockito.mock(UrlContentFetchTools.class),
         Mockito.mock(ClockTools.class),
+        Mockito.mock(SchedulerTools.class),
         Mockito.mock(RuntimeContextAdvisor.class),
         mockProviderReturning(null),
         provider);
@@ -117,6 +120,7 @@ class AiConfigurationTest {
         Mockito.mock(BlueskyPostTools.class),
         Mockito.mock(UrlContentFetchTools.class),
         Mockito.mock(ClockTools.class),
+        Mockito.mock(SchedulerTools.class),
         Mockito.mock(RuntimeContextAdvisor.class),
         mockProviderReturning(agentSkillAdvisor),
         mockProviderReturning(null));
