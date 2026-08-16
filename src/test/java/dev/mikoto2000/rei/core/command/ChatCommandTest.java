@@ -170,6 +170,40 @@ class ChatCommandTest {
   }
 
   @Test
+  void runDoesNotReplanWhenFinishReasonIsStop() {
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    CommandCancellationService cancellationService = new CommandCancellationService();
+    ChatResponseNarrator narrator = Mockito.mock(ChatResponseNarrator.class);
+    OutputLimitReplanner replanner = Mockito.mock(OutputLimitReplanner.class);
+
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(responseWithFinishReason("answer", "stop")));
+
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      assertTrue(new CommandLine(new ChatCommand(
+          new ChatCommand.FixedLlmChatClientProvider(chatClient),
+          modelHolderService,
+          new ChatCommand.FixedLlmModelProvider(),
+          new LlmProperties(),
+          cancellationService,
+          narrator,
+          java.util.Optional.empty(),
+          java.util.Optional.of(replanner))).execute("hello") == 0);
+    } finally {
+      System.setOut(originalOut);
+    }
+
+    verify(replanner, never()).replan(any());
+    verify(narrator).narrateIfCompleted("answer");
+  }
+
+  @Test
   void runReplansAndExecutesSubgoalsWhenOutputLimitIsReached() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
@@ -217,6 +251,48 @@ class ChatCommandTest {
     assertTrue(promptCaptor.getAllValues().get(3).getContents().contains("subgoal-1 result"));
     assertTrue(promptCaptor.getAllValues().get(3).getContents().contains("subgoal-2 result"));
     verify(narrator).narrateIfCompleted("final result");
+  }
+
+  @Test
+  void runStopsReplanningWhenReplanBudgetIsExhausted() {
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    CommandCancellationService cancellationService = new CommandCancellationService();
+    ChatResponseNarrator narrator = Mockito.mock(ChatResponseNarrator.class);
+    OutputLimitReplanner replanner = Mockito.mock(OutputLimitReplanner.class);
+    LlmProperties properties = new LlmProperties();
+    properties.getOutputLimit().setMaxReplansPerGoal(1);
+
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.stream().chatResponse()).thenReturn(
+        Flux.just(responseWithFinishReason("partial", "length")),
+        Flux.just(responseWithFinishReason("subgoal partial", "length")));
+    when(replanner.replan(any(OutputLimitReplanRequest.class))).thenReturn(
+        new OutputLimitReplanPlan(List.of(new OutputLimitReplanSubgoal("one", "large subgoal")), "integrate"));
+
+    ByteArrayOutputStream err = new ByteArrayOutputStream();
+    PrintStream originalErr = System.err;
+    System.setErr(new PrintStream(err));
+    try {
+      assertTrue(new CommandLine(new ChatCommand(
+          new ChatCommand.FixedLlmChatClientProvider(chatClient),
+          modelHolderService,
+          new ChatCommand.FixedLlmModelProvider(),
+          properties,
+          cancellationService,
+          narrator,
+          java.util.Optional.empty(),
+          java.util.Optional.of(replanner))).execute("original goal") == 0);
+    } finally {
+      System.setErr(originalErr);
+    }
+
+    verify(replanner, Mockito.times(1)).replan(any());
+    verify(chatClient, Mockito.times(2)).prompt(any(Prompt.class));
+    assertTrue(err.toString().contains("replan budget exhausted"));
+    verify(narrator, never()).narrateIfCompleted(any());
   }
 
   @Test

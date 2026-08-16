@@ -126,23 +126,28 @@ public class ChatCommand implements Runnable {
       return ChatRunResult.outputLimit(partialOutput);
     }
     if (!budget.hasRemainingLlmCalls()) {
-      log.warn("Output limit replan skipped: LLM call budget exhausted before planner");
+      log.warn("Output limit replan skipped: goal={}, reason=llm_call_budget_exhausted_before_planner",
+          summarizeForLog(currentGoal));
       System.err.println("[error] output token limit reached and LLM call budget exhausted");
       return ChatRunResult.outputLimit(partialOutput);
     }
     if (!budget.tryConsumeReplan()) {
-      log.warn("Output limit replan skipped: replan budget exhausted");
+      log.warn("Output limit replan skipped: goal={}, reason=replan_budget_exhausted, replanCount={}",
+          summarizeForLog(currentGoal), budget.replanCount());
       System.err.println("[error] output token limit reached and replan budget exhausted");
       return ChatRunResult.outputLimit(partialOutput);
     }
     if (!budget.tryConsumeLlmCall()) {
-      log.warn("Output limit replan skipped: LLM call budget exhausted before planner");
+      log.warn("Output limit replan skipped: goal={}, reason=llm_call_budget_exhausted_before_planner",
+          summarizeForLog(currentGoal));
       System.err.println("[error] output token limit reached and LLM call budget exhausted");
       return ChatRunResult.outputLimit(partialOutput);
     }
 
     OutputLimitReplanPlan plan;
     try {
+      log.info("Output limit replan started: goal={}, replanCount={}, remainingLlmCalls={}",
+          summarizeForLog(currentGoal), budget.replanCount(), budget.remainingLlmCalls());
       plan = outputLimitReplanner.get().replan(new OutputLimitReplanRequest(
           originalUserRequest,
           currentGoal,
@@ -262,8 +267,8 @@ public class ChatCommand implements Runnable {
         return ChatRunResult.failed();
       }
       if (outputLimitReached.get()) {
-        log.warn("Chat output token limit reached: promptLength={}, generatedLength={}",
-            promptText.length(), responseBuilder.length());
+        log.warn("Chat output token limit reached: goal={}, promptLength={}, generatedLength={}",
+            summarizeForLog(promptText), promptText.length(), responseBuilder.length());
         return ChatRunResult.outputLimit(responseBuilder.toString());
       }
       printGenerationSpeed(answerStartedAtNanos.get(), completionTokens.get());
@@ -294,6 +299,15 @@ public class ChatCommand implements Runnable {
         サブゴール結果:
         %s
         """.formatted(originalUserRequest, finalGoal, subgoalResults);
+  }
+
+  private String summarizeForLog(String value) {
+    if (value == null) {
+      return "";
+    }
+    String normalized = value.replaceAll("\\s+", " ").trim();
+    int maxLength = 120;
+    return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength) + "...";
   }
 
   private void maybeSuggestConsolidation() {
