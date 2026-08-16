@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
@@ -18,6 +19,7 @@ public class OutputLimitReplanner {
   private final LlmProperties properties;
   private final OutputLimitReplanParser parser;
 
+  @Autowired
   public OutputLimitReplanner(LlmModelProvider modelProvider, ModelHolderService modelHolderService,
       LlmProperties properties) {
     this(modelProvider, modelHolderService, properties, new OutputLimitReplanParser());
