@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.core.command;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
@@ -137,6 +139,32 @@ class ChatCommandTest {
   }
 
   @Test
+  void runTreatsLengthFinishReasonAsOutputLimitReached() {
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    CommandCancellationService cancellationService = new CommandCancellationService();
+    ChatResponseNarrator narrator = Mockito.mock(ChatResponseNarrator.class);
+
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(responseWithFinishReason("partial", "length")));
+
+    ByteArrayOutputStream err = new ByteArrayOutputStream();
+    PrintStream originalErr = System.err;
+    System.setErr(new PrintStream(err));
+    try {
+      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
+          narrator, java.util.Optional.empty())).execute("hello") == 0);
+    } finally {
+      System.setErr(originalErr);
+    }
+
+    assertTrue(err.toString().contains("output token limit"));
+    verify(narrator, never()).narrateIfCompleted(any());
+  }
+
+  @Test
   void runSendsPromptContainingAttachmentToken() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
@@ -253,6 +281,13 @@ class ChatCommandTest {
   private static ChatResponse responseWithThinking(String text, String thinking) {
     ChatGenerationMetadata metadata = ChatGenerationMetadata.builder()
         .metadata("reasoning_content", thinking)
+        .build();
+    return new ChatResponse(List.of(new Generation(new AssistantMessage(text), metadata)));
+  }
+
+  private static ChatResponse responseWithFinishReason(String text, String finishReason) {
+    ChatGenerationMetadata metadata = ChatGenerationMetadata.builder()
+        .finishReason(finishReason)
         .build();
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text), metadata)));
   }

@@ -18,6 +18,7 @@ import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
+import dev.mikoto2000.rei.llm.OutputLimitDetector;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -105,6 +106,7 @@ public class ChatCommand implements Runnable {
     AtomicReference<String> previousThinking = new AtomicReference<>("");
     AtomicLong answerStartedAtNanos = new AtomicLong(0L);
     AtomicInteger completionTokens = new AtomicInteger(0);
+    AtomicBoolean outputLimitReached = new AtomicBoolean(false);
     StringBuilder responseBuilder = new StringBuilder();
     Disposable disposable;
     try {
@@ -112,6 +114,9 @@ public class ChatCommand implements Runnable {
         .chatResponse()
         .subscribe(
             response -> {
+              if (OutputLimitDetector.isOutputLimitReached(response)) {
+                outputLimitReached.set(true);
+              }
               captureCompletionTokens(response, completionTokens);
               if (!headerPrinted.get()) {
                 printThinking(response, thinkingHeaderPrinted, previousThinking);
@@ -150,6 +155,12 @@ public class ChatCommand implements Runnable {
       if (error != null) {
         log.warn("Chat response failed", error);
         System.err.println("[error] " + buildUserFacingMessage(error));
+        return;
+      }
+      if (outputLimitReached.get()) {
+        log.warn("Chat output token limit reached: promptLength={}, generatedLength={}",
+            promptText.length(), responseBuilder.length());
+        System.err.println("[error] output token limit reached");
         return;
       }
       printGenerationSpeed(answerStartedAtNanos.get(), completionTokens.get());
