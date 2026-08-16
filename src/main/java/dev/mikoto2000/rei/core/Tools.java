@@ -35,6 +35,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Component;
 
+import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
+import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.service.SystemShellService;
 
@@ -45,6 +47,7 @@ public class Tools {
   private static final Charset CP932 = Charset.forName("windows-31j");
   private final ProjectService projectService;
   private final SystemShellService systemShellService;
+  private final BackgroundProcessManager backgroundProcessManager;
 
   public Tools() {
     this(null, new SystemShellService());
@@ -54,10 +57,16 @@ public class Tools {
     this(projectService, new SystemShellService());
   }
 
-  @Autowired
   public Tools(ProjectService projectService, SystemShellService systemShellService) {
+    this(projectService, systemShellService, new BackgroundProcessManager(systemShellService));
+  }
+
+  @Autowired
+  public Tools(ProjectService projectService, SystemShellService systemShellService,
+      BackgroundProcessManager backgroundProcessManager) {
     this.projectService = projectService;
     this.systemShellService = systemShellService;
+    this.backgroundProcessManager = backgroundProcessManager;
   }
 
   /**
@@ -108,7 +117,8 @@ public class Tools {
 
   @Tool(name = "executeShellCommand",
   description = """
-  $SHELL 環境変数で指定されたシェルでコマンド文字列をそのまま実行します。
+  $SHELL 環境変数で指定されたシェルで、終了が見込まれるコマンド文字列を同期実行します。
+  サーバー、watch、tail、ビルド監視などの長時間実行プロセスには spawnShellCommand を使用してください。
   $SHELL が未設定の場合、Windows は powershell、Linux と macOS は bash を使います。
   @param command 実行するシェルコマンド文字列
   @param timeoutSeconds タイムアウト秒数。null の場合は 30 秒、最大 600 秒です。
@@ -178,6 +188,40 @@ public class Tools {
   }
 
   public record ShellCommandResult(int exitCode, String stdout, String stderr, boolean timedOut) {
+  }
+
+  @Tool(name = "spawnShellCommand",
+  description = """
+  $SHELL 環境変数で指定されたシェルで、長時間実行プロセスをバックグラウンド起動します。
+  executeShellCommand と違い、コマンド終了を待たずに processId、OS pid、状態、直近ログを返します。
+  サーバー起動、watch、tail、開発サーバーなど、終了しない可能性があるコマンドに使用してください。
+  @param command 実行するシェルコマンド文字列
+  @return logical processId、OS pid、状態、終了コード、直近の標準出力/標準エラー
+  """)
+  BackgroundProcessSnapshot spawnShellCommand(String command) {
+    return backgroundProcessManager.spawnShell(command, currentWorkingDirectory());
+  }
+
+  @Tool(name = "getShellProcessStatus",
+  description = """
+  spawnShellCommand で起動したバックグラウンドプロセスの状態と直近ログを取得します。
+  @param processId spawnShellCommand が返した logical processId
+  @param tailLines 返すログ末尾行数。null の場合は既定値です。
+  @return 状態、終了コード、直近の標準出力/標準エラー
+  """)
+  BackgroundProcessSnapshot getShellProcessStatus(String processId, Integer tailLines) {
+    return backgroundProcessManager.status(processId, tailLines);
+  }
+
+  @Tool(name = "killShellProcess",
+  description = """
+  spawnShellCommand で起動したバックグラウンドプロセスだけを終了します。
+  processId に一致する管理対象プロセスと、その子プロセスツリーを graceful に停止し、残った場合は強制終了します。
+  @param processId spawnShellCommand が返した logical processId
+  @return 終了後の状態、終了コード、直近の標準出力/標準エラー
+  """)
+  BackgroundProcessSnapshot killShellProcess(String processId) {
+    return backgroundProcessManager.kill(processId);
   }
 
   @Tool(name = "rollDice", description = "x 面サイコロをひとつ振る")

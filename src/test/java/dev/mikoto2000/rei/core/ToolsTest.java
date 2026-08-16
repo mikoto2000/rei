@@ -20,6 +20,8 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
+import dev.mikoto2000.rei.core.process.BackgroundProcessStatus;
 import dev.mikoto2000.rei.core.project.ProjectService;
 
 class ToolsTest {
@@ -231,6 +233,22 @@ class ToolsTest {
   }
 
   @Test
+  void shellBackgroundProcessToolsSpawnStatusAndKill() throws Exception {
+    Tools tools = new Tools();
+    String osName = System.getProperty("os.name").toLowerCase();
+    String command = osName.contains("win")
+        ? "Write-Output ready; Start-Sleep -Seconds 10"
+        : "printf 'ready\\n'; sleep 10";
+
+    BackgroundProcessSnapshot spawned = tools.spawnShellCommand(command);
+    BackgroundProcessSnapshot ready = awaitToolStdout(tools, spawned.processId(), "ready");
+    BackgroundProcessSnapshot killed = tools.killShellProcess(spawned.processId());
+
+    assertEquals(BackgroundProcessStatus.RUNNING, ready.status());
+    assertEquals(BackgroundProcessStatus.KILLED, killed.status());
+  }
+
+  @Test
   void readTextFileUsesCurrentProjectForRelativePath() throws Exception {
     Path project = Files.createDirectories(tempDir.resolve("project-a"));
     Files.writeString(project.resolve("note.txt"), "project note");
@@ -412,6 +430,20 @@ class ToolsTest {
     if (exitCode != 0) {
       throw new IOException("git command failed: " + String.join(" ", buildGitCommand(args)));
     }
+  }
+
+  private BackgroundProcessSnapshot awaitToolStdout(Tools tools, String processId, String expectedLine)
+      throws Exception {
+    long deadline = System.currentTimeMillis() + 5000;
+    BackgroundProcessSnapshot snapshot;
+    do {
+      snapshot = tools.getShellProcessStatus(processId, 100);
+      if (snapshot.stdout().contains(expectedLine)) {
+        return snapshot;
+      }
+      Thread.sleep(50);
+    } while (System.currentTimeMillis() < deadline);
+    return snapshot;
   }
 
   private List<String> buildGitCommand(String... args) {
