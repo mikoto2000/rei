@@ -507,19 +507,16 @@ public class Tools {
 
   @Tool(name = "applyTextDiff", description =
   """
-  テキストファイルに小さな差分を適用し、任意のゲートコマンドで検証します。
+  テキストファイルに小さな差分を適用します。
   oldText がファイル内に一意に存在する場合だけ newText に置換します。
-  gateCommand が指定され、終了コードが 0 以外の場合は自動で元内容へロールバックします。
   @param pathStr 対象ファイルのパス
   @param oldText 置換前の期待文字列
   @param newText 置換後の文字列
   @param charset 読み書き文字コード。null または空の場合は UTF-8、UTF-8 で読めない場合は CP932
-  @param gateCommand 適用後に実行するシェルコマンド。null または空の場合は実行しません
-  @param timeoutSeconds ゲートコマンドのタイムアウト秒数。null の場合は 30 秒、最大 600 秒
-  @return 適用結果、ゲート結果、ロールバック有無
+  @return 適用結果
   """)
-    TextDiffApplyResult applyTextDiff(String pathStr, String oldText, String newText, String charset,
-        String gateCommand, Integer timeoutSeconds) throws IOException, InterruptedException {
+    TextDiffApplyResult applyTextDiff(String pathStr, String oldText, String newText, String charset)
+        throws IOException {
       IO.println(String.format("applyTextDiff を実行するよ: %s", pathStr));
       if (oldText == null || oldText.isEmpty()) {
         throw new IllegalArgumentException("oldText は空にできません");
@@ -533,44 +530,27 @@ public class Tools {
       String originalContent = original.content();
       int firstIndex = originalContent.indexOf(oldText);
       if (firstIndex < 0) {
-        return new TextDiffApplyResult(false, false, false, null, "", "", "oldText が見つかりません");
+        return new TextDiffApplyResult(false, false, "oldText が見つかりません");
       }
       int secondIndex = originalContent.indexOf(oldText, firstIndex + oldText.length());
       if (secondIndex >= 0) {
-        return new TextDiffApplyResult(false, false, false, null, "", "", "oldText が複数箇所に一致しました");
+        return new TextDiffApplyResult(false, false, "oldText が複数箇所に一致しました");
       }
 
       String updatedContent = originalContent.substring(0, firstIndex)
           + newText
           + originalContent.substring(firstIndex + oldText.length());
       if (updatedContent.equals(originalContent)) {
-        return new TextDiffApplyResult(true, false, false, null, "", "", "変更はありません");
+        return new TextDiffApplyResult(true, false, "変更はありません");
       }
 
       Files.writeString(path, updatedContent, original.charset(), StandardOpenOption.TRUNCATE_EXISTING);
-
-      if (gateCommand == null || gateCommand.isBlank()) {
-        return new TextDiffApplyResult(true, true, false, null, "", "", "差分を適用しました");
-      }
-
-      ShellCommandResult gateResult = executeShellCommand(gateCommand, timeoutSeconds, currentWorkingDirectory());
-      if (gateResult.exitCode() == 0 && !gateResult.timedOut()) {
-        return new TextDiffApplyResult(true, true, false, gateResult.exitCode(), gateResult.stdout(),
-            gateResult.stderr(), "差分を適用し、ゲートに成功しました");
-      }
-
-      Files.writeString(path, originalContent, original.charset(), StandardOpenOption.TRUNCATE_EXISTING);
-      return new TextDiffApplyResult(false, true, true, gateResult.exitCode(), gateResult.stdout(),
-          gateResult.stderr(), "ゲートに失敗したためロールバックしました");
+      return new TextDiffApplyResult(true, true, "差分を適用しました");
     }
 
   public record TextDiffApplyResult(
       boolean success,
       boolean changed,
-      boolean rolledBack,
-      Integer gateExitCode,
-      String gateStdout,
-      String gateStderr,
       String message) {
   }
 

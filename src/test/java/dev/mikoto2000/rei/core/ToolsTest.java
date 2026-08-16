@@ -332,7 +332,7 @@ class ToolsTest {
     Files.writeString(text, "hello\nworld\n");
     Tools tools = new Tools();
 
-    Tools.TextDiffApplyResult result = tools.applyTextDiff(text.toString(), "world", "rei", "", null, null);
+    Tools.TextDiffApplyResult result = tools.applyTextDiff(text.toString(), "world", "rei", "");
 
     assertTrue(result.success());
     assertTrue(result.changed());
@@ -345,7 +345,7 @@ class ToolsTest {
     Files.writeString(text, "hello\nworld\n");
     Tools tools = new Tools();
 
-    Tools.TextDiffApplyResult result = tools.applyTextDiff(text.toString(), "missing", "rei", "", null, null);
+    Tools.TextDiffApplyResult result = tools.applyTextDiff(text.toString(), "missing", "rei", "");
 
     assertFalse(result.success());
     assertFalse(result.changed());
@@ -362,43 +362,13 @@ class ToolsTest {
     java.io.PrintStream originalOut = System.out;
     System.setOut(new java.io.PrintStream(out));
     try {
-      tools.applyTextDiff(text.toString(), "missing", "rei", "", null, null);
+      tools.applyTextDiff(text.toString(), "missing", "rei", "");
     } finally {
       System.setOut(originalOut);
     }
 
     assertTrue(out.toString().contains("applyTextDiff を実行するよ"));
     assertTrue(out.toString().contains(text.toString()));
-  }
-
-  @Test
-  void applyTextDiffKeepsChangeWhenGateSucceeds() throws Exception {
-    Path text = tempDir.resolve("note.txt");
-    Files.writeString(text, "hello\nworld\n");
-    Tools tools = new Tools();
-
-    Tools.TextDiffApplyResult result = tools.applyTextDiff(text.toString(), "world", "rei", "",
-        successfulGateCommand(), 10);
-
-    assertTrue(result.success());
-    assertTrue(result.changed());
-    assertEquals(0, result.gateExitCode());
-    assertEquals("hello\nrei\n", Files.readString(text));
-  }
-
-  @Test
-  void applyTextDiffRollsBackWhenGateFails() throws Exception {
-    Path text = tempDir.resolve("note.txt");
-    Files.writeString(text, "hello\nworld\n");
-    Tools tools = new Tools();
-
-    Tools.TextDiffApplyResult result = tools.applyTextDiff(text.toString(), "world", "rei", "",
-        failingGateCommand(), 10);
-
-    assertFalse(result.success());
-    assertTrue(result.changed());
-    assertEquals(1, result.gateExitCode());
-    assertEquals("hello\nworld\n", Files.readString(text));
   }
 
   private void writePdf(Path pdf, String text) throws IOException {
@@ -442,11 +412,4 @@ class ToolsTest {
     return command;
   }
 
-  private String successfulGateCommand() {
-    return System.getProperty("os.name").toLowerCase().contains("win") ? "Write-Output ok" : "printf ok";
-  }
-
-  private String failingGateCommand() {
-    return System.getProperty("os.name").toLowerCase().contains("win") ? "exit 1" : "exit 1";
-  }
 }
