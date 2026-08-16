@@ -27,6 +27,7 @@ import dev.mikoto2000.rei.search.SearchTools;
 import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
 import dev.mikoto2000.rei.sound.SoundNotificationTools;
 import dev.mikoto2000.rei.task.TaskTools;
+import dev.mikoto2000.rei.temporal.ClockTools;
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchTools;
 import dev.mikoto2000.rei.websearch.WebSearchProperties;
 import dev.mikoto2000.rei.websearch.WebSearchTools;
@@ -53,6 +54,7 @@ class AiConfigurationTest {
         Mockito.mock(SoundNotificationTools.class),
         Mockito.mock(BlueskyPostTools.class),
         Mockito.mock(UrlContentFetchTools.class),
+        Mockito.mock(ClockTools.class),
         mockProviderReturning(null),
         provider);
 
@@ -82,6 +84,7 @@ class AiConfigurationTest {
         Mockito.mock(SoundNotificationTools.class),
         Mockito.mock(BlueskyPostTools.class),
         Mockito.mock(UrlContentFetchTools.class),
+        Mockito.mock(ClockTools.class),
         mockProviderReturning(null),
         provider);
 
@@ -110,6 +113,7 @@ class AiConfigurationTest {
         Mockito.mock(SoundNotificationTools.class),
         Mockito.mock(BlueskyPostTools.class),
         Mockito.mock(UrlContentFetchTools.class),
+        Mockito.mock(ClockTools.class),
         mockProviderReturning(agentSkillAdvisor),
         mockProviderReturning(null));
 
