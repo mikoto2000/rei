@@ -7,7 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.sql.SQLException;
@@ -48,6 +51,19 @@ class MemoryServiceTest {
     var found = service.findById(saved.id()).orElseThrow();
     assertEquals("hello memory", found.content());
     assertEquals(MemoryStatus.ACTIVE, found.status());
+  }
+
+  @Test
+  void savePersistsObservedAtAndValidUntil() {
+    OffsetDateTime observedAt = OffsetDateTime.parse("2026-08-16T16:30:00Z");
+    OffsetDateTime validUntil = OffsetDateTime.parse("2026-08-16T16:35:00Z");
+
+    Memory saved = service.save(new Memory(null, "server is running", MemoryType.KNOWLEDGE, MemoryScope.SHORT_TERM,
+        MemoryStatus.CANDIDATE, 0.9d, null, null, null, observedAt, validUntil));
+
+    Memory found = service.findById(saved.id()).orElseThrow();
+    assertEquals(observedAt, found.observedAt());
+    assertEquals(validUntil, found.validUntil());
   }
 
   @Test

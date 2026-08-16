@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.memory.service;
 
 import java.sql.ResultSet;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -24,11 +25,18 @@ public class MemoryService {
 
   private final JdbcClient jdbcClient;
   private final MemoryProperties memoryProperties;
+  private final Clock clock;
 
   public MemoryService(@Qualifier("memoryConsolidationDataSource") DataSource dataSource,
       MemoryProperties memoryProperties) {
+    this(dataSource, memoryProperties, Clock.systemUTC());
+  }
+
+  public MemoryService(@Qualifier("memoryConsolidationDataSource") DataSource dataSource,
+      MemoryProperties memoryProperties, Clock clock) {
     this.jdbcClient = JdbcClient.create(dataSource);
     this.memoryProperties = memoryProperties;
+    this.clock = clock;
     initializeSchema();
   }
 
@@ -44,9 +52,13 @@ public class MemoryService {
             confidence REAL NOT NULL,
             expires_at TEXT,
             created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
+            updated_at TEXT NOT NULL,
+            observed_at TEXT,
+            valid_until TEXT
           )
           """).update();
+      addColumnIfMissing("memories", "observed_at", "TEXT");
+      addColumnIfMissing("memories", "valid_until", "TEXT");
       jdbcClient.sql("CREATE TABLE IF NOT EXISTS memory_tags (memory_id TEXT NOT NULL, tag TEXT NOT NULL)").update();
       jdbcClient.sql("CREATE TABLE IF NOT EXISTS memory_sources (memory_id TEXT NOT NULL, source TEXT NOT NULL)").update();
       jdbcClient.sql("CREATE TABLE IF NOT EXISTS memory_relations (from_memory_id TEXT NOT NULL, to_memory_id TEXT NOT NULL, relation_type TEXT NOT NULL)")
@@ -58,9 +70,12 @@ public class MemoryService {
 
   public Memory save(Memory memory) {
     return executeDb(() -> {
-      OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+      OffsetDateTime now = OffsetDateTime.now(clock);
       String id = memory.id() == null || memory.id().isBlank() ? UUID.randomUUID().toString() : memory.id();
       OffsetDateTime expiresAt = memory.expiresAt() != null ? memory.expiresAt() : defaultExpiry(memory.scope(), now);
+      OffsetDateTime observedAt = memory.observedAt() != null ? memory.observedAt()
+          : memory.createdAt() != null ? memory.createdAt() : now;
+      OffsetDateTime validUntil = memory.validUntil() != null ? memory.validUntil() : expiresAt;
       Memory saved = new Memory(
           id,
           memory.content(),
@@ -70,14 +85,17 @@ public class MemoryService {
           memory.confidence(),
           expiresAt,
           memory.createdAt() != null ? memory.createdAt() : now,
-          now);
+          now,
+          observedAt,
+          validUntil);
       jdbcClient.sql("""
-          INSERT INTO memories(id, content, type, scope, status, confidence, expires_at, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO memories(id, content, type, scope, status, confidence, expires_at, created_at, updated_at, observed_at, valid_until)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """)
           .params(saved.id(), saved.content(), saved.type().name(), saved.scope().name(), saved.status().name(),
               saved.confidence(),
-              toDbTime(saved.expiresAt()), toDbTime(saved.createdAt()), toDbTime(saved.updatedAt()))
+              toDbTime(saved.expiresAt()), toDbTime(saved.createdAt()), toDbTime(saved.updatedAt()),
+              toDbTime(saved.observedAt()), toDbTime(saved.validUntil()))
           .update();
       jdbcClient.sql("INSERT INTO memory_fts(memory_id, content) VALUES (?, ?)")
           .params(saved.id(), saved.content()).update();
@@ -104,7 +122,7 @@ public class MemoryService {
         SET status = 'DEPRECATED', updated_at = ?
         WHERE status = 'ACTIVE' AND expires_at IS NOT NULL AND expires_at < ?
         """)
-        .params(toDbTime(OffsetDateTime.now(ZoneOffset.UTC)), toDbTime(OffsetDateTime.now(ZoneOffset.UTC)))
+        .params(toDbTime(OffsetDateTime.now(clock)), toDbTime(OffsetDateTime.now(clock)))
         .update(), "有効期限チェックに失敗しました");
     return listActive();
   }
@@ -127,7 +145,7 @@ public class MemoryService {
   public boolean updateStatus(String id, MemoryStatus status) {
     return executeDb(() -> {
       int updated = jdbcClient.sql("UPDATE memories SET status = ?, updated_at = ? WHERE id = ?")
-          .params(status.name(), toDbTime(OffsetDateTime.now(ZoneOffset.UTC)), id)
+          .params(status.name(), toDbTime(OffsetDateTime.now(clock)), id)
           .update();
       return updated > 0;
     }, "メモリステータス更新に失敗しました");
@@ -213,7 +231,19 @@ public class MemoryService {
         rs.getDouble("confidence"),
         fromDbTime(rs.getString("expires_at")),
         fromDbTime(rs.getString("created_at")),
-        fromDbTime(rs.getString("updated_at")));
+        fromDbTime(rs.getString("updated_at")),
+        fromDbTime(rs.getString("observed_at")),
+        fromDbTime(rs.getString("valid_until")));
+  }
+
+  private void addColumnIfMissing(String table, String column, String type) {
+    boolean exists = jdbcClient.sql("PRAGMA table_info(" + table + ")")
+        .query((rs, rowNum) -> rs.getString("name"))
+        .list()
+        .contains(column);
+    if (!exists) {
+      jdbcClient.sql("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type).update();
+    }
   }
 
   private <T> T executeDb(Supplier<T> supplier, String message) {
