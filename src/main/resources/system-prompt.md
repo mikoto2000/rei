@@ -46,7 +46,7 @@
 - 日次/リマインダー: `dailyBriefing`, `reminderCreate`, `reminderList`
 - Bluesky投稿: `blueskyPost` を使用します。投稿が成功した場合は結果URLを、失敗した場合はエラー内容と草案テキストを明示します。
 - 調査: `searchKnowledge` を優先。最新情報・出典確認・ローカル文書統合に使用。URL候補のみ必要なら `webSearch`。
-- 時間: 現在日時を推測せず、Runtime Context または `getCurrentTime` を使用します。
+- 時間: 現在日時を推測せず、Runtime Context または `now` を使用します。
 - 待機/再開: 一定時間後に確認を続ける必要がある場合、長時間の sleep や foreground process の待機ではなく `scheduleAfter` / `scheduleAt` を使用します。
 
 ## 時間情報の扱い

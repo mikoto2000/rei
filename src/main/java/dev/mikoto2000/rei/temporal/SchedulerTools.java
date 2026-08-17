@@ -26,7 +26,7 @@ public class SchedulerTools {
       duration は 10s, 10m, 2h, 1d または ISO-8601 Duration で指定します。
       action には再開時に行う内容、conversationId には現在の会話/タスク識別子を指定します。
       """)
-  ScheduledAgentTask scheduleAfter(String duration, String action, String conversationId) {
+  public ScheduledAgentTask scheduleAfter(String duration, String action, String conversationId) {
     return scheduler.scheduleAfter(parseDuration(duration), action, conversationId);
   }
 
@@ -35,12 +35,12 @@ public class SchedulerTools {
       timestamp は ISO-8601 形式で指定します。
       action には再開時に行う内容、conversationId には現在の会話/タスク識別子を指定します。
       """)
-  ScheduledAgentTask scheduleAt(String timestamp, String action, String conversationId) {
+  public ScheduledAgentTask scheduleAt(String timestamp, String action, String conversationId) {
     return scheduler.scheduleAt(OffsetDateTime.parse(timestamp).toInstant(), action, conversationId);
   }
 
   @Tool(name = "listScheduledActions", description = "登録済み continuation の一覧を取得します。")
-  List<ScheduledAgentTask> listScheduledActions() {
+  public List<ScheduledAgentTask> listScheduledActions() {
     return scheduler.list();
   }
 
