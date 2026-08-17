@@ -18,6 +18,7 @@ import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.core.configuration.CoreProperties;
+import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
 import dev.mikoto2000.rei.core.configuration.SystemPromptService;
 import dev.mikoto2000.rei.feed.FeedTools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
@@ -48,6 +49,7 @@ public class LlmChatClientProvider {
   private final ObjectProvider<BlueskyPostTools> blueskyPostTools;
   private final ObjectProvider<UrlContentFetchTools> urlContentFetchTools;
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
+  private final ObjectProvider<WorkingSetAdvisor> workingSetAdvisor;
   private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
   private final Map<String, ChatClient> cache = new ConcurrentHashMap<>();
 
@@ -59,6 +61,7 @@ public class LlmChatClientProvider {
       ObjectProvider<SearchTools> searchTools, ObjectProvider<WebSearchTools> webSearchTools,
       ObjectProvider<SoundNotificationTools> soundNotificationTools, ObjectProvider<BlueskyPostTools> blueskyPostTools,
       ObjectProvider<UrlContentFetchTools> urlContentFetchTools, ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor,
+      ObjectProvider<WorkingSetAdvisor> workingSetAdvisor,
       ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider) {
     this.modelProvider = modelProvider;
     this.coreProperties = coreProperties;
@@ -76,6 +79,7 @@ public class LlmChatClientProvider {
     this.blueskyPostTools = blueskyPostTools;
     this.urlContentFetchTools = urlContentFetchTools;
     this.agentSkillAdvisor = agentSkillAdvisor;
+    this.workingSetAdvisor = workingSetAdvisor;
     this.mcpToolCallbackProvider = mcpToolCallbackProvider;
   }
 
@@ -91,6 +95,10 @@ public class LlmChatClientProvider {
     AgentSkillAdvisor skillAdvisor = agentSkillAdvisor.getIfAvailable();
     if (skillAdvisor != null) {
       advisors.add(skillAdvisor);
+    }
+    WorkingSetAdvisor workingSetAdvisorInstance = workingSetAdvisor.getIfAvailable();
+    if (workingSetAdvisorInstance != null) {
+      advisors.add(workingSetAdvisorInstance);
     }
 
     ChatClient.Builder builder = ChatClient.builder(modelProvider.chatModel(feature))

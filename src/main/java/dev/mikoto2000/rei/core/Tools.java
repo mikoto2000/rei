@@ -40,6 +40,7 @@ import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.service.SystemShellService;
+import dev.mikoto2000.rei.core.working.WorkingSet;
 
 @Component
 public class Tools {
@@ -50,6 +51,7 @@ public class Tools {
   private final SystemShellService systemShellService;
   private final BackgroundProcessManager backgroundProcessManager;
   private final Clock clock;
+  private final WorkingSet workingSet;
 
   public Tools() {
     this(null, new SystemShellService());
@@ -71,10 +73,16 @@ public class Tools {
   @Autowired
   public Tools(ProjectService projectService, SystemShellService systemShellService,
       BackgroundProcessManager backgroundProcessManager, Clock clock) {
+    this(projectService, systemShellService, backgroundProcessManager, clock, new WorkingSet());
+  }
+
+  public Tools(ProjectService projectService, SystemShellService systemShellService,
+      BackgroundProcessManager backgroundProcessManager, Clock clock, WorkingSet workingSet) {
     this.projectService = projectService;
     this.systemShellService = systemShellService;
     this.backgroundProcessManager = backgroundProcessManager;
     this.clock = clock;
+    this.workingSet = workingSet;
   }
 
   /**
@@ -495,7 +503,10 @@ public class Tools {
   @Tool(name = "readTextFile", description = "テキストファイルをすべて読み込む。ファイルが存在しない場合は findFile を利用してファイルを探す。")
   List<String> readTextFile(String pathStr) throws IOException {
     IO.println(String.format("%s のテキストファイルを読むよ", pathStr));
-    return readTextFileLines(resolveProjectPath(pathStr), pathStr, "");
+    java.nio.file.Path path = resolveProjectPath(pathStr);
+    List<String> lines = readTextFileLines(path, pathStr, "");
+    workingSet.recordRead(path);
+    return lines;
   }
 
   @Tool(name = "readTextFileRange", description = "テキストファイルの指定行範囲を読み込みます。startLine と endLine は 1 始まりで、両端を含みます。")
@@ -508,7 +519,9 @@ public class Tools {
     }
 
     IO.println(String.format("%s の %d 行目から %d 行目を読むよ", pathStr, startLine, endLine));
-    List<String> lines = readTextFileLines(resolveProjectPath(pathStr), pathStr, "");
+    java.nio.file.Path path = resolveProjectPath(pathStr);
+    List<String> lines = readTextFileLines(path, pathStr, "");
+    workingSet.recordRead(path);
     int fromIndex = startLine - 1;
     if (fromIndex >= lines.size()) {
       return List.of();
@@ -520,11 +533,14 @@ public class Tools {
   @Tool(name = "readPdfFile", description = "PDF ファイルから本文テキストを抽出して読み込む。")
   String readPdfFile(String pathStr) throws IOException {
     IO.println(String.format("%s の PDF ファイルを読むよ", pathStr));
-    TikaDocumentReader documentReader = new TikaDocumentReader(new FileSystemResource(resolveProjectPath(pathStr)));
-    return documentReader.get().stream()
+    java.nio.file.Path path = resolveProjectPath(pathStr);
+    TikaDocumentReader documentReader = new TikaDocumentReader(new FileSystemResource(path));
+    String extracted = documentReader.get().stream()
       .map(Document::getText)
       .filter(text -> text != null && !text.isBlank())
       .collect(Collectors.joining(System.lineSeparator()));
+    workingSet.recordRead(path);
+    return extracted;
   }
 
   /**
@@ -565,6 +581,11 @@ public class Tools {
         Files.createDirectories(parent);
       }
       Files.writeString(path, contents, resolvedCharset, options);
+      if (append) {
+        workingSet.recordEdit(path);
+      } else {
+        workingSet.recordWrite(path);
+      }
     }
 
   @Tool(name = "applyTextDiff", description =
@@ -607,6 +628,7 @@ public class Tools {
       }
 
       Files.writeString(path, updatedContent, original.charset(), StandardOpenOption.TRUNCATE_EXISTING);
+      workingSet.recordEdit(path);
       return new TextDiffApplyResult(true, true, "差分を適用しました");
     }
 
@@ -619,7 +641,10 @@ public class Tools {
   @Tool(name = "readBinaryFile", description = "バイナリファイルをすべて読み込む。ファイルが存在しない場合は findFile を利用してファイルを探す。")
   byte[] readBinaryFile(String pathStr) throws IOException {
     IO.println(String.format("%s のバイナリファイルを読むよ", pathStr));
-    return Files.readAllBytes(resolveProjectPath(pathStr));
+    java.nio.file.Path path = resolveProjectPath(pathStr);
+    byte[] bytes = Files.readAllBytes(path);
+    workingSet.recordRead(path);
+    return bytes;
   }
 
   @Tool(name = "createDirectories", description = "指定したパスまでのディレクトリをすべて作成します。既に存在するディレクトリは成功扱いです。")
@@ -649,13 +674,21 @@ public class Tools {
       };
     }
 
-    Files.write(resolveProjectPath(pathStr), contents, options);
+    java.nio.file.Path path = resolveProjectPath(pathStr);
+    Files.write(path, contents, options);
+    if (append) {
+      workingSet.recordEdit(path);
+    } else {
+      workingSet.recordWrite(path);
+    }
   }
 
   @Tool(name = "deleteFile", description = "ファイルを削除します。ファイルが存在しない場合はエラーになります。")
   void deleteFile(String pathStr) throws IOException {
     IO.println(String.format("%s を削除するよ", pathStr));
-    Files.delete(resolveProjectPath(pathStr));
+    java.nio.file.Path path = resolveProjectPath(pathStr);
+    Files.delete(path);
+    workingSet.remove(path);
   }
 
   @Tool(name = "copyFile", description = "ファイルをコピーします。上書きする場合は false を指定します。ファイルが存在しない場合はエラーになります。")
@@ -670,6 +703,7 @@ public class Tools {
     }
 
     Files.copy(resolvedSourcePath, resolvedDestPath, overwrite ? StandardCopyOption.REPLACE_EXISTING : StandardCopyOption.COPY_ATTRIBUTES);
+    workingSet.recordCreate(resolvedDestPath);
   }
 
   @Tool(name = "moveFile", description = "ファイルを移動します。上書きする場合は false を指定します。ファイルが存在しない場合はエラーになります。")
@@ -684,6 +718,11 @@ public class Tools {
     }
 
     Files.move(resolvedSourcePath, resolvedDestPath, overwrite ? StandardCopyOption.REPLACE_EXISTING : StandardCopyOption.ATOMIC_MOVE);
+    workingSet.recordCreate(resolvedDestPath);
+  }
+
+  WorkingSet workingSet() {
+    return workingSet;
   }
 
   private java.nio.file.Path currentWorkingDirectory() {
