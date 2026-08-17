@@ -18,6 +18,7 @@ import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.core.configuration.CoreProperties;
+import dev.mikoto2000.rei.core.configuration.SystemPromptService;
 import dev.mikoto2000.rei.feed.FeedTools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
 import dev.mikoto2000.rei.reminder.ReminderTools;
@@ -33,6 +34,7 @@ public class LlmChatClientProvider {
 
   private final LlmModelProvider modelProvider;
   private final CoreProperties coreProperties;
+  private final SystemPromptService systemPromptService;
   private final ChatMemory chatMemory;
   private final ObjectProvider<Tools> tools;
   private final ObjectProvider<GoogleCalendarTools> googleCalendarTools;
@@ -49,7 +51,8 @@ public class LlmChatClientProvider {
   private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
   private final Map<String, ChatClient> cache = new ConcurrentHashMap<>();
 
-  public LlmChatClientProvider(LlmModelProvider modelProvider, CoreProperties coreProperties, ChatMemory chatMemory,
+  public LlmChatClientProvider(LlmModelProvider modelProvider, CoreProperties coreProperties,
+      SystemPromptService systemPromptService, ChatMemory chatMemory,
       ObjectProvider<Tools> tools, ObjectProvider<GoogleCalendarTools> googleCalendarTools,
       ObjectProvider<TaskTools> taskTools, ObjectProvider<BriefingTools> briefingTools,
       ObjectProvider<FeedTools> feedTools, ObjectProvider<ReminderTools> reminderTools,
@@ -59,6 +62,7 @@ public class LlmChatClientProvider {
       ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider) {
     this.modelProvider = modelProvider;
     this.coreProperties = coreProperties;
+    this.systemPromptService = systemPromptService;
     this.chatMemory = chatMemory;
     this.tools = tools;
     this.googleCalendarTools = googleCalendarTools;
@@ -90,7 +94,7 @@ public class LlmChatClientProvider {
     }
 
     ChatClient.Builder builder = ChatClient.builder(modelProvider.chatModel(feature))
-        .defaultSystem(coreProperties.systemPrompt())
+        .defaultSystem(systemPromptService.systemPrompt())
         .defaultOptions(modelProvider.chatOptions(feature, null))
         .defaultAdvisors(advisors);
 

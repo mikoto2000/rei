@@ -64,6 +64,17 @@ class ReiPathsTest {
   }
 
   @Test
+  void additionalSystemPromptFilePathUsesWorkingDirectory() {
+    Path workDirectory = Path.of("/work/rei");
+    Path expected = Path.of(
+        "/work/rei",
+        ".rei",
+        "additional-system-prompt.md");
+
+    assertEquals(expected, ReiPaths.additionalSystemPromptFilePath(workDirectory));
+  }
+
+  @Test
   void projectsFilePathUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
     Path expected = Path.of(

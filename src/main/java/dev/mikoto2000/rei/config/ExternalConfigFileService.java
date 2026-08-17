@@ -24,18 +24,40 @@ public class ExternalConfigFileService {
     return ReiPaths.configFilePath(workDirectory);
   }
 
+  public Path additionalSystemPromptFilePath() {
+    return ReiPaths.additionalSystemPromptFilePath(workDirectory);
+  }
+
   public Path initializeConfigFile(boolean force) {
     Path configFile = configFilePath();
     try {
       ReiPaths.ensureParentDirectoryExists(configFile);
       if (!force && Files.exists(configFile)) {
+        initializeAdditionalSystemPromptFile(false);
         return configFile;
       }
       Files.writeString(configFile, template());
+      initializeAdditionalSystemPromptFile(force);
       return configFile;
     } catch (Exception e) {
       throw new IllegalStateException("外部設定ファイルの初期化に失敗しました", e);
     }
+  }
+
+  private void initializeAdditionalSystemPromptFile(boolean force) throws Exception {
+    Path file = additionalSystemPromptFilePath();
+    ReiPaths.ensureParentDirectoryExists(file);
+    if (!force && Files.exists(file)) {
+      return;
+    }
+    Files.writeString(file, additionalSystemPromptTemplate());
+  }
+
+  private String additionalSystemPromptTemplate() {
+    return """
+        # 既定の system prompt に追記する内容を Markdown で直接記述します。
+        # 空のままなら何も追加されません。
+        """;
   }
 
   private String template() {

@@ -49,6 +49,7 @@ import lombok.RequiredArgsConstructor;
 public class AiConfiguration {
 
   private final CoreProperties coreProperties;
+  private final SystemPromptService systemPromptService;
   private final ChatModel chatModel;
   private final ChatMemory chatMemory;
   private final Tools tools;
@@ -82,7 +83,7 @@ public class AiConfiguration {
     }
 
     ChatClient.Builder builder = ChatClient.builder(chatModel)
-        .defaultSystem(coreProperties.systemPrompt())
+        .defaultSystem(systemPromptService.systemPrompt())
         .defaultOptions(OpenAiChatOptions.builder()
             .maxTokens(llmProperties.getMaxOutputTokens())
             .build())

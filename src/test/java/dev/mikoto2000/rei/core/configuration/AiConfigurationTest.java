@@ -45,6 +45,7 @@ class AiConfigurationTest {
 
     AiConfiguration configuration = new AiConfiguration(
         new CoreProperties("system prompt", 100),
+        systemPromptService(),
         Mockito.mock(ChatModel.class),
         Mockito.mock(ChatMemory.class),
         new Tools(),
@@ -78,6 +79,7 @@ class AiConfigurationTest {
 
     AiConfiguration configuration = new AiConfiguration(
         new CoreProperties("system prompt", 100),
+        systemPromptService(),
         Mockito.mock(ChatModel.class),
         Mockito.mock(ChatMemory.class),
         new Tools(),
@@ -110,6 +112,7 @@ class AiConfigurationTest {
 
     AiConfiguration configuration = new AiConfiguration(
         new CoreProperties("system prompt", 100),
+        systemPromptService(),
         Mockito.mock(ChatModel.class),
         Mockito.mock(ChatMemory.class),
         new Tools(),
@@ -143,6 +146,7 @@ class AiConfigurationTest {
 
     AiConfiguration configuration = new AiConfiguration(
         new CoreProperties("system prompt", 100),
+        systemPromptService(),
         Mockito.mock(ChatModel.class),
         Mockito.mock(ChatMemory.class),
         new Tools(),
@@ -204,5 +208,11 @@ class AiConfigurationTest {
     ObjectProvider<T> provider = Mockito.mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(value);
     return provider;
+  }
+
+  private SystemPromptService systemPromptService() {
+    SystemPromptService service = Mockito.mock(SystemPromptService.class);
+    when(service.systemPrompt()).thenReturn("system prompt");
+    return service;
   }
 }

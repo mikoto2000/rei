@@ -22,6 +22,14 @@ class ExternalConfigFileServiceTest {
   }
 
   @Test
+  void additionalSystemPromptFilePathUsesExternalApplicationYamlDirectory() {
+    ExternalConfigFileService service = new ExternalConfigFileService(tempDir);
+
+    assertEquals(tempDir.resolve(".rei").resolve("additional-system-prompt.md"),
+        service.additionalSystemPromptFilePath());
+  }
+
+  @Test
   void initializeCreatesTemplateWhenFileDoesNotExist() throws Exception {
     ExternalConfigFileService service = new ExternalConfigFileService(tempDir);
 
@@ -29,6 +37,7 @@ class ExternalConfigFileServiceTest {
 
     assertEquals(service.configFilePath(), created);
     assertTrue(Files.exists(created));
+    assertTrue(Files.exists(service.additionalSystemPromptFilePath()));
     String content = Files.readString(created);
     assertTrue(content.contains("spring:"));
     assertTrue(content.contains("rei:"));
@@ -67,32 +76,55 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("REI_BLUESKY_REPLY_CHECK_INTERVAL_SECONDS"));
     assertTrue(content.contains("REI_BLUESKY_REPLY_GENERATION_TIMEOUT_SECONDS"));
     assertTrue(content.contains("alice.bsky.social"));
+    String additionalSystemPrompt = Files.readString(service.additionalSystemPromptFilePath());
+    assertTrue(additionalSystemPrompt.contains("Markdown で直接記述"));
   }
 
   @Test
-  void initializeDoesNotOverwriteExistingFileWithoutForce() throws Exception {
+  void initializeDoesNotOverwriteExistingFilesWithoutForce() throws Exception {
     ExternalConfigFileService service = new ExternalConfigFileService(tempDir);
     Path configFile = service.configFilePath();
+    Path additionalSystemPromptFile = service.additionalSystemPromptFilePath();
     Files.createDirectories(configFile.getParent());
     Files.writeString(configFile, "custom: true\n");
+    Files.writeString(additionalSystemPromptFile, "custom\n");
 
     Path created = service.initializeConfigFile(false);
 
     assertEquals(configFile, created);
     assertEquals("custom: true\n", Files.readString(configFile));
+    assertEquals("custom\n", Files.readString(additionalSystemPromptFile));
   }
 
   @Test
-  void initializeOverwritesExistingFileWhenForceIsTrue() throws Exception {
+  void initializeCreatesAdditionalSystemPromptFileEvenWhenApplicationYamlExists() throws Exception {
     ExternalConfigFileService service = new ExternalConfigFileService(tempDir);
     Path configFile = service.configFilePath();
     Files.createDirectories(configFile.getParent());
     Files.writeString(configFile, "custom: true\n");
+
+    service.initializeConfigFile(false);
+
+    assertEquals("custom: true\n", Files.readString(configFile));
+    assertTrue(Files.exists(service.additionalSystemPromptFilePath()));
+  }
+
+  @Test
+  void initializeOverwritesExistingFilesWhenForceIsTrue() throws Exception {
+    ExternalConfigFileService service = new ExternalConfigFileService(tempDir);
+    Path configFile = service.configFilePath();
+    Path additionalSystemPromptFile = service.additionalSystemPromptFilePath();
+    Files.createDirectories(configFile.getParent());
+    Files.writeString(configFile, "custom: true\n");
+    Files.writeString(additionalSystemPromptFile, "custom\n");
 
     service.initializeConfigFile(true);
 
     String content = Files.readString(configFile);
     assertTrue(content.contains("spring:"));
     assertTrue(content.contains("rei:"));
+    String additionalSystemPrompt = Files.readString(additionalSystemPromptFile);
+    assertTrue(additionalSystemPrompt.contains("Markdown で直接記述"));
+    assertTrue(!additionalSystemPrompt.contains("custom"));
   }
 }

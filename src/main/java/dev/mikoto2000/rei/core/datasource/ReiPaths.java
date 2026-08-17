@@ -60,6 +60,10 @@ public final class ReiPaths {
     return configFilePath(workDirectory());
   }
 
+  public static Path additionalSystemPromptFilePath() {
+    return additionalSystemPromptFilePath(workDirectory());
+  }
+
   public static Path projectsFilePath() {
     return projectsFilePath(startupDirectory());
   }
@@ -96,6 +100,10 @@ public final class ReiPaths {
 
   public static Path configFilePath(Path workDirectory) {
     return workDirectory.resolve(".rei").resolve("application.yaml");
+  }
+
+  public static Path additionalSystemPromptFilePath(Path workDirectory) {
+    return workDirectory.resolve(".rei").resolve("additional-system-prompt.md");
   }
 
   public static Path projectsFilePath(Path workDirectory) {

@@ -52,6 +52,9 @@ Rei は起動時に、組み込みの `application.yaml` に加えて、起動�
 /config init --force
 ```
 
+`/config init` は `.rei/application.yaml` と同じディレクトリに `.rei/additional-system-prompt.md` も作成します。
+この Markdown ファイルに書いた内容は、既定の system prompt の末尾へ追記されます。空の場合は何も追加されません。
+
 例:
 
 ```yaml
