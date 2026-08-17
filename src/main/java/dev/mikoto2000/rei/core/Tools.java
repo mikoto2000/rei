@@ -536,7 +536,7 @@ public class Tools {
    */
   @Tool(name = "writeTextFile", description =
   """
-  テキストファイルに書き込みます。ファイルが存在しない場合は作成します。
+  テキストファイルに書き込みます。ファイルや親ディレクトリが存在しない場合は作成します。
   @param pathStr ファイルのパス
   @param contents 書き込む内容
   @param append 既存の内容に追記するかどうか。true の場合は追記、false の場合は上書きします。
@@ -559,7 +559,12 @@ public class Tools {
         };
       }
 
-      Files.writeString(resolveProjectPath(pathStr), contents, resolvedCharset, options);
+      java.nio.file.Path path = resolveProjectPath(pathStr);
+      java.nio.file.Path parent = path.getParent();
+      if (parent != null) {
+        Files.createDirectories(parent);
+      }
+      Files.writeString(path, contents, resolvedCharset, options);
     }
 
   @Tool(name = "applyTextDiff", description =

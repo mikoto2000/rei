@@ -343,6 +343,16 @@ class ToolsTest {
   }
 
   @Test
+  void writeTextFileCreatesParentDirectories() throws Exception {
+    Path text = tempDir.resolve("missing").resolve("nested").resolve("note.txt");
+    Tools tools = new Tools();
+
+    tools.writeTextFile(text.toString(), "メモ", false, "UTF-8");
+
+    assertEquals("メモ", Files.readString(text, Charset.forName("UTF-8")));
+  }
+
+  @Test
   void createDirectoriesCreatesNestedDirectories() throws Exception {
     Path nested = tempDir.resolve("a").resolve("b").resolve("c");
     Tools tools = new Tools();
