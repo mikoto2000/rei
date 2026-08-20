@@ -311,6 +311,7 @@ public class Tools {
   @Tool(name = "grep", description =
   """
   指定したディレクトリ配下のテキストを検索します。Linux grep の主要な使い方をマルチプラットフォームに実行します。
+  複数の検索条件が既知の場合は grepMultiQuery を優先してください。
   @param pattern 検索パターン。fixedString=false の場合は Java 正規表現です。
   @param baseDir 検索対象ディレクトリ。相対パスは現在の project 基準です。
   @param ignoreCase true の場合は大文字小文字を無視します。grep -i 相当。
