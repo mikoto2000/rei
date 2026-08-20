@@ -197,6 +197,27 @@ class ToolsTest {
   }
 
   @Test
+  void grepMultiQueryExecutesSingleQuery() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/tracked.txt"), "hello spring ai");
+    runGit("add", "docs/tracked.txt");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
+        new Tools.GrepQuery("spring", "docs", null, null, null, null, null, null, null, null, null, null)
+    ), tempDir);
+
+    assertEquals(1, results.size());
+    assertEquals(0, results.get(0).queryIndex());
+    assertEquals("spring", results.get(0).pattern());
+    assertEquals(1, results.get(0).matches().size());
+    assertEquals("docs/tracked.txt", results.get(0).matches().get(0).path());
+    assertEquals(1, results.get(0).matches().get(0).line());
+  }
+
+  @Test
   void resolveShellUsesShellEnvironmentVariableWhenConfigured() {
     Tools tools = new Tools();
 

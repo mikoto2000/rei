@@ -350,26 +350,92 @@ public class Tools {
       Boolean fileNamesOnly, Integer beforeContext, Integer afterContext, Integer maxMatches,
       Boolean includeLineNumber, String includeGlob, String excludeGlob, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
-    if (pattern == null || pattern.isBlank()) {
+    GrepQuery query = new GrepQuery(pattern, baseDir, ignoreCase, fixedString, invertMatch, fileNamesOnly,
+        beforeContext, afterContext, maxMatches, includeLineNumber, includeGlob, excludeGlob);
+    List<GrepMatch> matches = grepMatches(query, workingDirectory);
+    if (Boolean.TRUE.equals(fileNamesOnly)) {
+      return matches.stream().map(GrepMatch::path).distinct().collect(Collectors.toList());
+    }
+    boolean effectiveIncludeLineNumber = !Boolean.FALSE.equals(includeLineNumber);
+    return matches.stream()
+        .map(m -> formatGrepLine(m.path(), m.line(), m.content(), m.matched() ? ":" : "-",
+            effectiveIncludeLineNumber))
+        .collect(Collectors.toList());
+  }
+
+  /** 1 リクエストあたりの最大 query 数。 */
+  static final int MAX_GREP_QUERIES = 20;
+
+  /** 1 query あたりの最大 match 数。 */
+  static final int MAX_GREP_MATCHES_PER_QUERY = 1000;
+
+  /** 全 query 合計の最大 match 数。 */
+  static final int MAX_GREP_TOTAL_MATCHES = 5000;
+
+  /**
+   * 複数の独立した検索条件を 1 回のツール呼び出しで実行する。
+   *
+   * <p>複数の検索条件が既に分かっている場合は、grep を複数回呼ぶよりもこのツールを優先する。</p>
+   */
+  @Tool(name = "grepMultiQuery", description = """
+      複数の独立した検索条件を 1 回のツール呼び出しで実行します。複数の検索条件が既知の場合は grep を複数回呼ばず、このツールを優先してください。検索条件が 1 件だけの場合は grep を使用してください。
+      @param queries 検索条件のリスト。各要素は grep と同じパラメータを持つ。
+      @return query ごとの結果。queryIndex で入力順と対応する。
+      """)
+  List<GrepQueryResult> grepMultiQuery(List<GrepQuery> queries) throws IOException, InterruptedException {
+    return grepMultiQuery(queries, currentWorkingDirectory());
+  }
+
+  List<GrepQueryResult> grepMultiQuery(List<GrepQuery> queries, java.nio.file.Path workingDirectory)
+      throws IOException, InterruptedException {
+    if (queries == null || queries.isEmpty()) {
+      throw new IllegalArgumentException("queries must not be empty");
+    }
+    if (queries.size() > MAX_GREP_QUERIES) {
+      throw new IllegalArgumentException("too many queries: " + queries.size() + " (max " + MAX_GREP_QUERIES + ")");
+    }
+    List<GrepQueryResult> results = new ArrayList<>();
+    int totalMatches = 0;
+    for (int i = 0; i < queries.size(); i++) {
+      GrepQuery query = queries.get(i);
+      try {
+        List<GrepMatch> matches = grepMatches(query, workingDirectory);
+        int remaining = MAX_GREP_TOTAL_MATCHES - totalMatches;
+        if (matches.size() > remaining) {
+          matches = matches.subList(0, Math.max(0, remaining));
+        }
+        totalMatches += matches.size();
+        results.add(new GrepQueryResult(i, query.pattern(), matches, null));
+      } catch (IllegalArgumentException e) {
+        results.add(new GrepQueryResult(i, query.pattern(), List.of(), e.getMessage()));
+      }
+    }
+    return results;
+  }
+
+  /** 1 query の検索を実行し、構造化された match のリストを返す。 */
+  private List<GrepMatch> grepMatches(GrepQuery query, java.nio.file.Path workingDirectory)
+      throws IOException, InterruptedException {
+    if (query.pattern() == null || query.pattern().isBlank()) {
       throw new IllegalArgumentException("pattern must not be blank");
     }
-    if (baseDir == null || baseDir.isBlank()) {
+    if (query.baseDir() == null || query.baseDir().isBlank()) {
       throw new IllegalArgumentException("baseDir must not be blank");
     }
-    boolean effectiveIgnoreCase = Boolean.TRUE.equals(ignoreCase);
-    boolean effectiveFixedString = Boolean.TRUE.equals(fixedString);
-    boolean effectiveInvertMatch = Boolean.TRUE.equals(invertMatch);
-    boolean effectiveFileNamesOnly = Boolean.TRUE.equals(fileNamesOnly);
-    boolean effectiveIncludeLineNumber = !Boolean.FALSE.equals(includeLineNumber);
-    int effectiveBeforeContext = Math.max(0, beforeContext == null ? 0 : beforeContext);
-    int effectiveAfterContext = Math.max(0, afterContext == null ? 0 : afterContext);
-    int effectiveMaxMatches = maxMatches == null || maxMatches <= 0 ? 1000 : maxMatches;
-    Pattern compiled = compileGrepPattern(pattern, effectiveIgnoreCase, effectiveFixedString);
-    PathMatcher includeMatcher = globMatcher(includeGlob, workingDirectory);
-    PathMatcher excludeMatcher = globMatcher(excludeGlob, workingDirectory);
+    boolean effectiveIgnoreCase = Boolean.TRUE.equals(query.ignoreCase());
+    boolean effectiveFixedString = Boolean.TRUE.equals(query.fixedString());
+    boolean effectiveInvertMatch = Boolean.TRUE.equals(query.invertMatch());
+    boolean effectiveFileNamesOnly = Boolean.TRUE.equals(query.fileNamesOnly());
+    int effectiveBeforeContext = Math.max(0, query.beforeContext() == null ? 0 : query.beforeContext());
+    int effectiveAfterContext = Math.max(0, query.afterContext() == null ? 0 : query.afterContext());
+    int effectiveMaxMatches = query.maxMatches() == null || query.maxMatches() <= 0
+        ? MAX_GREP_MATCHES_PER_QUERY : query.maxMatches();
+    Pattern compiled = compileGrepPattern(query.pattern(), effectiveIgnoreCase, effectiveFixedString);
+    PathMatcher includeMatcher = globMatcher(query.includeGlob(), workingDirectory);
+    PathMatcher excludeMatcher = globMatcher(query.excludeGlob(), workingDirectory);
 
-    List<String> candidates = listFile(baseDir, workingDirectory);
-    List<String> matches = new ArrayList<>();
+    List<String> candidates = listFile(query.baseDir(), workingDirectory);
+    List<GrepMatch> matches = new ArrayList<>();
     for (String relativePath : candidates) {
       if (!matchesGlob(relativePath, includeMatcher, excludeMatcher, workingDirectory)) {
         continue;
@@ -385,7 +451,6 @@ public class Tools {
         continue;
       }
       Set<Integer> contextLineIndexes = new LinkedHashSet<>();
-      boolean fileMatched = false;
       for (int i = 0; i < lines.size(); i++) {
         String line = lines.get(i);
         boolean matched = compiled.matcher(line).find();
@@ -394,10 +459,7 @@ public class Tools {
         }
         if (matched) {
           if (effectiveFileNamesOnly) {
-            if (!fileMatched) {
-              matches.add(relativePath);
-              fileMatched = true;
-            }
+            matches.add(new GrepMatch(relativePath, i + 1, line, true));
             break;
           }
           int from = Math.max(0, i - effectiveBeforeContext);
@@ -410,9 +472,8 @@ public class Tools {
 
       if (!effectiveFileNamesOnly) {
         for (Integer lineIndex : contextLineIndexes) {
-          String separator = isMatchedLine(compiled, lines.get(lineIndex), effectiveInvertMatch) ? ":" : "-";
-          matches.add(formatGrepLine(relativePath, lineIndex + 1, lines.get(lineIndex), separator,
-              effectiveIncludeLineNumber));
+          matches.add(new GrepMatch(relativePath, lineIndex + 1, lines.get(lineIndex),
+              isMatchedLine(compiled, lines.get(lineIndex), effectiveInvertMatch)));
           if (matches.size() >= effectiveMaxMatches) {
             return matches;
           }
@@ -423,6 +484,30 @@ public class Tools {
       }
     }
     return matches;
+  }
+
+  /** 1 つの grep 検索条件。grep ツールのパラメータと 1:1 対応する。 */
+  public record GrepQuery(
+      String pattern,
+      String baseDir,
+      Boolean ignoreCase,
+      Boolean fixedString,
+      Boolean invertMatch,
+      Boolean fileNamesOnly,
+      Integer beforeContext,
+      Integer afterContext,
+      Integer maxMatches,
+      Boolean includeLineNumber,
+      String includeGlob,
+      String excludeGlob) {
+  }
+
+  /** 1 行の grep 検索結果。 */
+  public record GrepMatch(String path, int line, String content, boolean matched) {
+  }
+
+  /** 1 query の検索結果。queryIndex は入力順と対応する。 */
+  public record GrepQueryResult(int queryIndex, String pattern, List<GrepMatch> matches, String error) {
   }
 
   private PathMatcher globMatcher(String glob, java.nio.file.Path workingDirectory) {
