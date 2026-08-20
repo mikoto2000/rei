@@ -568,6 +568,24 @@ class ToolsTest {
   }
 
   @Test
+  void searchAndReadRejectsEmptyQueries() throws Exception {
+    Tools tools = new Tools();
+    assertThrows(IllegalArgumentException.class,
+        () -> tools.searchAndRead(new Tools.SearchAndReadRequest(List.of(), null, null), tempDir));
+  }
+
+  @Test
+  void searchAndReadRejectsTooManyQueries() throws Exception {
+    Tools tools = new Tools();
+    List<Tools.GrepQuery> queries = new java.util.ArrayList<>();
+    for (int i = 0; i < Tools.MAX_GREP_QUERIES + 1; i++) {
+      queries.add(new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null));
+    }
+    assertThrows(IllegalArgumentException.class,
+        () -> tools.searchAndRead(new Tools.SearchAndReadRequest(queries, null, null), tempDir));
+  }
+
+  @Test
   void grepMultiQueryRejectsBlankPattern() throws Exception {
     Tools tools = new Tools();
     List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
