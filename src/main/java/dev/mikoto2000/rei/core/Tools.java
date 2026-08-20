@@ -831,6 +831,7 @@ public class Tools {
   @Tool(name = "writeTextFile", description =
   """
   テキストファイルに書き込みます。ファイルや親ディレクトリが存在しない場合は作成します。
+  複数のファイルをまとめて書き込む場合は writeMultiFile を優先してください。
   @param pathStr ファイルのパス
   @param contents 書き込む内容
   @param append 既存の内容に追記するかどうか。true の場合は追記、false の場合は上書きします。
