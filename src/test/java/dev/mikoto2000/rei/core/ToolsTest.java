@@ -331,6 +331,46 @@ class ToolsTest {
   }
 
   @Test
+  void grepMultiQueryLimitsMatchesPerQuery() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < 10; i++) {
+      sb.append("foo\n");
+    }
+    Files.writeString(tempDir.resolve("docs/a.txt"), sb.toString());
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
+        new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, 3, null, null, null)
+    ), tempDir);
+
+    assertEquals(3, results.get(0).matches().size());
+  }
+
+  @Test
+  void grepMultiQueryLimitsTotalMatches() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/a.txt"), "foo\n");
+    Files.writeString(tempDir.resolve("docs/b.txt"), "foo\n");
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
+        new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null),
+        new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null)
+    ), tempDir);
+
+    // 合計制限は MAX_GREP_TOTAL_MATCHES だが、ここでは 2 query それぞれが 2 件ずつ返ることを確認する
+    assertEquals(2, results.get(0).matches().size());
+    assertEquals(2, results.get(1).matches().size());
+  }
+
+  @Test
   void resolveShellUsesShellEnvironmentVariableWhenConfigured() {
     Tools tools = new Tools();
 
