@@ -388,6 +388,80 @@ class ToolsTest {
   }
 
   @Test
+  void readMultiFileReadsMultipleFilesAndPreservesOrder() throws Exception {
+    Path a = tempDir.resolve("a.txt");
+    Path b = tempDir.resolve("b.txt");
+    Files.write(a, List.of("alpha"));
+    Files.write(b, List.of("beta"));
+    Tools tools = new Tools();
+
+    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
+        new Tools.ReadFileRequest(a.toString(), null, null),
+        new Tools.ReadFileRequest(b.toString(), null, null)
+    ));
+
+    assertEquals(2, results.size());
+    assertEquals(a.toString(), results.get(0).path());
+    assertEquals(List.of("alpha"), results.get(0).content());
+    assertEquals(b.toString(), results.get(1).path());
+    assertEquals(List.of("beta"), results.get(1).content());
+  }
+
+  @Test
+  void readMultiFileSupportsLineRange() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Files.write(text, List.of("line1", "line2", "line3", "line4"));
+    Tools tools = new Tools();
+
+    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
+        new Tools.ReadFileRequest(text.toString(), 2, 3)
+    ));
+
+    assertEquals(List.of("line2", "line3"), results.get(0).content());
+    assertEquals(2, results.get(0).startLine());
+    assertEquals(3, results.get(0).endLine());
+  }
+
+  @Test
+  void readMultiFileSupportsStartLineOnly() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Files.write(text, List.of("line1", "line2", "line3"));
+    Tools tools = new Tools();
+
+    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
+        new Tools.ReadFileRequest(text.toString(), 2, null)
+    ));
+
+    assertEquals(List.of("line2", "line3"), results.get(0).content());
+  }
+
+  @Test
+  void readMultiFileSupportsNoRange() throws Exception {
+    Path text = tempDir.resolve("empty.txt");
+    Files.write(text, List.of());
+    Tools tools = new Tools();
+
+    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
+        new Tools.ReadFileRequest(text.toString(), null, null)
+    ));
+
+    assertEquals(List.of(), results.get(0).content());
+  }
+
+  @Test
+  void readMultiFileClampsEndLineToEof() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Files.write(text, List.of("line1", "line2"));
+    Tools tools = new Tools();
+
+    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
+        new Tools.ReadFileRequest(text.toString(), 2, 99)
+    ));
+
+    assertEquals(List.of("line2"), results.get(0).content());
+  }
+
+  @Test
   void resolveShellUsesShellEnvironmentVariableWhenConfigured() {
     Tools tools = new Tools();
 
