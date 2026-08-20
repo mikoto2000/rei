@@ -308,23 +308,6 @@ public class Tools {
       .collect(Collectors.toList());
   }
 
-  @Tool(name = "grep", description =
-  """
-  指定したディレクトリ配下のテキストを検索します。Linux grep の主要な使い方をマルチプラットフォームに実行します。
-  複数の検索条件が既知の場合は grepMultiQuery を優先してください。
-  @param pattern 検索パターン。fixedString=false の場合は Java 正規表現です。
-  @param baseDir 検索対象ディレクトリ。相対パスは現在の project 基準です。
-  @param ignoreCase true の場合は大文字小文字を無視します。grep -i 相当。
-  @param fixedString true の場合は pattern を正規表現ではなく固定文字列として扱います。grep -F 相当。
-  @param invertMatch true の場合は一致しない行を返します。grep -v 相当。
-  @param fileNamesOnly true の場合は一致したファイル名だけを返します。grep -l 相当。
-  @param beforeContext 一致行の前に含める行数。grep -B 相当。
-  @param afterContext 一致行の後に含める行数。grep -A 相当。
-  @param maxMatches 最大結果数。null または 0 以下の場合は 1000 件。
-  @param includeLineNumber true の場合は path:line:text、false の場合は path:text で返します。
-  @param includeGlob 検索対象に含めるファイルの glob。例: **/*.java。null または空の場合は全ファイル対象。
-  @param excludeGlob 検索対象から除外するファイルの glob。例: **/target/**。null または空の場合は除外なし。
-  """)
   List<String> grep(String pattern, String baseDir, Boolean ignoreCase, Boolean fixedString, Boolean invertMatch,
       Boolean fileNamesOnly, Integer beforeContext, Integer afterContext, Integer maxMatches,
       Boolean includeLineNumber, String includeGlob, String excludeGlob) throws IOException, InterruptedException {
@@ -376,11 +359,11 @@ public class Tools {
   /**
    * 複数の独立した検索条件を 1 回のツール呼び出しで実行する。
    *
-   * <p>複数の検索条件が既に分かっている場合は、grep を複数回呼ぶよりもこのツールを優先する。</p>
+   * <p>検索条件が 1 件だけの場合もこのツールを使用する。</p>
    */
   @Tool(name = "grepMultiQuery", description = """
-      複数の独立した検索条件を 1 回のツール呼び出しで実行します。複数の検索条件が既知の場合は grep を複数回呼ばず、このツールを優先してください。検索条件が 1 件だけの場合は grep を使用してください。
-      @param queries 検索条件のリスト。各要素は grep と同じパラメータを持つ。
+      1 件以上の独立した検索条件を 1 回のツール呼び出しで実行します。検索条件が 1 件だけの場合もこのツールを使用してください。
+      @param queries 検索条件のリスト。
       @return query ごとの結果。queryIndex で入力順と対応する。
       """)
   List<GrepQueryResult> grepMultiQuery(List<GrepQuery> queries) throws IOException, InterruptedException {
@@ -523,10 +506,10 @@ public class Tools {
   /**
    * 複数のファイルまたは行範囲を 1 回のツール呼び出しで読み込む。
    *
-   * <p>複数の既知ファイルをまとめて調べる場合は、readFile を複数回呼ぶよりもこのツールを優先する。</p>
+   * <p>ファイルが 1 件だけの場合もこのツールを使用する。</p>
    */
   @Tool(name = "readMultiFile", description = """
-      複数のファイルまたは行範囲を 1 回のツール呼び出しで読み込みます。複数の既知ファイルをまとめて調べる場合は readFile を複数回呼ばず、このツールを優先してください。1 ファイルだけの場合は readFile を使用してください。
+      1 件以上のファイルまたは行範囲を 1 回のツール呼び出しで読み込みます。ファイルが 1 件だけの場合もこのツールを使用してください。
       @param files 読み込むファイルのリスト。各要素は path と任意の startLine / endLine を持つ。
       @return ファイルごとの読み込み結果。path で識別できる。
       """)
@@ -612,10 +595,10 @@ public class Tools {
   /**
    * 複数の既知ファイルを 1 回のツール呼び出しで書き込む。
    *
-   * <p>複数のファイルをまとめて作成・置換する場合は、writeFile を複数回呼ぶよりもこのツールを優先する。</p>
+   * <p>ファイルが 1 件だけの場合もこのツールを使用する。</p>
    */
   @Tool(name = "writeMultiFile", description = """
-      複数の既知ファイルを 1 回のツール呼び出しで書き込みます。複数のファイルをまとめて作成・置換する場合は writeFile を複数回呼ばず、このツールを優先してください。1 ファイルだけの場合は writeFile を使用してください。
+      1 件以上の既知ファイルを 1 回のツール呼び出しで書き込みます。ファイルが 1 件だけの場合もこのツールを使用してください。
       @param files 書き込むファイルのリスト。各要素は path と content を持つ。
       @return ファイルごとの書き込み結果。path で識別できる。
       """)
@@ -778,7 +761,6 @@ public class Tools {
       .toList();
   }
 
-  @Tool(name = "readTextFile", description = "テキストファイルをすべて読み込む。ファイルが存在しない場合は findFile を利用してファイルを探す。複数の既知ファイルをまとめて読む場合は readMultiFile を優先する。")
   List<String> readTextFile(String pathStr) throws IOException {
     IO.println(String.format("%s のテキストファイルを読むよ", pathStr));
     java.nio.file.Path path = resolveProjectPath(pathStr);
@@ -787,7 +769,6 @@ public class Tools {
     return lines;
   }
 
-  @Tool(name = "readTextFileRange", description = "テキストファイルの指定行範囲を読み込みます。startLine と endLine は 1 始まりで、両端を含みます。")
   List<String> readTextFileRange(String pathStr, int startLine, int endLine) throws IOException {
     if (startLine < 1) {
       throw new IllegalArgumentException("startLine は 1 以上である必要があります");
@@ -828,15 +809,6 @@ public class Tools {
    * @param contents 書き込む内容
    * @param append 既存の内容に追記するかどうか。true の場合は追記、false の場合は上書きします。
    */
-  @Tool(name = "writeTextFile", description =
-  """
-  テキストファイルに書き込みます。ファイルや親ディレクトリが存在しない場合は作成します。
-  複数のファイルをまとめて書き込む場合は writeMultiFile を優先してください。
-  @param pathStr ファイルのパス
-  @param contents 書き込む内容
-  @param append 既存の内容に追記するかどうか。true の場合は追記、false の場合は上書きします。
-  @param charset 書き込み文字コード。null または空の場合は UTF-8。例: UTF-8, windows-31j
-  """)
     void writeTextFile(String pathStr, String contents, boolean append, String charset) throws IOException {
       Charset resolvedCharset = resolveCharset(charset);
       IO.println(String.format("%s のテキストファイルに %s を %s で書き込むよ", pathStr, contents, resolvedCharset.name()));

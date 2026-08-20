@@ -22,6 +22,7 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.ai.tool.annotation.Tool;
 
 import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
 import dev.mikoto2000.rei.core.process.BackgroundProcessStatus;
@@ -43,6 +44,23 @@ class ToolsTest {
     String actual = tools.readPdfFile(pdf.toString());
 
     assertTrue(actual.contains("PDF reading test"));
+  }
+
+  @Test
+  void legacySingleOperationToolsAreNotExposed() {
+    List<String> toolNames = java.util.Arrays.stream(Tools.class.getDeclaredMethods())
+        .map(method -> method.getAnnotation(Tool.class))
+        .filter(annotation -> annotation != null)
+        .map(Tool::name)
+        .toList();
+
+    assertFalse(toolNames.contains("grep"));
+    assertFalse(toolNames.contains("readTextFile"));
+    assertFalse(toolNames.contains("readTextFileRange"));
+    assertFalse(toolNames.contains("writeTextFile"));
+    assertTrue(toolNames.contains("grepMultiQuery"));
+    assertTrue(toolNames.contains("readMultiFile"));
+    assertTrue(toolNames.contains("writeMultiFile"));
   }
 
   @Test
