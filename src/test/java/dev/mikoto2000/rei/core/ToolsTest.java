@@ -61,6 +61,7 @@ class ToolsTest {
     assertTrue(toolNames.contains("grepMultiQuery"));
     assertTrue(toolNames.contains("readMultiFile"));
     assertTrue(toolNames.contains("writeMultiFile"));
+    assertTrue(toolNames.contains("searchAndRead"));
   }
 
   @Test
