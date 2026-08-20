@@ -586,6 +586,25 @@ class ToolsTest {
   }
 
   @Test
+  void searchAndReadMaintainsPathSecurity() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/a.txt"), "foo\n");
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    // 既存 grep と同じく、baseDir は workspace 内の相対パスで指定する
+    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
+        new Tools.SearchAndReadRequest(
+            List.of(new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null)),
+            0, null), tempDir);
+
+    assertEquals(1, results.size());
+    assertEquals("docs/a.txt", results.get(0).path());
+  }
+
+  @Test
   void grepMultiQueryRejectsBlankPattern() throws Exception {
     Tools tools = new Tools();
     List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
