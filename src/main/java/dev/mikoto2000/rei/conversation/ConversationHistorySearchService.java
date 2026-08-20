@@ -48,6 +48,12 @@ public class ConversationHistorySearchService {
     if (normalizedScope.equals("all") || normalizedScope.equals("bluesky-reply")) {
       results.addAll(searchBlueskyReply(query, normalizedSpeaker, timeRange, safeLimit));
     }
+    if (normalizedScope.equals("all") || normalizedScope.equals("bluesky-manual")) {
+      results.addAll(searchBlueskyManual(query, normalizedSpeaker, timeRange, safeLimit));
+    }
+    if (normalizedScope.equals("all") || normalizedScope.equals("tool")) {
+      results.addAll(searchTool(query, normalizedSpeaker, timeRange, safeLimit));
+    }
     results.sort((a, b) -> b.timestamp().compareTo(a.timestamp()));
     return results.stream().limit(safeLimit).toList();
   }
@@ -58,14 +64,19 @@ public class ConversationHistorySearchService {
     }
     int safeLimit = normalizeLimit(limit, DEFAULT_DETAIL_LIMIT, MAX_DETAIL_LIMIT);
     if (conversationId.startsWith("chat:")) {
-      String id = conversationId.substring("chat:".length());
-      return new ConversationHistoryDetail(conversationId, "chat", findChatDetail(id, safeLimit));
+      return new ConversationHistoryDetail(conversationId, "chat", findChatDetailWithFallback(conversationId, "chat:".length(), safeLimit));
     }
     if (conversationId.startsWith("bluesky-reply:")) {
       String handle = conversationId.substring("bluesky-reply:".length());
       return new ConversationHistoryDetail(conversationId, "bluesky-reply", findBlueskyReplyDetail(handle, safeLimit));
     }
-    throw new IllegalArgumentException("conversationId must start with chat: or bluesky-reply:");
+    if (conversationId.startsWith("bluesky-manual:")) {
+      return new ConversationHistoryDetail(conversationId, "bluesky-manual", findChatDetailWithFallback(conversationId, "bluesky-manual:".length(), safeLimit));
+    }
+    if (conversationId.startsWith("tool:")) {
+      return new ConversationHistoryDetail(conversationId, "tool", findChatDetailWithFallback(conversationId, "tool:".length(), safeLimit));
+    }
+    throw new IllegalArgumentException("conversationId must start with chat:, bluesky-reply:, bluesky-manual:, or tool:");
   }
 
   private List<ConversationSearchResult> searchChat(String query, String speaker, TimeRange timeRange, int limit) {
@@ -73,6 +84,8 @@ public class ConversationHistorySearchService {
         SELECT conversation_id, content, type, timestamp
         FROM SPRING_AI_CHAT_MEMORY
         WHERE 1 = 1
+        AND conversation_id NOT LIKE 'bluesky-manual:%'
+        AND conversation_id NOT LIKE 'tool:%'
         """);
     List<Object> params = new ArrayList<>();
     addQueryConditions(sql, params, query);
@@ -96,9 +109,98 @@ public class ConversationHistorySearchService {
           .query((rs, rowNum) -> {
             String content = rs.getString("content");
             String timestamp = Instant.ofEpochMilli(rs.getLong("timestamp")).toString();
+            String conversationId = rs.getString("conversation_id");
             return new ConversationSearchResult(
-                "chat:" + rs.getString("conversation_id"),
+                conversationId.startsWith("chat:") ? conversationId : "chat:" + conversationId,
                 "chat",
+                normalizeChatSpeaker(rs.getString("type")),
+                timestamp,
+                preview(content, SUMMARY_MAX_LENGTH),
+                preview(content, CONTENT_MAX_LENGTH));
+          })
+          .list();
+    } catch (DataAccessException e) {
+      return List.of();
+    }
+  }
+
+  private List<ConversationSearchResult> searchBlueskyManual(String query, String speaker, TimeRange timeRange, int limit) {
+    StringBuilder sql = new StringBuilder("""
+        SELECT conversation_id, content, type, timestamp
+        FROM SPRING_AI_CHAT_MEMORY
+        WHERE 1 = 1
+        AND conversation_id LIKE 'bluesky-manual:%'
+        """);
+    List<Object> params = new ArrayList<>();
+    addQueryConditions(sql, params, query);
+    if (speaker != null) {
+      sql.append(" AND lower(type) = ?\n");
+      params.add(chatSpeaker(speaker));
+    }
+    if (timeRange.sinceEpochMillis() != null) {
+      sql.append(" AND timestamp >= ?\n");
+      params.add(timeRange.sinceEpochMillis());
+    }
+    if (timeRange.untilEpochMillis() != null) {
+      sql.append(" AND timestamp <= ?\n");
+      params.add(timeRange.untilEpochMillis());
+    }
+    sql.append(" ORDER BY timestamp DESC LIMIT ?");
+    params.add(limit);
+    try {
+      return jdbcClient.sql(sql.toString())
+          .params(params)
+          .query((rs, rowNum) -> {
+            String content = rs.getString("content");
+            String timestamp = Instant.ofEpochMilli(rs.getLong("timestamp")).toString();
+            String conversationId = rs.getString("conversation_id");
+            return new ConversationSearchResult(
+                conversationId,
+                "bluesky-manual",
+                normalizeChatSpeaker(rs.getString("type")),
+                timestamp,
+                preview(content, SUMMARY_MAX_LENGTH),
+                preview(content, CONTENT_MAX_LENGTH));
+          })
+          .list();
+    } catch (DataAccessException e) {
+      return List.of();
+    }
+  }
+
+  private List<ConversationSearchResult> searchTool(String query, String speaker, TimeRange timeRange, int limit) {
+    StringBuilder sql = new StringBuilder("""
+        SELECT conversation_id, content, type, timestamp
+        FROM SPRING_AI_CHAT_MEMORY
+        WHERE 1 = 1
+        AND conversation_id LIKE 'tool:%'
+        """);
+    List<Object> params = new ArrayList<>();
+    addQueryConditions(sql, params, query);
+    if (speaker != null) {
+      sql.append(" AND lower(type) = ?\n");
+      params.add(chatSpeaker(speaker));
+    }
+    if (timeRange.sinceEpochMillis() != null) {
+      sql.append(" AND timestamp >= ?\n");
+      params.add(timeRange.sinceEpochMillis());
+    }
+    if (timeRange.untilEpochMillis() != null) {
+      sql.append(" AND timestamp <= ?\n");
+      params.add(timeRange.untilEpochMillis());
+    }
+    sql.append(" ORDER BY timestamp DESC LIMIT ?");
+    params.add(limit);
+    try {
+      return jdbcClient.sql(sql.toString())
+          .params(params)
+          .query((rs, rowNum) -> {
+            String content = rs.getString("content");
+            String timestamp = Instant.ofEpochMilli(rs.getLong("timestamp")).toString();
+            String conversationId = rs.getString("conversation_id");
+            return new ConversationSearchResult(
+                conversationId,
+                "tool",
                 normalizeChatSpeaker(rs.getString("type")),
                 timestamp,
                 preview(content, SUMMARY_MAX_LENGTH),
@@ -173,6 +275,15 @@ public class ConversationHistorySearchService {
     }
   }
 
+  private List<ConversationHistoryMessage> findChatDetailWithFallback(String conversationId, int prefixLength,
+      int limit) {
+    List<ConversationHistoryMessage> messages = findChatDetail(conversationId, limit);
+    if (!messages.isEmpty()) {
+      return messages;
+    }
+    return findChatDetail(conversationId.substring(prefixLength), limit);
+  }
+
   private List<ConversationHistoryMessage> findBlueskyReplyDetail(String handle, int limit) {
     try {
       List<ConversationHistoryMessage> messages = jdbcClient.sql("""
@@ -210,10 +321,11 @@ public class ConversationHistorySearchService {
       return "all";
     }
     String normalized = scope.toLowerCase(Locale.ROOT);
-    if (normalized.equals("all") || normalized.equals("chat") || normalized.equals("bluesky-reply")) {
+    if (normalized.equals("all") || normalized.equals("chat") || normalized.equals("bluesky-reply")
+        || normalized.equals("bluesky-manual") || normalized.equals("tool")) {
       return normalized;
     }
-    throw new IllegalArgumentException("scope must be all, chat, or bluesky-reply");
+    throw new IllegalArgumentException("scope must be all, chat, bluesky-reply, bluesky-manual, or tool");
   }
 
   private String normalizeSpeaker(String speaker) {

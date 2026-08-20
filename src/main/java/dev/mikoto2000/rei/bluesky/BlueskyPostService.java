@@ -111,7 +111,7 @@ public class BlueskyPostService {
       if (target == null || isBlank(target.parentUri()) || isBlank(target.parentCid()) || isBlank(target.rootUri()) || isBlank(target.rootCid())) {
         return new BlueskyPostResult(false, "Failed to resolve reply target", null, null);
       }
-      String generatedText = blueskyReplyTextGenerator.generateForManualReply(target.targetText());
+      String generatedText = blueskyReplyTextGenerator.generateForManualReply(target.targetText(), conversationHandle(target), target.parentUri());
       return reply(targetPostUriOrUrl, generatedText);
     } catch (Exception e) {
       log.warn("Bluesky auto-reply failed due to unexpected error: {}", e.getMessage(), e);

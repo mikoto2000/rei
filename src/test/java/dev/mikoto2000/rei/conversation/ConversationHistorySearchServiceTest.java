@@ -84,6 +84,64 @@ class ConversationHistorySearchServiceTest {
   }
 
   @Test
+  void classifiesNewScopes() throws Exception {
+    long now = Instant.parse("2026-08-14T00:00:00Z").toEpochMilli();
+    insertChat("chat:main", "USER", "通常チャット", now);
+    insertChat("tool:search", "USER", "tool チャット", now + 1_000);
+    insertChat("bluesky-manual:at://did:plc:xxx/app.bsky.feed.post/abc", "USER", "手動返信チャット", now + 2_000);
+
+    var results = service.search("チャット", "all", null, null, null, 10);
+
+    assertThat(results).extracting(ConversationSearchResult::scope)
+        .contains("chat", "tool", "bluesky-manual");
+  }
+
+  @Test
+  void filtersByNewScopes() throws Exception {
+    long now = Instant.parse("2026-08-14T00:00:00Z").toEpochMilli();
+    insertChat("chat:main", "USER", "通常チャットの話", now);
+    insertChat("tool:search", "USER", "tool の話", now + 1_000);
+    insertChat("bluesky-manual:at://did:plc:xxx/app.bsky.feed.post/abc", "USER", "手動返信の話", now + 2_000);
+
+    var toolResults = service.search("話", "tool", null, null, null, 10);
+    assertThat(toolResults).hasSize(1);
+    assertThat(toolResults.get(0).conversationId()).isEqualTo("tool:search");
+    assertThat(toolResults.get(0).scope()).isEqualTo("tool");
+
+    var manualResults = service.search("話", "bluesky-manual", null, null, null, 10);
+    assertThat(manualResults).hasSize(1);
+    assertThat(manualResults.get(0).conversationId())
+        .isEqualTo("bluesky-manual:at://did:plc:xxx/app.bsky.feed.post/abc");
+    assertThat(manualResults.get(0).scope()).isEqualTo("bluesky-manual");
+  }
+
+  @Test
+  void returnsDetailForNewScopes() throws Exception {
+    long now = Instant.parse("2026-08-14T00:00:00Z").toEpochMilli();
+    insertChat("tool:search", "USER", "tool 質問", now);
+    insertChat("tool:search", "ASSISTANT", "tool 回答", now + 1_000);
+
+    ConversationHistoryDetail toolDetail = service.detail("tool:search", 10);
+    assertThat(toolDetail.scope()).isEqualTo("tool");
+    assertThat(toolDetail.messages()).extracting(ConversationHistoryMessage::content)
+        .containsExactly("tool 質問", "tool 回答");
+
+    ConversationHistoryDetail manualDetail = service.detail("bluesky-manual:abc", 10);
+    assertThat(manualDetail.scope()).isEqualTo("bluesky-manual");
+  }
+
+  @Test
+  void keepsLegacyUnprefixedChatHistoriesAsChatScope() throws Exception {
+    long now = Instant.parse("2026-08-14T00:00:00Z").toEpochMilli();
+    insertChat("legacy", "USER", "古い通常チャット", now);
+
+    var results = service.search("古い", "chat", null, null, null, 10);
+
+    assertThat(results).hasSize(1);
+    assertThat(results.get(0).conversationId()).isEqualTo("chat:legacy");
+  }
+
+  @Test
   void rejectsBlankQuery() {
     assertThatThrownBy(() -> service.search(" ", "all", null, null, null, 10))
         .isInstanceOf(IllegalArgumentException.class)

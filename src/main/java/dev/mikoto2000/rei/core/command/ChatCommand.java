@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.llm.ConversationIds;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
@@ -207,7 +209,8 @@ public class ChatCommand implements Runnable {
               .text(resolvedPrompt.prompt())
               .media(resolvedPrompt.media())
               .build(),
-          modelProvider.chatOptions(LlmFeature.CHAT, currentModelHolder.get(), true)));
+          modelProvider.chatOptions(LlmFeature.CHAT, currentModelHolder.get(), true)))
+      .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.chat()));
 
     CountDownLatch latch = new CountDownLatch(1);
     AtomicReference<Throwable> errorRef = new AtomicReference<>();

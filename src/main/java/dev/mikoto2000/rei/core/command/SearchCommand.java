@@ -10,12 +10,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.llm.ConversationIds;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
@@ -90,7 +92,8 @@ public class SearchCommand implements Runnable {
 
       ChatClientRequestSpec requestSpec = chatClientProvider.chatClient(LlmFeature.SEARCH).prompt(new Prompt(
           buildPrompt(query, vectorResults, webContext),
-          modelProvider.chatOptions(LlmFeature.SEARCH, currentModelHolder.get())));
+          modelProvider.chatOptions(LlmFeature.SEARCH, currentModelHolder.get())))
+          .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool("search")));
 
       if (result.webSearchSkippedMessage() != null) {
         IO.println("[web search skipped] " + result.webSearchSkippedMessage());

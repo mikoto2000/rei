@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.command.ChatCommand;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.llm.ConversationIds;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
@@ -42,6 +44,7 @@ public class BlueskyReplyTextGenerator {
   }
 
   public String generate(String handle, String postText, List<BlueskyReplyConversationRepository.ConversationMessage> history) {
+    String conversationId = ConversationIds.blueskyReply(handle);
     if (postText == null || postText.isBlank()) {
       throw new IllegalArgumentException("Bluesky reply target post text is blank");
     }
@@ -63,7 +66,7 @@ public class BlueskyReplyTextGenerator {
 
     Prompt prompt = new Prompt(promptText,
         modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, modelHolderService.get()));
-    String content = generateContent(prompt);
+    String content = generateContent(prompt, conversationId);
     if (content == null || content.isBlank()) {
       throw new IllegalStateException("Bluesky reply text generation returned blank content");
     }
@@ -71,6 +74,13 @@ public class BlueskyReplyTextGenerator {
   }
 
   public String generateForManualReply(String postText) {
+    return generateForManualReply(postText, String.valueOf(postText.hashCode()));
+  }
+
+  public String generateForManualReply(String postText, String handle, String identifier) {
+    String conversationId = handle != null && !handle.isBlank()
+        ? ConversationIds.blueskyReply(handle)
+        : ConversationIds.blueskyManual(identifier);
     if (postText == null || postText.isBlank()) {
       throw new IllegalArgumentException("Bluesky manual reply target post text is blank");
     }
@@ -86,16 +96,41 @@ public class BlueskyReplyTextGenerator {
         """.formatted(postText);
     Prompt prompt = new Prompt(promptText,
         modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, modelHolderService.get()));
-    String content = generateContent(prompt);
+    String content = generateContent(prompt, conversationId);
     if (content == null || content.isBlank()) {
       throw new IllegalStateException("Bluesky manual reply text generation returned blank content");
     }
     return content.strip();
   }
 
-  private String generateContent(Prompt prompt) {
+  public String generateForManualReply(String postText, String identifier) {
+    String conversationId = ConversationIds.blueskyManual(identifier);
+    if (postText == null || postText.isBlank()) {
+      throw new IllegalArgumentException("Bluesky manual reply target post text is blank");
+    }
+    String promptText = """
+        次のBluesky投稿に対する返信文を日本語で1つ作成してください。
+        条件:
+        - 120文字以内
+        - 自然で丁寧
+        - Markdownや箇条書きは使わない
+
+        投稿本文:
+        %s
+        """.formatted(postText);
+    Prompt prompt = new Prompt(promptText,
+        modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, modelHolderService.get()));
+    String content = generateContent(prompt, conversationId);
+    if (content == null || content.isBlank()) {
+      throw new IllegalStateException("Bluesky manual reply text generation returned blank content");
+    }
+    return content.strip();
+  }
+
+  private String generateContent(Prompt prompt, String conversationId) {
     return chatClientProvider.chatClient(LlmFeature.BLUESKY_REPLY)
         .prompt(prompt)
+        .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, conversationId))
         .stream()
         .chatResponse()
         .map(this::answerText)

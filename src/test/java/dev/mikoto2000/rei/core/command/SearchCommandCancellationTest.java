@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -47,6 +48,7 @@ class SearchCommandCancellationTest {
             new WebSearchPage("Spring AI News", "https://example.com/news", "latest update", "2026-03-31", "Fetched content"))),
         null));
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().content()).thenReturn(Flux.concat(
         Flux.just("partial "),
         Flux.<String>never().doOnSubscribe(ignored -> subscribed.countDown())));

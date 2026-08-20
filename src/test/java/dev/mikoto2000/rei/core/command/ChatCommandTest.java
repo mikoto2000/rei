@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.List;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -46,6 +47,7 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("answer "), response("text")));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -73,6 +75,7 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(
         response("answer "),
         responseWithUsage("", 12)));
@@ -102,6 +105,7 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("answer")));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -126,6 +130,7 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.error(new java.net.ConnectException("Connection refused")));
 
     ByteArrayOutputStream err = new ByteArrayOutputStream();
@@ -153,6 +158,7 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(responseWithFinishReason("partial", "length")));
 
     ByteArrayOutputStream err = new ByteArrayOutputStream();
@@ -180,6 +186,7 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(responseWithFinishReason("answer", "stop")));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -215,6 +222,7 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(
         Flux.just(responseWithFinishReason("partial", "length")),
         Flux.just(response("subgoal-1 result")),
@@ -266,6 +274,7 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(
         Flux.just(responseWithFinishReason("partial", "length")),
         Flux.just(responseWithFinishReason("subgoal partial", "length")));
@@ -308,6 +317,7 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(responseWithFinishReason("partial", "length")));
 
     ByteArrayOutputStream err = new ByteArrayOutputStream();
@@ -345,6 +355,7 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(
         Flux.just(responseWithFinishReason("partial", "length")),
         Flux.just(responseWithFinishReason("large subgoal partial", "length")),
@@ -390,6 +401,7 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("ok")));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -417,6 +429,7 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("ok")));
     when(memoryConsolidatorService.shouldSuggestConsolidationNow()).thenReturn(true);
 
@@ -444,6 +457,7 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("ok")));
     when(memoryConsolidatorService.shouldSuggestConsolidationNow()).thenReturn(false);
 
@@ -470,6 +484,7 @@ class ChatCommandTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(
         responseWithThinking("", "考えています"),
         response("answer")));

@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -47,6 +48,7 @@ class SearchCommandTest {
             List.of(new WebSearchPage("Blog", "https://example.com/blog", "blog snippet", null, "Less trusted content"))),
         null));
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().content()).thenReturn(Flux.just("combined ", "answer"));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -96,6 +98,7 @@ class SearchCommandTest {
         WebSearchContext.primaryOnly(List.of()),
         "Web search is disabled"));
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().content()).thenReturn(Flux.just("vector ", "only"));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -139,6 +142,7 @@ class SearchCommandTest {
         WebSearchContext.primaryOnly(List.of()),
         "Web search failed with status 401: invalid api key"));
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().content()).thenReturn(Flux.just("vector ", "fallback"));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -181,6 +185,7 @@ class SearchCommandTest {
         WebSearchContext.primaryOnly(List.of()),
         null));
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().content()).thenReturn(Flux.<String>never().doOnCancel(() -> disposed.set(true)));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();

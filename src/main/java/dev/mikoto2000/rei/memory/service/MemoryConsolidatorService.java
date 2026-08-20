@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import dev.mikoto2000.rei.llm.ConversationIds;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
@@ -64,6 +66,7 @@ public class MemoryConsolidatorService {
     try {
       llmText = chatClientProvider.chatClient(LlmFeature.MEMORY)
           .prompt("次の会話から保存候補をJSON配列で返してください:\n" + String.join("\n", messages))
+          .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool("memory-extract")))
           .call()
           .content();
     } catch (Exception e) {
@@ -132,7 +135,9 @@ public class MemoryConsolidatorService {
     String prompt = String.join("\n", conversation);
     String summary;
     try {
-      summary = chatClientProvider.chatClient(LlmFeature.MEMORY).prompt("会話を要約してください:\n" + prompt).call().content();
+      summary = chatClientProvider.chatClient(LlmFeature.MEMORY).prompt("会話を要約してください:\n" + prompt)
+          .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool("memory-summarize")))
+          .call().content();
     } catch (Exception e) {
       throw new IllegalStateException("LLM での要約に失敗しました", e);
     }

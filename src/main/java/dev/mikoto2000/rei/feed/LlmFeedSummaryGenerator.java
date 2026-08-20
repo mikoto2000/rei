@@ -1,10 +1,12 @@
 package dev.mikoto2000.rei.feed;
 
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.configuration.CoreProperties;
+import dev.mikoto2000.rei.llm.ConversationIds;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 
@@ -29,6 +31,7 @@ public class LlmFeedSummaryGenerator implements FeedSummaryGenerator {
   public String generate(String prompt) {
     return chatClientProvider.chatClient(LlmFeature.FEED_SUMMARY).prompt()
         .user(prompt)
+        .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool("feed-summary")))
         .call()
         .content();
   }

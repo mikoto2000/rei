@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.List;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -35,6 +36,7 @@ class ChatCommandNarrationTest {
 
         when(modelHolderService.get()).thenReturn("gpt-test");
         when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+        when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
         when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("answer "), response("text")));
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -60,6 +62,7 @@ class ChatCommandNarrationTest {
 
         when(modelHolderService.get()).thenReturn("gpt-test");
         when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+        when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
         when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("answer "), response("text")));
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();

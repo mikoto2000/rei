@@ -190,7 +190,7 @@ class BlueskyPostServiceTest {
             "at://did:plc:target/app.bsky.feed.post/xyz",
             "cid-parent",
             "元投稿本文"));
-    when(generator.generateForManualReply("元投稿本文")).thenReturn("生成返信");
+    when(generator.generateForManualReply("元投稿本文", "did:plc:target", "at://did:plc:target/app.bsky.feed.post/xyz")).thenReturn("生成返信");
     when(client.createReply("jwt", "did:plc:abc", "生成返信",
         "at://did:plc:target/app.bsky.feed.post/xyz", "cid-parent",
         "at://did:plc:target/app.bsky.feed.post/xyz", "cid-parent"))
@@ -203,7 +203,7 @@ class BlueskyPostServiceTest {
 
     assertTrue(result.success());
     assertEquals("Bluesky reply created", result.message());
-    verify(generator).generateForManualReply("元投稿本文");
+    verify(generator).generateForManualReply("元投稿本文", "did:plc:target", "at://did:plc:target/app.bsky.feed.post/xyz");
     verify(conversationRepository).appendUserMessage("did:plc:target", "元投稿本文");
     verify(conversationRepository).appendAssistantMessage("did:plc:target", "生成返信");
     verify(stateRepository).markReplied(
