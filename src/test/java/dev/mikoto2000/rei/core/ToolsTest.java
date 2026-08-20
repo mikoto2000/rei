@@ -462,6 +462,84 @@ class ToolsTest {
   }
 
   @Test
+  void readMultiFilePartialFailureKeepsOtherFiles() throws Exception {
+    Path a = tempDir.resolve("a.txt");
+    Files.write(a, List.of("alpha"));
+    Tools tools = new Tools();
+
+    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
+        new Tools.ReadFileRequest(a.toString(), null, null),
+        new Tools.ReadFileRequest(tempDir.resolve("missing.txt").toString(), null, null),
+        new Tools.ReadFileRequest(a.toString(), null, null)
+    ));
+
+    assertEquals(3, results.size());
+    assertEquals(List.of("alpha"), results.get(0).content());
+    assertTrue(results.get(1).error() != null);
+    assertEquals(List.of("alpha"), results.get(2).content());
+  }
+
+  @Test
+  void readMultiFileRejectsEmptyFiles() throws Exception {
+    Tools tools = new Tools();
+    assertThrows(IllegalArgumentException.class,
+        () -> tools.readMultiFile(List.of()));
+  }
+
+  @Test
+  void readMultiFileRejectsTooManyFiles() throws Exception {
+    Tools tools = new Tools();
+    List<Tools.ReadFileRequest> requests = new java.util.ArrayList<>();
+    for (int i = 0; i < Tools.MAX_READ_FILES + 1; i++) {
+      requests.add(new Tools.ReadFileRequest("a.txt", null, null));
+    }
+    assertThrows(IllegalArgumentException.class,
+        () -> tools.readMultiFile(requests));
+  }
+
+  @Test
+  void readMultiFileRejectsInvalidLineRange() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Files.write(text, List.of("line1", "line2"));
+    Tools tools = new Tools();
+
+    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
+        new Tools.ReadFileRequest(text.toString(), 3, 2)
+    ));
+
+    assertTrue(results.get(0).error() != null);
+  }
+
+  @Test
+  void readMultiFileRejectsBlankPath() throws Exception {
+    Tools tools = new Tools();
+
+    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
+        new Tools.ReadFileRequest("", null, null)
+    ));
+
+    assertTrue(results.get(0).error() != null);
+  }
+
+  @Test
+  void readMultiFileTruncatesPerFileLimit() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    List<String> manyLines = new java.util.ArrayList<>();
+    for (int i = 0; i < Tools.MAX_READ_LINES_PER_FILE + 10; i++) {
+      manyLines.add("line" + i);
+    }
+    Files.write(text, manyLines);
+    Tools tools = new Tools();
+
+    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
+        new Tools.ReadFileRequest(text.toString(), null, null)
+    ));
+
+    assertTrue(results.get(0).truncated());
+    assertEquals(Tools.MAX_READ_LINES_PER_FILE, results.get(0).content().size());
+  }
+
+  @Test
   void resolveShellUsesShellEnvironmentVariableWhenConfigured() {
     Tools tools = new Tools();
 
