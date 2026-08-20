@@ -218,6 +218,68 @@ class ToolsTest {
   }
 
   @Test
+  void grepMultiQueryExecutesMultipleQueriesAndPreservesOrder() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/a.txt"), "foo\nbar\n");
+    Files.writeString(tempDir.resolve("docs/b.txt"), "baz\n");
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
+        new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null),
+        new Tools.GrepQuery("baz", "docs", null, null, null, null, null, null, null, null, null, null)
+    ), tempDir);
+
+    assertEquals(2, results.size());
+    assertEquals(0, results.get(0).queryIndex());
+    assertEquals("foo", results.get(0).pattern());
+    assertEquals(1, results.get(0).matches().size());
+    assertEquals("docs/a.txt", results.get(0).matches().get(0).path());
+    assertEquals(1, results.get(1).queryIndex());
+    assertEquals("baz", results.get(1).pattern());
+    assertEquals("docs/b.txt", results.get(1).matches().get(0).path());
+  }
+
+  @Test
+  void grepMultiQueryReturnsZeroMatchesForNoHit() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/a.txt"), "foo\n");
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
+        new Tools.GrepQuery("missing", "docs", null, null, null, null, null, null, null, null, null, null)
+    ), tempDir);
+
+    assertEquals(1, results.size());
+    assertEquals(0, results.get(0).matches().size());
+    assertEquals(null, results.get(0).error());
+  }
+
+  @Test
+  void grepMultiQuerySameFileHitByMultipleQueries() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/a.txt"), "alpha beta\n");
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
+        new Tools.GrepQuery("alpha", "docs", null, null, null, null, null, null, null, null, null, null),
+        new Tools.GrepQuery("beta", "docs", null, null, null, null, null, null, null, null, null, null)
+    ), tempDir);
+
+    assertEquals(2, results.size());
+    assertEquals("docs/a.txt", results.get(0).matches().get(0).path());
+    assertEquals("docs/a.txt", results.get(1).matches().get(0).path());
+  }
+
+  @Test
   void resolveShellUsesShellEnvironmentVariableWhenConfigured() {
     Tools tools = new Tools();
 
