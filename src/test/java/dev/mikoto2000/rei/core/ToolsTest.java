@@ -408,6 +408,30 @@ class ToolsTest {
   }
 
   @Test
+  void searchAndReadSupportsMultipleQueries() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/note.txt"), "foo\nbar\nbaz\n");
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
+        new Tools.SearchAndReadRequest(
+            List.of(
+                new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null),
+                new Tools.GrepQuery("baz", "docs", null, null, null, null, null, null, null, null, null, null)),
+            1, null), tempDir);
+
+    assertEquals(1, results.size());
+    assertEquals(2, results.get(0).matches().size());
+    assertEquals(0, results.get(0).matches().get(0).queryIndex());
+    assertEquals(1, results.get(0).matches().get(0).line());
+    assertEquals(1, results.get(0).matches().get(1).queryIndex());
+    assertEquals(3, results.get(0).matches().get(1).line());
+  }
+
+  @Test
   void grepMultiQueryRejectsBlankPattern() throws Exception {
     Tools tools = new Tools();
     List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
