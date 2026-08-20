@@ -502,6 +502,29 @@ class ToolsTest {
   }
 
   @Test
+  void searchAndReadDeduplicatesFilesAcrossQueries() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/a.txt"), "foo\nbar\n");
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
+        new Tools.SearchAndReadRequest(
+            List.of(
+                new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null),
+                new Tools.GrepQuery("bar", "docs", null, null, null, null, null, null, null, null, null, null)),
+            0, null), tempDir);
+
+    assertEquals(1, results.size());
+    assertEquals("docs/a.txt", results.get(0).path());
+    assertEquals(2, results.get(0).matches().size());
+    assertEquals(0, results.get(0).matches().get(0).queryIndex());
+    assertEquals(1, results.get(0).matches().get(1).queryIndex());
+  }
+
+  @Test
   void grepMultiQueryRejectsBlankPattern() throws Exception {
     Tools tools = new Tools();
     List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
