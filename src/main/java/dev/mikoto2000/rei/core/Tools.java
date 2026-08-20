@@ -19,6 +19,7 @@ import java.time.OffsetDateTime;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -492,6 +493,167 @@ public class Tools {
 
   /** 1 query の検索結果。queryIndex は入力順と対応する。 */
   public record GrepQueryResult(int queryIndex, String pattern, List<GrepMatch> matches, String error) {
+  }
+
+  /** 1 リクエストあたりの最大 query 数。 */
+  static final int MAX_SEARCH_AND_READ_QUERIES = 20;
+
+  /** 1 リクエストあたりの最大読み込みファイル数。 */
+  static final int MAX_SEARCH_AND_READ_FILES = 8;
+
+  /** 1 ファイルあたりの最大読み込み行数。 */
+  static final int MAX_SEARCH_AND_READ_LINES_PER_FILE = 1000;
+
+  /** リクエスト全体の最大読み込み行数。 */
+  static final int MAX_SEARCH_AND_READ_TOTAL_LINES = 5000;
+
+  /** デフォルトの前後コンテキスト行数。 */
+  static final int DEFAULT_SEARCH_AND_READ_CONTEXT_LINES = 25;
+
+  /**
+   * 検索と周辺コードの読み込みを 1 回のツール呼び出しで完了する。
+   *
+   * <p>検索結果から対象ファイルを選び、ヒット行の前後を読み込んでまとめて返す。</p>
+   */
+  @Tool(name = "searchAndRead", description = """
+      Search for one or more code patterns and immediately read the relevant surrounding source code in a single tool call.
+      Prefer this tool when searching for code is likely to be followed by reading the matching files.
+      Use grep or grepMultiQuery when only match locations are needed.
+      Use readFile or readMultiFile when the target files are already known.
+      @param queries 検索条件のリスト。
+      @param contextLines ヒット行の前後何行を取得するか。デフォルト 25。
+      @param maxFiles 読み込む最大ファイル数。デフォルト 8。
+      @return ファイルごとの検索結果と読み込んだコンテキスト。
+      """)
+  List<SearchAndReadResult> searchAndRead(SearchAndReadRequest request) throws IOException, InterruptedException {
+    return searchAndRead(request, currentWorkingDirectory());
+  }
+
+  List<SearchAndReadResult> searchAndRead(SearchAndReadRequest request, java.nio.file.Path workingDirectory)
+      throws IOException, InterruptedException {
+    if (request == null) {
+      throw new IllegalArgumentException("request must not be null");
+    }
+    if (request.queries() == null || request.queries().isEmpty()) {
+      throw new IllegalArgumentException("queries must not be empty");
+    }
+    if (request.queries().size() > MAX_GREP_QUERIES) {
+      throw new IllegalArgumentException("too many queries: " + request.queries().size() + " (max " + MAX_GREP_QUERIES + ")");
+    }
+    int effectiveContextLines = request.contextLines() == null || request.contextLines() < 0
+        ? DEFAULT_SEARCH_AND_READ_CONTEXT_LINES : request.contextLines();
+    int effectiveMaxFiles = request.maxFiles() == null || request.maxFiles() <= 0
+        ? MAX_SEARCH_AND_READ_FILES : request.maxFiles();
+
+    // 1. 検索を実行する（grepMultiQuery と同じ共通ロジックを再利用）
+    List<GrepQueryResult> queryResults = grepMultiQuery(request.queries(), workingDirectory);
+
+    // 2. ファイルごとにヒットをまとめる（重複排除、queryIndex と line を保持）
+    LinkedHashMap<String, List<SearchMatch>> fileMatches = new LinkedHashMap<>();
+    for (GrepQueryResult queryResult : queryResults) {
+      if (queryResult.error() != null) {
+        continue;
+      }
+      for (GrepMatch match : queryResult.matches()) {
+        if (!match.matched()) {
+          continue;
+        }
+        fileMatches.computeIfAbsent(match.path(), k -> new ArrayList<>())
+            .add(new SearchMatch(queryResult.queryIndex(), match.line(), match.content()));
+      }
+    }
+
+    // 3. ファイルを選び、ヒット行の前後を読み込む
+    List<SearchAndReadResult> fileResults = new ArrayList<>();
+    int totalLines = 0;
+    boolean filesTruncated = false;
+    for (var entry : fileMatches.entrySet()) {
+      if (fileResults.size() >= effectiveMaxFiles) {
+        filesTruncated = true;
+        break;
+      }
+      try {
+        SearchAndReadResult fileResult = readFileSections(entry.getKey(), entry.getValue(),
+            effectiveContextLines, workingDirectory);
+        int remaining = MAX_SEARCH_AND_READ_TOTAL_LINES - totalLines;
+        if (fileResult.totalLines() > remaining) {
+          fileResult = fileResult.withTruncated(true);
+        }
+        totalLines += fileResult.totalLines();
+        fileResults.add(fileResult);
+      } catch (IllegalArgumentException | IOException e) {
+        fileResults.add(new SearchAndReadResult(entry.getKey(), entry.getValue(), List.of(),
+            e.getMessage(), false, filesTruncated));
+      }
+    }
+    return fileResults;
+  }
+
+  /** 1 ファイルのヒットから、マージした範囲を読み込む。 */
+  private SearchAndReadResult readFileSections(String relativePath, List<SearchMatch> matches,
+      int contextLines, java.nio.file.Path workingDirectory) throws IOException {
+    java.nio.file.Path filePath = resolveProjectPath(relativePath, workingDirectory);
+    List<String> lines = readTextFileLines(filePath, relativePath, "");
+    workingSet.recordRead(filePath);
+
+    // ヒット行から前後コンテキストを計算し、overlapping / adjacent をマージする
+    List<int[]> ranges = new ArrayList<>();
+    for (SearchMatch match : matches) {
+      int from = Math.max(1, match.line() - contextLines);
+      int to = Math.min(lines.size(), match.line() + contextLines);
+      ranges.add(new int[] { from, to });
+    }
+    ranges.sort((a, b) -> Integer.compare(a[0], b[0]));
+    List<int[]> merged = new ArrayList<>();
+    for (int[] range : ranges) {
+      if (merged.isEmpty() || range[0] > merged.get(merged.size() - 1)[1] + 1) {
+        merged.add(new int[] { range[0], range[1] });
+      } else {
+        int[] last = merged.get(merged.size() - 1);
+        last[1] = Math.max(last[1], range[1]);
+      }
+    }
+
+    List<ReadSection> sections = new ArrayList<>();
+    int totalLines = 0;
+    boolean truncated = false;
+    for (int[] range : merged) {
+      int fromIndex = range[0] - 1;
+      int toIndex = Math.min(range[1], lines.size());
+      List<String> content = lines.subList(fromIndex, toIndex);
+      int remaining = MAX_SEARCH_AND_READ_LINES_PER_FILE - totalLines;
+      if (content.size() > remaining) {
+        content = content.subList(0, Math.max(0, remaining));
+        truncated = true;
+      }
+      totalLines += content.size();
+      sections.add(new ReadSection(range[0], range[0] + content.size() - 1, content, truncated));
+    }
+    return new SearchAndReadResult(relativePath, matches, sections, null, truncated, false);
+  }
+
+  /** 1 リクエストの検索と読み込み要求。 */
+  public record SearchAndReadRequest(List<GrepQuery> queries, Integer contextLines, Integer maxFiles) {
+  }
+
+  /** 1 ファイルの検索ヒット。 */
+  public record SearchMatch(int queryIndex, int line, String content) {
+  }
+
+  /** 読み込んだ 1 セクション。 */
+  public record ReadSection(int startLine, int endLine, List<String> content, boolean truncated) {
+  }
+
+  /** 1 ファイルの検索と読み込み結果。 */
+  public record SearchAndReadResult(String path, List<SearchMatch> matches, List<ReadSection> sections,
+      String error, boolean truncated, boolean filesTruncated) {
+    int totalLines() {
+      return sections == null ? 0 : sections.stream().mapToInt(s -> s.content().size()).sum();
+    }
+
+    SearchAndReadResult withTruncated(boolean value) {
+      return new SearchAndReadResult(path, matches, sections, error, value, filesTruncated);
+    }
   }
 
   /** 1 リクエストあたりの最大ファイル数。 */

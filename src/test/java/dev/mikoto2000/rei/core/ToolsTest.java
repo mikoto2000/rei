@@ -339,6 +339,35 @@ class ToolsTest {
   }
 
   @Test
+  void searchAndReadReadsContextAroundSingleMatch() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    List<String> lines = new java.util.ArrayList<>();
+    for (int i = 1; i <= 100; i++) {
+      lines.add("line " + i);
+    }
+    Files.write(tempDir.resolve("docs/note.txt"), lines);
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
+        new Tools.SearchAndReadRequest(
+            List.of(new Tools.GrepQuery("line 50", "docs", null, null, null, null, null, null, null, null, null, null)),
+            5, null), tempDir);
+
+    assertEquals(1, results.size());
+    assertEquals("docs/note.txt", results.get(0).path());
+    assertEquals(1, results.get(0).matches().size());
+    assertEquals(0, results.get(0).matches().get(0).queryIndex());
+    assertEquals(50, results.get(0).matches().get(0).line());
+    assertEquals(1, results.get(0).sections().size());
+    assertEquals(45, results.get(0).sections().get(0).startLine());
+    assertEquals(55, results.get(0).sections().get(0).endLine());
+    assertEquals(11, results.get(0).sections().get(0).content().size());
+  }
+
+  @Test
   void grepMultiQueryRejectsBlankPattern() throws Exception {
     Tools tools = new Tools();
     List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
