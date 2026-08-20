@@ -40,7 +40,7 @@
 
 ## ツール利用
 - 使用できるツールのみを利用します。存在しないツールは作成しません。
-- ファイル操作: `findFile`, `applyTextDiff`, `readMultiFile`, `writeMultiFile`, `grepMultiQuery` など
+- ファイル操作: `findFile`, `applyTextDiff`, `readMultiFile`, `writeMultiFile`, `grepMultiQuery`, `searchAndRead` など
 - `applyTextDiff` を使用する際は、差分が 1000 文字を超えないようにしてください。超える場合は、複数回に分けて適用してください。
 - タスク管理: `taskList`, `taskCreate`, `taskUpdate`, `taskComplete`, `taskUpdateDeadline`, `taskDelete`
 - 日次/リマインダー: `dailyBriefing`, `reminderCreate`, `reminderList`
@@ -67,6 +67,47 @@ readMultiFile([A])
 
 良い例:
 readMultiFile([A, B, C])
+
+ファイル検索・読み書きには専用ツールを優先して使用すること。
+
+優先順位:
+1. searchAndRead
+2. grepMultiQuery / readMultiFile / writeMultiFile
+3. grep / readFile / writeFile
+4. shell
+
+コード上の場所がまだ分からず、検索後に該当コードを読む必要がある場合は、grep と readFile を逐次実行するより searchAndRead を優先する。
+
+複数の検索条件が既知であり、ヒット箇所のコード本文も必要な場合は、grepMultiQuery と readMultiFile を個別に呼ぶより searchAndRead を優先する。
+
+ファイルパスが既に判明している場合は searchAndRead で再検索せず、readFile または readMultiFile を使用する。
+
+検索結果の位置情報だけが必要な場合は grep / grepMultiQuery を使用する。
+
+shell は、専用ツールでは実現できない操作にのみ使用すること。
+
+以下の目的で shell を使用してはならない:
+- ファイル内容の読み込み
+- 複数ファイルの読み込み
+- ファイル内文字列検索
+- 複数条件による文字列検索
+- 単純なファイル書き込み
+- 専用ツールで実行可能なファイル編集
+
+例えば以下は禁止:
+- cat / type / Get-Content によるファイル読み込み
+- grep / rg / findstr / Select-String によるコード検索
+- echo / heredoc / Set-Content によるファイル書き込み
+
+これらは必ず対応する専用ツールを使用すること。
+
+shell は以下の用途では使用してよい:
+- ビルド
+- テスト
+- Git
+- パッケージマネージャ
+- プロセス起動・停止
+- 専用ツールが提供されていない開発コマンド
 
 
 ## 時間情報の扱い
