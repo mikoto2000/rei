@@ -554,6 +554,20 @@ class ToolsTest {
   }
 
   @Test
+  void writeMultiFileWritesSingleFile() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Tools tools = new Tools();
+
+    List<Tools.WriteFileResult> results = tools.writeMultiFile(List.of(
+        new Tools.WriteFileRequest(text.toString(), "hello", false, null)
+    ));
+
+    assertEquals(1, results.size());
+    assertTrue(results.get(0).success());
+    assertEquals("hello", Files.readString(text));
+  }
+
+  @Test
   void resolveShellUsesShellEnvironmentVariableWhenConfigured() {
     Tools tools = new Tools();
 

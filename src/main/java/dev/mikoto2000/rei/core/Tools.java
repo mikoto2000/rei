@@ -600,6 +600,109 @@ public class Tools {
       boolean truncated, String error) {
   }
 
+  /** 1 リクエストあたりの最大ファイル数。 */
+  static final int MAX_WRITE_FILES = 20;
+
+  /** 1 ファイルあたりの最大 content サイズ（文字数）。 */
+  static final int MAX_WRITE_CHARS_PER_FILE = 100_000;
+
+  /** リクエスト全体の最大 content サイズ（文字数）。 */
+  static final int MAX_WRITE_TOTAL_CHARS = 500_000;
+
+  /**
+   * 複数の既知ファイルを 1 回のツール呼び出しで書き込む。
+   *
+   * <p>複数のファイルをまとめて作成・置換する場合は、writeFile を複数回呼ぶよりもこのツールを優先する。</p>
+   */
+  @Tool(name = "writeMultiFile", description = """
+      複数の既知ファイルを 1 回のツール呼び出しで書き込みます。複数のファイルをまとめて作成・置換する場合は writeFile を複数回呼ばず、このツールを優先してください。1 ファイルだけの場合は writeFile を使用してください。
+      @param files 書き込むファイルのリスト。各要素は path と content を持つ。
+      @return ファイルごとの書き込み結果。path で識別できる。
+      """)
+  List<WriteFileResult> writeMultiFile(List<WriteFileRequest> files) throws IOException {
+    return writeMultiFile(files, currentWorkingDirectory());
+  }
+
+  List<WriteFileResult> writeMultiFile(List<WriteFileRequest> files, java.nio.file.Path workingDirectory)
+      throws IOException {
+    if (files == null || files.isEmpty()) {
+      throw new IllegalArgumentException("files must not be empty");
+    }
+    if (files.size() > MAX_WRITE_FILES) {
+      throw new IllegalArgumentException("too many files: " + files.size() + " (max " + MAX_WRITE_FILES + ")");
+    }
+    // 書き込み開始前に全件 validation を実施する（入力段階で検出可能なエラーを先に検出）
+    List<WriteFileRequest> validated = new ArrayList<>();
+    Set<String> seenPaths = new LinkedHashSet<>();
+    int totalChars = 0;
+    for (WriteFileRequest request : files) {
+      String validationError = validateWriteRequest(request, workingDirectory);
+      if (validationError != null) {
+        throw new IllegalArgumentException(validationError);
+      }
+      String normalized = resolveProjectPath(request.path(), workingDirectory).toString();
+      if (!seenPaths.add(normalized)) {
+        throw new IllegalArgumentException("duplicate path: " + request.path());
+      }
+      totalChars += request.content() == null ? 0 : request.content().length();
+      if (totalChars > MAX_WRITE_TOTAL_CHARS) {
+        throw new IllegalArgumentException("total content size exceeds limit");
+      }
+      validated.add(request);
+    }
+    List<WriteFileResult> results = new ArrayList<>();
+    for (WriteFileRequest request : validated) {
+      try {
+        writeSingleFile(request, workingDirectory);
+        results.add(new WriteFileResult(request.path(), true, null));
+      } catch (IOException e) {
+        results.add(new WriteFileResult(request.path(), false, e.getMessage()));
+      }
+    }
+    return results;
+  }
+
+  /** 書き込み要求を検証する。問題があればエラーメッセージを返す。 */
+  private String validateWriteRequest(WriteFileRequest request, java.nio.file.Path workingDirectory) {
+    if (request.path() == null || request.path().isBlank()) {
+      return "path must not be blank";
+    }
+    if (request.content() == null) {
+      return "content must not be null";
+    }
+    if (request.content().length() > MAX_WRITE_CHARS_PER_FILE) {
+      return "content size exceeds per-file limit";
+    }
+    return null;
+  }
+
+  /** 1 ファイルの書き込みを実行する。 */
+  private void writeSingleFile(WriteFileRequest request, java.nio.file.Path workingDirectory) throws IOException {
+    Charset resolvedCharset = resolveCharset(request.charset());
+    OpenOption[] options = Boolean.TRUE.equals(request.append())
+        ? new OpenOption[] { StandardOpenOption.CREATE, StandardOpenOption.APPEND }
+        : new OpenOption[] { StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING };
+    java.nio.file.Path path = resolveProjectPath(request.path(), workingDirectory);
+    java.nio.file.Path parent = path.getParent();
+    if (parent != null) {
+      Files.createDirectories(parent);
+    }
+    Files.writeString(path, request.content(), resolvedCharset, options);
+    if (Boolean.TRUE.equals(request.append())) {
+      workingSet.recordEdit(path);
+    } else {
+      workingSet.recordWrite(path);
+    }
+  }
+
+  /** 1 ファイルの書き込み要求。 */
+  public record WriteFileRequest(String path, String content, Boolean append, String charset) {
+  }
+
+  /** 1 ファイルの書き込み結果。 */
+  public record WriteFileResult(String path, boolean success, String error) {
+  }
+
   private PathMatcher globMatcher(String glob, java.nio.file.Path workingDirectory) {
     if (glob == null || glob.isBlank()) {
       return null;
