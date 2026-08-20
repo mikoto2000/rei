@@ -280,6 +280,57 @@ class ToolsTest {
   }
 
   @Test
+  void grepMultiQueryPartialFailureKeepsOtherQueries() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/a.txt"), "foo\n");
+    Files.writeString(tempDir.resolve("docs/b.txt"), "bar\n");
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
+        new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null),
+        new Tools.GrepQuery("[", "docs", null, null, null, null, null, null, null, null, null, null),
+        new Tools.GrepQuery("bar", "docs", null, null, null, null, null, null, null, null, null, null)
+    ), tempDir);
+
+    assertEquals(3, results.size());
+    assertEquals(1, results.get(0).matches().size());
+    assertEquals(0, results.get(1).matches().size());
+    assertTrue(results.get(1).error() != null);
+    assertEquals(1, results.get(2).matches().size());
+  }
+
+  @Test
+  void grepMultiQueryRejectsEmptyQueries() throws Exception {
+    Tools tools = new Tools();
+    assertThrows(IllegalArgumentException.class,
+        () -> tools.grepMultiQuery(List.of(), tempDir));
+  }
+
+  @Test
+  void grepMultiQueryRejectsTooManyQueries() throws Exception {
+    Tools tools = new Tools();
+    List<Tools.GrepQuery> queries = new java.util.ArrayList<>();
+    for (int i = 0; i < Tools.MAX_GREP_QUERIES + 1; i++) {
+      queries.add(new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null));
+    }
+    assertThrows(IllegalArgumentException.class,
+        () -> tools.grepMultiQuery(queries, tempDir));
+  }
+
+  @Test
+  void grepMultiQueryRejectsBlankPattern() throws Exception {
+    Tools tools = new Tools();
+    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
+        new Tools.GrepQuery("", "docs", null, null, null, null, null, null, null, null, null, null)
+    ), tempDir);
+    assertEquals(1, results.size());
+    assertTrue(results.get(0).error() != null);
+  }
+
+  @Test
   void resolveShellUsesShellEnvironmentVariableWhenConfigured() {
     Tools tools = new Tools();
 
