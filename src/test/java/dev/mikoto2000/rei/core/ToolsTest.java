@@ -525,6 +525,26 @@ class ToolsTest {
   }
 
   @Test
+  void searchAndReadEnforcesMaxFiles() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/a.txt"), "foo\n");
+    Files.writeString(tempDir.resolve("docs/b.txt"), "foo\n");
+    Files.writeString(tempDir.resolve("docs/c.txt"), "foo\n");
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
+        new Tools.SearchAndReadRequest(
+            List.of(new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null)),
+            0, 2), tempDir);
+
+    assertEquals(2, results.size());
+    assertTrue(results.get(0).filesTruncated());
+  }
+
+  @Test
   void grepMultiQueryRejectsBlankPattern() throws Exception {
     Tools tools = new Tools();
     List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(

@@ -586,6 +586,13 @@ public class Tools {
             e.getMessage(), false, filesTruncated));
       }
     }
+    if (filesTruncated) {
+      for (int i = 0; i < fileResults.size(); i++) {
+        SearchAndReadResult r = fileResults.get(i);
+        fileResults.set(i, new SearchAndReadResult(r.path(), r.matches(), r.sections(),
+            r.error(), r.truncated(), true));
+      }
+    }
     return fileResults;
   }
 
