@@ -568,6 +568,102 @@ class ToolsTest {
   }
 
   @Test
+  void writeMultiFileWritesMultipleFilesAndPreservesOrder() throws Exception {
+    Path a = tempDir.resolve("a.txt");
+    Path b = tempDir.resolve("b.txt");
+    Tools tools = new Tools();
+
+    List<Tools.WriteFileResult> results = tools.writeMultiFile(List.of(
+        new Tools.WriteFileRequest(a.toString(), "alpha", false, null),
+        new Tools.WriteFileRequest(b.toString(), "beta", false, null)
+    ));
+
+    assertEquals(2, results.size());
+    assertTrue(results.get(0).success());
+    assertTrue(results.get(1).success());
+    assertEquals("alpha", Files.readString(a));
+    assertEquals("beta", Files.readString(b));
+  }
+
+  @Test
+  void writeMultiFileCreatesNewFileAndUpdatesExisting() throws Exception {
+    Path existing = tempDir.resolve("existing.txt");
+    Files.writeString(existing, "old");
+    Path created = tempDir.resolve("created.txt");
+    Tools tools = new Tools();
+
+    List<Tools.WriteFileResult> results = tools.writeMultiFile(List.of(
+        new Tools.WriteFileRequest(existing.toString(), "new", false, null),
+        new Tools.WriteFileRequest(created.toString(), "created", false, null)
+    ));
+
+    assertEquals("new", Files.readString(existing));
+    assertEquals("created", Files.readString(created));
+  }
+
+  @Test
+  void writeMultiFileRejectsEmptyFiles() throws Exception {
+    Tools tools = new Tools();
+    assertThrows(IllegalArgumentException.class,
+        () -> tools.writeMultiFile(List.of()));
+  }
+
+  @Test
+  void writeMultiFileRejectsDuplicatePath() throws Exception {
+    Path a = tempDir.resolve("a.txt");
+    Tools tools = new Tools();
+
+    assertThrows(IllegalArgumentException.class,
+        () -> tools.writeMultiFile(List.of(
+            new Tools.WriteFileRequest(a.toString(), "one", false, null),
+            new Tools.WriteFileRequest(a.toString(), "two", false, null)
+        )));
+  }
+
+  @Test
+  void writeMultiFileRejectsBlankPath() throws Exception {
+    Tools tools = new Tools();
+
+    assertThrows(IllegalArgumentException.class,
+        () -> tools.writeMultiFile(List.of(
+            new Tools.WriteFileRequest("", "content", false, null)
+        )));
+  }
+
+  @Test
+  void writeMultiFileRejectsTooManyFiles() throws Exception {
+    Tools tools = new Tools();
+    List<Tools.WriteFileRequest> requests = new java.util.ArrayList<>();
+    for (int i = 0; i < Tools.MAX_WRITE_FILES + 1; i++) {
+      requests.add(new Tools.WriteFileRequest("a" + i + ".txt", "content", false, null));
+    }
+    assertThrows(IllegalArgumentException.class,
+        () -> tools.writeMultiFile(requests));
+  }
+
+  @Test
+  void writeMultiFileRejectsPerFileSizeLimit() throws Exception {
+    Tools tools = new Tools();
+    String big = "x".repeat(Tools.MAX_WRITE_CHARS_PER_FILE + 1);
+
+    assertThrows(IllegalArgumentException.class,
+        () -> tools.writeMultiFile(List.of(
+            new Tools.WriteFileRequest("a.txt", big, false, null)
+        )));
+  }
+
+  @Test
+  void writeMultiFileRejectsAggregateSizeLimit() throws Exception {
+    Tools tools = new Tools();
+    String big = "x".repeat(Tools.MAX_WRITE_TOTAL_CHARS);
+
+    assertThrows(IllegalArgumentException.class,
+        () -> tools.writeMultiFile(List.of(
+            new Tools.WriteFileRequest("a.txt", big, false, null)
+        )));
+  }
+
+  @Test
   void resolveShellUsesShellEnvironmentVariableWhenConfigured() {
     Tools tools = new Tools();
 
