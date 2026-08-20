@@ -476,6 +476,32 @@ class ToolsTest {
   }
 
   @Test
+  void searchAndReadSeparatesDistantRanges() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    List<String> lines = new java.util.ArrayList<>();
+    for (int i = 1; i <= 300; i++) {
+      lines.add("line " + i);
+    }
+    Files.write(tempDir.resolve("docs/note.txt"), lines);
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
+        new Tools.SearchAndReadRequest(
+            List.of(new Tools.GrepQuery("line 100|line 200", "docs", null, null, null, null, null, null, null, null, null, null)),
+            20, null), tempDir);
+
+    assertEquals(1, results.size());
+    assertEquals(2, results.get(0).sections().size());
+    assertEquals(80, results.get(0).sections().get(0).startLine());
+    assertEquals(120, results.get(0).sections().get(0).endLine());
+    assertEquals(180, results.get(0).sections().get(1).startLine());
+    assertEquals(220, results.get(0).sections().get(1).endLine());
+  }
+
+  @Test
   void grepMultiQueryRejectsBlankPattern() throws Exception {
     Tools tools = new Tools();
     List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
