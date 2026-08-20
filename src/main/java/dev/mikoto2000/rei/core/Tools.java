@@ -511,6 +511,95 @@ public class Tools {
   public record GrepQueryResult(int queryIndex, String pattern, List<GrepMatch> matches, String error) {
   }
 
+  /** 1 リクエストあたりの最大ファイル数。 */
+  static final int MAX_READ_FILES = 20;
+
+  /** 1 ファイルあたりの最大行数。 */
+  static final int MAX_READ_LINES_PER_FILE = 1000;
+
+  /** リクエスト全体の最大行数。 */
+  static final int MAX_READ_TOTAL_LINES = 5000;
+
+  /**
+   * 複数のファイルまたは行範囲を 1 回のツール呼び出しで読み込む。
+   *
+   * <p>複数の既知ファイルをまとめて調べる場合は、readFile を複数回呼ぶよりもこのツールを優先する。</p>
+   */
+  @Tool(name = "readMultiFile", description = """
+      複数のファイルまたは行範囲を 1 回のツール呼び出しで読み込みます。複数の既知ファイルをまとめて調べる場合は readFile を複数回呼ばず、このツールを優先してください。1 ファイルだけの場合は readFile を使用してください。
+      @param files 読み込むファイルのリスト。各要素は path と任意の startLine / endLine を持つ。
+      @return ファイルごとの読み込み結果。path で識別できる。
+      """)
+  List<ReadFileResult> readMultiFile(List<ReadFileRequest> files) throws IOException {
+    return readMultiFile(files, currentWorkingDirectory());
+  }
+
+  List<ReadFileResult> readMultiFile(List<ReadFileRequest> files, java.nio.file.Path workingDirectory)
+      throws IOException {
+    if (files == null || files.isEmpty()) {
+      throw new IllegalArgumentException("files must not be empty");
+    }
+    if (files.size() > MAX_READ_FILES) {
+      throw new IllegalArgumentException("too many files: " + files.size() + " (max " + MAX_READ_FILES + ")");
+    }
+    List<ReadFileResult> results = new ArrayList<>();
+    int totalLines = 0;
+    for (ReadFileRequest request : files) {
+      try {
+        ReadFileResult result = readSingleFile(request, workingDirectory);
+        int remaining = MAX_READ_TOTAL_LINES - totalLines;
+        if (result.content().size() > remaining) {
+          result = new ReadFileResult(result.path(), result.startLine(), result.endLine(),
+              result.content().subList(0, Math.max(0, remaining)), true, null);
+        }
+        totalLines += result.content().size();
+        results.add(result);
+      } catch (IllegalArgumentException | IOException e) {
+        results.add(new ReadFileResult(request.path(), null, null, List.of(), false, e.getMessage()));
+      }
+    }
+    return results;
+  }
+
+  /** 1 ファイルの読み込みを実行する。 */
+  private ReadFileResult readSingleFile(ReadFileRequest request, java.nio.file.Path workingDirectory)
+      throws IOException {
+    if (request.path() == null || request.path().isBlank()) {
+      throw new IllegalArgumentException("path must not be blank");
+    }
+    Integer startLine = request.startLine();
+    Integer endLine = request.endLine();
+    if (startLine != null && startLine < 1) {
+      throw new IllegalArgumentException("startLine は 1 以上である必要があります");
+    }
+    if (endLine != null && startLine != null && endLine < startLine) {
+      throw new IllegalArgumentException("endLine は startLine 以上である必要があります");
+    }
+    java.nio.file.Path path = resolveProjectPath(request.path(), workingDirectory);
+    List<String> lines = readTextFileLines(path, request.path(), "");
+    workingSet.recordRead(path);
+    int fromIndex = startLine == null ? 0 : startLine - 1;
+    if (fromIndex >= lines.size()) {
+      return new ReadFileResult(request.path(), startLine, endLine, List.of(), false, null);
+    }
+    int toIndex = endLine == null ? lines.size() : Math.min(endLine, lines.size());
+    List<String> content = lines.subList(fromIndex, toIndex);
+    boolean truncated = content.size() > MAX_READ_LINES_PER_FILE;
+    if (truncated) {
+      content = content.subList(0, MAX_READ_LINES_PER_FILE);
+    }
+    return new ReadFileResult(request.path(), startLine, endLine, content, truncated, null);
+  }
+
+  /** 1 ファイルの読み込み要求。startLine / endLine は任意。 */
+  public record ReadFileRequest(String path, Integer startLine, Integer endLine) {
+  }
+
+  /** 1 ファイルの読み込み結果。 */
+  public record ReadFileResult(String path, Integer startLine, Integer endLine, List<String> content,
+      boolean truncated, String error) {
+  }
+
   private PathMatcher globMatcher(String glob, java.nio.file.Path workingDirectory) {
     if (glob == null || glob.isBlank()) {
       return null;
@@ -819,11 +908,15 @@ public class Tools {
   }
 
   private java.nio.file.Path resolveProjectPath(String pathStr) {
+    return resolveProjectPath(pathStr, currentWorkingDirectory());
+  }
+
+  private java.nio.file.Path resolveProjectPath(String pathStr, java.nio.file.Path workingDirectory) {
     java.nio.file.Path path = Paths.get(pathStr);
     if (path.isAbsolute()) {
       return path.normalize();
     }
-    return currentWorkingDirectory().resolve(path).normalize();
+    return workingDirectory.resolve(path).normalize();
   }
 
   private Charset resolveCharset(String charset) {

@@ -371,6 +371,23 @@ class ToolsTest {
   }
 
   @Test
+  void readMultiFileReadsSingleFile() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Files.write(text, List.of("line1", "line2", "line3"));
+    Tools tools = new Tools();
+
+    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
+        new Tools.ReadFileRequest(text.toString(), null, null)
+    ));
+
+    assertEquals(1, results.size());
+    assertEquals(text.toString(), results.get(0).path());
+    assertEquals(List.of("line1", "line2", "line3"), results.get(0).content());
+    assertFalse(results.get(0).truncated());
+    assertEquals(null, results.get(0).error());
+  }
+
+  @Test
   void resolveShellUsesShellEnvironmentVariableWhenConfigured() {
     Tools tools = new Tools();
 
