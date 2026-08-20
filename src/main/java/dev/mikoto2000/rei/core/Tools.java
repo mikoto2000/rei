@@ -675,7 +675,7 @@ public class Tools {
       .toList();
   }
 
-  @Tool(name = "readTextFile", description = "テキストファイルをすべて読み込む。ファイルが存在しない場合は findFile を利用してファイルを探す。")
+  @Tool(name = "readTextFile", description = "テキストファイルをすべて読み込む。ファイルが存在しない場合は findFile を利用してファイルを探す。複数の既知ファイルをまとめて読む場合は readMultiFile を優先する。")
   List<String> readTextFile(String pathStr) throws IOException {
     IO.println(String.format("%s のテキストファイルを読むよ", pathStr));
     java.nio.file.Path path = resolveProjectPath(pathStr);
