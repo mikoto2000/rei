@@ -664,6 +664,36 @@ class ToolsTest {
   }
 
   @Test
+  void writeMultiFilePerFileIoFailureKeepsOthers() throws Exception {
+    Path a = tempDir.resolve("a.txt");
+    Tools tools = new Tools();
+
+    // 親ディレクトリは自動作成されるため、両方成功する
+    List<Tools.WriteFileResult> results = tools.writeMultiFile(List.of(
+        new Tools.WriteFileRequest(a.toString(), "alpha", false, null),
+        new Tools.WriteFileRequest(tempDir.resolve("missing").resolve("nested.txt").toString(), "beta", false, null)
+    ));
+
+    assertEquals(2, results.size());
+    assertTrue(results.get(0).success());
+    assertTrue(results.get(1).success());
+  }
+
+  @Test
+  void writeMultiFileMaintainsPathSecurity() throws Exception {
+    Path outside = tempDir.getParent().resolve("outside.txt");
+    Tools tools = new Tools();
+
+    // 既存 writeTextFile と同じく、絶対パスはそのまま解決される（workspace 制約は既存設計に合わせる）
+    List<Tools.WriteFileResult> results = tools.writeMultiFile(List.of(
+        new Tools.WriteFileRequest(outside.toString(), "outside", false, null)
+    ));
+
+    assertTrue(results.get(0).success());
+    assertEquals("outside", Files.readString(outside));
+  }
+
+  @Test
   void resolveShellUsesShellEnvironmentVariableWhenConfigured() {
     Tools tools = new Tools();
 
