@@ -368,6 +368,46 @@ class ToolsTest {
   }
 
   @Test
+  void searchAndReadClampsContextToFileStart() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/note.txt"), "alpha\nbeta\ngamma\n");
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
+        new Tools.SearchAndReadRequest(
+            List.of(new Tools.GrepQuery("alpha", "docs", null, null, null, null, null, null, null, null, null, null)),
+            10, null), tempDir);
+
+    assertEquals(1, results.size());
+    assertEquals(1, results.get(0).sections().get(0).startLine());
+    assertEquals(3, results.get(0).sections().get(0).endLine());
+    assertEquals(3, results.get(0).sections().get(0).content().size());
+  }
+
+  @Test
+  void searchAndReadClampsContextToFileEnd() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/note.txt"), "alpha\nbeta\ngamma\n");
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
+        new Tools.SearchAndReadRequest(
+            List.of(new Tools.GrepQuery("gamma", "docs", null, null, null, null, null, null, null, null, null, null)),
+            10, null), tempDir);
+
+    assertEquals(1, results.size());
+    assertEquals(1, results.get(0).sections().get(0).startLine());
+    assertEquals(3, results.get(0).sections().get(0).endLine());
+    assertEquals(3, results.get(0).sections().get(0).content().size());
+  }
+
+  @Test
   void grepMultiQueryRejectsBlankPattern() throws Exception {
     Tools tools = new Tools();
     List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
