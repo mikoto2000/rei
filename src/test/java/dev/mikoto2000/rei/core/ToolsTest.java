@@ -540,6 +540,20 @@ class ToolsTest {
   }
 
   @Test
+  void readMultiFileMaintainsPathSecurity() throws Exception {
+    Path outside = tempDir.getParent().resolve("outside.txt");
+    Files.write(outside, List.of("outside"));
+    Tools tools = new Tools();
+
+    // 既存 readTextFile と同じく、絶対パスはそのまま解決される（workspace 制約は既存設計に合わせる）
+    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
+        new Tools.ReadFileRequest(outside.toString(), null, null)
+    ));
+
+    assertEquals(List.of("outside"), results.get(0).content());
+  }
+
+  @Test
   void resolveShellUsesShellEnvironmentVariableWhenConfigured() {
     Tools tools = new Tools();
 
