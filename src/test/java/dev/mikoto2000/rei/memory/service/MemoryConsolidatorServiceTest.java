@@ -54,7 +54,8 @@ class MemoryConsolidatorServiceTest {
   @Test
   void extractCandidatesThrowsWhenChatClientFails() {
     ChatClient chatClient = Mockito.mock(ChatClient.class, Mockito.RETURNS_DEEP_STUBS);
-    Mockito.when(chatClient.prompt(Mockito.anyString()).call().content()).thenThrow(new RuntimeException("boom"));
+    Mockito.when(chatClient.prompt(Mockito.anyString()).advisors(Mockito.any(java.util.function.Consumer.class)).call().content())
+        .thenThrow(new RuntimeException("boom"));
     var ds = new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("consolidator-fail.db"));
     JdbcClient.create(ds).sql("CREATE TABLE IF NOT EXISTS SPRING_AI_CHAT_MEMORY(type TEXT, content TEXT, timestamp TEXT)").update();
     JdbcClient.create(ds).sql("INSERT INTO SPRING_AI_CHAT_MEMORY(type, content, timestamp) VALUES('USER','hello',datetime('now'))").update();
@@ -68,7 +69,8 @@ class MemoryConsolidatorServiceTest {
   @Test
   void summarizeThrowsWhenChatClientFails() {
     ChatClient chatClient = Mockito.mock(ChatClient.class, Mockito.RETURNS_DEEP_STUBS);
-    Mockito.when(chatClient.prompt(Mockito.anyString()).call().content()).thenThrow(new RuntimeException("boom"));
+    Mockito.when(chatClient.prompt(Mockito.anyString()).advisors(Mockito.any(java.util.function.Consumer.class)).call().content())
+        .thenThrow(new RuntimeException("boom"));
     var ds = new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("summarize-fail.db"));
     var props = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60,
         new MemoryProperties.ExpiryDefaults(30, 365));
