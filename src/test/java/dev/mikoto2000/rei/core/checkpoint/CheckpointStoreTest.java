@@ -19,6 +19,10 @@ class CheckpointStoreTest {
     return new CheckpointStore(Clock.fixed(start, ZONE));
   }
 
+  private TurnCheckpoint checkpoint(String reason) {
+    return new TurnCheckpoint("task-1", "goal", "step-1", List.of(), List.of(), List.of(), null, null, null, reason, "2026-08-17T00:00:00Z");
+  }
+
   @Test
   void emptyCheckpointStoreHasNoLatest() {
     CheckpointStore store = store(Instant.parse("2026-08-17T00:00:00Z"));
@@ -47,8 +51,36 @@ class CheckpointStoreTest {
   @Test
   void latestCheckpointCanBeRetrieved() {
     CheckpointStore store = store(Instant.parse("2026-08-17T00:00:00Z"));
-    store.save(new TurnCheckpoint("task-1", "goal-1", "step-1", List.of(), List.of(), List.of(), null, null, null, "TURN_END", "2026-08-17T00:00:00Z"));
-    store.save(new TurnCheckpoint("task-1", "goal-2", "step-2", List.of(), List.of(), List.of(), null, null, null, "TURN_END", "2026-08-17T01:00:00Z"));
-    assertEquals("goal-2", store.latest().get().goal());
+    store.save(checkpoint("TURN_END"));
+    store.save(checkpoint("LENGTH"));
+    assertEquals("LENGTH", store.latest().get().reason());
+  }
+
+  @Test
+  void turnEndReasonIsDistinguishable() {
+    CheckpointStore store = store(Instant.parse("2026-08-17T00:00:00Z"));
+    store.save(checkpoint("TURN_END"));
+    assertEquals("TURN_END", store.latest().get().reason());
+  }
+
+  @Test
+  void lengthReasonIsDistinguishable() {
+    CheckpointStore store = store(Instant.parse("2026-08-17T00:00:00Z"));
+    store.save(checkpoint("LENGTH"));
+    assertEquals("LENGTH", store.latest().get().reason());
+  }
+
+  @Test
+  void blockedReasonIsDistinguishable() {
+    CheckpointStore store = store(Instant.parse("2026-08-17T00:00:00Z"));
+    store.save(checkpoint("BLOCKED"));
+    assertEquals("BLOCKED", store.latest().get().reason());
+  }
+
+  @Test
+  void completedReasonIsDistinguishable() {
+    CheckpointStore store = store(Instant.parse("2026-08-17T00:00:00Z"));
+    store.save(checkpoint("COMPLETED"));
+    assertEquals("COMPLETED", store.latest().get().reason());
   }
 }
