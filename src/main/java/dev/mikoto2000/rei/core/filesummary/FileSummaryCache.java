@@ -58,6 +58,11 @@ public class FileSummaryCache {
     return Optional.ofNullable(entries.get(path));
   }
 
+  /** 指定パス・version の要約が利用可能（version 一致）かどうか。 */
+  public boolean isUsable(String path, String version) {
+    return find(path).map(s -> s.version().equals(version)).orElse(false);
+  }
+
   private void evictIfNeeded() {
     while (entries.size() > maxEntries) {
       String oldest = entries.values().stream()

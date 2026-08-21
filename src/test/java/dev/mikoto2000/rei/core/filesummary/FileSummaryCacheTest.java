@@ -36,4 +36,20 @@ class FileSummaryCacheTest {
     assertEquals("abc123", found.version());
     assertEquals("User の作成・更新を担当", found.summary());
   }
+
+  @Test
+  void summaryIsUsableWhenVersionMatches() {
+    FileSummaryCache cache = cache(20, Instant.parse("2026-08-17T00:00:00Z"));
+    cache.save(new FileSummary("src/UserService.java", "abc123", "User の作成・更新を担当",
+        Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
+    assertTrue(cache.isUsable("src/UserService.java", "abc123"));
+  }
+
+  @Test
+  void summaryIsStaleWhenVersionDiffers() {
+    FileSummaryCache cache = cache(20, Instant.parse("2026-08-17T00:00:00Z"));
+    cache.save(new FileSummary("src/UserService.java", "abc123", "User の作成・更新を担当",
+        Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
+    assertFalse(cache.isUsable("src/UserService.java", "def456"));
+  }
 }
