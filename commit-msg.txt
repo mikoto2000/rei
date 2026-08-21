@@ -1,1 +1,1 @@
-feat: add context budget manager singleton bean
+chore: remove commit message scratch file
