@@ -99,6 +99,24 @@ class RelatedFileGraphTest {
   }
 
   @Test
+  void promptRendersOnlyRelationsForWorkingSetFiles() {
+    RelatedFileGraph graph = graph(100, Instant.parse("2026-08-17T00:00:00Z"));
+    graph.addRelation("src/UserController.java", "src/UserService.java", "REFERENCES", "SEARCH");
+    graph.addRelation("src/Other.java", "src/Unrelated.java", "REFERENCES", "SEARCH");
+
+    String prompt = graph.renderForPrompt(java.util.Set.of("src/UserController.java"));
+    assertTrue(prompt.contains("src/UserController.java"));
+    assertTrue(prompt.contains("src/UserService.java"));
+    assertFalse(prompt.contains("src/Other.java"));
+  }
+
+  @Test
+  void emptyGraphRendersBlank() {
+    RelatedFileGraph graph = graph(100, Instant.parse("2026-08-17T00:00:00Z"));
+    assertEquals("", graph.renderForPrompt(java.util.Set.of("src/UserController.java")));
+  }
+
+  @Test
   void lastConfirmedAtIsUpdatedOnReconfirmation() {
     Instant start = Instant.parse("2026-08-17T00:00:00Z");
     RelatedFileGraph graph = graph(100, start);

@@ -99,6 +99,24 @@ public class RelatedFileGraph {
     relations.clear();
   }
 
+  /**
+   * LLM コンテキストに渡す表現を組み立てる。
+   *
+   * <p>workingSetPaths に含まれるファイルを source とする relation のみを提示する。
+   * 全 graph を毎ターン渡さない。</p>
+   */
+  public String renderForPrompt(java.util.Set<String> workingSetPaths) {
+    StringBuilder sb = new StringBuilder();
+    for (FileRelation relation : relations.values()) {
+      if (!workingSetPaths.contains(relation.sourcePath())) {
+        continue;
+      }
+      sb.append("- ").append(relation.sourcePath()).append(" [").append(relation.type().toLowerCase()).append("] ");
+      sb.append(relation.targetPath()).append(" (evidence: ").append(relation.evidence()).append(")\n");
+    }
+    return sb.toString();
+  }
+
   private void evictIfNeeded() {
     while (relations.size() > maxRelations) {
       String oldest = relations.values().stream()
