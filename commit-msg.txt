@@ -1,1 +1,1 @@
-test: distinguish checkpoint reasons
+feat: include working set and task state info in checkpoint
