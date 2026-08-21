@@ -86,4 +86,39 @@ class SearchResultCacheTest {
 
     assertFalse(later.get(key).isPresent());
   }
+
+  @Test
+  void failedResultIsNotCached() {
+    SearchResultCache cache = cache(Instant.parse("2026-08-17T00:00:00Z"));
+    SearchCacheKey key = new SearchCacheKey("grepMultiQuery", "pattern=UserService");
+
+    // 失敗結果は保存しない（put しない）ため、取得できない
+    assertFalse(cache.get(key).isPresent());
+  }
+
+  @Test
+  void clearRemovesAllEntries() {
+    SearchResultCache cache = cache(Instant.parse("2026-08-17T00:00:00Z"));
+    cache.put(new SearchCacheKey("grepMultiQuery", "pattern=A"), List.of("a"));
+    cache.put(new SearchCacheKey("grepMultiQuery", "pattern=B"), List.of("b"));
+
+    cache.clear();
+
+    assertTrue(cache.isEmpty());
+    assertEquals(0, cache.size());
+  }
+
+  @Test
+  void maxEntriesEvictsOldest() {
+    SearchResultCache cache = new SearchResultCache(Duration.ofSeconds(60), 2,
+        Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE));
+    cache.put(new SearchCacheKey("grepMultiQuery", "pattern=A"), List.of("a"));
+    cache.put(new SearchCacheKey("grepMultiQuery", "pattern=B"), List.of("b"));
+    cache.put(new SearchCacheKey("grepMultiQuery", "pattern=C"), List.of("c"));
+
+    assertEquals(2, cache.size());
+    assertFalse(cache.get(new SearchCacheKey("grepMultiQuery", "pattern=A")).isPresent());
+    assertTrue(cache.get(new SearchCacheKey("grepMultiQuery", "pattern=B")).isPresent());
+    assertTrue(cache.get(new SearchCacheKey("grepMultiQuery", "pattern=C")).isPresent());
+  }
 }
