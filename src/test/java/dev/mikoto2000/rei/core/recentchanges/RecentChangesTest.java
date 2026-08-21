@@ -54,4 +54,24 @@ class RecentChangesTest {
     assertEquals(RecentChanges.OP_DELETE, entry.operation());
     assertEquals("deleted", entry.summary());
   }
+
+  @Test
+  void sameFileReEditOverwritesLatestEntry() {
+    RecentChanges changes = recentChanges(20, Instant.parse("2026-08-17T00:00:00Z"));
+    changes.record("src/UserService.java", RecentChanges.OP_EDIT, "first");
+    changes.record("src/UserService.java", RecentChanges.OP_EDIT, "second");
+    assertEquals(1, changes.entries().size());
+    assertEquals("second", changes.entries().get(0).summary());
+  }
+
+  @Test
+  void maxEntriesEvictsOldest() {
+    RecentChanges changes = recentChanges(2, Instant.parse("2026-08-17T00:00:00Z"));
+    changes.record("a", RecentChanges.OP_EDIT, "a");
+    changes.record("b", RecentChanges.OP_EDIT, "b");
+    changes.record("c", RecentChanges.OP_EDIT, "c");
+    assertEquals(2, changes.entries().size());
+    assertEquals("b", changes.entries().get(0).summary());
+    assertEquals("c", changes.entries().get(1).summary());
+  }
 }

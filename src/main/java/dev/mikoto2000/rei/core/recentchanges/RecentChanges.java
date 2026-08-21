@@ -45,8 +45,14 @@ public class RecentChanges {
     return entries.isEmpty();
   }
 
-  /** 変更を記録する。 */
+  /** 変更を記録する。同じファイルの最新変更は上書きする。 */
   public void record(String path, String operation, String summary) {
+    for (int i = entries.size() - 1; i >= 0; i--) {
+      if (entries.get(i).path().equals(path)) {
+        entries.set(i, new RecentChange(path, operation, summary, now()));
+        return;
+      }
+    }
     entries.add(new RecentChange(path, operation, summary, now()));
     evictIfNeeded();
   }
