@@ -1,1 +1,1 @@
-feat: add action plan singleton bean
+feat: inject action plan into llm context
