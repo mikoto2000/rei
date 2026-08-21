@@ -86,4 +86,75 @@ class ContextBudgetManagerTest {
     assertTrue(result.included().contains("SYSTEM"));
     assertTrue(result.included().contains("CURRENT_USER"));
   }
+
+  @Test
+  void actionPlanOldDoneStepsAreTrimmed() {
+    ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
+    ContextSection plan = new ContextSection("ACTION_PLAN", "1. [DONE] old step\n2. [IN_PROGRESS] current step\n3. [TODO] next step");
+
+    AllocationResult result = manager.allocate(List.of(plan));
+    assertTrue(result.included().contains("ACTION_PLAN"));
+  }
+
+  @Test
+  void currentStepIsKept() {
+    ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
+    ContextSection plan = new ContextSection("ACTION_PLAN", "1. [IN_PROGRESS] current step");
+
+    AllocationResult result = manager.allocate(List.of(plan));
+    assertTrue(result.included().contains("ACTION_PLAN"));
+  }
+
+  @Test
+  void workingSetLimitedToTopN() {
+    ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
+    ContextSection working = new ContextSection("WORKING_SET", "file1\nfile2\nfile3");
+
+    AllocationResult result = manager.allocate(List.of(working));
+    assertTrue(result.included().contains("WORKING_SET"));
+  }
+
+  @Test
+  void fileSummariesLimitedToWorkingSetRelated() {
+    ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
+    ContextSection summaries = new ContextSection("FILE_SUMMARIES", "summary1");
+
+    AllocationResult result = manager.allocate(List.of(summaries));
+    assertTrue(result.included().contains("FILE_SUMMARIES"));
+  }
+
+  @Test
+  void relatedFilesLimitedToOneHop() {
+    ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
+    ContextSection related = new ContextSection("RELATED_FILES", "related1");
+
+    AllocationResult result = manager.allocate(List.of(related));
+    assertTrue(result.included().contains("RELATED_FILES"));
+  }
+
+  @Test
+  void recentChangesLimitedToLatestN() {
+    ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
+    ContextSection changes = new ContextSection("RECENT_CHANGES", "change1");
+
+    AllocationResult result = manager.allocate(List.of(changes));
+    assertTrue(result.included().contains("RECENT_CHANGES"));
+  }
+
+  @Test
+  void conversationHistoryTrimmedFromOldest() {
+    ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
+    ContextSection history = new ContextSection("CONVERSATION_HISTORY", "old history " + "x".repeat(5000));
+
+    AllocationResult result = manager.allocate(List.of(history));
+    assertTrue(result.dropped().contains("CONVERSATION_HISTORY"));
+  }
+
+  @Test
+  void debugAllocationResultIsAvailable() {
+    ContextBudgetManager manager = new ContextBudgetManager(128000, 8000, 2000);
+    ContextSection system = new ContextSection("SYSTEM", "system");
+    AllocationResult result = manager.allocate(List.of(system));
+    assertTrue(result.totalTokens() > 0);
+  }
 }

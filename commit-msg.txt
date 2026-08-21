@@ -1,1 +1,1 @@
-feat: add context budget allocation
+test: add context budget trimming behaviors
