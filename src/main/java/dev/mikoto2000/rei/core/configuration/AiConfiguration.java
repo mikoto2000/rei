@@ -24,6 +24,7 @@ import dev.mikoto2000.rei.core.actionplan.ActionPlanAdvisor;
 import dev.mikoto2000.rei.core.checkpoint.CheckpointAdvisor;
 import dev.mikoto2000.rei.core.filesummary.FileSummaryAdvisor;
 import dev.mikoto2000.rei.core.recentchanges.RecentChangesAdvisor;
+import dev.mikoto2000.rei.core.stagnation.StagnationAdvisor;
 import dev.mikoto2000.rei.core.relatedgraph.RelatedFileGraphAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
@@ -81,6 +82,7 @@ public class AiConfiguration {
   private final RelatedFileGraphAdvisor relatedFileGraphAdvisor;
   private final CheckpointAdvisor checkpointAdvisor;
   private final ActionPlanAdvisor actionPlanAdvisor;
+  private final StagnationAdvisor stagnationAdvisor;
   private final TaskStateTools taskStateTools;
   private final LlmProperties llmProperties;
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
@@ -100,6 +102,7 @@ public class AiConfiguration {
     advisors.add(relatedFileGraphAdvisor);
     advisors.add(checkpointAdvisor);
     advisors.add(actionPlanAdvisor);
+    advisors.add(stagnationAdvisor);
     AgentSkillAdvisor skillAdvisor = agentSkillAdvisor.getIfAvailable();
     if (skillAdvisor != null) {
       advisors.add(skillAdvisor);

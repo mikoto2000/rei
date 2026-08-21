@@ -25,6 +25,7 @@ import dev.mikoto2000.rei.core.checkpoint.CheckpointAdvisor;
 import dev.mikoto2000.rei.core.filesummary.FileSummaryAdvisor;
 import dev.mikoto2000.rei.core.recentchanges.RecentChangesAdvisor;
 import dev.mikoto2000.rei.core.relatedgraph.RelatedFileGraphAdvisor;
+import dev.mikoto2000.rei.core.stagnation.StagnationAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
@@ -77,6 +78,7 @@ class AiConfigurationTest {
         Mockito.mock(RelatedFileGraphAdvisor.class),
         Mockito.mock(CheckpointAdvisor.class),
         Mockito.mock(ActionPlanAdvisor.class),
+        Mockito.mock(StagnationAdvisor.class),
         Mockito.mock(TaskStateTools.class),
         new LlmProperties(),
         mockProviderReturning(null),
@@ -119,6 +121,7 @@ class AiConfigurationTest {
         Mockito.mock(RelatedFileGraphAdvisor.class),
         Mockito.mock(CheckpointAdvisor.class),
         Mockito.mock(ActionPlanAdvisor.class),
+        Mockito.mock(StagnationAdvisor.class),
         Mockito.mock(TaskStateTools.class),
         new LlmProperties(),
         mockProviderReturning(null),
@@ -160,6 +163,7 @@ class AiConfigurationTest {
         Mockito.mock(RelatedFileGraphAdvisor.class),
         Mockito.mock(CheckpointAdvisor.class),
         Mockito.mock(ActionPlanAdvisor.class),
+        Mockito.mock(StagnationAdvisor.class),
         Mockito.mock(TaskStateTools.class),
         new LlmProperties(),
         mockProviderReturning(agentSkillAdvisor),
@@ -202,6 +206,7 @@ class AiConfigurationTest {
         Mockito.mock(RelatedFileGraphAdvisor.class),
         Mockito.mock(CheckpointAdvisor.class),
         Mockito.mock(ActionPlanAdvisor.class),
+        Mockito.mock(StagnationAdvisor.class),
         Mockito.mock(TaskStateTools.class),
         llmProperties,
         mockProviderReturning(null),
