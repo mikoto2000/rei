@@ -1275,6 +1275,60 @@ class ToolsTest {
   }
 
   @Test
+  void editInvalidatesRelatedRelations() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Files.writeString(text, "hello\nworld\n");
+    Tools tools = new Tools();
+    tools.relatedFileGraph().addRelation(text.toString(), "src/Other.java", "REFERENCES", "SEARCH");
+
+    tools.applyTextDiff(text.toString(), "world", "rei", "");
+
+    assertTrue(tools.relatedFileGraph().getRelated(text.toString()).isEmpty());
+  }
+
+  @Test
+  void deleteRemovesRelatedRelations() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Files.writeString(text, "hello\n");
+    Tools tools = new Tools();
+    tools.relatedFileGraph().addRelation(text.toString(), "src/Other.java", "REFERENCES", "SEARCH");
+
+    tools.deleteFile(text.toString());
+
+    assertTrue(tools.relatedFileGraph().getRelated(text.toString()).isEmpty());
+  }
+
+  @Test
+  void failedEditDoesNotInvalidateRelatedRelations() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Files.writeString(text, "hello\nworld\n");
+    Tools tools = new Tools();
+    tools.relatedFileGraph().addRelation(text.toString(), "src/Other.java", "REFERENCES", "SEARCH");
+
+    tools.applyTextDiff(text.toString(), "missing", "rei", "");
+
+    assertEquals(1, tools.relatedFileGraph().getRelated(text.toString()).size());
+  }
+
+  @Test
+  void searchDiscoversReferencesRelation() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("src"));
+    Files.writeString(tempDir.resolve("src/UserController.java"), "class UserController { UserService service; }\n");
+    Files.writeString(tempDir.resolve("src/UserService.java"), "class UserService {}\n");
+    runGit("add", "src");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    tools.grepMultiQuery(List.of(
+        new Tools.GrepQuery("UserService", "src", null, null, null, null, null, null, null, null, null, null)
+    ), tempDir);
+
+    assertTrue(tools.relatedFileGraph().getRelated("src/UserController.java").stream()
+        .anyMatch(r -> r.targetPath().equals("UserService")));
+  }
+
+  @Test
   void editClearsSearchCache() throws Exception {
     initGitRepo();
     Files.createDirectories(tempDir.resolve("docs"));

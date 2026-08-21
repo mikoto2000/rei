@@ -42,6 +42,7 @@ import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.recentchanges.RecentChanges;
+import dev.mikoto2000.rei.core.relatedgraph.RelatedFileGraph;
 import dev.mikoto2000.rei.core.searchcache.SearchCacheKey;
 import dev.mikoto2000.rei.core.searchcache.SearchResultCache;
 import dev.mikoto2000.rei.core.service.SystemShellService;
@@ -60,6 +61,7 @@ public class Tools {
   private final RecentChanges recentChanges;
   private final FileSummaryCache fileSummaryCache;
   private final SearchResultCache searchResultCache;
+  private final RelatedFileGraph relatedFileGraph;
 
   public Tools() {
     this(null, new SystemShellService());
@@ -106,6 +108,14 @@ public class Tools {
   public Tools(ProjectService projectService, SystemShellService systemShellService,
       BackgroundProcessManager backgroundProcessManager, Clock clock, WorkingSet workingSet,
       RecentChanges recentChanges, FileSummaryCache fileSummaryCache, SearchResultCache searchResultCache) {
+    this(projectService, systemShellService, backgroundProcessManager, clock, workingSet, recentChanges,
+        fileSummaryCache, searchResultCache, new RelatedFileGraph());
+  }
+
+  public Tools(ProjectService projectService, SystemShellService systemShellService,
+      BackgroundProcessManager backgroundProcessManager, Clock clock, WorkingSet workingSet,
+      RecentChanges recentChanges, FileSummaryCache fileSummaryCache, SearchResultCache searchResultCache,
+      RelatedFileGraph relatedFileGraph) {
     this.projectService = projectService;
     this.systemShellService = systemShellService;
     this.backgroundProcessManager = backgroundProcessManager;
@@ -114,6 +124,7 @@ public class Tools {
     this.recentChanges = recentChanges;
     this.fileSummaryCache = fileSummaryCache;
     this.searchResultCache = searchResultCache;
+    this.relatedFileGraph = relatedFileGraph;
   }
 
   /**
@@ -425,7 +436,44 @@ public class Tools {
         results.add(new GrepQueryResult(i, query.pattern(), List.of(), e.getMessage()));
       }
     }
+    discoverRelationsFromSearch(queries, results, workingDirectory);
     return results;
+  }
+
+  /**
+   * 検索結果から、明確に確認できるファイル間の関係を Related File Graph に登録する。
+   *
+   * <p>検索パターンがファイル名（例: UserService）に一致し、ヒットファイルがその名前を含む場合、
+   * ヒットファイルが対象ファイルを参照していると判断できる材料があるとみなす。
+   * ファイル名の類似だけでは登録しない。</p>
+   */
+  private void discoverRelationsFromSearch(List<GrepQuery> queries, List<GrepQueryResult> results,
+      java.nio.file.Path workingDirectory) {
+    for (int i = 0; i < queries.size(); i++) {
+      GrepQuery query = queries.get(i);
+      GrepQueryResult result = results.get(i);
+      if (result.error() != null) {
+        continue;
+      }
+      String pattern = query.pattern();
+      String targetName = pattern.replaceAll("^.*[/\\\\]", "").replaceAll("\\.[^.]+$", "");
+      if (targetName.isBlank() || targetName.length() < 2) {
+        continue;
+      }
+      for (GrepMatch match : result.matches()) {
+        if (!match.matched()) {
+          continue;
+        }
+        String sourcePath = match.path();
+        String sourceName = sourcePath.replaceAll("^.*[/\\\\]", "").replaceAll("\\.[^.]+$", "");
+        if (sourceName.equals(targetName)) {
+          continue;
+        }
+        // ヒットファイルが検索対象の名前を含む場合、参照関係とみなす
+        relatedFileGraph.addRelation(sourcePath, pattern, RelatedFileGraph.TYPE_REFERENCES,
+            RelatedFileGraph.EVIDENCE_SEARCH);
+      }
+    }
   }
 
   /** キャッシュを利用して 1 query の検索結果を返す。失敗結果はキャッシュしない。 */
@@ -912,6 +960,7 @@ public class Tools {
       recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
       fileSummaryCache.invalidate(path.toString());
     }
+    relatedFileGraph.removeRelationsFor(path.toString());
     searchResultCache.clear();
   }
 
@@ -1078,6 +1127,7 @@ public class Tools {
         recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
         fileSummaryCache.invalidate(path.toString());
       }
+      relatedFileGraph.removeRelationsFor(path.toString());
       searchResultCache.clear();
     }
 
@@ -1124,6 +1174,7 @@ public class Tools {
       workingSet.recordEdit(path);
       recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
       fileSummaryCache.invalidate(path.toString());
+      relatedFileGraph.removeRelationsFor(path.toString());
       searchResultCache.clear();
       return new TextDiffApplyResult(true, true, "差分を適用しました");
     }
@@ -1181,6 +1232,7 @@ public class Tools {
       recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
       fileSummaryCache.invalidate(path.toString());
     }
+    relatedFileGraph.removeRelationsFor(path.toString());
     searchResultCache.clear();
   }
 
@@ -1192,6 +1244,7 @@ public class Tools {
     workingSet.remove(path);
     recentChanges.record(path.toString(), RecentChanges.OP_DELETE, "deleted");
     fileSummaryCache.invalidate(path.toString());
+    relatedFileGraph.removeRelationsFor(path.toString());
     searchResultCache.clear();
   }
 
@@ -1210,6 +1263,7 @@ public class Tools {
     workingSet.recordCreate(resolvedDestPath);
     recentChanges.record(resolvedDestPath.toString(), RecentChanges.OP_CREATE, "created");
     fileSummaryCache.invalidate(resolvedDestPath.toString());
+    relatedFileGraph.removeRelationsFor(resolvedDestPath.toString());
     searchResultCache.clear();
   }
 
@@ -1228,6 +1282,7 @@ public class Tools {
     workingSet.recordCreate(resolvedDestPath);
     recentChanges.record(resolvedDestPath.toString(), RecentChanges.OP_CREATE, "created");
     fileSummaryCache.invalidate(resolvedDestPath.toString());
+    relatedFileGraph.removeRelationsFor(resolvedDestPath.toString());
     searchResultCache.clear();
   }
 
@@ -1245,6 +1300,10 @@ public class Tools {
 
   SearchResultCache searchResultCache() {
     return searchResultCache;
+  }
+
+  RelatedFileGraph relatedFileGraph() {
+    return relatedFileGraph;
   }
 
   private java.nio.file.Path currentWorkingDirectory() {
