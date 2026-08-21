@@ -65,4 +65,25 @@ class SearchResultCacheTest {
 
     assertFalse(cache.get(keyB).isPresent());
   }
+
+  @Test
+  void hitWithinTtl() {
+    SearchResultCache cache = cache(Instant.parse("2026-08-17T00:00:00Z"));
+    SearchCacheKey key = new SearchCacheKey("grepMultiQuery", "pattern=UserService");
+    cache.put(key, List.of("docs/UserService.java"));
+
+    assertTrue(cache.get(key).isPresent());
+  }
+
+  @Test
+  void missAfterTtlExpires() {
+    SearchResultCache cache = cache(Instant.parse("2026-08-17T00:00:00Z"));
+    SearchCacheKey key = new SearchCacheKey("grepMultiQuery", "pattern=UserService");
+    cache.put(key, List.of("docs/UserService.java"));
+
+    SearchResultCache later = new SearchResultCache(Duration.ofSeconds(60), 100,
+        Clock.fixed(Instant.parse("2026-08-17T00:02:00Z"), ZONE));
+
+    assertFalse(later.get(key).isPresent());
+  }
 }
