@@ -45,4 +45,24 @@ class SearchResultCacheTest {
     assertTrue(found.isPresent());
     assertEquals(result, found.get());
   }
+
+  @Test
+  void differentQueryIsDifferentKey() {
+    SearchResultCache cache = cache(Instant.parse("2026-08-17T00:00:00Z"));
+    SearchCacheKey keyA = new SearchCacheKey("grepMultiQuery", "pattern=UserService");
+    SearchCacheKey keyB = new SearchCacheKey("grepMultiQuery", "pattern=TaskState");
+    cache.put(keyA, List.of("docs/UserService.java"));
+
+    assertFalse(cache.get(keyB).isPresent());
+  }
+
+  @Test
+  void differentPathIsDifferentKey() {
+    SearchResultCache cache = cache(Instant.parse("2026-08-17T00:00:00Z"));
+    SearchCacheKey keyA = new SearchCacheKey("grepMultiQuery", "pattern=UserService|path=src");
+    SearchCacheKey keyB = new SearchCacheKey("grepMultiQuery", "pattern=UserService|path=docs");
+    cache.put(keyA, List.of("src/UserService.java"));
+
+    assertFalse(cache.get(keyB).isPresent());
+  }
 }
