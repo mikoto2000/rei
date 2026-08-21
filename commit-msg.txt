@@ -1,1 +1,1 @@
-feat: add stagnation detector singleton bean
+feat: inject replan notice into llm context
