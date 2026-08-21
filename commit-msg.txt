@@ -1,1 +1,1 @@
-feat: register action plan advisor in chat clients
+feat: add stagnation detector
