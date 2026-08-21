@@ -1,0 +1,29 @@
+package dev.mikoto2000.rei.core.filesummary;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+
+import org.junit.jupiter.api.Test;
+
+class FileSummaryCacheTest {
+
+  private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
+
+  private FileSummaryCache cache(int maxEntries, Instant start) {
+    return new FileSummaryCache(maxEntries, Clock.fixed(start, ZONE));
+  }
+
+  @Test
+  void fileSummaryCanBeSaved() {
+    FileSummaryCache cache = cache(20, Instant.parse("2026-08-17T00:00:00Z"));
+    cache.save(new FileSummary("src/UserService.java", "abc123", "User の作成・更新を担当",
+        Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
+    assertFalse(cache.isEmpty());
+    assertEquals(1, cache.entries().size());
+  }
+}
