@@ -61,6 +61,44 @@ class RelatedFileGraphTest {
   }
 
   @Test
+  void sourceFileChangeRemovesRelations() {
+    RelatedFileGraph graph = graph(100, Instant.parse("2026-08-17T00:00:00Z"));
+    graph.addRelation("src/UserController.java", "src/UserService.java", "REFERENCES", "SEARCH");
+    graph.removeRelationsFor("src/UserController.java");
+    assertTrue(graph.isEmpty());
+  }
+
+  @Test
+  void targetFileChangeRemovesRelations() {
+    RelatedFileGraph graph = graph(100, Instant.parse("2026-08-17T00:00:00Z"));
+    graph.addRelation("src/UserController.java", "src/UserService.java", "REFERENCES", "SEARCH");
+    graph.removeRelationsFor("src/UserService.java");
+    assertTrue(graph.isEmpty());
+  }
+
+  @Test
+  void deleteRemovesAllRelationsForFile() {
+    RelatedFileGraph graph = graph(100, Instant.parse("2026-08-17T00:00:00Z"));
+    graph.addRelation("src/UserController.java", "src/UserService.java", "REFERENCES", "SEARCH");
+    graph.addRelation("src/UserServiceTest.java", "src/UserService.java", "TESTS", "SEARCH");
+    graph.removeRelationsFor("src/UserService.java");
+    assertTrue(graph.isEmpty());
+  }
+
+  @Test
+  void maxRelationsEvictsOldest() {
+    Instant start = Instant.parse("2026-08-17T00:00:00Z");
+    RelatedFileGraph graph = graph(2, start);
+    graph.addRelation("a", "b", "REFERENCES", "SEARCH");
+    graph.addRelation("c", "d", "REFERENCES", "SEARCH");
+    graph.addRelation("e", "f", "REFERENCES", "SEARCH");
+    assertEquals(2, graph.size());
+    assertTrue(graph.getRelated("a").isEmpty());
+    assertTrue(graph.getRelated("c").size() == 1);
+    assertTrue(graph.getRelated("e").size() == 1);
+  }
+
+  @Test
   void lastConfirmedAtIsUpdatedOnReconfirmation() {
     Instant start = Instant.parse("2026-08-17T00:00:00Z");
     RelatedFileGraph graph = graph(100, start);
