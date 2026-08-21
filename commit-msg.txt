@@ -1,1 +1,1 @@
-feat: add action plan step queue
+feat: add action plan singleton bean
