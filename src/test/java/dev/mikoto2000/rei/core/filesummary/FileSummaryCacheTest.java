@@ -70,4 +70,16 @@ class FileSummaryCacheTest {
     cache.invalidate("src/UserService.java");
     assertFalse(cache.find("src/UserService.java").isPresent());
   }
+
+  @Test
+  void maxEntriesEvictsOldest() {
+    FileSummaryCache cache = cache(2, Instant.parse("2026-08-17T00:00:00Z"));
+    cache.save(new FileSummary("a", "v1", "a", Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
+    cache.save(new FileSummary("b", "v1", "b", Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
+    cache.save(new FileSummary("c", "v1", "c", Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
+    assertEquals(2, cache.entries().size());
+    assertFalse(cache.find("a").isPresent());
+    assertTrue(cache.find("b").isPresent());
+    assertTrue(cache.find("c").isPresent());
+  }
 }
