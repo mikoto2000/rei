@@ -20,6 +20,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
+import dev.mikoto2000.rei.core.actionplan.ActionPlanAdvisor;
 import dev.mikoto2000.rei.core.checkpoint.CheckpointAdvisor;
 import dev.mikoto2000.rei.core.filesummary.FileSummaryAdvisor;
 import dev.mikoto2000.rei.core.recentchanges.RecentChangesAdvisor;
@@ -75,6 +76,7 @@ class AiConfigurationTest {
         Mockito.mock(FileSummaryAdvisor.class),
         Mockito.mock(RelatedFileGraphAdvisor.class),
         Mockito.mock(CheckpointAdvisor.class),
+        Mockito.mock(ActionPlanAdvisor.class),
         Mockito.mock(TaskStateTools.class),
         new LlmProperties(),
         mockProviderReturning(null),
@@ -116,6 +118,7 @@ class AiConfigurationTest {
         Mockito.mock(FileSummaryAdvisor.class),
         Mockito.mock(RelatedFileGraphAdvisor.class),
         Mockito.mock(CheckpointAdvisor.class),
+        Mockito.mock(ActionPlanAdvisor.class),
         Mockito.mock(TaskStateTools.class),
         new LlmProperties(),
         mockProviderReturning(null),
@@ -156,6 +159,7 @@ class AiConfigurationTest {
         Mockito.mock(FileSummaryAdvisor.class),
         Mockito.mock(RelatedFileGraphAdvisor.class),
         Mockito.mock(CheckpointAdvisor.class),
+        Mockito.mock(ActionPlanAdvisor.class),
         Mockito.mock(TaskStateTools.class),
         new LlmProperties(),
         mockProviderReturning(agentSkillAdvisor),
@@ -197,6 +201,7 @@ class AiConfigurationTest {
         Mockito.mock(FileSummaryAdvisor.class),
         Mockito.mock(RelatedFileGraphAdvisor.class),
         Mockito.mock(CheckpointAdvisor.class),
+        Mockito.mock(ActionPlanAdvisor.class),
         Mockito.mock(TaskStateTools.class),
         llmProperties,
         mockProviderReturning(null),

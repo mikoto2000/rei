@@ -1,1 +1,1 @@
-feat: inject action plan into llm context
+feat: register action plan advisor in chat clients
