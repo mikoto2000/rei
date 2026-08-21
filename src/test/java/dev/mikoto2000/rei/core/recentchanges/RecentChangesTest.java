@@ -36,4 +36,22 @@ class RecentChangesTest {
     assertEquals(RecentChanges.OP_CREATE, entry.operation());
     assertEquals("created", entry.summary());
   }
+
+  @Test
+  void editCanBeRecorded() {
+    RecentChanges changes = recentChanges(20, Instant.parse("2026-08-17T00:00:00Z"));
+    changes.record("src/main/java/UserService.java", RecentChanges.OP_EDIT, "edited");
+    RecentChange entry = changes.entries().get(0);
+    assertEquals(RecentChanges.OP_EDIT, entry.operation());
+    assertEquals("edited", entry.summary());
+  }
+
+  @Test
+  void deleteCanBeRecorded() {
+    RecentChanges changes = recentChanges(20, Instant.parse("2026-08-17T00:00:00Z"));
+    changes.record("src/main/java/UserService.java", RecentChanges.OP_DELETE, "deleted");
+    RecentChange entry = changes.entries().get(0);
+    assertEquals(RecentChanges.OP_DELETE, entry.operation());
+    assertEquals("deleted", entry.summary());
+  }
 }
