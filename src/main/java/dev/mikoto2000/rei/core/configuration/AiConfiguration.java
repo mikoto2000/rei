@@ -20,6 +20,7 @@ import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.bluesky.BlueskyProperties;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
+import dev.mikoto2000.rei.core.checkpoint.CheckpointAdvisor;
 import dev.mikoto2000.rei.core.filesummary.FileSummaryAdvisor;
 import dev.mikoto2000.rei.core.recentchanges.RecentChangesAdvisor;
 import dev.mikoto2000.rei.core.relatedgraph.RelatedFileGraphAdvisor;
@@ -77,6 +78,7 @@ public class AiConfiguration {
   private final RecentChangesAdvisor recentChangesAdvisor;
   private final FileSummaryAdvisor fileSummaryAdvisor;
   private final RelatedFileGraphAdvisor relatedFileGraphAdvisor;
+  private final CheckpointAdvisor checkpointAdvisor;
   private final TaskStateTools taskStateTools;
   private final LlmProperties llmProperties;
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
@@ -94,6 +96,7 @@ public class AiConfiguration {
     advisors.add(recentChangesAdvisor);
     advisors.add(fileSummaryAdvisor);
     advisors.add(relatedFileGraphAdvisor);
+    advisors.add(checkpointAdvisor);
     AgentSkillAdvisor skillAdvisor = agentSkillAdvisor.getIfAvailable();
     if (skillAdvisor != null) {
       advisors.add(skillAdvisor);
