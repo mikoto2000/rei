@@ -21,6 +21,7 @@ import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
+import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
 import dev.mikoto2000.rei.feed.FeedTools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
@@ -66,6 +67,7 @@ class AiConfigurationTest {
         Mockito.mock(RuntimeContextAdvisor.class),
         Mockito.mock(WorkingSetAdvisor.class),
         Mockito.mock(TaskStateAdvisor.class),
+        Mockito.mock(TaskStateTools.class),
         new LlmProperties(),
         mockProviderReturning(null),
         provider);
@@ -102,6 +104,7 @@ class AiConfigurationTest {
         Mockito.mock(RuntimeContextAdvisor.class),
         Mockito.mock(WorkingSetAdvisor.class),
         Mockito.mock(TaskStateAdvisor.class),
+        Mockito.mock(TaskStateTools.class),
         new LlmProperties(),
         mockProviderReturning(null),
         provider);
@@ -137,6 +140,7 @@ class AiConfigurationTest {
         Mockito.mock(RuntimeContextAdvisor.class),
         Mockito.mock(WorkingSetAdvisor.class),
         Mockito.mock(TaskStateAdvisor.class),
+        Mockito.mock(TaskStateTools.class),
         new LlmProperties(),
         mockProviderReturning(agentSkillAdvisor),
         mockProviderReturning(null));
@@ -173,6 +177,7 @@ class AiConfigurationTest {
         Mockito.mock(RuntimeContextAdvisor.class),
         Mockito.mock(WorkingSetAdvisor.class),
         Mockito.mock(TaskStateAdvisor.class),
+        Mockito.mock(TaskStateTools.class),
         llmProperties,
         mockProviderReturning(null),
         mockProviderReturning(null));

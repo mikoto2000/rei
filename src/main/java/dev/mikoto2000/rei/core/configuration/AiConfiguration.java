@@ -21,6 +21,7 @@ import dev.mikoto2000.rei.bluesky.BlueskyProperties;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
+import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
 import dev.mikoto2000.rei.feed.FeedProperties;
 import dev.mikoto2000.rei.feed.FeedTools;
@@ -70,6 +71,7 @@ public class AiConfiguration {
   private final RuntimeContextAdvisor runtimeContextAdvisor;
   private final WorkingSetAdvisor workingSetAdvisor;
   private final TaskStateAdvisor taskStateAdvisor;
+  private final TaskStateTools taskStateTools;
   private final LlmProperties llmProperties;
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
   private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
@@ -95,7 +97,7 @@ public class AiConfiguration {
             .build())
         .defaultAdvisors(advisors)
         .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
-            soundNotificationTools, blueskyPostTools, urlContentFetchTools, clockTools, schedulerTools);
+            soundNotificationTools, blueskyPostTools, urlContentFetchTools, clockTools, schedulerTools, taskStateTools);
 
     ToolCallbackProvider toolCallbackProvider = mcpToolCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {

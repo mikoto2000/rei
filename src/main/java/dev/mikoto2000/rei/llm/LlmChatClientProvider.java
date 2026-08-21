@@ -19,6 +19,7 @@ import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.core.configuration.CoreProperties;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
+import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
 import dev.mikoto2000.rei.core.configuration.SystemPromptService;
 import dev.mikoto2000.rei.feed.FeedTools;
@@ -52,6 +53,7 @@ public class LlmChatClientProvider {
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
   private final ObjectProvider<WorkingSetAdvisor> workingSetAdvisor;
   private final ObjectProvider<TaskStateAdvisor> taskStateAdvisor;
+  private final ObjectProvider<TaskStateTools> taskStateTools;
   private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
   private final Map<String, ChatClient> cache = new ConcurrentHashMap<>();
 
@@ -65,6 +67,7 @@ public class LlmChatClientProvider {
       ObjectProvider<UrlContentFetchTools> urlContentFetchTools, ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor,
       ObjectProvider<WorkingSetAdvisor> workingSetAdvisor,
       ObjectProvider<TaskStateAdvisor> taskStateAdvisor,
+      ObjectProvider<TaskStateTools> taskStateTools,
       ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider) {
     this.modelProvider = modelProvider;
     this.coreProperties = coreProperties;
@@ -84,6 +87,7 @@ public class LlmChatClientProvider {
     this.agentSkillAdvisor = agentSkillAdvisor;
     this.workingSetAdvisor = workingSetAdvisor;
     this.taskStateAdvisor = taskStateAdvisor;
+    this.taskStateTools = taskStateTools;
     this.mcpToolCallbackProvider = mcpToolCallbackProvider;
   }
 
@@ -108,7 +112,6 @@ public class LlmChatClientProvider {
     if (taskStateAdvisorInstance != null) {
       advisors.add(taskStateAdvisorInstance);
     }
-
     ChatClient.Builder builder = ChatClient.builder(modelProvider.chatModel(feature))
         .defaultSystem(systemPromptService.systemPrompt())
         .defaultOptions(modelProvider.chatOptions(feature, null))
@@ -126,6 +129,10 @@ public class LlmChatClientProvider {
     addIfAvailable(toolObjects, soundNotificationTools);
     addIfAvailable(toolObjects, blueskyPostTools);
     addIfAvailable(toolObjects, urlContentFetchTools);
+    TaskStateTools taskStateToolsInstance = taskStateTools.getIfAvailable();
+    if (taskStateToolsInstance != null) {
+      toolObjects.add(taskStateToolsInstance);
+    }
     if (!toolObjects.isEmpty()) {
       builder.defaultTools(toolObjects.toArray());
     }
