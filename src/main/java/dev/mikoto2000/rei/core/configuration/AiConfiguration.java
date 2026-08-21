@@ -20,6 +20,7 @@ import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.bluesky.BlueskyProperties;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
+import dev.mikoto2000.rei.core.recentchanges.RecentChangesAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
@@ -71,6 +72,7 @@ public class AiConfiguration {
   private final RuntimeContextAdvisor runtimeContextAdvisor;
   private final WorkingSetAdvisor workingSetAdvisor;
   private final TaskStateAdvisor taskStateAdvisor;
+  private final RecentChangesAdvisor recentChangesAdvisor;
   private final TaskStateTools taskStateTools;
   private final LlmProperties llmProperties;
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
@@ -85,6 +87,7 @@ public class AiConfiguration {
     advisors.add(runtimeContextAdvisor);
     advisors.add(workingSetAdvisor);
     advisors.add(taskStateAdvisor);
+    advisors.add(recentChangesAdvisor);
     AgentSkillAdvisor skillAdvisor = agentSkillAdvisor.getIfAvailable();
     if (skillAdvisor != null) {
       advisors.add(skillAdvisor);
