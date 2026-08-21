@@ -53,6 +53,11 @@ public class FileSummaryCache {
     evictIfNeeded();
   }
 
+  /** 指定パスの要約を返す。 */
+  public Optional<FileSummary> find(String path) {
+    return Optional.ofNullable(entries.get(path));
+  }
+
   private void evictIfNeeded() {
     while (entries.size() > maxEntries) {
       String oldest = entries.values().stream()

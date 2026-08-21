@@ -26,4 +26,14 @@ class FileSummaryCacheTest {
     assertFalse(cache.isEmpty());
     assertEquals(1, cache.entries().size());
   }
+
+  @Test
+  void summaryCanBeRetrievedByPath() {
+    FileSummaryCache cache = cache(20, Instant.parse("2026-08-17T00:00:00Z"));
+    cache.save(new FileSummary("src/UserService.java", "abc123", "User の作成・更新を担当",
+        Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
+    FileSummary found = cache.find("src/UserService.java").orElseThrow();
+    assertEquals("abc123", found.version());
+    assertEquals("User の作成・更新を担当", found.summary());
+  }
 }
