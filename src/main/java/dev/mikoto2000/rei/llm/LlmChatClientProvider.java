@@ -18,6 +18,7 @@ import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.core.configuration.CoreProperties;
+import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
 import dev.mikoto2000.rei.core.configuration.SystemPromptService;
 import dev.mikoto2000.rei.feed.FeedTools;
@@ -50,6 +51,7 @@ public class LlmChatClientProvider {
   private final ObjectProvider<UrlContentFetchTools> urlContentFetchTools;
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
   private final ObjectProvider<WorkingSetAdvisor> workingSetAdvisor;
+  private final ObjectProvider<TaskStateAdvisor> taskStateAdvisor;
   private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
   private final Map<String, ChatClient> cache = new ConcurrentHashMap<>();
 
@@ -62,6 +64,7 @@ public class LlmChatClientProvider {
       ObjectProvider<SoundNotificationTools> soundNotificationTools, ObjectProvider<BlueskyPostTools> blueskyPostTools,
       ObjectProvider<UrlContentFetchTools> urlContentFetchTools, ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor,
       ObjectProvider<WorkingSetAdvisor> workingSetAdvisor,
+      ObjectProvider<TaskStateAdvisor> taskStateAdvisor,
       ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider) {
     this.modelProvider = modelProvider;
     this.coreProperties = coreProperties;
@@ -80,6 +83,7 @@ public class LlmChatClientProvider {
     this.urlContentFetchTools = urlContentFetchTools;
     this.agentSkillAdvisor = agentSkillAdvisor;
     this.workingSetAdvisor = workingSetAdvisor;
+    this.taskStateAdvisor = taskStateAdvisor;
     this.mcpToolCallbackProvider = mcpToolCallbackProvider;
   }
 
@@ -99,6 +103,10 @@ public class LlmChatClientProvider {
     WorkingSetAdvisor workingSetAdvisorInstance = workingSetAdvisor.getIfAvailable();
     if (workingSetAdvisorInstance != null) {
       advisors.add(workingSetAdvisorInstance);
+    }
+    TaskStateAdvisor taskStateAdvisorInstance = taskStateAdvisor.getIfAvailable();
+    if (taskStateAdvisorInstance != null) {
+      advisors.add(taskStateAdvisorInstance);
     }
 
     ChatClient.Builder builder = ChatClient.builder(modelProvider.chatModel(feature))

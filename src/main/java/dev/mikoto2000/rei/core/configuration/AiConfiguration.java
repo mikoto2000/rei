@@ -20,6 +20,7 @@ import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.bluesky.BlueskyProperties;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
+import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
 import dev.mikoto2000.rei.feed.FeedProperties;
 import dev.mikoto2000.rei.feed.FeedTools;
@@ -68,6 +69,7 @@ public class AiConfiguration {
   private final SchedulerTools schedulerTools;
   private final RuntimeContextAdvisor runtimeContextAdvisor;
   private final WorkingSetAdvisor workingSetAdvisor;
+  private final TaskStateAdvisor taskStateAdvisor;
   private final LlmProperties llmProperties;
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
   private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
@@ -80,6 +82,7 @@ public class AiConfiguration {
         .build());
     advisors.add(runtimeContextAdvisor);
     advisors.add(workingSetAdvisor);
+    advisors.add(taskStateAdvisor);
     AgentSkillAdvisor skillAdvisor = agentSkillAdvisor.getIfAvailable();
     if (skillAdvisor != null) {
       advisors.add(skillAdvisor);
