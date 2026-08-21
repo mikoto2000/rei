@@ -63,6 +63,24 @@ public class FileSummaryCache {
     return find(path).map(s -> s.version().equals(version)).orElse(false);
   }
 
+  /**
+   * LLM コンテキストに渡す表現を組み立てる。
+   *
+   * <p>versionProvider は各ファイルの現在 version を返す。version が一致しない summary は stale として除外する。</p>
+   */
+  public String renderForPrompt(java.util.function.Function<String, String> versionProvider) {
+    StringBuilder sb = new StringBuilder();
+    for (FileSummary summary : entries.values()) {
+      String currentVersion = versionProvider.apply(summary.path());
+      if (currentVersion == null || !currentVersion.equals(summary.version())) {
+        continue;
+      }
+      sb.append("- ").append(summary.path()).append("\n");
+      sb.append("  ").append(summary.summary()).append("\n");
+    }
+    return sb.toString();
+  }
+
   private void evictIfNeeded() {
     while (entries.size() > maxEntries) {
       String oldest = entries.values().stream()

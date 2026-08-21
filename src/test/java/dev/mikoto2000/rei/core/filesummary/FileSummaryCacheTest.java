@@ -52,4 +52,13 @@ class FileSummaryCacheTest {
         Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
     assertFalse(cache.isUsable("src/UserService.java", "def456"));
   }
+
+  @Test
+  void staleSummaryIsNotRenderedInPrompt() {
+    FileSummaryCache cache = cache(20, Instant.parse("2026-08-17T00:00:00Z"));
+    cache.save(new FileSummary("src/UserService.java", "abc123", "User の作成・更新を担当",
+        Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
+    String prompt = cache.renderForPrompt(path -> "def456");
+    assertFalse(prompt.contains("User の作成・更新を担当"));
+  }
 }
