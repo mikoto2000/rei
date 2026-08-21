@@ -63,6 +63,26 @@ public class RecentChanges {
     }
   }
 
+  /** 新しいタスク用に Recent Changes をリセットする。 */
+  public void reset() {
+    entries.clear();
+  }
+
+  /** LLM コンテキストに渡す簡潔な表現を組み立てる。 */
+  public String renderForPrompt() {
+    if (entries.isEmpty()) {
+      return "";
+    }
+    StringBuilder sb = new StringBuilder();
+    sb.append("## Recent Changes\n\n");
+    for (RecentChange entry : entries) {
+      sb.append("- ").append(entry.path()).append(" [").append(entry.operation().toLowerCase()).append("]\n");
+      sb.append("  ").append(entry.summary()).append("\n");
+    }
+    sb.append("\n");
+    return sb.toString();
+  }
+
   private OffsetDateTime now() {
     return OffsetDateTime.now(clock);
   }

@@ -74,4 +74,28 @@ class RecentChangesTest {
     assertEquals("b", changes.entries().get(0).summary());
     assertEquals("c", changes.entries().get(1).summary());
   }
+
+  @Test
+  void resetClearsAllEntries() {
+    RecentChanges changes = recentChanges(20, Instant.parse("2026-08-17T00:00:00Z"));
+    changes.record("a", RecentChanges.OP_EDIT, "a");
+    changes.reset();
+    assertTrue(changes.isEmpty());
+  }
+
+  @Test
+  void renderForPromptContainsChanges() {
+    RecentChanges changes = recentChanges(20, Instant.parse("2026-08-17T00:00:00Z"));
+    changes.record("src/UserService.java", RecentChanges.OP_EDIT, "save() を Optional 化");
+    String prompt = changes.renderForPrompt();
+    assertTrue(prompt.contains("## Recent Changes"));
+    assertTrue(prompt.contains("src/UserService.java"));
+    assertTrue(prompt.contains("save() を Optional 化"));
+  }
+
+  @Test
+  void emptyRecentChangesRendersBlank() {
+    RecentChanges changes = recentChanges(20, Instant.parse("2026-08-17T00:00:00Z"));
+    assertEquals("", changes.renderForPrompt());
+  }
 }
