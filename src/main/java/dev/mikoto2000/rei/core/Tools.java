@@ -40,6 +40,7 @@ import org.springframework.stereotype.Component;
 import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.core.recentchanges.RecentChanges;
 import dev.mikoto2000.rei.core.service.SystemShellService;
 import dev.mikoto2000.rei.core.working.WorkingSet;
 
@@ -53,6 +54,7 @@ public class Tools {
   private final BackgroundProcessManager backgroundProcessManager;
   private final Clock clock;
   private final WorkingSet workingSet;
+  private final RecentChanges recentChanges;
 
   public Tools() {
     this(null, new SystemShellService());
@@ -79,11 +81,18 @@ public class Tools {
 
   public Tools(ProjectService projectService, SystemShellService systemShellService,
       BackgroundProcessManager backgroundProcessManager, Clock clock, WorkingSet workingSet) {
+    this(projectService, systemShellService, backgroundProcessManager, clock, workingSet, new RecentChanges());
+  }
+
+  public Tools(ProjectService projectService, SystemShellService systemShellService,
+      BackgroundProcessManager backgroundProcessManager, Clock clock, WorkingSet workingSet,
+      RecentChanges recentChanges) {
     this.projectService = projectService;
     this.systemShellService = systemShellService;
     this.backgroundProcessManager = backgroundProcessManager;
     this.clock = clock;
     this.workingSet = workingSet;
+    this.recentChanges = recentChanges;
   }
 
   /**
@@ -842,8 +851,10 @@ public class Tools {
     Files.writeString(path, request.content(), resolvedCharset, options);
     if (Boolean.TRUE.equals(request.append())) {
       workingSet.recordEdit(path);
+      recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
     } else {
       workingSet.recordWrite(path);
+      recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
     }
   }
 
@@ -1003,8 +1014,10 @@ public class Tools {
       Files.writeString(path, contents, resolvedCharset, options);
       if (append) {
         workingSet.recordEdit(path);
+        recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
       } else {
         workingSet.recordWrite(path);
+        recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
       }
     }
 
@@ -1049,6 +1062,7 @@ public class Tools {
 
       Files.writeString(path, updatedContent, original.charset(), StandardOpenOption.TRUNCATE_EXISTING);
       workingSet.recordEdit(path);
+      recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
       return new TextDiffApplyResult(true, true, "差分を適用しました");
     }
 
@@ -1098,8 +1112,10 @@ public class Tools {
     Files.write(path, contents, options);
     if (append) {
       workingSet.recordEdit(path);
+      recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
     } else {
       workingSet.recordWrite(path);
+      recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
     }
   }
 
@@ -1109,6 +1125,7 @@ public class Tools {
     java.nio.file.Path path = resolveProjectPath(pathStr);
     Files.delete(path);
     workingSet.remove(path);
+    recentChanges.record(path.toString(), RecentChanges.OP_DELETE, "deleted");
   }
 
   @Tool(name = "copyFile", description = "ファイルをコピーします。上書きする場合は false を指定します。ファイルが存在しない場合はエラーになります。")
@@ -1124,6 +1141,7 @@ public class Tools {
 
     Files.copy(resolvedSourcePath, resolvedDestPath, overwrite ? StandardCopyOption.REPLACE_EXISTING : StandardCopyOption.COPY_ATTRIBUTES);
     workingSet.recordCreate(resolvedDestPath);
+    recentChanges.record(resolvedDestPath.toString(), RecentChanges.OP_CREATE, "created");
   }
 
   @Tool(name = "moveFile", description = "ファイルを移動します。上書きする場合は false を指定します。ファイルが存在しない場合はエラーになります。")
@@ -1139,10 +1157,15 @@ public class Tools {
 
     Files.move(resolvedSourcePath, resolvedDestPath, overwrite ? StandardCopyOption.REPLACE_EXISTING : StandardCopyOption.ATOMIC_MOVE);
     workingSet.recordCreate(resolvedDestPath);
+    recentChanges.record(resolvedDestPath.toString(), RecentChanges.OP_CREATE, "created");
   }
 
   WorkingSet workingSet() {
     return workingSet;
+  }
+
+  RecentChanges recentChanges() {
+    return recentChanges;
   }
 
   private java.nio.file.Path currentWorkingDirectory() {
