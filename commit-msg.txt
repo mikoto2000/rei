@@ -1,1 +1,1 @@
-test: add context budget trimming behaviors
+feat: add context budget manager singleton bean
