@@ -82,4 +82,18 @@ class FileSummaryCacheTest {
     assertTrue(cache.find("b").isPresent());
     assertTrue(cache.find("c").isPresent());
   }
+
+  @Test
+  void emptyCacheRendersBlank() {
+    FileSummaryCache cache = cache(20, Instant.parse("2026-08-17T00:00:00Z"));
+    assertEquals("", cache.renderForPrompt(path -> "v1"));
+  }
+
+  @Test
+  void missingFileIsNotUsable() {
+    FileSummaryCache cache = cache(20, Instant.parse("2026-08-17T00:00:00Z"));
+    cache.save(new FileSummary("src/UserService.java", "abc123", "User の作成・更新を担当",
+        Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
+    assertFalse(cache.isUsable("src/UserService.java", null));
+  }
 }
