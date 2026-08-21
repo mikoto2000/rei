@@ -15,6 +15,13 @@ public class RecentChanges {
 
   static final int DEFAULT_MAX_ENTRIES = 20;
 
+  /** ファイルを作成した。 */
+  public static final String OP_CREATE = "CREATE";
+  /** ファイルを編集した。 */
+  public static final String OP_EDIT = "EDIT";
+  /** ファイルを削除した。 */
+  public static final String OP_DELETE = "DELETE";
+
   private final int maxEntries;
   private final Clock clock;
   private final List<RecentChange> entries = new ArrayList<>();
@@ -36,6 +43,18 @@ public class RecentChanges {
   /** Recent Changes が空かどうか。 */
   public boolean isEmpty() {
     return entries.isEmpty();
+  }
+
+  /** 変更を記録する。 */
+  public void record(String path, String operation, String summary) {
+    entries.add(new RecentChange(path, operation, summary, now()));
+    evictIfNeeded();
+  }
+
+  private void evictIfNeeded() {
+    while (entries.size() > maxEntries) {
+      entries.remove(0);
+    }
   }
 
   private OffsetDateTime now() {

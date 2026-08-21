@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.recentchanges;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
@@ -22,5 +23,17 @@ class RecentChangesTest {
     RecentChanges changes = recentChanges(20, Instant.parse("2026-08-17T00:00:00Z"));
     assertTrue(changes.isEmpty());
     assertEquals(0, changes.entries().size());
+  }
+
+  @Test
+  void createCanBeRecorded() {
+    RecentChanges changes = recentChanges(20, Instant.parse("2026-08-17T00:00:00Z"));
+    changes.record("src/main/java/UserService.java", RecentChanges.OP_CREATE, "created");
+    assertFalse(changes.isEmpty());
+    assertEquals(1, changes.entries().size());
+    RecentChange entry = changes.entries().get(0);
+    assertEquals("src/main/java/UserService.java", entry.path());
+    assertEquals(RecentChanges.OP_CREATE, entry.operation());
+    assertEquals("created", entry.summary());
   }
 }
