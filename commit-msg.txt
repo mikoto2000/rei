@@ -1,1 +1,1 @@
-feat: register stagnation advisor in chat clients
+feat: add context budget allocation
