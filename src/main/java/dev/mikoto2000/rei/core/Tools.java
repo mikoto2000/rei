@@ -37,6 +37,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Component;
 
+import dev.mikoto2000.rei.core.filesummary.FileSummaryCache;
 import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
 import dev.mikoto2000.rei.core.project.ProjectService;
@@ -55,6 +56,7 @@ public class Tools {
   private final Clock clock;
   private final WorkingSet workingSet;
   private final RecentChanges recentChanges;
+  private final FileSummaryCache fileSummaryCache;
 
   public Tools() {
     this(null, new SystemShellService());
@@ -87,12 +89,20 @@ public class Tools {
   public Tools(ProjectService projectService, SystemShellService systemShellService,
       BackgroundProcessManager backgroundProcessManager, Clock clock, WorkingSet workingSet,
       RecentChanges recentChanges) {
+    this(projectService, systemShellService, backgroundProcessManager, clock, workingSet, recentChanges,
+        new FileSummaryCache());
+  }
+
+  public Tools(ProjectService projectService, SystemShellService systemShellService,
+      BackgroundProcessManager backgroundProcessManager, Clock clock, WorkingSet workingSet,
+      RecentChanges recentChanges, FileSummaryCache fileSummaryCache) {
     this.projectService = projectService;
     this.systemShellService = systemShellService;
     this.backgroundProcessManager = backgroundProcessManager;
     this.clock = clock;
     this.workingSet = workingSet;
     this.recentChanges = recentChanges;
+    this.fileSummaryCache = fileSummaryCache;
   }
 
   /**
@@ -852,9 +862,11 @@ public class Tools {
     if (Boolean.TRUE.equals(request.append())) {
       workingSet.recordEdit(path);
       recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
+      fileSummaryCache.invalidate(path.toString());
     } else {
       workingSet.recordWrite(path);
       recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
+      fileSummaryCache.invalidate(path.toString());
     }
   }
 
@@ -1015,9 +1027,11 @@ public class Tools {
       if (append) {
         workingSet.recordEdit(path);
         recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
+        fileSummaryCache.invalidate(path.toString());
       } else {
         workingSet.recordWrite(path);
         recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
+        fileSummaryCache.invalidate(path.toString());
       }
     }
 
@@ -1063,6 +1077,7 @@ public class Tools {
       Files.writeString(path, updatedContent, original.charset(), StandardOpenOption.TRUNCATE_EXISTING);
       workingSet.recordEdit(path);
       recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
+      fileSummaryCache.invalidate(path.toString());
       return new TextDiffApplyResult(true, true, "差分を適用しました");
     }
 
@@ -1113,9 +1128,11 @@ public class Tools {
     if (append) {
       workingSet.recordEdit(path);
       recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
+      fileSummaryCache.invalidate(path.toString());
     } else {
       workingSet.recordWrite(path);
       recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
+      fileSummaryCache.invalidate(path.toString());
     }
   }
 
@@ -1126,6 +1143,7 @@ public class Tools {
     Files.delete(path);
     workingSet.remove(path);
     recentChanges.record(path.toString(), RecentChanges.OP_DELETE, "deleted");
+    fileSummaryCache.invalidate(path.toString());
   }
 
   @Tool(name = "copyFile", description = "ファイルをコピーします。上書きする場合は false を指定します。ファイルが存在しない場合はエラーになります。")
@@ -1142,6 +1160,7 @@ public class Tools {
     Files.copy(resolvedSourcePath, resolvedDestPath, overwrite ? StandardCopyOption.REPLACE_EXISTING : StandardCopyOption.COPY_ATTRIBUTES);
     workingSet.recordCreate(resolvedDestPath);
     recentChanges.record(resolvedDestPath.toString(), RecentChanges.OP_CREATE, "created");
+    fileSummaryCache.invalidate(resolvedDestPath.toString());
   }
 
   @Tool(name = "moveFile", description = "ファイルを移動します。上書きする場合は false を指定します。ファイルが存在しない場合はエラーになります。")
@@ -1158,6 +1177,7 @@ public class Tools {
     Files.move(resolvedSourcePath, resolvedDestPath, overwrite ? StandardCopyOption.REPLACE_EXISTING : StandardCopyOption.ATOMIC_MOVE);
     workingSet.recordCreate(resolvedDestPath);
     recentChanges.record(resolvedDestPath.toString(), RecentChanges.OP_CREATE, "created");
+    fileSummaryCache.invalidate(resolvedDestPath.toString());
   }
 
   WorkingSet workingSet() {
@@ -1166,6 +1186,10 @@ public class Tools {
 
   RecentChanges recentChanges() {
     return recentChanges;
+  }
+
+  FileSummaryCache fileSummaryCache() {
+    return fileSummaryCache;
   }
 
   private java.nio.file.Path currentWorkingDirectory() {

@@ -24,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.tool.annotation.Tool;
 
+import dev.mikoto2000.rei.core.filesummary.FileSummary;
+import dev.mikoto2000.rei.core.filesummary.FileSummaryCache;
 import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
 import dev.mikoto2000.rei.core.process.BackgroundProcessStatus;
 import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
@@ -1203,6 +1205,54 @@ class ToolsTest {
 
     assertTrue(out.toString().contains("applyTextDiff を実行するよ"));
     assertTrue(out.toString().contains(text.toString()));
+  }
+
+  @Test
+  void editInvalidatesFileSummary() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Files.writeString(text, "hello\nworld\n");
+    Tools tools = new Tools();
+    tools.fileSummaryCache().save(new FileSummary(text.toString(), "v1", "summary", null));
+
+    tools.applyTextDiff(text.toString(), "world", "rei", "");
+
+    assertFalse(tools.fileSummaryCache().find(text.toString()).isPresent());
+  }
+
+  @Test
+  void writeInvalidatesFileSummary() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Files.writeString(text, "hello\n");
+    Tools tools = new Tools();
+    tools.fileSummaryCache().save(new FileSummary(text.toString(), "v1", "summary", null));
+
+    tools.writeTextFile(text.toString(), "new content", false, "");
+
+    assertFalse(tools.fileSummaryCache().find(text.toString()).isPresent());
+  }
+
+  @Test
+  void deleteInvalidatesFileSummary() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Files.writeString(text, "hello\n");
+    Tools tools = new Tools();
+    tools.fileSummaryCache().save(new FileSummary(text.toString(), "v1", "summary", null));
+
+    tools.deleteFile(text.toString());
+
+    assertFalse(tools.fileSummaryCache().find(text.toString()).isPresent());
+  }
+
+  @Test
+  void failedEditDoesNotInvalidateFileSummary() throws Exception {
+    Path text = tempDir.resolve("note.txt");
+    Files.writeString(text, "hello\nworld\n");
+    Tools tools = new Tools();
+    tools.fileSummaryCache().save(new FileSummary(text.toString(), "v1", "summary", null));
+
+    tools.applyTextDiff(text.toString(), "missing", "rei", "");
+
+    assertTrue(tools.fileSummaryCache().find(text.toString()).isPresent());
   }
 
   private void writePdf(Path pdf, String text) throws IOException {
