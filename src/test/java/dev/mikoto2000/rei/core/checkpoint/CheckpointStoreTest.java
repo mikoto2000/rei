@@ -112,4 +112,13 @@ class CheckpointStoreTest {
     assertTrue(prompt.contains("UserService の Optional 対応"));
     assertTrue(prompt.contains("UserService.save() から再開"));
   }
+
+  @Test
+  void taskSwitchDoesNotReuseOldCheckpoint() {
+    CheckpointStore store = store(Instant.parse("2026-08-17T00:00:00Z"));
+    store.save(new TurnCheckpoint("task-1", "old goal", "step-1", List.of(), List.of(), List.of(), null, null, null, "TURN_END", "2026-08-17T00:00:00Z"));
+    store.save(new TurnCheckpoint("task-2", "new goal", "step-1", List.of(), List.of(), List.of(), null, null, null, "TURN_END", "2026-08-17T01:00:00Z"));
+    assertEquals("task-2", store.latest().get().taskId());
+    assertEquals("new goal", store.latest().get().goal());
+  }
 }

@@ -1,1 +1,1 @@
-feat: inject checkpoint into llm context
+test: task switch does not reuse old checkpoint
