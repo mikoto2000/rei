@@ -1,1 +1,1 @@
-feat: include working set and task state info in checkpoint
+feat: inject checkpoint into llm context
