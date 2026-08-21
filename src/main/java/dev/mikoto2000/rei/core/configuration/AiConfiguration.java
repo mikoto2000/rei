@@ -22,6 +22,7 @@ import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.core.filesummary.FileSummaryAdvisor;
 import dev.mikoto2000.rei.core.recentchanges.RecentChangesAdvisor;
+import dev.mikoto2000.rei.core.relatedgraph.RelatedFileGraphAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
@@ -75,6 +76,7 @@ public class AiConfiguration {
   private final TaskStateAdvisor taskStateAdvisor;
   private final RecentChangesAdvisor recentChangesAdvisor;
   private final FileSummaryAdvisor fileSummaryAdvisor;
+  private final RelatedFileGraphAdvisor relatedFileGraphAdvisor;
   private final TaskStateTools taskStateTools;
   private final LlmProperties llmProperties;
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
@@ -91,6 +93,7 @@ public class AiConfiguration {
     advisors.add(taskStateAdvisor);
     advisors.add(recentChangesAdvisor);
     advisors.add(fileSummaryAdvisor);
+    advisors.add(relatedFileGraphAdvisor);
     AgentSkillAdvisor skillAdvisor = agentSkillAdvisor.getIfAvailable();
     if (skillAdvisor != null) {
       advisors.add(skillAdvisor);
