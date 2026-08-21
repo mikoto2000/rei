@@ -1,1 +1,1 @@
-feat: register checkpoint advisor in chat clients
+test: add empty action plan behavior
