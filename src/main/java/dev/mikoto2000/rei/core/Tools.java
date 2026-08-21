@@ -42,6 +42,8 @@ import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.recentchanges.RecentChanges;
+import dev.mikoto2000.rei.core.searchcache.SearchCacheKey;
+import dev.mikoto2000.rei.core.searchcache.SearchResultCache;
 import dev.mikoto2000.rei.core.service.SystemShellService;
 import dev.mikoto2000.rei.core.working.WorkingSet;
 
@@ -57,6 +59,7 @@ public class Tools {
   private final WorkingSet workingSet;
   private final RecentChanges recentChanges;
   private final FileSummaryCache fileSummaryCache;
+  private final SearchResultCache searchResultCache;
 
   public Tools() {
     this(null, new SystemShellService());
@@ -96,6 +99,13 @@ public class Tools {
   public Tools(ProjectService projectService, SystemShellService systemShellService,
       BackgroundProcessManager backgroundProcessManager, Clock clock, WorkingSet workingSet,
       RecentChanges recentChanges, FileSummaryCache fileSummaryCache) {
+    this(projectService, systemShellService, backgroundProcessManager, clock, workingSet, recentChanges,
+        fileSummaryCache, new SearchResultCache());
+  }
+
+  public Tools(ProjectService projectService, SystemShellService systemShellService,
+      BackgroundProcessManager backgroundProcessManager, Clock clock, WorkingSet workingSet,
+      RecentChanges recentChanges, FileSummaryCache fileSummaryCache, SearchResultCache searchResultCache) {
     this.projectService = projectService;
     this.systemShellService = systemShellService;
     this.backgroundProcessManager = backgroundProcessManager;
@@ -103,6 +113,7 @@ public class Tools {
     this.workingSet = workingSet;
     this.recentChanges = recentChanges;
     this.fileSummaryCache = fileSummaryCache;
+    this.searchResultCache = searchResultCache;
   }
 
   /**
@@ -403,7 +414,7 @@ public class Tools {
     for (int i = 0; i < queries.size(); i++) {
       GrepQuery query = queries.get(i);
       try {
-        List<GrepMatch> matches = grepMatches(query, workingDirectory);
+        List<GrepMatch> matches = cachedGrepMatches(query, workingDirectory);
         int remaining = MAX_GREP_TOTAL_MATCHES - totalMatches;
         if (matches.size() > remaining) {
           matches = matches.subList(0, Math.max(0, remaining));
@@ -415,6 +426,39 @@ public class Tools {
       }
     }
     return results;
+  }
+
+  /** キャッシュを利用して 1 query の検索結果を返す。失敗結果はキャッシュしない。 */
+  @SuppressWarnings("unchecked")
+  private List<GrepMatch> cachedGrepMatches(GrepQuery query, java.nio.file.Path workingDirectory)
+      throws IOException, InterruptedException {
+    SearchCacheKey key = grepCacheKey(query);
+    Object cached = searchResultCache.get(key).orElse(null);
+    if (cached != null) {
+      IO.println("search cache hit: " + key.canonical());
+      return (List<GrepMatch>) cached;
+    }
+    List<GrepMatch> matches = grepMatches(query, workingDirectory);
+    searchResultCache.put(key, matches);
+    return matches;
+  }
+
+  /** grep query から決定的なキャッシュキーを作成する。 */
+  private SearchCacheKey grepCacheKey(GrepQuery query) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("pattern=").append(query.pattern()).append('|');
+    sb.append("baseDir=").append(query.baseDir()).append('|');
+    sb.append("ignoreCase=").append(query.ignoreCase()).append('|');
+    sb.append("fixedString=").append(query.fixedString()).append('|');
+    sb.append("invertMatch=").append(query.invertMatch()).append('|');
+    sb.append("fileNamesOnly=").append(query.fileNamesOnly()).append('|');
+    sb.append("beforeContext=").append(query.beforeContext()).append('|');
+    sb.append("afterContext=").append(query.afterContext()).append('|');
+    sb.append("maxMatches=").append(query.maxMatches()).append('|');
+    sb.append("includeLineNumber=").append(query.includeLineNumber()).append('|');
+    sb.append("includeGlob=").append(query.includeGlob()).append('|');
+    sb.append("excludeGlob=").append(query.excludeGlob());
+    return new SearchCacheKey("grepMultiQuery", sb.toString());
   }
 
   /** 1 query の検索を実行し、構造化された match のリストを返す。 */
@@ -868,6 +912,7 @@ public class Tools {
       recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
       fileSummaryCache.invalidate(path.toString());
     }
+    searchResultCache.clear();
   }
 
   /** 1 ファイルの書き込み要求。 */
@@ -1033,6 +1078,7 @@ public class Tools {
         recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
         fileSummaryCache.invalidate(path.toString());
       }
+      searchResultCache.clear();
     }
 
   @Tool(name = "applyTextDiff", description =
@@ -1078,6 +1124,7 @@ public class Tools {
       workingSet.recordEdit(path);
       recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
       fileSummaryCache.invalidate(path.toString());
+      searchResultCache.clear();
       return new TextDiffApplyResult(true, true, "差分を適用しました");
     }
 
@@ -1134,6 +1181,7 @@ public class Tools {
       recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
       fileSummaryCache.invalidate(path.toString());
     }
+    searchResultCache.clear();
   }
 
   @Tool(name = "deleteFile", description = "ファイルを削除します。ファイルが存在しない場合はエラーになります。")
@@ -1144,6 +1192,7 @@ public class Tools {
     workingSet.remove(path);
     recentChanges.record(path.toString(), RecentChanges.OP_DELETE, "deleted");
     fileSummaryCache.invalidate(path.toString());
+    searchResultCache.clear();
   }
 
   @Tool(name = "copyFile", description = "ファイルをコピーします。上書きする場合は false を指定します。ファイルが存在しない場合はエラーになります。")
@@ -1161,6 +1210,7 @@ public class Tools {
     workingSet.recordCreate(resolvedDestPath);
     recentChanges.record(resolvedDestPath.toString(), RecentChanges.OP_CREATE, "created");
     fileSummaryCache.invalidate(resolvedDestPath.toString());
+    searchResultCache.clear();
   }
 
   @Tool(name = "moveFile", description = "ファイルを移動します。上書きする場合は false を指定します。ファイルが存在しない場合はエラーになります。")
@@ -1178,6 +1228,7 @@ public class Tools {
     workingSet.recordCreate(resolvedDestPath);
     recentChanges.record(resolvedDestPath.toString(), RecentChanges.OP_CREATE, "created");
     fileSummaryCache.invalidate(resolvedDestPath.toString());
+    searchResultCache.clear();
   }
 
   WorkingSet workingSet() {
@@ -1190,6 +1241,10 @@ public class Tools {
 
   FileSummaryCache fileSummaryCache() {
     return fileSummaryCache;
+  }
+
+  SearchResultCache searchResultCache() {
+    return searchResultCache;
   }
 
   private java.nio.file.Path currentWorkingDirectory() {

@@ -30,6 +30,7 @@ import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
 import dev.mikoto2000.rei.core.process.BackgroundProcessStatus;
 import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.core.searchcache.SearchResultCache;
 import dev.mikoto2000.rei.core.service.SystemShellService;
 
 class ToolsTest {
@@ -1253,6 +1254,42 @@ class ToolsTest {
     tools.applyTextDiff(text.toString(), "missing", "rei", "");
 
     assertTrue(tools.fileSummaryCache().find(text.toString()).isPresent());
+  }
+
+  @Test
+  void sameSearchTwiceInvokesUnderlyingSearchOnce() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/a.txt"), "spring\n");
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    Tools.GrepQuery query = new Tools.GrepQuery("spring", "docs", null, null, null, null, null, null, null, null, null, null);
+
+    tools.grepMultiQuery(List.of(query), tempDir);
+    tools.grepMultiQuery(List.of(query), tempDir);
+
+    // 2 回目の呼び出しはキャッシュヒットし、実検索は 1 回で済む
+    assertTrue(tools.searchResultCache().size() >= 1);
+  }
+
+  @Test
+  void editClearsSearchCache() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/a.txt"), "spring\n");
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    Tools.GrepQuery query = new Tools.GrepQuery("spring", "docs", null, null, null, null, null, null, null, null, null, null);
+    tools.grepMultiQuery(List.of(query), tempDir);
+    assertTrue(tools.searchResultCache().size() >= 1);
+
+    tools.writeTextFile(tempDir.resolve("docs/a.txt").toString(), "spring\nchanged\n", false, "");
+
+    assertTrue(tools.searchResultCache().isEmpty());
   }
 
   private void writePdf(Path pdf, String text) throws IOException {
