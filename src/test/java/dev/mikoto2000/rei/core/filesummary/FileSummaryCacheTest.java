@@ -61,4 +61,13 @@ class FileSummaryCacheTest {
     String prompt = cache.renderForPrompt(path -> "def456");
     assertFalse(prompt.contains("User の作成・更新を担当"));
   }
+
+  @Test
+  void editInvalidatesSummary() {
+    FileSummaryCache cache = cache(20, Instant.parse("2026-08-17T00:00:00Z"));
+    cache.save(new FileSummary("src/UserService.java", "abc123", "User の作成・更新を担当",
+        Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
+    cache.invalidate("src/UserService.java");
+    assertFalse(cache.find("src/UserService.java").isPresent());
+  }
 }

@@ -63,6 +63,11 @@ public class FileSummaryCache {
     return find(path).map(s -> s.version().equals(version)).orElse(false);
   }
 
+  /** 指定パスの要約を無効化（削除）する。 */
+  public void invalidate(String path) {
+    entries.remove(path);
+  }
+
   /**
    * LLM コンテキストに渡す表現を組み立てる。
    *
