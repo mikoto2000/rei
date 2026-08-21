@@ -20,6 +20,10 @@ public class TaskStateTools {
     this.taskState = taskState;
   }
 
+  TaskState taskState() {
+    return taskState;
+  }
+
   /**
    * 現在の作業目的・進捗・次に行うべきことを更新する。
    *

@@ -24,6 +24,10 @@ public class TaskStateAdvisor implements BaseAdvisor {
     this.taskState = taskState;
   }
 
+  TaskState taskState() {
+    return taskState;
+  }
+
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     UserMessage userMessage = request.prompt().getUserMessage();
