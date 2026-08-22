@@ -1,4 +1,4 @@
-# Agent TUI v1
+# Agent TUI v1.1
 
 ## 目的と構造
 
@@ -23,7 +23,13 @@ TUI は Agent Event を解釈せず、`AgentUiProjection.currentState()` の imm
 
 ## 起動と画面
 
-既存shellで `/tui` を実行する。
+既存shellで `/tui` を実行するか、起動時に `--tui` を指定する。
+
+```powershell
+java -jar target/rei-0.0.1-SNAPSHOT.jar --tui
+```
+
+optionなしは従来どおりShellを起動する。`--tui` はShellへ文字列を疑似入力せず、startup mode判定から共通の `AgentTuiLauncher` を直接起動する。Shellの `/tui` も同じlauncherを既存JLine terminal付きで呼ぶ。
 
 ```text
 Status (3 rows):       rei / IDLE, RUNNING, COMPLETED, FAILED
@@ -39,10 +45,18 @@ Input (3 rows):        > input / [RUNNING] input
 * 通常文字・日本語: cursor位置へ追加
 * Left / Right / Home / End: cursor移動
 * Backspace / Delete: code point境界で削除
-* Enter: 空でなくAgentが実行中でない場合にsubmit
-* Ctrl+C: 実行中なら既存cancellation APIを呼び、TUIを終了
+* Enter: 空でない入力を共通parserへsubmit
+* Ctrl+C: 実行中なら既存cancellation APIでAgentだけをcancel、待機中ならTUIを終了
 
-RUNNING中の入力は保持するがsubmitしない。queueや並列Runは作らない。
+queueや並列Runは作らない。
+
+## Slash command
+
+ShellとTUIは `UserInputParser` で空入力・通常chat・slash commandを同じ規則で分類し、引用符を含む引数も同じtokenizerで処理する。TUIのslash commandは既存のpicocli `RootCommand` を実行し、stdout/stderrとpicocli writerを回収してAssistant領域へ表示する。command状態はAgentUiProjectionへ混ぜずTUIローカル状態に保持する。
+
+`/help`、`/version` とRootCommand配下の `search`、`models`、`model`、`project`、`config`、`schedule`、`embed`、`task`、`feed`、`briefing`、`reminder`、`bsky`、`interest`、`memory`、`skill`、`image` を利用できる。`/sh` は外部terminal lifecycle、`/paste` はShellの複数行readerに依存するためTUIでは利用不可。`/tui` は `Already in TUI mode.` と表示して再帰起動を防ぐ。
+
+RUNNING中は `/help` と `/version` および `/exit` を許可し、通常chatと状態変更を伴うcommandは拒否する。`/exit` はTUIを閉じる。Shellから入った場合は呼び出し元のShell loopへ戻り、`--tui` 起動ではmainへ戻ってApplicationを正常終了する。
 
 ## 実行、redraw、shutdown
 
@@ -54,18 +68,20 @@ TUI開始時にProjectionをEvent Busへsubscribeし、終了時にunsubscribe�
 
 ## Test とmanual smoke
 
-Terminal不要のtestで、Unicode入力編集、空入力、RUNNING中submit拒否、4 Run状態、streaming、日本語、長文、3 Tool状態、順序、最新Tool選択、Event Busからrender modelまでを検証する。
+Terminal不要のtestで、Unicode入力編集、共通入力分類、startup mode、slash routing、RUNNING中policy、複数行command出力、未知command、launcher共有、4 Run状態、streaming、日本語、長文、3 Tool状態、Event Busからrender modelまでを検証する。
 
 実Terminal smoke手順:
 
 1. `./mvnw.cmd spring-boot:run` をPTY対応terminalで起動
 2. `/tui` を入力しalternate screenを確認
 3. 日本語を入力し、cursor編集を確認
-4. EnterでAgentを実行し、RUNNING、streaming、Tool、完了状態を確認
-5. 次の入力を送信
-6. Ctrl+Cで終了し、shellのecho、cursor、screenが復元されたことを確認
+4. `/help` を入力し、複数行のcommand一覧を確認
+5. `/tui` が再帰起動せずメッセージになることを確認
+6. `/exit` でShellへ戻ることを確認
+7. `java -jar ... --tui` でShell bannerなしにTUIへ入り、`/exit` でApplicationが終了することを確認
+8. 通常入力でAgentを実行し、RUNNING、streaming、Tool、完了状態を確認
 
-2026-08-23にPTY上で起動、日本語入力、Ctrl+C終了、Terminal復元を確認した。外部LLMを使うstreaming/Toolのend-to-end smokeは実施していない。これは自動testでEvent Busからrender modelまでを検証しているが、実backendでの完全対話確認は利用環境のLLM接続を有効にして上記手順で行う必要がある。
+2026-08-23にPTY上でShell経由と`--tui`直接起動がそれぞれTUI初期化へ進むことを確認した。Codex PTYはTamboUIの端末能力問い合わせと画面差分を完全にはエミュレートしないため、`/help`描画と`/exit`復帰は自動testで検証した。外部LLMを使うstreaming/Toolのend-to-end smokeは実施していない。
 
 ## v1の対象外・制約
 
