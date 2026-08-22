@@ -47,6 +47,7 @@ import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.sound.SoundNotificationService;
+import dev.mikoto2000.rei.ui.tui.AgentTuiCommand;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine;
@@ -229,6 +230,16 @@ public class ReiApplication {
   }
 
   void executeInteractiveShellCommand(CommandLine cmd, LineReader reader, Terminal terminal, String... args) {
+    if (args != null && args.length > 0 && "tui".equals(args[0])) {
+      try {
+        AgentTuiCommand tui = (AgentTuiCommand) cmd.getSubcommands().get("tui").getCommand();
+        tui.run(terminal);
+      } finally {
+        clearPendingInputAfterInteractiveShell(reader, terminal);
+      }
+      return;
+    }
+
     boolean paused = false;
     try {
       if (terminal.canPauseResume()) {

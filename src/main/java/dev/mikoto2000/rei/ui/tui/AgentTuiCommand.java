@@ -15,6 +15,7 @@ import dev.mikoto2000.rei.core.command.ChatCommand;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.ui.projection.DefaultAgentUiProjection;
+import dev.tamboui.backend.jline3.JLineBackend;
 import dev.tamboui.tui.TuiConfig;
 import dev.tamboui.tui.TuiRunner;
 import dev.tamboui.tui.event.KeyCode;
@@ -42,6 +43,11 @@ public final class AgentTuiCommand implements Runnable {
 
   @Override
   public void run() {
+    run(null);
+  }
+
+  /** Runs the TUI on the shell's existing terminal when invoked from the REI shell. */
+  public void run(org.jline.terminal.Terminal shellTerminal) {
     DefaultAgentUiProjection projection = new DefaultAgentUiProjection();
     AgentEventBus.Subscription subscription = eventBus.subscribe(projection);
     ExecutorService agentExecutor = Executors.newSingleThreadExecutor(runnable -> {
@@ -56,14 +62,17 @@ public final class AgentTuiCommand implements Runnable {
     PrintStream originalOut = System.out;
     PrintStream originalErr = System.err;
 
-    TuiConfig config = TuiConfig.builder()
+    TuiConfig.Builder configBuilder = TuiConfig.builder()
         .rawMode(true)
         .alternateScreen(true)
         .hideCursor(false)
         .mouseCapture(false)
         .tickRate(Duration.ofMillis(100))
-        .errorOutput(originalErr)
-        .build();
+        .errorOutput(originalErr);
+    if (shellTerminal != null) {
+      configBuilder.backend(new JLineBackend(shellTerminal));
+    }
+    TuiConfig config = configBuilder.build();
 
     try (TuiRunner tui = TuiRunner.create(config);
         PrintStream discardedOutput = new PrintStream(OutputStream.nullOutputStream())) {
