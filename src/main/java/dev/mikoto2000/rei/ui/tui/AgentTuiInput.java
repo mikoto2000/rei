@@ -1,75 +1,108 @@
 package dev.mikoto2000.rei.ui.tui;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
-/** TUI 固有の単一行入力状態。cursor は UTF-16 の code-point 境界で保持する。 */
+import org.jline.reader.Buffer;
+import org.jline.reader.Candidate;
+import org.jline.reader.Completer;
+import org.jline.reader.History;
+import org.jline.reader.LineReader;
+import org.jline.reader.ParsedLine;
+import org.jline.reader.Parser;
+import org.jline.reader.SyntaxError;
+import org.jline.reader.impl.BufferImpl;
+
+/** TUI editor backed by JLine's buffer, history, parser and completer without JLine rendering. */
 final class AgentTuiInput {
+  private final Buffer buffer;
+  private final LineReader reader;
+  private final Completer completer;
+  private List<String> completionCandidates = List.of();
 
-  private final StringBuilder text = new StringBuilder();
-  private int cursor;
-
-  String text() {
-    return text.toString();
+  AgentTuiInput() {
+    this.buffer = new BufferImpl();
+    this.reader = null;
+    this.completer = null;
   }
 
-  String textBeforeCursor() {
-    return text.substring(0, cursor);
+  AgentTuiInput(LineReader reader, Completer completer) {
+    this.buffer = reader.getBuffer();
+    this.reader = reader;
+    this.completer = completer;
   }
 
-  int cursor() {
-    return cursor;
-  }
+  String text() { return buffer.toString(); }
+  String textBeforeCursor() { return buffer.upToCursor(); }
+  int cursor() { return buffer.cursor(); }
+  List<String> completionCandidates() { return completionCandidates; }
 
   void insert(int codePoint) {
-    String value = Character.toString(codePoint);
-    text.insert(cursor, value);
-    cursor += value.length();
+    buffer.write(codePoint);
+    clearCandidates();
   }
 
-  void backspace() {
-    if (cursor == 0) {
-      return;
+  void backspace() { buffer.backspace(); clearCandidates(); }
+  void delete() { buffer.delete(); clearCandidates(); }
+  void left() { buffer.move(-1); clearCandidates(); }
+  void right() { buffer.move(1); clearCandidates(); }
+  void home() { buffer.cursor(0); clearCandidates(); }
+  void end() { buffer.cursor(buffer.length()); clearCandidates(); }
+
+  void previousHistory() {
+    History history = history();
+    if (history != null && history.previous()) replaceAll(history.current());
+  }
+
+  void nextHistory() {
+    History history = history();
+    if (history != null && history.next()) replaceAll(history.current());
+  }
+
+  void complete() {
+    if (reader == null || completer == null) return;
+    try {
+      ParsedLine line = reader.getParser().parse(text(), cursor(), Parser.ParseContext.COMPLETE);
+      List<Candidate> candidates = new ArrayList<>();
+      completer.complete(reader, line, candidates);
+      List<String> values = candidates.stream().map(Candidate::value).distinct().toList();
+      if (values.size() == 1) replaceWord(line, values.get(0));
+      completionCandidates = values;
+    } catch (SyntaxError ignored) {
+      completionCandidates = List.of();
     }
-    int previous = text.offsetByCodePoints(cursor, -1);
-    text.delete(previous, cursor);
-    cursor = previous;
-  }
-
-  void delete() {
-    if (cursor == text.length()) {
-      return;
-    }
-    int next = text.offsetByCodePoints(cursor, 1);
-    text.delete(cursor, next);
-  }
-
-  void left() {
-    if (cursor > 0) {
-      cursor = text.offsetByCodePoints(cursor, -1);
-    }
-  }
-
-  void right() {
-    if (cursor < text.length()) {
-      cursor = text.offsetByCodePoints(cursor, 1);
-    }
-  }
-
-  void home() {
-    cursor = 0;
-  }
-
-  void end() {
-    cursor = text.length();
   }
 
   Optional<String> submit() {
-    String value = text.toString();
-    if (value.isBlank()) {
-      return Optional.empty();
+    String value = text();
+    if (value.isBlank()) return Optional.empty();
+    History history = history();
+    if (history != null) {
+      history.add(value);
+      try { history.save(); } catch (IOException ignored) { }
     }
-    text.setLength(0);
-    cursor = 0;
+    buffer.clear();
+    clearCandidates();
     return Optional.of(value);
   }
+
+  private History history() { return reader == null ? null : reader.getHistory(); }
+
+  private void replaceWord(ParsedLine line, String replacement) {
+    int start = cursor() - line.wordCursor();
+    int end = start + line.word().length();
+    String current = text();
+    replaceAll(current.substring(0, start) + replacement + current.substring(end));
+    buffer.cursor(start + replacement.length());
+  }
+
+  private void replaceAll(String value) {
+    buffer.clear();
+    buffer.write(value);
+    clearCandidates();
+  }
+
+  private void clearCandidates() { completionCandidates = List.of(); }
 }

@@ -3,7 +3,16 @@ package dev.mikoto2000.rei.ui.tui;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
+import org.jline.reader.Candidate;
+import org.jline.reader.Completer;
+import org.jline.reader.History;
+import org.jline.reader.LineReader;
+import org.jline.reader.impl.BufferImpl;
+import org.jline.reader.impl.DefaultParser;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class AgentTuiInputTest {
 
@@ -48,5 +57,37 @@ class AgentTuiInputTest {
   void emptySubmitIsRejected() {
     AgentTuiInput input = new AgentTuiInput();
     assertTrue(input.submit().isEmpty());
+  }
+
+  @Test
+  void navigatesJLineHistory() {
+    LineReader reader = Mockito.mock(LineReader.class);
+    History history = Mockito.mock(History.class);
+    BufferImpl buffer = new BufferImpl();
+    Mockito.when(reader.getBuffer()).thenReturn(buffer);
+    Mockito.when(reader.getHistory()).thenReturn(history);
+    Mockito.when(history.previous()).thenReturn(true);
+    Mockito.when(history.current()).thenReturn("/model previous");
+    AgentTuiInput input = new AgentTuiInput(reader, (r, l, c) -> { });
+
+    input.previousHistory();
+
+    assertEquals("/model previous", input.text());
+  }
+
+  @Test
+  void usesJLineParserAndCompleterForTabCompletion() {
+    LineReader reader = Mockito.mock(LineReader.class);
+    BufferImpl buffer = new BufferImpl();
+    buffer.write("/he");
+    Mockito.when(reader.getBuffer()).thenReturn(buffer);
+    Mockito.when(reader.getParser()).thenReturn(new DefaultParser());
+    Completer completer = (r, line, candidates) -> candidates.add(new Candidate("/help"));
+    AgentTuiInput input = new AgentTuiInput(reader, completer);
+
+    input.complete();
+
+    assertEquals("/help", input.text());
+    assertEquals(List.of("/help"), input.completionCandidates());
   }
 }
