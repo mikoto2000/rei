@@ -40,17 +40,13 @@ class AgentTuiInputTest {
     AgentTuiInput input = new AgentTuiInput();
     "hello".codePoints().forEach(input::insert);
 
-    assertEquals("hello", input.submit(false).orElseThrow());
+    assertEquals("hello", input.submit().orElseThrow());
     assertEquals("", input.text());
   }
 
   @Test
-  void emptyOrRunningSubmitIsRejectedAndRunningInputIsPreserved() {
+  void emptySubmitIsRejected() {
     AgentTuiInput input = new AgentTuiInput();
-    assertTrue(input.submit(false).isEmpty());
-    "next".codePoints().forEach(input::insert);
-
-    assertTrue(input.submit(true).isEmpty());
-    assertEquals("next", input.text());
+    assertTrue(input.submit().isEmpty());
   }
 }

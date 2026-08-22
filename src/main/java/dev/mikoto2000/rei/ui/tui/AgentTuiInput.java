@@ -63,9 +63,9 @@ final class AgentTuiInput {
     cursor = text.length();
   }
 
-  Optional<String> submit(boolean agentRunning) {
+  Optional<String> submit() {
     String value = text.toString();
-    if (agentRunning || value.isBlank()) {
+    if (value.isBlank()) {
       return Optional.empty();
     }
     text.setLength(0);

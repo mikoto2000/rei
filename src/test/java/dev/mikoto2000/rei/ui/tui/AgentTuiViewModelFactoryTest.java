@@ -56,6 +56,18 @@ class AgentTuiViewModelFactoryTest {
   }
 
   @Test
+  void commandOutputTemporarilyOverridesAgentAssistantText() {
+    DefaultAgentUiProjection projection = new DefaultAgentUiProjection();
+    InMemoryAgentEventBus bus = busFor(projection);
+    bus.publish(events.messageCompleted("msg-1", "assistant", "agent response"));
+
+    AgentTuiRenderModel model = factory.create(
+        projection.currentState(), new AgentTuiInput(), false, 10, "command\noutput");
+
+    assertEquals("command\noutput", model.assistantText());
+  }
+
+  @Test
   void toolsShowStatusDurationErrorAndStartOrder() {
     DefaultAgentUiProjection projection = new DefaultAgentUiProjection();
     InMemoryAgentEventBus bus = busFor(projection);

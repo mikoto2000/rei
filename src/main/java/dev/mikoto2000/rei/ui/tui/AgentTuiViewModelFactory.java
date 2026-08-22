@@ -11,12 +11,17 @@ import dev.mikoto2000.rei.ui.projection.ToolExecutionView;
 final class AgentTuiViewModelFactory {
 
   AgentTuiRenderModel create(AgentUiState state, AgentTuiInput input, boolean busy, int maxTools) {
+    return create(state, input, busy, maxTools, "");
+  }
+
+  AgentTuiRenderModel create(AgentUiState state, AgentTuiInput input, boolean busy, int maxTools,
+      String commandOutput) {
     List<ToolExecutionView> tools = state.tools();
     int from = Math.max(0, tools.size() - Math.max(0, maxTools));
     List<String> toolLines = tools.subList(from, tools.size()).stream().map(this::toolLine).toList();
     return new AgentTuiRenderModel(
         state.run().status().name(),
-        latestAssistantText(state),
+        commandOutput == null || commandOutput.isBlank() ? latestAssistantText(state) : commandOutput,
         toolLines,
         input.text(),
         input.textBeforeCursor(),
