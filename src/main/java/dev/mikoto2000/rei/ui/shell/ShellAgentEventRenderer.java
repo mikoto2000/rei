@@ -54,7 +54,8 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       case TOOL_STARTED -> {
         beforeTool();
         ToolStartedPayload payload = (ToolStartedPayload) event.payload();
-        output.println("  → " + payload.toolName());
+        String arguments = oneLineSummary(payload.argumentsSummary());
+        output.println("  → " + payload.toolName() + (arguments.isEmpty() ? "" : " " + arguments));
       }
       case TOOL_COMPLETED -> {
         beforeTool();
@@ -115,5 +116,15 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   private String formatDecimal(double value) {
     return String.format(java.util.Locale.ROOT, "%.1f", value);
+  }
+
+  private String oneLineSummary(String value) {
+    if (value == null || value.isBlank()) return "";
+    StringBuilder sanitized = new StringBuilder(value.length());
+    for (int index = 0; index < value.length(); index++) {
+      char character = value.charAt(index);
+      sanitized.append(Character.isISOControl(character) ? ' ' : character);
+    }
+    return sanitized.toString().replaceAll("\\s+", " ").trim();
   }
 }

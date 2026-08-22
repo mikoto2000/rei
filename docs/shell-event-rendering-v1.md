@@ -26,6 +26,8 @@ assistant streaming text
 
 Run完了行にはコマンド全体の経過時間、completion token数、回答生成速度を表示する。出力上限による再計画やサブゴールで複数回LLMを呼び出した場合は各呼び出しのcompletion tokenを合算し、速度は従来の `=== speed(... tok/s) ===` と同じ計算による最後の回答ストリームの値を表示する。プロバイダーがusageを返さない場合は `tokens unavailable, speed unavailable` と表示する。
 
+Tool開始行は `→ toolName argumentsSummary` として、redact・120文字制限済みの引数要約をTool名の横に表示する。改行と端末制御文字は空白へ変換し、空の引数は表示しない。
+
 Tool failure eventにはdurationがないため算出せず、event内のtool名とerror summaryだけを表示する。stack traceと詳細は既存file loggingへ任せる。
 
 ## JLineと入力行保護

@@ -54,7 +54,16 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.toolCompleted("c1", "readMultiFile", 121, "ok"));
     renderer.onEvent(events.messageDelta("m1", "続けます。"));
     renderer.onEvent(events.messageCompleted("m1", "assistant", "確認します。続けます。"));
-    assertEquals("確認します。\n  → readMultiFile\n  ✓ readMultiFile (121 ms)\n\n続けます。\n", output.text());
+    assertEquals("確認します。\n  → readMultiFile files=8\n  ✓ readMultiFile (121 ms)\n\n続けます。\n", output.text());
+  }
+
+  @Test
+  void rendersToolArgumentsAsOneSafeLineAndOmitsEmptyArguments() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.toolStarted("c1", "writeFile", "{\n  \"path\": \"memo.txt\"\u001b\n}"));
+    renderer.onEvent(events.toolStarted("c2", "listFiles", ""));
+    assertEquals("  → writeFile { \"path\": \"memo.txt\" }\n  → listFiles\n", output.text());
   }
 
   @Test
