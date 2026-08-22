@@ -14,7 +14,6 @@ import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
-import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.beans.factory.ObjectProvider;
 
 import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
@@ -29,6 +28,7 @@ import dev.mikoto2000.rei.core.stagnation.StagnationAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
+import dev.mikoto2000.rei.event.ToolEventCallbackProvider;
 import dev.mikoto2000.rei.feed.FeedTools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
@@ -49,8 +49,8 @@ class AiConfigurationTest {
 
   @Test
   void chatClientIncludesMcpToolCallbackProviderWhenAvailable() throws Exception {
-    ToolCallbackProvider mcpToolCallbackProvider = Mockito.mock(ToolCallbackProvider.class);
-    ObjectProvider<ToolCallbackProvider> provider = mockProviderReturning(mcpToolCallbackProvider);
+    ToolEventCallbackProvider mcpToolCallbackProvider = Mockito.mock(ToolEventCallbackProvider.class);
+    ObjectProvider<ToolEventCallbackProvider> provider = mockProviderReturning(mcpToolCallbackProvider);
 
     AiConfiguration configuration = new AiConfiguration(
         new CoreProperties("system prompt", 100),
@@ -93,7 +93,7 @@ class AiConfigurationTest {
 
   @Test
   void chatClientOmitsMcpToolCallbackProviderWhenUnavailable() throws Exception {
-    ObjectProvider<ToolCallbackProvider> provider = mockProviderReturning(null);
+    ObjectProvider<ToolEventCallbackProvider> provider = mockProviderReturning(null);
 
     AiConfiguration configuration = new AiConfiguration(
         new CoreProperties("system prompt", 100),

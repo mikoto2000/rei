@@ -7,7 +7,6 @@ import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -29,6 +28,7 @@ import dev.mikoto2000.rei.core.relatedgraph.RelatedFileGraphAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
+import dev.mikoto2000.rei.event.ToolEventCallbackProvider;
 import dev.mikoto2000.rei.feed.FeedProperties;
 import dev.mikoto2000.rei.feed.FeedTools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
@@ -86,7 +86,7 @@ public class AiConfiguration {
   private final TaskStateTools taskStateTools;
   private final LlmProperties llmProperties;
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
-  private final ObjectProvider<ToolCallbackProvider> mcpToolCallbackProvider;
+  private final ObjectProvider<ToolEventCallbackProvider> toolEventCallbackProvider;
 
   @Bean
   public ChatClient chatClient() {
@@ -117,7 +117,7 @@ public class AiConfiguration {
         .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
             soundNotificationTools, blueskyPostTools, urlContentFetchTools, clockTools, schedulerTools, taskStateTools);
 
-    ToolCallbackProvider toolCallbackProvider = mcpToolCallbackProvider.getIfAvailable();
+    ToolEventCallbackProvider toolCallbackProvider = toolEventCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {
       builder.defaultToolCallbacks(toolCallbackProvider);
     }
