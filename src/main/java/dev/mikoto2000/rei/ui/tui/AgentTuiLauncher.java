@@ -126,7 +126,7 @@ public final class AgentTuiLauncher {
     }
   }
 
-  private String executeCommand(String[] inputArguments) {
+  String executeCommand(String[] inputArguments) {
     String[] arguments = normalizeSpecialCommand(inputArguments);
     ByteArrayOutputStream bytes = new ByteArrayOutputStream();
     try (PrintStream capture = new PrintStream(bytes, true, StandardCharsets.UTF_8)) {
