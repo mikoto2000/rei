@@ -39,6 +39,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 import dev.mikoto2000.rei.core.command.ProjectAddDirectoryCompletion;
 import dev.mikoto2000.rei.core.command.RootCommand;
+import dev.mikoto2000.rei.core.command.UserInputParser;
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
@@ -48,6 +49,7 @@ import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.sound.SoundNotificationService;
 import dev.mikoto2000.rei.ui.tui.AgentTuiCommand;
+import dev.mikoto2000.rei.ui.tui.AgentTuiLauncher;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine;
@@ -85,14 +87,23 @@ public class ReiApplication {
     int exitCode;
     try {
       var app = context.getBean(ReiApplication.class);
-      app.run(args);
+      launch(StartupMode.from(args), app, context.getBean(AgentTuiLauncher.class), args);
     } finally {
       exitCode = SpringApplication.exit(context);
     }
     System.exit(exitCode);
   }
 
-  private void run(String[] args) throws IOException {
+  static void launch(StartupMode mode, ReiApplication app, AgentTuiLauncher tui, String[] args)
+      throws IOException {
+    if (mode == StartupMode.TUI) {
+      tui.run(null);
+    } else {
+      app.run(args);
+    }
+  }
+
+  void run(String[] args) throws IOException {
     var cmd = new picocli.CommandLine(rootCommand, factory);
     configureCommandOutput(cmd);
     Completer completer = new SlashCommandCompleter(
@@ -124,6 +135,7 @@ public class ReiApplication {
     System.out.println("/paste で確実な複数行入力モード（終了は単独行の . ）");
 
     ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
+    UserInputParser inputParser = new UserInputParser();
     try {
       while (true) {
         try {
@@ -167,12 +179,12 @@ public class ReiApplication {
             continue;
           }
 
-          if (trimmed.startsWith("/")) {
-            String commandText = trimmed.substring(1).trim();
-            if (commandText.isEmpty()) {
+          UserInputParser.ParsedInput parsedInput = inputParser.parse(line);
+          if (parsedInput.kind() == UserInputParser.Kind.SLASH_COMMAND) {
+            String[] commandArgs = parsedInput.arguments();
+            if (commandArgs.length == 0) {
               continue;
             }
-            String[] commandArgs = splitCommandLine(commandText);
             printUserInputIfNeeded(trimmed, terminal, commandArgs);
             if (isInteractiveShellCommand(commandArgs)) {
               executeInteractiveShellCommand(cmd, reader, terminal, commandArgs);
@@ -273,33 +285,7 @@ public class ReiApplication {
   }
 
   String[] splitCommandLine(String line) {
-    List<String> words = new java.util.ArrayList<>();
-    StringBuilder current = new StringBuilder();
-    boolean inSingleQuote = false;
-    boolean inDoubleQuote = false;
-    for (int i = 0; i < line.length(); i++) {
-      char c = line.charAt(i);
-      if (c == '\'' && !inDoubleQuote) {
-        inSingleQuote = !inSingleQuote;
-        continue;
-      }
-      if (c == '"' && !inSingleQuote) {
-        inDoubleQuote = !inDoubleQuote;
-        continue;
-      }
-      if (Character.isWhitespace(c) && !inSingleQuote && !inDoubleQuote) {
-        if (current.length() > 0) {
-          words.add(current.toString());
-          current = new StringBuilder();
-        }
-        continue;
-      }
-      current.append(c);
-    }
-    if (current.length() > 0) {
-      words.add(current.toString());
-    }
-    return words.toArray(String[]::new);
+    return new UserInputParser().split(line);
   }
 
   String buildPrompt() {
