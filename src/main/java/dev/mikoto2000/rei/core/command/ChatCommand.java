@@ -16,6 +16,10 @@ import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
+import dev.mikoto2000.rei.event.ErrorInformation;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.llm.ConversationIds;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
@@ -32,6 +36,8 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 import reactor.core.Disposable;
 
+import java.time.Clock;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -65,20 +71,42 @@ public class ChatCommand implements Runnable {
   private final ChatResponseNarrator chatResponseNarrator;
   private final Optional<MemoryConsolidatorService> memoryConsolidatorService;
   private final Optional<OutputLimitReplanner> outputLimitReplanner;
+  private final AgentEventFactory eventFactory;
+  private final AgentEventPublisher eventPublisher;
   private final InlineFileAttachmentResolver inlineFileAttachmentResolver = new InlineFileAttachmentResolver();
 
   public ChatCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
       CommandCancellationService cancellationService, ChatResponseNarrator chatResponseNarrator,
       Optional<MemoryConsolidatorService> memoryConsolidatorService) {
     this(new FixedLlmChatClientProvider(chatClient), currentModelHolder, new FixedLlmModelProvider(),
-        new LlmProperties(), cancellationService, chatResponseNarrator, memoryConsolidatorService, Optional.empty());
+        new LlmProperties(), cancellationService, chatResponseNarrator, memoryConsolidatorService, Optional.empty(),
+        new AgentEventFactory(Clock.systemDefaultZone()), new InMemoryAgentEventBus());
+  }
+
+  public ChatCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
+      CommandCancellationService cancellationService, ChatResponseNarrator chatResponseNarrator,
+      Optional<MemoryConsolidatorService> memoryConsolidatorService, AgentEventFactory eventFactory,
+      AgentEventPublisher eventPublisher) {
+    this(new FixedLlmChatClientProvider(chatClient), currentModelHolder, new FixedLlmModelProvider(),
+        new LlmProperties(), cancellationService, chatResponseNarrator, memoryConsolidatorService, Optional.empty(),
+        eventFactory, eventPublisher);
+  }
+
+  public ChatCommand(LlmChatClientProvider chatClientProvider, ModelHolderService currentModelHolder,
+      LlmModelProvider modelProvider, LlmProperties llmProperties, CommandCancellationService cancellationService,
+      ChatResponseNarrator chatResponseNarrator, Optional<MemoryConsolidatorService> memoryConsolidatorService,
+      Optional<OutputLimitReplanner> outputLimitReplanner) {
+    this(chatClientProvider, currentModelHolder, modelProvider, llmProperties, cancellationService,
+        chatResponseNarrator, memoryConsolidatorService, outputLimitReplanner,
+        new AgentEventFactory(Clock.systemDefaultZone()), new InMemoryAgentEventBus());
   }
 
   @Autowired
   public ChatCommand(LlmChatClientProvider chatClientProvider, ModelHolderService currentModelHolder,
       LlmModelProvider modelProvider, LlmProperties llmProperties, CommandCancellationService cancellationService,
       ChatResponseNarrator chatResponseNarrator, Optional<MemoryConsolidatorService> memoryConsolidatorService,
-      Optional<OutputLimitReplanner> outputLimitReplanner) {
+      Optional<OutputLimitReplanner> outputLimitReplanner, AgentEventFactory eventFactory,
+      AgentEventPublisher eventPublisher) {
     this.chatClientProvider = chatClientProvider;
     this.currentModelHolder = currentModelHolder;
     this.modelProvider = modelProvider;
@@ -87,6 +115,8 @@ public class ChatCommand implements Runnable {
     this.chatResponseNarrator = chatResponseNarrator;
     this.memoryConsolidatorService = memoryConsolidatorService;
     this.outputLimitReplanner = outputLimitReplanner;
+    this.eventFactory = eventFactory;
+    this.eventPublisher = eventPublisher;
   }
 
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
@@ -97,6 +127,7 @@ public class ChatCommand implements Runnable {
     long startedAtNanos = System.nanoTime();
     cancellationService.begin(Thread.currentThread());
     chatResponseNarrator.reset();
+    String runId = UUID.randomUUID().toString();
 
     try {
       String promptText = String.join(" ", prompts);
@@ -108,13 +139,17 @@ public class ChatCommand implements Runnable {
         System.err.println("[error] LLM call budget exhausted before initial prompt");
         return;
       }
-      ChatRunResult result = executePrompt(promptText, true, startedAtNanos, budget);
+      eventPublisher.publish(eventFactory.runStarted(runId, "user-request", null));
+      ChatRunResult result = executePrompt(promptText, true, startedAtNanos, budget, runId);
       if (result.status() == ChatRunStatus.OUTPUT_LIMIT) {
-        result = handleOutputLimit(promptText, promptText, "", result.text(), budget, startedAtNanos);
+        result = handleOutputLimit(promptText, promptText, "", result.text(), budget, startedAtNanos, runId);
       }
       if (result.status() == ChatRunStatus.SUCCESS) {
+        eventPublisher.publish(eventFactory.runCompleted(runId, elapsedMillis(startedAtNanos)));
         chatResponseNarrator.narrateIfCompleted(result.text());
         maybeSuggestConsolidation();
+      } else if (result.status() == ChatRunStatus.FAILED) {
+        eventPublisher.publish(eventFactory.runFailed(runId, new ErrorInformation("ChatRunFailed", "chat run failed", null)));
       }
     } finally {
       cancellationService.clear();
@@ -122,7 +157,7 @@ public class ChatCommand implements Runnable {
   }
 
   private ChatRunResult handleOutputLimit(String originalUserRequest, String currentGoal, String progressSoFar,
-      String partialOutput, OutputLimitRunBudget budget, long startedAtNanos) {
+      String partialOutput, OutputLimitRunBudget budget, long startedAtNanos, String runId) {
     if (outputLimitReplanner.isEmpty()) {
       System.err.println("[error] output token limit reached");
       return ChatRunResult.outputLimit(partialOutput);
@@ -172,11 +207,11 @@ public class ChatCommand implements Runnable {
         return ChatRunResult.outputLimit(subgoalResults.toString());
       }
       log.info("Output limit subgoal started: id={}, goal={}", subgoal.id(), subgoal.goal());
-      ChatRunResult subgoalResult = executePrompt(subgoal.goal(), false, startedAtNanos, budget);
+      ChatRunResult subgoalResult = executePrompt(subgoal.goal(), false, startedAtNanos, budget, runId);
       log.info("Output limit subgoal finished: id={}, status={}", subgoal.id(), subgoalResult.status());
       if (subgoalResult.status() == ChatRunStatus.OUTPUT_LIMIT) {
         subgoalResult = handleOutputLimit(originalUserRequest, subgoal.goal(), subgoalResults.toString(),
-            subgoalResult.text(), budget, startedAtNanos);
+            subgoalResult.text(), budget, startedAtNanos, runId);
       }
       if (subgoalResult.status() != ChatRunStatus.SUCCESS) {
         return subgoalResult;
@@ -191,11 +226,11 @@ public class ChatCommand implements Runnable {
       return ChatRunResult.outputLimit(subgoalResults.toString());
     }
     return executePrompt(buildIntegrationPrompt(originalUserRequest, plan.finalGoal(), subgoalResults.toString()),
-        false, startedAtNanos, budget);
+        false, startedAtNanos, budget, runId);
   }
 
   private ChatRunResult executePrompt(String promptText, boolean resolveAttachments, long startedAtNanos,
-      OutputLimitRunBudget budget) {
+      OutputLimitRunBudget budget, String runId) {
     InlineFileAttachmentResolver.ResolvedPrompt resolvedPrompt = resolveAttachments
         ? inlineFileAttachmentResolver.resolve(promptText)
         : new InlineFileAttachmentResolver.ResolvedPrompt(promptText, java.util.List.of(), java.util.List.of());
@@ -220,6 +255,8 @@ public class ChatCommand implements Runnable {
     AtomicLong answerStartedAtNanos = new AtomicLong(0L);
     AtomicInteger completionTokens = new AtomicInteger(0);
     AtomicBoolean outputLimitReached = new AtomicBoolean(false);
+    AtomicBoolean messageStarted = new AtomicBoolean(false);
+    String messageId = UUID.randomUUID().toString();
     StringBuilder responseBuilder = new StringBuilder();
     Disposable disposable;
     try {
@@ -238,6 +275,9 @@ public class ChatCommand implements Runnable {
               if (chunk == null || chunk.isEmpty()) {
                 return;
               }
+              if (messageStarted.compareAndSet(false, true)) {
+                eventPublisher.publish(eventFactory.messageStarted(messageId, "assistant"));
+              }
               if (headerPrinted.compareAndSet(false, true)) {
                 if (thinkingHeaderPrinted.get()) {
                   System.out.println();
@@ -247,6 +287,7 @@ public class ChatCommand implements Runnable {
               }
               System.out.print(chunk);
               responseBuilder.append(chunk);
+              eventPublisher.publish(eventFactory.messageDelta(messageId, chunk));
             },
             error -> {
               errorRef.set(error);
@@ -274,6 +315,9 @@ public class ChatCommand implements Runnable {
             summarizeForLog(promptText), promptText.length(), responseBuilder.length());
         return ChatRunResult.outputLimit(responseBuilder.toString());
       }
+      if (messageStarted.get()) {
+        eventPublisher.publish(eventFactory.messageCompleted(messageId, "assistant", responseBuilder.toString()));
+      }
       printGenerationSpeed(answerStartedAtNanos.get(), completionTokens.get());
       return ChatRunResult.success(responseBuilder.toString());
     } catch (InterruptedException e) {
@@ -287,6 +331,10 @@ public class ChatCommand implements Runnable {
       IO.println("[error] 回答待機が中断されました");
       return ChatRunResult.failed();
     }
+  }
+
+  private long elapsedMillis(long startedAtNanos) {
+    return (System.nanoTime() - startedAtNanos) / 1_000_000L;
   }
 
   private String buildIntegrationPrompt(String originalUserRequest, String finalGoal, String subgoalResults) {
