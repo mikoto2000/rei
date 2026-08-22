@@ -224,7 +224,8 @@ public class ReiApplication {
   }
 
   boolean isInteractiveShellCommand(String... args) {
-    return args != null && args.length > 0 && "sh".equals(args[0]);
+    return args != null && args.length > 0
+        && ("sh".equals(args[0]) || "tui".equals(args[0]));
   }
 
   void executeInteractiveShellCommand(CommandLine cmd, LineReader reader, Terminal terminal, String... args) {

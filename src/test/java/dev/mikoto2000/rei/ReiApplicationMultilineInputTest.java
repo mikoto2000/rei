@@ -76,6 +76,7 @@ class ReiApplicationMultilineInputTest {
     ReiApplication app = newApp();
 
     assertEquals(true, app.isInteractiveShellCommand("sh"));
+    assertEquals(true, app.isInteractiveShellCommand("tui"));
     assertEquals(false, app.isInteractiveShellCommand("chat"));
   }
 
