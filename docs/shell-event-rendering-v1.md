@@ -1,0 +1,60 @@
+# Shell Event Rendering v1
+
+## 目的と構造
+
+既存Shellの履歴、補完、line editingを維持しながら、Agent Eventをappend-onlyに観測する。
+
+```text
+Agent Core -> Agent Event Bus -> ShellAgentEventRenderer -> JLineShellEventOutput
+                           \-> AgentUiProjection -> TUI
+```
+
+ShellはProjectionをpollingせずEvent Busを直接購読し、受信順（Busのsequence順）に表示する。対象は `agent.run.started/completed/failed`、`message.started/delta/completed`、`tool.started/completed/failed`。Task、Working Set、Context、File eventはv1対象外。
+
+## 表示
+
+```text
+[agent] running
+assistant streaming text
+  → toolName
+  ✓ toolName (84 ms)
+  ✗ toolName: error summary
+[agent] completed
+```
+
+`message.delta` はprefixを付けず `print` とflushを行い、`message.completed` で行を閉じる。Tool eventがassistant行へ割り込む場合は先に改行し、Toolを独立行で表示した後、空行を挟んでassistant streamingを再開する。Rendererは表示上の「assistant行が開いているか」だけを持ち、新しいRunでリセットする。全event処理は`synchronized`で文字単位の競合を防ぐ。
+
+Tool failure eventにはdurationがないため算出せず、event内のtool名とerror summaryだけを表示する。stack traceと詳細は既存file loggingへ任せる。
+
+## JLineと入力行保護
+
+通常のAgent command実行中は `LineReader.isReading()` がfalseなので、JLine terminal writerへdeltaを直接書きflushする。入力編集中にbackground eventが届いた場合はdeltaを行境界までbufferし、`LineReader.printAbove()` で出力する。これにより編集中bufferとcursorはJLineが再描画する。独自ANSI cursor制御は行わない。
+
+## 二重表示の防止
+
+`ChatCommand`とTool群にはEvent API以前の直接stdout出力が残る。Shellのchat command実行中だけ `System.out/err` をnull streamへ退避し、表示経路をEvent Busへ一本化する。slash commandはこのpolicy対象外で従来出力を維持する。TUIも従来どおり自身のstdout抑制とProjection描画を使う。
+
+## Subscription lifecycleとTUI排他
+
+Shell開始後、LineReader構築時に `ShellEventSession` がsubscribeする。Shell終了のfinallyでunsubscribeする。Shellから `/tui` へ入る直前にsessionをpauseし、TUI終了後にresumeするため、Shell rendererとTUI Projectionが同時に画面出力しない。`--tui` startup modeはShell loopを起動しないためShell listenerを作らない。
+
+## Testとmanual smoke
+
+自動testではRun lifecycle、失敗summary、日本語delta、prefix非重複、Tool 3状態、duration有無、message/tool interleave、複数Run reset、thread-safe output boundary、JLine `printAbove`、pause/resume/unsubscribe、legacy chat stdout抑制、slash stdout維持を確認する。
+
+実Terminal smoke手順:
+
+1. Shellを起動し、履歴とTab補完を確認する。
+2. 通常chatを実行し、`[agent] running`、assistant streaming、Tool行、完了行を確認する。
+3. Tool interleave後もassistantと次promptが正しい行にあることを確認する。
+4. background event中に文字を編集中にして、event表示後に入力とcursorが復元されることを確認する。
+5. `/help` の出力を確認する。
+6. `/tui` 中にShell eventが混入せず、`/exit` 後のShell chatで再びevent表示されることを確認する。
+
+外部LLMが利用できない環境では、event列は `ShellAgentEventRendererTest` で再現する。実LLM/Toolのend-to-end確認は接続可能なterminalで上記手順を実施する。
+
+2026-08-23のCodex PTYでは最新クラスによるShell起動とprompt表示を確認した。ただし同PTYはJLineへのEnterを通常の対話terminalとして配送しないため、chat、`/help`、`/tui` の操作完了は観測できなかった。event表示、interleave、入力行復元、購読排他は上記自動testで確認し、完全なend-to-endはWindows Terminal等で実施する。
+
+## v1対象外
+
+Task/Working Set/Context/File表示、Tool結果詳細、replay/persistence、spinner、progress bar、Markdown、syntax highlight、theme、filter、verbosity設定、log viewerは対象外。
