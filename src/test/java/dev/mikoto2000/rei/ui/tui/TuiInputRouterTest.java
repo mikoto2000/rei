@@ -6,10 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import org.junit.jupiter.api.Test;
 
 import dev.mikoto2000.rei.core.command.UserInputParser;
+import dev.mikoto2000.rei.core.command.UserInputService;
 
 class TuiInputRouterTest {
 
-  private final TuiInputRouter router = new TuiInputRouter(new UserInputParser());
+  private final TuiInputRouter router = new TuiInputRouter(
+      new UserInputService(new UserInputParser()));
 
   @Test
   void routesChatAndSlashWithoutSendingSlashToChat() {

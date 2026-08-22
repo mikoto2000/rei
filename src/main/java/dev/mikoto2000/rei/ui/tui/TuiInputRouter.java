@@ -2,7 +2,7 @@ package dev.mikoto2000.rei.ui.tui;
 
 import java.util.Set;
 
-import dev.mikoto2000.rei.core.command.UserInputParser;
+import dev.mikoto2000.rei.core.command.UserInputService;
 
 /** Pure routing policy for input submitted from the TUI. */
 final class TuiInputRouter {
@@ -20,40 +20,44 @@ final class TuiInputRouter {
     }
   }
 
-  private static final Set<String> SAFE_WHILE_RUNNING = Set.of("help", "version");
-  private static final Set<String> SHELL_ONLY = Set.of("sh", "paste");
-  private final UserInputParser parser;
+  private static final Set<String> SHELL_ONLY = Set.of("sh");
+  private final UserInputService inputs;
 
-  TuiInputRouter(UserInputParser parser) {
-    this.parser = parser;
+  TuiInputRouter(UserInputService inputs) {
+    this.inputs = inputs;
   }
 
   Route route(String input, boolean running) {
-    UserInputParser.ParsedInput parsed = parser.parse(input);
-    if (parsed.kind() == UserInputParser.Kind.EMPTY) {
-      return route(Kind.EMPTY, "", new String[0], "");
-    }
-    if (parsed.kind() == UserInputParser.Kind.CHAT) {
-      return running
-          ? route(Kind.MESSAGE, "", new String[0], "Agent is already running.")
-          : route(Kind.CHAT, parsed.text(), new String[0], "");
+    UserInputService.Input interpreted = inputs.interpret(input);
+    switch (interpreted.kind()) {
+      case EMPTY:
+        return route(Kind.EMPTY, "", new String[0], "");
+      case CHAT:
+        return running
+            ? route(Kind.MESSAGE, "", new String[0], "Agent is already running.")
+            : route(Kind.CHAT, interpreted.text(), new String[0], "");
+      case EXIT:
+        return route(Kind.EXIT, "", interpreted.arguments(), "");
+      case HELP:
+        return route(Kind.COMMAND, "", interpreted.arguments(), "");
+      case VERSION:
+        return route(Kind.COMMAND, "", interpreted.arguments(), "");
+      case PASTE:
+        return route(Kind.MESSAGE, "", interpreted.arguments(),
+            "This command is not available in TUI mode.");
+      case COMMAND:
+        break;
     }
 
-    String[] arguments = parsed.arguments();
-    if (arguments.length == 0) {
-      return route(Kind.EMPTY, "", arguments, "");
-    }
+    String[] arguments = interpreted.arguments();
     String command = arguments[0];
-    if ("exit".equals(command) || "quit".equals(command)) {
-      return route(Kind.EXIT, "", arguments, "");
-    }
     if ("tui".equals(command)) {
       return route(Kind.MESSAGE, "", arguments, "Already in TUI mode.");
     }
     if (SHELL_ONLY.contains(command)) {
       return route(Kind.MESSAGE, "", arguments, "This command is not available in TUI mode.");
     }
-    if (running && !SAFE_WHILE_RUNNING.contains(command)) {
+    if (running) {
       return route(Kind.MESSAGE, "", arguments, "Command is not available while the agent is running.");
     }
     return route(Kind.COMMAND, "", arguments, "");

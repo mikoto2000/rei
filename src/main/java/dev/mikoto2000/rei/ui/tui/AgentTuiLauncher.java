@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 import dev.mikoto2000.rei.core.command.ChatCommand;
 import dev.mikoto2000.rei.core.command.RootCommand;
 import dev.mikoto2000.rei.core.command.UserInputParser;
+import dev.mikoto2000.rei.core.command.UserInputService;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.ui.projection.DefaultAgentUiProjection;
@@ -61,7 +62,8 @@ public final class AgentTuiLauncher {
     AtomicBoolean busy = new AtomicBoolean();
     AtomicReference<String> localOutput = new AtomicReference<>("");
     AgentTuiInput input = new AgentTuiInput();
-    TuiInputRouter router = new TuiInputRouter(new UserInputParser());
+    TuiInputRouter router = new TuiInputRouter(
+        new UserInputService(new UserInputParser()));
     AgentTuiViewModelFactory models = new AgentTuiViewModelFactory();
     AgentTuiRenderer renderer = new AgentTuiRenderer();
     PrintStream originalOut = System.out;
