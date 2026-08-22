@@ -117,5 +117,11 @@ class InMemoryAgentEventBusTest {
     bus.publish(event("agent.run.started"));
 
     assertNotEquals(0L, received.get(0).sequence());
+    assertEquals(received.get(0).sequence(), bus.lastSequence());
+  }
+
+  @Test
+  void lastSequenceIsZeroBeforeFirstPublish() {
+    assertEquals(0L, new InMemoryAgentEventBus().lastSequence());
   }
 }

@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.event;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
@@ -16,6 +17,9 @@ import org.springframework.ai.tool.definition.ToolDefinition;
  * 結果全文は payload に格納せず、要約情報のみを保持する。</p>
  */
 public class ToolEventCallbackDecorator implements ToolCallback {
+
+  private static final Pattern QUOTED_SECRET = Pattern.compile(
+      "(?i)(\\\"(?:api[_-]?key|access[_-]?token|token|password|secret)\\\"\\s*:\\s*\\\")[^\\\"]*(\\\")");
 
   private final ToolCallback delegate;
   private final AgentEventFactory eventFactory;
@@ -76,10 +80,11 @@ public class ToolEventCallbackDecorator implements ToolCallback {
     if (value == null) {
       return "";
     }
+    String sanitized = QUOTED_SECRET.matcher(value).replaceAll("$1[REDACTED]$2");
     int maxLength = 120;
-    if (value.length() <= maxLength) {
-      return value;
+    if (sanitized.length() <= maxLength) {
+      return sanitized;
     }
-    return value.substring(0, maxLength) + "... (" + value.length() + " chars)";
+    return sanitized.substring(0, maxLength) + "... (" + sanitized.length() + " chars)";
   }
 }

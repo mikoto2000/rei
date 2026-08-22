@@ -23,6 +23,9 @@ public interface AgentEventBus {
    */
   void publish(AgentEvent event);
 
+  /** これまでに割り当てた最新の sequence。未発行の場合は 0。 */
+  long lastSequence();
+
   /**
    * 購読解除を表すハンドル。
    */

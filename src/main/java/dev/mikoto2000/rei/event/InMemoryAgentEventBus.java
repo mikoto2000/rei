@@ -57,6 +57,11 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
     }
   }
 
+  @Override
+  public long lastSequence() {
+    return sequence.get();
+  }
+
   private AgentEvent withSequence(AgentEvent event) {
     long next = sequence.incrementAndGet();
     return new AgentEvent(

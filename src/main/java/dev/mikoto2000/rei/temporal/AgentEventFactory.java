@@ -6,7 +6,7 @@ import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
-@Component
+@Component("temporalAgentEventFactory")
 public class AgentEventFactory {
   private final Clock clock;
 

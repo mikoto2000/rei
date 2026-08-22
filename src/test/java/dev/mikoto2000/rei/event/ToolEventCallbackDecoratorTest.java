@@ -19,6 +19,8 @@ import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
 class ToolEventCallbackDecoratorTest {
 
@@ -136,5 +138,51 @@ class ToolEventCallbackDecoratorTest {
     assertEquals(2, received.size());
     assertEquals(AgentEventType.TOOL_STARTED, received.get(0).type());
     assertEquals(AgentEventType.TOOL_COMPLETED, received.get(1).type());
+  }
+
+  @Test
+  void suppliedToolCallIdIsUsedForStartedAndCompleted() {
+    bus.subscribe(received::add);
+    ToolCallback delegate = delegate("readMultiFile", "ok");
+    ToolCallback decorated = new ToolEventCallbackDecorator(delegate, factory, bus);
+
+    decorated.call("input", new ToolContext(java.util.Map.of("toolCallId", "call-from-model")));
+
+    assertEquals("call-from-model", received.get(0).correlationId());
+    assertEquals("call-from-model", received.get(1).correlationId());
+  }
+
+  @Test
+  void methodToolProviderCallbacksAreObserved() {
+    bus.subscribe(received::add);
+    MethodToolCallbackProvider provider = MethodToolCallbackProvider.builder()
+        .toolObjects(new SampleMethodTools())
+        .build();
+    ToolCallback decorated = new ToolEventCallbackProvider(provider, factory, bus).getToolCallbacks()[0];
+
+    assertEquals("\"hello Rei\"", decorated.call("{\"name\":\"Rei\"}"));
+    assertEquals(AgentEventType.TOOL_STARTED, received.get(0).type());
+    assertEquals(AgentEventType.TOOL_COMPLETED, received.get(1).type());
+    assertEquals("hello", ((ToolStartedPayload) received.get(0).payload()).toolName());
+  }
+
+  @Test
+  void argumentsSummaryRedactsObviousCredentials() {
+    bus.subscribe(received::add);
+    ToolCallback delegate = delegate("remoteCall", "ok");
+
+    new ToolEventCallbackDecorator(delegate, factory, bus)
+        .call("{\"apiKey\":\"super-secret-value\",\"query\":\"hello\"}");
+
+    String summary = ((ToolStartedPayload) received.get(0).payload()).argumentsSummary();
+    assertTrue(summary.contains("[REDACTED]"));
+    assertTrue(!summary.contains("super-secret-value"));
+  }
+
+  public static class SampleMethodTools {
+    @Tool(name = "hello", description = "returns a greeting")
+    public String hello(String name) {
+      return "hello " + name;
+    }
   }
 }

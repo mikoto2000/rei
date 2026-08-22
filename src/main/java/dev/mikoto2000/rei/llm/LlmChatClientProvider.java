@@ -10,6 +10,7 @@ import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +23,8 @@ import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
 import dev.mikoto2000.rei.core.configuration.SystemPromptService;
 import dev.mikoto2000.rei.event.ToolEventCallbackProvider;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.feed.FeedTools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
 import dev.mikoto2000.rei.reminder.ReminderTools;
@@ -55,6 +58,8 @@ public class LlmChatClientProvider {
   private final ObjectProvider<TaskStateAdvisor> taskStateAdvisor;
   private final ObjectProvider<TaskStateTools> taskStateTools;
   private final ObjectProvider<ToolEventCallbackProvider> toolEventCallbackProvider;
+  private final AgentEventFactory eventFactory;
+  private final AgentEventPublisher eventPublisher;
   private final Map<String, ChatClient> cache = new ConcurrentHashMap<>();
 
   public LlmChatClientProvider(LlmModelProvider modelProvider, CoreProperties coreProperties,
@@ -68,7 +73,8 @@ public class LlmChatClientProvider {
       ObjectProvider<WorkingSetAdvisor> workingSetAdvisor,
       ObjectProvider<TaskStateAdvisor> taskStateAdvisor,
       ObjectProvider<TaskStateTools> taskStateTools,
-      ObjectProvider<ToolEventCallbackProvider> toolEventCallbackProvider) {
+      ObjectProvider<ToolEventCallbackProvider> toolEventCallbackProvider,
+      AgentEventFactory eventFactory, AgentEventPublisher eventPublisher) {
     this.modelProvider = modelProvider;
     this.coreProperties = coreProperties;
     this.systemPromptService = systemPromptService;
@@ -89,6 +95,8 @@ public class LlmChatClientProvider {
     this.taskStateAdvisor = taskStateAdvisor;
     this.taskStateTools = taskStateTools;
     this.toolEventCallbackProvider = toolEventCallbackProvider;
+    this.eventFactory = eventFactory;
+    this.eventPublisher = eventPublisher;
   }
 
   public ChatClient chatClient(String feature) {
@@ -134,7 +142,10 @@ public class LlmChatClientProvider {
       toolObjects.add(taskStateToolsInstance);
     }
     if (!toolObjects.isEmpty()) {
-      builder.defaultTools(toolObjects.toArray());
+      MethodToolCallbackProvider methodTools = MethodToolCallbackProvider.builder()
+          .toolObjects(toolObjects.toArray())
+          .build();
+      builder.defaultToolCallbacks(new ToolEventCallbackProvider(methodTools, eventFactory, eventPublisher));
     }
 
     ToolEventCallbackProvider toolCallbackProvider = toolEventCallbackProvider.getIfAvailable();
