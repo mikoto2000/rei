@@ -33,12 +33,13 @@ class AgentEventFactoryTest {
 
   @Test
   void createsRunCompletedEvent() {
-    AgentEvent event = factory.runCompleted("run-1", 1234L);
+    AgentEvent event = factory.runCompleted("run-1", 1234L, 567L);
 
     assertEquals(AgentEventType.AGENT_RUN_COMPLETED, event.type());
     AgentRunCompletedPayload payload = (AgentRunCompletedPayload) event.payload();
     assertEquals("run-1", payload.runId());
     assertEquals(1234L, payload.duration());
+    assertEquals(567L, payload.completionTokens());
   }
 
   @Test

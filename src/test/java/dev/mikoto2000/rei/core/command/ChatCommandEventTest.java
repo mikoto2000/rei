@@ -18,6 +18,8 @@ import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
+import org.springframework.ai.chat.metadata.DefaultUsage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -27,6 +29,7 @@ import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.AgentRunCompletedPayload;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import picocli.CommandLine;
@@ -88,6 +91,28 @@ class ChatCommandEventTest {
 
     assertEquals(AgentEventType.AGENT_RUN_STARTED, received.getFirst().type());
     assertEquals(AgentEventType.AGENT_RUN_FAILED, received.getLast().type());
+  }
+
+  @Test
+  void completedRunContainsCompletionTokenUsage() {
+    bus.subscribe(received::add);
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    ChatResponseMetadata metadata = ChatResponseMetadata.builder()
+        .usage(new DefaultUsage(0, 42))
+        .build();
+    when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(
+        new ChatResponse(List.of(new Generation(new AssistantMessage("answer"))), metadata)));
+
+    new CommandLine(new ChatCommand(chatClient, modelHolderService, new CommandCancellationService(),
+        Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty(), factory, bus)).execute("hello");
+
+    AgentRunCompletedPayload payload = (AgentRunCompletedPayload) received.getLast().payload();
+    assertEquals(42L, payload.completionTokens());
   }
 
   private static ChatResponse response(String text) {

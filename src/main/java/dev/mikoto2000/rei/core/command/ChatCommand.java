@@ -128,6 +128,8 @@ public class ChatCommand implements Runnable {
     cancellationService.begin(Thread.currentThread());
     chatResponseNarrator.reset();
     String runId = UUID.randomUUID().toString();
+    AtomicLong runCompletionTokens = new AtomicLong();
+    AtomicBoolean usageAvailable = new AtomicBoolean();
 
     try {
       String promptText = String.join(" ", prompts);
@@ -140,12 +142,15 @@ public class ChatCommand implements Runnable {
         return;
       }
       eventPublisher.publish(eventFactory.runStarted(runId, "user-request", null));
-      ChatRunResult result = executePrompt(promptText, true, startedAtNanos, budget, runId);
+      ChatRunResult result = executePrompt(promptText, true, startedAtNanos, budget, runId,
+          runCompletionTokens, usageAvailable);
       if (result.status() == ChatRunStatus.OUTPUT_LIMIT) {
-        result = handleOutputLimit(promptText, promptText, "", result.text(), budget, startedAtNanos, runId);
+        result = handleOutputLimit(promptText, promptText, "", result.text(), budget, startedAtNanos, runId,
+            runCompletionTokens, usageAvailable);
       }
       if (result.status() == ChatRunStatus.SUCCESS) {
-        eventPublisher.publish(eventFactory.runCompleted(runId, elapsedMillis(startedAtNanos)));
+        eventPublisher.publish(eventFactory.runCompleted(runId, elapsedMillis(startedAtNanos),
+            usageAvailable.get() ? runCompletionTokens.get() : null));
         chatResponseNarrator.narrateIfCompleted(result.text());
         maybeSuggestConsolidation();
       } else {
@@ -166,7 +171,8 @@ public class ChatCommand implements Runnable {
   }
 
   private ChatRunResult handleOutputLimit(String originalUserRequest, String currentGoal, String progressSoFar,
-      String partialOutput, OutputLimitRunBudget budget, long startedAtNanos, String runId) {
+      String partialOutput, OutputLimitRunBudget budget, long startedAtNanos, String runId,
+      AtomicLong runCompletionTokens, AtomicBoolean usageAvailable) {
     if (outputLimitReplanner.isEmpty()) {
       System.err.println("[error] output token limit reached");
       return ChatRunResult.outputLimit(partialOutput);
@@ -216,11 +222,12 @@ public class ChatCommand implements Runnable {
         return ChatRunResult.outputLimit(subgoalResults.toString());
       }
       log.info("Output limit subgoal started: id={}, goal={}", subgoal.id(), subgoal.goal());
-      ChatRunResult subgoalResult = executePrompt(subgoal.goal(), false, startedAtNanos, budget, runId);
+      ChatRunResult subgoalResult = executePrompt(subgoal.goal(), false, startedAtNanos, budget, runId,
+          runCompletionTokens, usageAvailable);
       log.info("Output limit subgoal finished: id={}, status={}", subgoal.id(), subgoalResult.status());
       if (subgoalResult.status() == ChatRunStatus.OUTPUT_LIMIT) {
         subgoalResult = handleOutputLimit(originalUserRequest, subgoal.goal(), subgoalResults.toString(),
-            subgoalResult.text(), budget, startedAtNanos, runId);
+            subgoalResult.text(), budget, startedAtNanos, runId, runCompletionTokens, usageAvailable);
       }
       if (subgoalResult.status() != ChatRunStatus.SUCCESS) {
         return subgoalResult;
@@ -235,11 +242,11 @@ public class ChatCommand implements Runnable {
       return ChatRunResult.outputLimit(subgoalResults.toString());
     }
     return executePrompt(buildIntegrationPrompt(originalUserRequest, plan.finalGoal(), subgoalResults.toString()),
-        false, startedAtNanos, budget, runId);
+        false, startedAtNanos, budget, runId, runCompletionTokens, usageAvailable);
   }
 
   private ChatRunResult executePrompt(String promptText, boolean resolveAttachments, long startedAtNanos,
-      OutputLimitRunBudget budget, String runId) {
+      OutputLimitRunBudget budget, String runId, AtomicLong runCompletionTokens, AtomicBoolean usageAvailable) {
     InlineFileAttachmentResolver.ResolvedPrompt resolvedPrompt = resolveAttachments
         ? inlineFileAttachmentResolver.resolve(promptText)
         : new InlineFileAttachmentResolver.ResolvedPrompt(promptText, java.util.List.of(), java.util.List.of());
@@ -312,6 +319,10 @@ public class ChatCommand implements Runnable {
 
     try {
       latch.await();
+      if (completionTokens.get() > 0) {
+        runCompletionTokens.addAndGet(completionTokens.get());
+        usageAvailable.set(true);
+      }
       System.out.println();
       Throwable error = errorRef.get();
       if (error != null) {

@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventListener;
+import dev.mikoto2000.rei.event.AgentRunCompletedPayload;
 import dev.mikoto2000.rei.event.AgentRunFailedPayload;
 import dev.mikoto2000.rei.event.MessageCompletedPayload;
 import dev.mikoto2000.rei.event.MessageDeltaPayload;
@@ -32,7 +33,11 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       }
       case AGENT_RUN_COMPLETED -> {
         closeAssistantLine();
-        output.println("[agent] completed");
+        AgentRunCompletedPayload payload = (AgentRunCompletedPayload) event.payload();
+        String tokens = payload.completionTokens() == null
+            ? "tokens unavailable"
+            : payload.completionTokens() + " tokens";
+        output.println("[agent] completed (" + formatSeconds(payload.duration()) + " s, " + tokens + ")");
       }
       case AGENT_RUN_FAILED -> {
         closeAssistantLine();
@@ -98,5 +103,9 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   private String errorMessage(dev.mikoto2000.rei.event.ErrorInformation error) {
     if (error == null || error.message() == null || error.message().isBlank()) return "unknown error";
     return error.message();
+  }
+
+  private String formatSeconds(long durationMillis) {
+    return String.format(java.util.Locale.ROOT, "%.1f", durationMillis / 1_000.0d);
   }
 }

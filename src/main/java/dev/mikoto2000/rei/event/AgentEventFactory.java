@@ -31,8 +31,12 @@ public class AgentEventFactory {
   }
 
   public AgentEvent runCompleted(String runId, long duration) {
+    return runCompleted(runId, duration, null);
+  }
+
+  public AgentEvent runCompleted(String runId, long duration, Long completionTokens) {
     return newEvent(AgentEventType.AGENT_RUN_COMPLETED, runId, null,
-        new AgentRunCompletedPayload(runId, duration));
+        new AgentRunCompletedPayload(runId, duration, completionTokens));
   }
 
   public AgentEvent runFailed(String runId, ErrorInformation error) {

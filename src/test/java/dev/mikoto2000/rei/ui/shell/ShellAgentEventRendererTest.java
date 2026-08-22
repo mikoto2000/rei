@@ -20,9 +20,17 @@ class ShellAgentEventRendererTest {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
     renderer.onEvent(events.runStarted("run-1", "user", null));
-    renderer.onEvent(events.runCompleted("run-1", 20));
+    renderer.onEvent(events.runCompleted("run-1", 1_234, 456L));
     renderer.onEvent(events.runFailed("run-2", new ErrorInformation("IO", "permission denied", "stack")));
-    assertEquals("[agent] running\n[agent] completed\n[agent] failed: permission denied\n", output.text());
+    assertEquals("[agent] running\n[agent] completed (1.2 s, 456 tokens)\n[agent] failed: permission denied\n", output.text());
+  }
+
+  @Test
+  void reportsUnavailableTokensWhenProviderDoesNotReturnUsage() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.runCompleted("run-1", 20, null));
+    assertEquals("[agent] completed (0.0 s, tokens unavailable)\n", output.text());
   }
 
   @Test
