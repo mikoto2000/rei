@@ -19,12 +19,12 @@ assistant streaming text
   → toolName
   ✓ toolName (84 ms)
   ✗ toolName: error summary
-[agent] completed (1.2 s, 456 tokens)
+[agent] completed (1.2 s, 456 tokens, 78.9 tok/s)
 ```
 
 `message.delta` はprefixを付けず `print` とflushを行い、`message.completed` で行を閉じる。Tool eventがassistant行へ割り込む場合は先に改行し、Toolを独立行で表示した後、空行を挟んでassistant streamingを再開する。Rendererは表示上の「assistant行が開いているか」だけを持ち、新しいRunでリセットする。全event処理は`synchronized`で文字単位の競合を防ぐ。
 
-Run完了行にはコマンド全体の経過時間とcompletion token数を表示する。出力上限による再計画やサブゴールで複数回LLMを呼び出した場合は各呼び出しのcompletion tokenを合算する。プロバイダーがusageを返さない場合は `tokens unavailable` と表示する。
+Run完了行にはコマンド全体の経過時間、completion token数、回答生成速度を表示する。出力上限による再計画やサブゴールで複数回LLMを呼び出した場合は各呼び出しのcompletion tokenを合算し、速度は従来の `=== speed(... tok/s) ===` と同じ計算による最後の回答ストリームの値を表示する。プロバイダーがusageを返さない場合は `tokens unavailable, speed unavailable` と表示する。
 
 Tool failure eventにはdurationがないため算出せず、event内のtool名とerror summaryだけを表示する。stack traceと詳細は既存file loggingへ任せる。
 

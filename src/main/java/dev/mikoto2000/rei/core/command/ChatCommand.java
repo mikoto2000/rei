@@ -130,6 +130,7 @@ public class ChatCommand implements Runnable {
     String runId = UUID.randomUUID().toString();
     AtomicLong runCompletionTokens = new AtomicLong();
     AtomicBoolean usageAvailable = new AtomicBoolean();
+    AtomicReference<Double> lastTokensPerSecond = new AtomicReference<>();
 
     try {
       String promptText = String.join(" ", prompts);
@@ -143,14 +144,14 @@ public class ChatCommand implements Runnable {
       }
       eventPublisher.publish(eventFactory.runStarted(runId, "user-request", null));
       ChatRunResult result = executePrompt(promptText, true, startedAtNanos, budget, runId,
-          runCompletionTokens, usageAvailable);
+          runCompletionTokens, usageAvailable, lastTokensPerSecond);
       if (result.status() == ChatRunStatus.OUTPUT_LIMIT) {
         result = handleOutputLimit(promptText, promptText, "", result.text(), budget, startedAtNanos, runId,
-            runCompletionTokens, usageAvailable);
+            runCompletionTokens, usageAvailable, lastTokensPerSecond);
       }
       if (result.status() == ChatRunStatus.SUCCESS) {
         eventPublisher.publish(eventFactory.runCompleted(runId, elapsedMillis(startedAtNanos),
-            usageAvailable.get() ? runCompletionTokens.get() : null));
+            usageAvailable.get() ? runCompletionTokens.get() : null, lastTokensPerSecond.get()));
         chatResponseNarrator.narrateIfCompleted(result.text());
         maybeSuggestConsolidation();
       } else {
@@ -172,7 +173,7 @@ public class ChatCommand implements Runnable {
 
   private ChatRunResult handleOutputLimit(String originalUserRequest, String currentGoal, String progressSoFar,
       String partialOutput, OutputLimitRunBudget budget, long startedAtNanos, String runId,
-      AtomicLong runCompletionTokens, AtomicBoolean usageAvailable) {
+      AtomicLong runCompletionTokens, AtomicBoolean usageAvailable, AtomicReference<Double> lastTokensPerSecond) {
     if (outputLimitReplanner.isEmpty()) {
       System.err.println("[error] output token limit reached");
       return ChatRunResult.outputLimit(partialOutput);
@@ -223,11 +224,12 @@ public class ChatCommand implements Runnable {
       }
       log.info("Output limit subgoal started: id={}, goal={}", subgoal.id(), subgoal.goal());
       ChatRunResult subgoalResult = executePrompt(subgoal.goal(), false, startedAtNanos, budget, runId,
-          runCompletionTokens, usageAvailable);
+          runCompletionTokens, usageAvailable, lastTokensPerSecond);
       log.info("Output limit subgoal finished: id={}, status={}", subgoal.id(), subgoalResult.status());
       if (subgoalResult.status() == ChatRunStatus.OUTPUT_LIMIT) {
         subgoalResult = handleOutputLimit(originalUserRequest, subgoal.goal(), subgoalResults.toString(),
-            subgoalResult.text(), budget, startedAtNanos, runId, runCompletionTokens, usageAvailable);
+            subgoalResult.text(), budget, startedAtNanos, runId, runCompletionTokens, usageAvailable,
+            lastTokensPerSecond);
       }
       if (subgoalResult.status() != ChatRunStatus.SUCCESS) {
         return subgoalResult;
@@ -242,11 +244,12 @@ public class ChatCommand implements Runnable {
       return ChatRunResult.outputLimit(subgoalResults.toString());
     }
     return executePrompt(buildIntegrationPrompt(originalUserRequest, plan.finalGoal(), subgoalResults.toString()),
-        false, startedAtNanos, budget, runId, runCompletionTokens, usageAvailable);
+        false, startedAtNanos, budget, runId, runCompletionTokens, usageAvailable, lastTokensPerSecond);
   }
 
   private ChatRunResult executePrompt(String promptText, boolean resolveAttachments, long startedAtNanos,
-      OutputLimitRunBudget budget, String runId, AtomicLong runCompletionTokens, AtomicBoolean usageAvailable) {
+      OutputLimitRunBudget budget, String runId, AtomicLong runCompletionTokens, AtomicBoolean usageAvailable,
+      AtomicReference<Double> lastTokensPerSecond) {
     InlineFileAttachmentResolver.ResolvedPrompt resolvedPrompt = resolveAttachments
         ? inlineFileAttachmentResolver.resolve(promptText)
         : new InlineFileAttachmentResolver.ResolvedPrompt(promptText, java.util.List.of(), java.util.List.of());
@@ -338,7 +341,7 @@ public class ChatCommand implements Runnable {
       if (messageStarted.get()) {
         eventPublisher.publish(eventFactory.messageCompleted(messageId, "assistant", responseBuilder.toString()));
       }
-      printGenerationSpeed(answerStartedAtNanos.get(), completionTokens.get());
+      lastTokensPerSecond.set(printGenerationSpeed(answerStartedAtNanos.get(), completionTokens.get()));
       return ChatRunResult.success(responseBuilder.toString());
     } catch (InterruptedException e) {
       if (cancellationService.consumeCancellationRequested()) {
@@ -425,13 +428,14 @@ public class ChatCommand implements Runnable {
     completionTokens.set(usage.getCompletionTokens());
   }
 
-  private void printGenerationSpeed(long answerStartedAtNanos, int completionTokens) {
+  private Double printGenerationSpeed(long answerStartedAtNanos, int completionTokens) {
     if (answerStartedAtNanos <= 0L || completionTokens <= 0) {
-      return;
+      return null;
     }
     double elapsedSeconds = Math.max((System.nanoTime() - answerStartedAtNanos) / 1_000_000_000.0d, 0.001d);
     double tokensPerSecond = completionTokens / elapsedSeconds;
     IO.println("=== speed(" + String.format(Locale.ROOT, "%.1f", tokensPerSecond) + " tok/s) ===");
+    return tokensPerSecond;
   }
 
   private void printThinking(ChatResponse response, AtomicBoolean thinkingHeaderPrinted,

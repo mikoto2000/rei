@@ -37,7 +37,11 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         String tokens = payload.completionTokens() == null
             ? "tokens unavailable"
             : payload.completionTokens() + " tokens";
-        output.println("[agent] completed (" + formatSeconds(payload.duration()) + " s, " + tokens + ")");
+        String speed = payload.tokensPerSecond() == null
+            ? "speed unavailable"
+            : formatDecimal(payload.tokensPerSecond()) + " tok/s";
+        output.println("[agent] completed (" + formatSeconds(payload.duration()) + " s, " + tokens + ", "
+            + speed + ")");
       }
       case AGENT_RUN_FAILED -> {
         closeAssistantLine();
@@ -106,6 +110,10 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   }
 
   private String formatSeconds(long durationMillis) {
-    return String.format(java.util.Locale.ROOT, "%.1f", durationMillis / 1_000.0d);
+    return formatDecimal(durationMillis / 1_000.0d);
+  }
+
+  private String formatDecimal(double value) {
+    return String.format(java.util.Locale.ROOT, "%.1f", value);
   }
 }

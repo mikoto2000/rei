@@ -113,6 +113,8 @@ class ChatCommandEventTest {
 
     AgentRunCompletedPayload payload = (AgentRunCompletedPayload) received.getLast().payload();
     assertEquals(42L, payload.completionTokens());
+    org.junit.jupiter.api.Assertions.assertNotNull(payload.tokensPerSecond());
+    org.junit.jupiter.api.Assertions.assertTrue(payload.tokensPerSecond() > 0.0d);
   }
 
   private static ChatResponse response(String text) {
