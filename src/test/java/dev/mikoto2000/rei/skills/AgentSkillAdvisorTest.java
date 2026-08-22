@@ -3,9 +3,8 @@ package dev.mikoto2000.rei.skills;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 
@@ -16,6 +15,12 @@ import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
+
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
+import dev.mikoto2000.rei.event.SkillSelectionCompletedPayload;
 
 class AgentSkillAdvisorTest {
 
@@ -38,24 +43,43 @@ class AgentSkillAdvisorTest {
   }
 
   @Test
-  void printsWarningsAndSelectedSkillNames() {
+  void emitsSelectionLifecycleWithWarningsAndSelectedSkillNames() {
     AgentSkill skill = skill("sample");
     AgentSkillSelectionService selectionService = Mockito.mock(AgentSkillSelectionService.class);
     when(selectionService.select("@skill:missing hello")).thenReturn(
         new AgentSkillSelection(List.of(skill), List.of(), List.of("[warn] Skill が見つかりません: missing"), "hello"));
-    AgentSkillAdvisor advisor = new AgentSkillAdvisor(selectionService, new AgentSkillPromptRenderer());
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    List<AgentEvent> events = new java.util.ArrayList<>();
+    bus.subscribe(events::add);
+    AgentSkillAdvisor advisor = new AgentSkillAdvisor(selectionService, new AgentSkillPromptRenderer(),
+        new AgentEventFactory(Clock.systemUTC()), bus);
 
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    PrintStream originalOut = System.out;
-    System.setOut(new PrintStream(out));
-    try {
-      advisor.before(request("@skill:missing hello"), Mockito.mock(AdvisorChain.class));
-    } finally {
-      System.setOut(originalOut);
-    }
+    advisor.before(request("@skill:missing hello"), Mockito.mock(AdvisorChain.class));
 
-    assertThat(out.toString()).contains("[warn] Skill が見つかりません: missing");
-    assertThat(out.toString()).contains("実行スキル: sample");
+    assertThat(events).extracting(AgentEvent::type)
+        .containsExactly(AgentEventType.SKILL_SELECTION_STARTED, AgentEventType.SKILL_SELECTION_COMPLETED);
+    SkillSelectionCompletedPayload completed = (SkillSelectionCompletedPayload) events.getLast().payload();
+    assertThat(completed.explicitSkillNames()).containsExactly("sample");
+    assertThat(completed.implicitSkillNames()).isEmpty();
+    assertThat(completed.warnings()).containsExactly("[warn] Skill が見つかりません: missing");
+    assertThat(events.getFirst().correlationId()).isEqualTo(events.getLast().correlationId());
+  }
+
+  @Test
+  void emitsFailedEventWhenSelectionThrows() {
+    AgentSkillSelectionService selectionService = Mockito.mock(AgentSkillSelectionService.class);
+    when(selectionService.select("hello")).thenThrow(new IllegalStateException("selection unavailable"));
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    List<AgentEvent> events = new java.util.ArrayList<>();
+    bus.subscribe(events::add);
+    AgentSkillAdvisor advisor = new AgentSkillAdvisor(selectionService, new AgentSkillPromptRenderer(),
+        new AgentEventFactory(Clock.systemUTC()), bus);
+
+    org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+        () -> advisor.before(request("hello"), Mockito.mock(AdvisorChain.class)));
+
+    assertThat(events).extracting(AgentEvent::type)
+        .containsExactly(AgentEventType.SKILL_SELECTION_STARTED, AgentEventType.SKILL_SELECTION_FAILED);
   }
 
   @Test

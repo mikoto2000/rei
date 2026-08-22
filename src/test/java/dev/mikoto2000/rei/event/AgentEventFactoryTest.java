@@ -88,6 +88,22 @@ class AgentEventFactoryTest {
   }
 
   @Test
+  void createsSkillSelectionLifecycleEventsWithSharedCorrelationId() {
+    AgentEvent started = factory.skillSelectionStarted("selection-1");
+    AgentEvent completed = factory.skillSelectionCompleted("selection-1", java.util.List.of("explicit"),
+        java.util.List.of("implicit"), java.util.List.of("warning"));
+
+    assertEquals(AgentEventType.SKILL_SELECTION_STARTED, started.type());
+    assertEquals(AgentEventType.SKILL_SELECTION_COMPLETED, completed.type());
+    assertEquals("selection-1", started.correlationId());
+    assertEquals("selection-1", completed.correlationId());
+    SkillSelectionCompletedPayload payload = (SkillSelectionCompletedPayload) completed.payload();
+    assertEquals(java.util.List.of("explicit"), payload.explicitSkillNames());
+    assertEquals(java.util.List.of("implicit"), payload.implicitSkillNames());
+    assertEquals(java.util.List.of("warning"), payload.warnings());
+  }
+
+  @Test
   void correlationIdIsOptional() {
     AgentEvent event = factory.runStarted("run-1", "user-request", null);
     assertNull(event.correlationId());

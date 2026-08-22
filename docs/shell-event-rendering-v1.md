@@ -9,12 +9,14 @@ Agent Core -> Agent Event Bus -> ShellAgentEventRenderer -> JLineShellEventOutpu
                            \-> AgentUiProjection -> TUI
 ```
 
-ShellはProjectionをpollingせずEvent Busを直接購読し、受信順（Busのsequence順）に表示する。対象は `agent.run.started/completed/failed`、`message.started/delta/completed`、`tool.started/completed/failed`。Task、Working Set、Context、File eventはv1対象外。
+ShellはProjectionをpollingせずEvent Busを直接購読し、受信順（Busのsequence順）に表示する。対象は `agent.run.started/completed/failed`、`message.started/delta/completed`、`tool.started/completed/failed`、`skill.selection.started/completed/failed`。Task、Working Set、Context、File eventはv1対象外。
 
 ## 表示
 
 ```text
 [agent] running
+[skill] selecting
+[skill] selected: filesystem (explicit), browser (implicit)
 assistant streaming text
   → toolName
   ✓ toolName (84 ms)

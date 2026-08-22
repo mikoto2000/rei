@@ -17,6 +17,7 @@ Agent Core で外部から観測する価値のある状態変化を、UI や LL
 | `agent.run.started`, `agent.run.completed`, `agent.run.failed` | `ChatCommand` の run 境界へ統合済み |
 | `message.started`, `message.delta`, `message.completed` | `ChatCommand` の正規化済み response stream へ統合済み |
 | `tool.started`, `tool.completed`, `tool.failed` | MCP Tool と Method Tool の `ToolCallback.call` 境界へ統合済み |
+| `skill.selection.started`, `skill.selection.completed`, `skill.selection.failed` | `AgentSkillAdvisor` の選定境界へ統合済み |
 | `task.created`, `task.started`, `task.completed`, `task.failed` | 型と factory のみ |
 | `working_set.item.added`, `working_set.item.removed` | 型と factory のみ |
 | `context.snapshot.updated` | 型と factory のみ |
@@ -42,6 +43,10 @@ Provider 固有の streaming response や SSE を UI へ渡さない。`ChatComm
 MCP の `SyncMcpToolCallbackProvider` は `ToolEventCallbackProvider` で包む。`defaultTools(...)` に渡していた Java object は `MethodToolCallbackProvider` で公開 API を使って `MethodToolCallback` に変換し、同じ provider decorator で包んでから `defaultToolCallbacks(...)` に登録する。したがって個々の `@Tool` method に event code はない。
 
 `ToolEventCallbackDecorator` は呼出し前後で started/completed/failed を発行する。arguments/result は短い summary のみとし、巨大な file content や result 全文、stack trace を複製しない。
+
+## Skill selection
+
+`AgentSkillAdvisor` は選定処理の前後で `skill.selection.started/completed/failed` を発行する。各選定に UUID の `selectionId` を割り当て、payload と `correlationId` で lifecycle を関連付ける。completed payload は明示選択名、暗黙選択名、警告を別々の immutable list として保持する。従来の直接標準出力は行わず、表示は Event consumer に委ねる。
 
 Spring AI 2.0.0-M3 の `DefaultToolCallingManager` は LLM の `AssistantMessage.ToolCall.id()` を `ToolContext` に追加せず、prompt の static tool context だけを渡す。そのため `toolCallId` が context に明示されている場合はそれを採用し、ない場合は一回の decorator 呼出しにつき UUID を生成して started と completed/failed で共有する。LLM ID の完全な伝播には Spring AI 側の公開 extension point 追加、または ToolCallingManager の差し替えが必要になる。
 

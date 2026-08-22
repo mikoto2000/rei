@@ -9,6 +9,7 @@ public sealed interface AgentEventPayload
     permits AgentRunStartedPayload, AgentRunCompletedPayload, AgentRunFailedPayload,
         MessageStartedPayload, MessageDeltaPayload, MessageCompletedPayload,
         ToolStartedPayload, ToolCompletedPayload, ToolFailedPayload,
+        SkillSelectionStartedPayload, SkillSelectionCompletedPayload, SkillSelectionFailedPayload,
         TaskCreatedPayload, TaskStartedPayload, TaskCompletedPayload, TaskFailedPayload,
         WorkingSetItemAddedPayload, WorkingSetItemRemovedPayload,
         ContextSnapshotUpdatedPayload,

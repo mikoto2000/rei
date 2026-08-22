@@ -93,6 +93,24 @@ public class AgentEventFactory {
         new ToolFailedPayload(toolCallId, toolName, error));
   }
 
+  // ---- Skill selection ----
+
+  public AgentEvent skillSelectionStarted(String selectionId) {
+    return newEvent(AgentEventType.SKILL_SELECTION_STARTED, null, selectionId,
+        new SkillSelectionStartedPayload(selectionId));
+  }
+
+  public AgentEvent skillSelectionCompleted(String selectionId, java.util.List<String> explicitSkillNames,
+      java.util.List<String> implicitSkillNames, java.util.List<String> warnings) {
+    return newEvent(AgentEventType.SKILL_SELECTION_COMPLETED, null, selectionId,
+        new SkillSelectionCompletedPayload(selectionId, explicitSkillNames, implicitSkillNames, warnings));
+  }
+
+  public AgentEvent skillSelectionFailed(String selectionId, ErrorInformation error) {
+    return newEvent(AgentEventType.SKILL_SELECTION_FAILED, null, selectionId,
+        new SkillSelectionFailedPayload(selectionId, error));
+  }
+
   // ---- Task ----
 
   public AgentEvent taskCreated(String taskId, String parentTaskId, String title, String status) {

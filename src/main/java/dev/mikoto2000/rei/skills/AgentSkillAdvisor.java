@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.skills;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -12,15 +13,31 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
+import dev.mikoto2000.rei.event.ErrorInformation;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
+
 @Component
 public class AgentSkillAdvisor implements BaseAdvisor {
 
   private final AgentSkillSelectionService selectionService;
   private final AgentSkillPromptRenderer promptRenderer;
+  private final AgentEventFactory eventFactory;
+  private final AgentEventPublisher eventPublisher;
 
   public AgentSkillAdvisor(AgentSkillSelectionService selectionService, AgentSkillPromptRenderer promptRenderer) {
+    this(selectionService, promptRenderer, new AgentEventFactory(java.time.Clock.systemDefaultZone()),
+        new InMemoryAgentEventBus());
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public AgentSkillAdvisor(AgentSkillSelectionService selectionService, AgentSkillPromptRenderer promptRenderer,
+      AgentEventFactory eventFactory, AgentEventPublisher eventPublisher) {
     this.selectionService = selectionService;
     this.promptRenderer = promptRenderer;
+    this.eventFactory = eventFactory;
+    this.eventPublisher = eventPublisher;
   }
 
   @Override
@@ -31,9 +48,17 @@ public class AgentSkillAdvisor implements BaseAdvisor {
       return request;
     }
 
-    AgentSkillSelection selection = selectionService.select(userMessage.getText());
-    printWarnings(selection);
-    printSelectedSkills(selection);
+    String selectionId = UUID.randomUUID().toString();
+    eventPublisher.publish(eventFactory.skillSelectionStarted(selectionId));
+    AgentSkillSelection selection;
+    try {
+      selection = selectionService.select(userMessage.getText());
+      eventPublisher.publish(eventFactory.skillSelectionCompleted(selectionId,
+          skillNames(selection.explicitSkills()), skillNames(selection.implicitSkills()), selection.warnings()));
+    } catch (RuntimeException exception) {
+      eventPublisher.publish(eventFactory.skillSelectionFailed(selectionId, ErrorInformation.from(exception)));
+      throw exception;
+    }
     if (selection.selectedSkills().isEmpty() && selection.sanitizedPrompt().equals(userMessage.getText())) {
       return request;
     }
@@ -74,18 +99,9 @@ public class AgentSkillAdvisor implements BaseAdvisor {
     return List.copyOf(replaced);
   }
 
-  private void printWarnings(AgentSkillSelection selection) {
-    for (String warning : selection.warnings()) {
-      System.out.println(warning);
-    }
-  }
-
-  private void printSelectedSkills(AgentSkillSelection selection) {
-    List<String> skillNames = selection.selectedSkills().stream()
+  private List<String> skillNames(List<AgentSkill> skills) {
+    return skills.stream()
         .map(AgentSkill::name)
         .toList();
-    if (!skillNames.isEmpty()) {
-      System.out.println("実行スキル: " + String.join(", ", skillNames));
-    }
   }
 }

@@ -7,6 +7,8 @@ import dev.mikoto2000.rei.event.AgentRunFailedPayload;
 import dev.mikoto2000.rei.event.MessageCompletedPayload;
 import dev.mikoto2000.rei.event.MessageDeltaPayload;
 import dev.mikoto2000.rei.event.MessageStartedPayload;
+import dev.mikoto2000.rei.event.SkillSelectionCompletedPayload;
+import dev.mikoto2000.rei.event.SkillSelectionFailedPayload;
 import dev.mikoto2000.rei.event.ToolCompletedPayload;
 import dev.mikoto2000.rei.event.ToolFailedPayload;
 import dev.mikoto2000.rei.event.ToolStartedPayload;
@@ -66,6 +68,24 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         beforeTool();
         ToolFailedPayload payload = (ToolFailedPayload) event.payload();
         output.println("  ✗ " + payload.toolName() + ": " + errorMessage(payload.error()));
+      }
+      case SKILL_SELECTION_STARTED -> {
+        closeAssistantLine();
+        output.println("[skill] selecting");
+      }
+      case SKILL_SELECTION_COMPLETED -> {
+        closeAssistantLine();
+        SkillSelectionCompletedPayload payload = (SkillSelectionCompletedPayload) event.payload();
+        payload.warnings().forEach(output::println);
+        java.util.List<String> selected = new java.util.ArrayList<>();
+        payload.explicitSkillNames().forEach(name -> selected.add(name + " (explicit)"));
+        payload.implicitSkillNames().forEach(name -> selected.add(name + " (implicit)"));
+        output.println("[skill] selected: " + (selected.isEmpty() ? "none" : String.join(", ", selected)));
+      }
+      case SKILL_SELECTION_FAILED -> {
+        closeAssistantLine();
+        SkillSelectionFailedPayload payload = (SkillSelectionFailedPayload) event.payload();
+        output.println("[skill] selection failed: " + errorMessage(payload.error()));
       }
       default -> { }
     }

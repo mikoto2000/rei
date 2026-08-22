@@ -74,6 +74,20 @@ class ShellAgentEventRendererTest {
     assertEquals("  ✗ writeFile: denied\n", output.text());
   }
 
+  @Test
+  void rendersSkillSelectionLifecycleAndWarnings() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.skillSelectionStarted("selection-1"));
+    renderer.onEvent(events.skillSelectionCompleted("selection-1", java.util.List.of("explicit-skill"),
+        java.util.List.of("implicit-skill"), java.util.List.of("[warn] missing skill")));
+    renderer.onEvent(events.skillSelectionFailed("selection-2",
+        new ErrorInformation("IllegalStateException", "selection unavailable", null)));
+    assertEquals("[skill] selecting\n[warn] missing skill\n"
+        + "[skill] selected: explicit-skill (explicit), implicit-skill (implicit)\n"
+        + "[skill] selection failed: selection unavailable\n", output.text());
+  }
+
   private static final class RecordingOutput implements ShellEventOutput {
     private final StringBuilder value = new StringBuilder();
     public void print(String text) { value.append(text); }
