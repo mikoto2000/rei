@@ -148,12 +148,21 @@ public class ChatCommand implements Runnable {
         eventPublisher.publish(eventFactory.runCompleted(runId, elapsedMillis(startedAtNanos)));
         chatResponseNarrator.narrateIfCompleted(result.text());
         maybeSuggestConsolidation();
-      } else if (result.status() == ChatRunStatus.FAILED) {
-        eventPublisher.publish(eventFactory.runFailed(runId, new ErrorInformation("ChatRunFailed", "chat run failed", null)));
+      } else {
+        eventPublisher.publish(eventFactory.runFailed(runId, terminalError(result.status())));
       }
     } finally {
       cancellationService.clear();
     }
+  }
+
+  private ErrorInformation terminalError(ChatRunStatus status) {
+    return switch (status) {
+      case OUTPUT_LIMIT -> new ErrorInformation("OutputLimit", "output token limit reached", "output_limit");
+      case CANCELLED -> new ErrorInformation("Cancelled", "chat run cancelled", "cancelled");
+      case FAILED -> new ErrorInformation("ChatRunFailed", "chat run failed", null);
+      case SUCCESS -> throw new IllegalArgumentException("SUCCESS is not a failed terminal state");
+    };
   }
 
   private ChatRunResult handleOutputLimit(String originalUserRequest, String currentGoal, String progressSoFar,

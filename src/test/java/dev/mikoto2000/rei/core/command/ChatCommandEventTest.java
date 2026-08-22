@@ -72,6 +72,24 @@ class ChatCommandEventTest {
     assertEquals(AgentEventType.AGENT_RUN_COMPLETED, received.get(5).type());
   }
 
+  @Test
+  void runEmitsFailedTerminalEventWhenResponseFails() {
+    bus.subscribe(received::add);
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.stream().chatResponse()).thenReturn(Flux.error(new IllegalStateException("boom")));
+
+    new CommandLine(new ChatCommand(chatClient, modelHolderService, new CommandCancellationService(),
+        Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty(), factory, bus)).execute("hello");
+
+    assertEquals(AgentEventType.AGENT_RUN_STARTED, received.getFirst().type());
+    assertEquals(AgentEventType.AGENT_RUN_FAILED, received.getLast().type());
+  }
+
   private static ChatResponse response(String text) {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
   }
