@@ -45,6 +45,8 @@ Input (3 rows):        > input / [RUNNING] input
 * 通常文字・日本語: cursor位置へ追加
 * Left / Right / Home / End: cursor移動
 * Backspace / Delete: code point境界で削除
+* Up / Down: Shellと同じJLine履歴を前後移動
+* Tab: Shellと同じpicocli/JLine completerで補完。単一候補は入力へ反映し、候補を入力枠内に表示
 * Enter: 空でない入力を共通parserへsubmit
 * Ctrl+C: 実行中なら既存cancellation APIでAgentだけをcancel、待機中ならTUIを終了
 
@@ -53,6 +55,8 @@ queueや並列Runは作らない。
 ## Slash command
 
 Shellの既存入力体験をcanonical behaviorとし、ShellとTUIは共通の `UserInputService` で空入力、通常chat、`/exit`、`/quit`、`/help`、`/version`、`/paste`、一般slash commandを解釈する。引用符を含む引数のtokenizeはサービス内部の `UserInputParser` が担う。各UIは同じ解釈結果に対して、Shellなら標準出力や複数行reader、TUIなら画面内表示という固有presentationだけを適用する。TUIのslash commandは既存のpicocli `RootCommand` を実行し、stdout/stderrとpicocli writerを回収してAssistant領域へ表示する。command状態はAgentUiProjectionへ混ぜずTUIローカル状態に保持する。
+
+入力編集基盤は `ReiLineReaderFactory` が構築するJLine sessionを共有する。Shellから `/tui` へ入る場合は利用中の `LineReader` とcompleterをそのまま渡し、`--tui` では同じfactoryから生成する。TUIはJLineの `Buffer`、`History`、`Parser`、`Completer` のみを利用し、`readLine()`、prompt描画、候補描画、redisplayは呼ばない。terminal全体の描画とcursor制御は引き続きTamboUIだけが所有する。
 
 `/help`、`/version` とRootCommand配下の `search`、`models`、`model`、`project`、`config`、`schedule`、`embed`、`task`、`feed`、`briefing`、`reminder`、`bsky`、`interest`、`memory`、`skill`、`image` を利用できる。`/sh` は外部terminal lifecycle、`/paste` はShellの複数行readerに依存するためTUIでは利用不可。`/tui` は `Already in TUI mode.` と表示して再帰起動を防ぐ。
 
@@ -68,7 +72,7 @@ TUI開始時にProjectionをEvent Busへsubscribeし、終了時にunsubscribe�
 
 ## Test とmanual smoke
 
-Terminal不要のtestで、Unicode入力編集、共通入力分類、startup mode、slash routing、RUNNING中policy、複数行command出力、未知command、launcher共有、4 Run状態、streaming、日本語、長文、3 Tool状態、Event Busからrender modelまでを検証する。
+Terminal不要のtestで、Unicode入力編集、JLine履歴移動、JLine parser/completerによるTab補完、共通入力分類、startup mode、slash routing、RUNNING中policy、複数行command出力、未知command、launcher共有、4 Run状態、streaming、日本語、長文、3 Tool状態、Event Busからrender modelまでを検証する。
 
 実Terminal smoke手順:
 
