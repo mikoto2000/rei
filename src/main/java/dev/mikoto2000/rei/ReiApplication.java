@@ -40,6 +40,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import dev.mikoto2000.rei.core.command.ProjectAddDirectoryCompletion;
 import dev.mikoto2000.rei.core.command.RootCommand;
 import dev.mikoto2000.rei.core.command.UserInputParser;
+import dev.mikoto2000.rei.core.command.UserInputService;
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
@@ -135,9 +136,9 @@ public class ReiApplication {
     System.out.println("/paste で確実な複数行入力モード（終了は単独行の . ）");
 
     ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
-    UserInputParser inputParser = new UserInputParser();
+    UserInputService inputService = new UserInputService(new UserInputParser());
     try {
-      while (true) {
+      shellLoop: while (true) {
         try {
           String line = reader.readLine(buildPrompt());
           if (line == null) {
@@ -145,55 +146,42 @@ public class ReiApplication {
           }
           line = readPossiblyMultilineInput(line, reader);
 
-          String trimmed = line.trim();
-          if (trimmed.isEmpty()) {
-            continue;
-          }
-
-          if (trimmed.equals("/exit") || trimmed.equals("/quit")) {
-            if (confirmExitIfNeeded(prompt -> reader.readLine(prompt))) {
-              break;
+          UserInputService.Input input = inputService.interpret(line);
+          switch (input.kind()) {
+            case EMPTY -> { }
+            case EXIT -> {
+              if (confirmExitIfNeeded(prompt -> reader.readLine(prompt))) {
+                break shellLoop;
+              }
             }
-            continue;
-          }
-
-          if (trimmed.equals("/help")) {
-            printUserInput(trimmed, terminal);
-            executeInterruptibly(cmd, terminal, commandExecutor, "--help");
-            continue;
-          }
-
-          if (trimmed.equals("/version")) {
-            printUserInput(trimmed, terminal);
-            executeInterruptibly(cmd, terminal, commandExecutor, "--version");
-            continue;
-          }
-
-          if (trimmed.equals("/paste")) {
-            String pasted = readPasteBlock(reader);
-            if (pasted.isBlank()) {
-              continue;
+            case HELP -> {
+              printUserInput(input.text(), terminal);
+              executeInterruptibly(cmd, terminal, commandExecutor, "--help");
             }
-            printUserInput(pasted, terminal);
-            executeInterruptibly(cmd, terminal, commandExecutor, "chat", pasted);
-            continue;
-          }
-
-          UserInputParser.ParsedInput parsedInput = inputParser.parse(line);
-          if (parsedInput.kind() == UserInputParser.Kind.SLASH_COMMAND) {
-            String[] commandArgs = parsedInput.arguments();
-            if (commandArgs.length == 0) {
-              continue;
+            case VERSION -> {
+              printUserInput(input.text(), terminal);
+              executeInterruptibly(cmd, terminal, commandExecutor, "--version");
             }
-            printUserInputIfNeeded(trimmed, terminal, commandArgs);
-            if (isInteractiveShellCommand(commandArgs)) {
-              executeInteractiveShellCommand(cmd, reader, terminal, commandArgs);
-              continue;
+            case PASTE -> {
+              String pasted = readPasteBlock(reader);
+              if (!pasted.isBlank()) {
+                printUserInput(pasted, terminal);
+                executeInterruptibly(cmd, terminal, commandExecutor, "chat", pasted);
+              }
             }
-            executeInterruptibly(cmd, terminal, commandExecutor, commandArgs);
-          } else {
-            printUserInput(line, terminal);
-            executeInterruptibly(cmd, terminal, commandExecutor, "chat", line);
+            case COMMAND -> {
+              String[] commandArgs = input.arguments();
+              printUserInputIfNeeded(input.text(), terminal, commandArgs);
+              if (isInteractiveShellCommand(commandArgs)) {
+                executeInteractiveShellCommand(cmd, reader, terminal, commandArgs);
+              } else {
+                executeInterruptibly(cmd, terminal, commandExecutor, commandArgs);
+              }
+            }
+            case CHAT -> {
+              printUserInput(input.text(), terminal);
+              executeInterruptibly(cmd, terminal, commandExecutor, "chat", input.text());
+            }
           }
 
         } catch (UserInterruptException e) {
