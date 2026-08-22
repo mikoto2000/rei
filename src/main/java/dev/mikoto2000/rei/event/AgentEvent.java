@@ -46,4 +46,12 @@ public record AgentEvent(
       throw new IllegalArgumentException("version must be positive");
     }
   }
+
+  /**
+   * sessionId と turnId を設定した複製を返す。
+   */
+  public AgentEvent withContext(String sessionId, String turnId) {
+    return new AgentEvent(id, sequence, timestamp, type, version, sessionId, turnId, runId,
+        correlationId, parentEventId, payload);
+  }
 }
