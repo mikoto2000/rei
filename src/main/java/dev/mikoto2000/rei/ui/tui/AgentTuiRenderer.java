@@ -19,8 +19,9 @@ final class AgentTuiRenderer {
       return;
     }
 
+    int inputHeight = Math.min(8, 3 + model.completionCandidates().size());
     List<dev.tamboui.layout.Rect> areas = Layout.vertical()
-        .constraints(Constraint.length(3), Constraint.fill(), Constraint.percentage(30), Constraint.length(3))
+        .constraints(Constraint.length(3), Constraint.fill(), Constraint.percentage(30), Constraint.length(inputHeight))
         .split(frame.area());
 
     Color statusColor = switch (model.status()) {
@@ -49,8 +50,10 @@ final class AgentTuiRenderer {
         .build(), areas.get(2));
 
     String prompt = model.agentRunning() ? "[RUNNING] " : "> ";
+    String candidates = model.completionCandidates().isEmpty() ? "" : System.lineSeparator()
+        + String.join("  ", model.completionCandidates());
     frame.renderWidget(Paragraph.builder()
-        .text(prompt + model.input())
+        .text(prompt + model.input() + candidates)
         .block(Block.bordered())
         .build(), areas.get(3));
     int cursorWidth = Text.from(prompt + model.inputBeforeCursor()).width();

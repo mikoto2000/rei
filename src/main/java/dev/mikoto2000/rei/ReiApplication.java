@@ -9,7 +9,6 @@ import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -39,9 +38,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 import dev.mikoto2000.rei.core.command.ProjectAddDirectoryCompletion;
 import dev.mikoto2000.rei.core.command.RootCommand;
+import dev.mikoto2000.rei.core.command.ReiLineReaderFactory;
 import dev.mikoto2000.rei.core.command.UserInputParser;
 import dev.mikoto2000.rei.core.command.UserInputService;
-import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
@@ -71,8 +70,6 @@ public class ReiApplication {
   private final AsyncVectorDocumentService asyncVectorDocumentService;
   private final SoundNotificationService soundNotificationService;
   private final ChatResponseNarrator chatResponseNarrator;
-
-  private final Path HISTORY_FILE = ReiPaths.historyFilePath();
 
   private static final String COMMAND_COMPLETION_MESSAGE = "コマンド実行が完了しました";
   private static final String MULTILINE_CONTINUATION = "\\";
@@ -107,27 +104,12 @@ public class ReiApplication {
   void run(String[] args) throws IOException {
     var cmd = new picocli.CommandLine(rootCommand, factory);
     configureCommandOutput(cmd);
-    Completer completer = new SlashCommandCompleter(
-        new PicocliJLineCompleter(cmd.getCommandSpec()),
-        cmd.getSubcommands().keySet().stream().sorted().toList());
-    try {
-      ReiPaths.ensureParentDirectoryExists(HISTORY_FILE);
-    } catch (Exception e) {
-      throw new IOException("履歴ファイル用ディレクトリの作成に失敗しました: " + HISTORY_FILE, e);
-    }
-
     var terminal = TerminalBuilder.builder()
       .system(true)
       .build();
 
-    LineReader reader = LineReaderBuilder.builder()
-      .terminal(terminal)
-      .completer(completer)
-      .variable(LineReader.HISTORY_FILE, HISTORY_FILE)
-      .variable(LineReader.HISTORY_SIZE, 1000)
-      .variable(LineReader.HISTORY_FILE_SIZE, 1000)
-      .build();
-    reader.setOpt(LineReader.Option.BRACKETED_PASTE);
+    ReiLineReaderFactory.Session inputSession = ReiLineReaderFactory.create(terminal, cmd);
+    LineReader reader = inputSession.reader();
     configureMultilineKeyBinding(reader);
 
     System.out.println("AI Shell");
@@ -173,7 +155,7 @@ public class ReiApplication {
               String[] commandArgs = input.arguments();
               printUserInputIfNeeded(input.text(), terminal, commandArgs);
               if (isInteractiveShellCommand(commandArgs)) {
-                executeInteractiveShellCommand(cmd, reader, terminal, commandArgs);
+                executeInteractiveShellCommand(cmd, reader, terminal, inputSession.completer(), commandArgs);
               } else {
                 executeInterruptibly(cmd, terminal, commandExecutor, commandArgs);
               }
@@ -230,10 +212,15 @@ public class ReiApplication {
   }
 
   void executeInteractiveShellCommand(CommandLine cmd, LineReader reader, Terminal terminal, String... args) {
+    executeInteractiveShellCommand(cmd, reader, terminal, ReiLineReaderFactory.completer(cmd), args);
+  }
+
+  void executeInteractiveShellCommand(CommandLine cmd, LineReader reader, Terminal terminal,
+      Completer completer, String... args) {
     if (args != null && args.length > 0 && "tui".equals(args[0])) {
       try {
         AgentTuiCommand tui = (AgentTuiCommand) cmd.getSubcommands().get("tui").getCommand();
-        tui.run(terminal);
+        tui.run(terminal, reader, completer);
       } finally {
         clearPendingInputAfterInteractiveShell(reader, terminal);
       }
@@ -401,71 +388,4 @@ public class ReiApplication {
     String read(String prompt) throws UserInterruptException, EndOfFileException;
   }
 
-  private static final class SlashCommandCompleter implements Completer {
-
-    private static final List<String> BUILTIN_COMMANDS = List.of("/exit", "/quit", "/help", "/version", "/paste");
-
-    private final Completer delegate;
-    private final List<String> rootCommands;
-    private final Parser parser = new DefaultParser();
-
-    private SlashCommandCompleter(Completer delegate, List<String> rootCommands) {
-      this.delegate = delegate;
-      this.rootCommands = rootCommands;
-    }
-
-    @Override
-    public void complete(LineReader reader, ParsedLine line, List<Candidate> candidates) {
-      String rawLine = line.line();
-      if (rawLine == null || !rawLine.startsWith("/")) {
-        return;
-      }
-
-      if (isCompletingRootCommand(rawLine)) {
-        completeRootCommand(rawLine, candidates);
-        return;
-      }
-
-      if (isCompletingProjectAddDirectory(rawLine)) {
-        ProjectAddDirectoryCompletion.complete(rawLine, ProjectService.currentProjectOrStartupDirectory())
-            .forEach(candidate -> candidates.add(new Candidate(candidate)));
-        return;
-      }
-
-      try {
-        delegate.complete(reader, stripSlash(line), candidates);
-      } catch (SyntaxError e) {
-        return;
-      }
-    }
-
-    private boolean isCompletingRootCommand(String rawLine) {
-      return !rawLine.substring(1).contains(" ");
-    }
-
-    private boolean isCompletingProjectAddDirectory(String rawLine) {
-      return rawLine.equals("/project add") || rawLine.startsWith("/project add ");
-    }
-
-    private void completeRootCommand(String current, List<Candidate> candidates) {
-      for (String builtinCommand : BUILTIN_COMMANDS) {
-        if (builtinCommand.startsWith(current)) {
-          candidates.add(new Candidate(builtinCommand));
-        }
-      }
-      for (String rootCommand : rootCommands) {
-        String slashCommand = "/" + rootCommand;
-        if (slashCommand.startsWith(current)) {
-          candidates.add(new Candidate(slashCommand));
-        }
-      }
-    }
-
-    private ParsedLine stripSlash(ParsedLine line) throws SyntaxError {
-      String rawLine = line.line();
-      String strippedLine = rawLine.length() <= 1 ? "" : rawLine.substring(1);
-      int strippedCursor = Math.max(0, line.cursor() - 1);
-      return parser.parse(strippedLine, strippedCursor, Parser.ParseContext.COMPLETE);
-    }
-  }
 }

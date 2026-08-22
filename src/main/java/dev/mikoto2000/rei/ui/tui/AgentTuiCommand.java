@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.ui.tui;
 
 import org.springframework.stereotype.Component;
+import org.jline.reader.Completer;
+import org.jline.reader.LineReader;
 
 import picocli.CommandLine.Command;
 
@@ -21,5 +23,9 @@ public final class AgentTuiCommand implements Runnable {
 
   public void run(org.jline.terminal.Terminal shellTerminal) {
     launcher.run(shellTerminal);
+  }
+
+  public void run(org.jline.terminal.Terminal shellTerminal, LineReader reader, Completer completer) {
+    launcher.run(shellTerminal, reader, completer);
   }
 }

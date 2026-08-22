@@ -15,9 +15,14 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+import org.jline.reader.Completer;
+import org.jline.reader.LineReader;
+import org.jline.terminal.Terminal;
+import org.jline.terminal.TerminalBuilder;
 
 import dev.mikoto2000.rei.core.command.ChatCommand;
 import dev.mikoto2000.rei.core.command.RootCommand;
+import dev.mikoto2000.rei.core.command.ReiLineReaderFactory;
 import dev.mikoto2000.rei.core.command.UserInputParser;
 import dev.mikoto2000.rei.core.command.UserInputService;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
@@ -52,6 +57,28 @@ public final class AgentTuiLauncher {
   }
 
   public void run(org.jline.terminal.Terminal shellTerminal) {
+    run(shellTerminal, null, null);
+  }
+
+  public void run(Terminal shellTerminal, LineReader shellReader, Completer shellCompleter) {
+    Terminal activeTerminal = shellTerminal;
+    boolean ownTerminal = false;
+    try {
+      if (activeTerminal == null) {
+        activeTerminal = TerminalBuilder.builder().system(true).build();
+        ownTerminal = true;
+      }
+      if (shellReader == null || shellCompleter == null) {
+        CommandLine command = new CommandLine(rootCommand.getObject(), commandFactory);
+        ReiLineReaderFactory.Session session = ReiLineReaderFactory.create(activeTerminal, command);
+        shellReader = session.reader();
+        shellCompleter = session.completer();
+      }
+    } catch (Exception exception) {
+      System.err.println("TUI startup failed: " + exception.getMessage());
+      closeOwnedTerminal(activeTerminal, ownTerminal);
+      return;
+    }
     DefaultAgentUiProjection projection = new DefaultAgentUiProjection();
     AgentEventBus.Subscription subscription = eventBus.subscribe(projection);
     ExecutorService executor = Executors.newSingleThreadExecutor(runnable -> {
@@ -61,7 +88,7 @@ public final class AgentTuiLauncher {
     });
     AtomicBoolean busy = new AtomicBoolean();
     AtomicReference<String> localOutput = new AtomicReference<>("");
-    AgentTuiInput input = new AgentTuiInput();
+    AgentTuiInput input = new AgentTuiInput(shellReader, shellCompleter);
     TuiInputRouter router = new TuiInputRouter(
         new UserInputService(new UserInputParser()));
     AgentTuiViewModelFactory models = new AgentTuiViewModelFactory();
@@ -71,9 +98,7 @@ public final class AgentTuiLauncher {
     TuiConfig.Builder configBuilder = TuiConfig.builder()
         .rawMode(true).alternateScreen(true).hideCursor(false).mouseCapture(false)
         .tickRate(Duration.ofMillis(100)).errorOutput(originalErr);
-    if (shellTerminal != null) {
-      configBuilder.backend(new JLineBackend(shellTerminal));
-    }
+    configBuilder.backend(new JLineBackend(activeTerminal));
 
     try (TuiRunner tui = TuiRunner.create(configBuilder.build());
         PrintStream discarded = new PrintStream(OutputStream.nullOutputStream())) {
@@ -109,6 +134,13 @@ public final class AgentTuiLauncher {
       } catch (InterruptedException interrupted) {
         Thread.currentThread().interrupt();
       }
+      closeOwnedTerminal(activeTerminal, ownTerminal);
+    }
+  }
+
+  private void closeOwnedTerminal(Terminal terminal, boolean owned) {
+    if (owned && terminal != null) {
+      try { terminal.close(); } catch (Exception ignored) { }
     }
   }
 
@@ -169,7 +201,10 @@ public final class AgentTuiLauncher {
 
   private Optional<String> handleKey(KeyEvent key, AgentTuiInput input) {
     if (key.isKey(KeyCode.ENTER)) return input.submit();
-    if (key.isDeleteBackward()) input.backspace();
+    if (key.isKey(KeyCode.TAB)) input.complete();
+    else if (key.isUp()) input.previousHistory();
+    else if (key.isDown()) input.nextHistory();
+    else if (key.isDeleteBackward()) input.backspace();
     else if (key.isDeleteForward()) input.delete();
     else if (key.isLeft()) input.left();
     else if (key.isRight()) input.right();

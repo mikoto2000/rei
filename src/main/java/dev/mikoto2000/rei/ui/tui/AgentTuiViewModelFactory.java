@@ -23,6 +23,7 @@ final class AgentTuiViewModelFactory {
         state.run().status().name(),
         commandOutput == null || commandOutput.isBlank() ? latestAssistantText(state) : commandOutput,
         toolLines,
+        input.completionCandidates(),
         input.text(),
         input.textBeforeCursor(),
         busy || state.run().status() == AgentRunStatus.RUNNING);
