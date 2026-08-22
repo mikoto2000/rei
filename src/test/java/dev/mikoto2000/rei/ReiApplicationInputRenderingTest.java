@@ -66,7 +66,8 @@ class ReiApplicationInputRenderingTest {
         new CommandUserInputDisplayPolicy(),
         asyncVectorDocumentService,
         Mockito.mock(SoundNotificationService.class),
-        Mockito.mock(ChatResponseNarrator.class));
+        Mockito.mock(ChatResponseNarrator.class),
+        Mockito.mock(dev.mikoto2000.rei.event.AgentEventBus.class));
   }
 
   private ReiApplication newAppWithFixedTime(String modelName, LocalTime fixedTime) {
@@ -84,7 +85,8 @@ class ReiApplicationInputRenderingTest {
         new CommandUserInputDisplayPolicy(),
         asyncVectorDocumentService,
         Mockito.mock(SoundNotificationService.class),
-        Mockito.mock(ChatResponseNarrator.class)) {
+        Mockito.mock(ChatResponseNarrator.class),
+        Mockito.mock(dev.mikoto2000.rei.event.AgentEventBus.class)) {
       @Override
       LocalTime now() {
         return fixedTime;

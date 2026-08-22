@@ -46,10 +46,14 @@ import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.sound.SoundNotificationService;
 import dev.mikoto2000.rei.ui.tui.AgentTuiCommand;
 import dev.mikoto2000.rei.ui.tui.AgentTuiLauncher;
+import dev.mikoto2000.rei.ui.shell.JLineShellEventOutput;
+import dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer;
+import dev.mikoto2000.rei.ui.shell.ShellEventSession;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine;
@@ -70,6 +74,7 @@ public class ReiApplication {
   private final AsyncVectorDocumentService asyncVectorDocumentService;
   private final SoundNotificationService soundNotificationService;
   private final ChatResponseNarrator chatResponseNarrator;
+  private final AgentEventBus agentEventBus;
 
   private static final String COMMAND_COMPLETION_MESSAGE = "コマンド実行が完了しました";
   private static final String MULTILINE_CONTINUATION = "\\";
@@ -111,6 +116,8 @@ public class ReiApplication {
     ReiLineReaderFactory.Session inputSession = ReiLineReaderFactory.create(terminal, cmd);
     LineReader reader = inputSession.reader();
     configureMultilineKeyBinding(reader);
+    ShellEventSession shellEvents = new ShellEventSession(agentEventBus,
+        new ShellAgentEventRenderer(new JLineShellEventOutput(reader)));
 
     System.out.println("AI Shell");
     System.out.println("通常入力は chat として扱います。/exit で終了します。");
@@ -155,7 +162,13 @@ public class ReiApplication {
               String[] commandArgs = input.arguments();
               printUserInputIfNeeded(input.text(), terminal, commandArgs);
               if (isInteractiveShellCommand(commandArgs)) {
-                executeInteractiveShellCommand(cmd, reader, terminal, inputSession.completer(), commandArgs);
+                boolean enteringTui = "tui".equals(commandArgs[0]);
+                if (enteringTui) shellEvents.pause();
+                try {
+                  executeInteractiveShellCommand(cmd, reader, terminal, inputSession.completer(), commandArgs);
+                } finally {
+                  if (enteringTui) shellEvents.resume();
+                }
               } else {
                 executeInterruptibly(cmd, terminal, commandExecutor, commandArgs);
               }
@@ -175,6 +188,7 @@ public class ReiApplication {
       }
     } finally {
       commandExecutor.shutdownNow();
+      shellEvents.close();
     }
   }
 
@@ -195,7 +209,7 @@ public class ReiApplication {
       throws IOException {
     Attributes originalAttributes = terminal.enterRawMode();
     try {
-      var future = commandExecutor.submit(() -> cmd.execute(args));
+      var future = commandExecutor.submit(() -> executeWithOutputPolicy(cmd, args));
       escCancellationMonitor.await(future, timeoutMillis -> terminal.reader().read(timeoutMillis), commandCancellationService::cancel);
     } finally {
       terminal.setAttributes(originalAttributes);
@@ -203,6 +217,22 @@ public class ReiApplication {
         soundNotificationService.notify(COMMAND_COMPLETION_MESSAGE);
       }
       chatResponseNarrator.reset();
+    }
+  }
+
+  int executeWithOutputPolicy(CommandLine command, String... args) {
+    if (args == null || args.length == 0 || !"chat".equals(args[0])) {
+      return command.execute(args);
+    }
+    PrintStream previousOut = System.out;
+    PrintStream previousErr = System.err;
+    try (PrintStream discarded = new PrintStream(java.io.OutputStream.nullOutputStream())) {
+      System.setOut(discarded);
+      System.setErr(discarded);
+      return command.execute(args);
+    } finally {
+      System.setOut(previousOut);
+      System.setErr(previousErr);
     }
   }
 

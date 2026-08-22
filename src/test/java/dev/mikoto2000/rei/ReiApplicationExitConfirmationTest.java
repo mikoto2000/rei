@@ -76,6 +76,7 @@ class ReiApplicationExitConfirmationTest {
         new CommandUserInputDisplayPolicy(),
         asyncVectorDocumentService,
         Mockito.mock(SoundNotificationService.class),
-        Mockito.mock(ChatResponseNarrator.class));
+        Mockito.mock(ChatResponseNarrator.class),
+        Mockito.mock(dev.mikoto2000.rei.event.AgentEventBus.class));
   }
 }

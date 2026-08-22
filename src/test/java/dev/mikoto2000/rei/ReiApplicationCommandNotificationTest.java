@@ -67,7 +67,8 @@ class ReiApplicationCommandNotificationTest {
                 new CommandUserInputDisplayPolicy(),
                 asyncVectorDocumentService,
                 soundNotificationService,
-                chatResponseNarrator);
+                chatResponseNarrator,
+                Mockito.mock(dev.mikoto2000.rei.event.AgentEventBus.class));
     }
 
     @Test
