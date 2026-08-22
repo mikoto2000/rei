@@ -52,7 +52,7 @@ queueや並列Runは作らない。
 
 ## Slash command
 
-ShellとTUIは `UserInputParser` で空入力・通常chat・slash commandを同じ規則で分類し、引用符を含む引数も同じtokenizerで処理する。TUIのslash commandは既存のpicocli `RootCommand` を実行し、stdout/stderrとpicocli writerを回収してAssistant領域へ表示する。command状態はAgentUiProjectionへ混ぜずTUIローカル状態に保持する。
+Shellの既存入力体験をcanonical behaviorとし、ShellとTUIは共通の `UserInputService` で空入力、通常chat、`/exit`、`/quit`、`/help`、`/version`、`/paste`、一般slash commandを解釈する。引用符を含む引数のtokenizeはサービス内部の `UserInputParser` が担う。各UIは同じ解釈結果に対して、Shellなら標準出力や複数行reader、TUIなら画面内表示という固有presentationだけを適用する。TUIのslash commandは既存のpicocli `RootCommand` を実行し、stdout/stderrとpicocli writerを回収してAssistant領域へ表示する。command状態はAgentUiProjectionへ混ぜずTUIローカル状態に保持する。
 
 `/help`、`/version` とRootCommand配下の `search`、`models`、`model`、`project`、`config`、`schedule`、`embed`、`task`、`feed`、`briefing`、`reminder`、`bsky`、`interest`、`memory`、`skill`、`image` を利用できる。`/sh` は外部terminal lifecycle、`/paste` はShellの複数行readerに依存するためTUIでは利用不可。`/tui` は `Already in TUI mode.` と表示して再帰起動を防ぐ。
 
