@@ -27,7 +27,8 @@ public class WebPageExtractor {
     if (content.isBlank()) {
       content = normalize(result.snippet());
     }
-    if (content.length() > MAX_CONTENT_LENGTH) {
+    boolean truncated = content.length() > MAX_CONTENT_LENGTH;
+    if (truncated) {
       content = content.substring(0, MAX_CONTENT_LENGTH);
     }
 
@@ -36,7 +37,8 @@ public class WebPageExtractor {
         result.url(),
         result.snippet(),
         publishedAt,
-        content);
+        content,
+        truncated);
   }
 
   private String metaContent(Document document, String property) {

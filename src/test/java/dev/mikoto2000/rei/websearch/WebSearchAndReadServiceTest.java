@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchService;
+import dev.mikoto2000.rei.urlfetch.UrlContentFetchResult;
 
 class WebSearchAndReadServiceTest {
   private WebSearchAndReadService service;
@@ -66,5 +67,36 @@ class WebSearchAndReadServiceTest {
     assertEquals(List.of("not_requested", "not_requested"),
         response.results().stream().map(WebSearchAndReadItem::fetchStatus).toList());
     Mockito.verifyNoInteractions(urlContentFetchService);
+  }
+
+  @Test
+  void fetchesAndNormalizesOnlyRequestedTopResult() throws Exception {
+    WebSearchResult first = new WebSearchResult("First", "https://example.com/1", "Snippet 1", null);
+    WebSearchResult second = new WebSearchResult("Second", "https://example.com/2", "Snippet 2", null);
+    org.mockito.Mockito.when(webSearchService.search("query", 2)).thenReturn(List.of(first, second));
+    org.mockito.Mockito.when(urlContentFetchService.fetch(first.url())).thenReturn(UrlContentFetchResult.success("""
+        <html><body><nav>menu</nav><article><p>Readable content.</p></article><script>ignore()</script></body></html>
+        """));
+
+    WebSearchAndReadResponse response = service.searchAndRead(new WebSearchAndReadRequest("query", 2, 1));
+
+    assertEquals("success", response.results().get(0).fetchStatus());
+    assertEquals("Readable content.", response.results().get(0).content());
+    assertEquals("not_requested", response.results().get(1).fetchStatus());
+    Mockito.verify(urlContentFetchService).fetch("https://example.com/1");
+    Mockito.verify(urlContentFetchService, Mockito.never()).fetch("https://example.com/2");
+  }
+
+  @Test
+  void marksContentTruncatedAtExtractorLimit() throws Exception {
+    WebSearchResult result = new WebSearchResult("Title", "https://example.com/long", "Snippet", null);
+    org.mockito.Mockito.when(webSearchService.search("query", 1)).thenReturn(List.of(result));
+    org.mockito.Mockito.when(urlContentFetchService.fetch(result.url()))
+        .thenReturn(UrlContentFetchResult.success("<html><body>" + "x".repeat(2_100) + "</body></html>"));
+
+    WebSearchAndReadItem item = service.searchAndRead(new WebSearchAndReadRequest("query", 1, 1)).results().getFirst();
+
+    assertEquals(2_000, item.content().length());
+    org.junit.jupiter.api.Assertions.assertTrue(item.truncated());
   }
 }

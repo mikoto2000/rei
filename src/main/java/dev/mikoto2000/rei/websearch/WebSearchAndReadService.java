@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import org.springframework.stereotype.Service;
 
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchService;
+import dev.mikoto2000.rei.urlfetch.UrlContentFetchResult;
 
 /** Web 検索と検索結果本文の取得を一つの操作として実行する。 */
 @Service
@@ -33,9 +34,20 @@ public class WebSearchAndReadService {
     List<WebSearchAndReadItem> results = new ArrayList<>();
     for (WebSearchResult result : searchResults) {
       if (results.size() >= validated.maxResults()) break;
-      results.add(notRequested(result));
+      results.add(results.size() < validated.readTop() ? fetch(result) : notRequested(result));
     }
     return new WebSearchAndReadResponse(validated.query(), results);
+  }
+
+  private WebSearchAndReadItem fetch(WebSearchResult result) {
+    UrlContentFetchResult fetched = urlContentFetchService.fetch(result.url());
+    if (!fetched.success()) {
+      return new WebSearchAndReadItem(result.title(), result.url(), result.snippet(), result.publishedAt(),
+          null, null, "failed", fetched.errorType(), fetched.errorMessage(), false);
+    }
+    WebSearchPage page = webPageExtractor.extract(result, fetched.content());
+    return new WebSearchAndReadItem(page.title(), page.url(), page.snippet(), page.publishedAt(),
+        page.content(), null, "success", null, null, page.truncated());
   }
 
   private WebSearchAndReadItem notRequested(WebSearchResult result) {

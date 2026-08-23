@@ -5,5 +5,10 @@ public record WebSearchPage(
     String url,
     String snippet,
     String publishedAt,
-    String content) {
+    String content,
+    boolean truncated) {
+
+  public WebSearchPage(String title, String url, String snippet, String publishedAt, String content) {
+    this(title, url, snippet, publishedAt, content, false);
+  }
 }
