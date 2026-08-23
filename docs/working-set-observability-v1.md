@@ -75,7 +75,7 @@ started/completed は同じ `searchId` を payload と envelope `correlationId` 
 ## Metrics and non-goals
 
 event は search 回数/時間、hit→candidate、candidate→selected、selected→actual added、duplicate rate、churn、
-reason 傾向を後から集計できる。metrics backend、永続化、dashboard、replay、GUI/TUI pane、全 hit/candidate 表示、
+reason 傾向を後から集計できる。metrics backend、永続化、dashboard、replay、専用 UI pane、全 hit/candidate 表示、
 新しい reason/reuse/ranking/relevance/search algorithm は v1.1 の対象外である。
 
 ## Manual smoke test

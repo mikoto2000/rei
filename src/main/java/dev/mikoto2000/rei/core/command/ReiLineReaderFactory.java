@@ -18,7 +18,7 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import picocli.CommandLine;
 import picocli.shell.jline3.PicocliJLineCompleter;
 
-/** Builds the canonical JLine input services shared by Shell and TUI. */
+/** Builds the canonical JLine input services for the Shell. */
 public final class ReiLineReaderFactory {
   private static final List<String> BUILTINS = List.of("/exit", "/quit", "/help", "/version", "/paste");
 

@@ -2,7 +2,7 @@
 
 ## 目的
 
-Agent Core で外部から観測する価値のある状態変化を、UI や LLM provider の型から独立した append-only event として公開する。購読者として logger、debugger、将来の TUI / GUI / SSE adapter を想定する。
+Agent Core で外部から観測する価値のある状態変化を、UI や LLM provider の型から独立した append-only event として公開する。購読者として logger、debugger、将来の GUI / SSE adapter を想定する。
 
 ## Envelope と payload
 
@@ -56,4 +56,4 @@ Spring AI 2.0.0-M3 の `DefaultToolCallingManager` は LLM の `AssistantMessage
 
 ## v1 の対象外と拡張
 
-Event Store、完全な Event Sourcing、永続化、replay、broker、HTTP、SSE、WebSocket、TUI、GUI、分散配送は対象外。将来は Agent Core を変更せず、`AgentEventListener` を実装する SSE serializer、UI state projector、persistent logger を Event Bus に購読させる。
+Event Store、完全な Event Sourcing、永続化、replay、broker、HTTP、SSE、WebSocket、具体的な GUI、分散配送は対象外。将来は Agent Core を変更せず、`AgentEventListener` を実装する SSE serializer、UI state projector、persistent logger を Event Bus に購読させる。
