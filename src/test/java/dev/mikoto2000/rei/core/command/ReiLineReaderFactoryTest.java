@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.command;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mock;
 
 import java.util.ArrayList;
@@ -25,5 +26,6 @@ class ReiLineReaderFactoryTest {
     completer.complete(mock(LineReader.class), line, candidates);
 
     assertTrue(candidates.stream().anyMatch(candidate -> "/help".equals(candidate.value())));
+    assertFalse(candidates.stream().anyMatch(candidate -> "/tui".equals(candidate.value())));
   }
 }
