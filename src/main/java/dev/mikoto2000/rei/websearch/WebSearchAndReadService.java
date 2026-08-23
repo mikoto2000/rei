@@ -1,0 +1,52 @@
+package dev.mikoto2000.rei.websearch;
+
+import java.io.IOException;
+import java.util.List;
+
+import org.springframework.stereotype.Service;
+
+import dev.mikoto2000.rei.urlfetch.UrlContentFetchService;
+
+/** Web 検索と検索結果本文の取得を一つの操作として実行する。 */
+@Service
+public class WebSearchAndReadService {
+  static final int DEFAULT_READ_TOP = 3;
+
+  private final WebSearchService webSearchService;
+  private final UrlContentFetchService urlContentFetchService;
+  private final WebPageExtractor webPageExtractor;
+  private final WebSearchProperties properties;
+
+  public WebSearchAndReadService(WebSearchService webSearchService, UrlContentFetchService urlContentFetchService,
+      WebPageExtractor webPageExtractor, WebSearchProperties properties) {
+    this.webSearchService = webSearchService;
+    this.urlContentFetchService = urlContentFetchService;
+    this.webPageExtractor = webPageExtractor;
+    this.properties = properties;
+  }
+
+  public WebSearchAndReadResponse searchAndRead(WebSearchAndReadRequest request)
+      throws IOException, InterruptedException {
+    ValidatedRequest validated = validate(request);
+    return new WebSearchAndReadResponse(validated.query(), List.of());
+  }
+
+  private ValidatedRequest validate(WebSearchAndReadRequest request) {
+    if (request == null) throw new IllegalArgumentException("request must not be null");
+    if (request.query() == null || request.query().isBlank()) {
+      throw new IllegalArgumentException("query must not be blank");
+    }
+    int maxResults = request.maxResults() == null ? properties.getMaxResults() : request.maxResults();
+    if (maxResults <= 0 || maxResults > properties.getMaxResults()) {
+      throw new IllegalArgumentException("maxResults must be between 1 and " + properties.getMaxResults());
+    }
+    int readTop = request.readTop() == null ? Math.min(DEFAULT_READ_TOP, maxResults) : request.readTop();
+    if (readTop < 0 || readTop > maxResults) {
+      throw new IllegalArgumentException("readTop must be between 0 and maxResults");
+    }
+    return new ValidatedRequest(request.query().trim(), maxResults, readTop);
+  }
+
+  private record ValidatedRequest(String query, int maxResults, int readTop) {
+  }
+}
