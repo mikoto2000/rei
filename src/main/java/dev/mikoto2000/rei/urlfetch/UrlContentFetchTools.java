@@ -11,7 +11,11 @@ public class UrlContentFetchTools {
 
   private final UrlContentFetchService urlContentFetchService;
 
-  @Tool(name = "fetchUrlContent", description = "指定した URL の内容を読み込みます。http/https のみ対応します。")
+  @Tool(name = "fetchUrlContent", description = """
+      Fetch content from one exact URL using the shared http/https fetcher.
+      Use this primitive when the URL is already known.
+      For public-web research, prefer webSearchAndRead over manually chaining webSearch and this tool.
+      """)
   public UrlContentFetchResult fetchUrlContent(String url) {
     return urlContentFetchService.fetch(url);
   }

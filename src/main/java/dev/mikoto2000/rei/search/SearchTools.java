@@ -17,7 +17,11 @@ public class SearchTools {
 
   private final SearchKnowledgeService searchKnowledgeService;
 
-  @Tool(name = "searchKnowledge", description = "必要なときだけ Web 検索とベクトル検索をまとめて実行します。最新情報、出典確認、ローカル文書確認が必要な場合に使います。")
+  @Tool(name = "searchKnowledge", description = """
+      Search the agent's indexed knowledge base and supplement it with public-web sources.
+      Use this hybrid workflow when registered internal knowledge is relevant to the question.
+      For public-web-only research, prefer webSearchAndRead.
+      """)
   String searchKnowledge(String query, Integer vectorTopK, Integer webTopK, Double threshold, String source)
       throws IOException, InterruptedException {
     IO.println(String.format("知識検索を実行するよ。query=%s、vectorTopK=%s、webTopK=%s、threshold=%s、source=%s",

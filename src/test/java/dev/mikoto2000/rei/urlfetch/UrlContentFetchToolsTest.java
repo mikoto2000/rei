@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.tool.annotation.Tool;
 
 class UrlContentFetchToolsTest {
 
@@ -20,5 +21,13 @@ class UrlContentFetchToolsTest {
 
     assertEquals(expected, actual);
     verify(service).fetch("https://example.com");
+  }
+
+  @Test
+  void descriptionRoutesKnownUrlsWithoutManualSearchChaining() throws Exception {
+    Tool tool = UrlContentFetchTools.class.getDeclaredMethod("fetchUrlContent", String.class).getAnnotation(Tool.class);
+
+    org.junit.jupiter.api.Assertions.assertTrue(tool.description().contains("exact URL"));
+    org.junit.jupiter.api.Assertions.assertTrue(tool.description().contains("webSearchAndRead"));
   }
 }

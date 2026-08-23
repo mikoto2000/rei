@@ -8,6 +8,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.ai.tool.annotation.Tool;
 
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.websearch.WebSearchContext;
@@ -34,5 +35,16 @@ class SearchToolsTest {
     assertTrue(result.contains("Web 一次情報"));
     assertTrue(result.contains("https://docs.example.com"));
     assertTrue(result.contains("secondary content"));
+  }
+
+  @Test
+  void descriptionDistinguishesHybridKnowledgeSearchFromPublicWebResearch() throws Exception {
+    Tool tool = SearchTools.class.getDeclaredMethod("searchKnowledge", String.class, Integer.class, Integer.class,
+        Double.class, String.class).getAnnotation(Tool.class);
+
+    assertTrue(tool.description().contains("indexed knowledge base"));
+    assertTrue(tool.description().contains("supplement"));
+    assertTrue(tool.description().contains("public-web-only"));
+    assertTrue(tool.description().contains("webSearchAndRead"));
   }
 }

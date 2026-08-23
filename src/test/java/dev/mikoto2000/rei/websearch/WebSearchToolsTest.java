@@ -41,13 +41,19 @@ class WebSearchToolsTest {
 
   @Test
   void toolDescriptionExplainsWhenToUseCompositeAndPrimitiveTools() throws Exception {
-    Tool tool = WebSearchTools.class.getDeclaredMethod("webSearchAndRead", WebSearchAndReadRequest.class)
+    Tool composite = WebSearchTools.class.getDeclaredMethod("webSearchAndRead", WebSearchAndReadRequest.class)
+        .getAnnotation(Tool.class);
+    Tool primitive = WebSearchTools.class.getDeclaredMethod("webSearch", String.class, Integer.class)
         .getAnnotation(Tool.class);
 
-    org.junit.jupiter.api.Assertions.assertTrue(tool.description().contains("default tool"));
-    org.junit.jupiter.api.Assertions.assertTrue(tool.description().contains("webSearch"));
-    org.junit.jupiter.api.Assertions.assertTrue(tool.description().contains("fetchUrlContent"));
-    org.junit.jupiter.api.Assertions.assertTrue(tool.description().contains("readTop = 0"));
+    org.junit.jupiter.api.Assertions.assertTrue(composite.description().contains("default tool"));
+    org.junit.jupiter.api.Assertions.assertTrue(composite.description().contains("public web"));
+    org.junit.jupiter.api.Assertions.assertTrue(composite.description().contains("webSearch"));
+    org.junit.jupiter.api.Assertions.assertTrue(composite.description().contains("fetchUrlContent"));
+    org.junit.jupiter.api.Assertions.assertTrue(composite.description().contains("readTop = 0"));
+    org.junit.jupiter.api.Assertions.assertTrue(primitive.description().contains("result metadata"));
+    org.junit.jupiter.api.Assertions.assertTrue(primitive.description().contains("URLs"));
+    org.junit.jupiter.api.Assertions.assertTrue(primitive.description().contains("webSearchAndRead"));
   }
 
   @Test

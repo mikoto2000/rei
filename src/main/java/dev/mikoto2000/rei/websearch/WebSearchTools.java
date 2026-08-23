@@ -15,7 +15,11 @@ public class WebSearchTools {
   private final WebSearchService webSearchService;
   private final WebSearchAndReadService webSearchAndReadService;
 
-  @Tool(name = "webSearch", description = "Web を検索します。外部の最新情報が必要な場合に使います。query と limit を指定できます。")
+  @Tool(name = "webSearch", description = """
+      Search the public web and return result metadata such as titles, URLs, and snippets.
+      Use this primitive when result metadata or candidate URLs are sufficient.
+      For normal public-web research that needs page content, prefer webSearchAndRead.
+      """)
   List<WebSearchResult> webSearch(String query, Integer limit) throws IOException, InterruptedException {
     IO.println(String.format("Web を検索するよ。query=%s、limit=%s", query, limit));
     return webSearchService.search(query, limit);
