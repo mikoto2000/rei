@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.websearch;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.ArrayList;
 
 import org.springframework.stereotype.Service;
 
@@ -28,7 +29,18 @@ public class WebSearchAndReadService {
   public WebSearchAndReadResponse searchAndRead(WebSearchAndReadRequest request)
       throws IOException, InterruptedException {
     ValidatedRequest validated = validate(request);
-    return new WebSearchAndReadResponse(validated.query(), List.of());
+    List<WebSearchResult> searchResults = webSearchService.search(validated.query(), validated.maxResults());
+    List<WebSearchAndReadItem> results = new ArrayList<>();
+    for (WebSearchResult result : searchResults) {
+      if (results.size() >= validated.maxResults()) break;
+      results.add(notRequested(result));
+    }
+    return new WebSearchAndReadResponse(validated.query(), results);
+  }
+
+  private WebSearchAndReadItem notRequested(WebSearchResult result) {
+    return new WebSearchAndReadItem(result.title(), result.url(), result.snippet(), result.publishedAt(),
+        null, null, "not_requested", null, null, false);
   }
 
   private ValidatedRequest validate(WebSearchAndReadRequest request) {
