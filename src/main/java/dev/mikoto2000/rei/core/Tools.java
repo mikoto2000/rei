@@ -180,8 +180,8 @@ public class Tools {
 
   @Tool(name = "executeShellCommand",
   description = """
-  primitive tool for explicit foreground execution. 通常は runCommand(auto) を使用してください。
-  $SHELL 環境変数で指定されたシェルで、コマンド文字列を同期実行します。
+  Execute a shell command with explicit completion waiting. This is the low-level foreground primitive.
+  Use this for deliberate synchronous control; for normal shell execution, prefer runCommand in auto mode.
   $SHELL が未設定の場合、Windows は powershell、Linux と macOS は bash を使います。
   @param command 実行するシェルコマンド文字列
   @param timeoutSeconds タイムアウト秒数。null の場合は 30 秒、最大 600 秒です。
@@ -319,10 +319,9 @@ public class Tools {
 
   @Tool(name = "spawnShellCommand",
   description = """
-  primitive tool for explicit background execution. 通常は runCommand(auto) を使用してください。
-  $SHELL 環境変数で指定されたシェルで、長時間実行プロセスをバックグラウンド起動します。
-  executeShellCommand と違い、コマンド終了を待たずに processId、OS pid、状態、直近ログを返します。
-  サーバー起動、watch、tail、開発サーバーなど、終了しない可能性があるコマンドに使用してください。
+  Start a command explicitly as a managed process. This is the low-level background primitive.
+  Use this only when background execution is intentional; for normal shell execution, prefer runCommand in auto mode.
+  It returns processId, OS pid, status, and recent logs without waiting for completion.
   @param command 実行するシェルコマンド文字列
   @return logical processId、OS pid、状態、終了コード、直近の標準出力/標準エラー
   """)
@@ -332,8 +331,8 @@ public class Tools {
 
   @Tool(name = "getShellProcessStatus",
   description = """
-  spawnShellCommand で起動したバックグラウンドプロセスの状態と直近ログを取得します。
-  @param processId spawnShellCommand が返した logical processId
+  Get status and recent logs for a managed background process started by runCommand or spawnShellCommand.
+  @param processId runCommand または spawnShellCommand が返した logical processId
   @param tailLines 返すログ末尾行数。null の場合は既定値です。
   @return 状態、終了コード、直近の標準出力/標準エラー
   """)
@@ -343,9 +342,9 @@ public class Tools {
 
   @Tool(name = "killShellProcess",
   description = """
-  spawnShellCommand で起動したバックグラウンドプロセスだけを終了します。
+  Stop a managed background process started by runCommand or spawnShellCommand.
   processId に一致する管理対象プロセスと、その子プロセスツリーを graceful に停止し、残った場合は強制終了します。
-  @param processId spawnShellCommand が返した logical processId
+  @param processId runCommand または spawnShellCommand が返した logical processId
   @return 終了後の状態、終了コード、直近の標準出力/標準エラー
   """)
   BackgroundProcessSnapshot killShellProcess(String processId) {

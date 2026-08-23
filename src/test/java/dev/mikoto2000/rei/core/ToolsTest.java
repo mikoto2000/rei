@@ -82,8 +82,16 @@ class ToolsTest {
     Tool background = Tools.class.getDeclaredMethod("spawnShellCommand", String.class).getAnnotation(Tool.class);
     assertTrue(run.description().contains("default tool"));
     assertTrue(run.description().contains("auto mode"));
-    assertTrue(foreground.description().contains("primitive"));
-    assertTrue(background.description().contains("primitive"));
+    assertTrue(foreground.description().contains("low-level foreground"));
+    assertTrue(foreground.description().contains("runCommand"));
+    assertTrue(background.description().contains("low-level background"));
+    assertTrue(background.description().contains("runCommand"));
+
+    Tool status = Tools.class.getDeclaredMethod("getShellProcessStatus", String.class, Integer.class)
+        .getAnnotation(Tool.class);
+    Tool kill = Tools.class.getDeclaredMethod("killShellProcess", String.class).getAnnotation(Tool.class);
+    assertTrue(status.description().contains("runCommand"));
+    assertTrue(kill.description().contains("runCommand"));
 
     var callback = java.util.Arrays.stream(MethodToolCallbackProvider.builder().toolObjects(new Tools()).build()
         .getToolCallbacks())
