@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.mockito.Mockito;
 
 import dev.mikoto2000.rei.websearch.WebSearchPage;
 
@@ -204,6 +205,42 @@ class FeedSummaryServiceTest {
     assertEquals("not_requested", result.articleFetchStatus());
     assertEquals(0, fetches.get());
     assertTrue(promptRef.get().contains("EMBEDDED_CONTENT_MARKER"));
+  }
+
+  @Test
+  void briefingUsesArticleAndFeedFallbackAndDeduplicatesUrls() {
+    FeedService feedService = Mockito.mock(FeedService.class);
+    OffsetDateTime from = OffsetDateTime.parse("2026-04-21T00:00:00Z");
+    OffsetDateTime to = OffsetDateTime.parse("2026-04-22T09:00:00Z");
+    List<FeedBriefingItem> items = List.of(
+        new FeedBriefingItem(1, "A", "https://example.com/shared", null, null,
+            OffsetDateTime.parse("2026-04-22T08:00:00Z"), "Feed A"),
+        new FeedBriefingItem(2, "B", "https://example.com/failure", "FEED_B_FALLBACK", null,
+            OffsetDateTime.parse("2026-04-22T07:00:00Z"), "Feed B"),
+        new FeedBriefingItem(3, "C", "https://example.com/shared", null, null,
+            OffsetDateTime.parse("2026-04-22T06:00:00Z"), "Feed C"));
+    Mockito.when(feedService.listBriefingItems(from, to, 20)).thenReturn(items);
+    java.util.Map<String, Integer> fetchCounts = new java.util.HashMap<>();
+    AtomicReference<String> promptRef = new AtomicReference<>();
+    FeedSummaryService service = new FeedSummaryService(feedService, item -> {
+      fetchCounts.merge(item.url(), 1, Integer::sum);
+      if (item.url().endsWith("failure")) throw new IllegalStateException("timeout");
+      return new WebSearchPage(item.title(), item.url(), "", null, "SHARED_ARTICLE_BODY");
+    }, prompt -> {
+      promptRef.set(prompt);
+      return "briefing summary";
+    }, new FeedProperties(20));
+
+    String result = service.summarizeBriefing(from, to);
+
+    assertEquals("briefing summary", result);
+    assertEquals(1, fetchCounts.get("https://example.com/shared"));
+    assertEquals(1, fetchCounts.get("https://example.com/failure"));
+    assertTrue(promptRef.get().contains("SHARED_ARTICLE_BODY"));
+    assertTrue(promptRef.get().contains("FEED_B_FALLBACK"));
+    assertTrue(promptRef.get().contains("summarySource=article"));
+    assertTrue(promptRef.get().contains("summarySource=feed"));
+    assertTrue(promptRef.get().contains("articleFetchStatus=failed"));
   }
 
   private FeedService serviceWithItem(String url, String description, String content) {

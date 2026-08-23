@@ -4,6 +4,8 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.function.Function;
 
 import org.jsoup.Jsoup;
@@ -91,8 +93,9 @@ public class FeedSummaryService {
         対象期間: %s から %s
         記事一覧:
         """.formatted(from, to));
+    Map<String, ArticleFetch> fetchCache = new LinkedHashMap<>();
     for (FeedBriefingItem item : items) {
-      WebSearchPage page = fetchPage(item);
+      ResolvedContent resolved = resolveContent(item, fetchCache);
       builder.append("- ")
           .append(item.publishedAt())
           .append(" | ")
@@ -101,10 +104,15 @@ public class FeedSummaryService {
           .append(item.title())
           .append(" | ")
           .append(item.url())
+          .append(" | summarySource=")
+          .append(resolved.source())
+          .append(" | articleFetchStatus=")
+          .append(resolved.fetchStatus())
           .append(" | content=")
-          .append(page.content())
+          .append(resolved.content())
           .append('\n');
     }
+    log.debug("feed briefing content resolved: items={}, uniqueArticleUrls={}", items.size(), fetchCache.size());
     return builder.toString().trim();
   }
 
@@ -137,45 +145,32 @@ public class FeedSummaryService {
         """.formatted(item.feedName(), item.publishedAt(), item.title(), item.url(), resolved.content());
   }
 
-  private WebSearchPage fetchPage(FeedBriefingItem item) {
-    try {
-      WebSearchPage page = feedArticlePageFetcher.apply(item);
-      if (page == null) {
-        return fallbackPage(item);
-      }
-      String content = page.content();
-      if (content == null || content.isBlank()) {
-        return fallbackPage(item);
-      }
-      return page;
-    } catch (Exception e) {
-      return fallbackPage(item);
-    }
-  }
-
-  private WebSearchPage fallbackPage(FeedBriefingItem item) {
-    return new WebSearchPage(
-        item.title(),
-        item.url(),
-        "",
-        item.publishedAt() == null ? null : item.publishedAt().toString(),
-        "title=" + item.title() + " url=" + item.url());
-  }
-
   private ResolvedContent resolveContent(FeedBriefingItem item) {
+    return resolveContent(item, new LinkedHashMap<>());
+  }
+
+  private ResolvedContent resolveContent(FeedBriefingItem item, Map<String, ArticleFetch> fetchCache) {
     if (isBlank(item.url())) {
       return feedContent(item, "not_requested");
     }
+    ArticleFetch fetched = fetchCache.computeIfAbsent(item.url(), ignored -> fetchArticle(item));
+    if (fetched.success()) {
+      return new ResolvedContent(fetched.content(), "article", "success", fetched.truncated());
+    }
+    return feedContent(item, "failed");
+  }
+
+  private ArticleFetch fetchArticle(FeedBriefingItem item) {
     try {
       WebSearchPage page = feedArticlePageFetcher.apply(item);
       if (page != null && !isBlank(page.content())) {
-        return new ResolvedContent(page.content().trim(), "article", "success", page.truncated());
+        return new ArticleFetch(page.content().trim(), true, page.truncated());
       }
       log.debug("feed article fetch produced empty content: itemId={}, articleUrl={}", item.id(), item.url());
     } catch (Exception e) {
       log.debug("feed article fetch failed: itemId={}, articleUrl={}, reason={}", item.id(), item.url(), e.toString());
     }
-    return feedContent(item, "failed");
+    return new ArticleFetch("", false, false);
   }
 
   private ResolvedContent feedContent(FeedBriefingItem item, String fetchStatus) {
@@ -202,5 +197,8 @@ public class FeedSummaryService {
   }
 
   private record ResolvedContent(String content, String source, String fetchStatus, boolean truncated) {
+  }
+
+  private record ArticleFetch(String content, boolean success, boolean truncated) {
   }
 }
