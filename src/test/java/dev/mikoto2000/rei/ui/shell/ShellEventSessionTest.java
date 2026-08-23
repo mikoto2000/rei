@@ -14,7 +14,7 @@ import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 
 class ShellEventSessionTest {
   @Test
-  void pausesForTuiResumesForShellAndUnsubscribesOnClose() {
+  void forwardsShellEventsAndUnsubscribesOnClose() {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     AgentEventFactory events = new AgentEventFactory(
         Clock.fixed(Instant.parse("2026-08-23T00:00:00Z"), ZoneOffset.UTC));
@@ -22,12 +22,9 @@ class ShellEventSessionTest {
     ShellEventSession session = new ShellEventSession(bus, event -> received.incrementAndGet());
 
     bus.publish(events.runStarted("r1", "user", null));
-    session.pause();
     bus.publish(events.runStarted("r2", "user", null));
-    session.resume();
-    bus.publish(events.runStarted("r3", "user", null));
     session.close();
-    bus.publish(events.runStarted("r4", "user", null));
+    bus.publish(events.runStarted("r3", "user", null));
 
     assertEquals(2, received.get());
   }
