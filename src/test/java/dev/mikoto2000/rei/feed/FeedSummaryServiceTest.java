@@ -243,6 +243,29 @@ class FeedSummaryServiceTest {
     assertTrue(promptRef.get().contains("articleFetchStatus=failed"));
   }
 
+  @Test
+  void summarizeItemDoesNotInvokeLlmWhenArticleAndFeedInformationAreEmpty() {
+    FeedService feedService = newService();
+    Feed feed = feedService.add("https://example.com/feed.xml", "Example Feed");
+    feedService.saveFetchedItems(feed.id(), List.of(new FetchedFeedItem(" ", "https://example.com/empty",
+        OffsetDateTime.parse("2026-04-22T07:00:00Z"), " ", " ")),
+        OffsetDateTime.parse("2026-04-22T08:00:00Z"));
+    long itemId = feedService.listItemsForFeed(1L).getFirst().id();
+    java.util.concurrent.atomic.AtomicInteger generations = new java.util.concurrent.atomic.AtomicInteger();
+    FeedSummaryService service = new FeedSummaryService(feedService,
+        item -> new WebSearchPage("", item.url(), "", null, " "), prompt -> {
+          generations.incrementAndGet();
+          return "must not run";
+        }, new FeedProperties(20));
+
+    FeedItemSummaryResult result = service.summarizeItemDetailed(itemId);
+
+    assertEquals("要約可能な記事情報がありません。", result.summary());
+    assertEquals("feed", result.summarySource());
+    assertEquals("failed", result.articleFetchStatus());
+    assertEquals(0, generations.get());
+  }
+
   private FeedService serviceWithItem(String url, String description, String content) {
     FeedService service = newService();
     Feed feed = service.add("https://example.com/feed.xml", "Example Feed");
