@@ -16,6 +16,7 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.Duration;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,6 +41,10 @@ import org.springframework.stereotype.Component;
 import dev.mikoto2000.rei.core.filesummary.FileSummaryCache;
 import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
+import dev.mikoto2000.rei.core.process.BackgroundProcessStatus;
+import dev.mikoto2000.rei.core.process.CommandExecutionMode;
+import dev.mikoto2000.rei.core.process.RunCommandRequest;
+import dev.mikoto2000.rei.core.process.RunCommandResult;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.recentchanges.RecentChanges;
 import dev.mikoto2000.rei.core.relatedgraph.RelatedFileGraph;
@@ -246,6 +251,51 @@ public class Tools {
   }
 
   public record ShellCommandResult(int exitCode, String stdout, String stderr, boolean timedOut) {
+  }
+
+  @Tool(name = "runCommand", description = """
+  Run a shell command. Use this as the default tool for shell commands.
+  In auto mode, short-lived commands return normally while long-running commands continue as managed background processes.
+  Prefer this over manually choosing between executeShellCommand and spawnShellCommand.
+  Use foreground only when explicitly waiting for completion, and background only when explicitly starting a managed process.
+  @param request command, optional executionMode (auto/foreground/background), and optional foreground timeoutSeconds
+  @return normalized completion or managed-process result
+  """)
+  RunCommandResult runCommand(RunCommandRequest request) throws IOException, InterruptedException {
+    return runCommand(request, currentWorkingDirectory(), Duration.ofSeconds(3));
+  }
+
+  RunCommandResult runCommand(RunCommandRequest request, java.nio.file.Path workingDirectory, Duration autoWait)
+      throws IOException, InterruptedException {
+    if (request == null) throw new IllegalArgumentException("request must not be null");
+    return switch (request.mode()) {
+      case FOREGROUND -> foregroundResult(request, workingDirectory);
+      case BACKGROUND -> backgroundResult(request, workingDirectory);
+      case AUTO -> throw new UnsupportedOperationException("auto mode is not implemented");
+    };
+  }
+
+  private RunCommandResult foregroundResult(RunCommandRequest request, java.nio.file.Path workingDirectory)
+      throws IOException, InterruptedException {
+    ShellCommandResult result = executeShellCommand(request.command(), request.timeoutSeconds(), workingDirectory);
+    String status = result.timedOut() || result.exitCode() != 0 ? "failed" : "completed";
+    return new RunCommandResult(status, request.mode().name().toLowerCase(), "foreground", result.exitCode(),
+        result.stdout(), result.stderr(), null, null, result.timedOut(),
+        result.timedOut() ? "command timed out" : null);
+  }
+
+  private RunCommandResult backgroundResult(RunCommandRequest request, java.nio.file.Path workingDirectory) {
+    BackgroundProcessSnapshot snapshot = backgroundProcessManager.spawnShell(request.command(), workingDirectory);
+    if (snapshot.status() == BackgroundProcessStatus.FAILED) {
+      return new RunCommandResult("failed", request.mode().name().toLowerCase(), "background", snapshot.exitCode(),
+          joinLines(snapshot.stdout()), joinLines(snapshot.stderr()), null, null, false, snapshot.message());
+    }
+    return new RunCommandResult("running", request.mode().name().toLowerCase(), "background", null,
+        joinLines(snapshot.stdout()), joinLines(snapshot.stderr()), snapshot.processId(), snapshot.pid(), false, null);
+  }
+
+  private String joinLines(List<String> lines) {
+    return lines == null ? "" : String.join(System.lineSeparator(), lines);
   }
 
   @Tool(name = "spawnShellCommand",

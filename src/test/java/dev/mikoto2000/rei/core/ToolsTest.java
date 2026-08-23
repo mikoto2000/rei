@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.Duration;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,6 +30,8 @@ import dev.mikoto2000.rei.core.filesummary.FileSummaryCache;
 import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
 import dev.mikoto2000.rei.core.process.BackgroundProcessStatus;
 import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
+import dev.mikoto2000.rei.core.process.RunCommandRequest;
+import dev.mikoto2000.rei.core.process.RunCommandResult;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.searchcache.SearchResultCache;
 import dev.mikoto2000.rei.core.service.SystemShellService;
@@ -1020,6 +1023,47 @@ class ToolsTest {
     assertEquals(0, result.exitCode());
     assertEquals("hello", result.stdout().trim());
     assertFalse(result.timedOut());
+  }
+
+  @Test
+  void runCommandForegroundReturnsExistingShellResultShape() throws Exception {
+    Tools tools = new Tools();
+    String command = System.getProperty("os.name").toLowerCase().contains("win")
+        ? "Write-Output hello; [Console]::Error.WriteLine('warning'); exit 7"
+        : "printf 'hello\\n'; printf 'warning\\n' >&2; exit 7";
+
+    RunCommandResult result = tools.runCommand(
+        new RunCommandRequest(command, "foreground", 10), tempDir, Duration.ofMillis(10));
+
+    assertEquals("failed", result.status());
+    assertEquals("foreground", result.resolvedExecutionMode());
+    assertEquals(7, result.exitCode());
+    assertTrue(result.stdout().contains("hello"));
+    assertTrue(result.stderr().contains("warning"));
+    assertEquals(null, result.processId());
+  }
+
+  @Test
+  void runCommandBackgroundRegistersWithExistingProcessManager() throws Exception {
+    SystemShellService shellService = new SystemShellService();
+    BackgroundProcessManager manager = new BackgroundProcessManager(shellService);
+    Tools tools = new Tools(null, shellService, manager);
+    String command = System.getProperty("os.name").toLowerCase().contains("win")
+        ? "Write-Output ready; Start-Sleep -Seconds 10"
+        : "printf 'ready\\n'; sleep 10";
+    try {
+      RunCommandResult result = tools.runCommand(
+          new RunCommandRequest(command, "background", null), tempDir, Duration.ofMillis(10));
+
+      assertEquals("running", result.status());
+      assertEquals("background", result.resolvedExecutionMode());
+      assertTrue(result.processId().startsWith("proc-"));
+      BackgroundProcessSnapshot status = manager.status(result.processId(), 100);
+      assertTrue(status.found());
+      manager.kill(result.processId());
+    } finally {
+      manager.shutdown();
+    }
   }
 
   @Test
