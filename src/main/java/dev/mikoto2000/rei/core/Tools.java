@@ -351,7 +351,6 @@ public class Tools {
     return backgroundProcessManager.kill(processId);
   }
 
-  @Tool(name = "rollDice", description = "x 面サイコロをひとつ振る")
   int rollDice(int x) {
     IO.println(String.format("%d 面サイコロをひとつ振るよ", x));
     return (int) (Math.random() * x) + 1;

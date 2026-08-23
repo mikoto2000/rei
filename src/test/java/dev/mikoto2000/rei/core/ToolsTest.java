@@ -65,6 +65,7 @@ class ToolsTest {
     assertFalse(toolNames.contains("readTextFile"));
     assertFalse(toolNames.contains("readTextFileRange"));
     assertFalse(toolNames.contains("writeTextFile"));
+    assertFalse(toolNames.contains("rollDice"));
     assertTrue(toolNames.contains("grepMultiQuery"));
     assertTrue(toolNames.contains("readMultiFile"));
     assertTrue(toolNames.contains("writeMultiFile"));
