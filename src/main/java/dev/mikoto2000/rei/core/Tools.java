@@ -368,7 +368,45 @@ public class Tools {
     return OffsetDateTime.now(clock).toString();
   }
 
-  @Tool(name = "findFile", description = "ファイルを検索します（.gitignore を尊重）")
+  @Tool(name = "findFile", description = """
+      Find files whose file names partially match any supplied keyword, case-insensitively.
+      Results matching more keywords rank first and maxResults limits the response. .gitignore is respected.
+      """)
+  List<String> findFile(FindFileRequest request) throws IOException, InterruptedException {
+    return findFile(request, currentWorkingDirectory());
+  }
+
+  List<String> findFile(FindFileRequest request, java.nio.file.Path workingDirectory)
+      throws IOException, InterruptedException {
+    if (request == null) {
+      throw new IllegalArgumentException("request must not be null");
+    }
+    List<String> keywords = request.keywords().stream()
+        .filter(value -> value != null && !value.isBlank())
+        .map(value -> value.trim().toLowerCase(java.util.Locale.ROOT))
+        .distinct()
+        .toList();
+    int maxResults = request.maxResults() == null ? 50 : request.maxResults();
+    List<String> candidates = gitLsFiles(List.of(), workingDirectory);
+    if (candidates == null) {
+      try (var paths = Files.find(workingDirectory, 20,
+          (path, attributes) -> attributes.isRegularFile())) {
+        candidates = paths.map(workingDirectory::relativize)
+            .map(java.nio.file.Path::toString)
+            .toList();
+      }
+    }
+    return candidates.stream()
+        .map(path -> new FileNameMatch(path, matchingKeywordCount(path, keywords)))
+        .filter(match -> match.matchCount() > 0)
+        .sorted(java.util.Comparator.comparingInt(FileNameMatch::matchCount).reversed()
+            .thenComparingInt(match -> match.path().length())
+            .thenComparing(FileNameMatch::path, String.CASE_INSENSITIVE_ORDER))
+        .limit(maxResults)
+        .map(FileNameMatch::path)
+        .toList();
+  }
+
   List<String> findFile(String fileName) throws IOException, InterruptedException {
     return findFile(fileName, currentWorkingDirectory());
   }
@@ -389,6 +427,14 @@ public class Tools {
     return gitListedFiles.stream()
       .filter(s -> s.endsWith(fileName))
       .collect(Collectors.toList());
+  }
+
+  private int matchingKeywordCount(String path, List<String> keywords) {
+    String fileName = java.nio.file.Path.of(path).getFileName().toString().toLowerCase(java.util.Locale.ROOT);
+    return (int) keywords.stream().filter(fileName::contains).count();
+  }
+
+  private record FileNameMatch(String path, int matchCount) {
   }
 
   @Tool(name = "listFile", description = "ファイル一覧を取得します（.gitignore を尊重）")

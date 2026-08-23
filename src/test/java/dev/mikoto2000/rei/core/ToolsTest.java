@@ -158,6 +158,39 @@ class ToolsTest {
   }
 
   @Test
+  void findFileMatchesAnyKeywordCaseInsensitivelyAndRanksMoreMatchesFirst() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("src"));
+    Files.writeString(tempDir.resolve("src/FeedSummaryService.java"), "");
+    Files.writeString(tempDir.resolve("src/FeedService.java"), "");
+    Files.writeString(tempDir.resolve("src/SummaryGenerator.java"), "");
+
+    List<String> files = new Tools().findFile(
+        new FindFileRequest(List.of("FEED", "summary"), 10), tempDir);
+
+    assertEquals("src/FeedSummaryService.java", files.getFirst());
+    assertTrue(files.contains("src/FeedService.java"));
+    assertTrue(files.contains("src/SummaryGenerator.java"));
+  }
+
+  @Test
+  void findFileLimitsResultsAndExposesStructuredSchema() throws Exception {
+    initGitRepo();
+    Files.writeString(tempDir.resolve("AlphaOne.txt"), "");
+    Files.writeString(tempDir.resolve("AlphaTwo.txt"), "");
+
+    List<String> files = new Tools().findFile(new FindFileRequest(List.of("alpha"), 1), tempDir);
+
+    assertEquals(1, files.size());
+    var callback = java.util.Arrays.stream(MethodToolCallbackProvider.builder().toolObjects(new Tools()).build()
+        .getToolCallbacks())
+        .filter(candidate -> "findFile".equals(candidate.getToolDefinition().name()))
+        .findFirst().orElseThrow();
+    assertTrue(callback.getToolDefinition().inputSchema().contains("keywords"));
+    assertTrue(callback.getToolDefinition().inputSchema().contains("maxResults"));
+  }
+
+  @Test
   void listFileIncludesUntrackedFiles() throws Exception {
     initGitRepo();
     Files.createDirectories(tempDir.resolve("docs"));
