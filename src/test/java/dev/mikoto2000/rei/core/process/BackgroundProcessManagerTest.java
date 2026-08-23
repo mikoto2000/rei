@@ -113,6 +113,17 @@ class BackgroundProcessManagerTest {
     }
   }
 
+  @Test
+  void timeoutBoundaryAlwaysLeavesEitherCompletedOutputOrValidManagedId() throws Exception {
+    BackgroundProcessSnapshot spawned = manager.spawnCommandLine(javaCommand("exit", "0"), tempDir);
+
+    BackgroundProcessSnapshot observed = manager.await(spawned.processId(), java.time.Duration.ZERO);
+
+    assertTrue(observed.status() == BackgroundProcessStatus.RUNNING
+        || observed.status() == BackgroundProcessStatus.EXITED);
+    assertTrue(manager.status(spawned.processId(), 100).found());
+  }
+
   private BackgroundProcessSnapshot awaitStdout(String processId, String expectedLine) throws Exception {
     return awaitStdout(processId, expectedLine, manager);
   }

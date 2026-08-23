@@ -1117,6 +1117,46 @@ class ToolsTest {
   }
 
   @Test
+  void runCommandAutoReturnsEarlyNonZeroExitAsForegroundFailure() throws Exception {
+    SystemShellService shellService = new SystemShellService();
+    BackgroundProcessManager manager = new BackgroundProcessManager(shellService);
+    Tools tools = new Tools(null, shellService, manager);
+    String command = System.getProperty("os.name").toLowerCase().contains("win")
+        ? "[Console]::Error.WriteLine('bad config'); exit 9"
+        : "printf 'bad config\\n' >&2; exit 9";
+    try {
+      RunCommandResult result = tools.runCommand(
+          new RunCommandRequest(command, "auto", null), tempDir, Duration.ofSeconds(1));
+
+      assertEquals("failed", result.status());
+      assertEquals("foreground", result.resolvedExecutionMode());
+      assertEquals(9, result.exitCode());
+      assertTrue(result.stderr().contains("bad config"));
+      assertEquals(null, result.processId());
+    } finally {
+      manager.shutdown();
+    }
+  }
+
+  @Test
+  void runCommandDoesNotReturnRunningWhenProcessStartFails() throws Exception {
+    SystemShellService shellService = new SystemShellService();
+    BackgroundProcessManager manager = new BackgroundProcessManager(shellService);
+    Tools tools = new Tools(null, shellService, manager);
+    try {
+      RunCommandResult result = tools.runCommand(new RunCommandRequest("echo hello", "auto", null),
+          tempDir.resolve("missing-directory"), Duration.ofMillis(10));
+
+      assertEquals("failed", result.status());
+      assertEquals(null, result.processId());
+      assertEquals(null, result.pid());
+      assertTrue(result.errorMessage() != null && !result.errorMessage().isBlank());
+    } finally {
+      manager.shutdown();
+    }
+  }
+
+  @Test
   void todayAndNowUseInjectedClock() {
     Clock fixed = Clock.fixed(Instant.parse("2026-08-16T16:35:42Z"), ZoneId.of("Asia/Tokyo"));
     SystemShellService shellService = new SystemShellService();
