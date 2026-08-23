@@ -180,8 +180,8 @@ public class Tools {
 
   @Tool(name = "executeShellCommand",
   description = """
-  $SHELL 環境変数で指定されたシェルで、終了が見込まれるコマンド文字列を同期実行します。
-  サーバー、watch、tail、ビルド監視などの長時間実行プロセスには spawnShellCommand を使用してください。
+  primitive tool for explicit foreground execution. 通常は runCommand(auto) を使用してください。
+  $SHELL 環境変数で指定されたシェルで、コマンド文字列を同期実行します。
   $SHELL が未設定の場合、Windows は powershell、Linux と macOS は bash を使います。
   @param command 実行するシェルコマンド文字列
   @param timeoutSeconds タイムアウト秒数。null の場合は 30 秒、最大 600 秒です。
@@ -319,6 +319,7 @@ public class Tools {
 
   @Tool(name = "spawnShellCommand",
   description = """
+  primitive tool for explicit background execution. 通常は runCommand(auto) を使用してください。
   $SHELL 環境変数で指定されたシェルで、長時間実行プロセスをバックグラウンド起動します。
   executeShellCommand と違い、コマンド終了を待たずに processId、OS pid、状態、直近ログを返します。
   サーバー起動、watch、tail、開発サーバーなど、終了しない可能性があるコマンドに使用してください。

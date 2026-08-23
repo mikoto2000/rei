@@ -24,6 +24,7 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
 import dev.mikoto2000.rei.core.filesummary.FileSummary;
 import dev.mikoto2000.rei.core.filesummary.FileSummaryCache;
@@ -68,6 +69,30 @@ class ToolsTest {
     assertTrue(toolNames.contains("readMultiFile"));
     assertTrue(toolNames.contains("writeMultiFile"));
     assertTrue(toolNames.contains("searchAndRead"));
+    assertTrue(toolNames.contains("runCommand"));
+    assertTrue(toolNames.contains("executeShellCommand"));
+    assertTrue(toolNames.contains("spawnShellCommand"));
+  }
+
+  @Test
+  void runCommandToolSchemaAndDescriptionsPreferAutoHighLevelEntry() throws Exception {
+    Tool run = Tools.class.getDeclaredMethod("runCommand", RunCommandRequest.class).getAnnotation(Tool.class);
+    Tool foreground = Tools.class.getDeclaredMethod("executeShellCommand", String.class, Integer.class)
+        .getAnnotation(Tool.class);
+    Tool background = Tools.class.getDeclaredMethod("spawnShellCommand", String.class).getAnnotation(Tool.class);
+    assertTrue(run.description().contains("default tool"));
+    assertTrue(run.description().contains("auto mode"));
+    assertTrue(foreground.description().contains("primitive"));
+    assertTrue(background.description().contains("primitive"));
+
+    var callback = java.util.Arrays.stream(MethodToolCallbackProvider.builder().toolObjects(new Tools()).build()
+        .getToolCallbacks())
+        .filter(candidate -> "runCommand".equals(candidate.getToolDefinition().name()))
+        .findFirst().orElseThrow();
+    String schema = callback.getToolDefinition().inputSchema();
+    assertTrue(schema.contains("command"));
+    assertTrue(schema.contains("executionMode"));
+    assertTrue(schema.contains("timeoutSeconds"));
   }
 
   @Test
