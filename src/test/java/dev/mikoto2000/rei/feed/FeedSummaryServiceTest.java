@@ -19,6 +19,7 @@ class FeedSummaryServiceTest {
 
   @TempDir
   Path tempDir;
+  private int databaseSequence;
 
   @Test
   void summarizeRecentItemsBuildsPromptFromBriefingItems() {
@@ -149,7 +150,81 @@ class FeedSummaryServiceTest {
     assertTrue(promptRef.get().contains("https://example.com/today"));
   }
 
+  @Test
+  void summarizeItemDetailedReportsArticleSourceWhenFetchSucceeds() {
+    FeedService feedService = serviceWithItem("https://example.com/article", "FEED_DESCRIPTION", "FEED_CONTENT");
+    long itemId = feedService.listItemsForFeed(1L).getFirst().id();
+    AtomicReference<String> promptRef = new AtomicReference<>();
+    FeedSummaryService service = summaryService(feedService,
+        item -> new WebSearchPage(item.title(), item.url(), "", null, "ARTICLE_BODY_MARKER"), promptRef);
+
+    FeedItemSummaryResult result = service.summarizeItemDetailed(itemId);
+
+    assertEquals("generated summary", result.summary());
+    assertEquals("article", result.summarySource());
+    assertEquals("success", result.articleFetchStatus());
+    assertTrue(promptRef.get().contains("ARTICLE_BODY_MARKER"));
+    org.junit.jupiter.api.Assertions.assertFalse(promptRef.get().contains("FEED_DESCRIPTION"));
+  }
+
+  @Test
+  void summarizeItemDetailedFallsBackToFeedWhenFetchFailsOrIsEmpty() {
+    for (boolean throwsFailure : List.of(true, false)) {
+      FeedService feedService = serviceWithItem("https://example.com/article", "FEED_DESCRIPTION_MARKER", null);
+      long itemId = feedService.listItemsForFeed(1L).getFirst().id();
+      AtomicReference<String> promptRef = new AtomicReference<>();
+      FeedSummaryService service = summaryService(feedService, item -> {
+        if (throwsFailure) throw new IllegalStateException("fetch failed");
+        return new WebSearchPage(item.title(), item.url(), "", null, "  ");
+      }, promptRef);
+
+      FeedItemSummaryResult result = service.summarizeItemDetailed(itemId);
+
+      assertEquals("feed", result.summarySource());
+      assertEquals("failed", result.articleFetchStatus());
+      assertTrue(promptRef.get().contains("FEED_DESCRIPTION_MARKER"));
+      assertTrue(promptRef.get().contains("記事本文は取得できませんでした"));
+    }
+  }
+
+  @Test
+  void summarizeItemDetailedUsesFeedWithoutFetchWhenUrlIsMissing() {
+    FeedService feedService = serviceWithItem(null, null, "EMBEDDED_CONTENT_MARKER");
+    long itemId = feedService.listItemsForFeed(1L).getFirst().id();
+    AtomicReference<String> promptRef = new AtomicReference<>();
+    java.util.concurrent.atomic.AtomicInteger fetches = new java.util.concurrent.atomic.AtomicInteger();
+    FeedSummaryService service = summaryService(feedService, item -> {
+      fetches.incrementAndGet();
+      throw new AssertionError("must not fetch");
+    }, promptRef);
+
+    FeedItemSummaryResult result = service.summarizeItemDetailed(itemId);
+
+    assertEquals("feed", result.summarySource());
+    assertEquals("not_requested", result.articleFetchStatus());
+    assertEquals(0, fetches.get());
+    assertTrue(promptRef.get().contains("EMBEDDED_CONTENT_MARKER"));
+  }
+
+  private FeedService serviceWithItem(String url, String description, String content) {
+    FeedService service = newService();
+    Feed feed = service.add("https://example.com/feed.xml", "Example Feed");
+    service.saveFetchedItems(feed.id(), List.of(new FetchedFeedItem("Today", url,
+        OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC), description, content)),
+        OffsetDateTime.of(2026, 4, 22, 8, 0, 0, 0, ZoneOffset.UTC));
+    return service;
+  }
+
+  private FeedSummaryService summaryService(FeedService feedService,
+      java.util.function.Function<FeedBriefingItem, WebSearchPage> fetcher, AtomicReference<String> promptRef) {
+    return new FeedSummaryService(feedService, fetcher, prompt -> {
+      promptRef.set(prompt);
+      return "generated summary";
+    }, new FeedProperties(20));
+  }
+
   private FeedService newService() {
-    return new FeedService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feed-summary.db")));
+    return new FeedService(new DriverManagerDataSource(
+        "jdbc:sqlite:" + tempDir.resolve("feed-summary-" + databaseSequence++ + ".db")));
   }
 }

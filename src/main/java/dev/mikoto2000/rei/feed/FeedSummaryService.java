@@ -6,12 +6,18 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.function.Function;
 
+import org.jsoup.Jsoup;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import dev.mikoto2000.rei.websearch.WebSearchPage;
 
 @Service
 public class FeedSummaryService {
+
+  private static final Logger log = LoggerFactory.getLogger(FeedSummaryService.class);
+  private static final int MAX_FEED_CONTENT_LENGTH = 2000;
 
   private final FeedService feedService;
   private final Function<FeedBriefingItem, WebSearchPage> feedArticlePageFetcher;
@@ -46,11 +52,23 @@ public class FeedSummaryService {
   }
 
   public String summarizeItem(long itemId) {
+    return summarizeItemDetailed(itemId).summary();
+  }
+
+  public FeedItemSummaryResult summarizeItemDetailed(long itemId) {
     FeedBriefingItem item = feedService.findBriefingItem(itemId);
+    ResolvedContent resolved = resolveContent(item);
+    if (resolved.content().isBlank() && isBlank(item.title())) {
+      return new FeedItemSummaryResult("要約可能な記事情報がありません。", "feed", resolved.fetchStatus());
+    }
     try {
-      return feedSummaryGenerator.generate(buildItemPrompt(item));
+      String summary = feedSummaryGenerator.generate(buildItemPrompt(item, resolved));
+      log.debug("feed item summarized: itemId={}, articleUrl={}, articleFetchStatus={}, summarySource={}, truncated={}",
+          item.id(), item.url(), resolved.fetchStatus(), resolved.source(), resolved.truncated());
+      return new FeedItemSummaryResult(summary, resolved.source(), resolved.fetchStatus());
     } catch (RuntimeException e) {
-      return "記事要約の生成に失敗しました。タイトルと URL を確認してください。";
+      return new FeedItemSummaryResult("記事要約の生成に失敗しました。タイトルと URL を確認してください。",
+          resolved.source(), resolved.fetchStatus());
     }
   }
 
@@ -90,20 +108,33 @@ public class FeedSummaryService {
     return builder.toString().trim();
   }
 
-  private String buildItemPrompt(FeedBriefingItem item) {
-    WebSearchPage page = fetchPage(item);
-    return """
+  private String buildItemPrompt(FeedBriefingItem item, ResolvedContent resolved) {
+    if ("article".equals(resolved.source())) {
+      return """
         あなたは RSS/Atom フィードの記事要約アシスタントです。
-        次の本文とメタデータを根拠に、重要点を日本語で簡潔に要約してください。
-        本文取得に失敗して本文が短い場合は、その旨を踏まえて断定しすぎないこと。
+        次の記事本文を主な根拠に、重要点を日本語で簡潔に要約してください。
+        与えられた情報だけを使い、不足情報を推測で補完しないでください。
 
         フィード: %s
         公開日時: %s
         タイトル: %s
         URL: %s
-        本文:
+        記事本文:
         %s
-        """.formatted(item.feedName(), item.publishedAt(), item.title(), item.url(), page.content());
+        """.formatted(item.feedName(), item.publishedAt(), item.title(), item.url(), resolved.content());
+    }
+    return """
+        あなたは RSS/Atom フィードの記事要約アシスタントです。
+        記事本文は取得できませんでした。以下の Feed 提供情報だけを使って要約してください。
+        不足情報を推測で補完せず、本文を読んだかのような詳細を生成しないでください。
+
+        フィード: %s
+        公開日時: %s
+        タイトル: %s
+        URL: %s
+        Feed content:
+        %s
+        """.formatted(item.feedName(), item.publishedAt(), item.title(), item.url(), resolved.content());
   }
 
   private WebSearchPage fetchPage(FeedBriefingItem item) {
@@ -129,5 +160,47 @@ public class FeedSummaryService {
         "",
         item.publishedAt() == null ? null : item.publishedAt().toString(),
         "title=" + item.title() + " url=" + item.url());
+  }
+
+  private ResolvedContent resolveContent(FeedBriefingItem item) {
+    if (isBlank(item.url())) {
+      return feedContent(item, "not_requested");
+    }
+    try {
+      WebSearchPage page = feedArticlePageFetcher.apply(item);
+      if (page != null && !isBlank(page.content())) {
+        return new ResolvedContent(page.content().trim(), "article", "success", page.truncated());
+      }
+      log.debug("feed article fetch produced empty content: itemId={}, articleUrl={}", item.id(), item.url());
+    } catch (Exception e) {
+      log.debug("feed article fetch failed: itemId={}, articleUrl={}, reason={}", item.id(), item.url(), e.toString());
+    }
+    return feedContent(item, "failed");
+  }
+
+  private ResolvedContent feedContent(FeedBriefingItem item, String fetchStatus) {
+    String content = firstNonBlank(item.content(), item.description(), item.title());
+    String normalized = content == null ? "" : Jsoup.parse(content).text().replaceAll("\\s+", " ").trim();
+    boolean truncated = normalized.length() > MAX_FEED_CONTENT_LENGTH;
+    if (truncated) {
+      int end = normalized.offsetByCodePoints(0, Math.min(MAX_FEED_CONTENT_LENGTH,
+          normalized.codePointCount(0, normalized.length())));
+      normalized = normalized.substring(0, end);
+    }
+    return new ResolvedContent(normalized, "feed", fetchStatus, truncated);
+  }
+
+  private String firstNonBlank(String... values) {
+    for (String value : values) {
+      if (!isBlank(value)) return value;
+    }
+    return "";
+  }
+
+  private boolean isBlank(String value) {
+    return value == null || value.isBlank();
+  }
+
+  private record ResolvedContent(String content, String source, String fetchStatus, boolean truncated) {
   }
 }
