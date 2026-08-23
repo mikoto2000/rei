@@ -24,6 +24,8 @@ public enum AgentEventType {
   TASK_FAILED("task.failed"),
   WORKING_SET_ITEM_ADDED("working_set.item.added"),
   WORKING_SET_ITEM_REMOVED("working_set.item.removed"),
+  WORKING_SET_SEARCH_STARTED("working_set.search.started"),
+  WORKING_SET_SEARCH_COMPLETED("working_set.search.completed"),
   CONTEXT_SNAPSHOT_UPDATED("context.snapshot.updated"),
   FILE_CREATED("file.created"),
   FILE_MODIFIED("file.modified"),

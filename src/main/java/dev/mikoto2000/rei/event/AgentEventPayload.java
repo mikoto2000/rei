@@ -12,6 +12,7 @@ public sealed interface AgentEventPayload
         SkillSelectionStartedPayload, SkillSelectionCompletedPayload, SkillSelectionFailedPayload,
         TaskCreatedPayload, TaskStartedPayload, TaskCompletedPayload, TaskFailedPayload,
         WorkingSetItemAddedPayload, WorkingSetItemRemovedPayload,
+        WorkingSetSearchStartedPayload, WorkingSetSearchCompletedPayload,
         ContextSnapshotUpdatedPayload,
         FileCreatedPayload, FileModifiedPayload, FileDeletedPayload {
 }
