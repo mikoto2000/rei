@@ -11,8 +11,16 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.ArrayList;
 
 import org.junit.jupiter.api.Test;
+
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
+import dev.mikoto2000.rei.event.WorkingSetItemAddedPayload;
+import dev.mikoto2000.rei.event.WorkingSetItemRemovedPayload;
 
 class WorkingSetTest {
 
@@ -24,6 +32,46 @@ class WorkingSetTest {
 
   private Path abs(String relative) {
     return Path.of(relative).toAbsolutePath().normalize();
+  }
+
+  @Test
+  void publishesAddedOnlyWhenAFileActuallyEntersTheWorkingSet() {
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    List<AgentEvent> received = new ArrayList<>();
+    bus.subscribe(received::add);
+    Clock clock = Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE);
+    WorkingSet ws = new WorkingSet(20, clock, new AgentEventFactory(clock), bus);
+
+    ws.recordRead(Path.of("foo.txt"));
+    ws.recordRead(Path.of("foo.txt"));
+
+    assertEquals(1, received.size());
+    assertEquals(AgentEventType.WORKING_SET_ITEM_ADDED, received.getFirst().type());
+    WorkingSetItemAddedPayload payload = (WorkingSetItemAddedPayload) received.getFirst().payload();
+    assertEquals(abs("foo.txt").toString(), payload.path());
+    assertEquals("read", payload.reason());
+  }
+
+  @Test
+  void publishesRemovalReasonsAtTheMutationBoundary() {
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    List<AgentEvent> received = new ArrayList<>();
+    bus.subscribe(received::add);
+    Clock clock = Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE);
+    WorkingSet ws = new WorkingSet(1, clock, new AgentEventFactory(clock), bus);
+
+    ws.recordRead(Path.of("old.txt"));
+    ws.recordRead(Path.of("new.txt"));
+    ws.remove(Path.of("new.txt"));
+    ws.remove(Path.of("absent.txt"));
+
+    List<WorkingSetItemRemovedPayload> removals = received.stream()
+        .filter(event -> event.type() == AgentEventType.WORKING_SET_ITEM_REMOVED)
+        .map(event -> (WorkingSetItemRemovedPayload) event.payload())
+        .toList();
+    assertEquals(2, removals.size());
+    assertEquals("capacity eviction", removals.get(0).reason());
+    assertEquals("explicit removal", removals.get(1).reason());
   }
 
   @Test

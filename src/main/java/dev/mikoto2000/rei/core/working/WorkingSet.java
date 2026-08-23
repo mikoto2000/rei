@@ -13,6 +13,9 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import dev.mikoto2000.rei.event.AgentEventBus;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+
 /**
  * 現在のタスクで実際に使用されたファイルの集合を保持する。
  *
@@ -27,6 +30,8 @@ public class WorkingSet {
 
   private final int maxFiles;
   private final Clock clock;
+  private final AgentEventFactory events;
+  private final AgentEventBus eventBus;
   private final Map<String, FileReference> files = new LinkedHashMap<>();
 
   public WorkingSet() {
@@ -34,8 +39,14 @@ public class WorkingSet {
   }
 
   public WorkingSet(int maxFiles, Clock clock) {
+    this(maxFiles, clock, null, null);
+  }
+
+  public WorkingSet(int maxFiles, Clock clock, AgentEventFactory events, AgentEventBus eventBus) {
     this.maxFiles = Math.max(1, maxFiles);
     this.clock = clock;
+    this.events = events;
+    this.eventBus = eventBus;
   }
 
   /**
@@ -73,18 +84,14 @@ public class WorkingSet {
    * 指定パスを Working Set から削除する。
    */
   public void remove(Path path) {
-    String normalized = normalize(path);
-    FileReference removed = files.remove(normalized);
-    if (removed != null) {
-      log.debug("Working set: removed {}", normalized);
-    }
+    remove(normalize(path), "explicit removal");
   }
 
   /**
    * Working Set を空にする。
    */
   public void clear() {
-    files.clear();
+    List.copyOf(files.keySet()).forEach(path -> remove(path, "clear"));
   }
 
   /**
@@ -137,6 +144,7 @@ public class WorkingSet {
     }
     files.put(normalized, reference);
     log.debug("Working set: added {} ({})", normalized, reference.accessType());
+    publishAdded(reference);
     evictIfNeeded();
   }
 
@@ -149,7 +157,7 @@ public class WorkingSet {
       if (oldest == null) {
         return;
       }
-      files.remove(oldest);
+      remove(oldest, "capacity eviction");
       log.debug("Working set: evicted {}", oldest);
     }
   }
@@ -193,8 +201,26 @@ public class WorkingSet {
    */
   public void removeIfMissing(Path path) {
     if (!java.nio.file.Files.exists(path)) {
-      remove(path);
+      remove(normalize(path), "missing file");
       log.debug("Working set: removed missing file {}", normalize(path));
+    }
+  }
+
+  private void remove(String normalized, String reason) {
+    FileReference removed = files.remove(normalized);
+    if (removed == null) {
+      return;
+    }
+    log.debug("Working set: removed {}", normalized);
+    if (events != null && eventBus != null) {
+      eventBus.publish(events.workingSetItemRemoved(normalized, reason));
+    }
+  }
+
+  private void publishAdded(FileReference reference) {
+    if (events != null && eventBus != null) {
+      eventBus.publish(events.workingSetItemAdded(reference.path(), "file", reference.path(), reference.path(),
+          reference.accessType()));
     }
   }
 }
