@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.websearch;
 import java.io.IOException;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
@@ -32,15 +34,16 @@ public class WebSearchAndReadService {
     ValidatedRequest validated = validate(request);
     List<WebSearchResult> searchResults = webSearchService.search(validated.query(), validated.maxResults());
     List<WebSearchAndReadItem> results = new ArrayList<>();
+    Map<String, UrlContentFetchResult> fetchCache = new LinkedHashMap<>();
     for (WebSearchResult result : searchResults) {
       if (results.size() >= validated.maxResults()) break;
-      results.add(results.size() < validated.readTop() ? fetch(result) : notRequested(result));
+      results.add(results.size() < validated.readTop() ? fetch(result, fetchCache) : notRequested(result));
     }
     return new WebSearchAndReadResponse(validated.query(), results);
   }
 
-  private WebSearchAndReadItem fetch(WebSearchResult result) {
-    UrlContentFetchResult fetched = urlContentFetchService.fetch(result.url());
+  private WebSearchAndReadItem fetch(WebSearchResult result, Map<String, UrlContentFetchResult> fetchCache) {
+    UrlContentFetchResult fetched = fetchCache.computeIfAbsent(result.url(), this::safeFetch);
     if (!fetched.success()) {
       return new WebSearchAndReadItem(result.title(), result.url(), result.snippet(), result.publishedAt(),
           null, null, "failed", fetched.errorType(), fetched.errorMessage(), false);
@@ -48,6 +51,15 @@ public class WebSearchAndReadService {
     WebSearchPage page = webPageExtractor.extract(result, fetched.content());
     return new WebSearchAndReadItem(page.title(), page.url(), page.snippet(), page.publishedAt(),
         page.content(), null, "success", null, null, page.truncated());
+  }
+
+  private UrlContentFetchResult safeFetch(String url) {
+    try {
+      return urlContentFetchService.fetch(url);
+    } catch (RuntimeException exception) {
+      return UrlContentFetchResult.failure("FETCH_ERROR",
+          exception.getMessage() == null ? "Failed to fetch URL" : exception.getMessage());
+    }
   }
 
   private WebSearchAndReadItem notRequested(WebSearchResult result) {

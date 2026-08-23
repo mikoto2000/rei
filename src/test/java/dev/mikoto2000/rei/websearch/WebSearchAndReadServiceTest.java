@@ -99,4 +99,60 @@ class WebSearchAndReadServiceTest {
     assertEquals(2_000, item.content().length());
     org.junit.jupiter.api.Assertions.assertTrue(item.truncated());
   }
+
+  @Test
+  void keepsRankOrderAndReturnsPartialFetchFailures() throws Exception {
+    WebSearchResult first = new WebSearchResult("First", "https://example.com/1", "S1", null);
+    WebSearchResult second = new WebSearchResult("Second", "https://example.com/2", "S2", null);
+    WebSearchResult third = new WebSearchResult("Third", "https://example.com/3", "S3", null);
+    org.mockito.Mockito.when(webSearchService.search("query", 3)).thenReturn(List.of(first, second, third));
+    org.mockito.Mockito.when(urlContentFetchService.fetch(first.url()))
+        .thenReturn(UrlContentFetchResult.success("<p>one</p>"));
+    org.mockito.Mockito.when(urlContentFetchService.fetch(second.url()))
+        .thenReturn(UrlContentFetchResult.failure("NETWORK_ERROR", "timeout"));
+    org.mockito.Mockito.when(urlContentFetchService.fetch(third.url()))
+        .thenReturn(UrlContentFetchResult.success("<p>three</p>"));
+
+    List<WebSearchAndReadItem> items = service.searchAndRead(
+        new WebSearchAndReadRequest("query", 3, 3)).results();
+
+    assertEquals(List.of("First", "Second", "Third"), items.stream().map(WebSearchAndReadItem::title).toList());
+    assertEquals(List.of("success", "failed", "success"),
+        items.stream().map(WebSearchAndReadItem::fetchStatus).toList());
+    assertEquals("NETWORK_ERROR", items.get(1).errorType());
+    assertEquals("timeout", items.get(1).errorMessage());
+  }
+
+  @Test
+  void returnsSearchMetadataWhenEveryFetchFails() throws Exception {
+    WebSearchResult first = new WebSearchResult("First", "https://example.com/1", "S1", null);
+    WebSearchResult second = new WebSearchResult("Second", "https://example.com/2", "S2", null);
+    org.mockito.Mockito.when(webSearchService.search("query", 2)).thenReturn(List.of(first, second));
+    org.mockito.Mockito.when(urlContentFetchService.fetch(Mockito.anyString()))
+        .thenReturn(UrlContentFetchResult.failure("NETWORK_ERROR", "offline"));
+
+    List<WebSearchAndReadItem> items = service.searchAndRead(
+        new WebSearchAndReadRequest("query", 2, 2)).results();
+
+    assertEquals(2, items.size());
+    assertEquals(List.of("failed", "failed"), items.stream().map(WebSearchAndReadItem::fetchStatus).toList());
+    assertEquals(List.of("S1", "S2"), items.stream().map(WebSearchAndReadItem::snippet).toList());
+  }
+
+  @Test
+  void fetchesDuplicateUrlOnlyOnceWhilePreservingResults() throws Exception {
+    WebSearchResult first = new WebSearchResult("First", "https://example.com/same", "S1", null);
+    WebSearchResult duplicate = new WebSearchResult("Duplicate", "https://example.com/same", "S2", null);
+    org.mockito.Mockito.when(webSearchService.search("query", 2)).thenReturn(List.of(first, duplicate));
+    org.mockito.Mockito.when(urlContentFetchService.fetch(first.url()))
+        .thenReturn(UrlContentFetchResult.success("<p>shared</p>"));
+
+    List<WebSearchAndReadItem> items = service.searchAndRead(
+        new WebSearchAndReadRequest("query", 2, 2)).results();
+
+    assertEquals(2, items.size());
+    assertEquals(List.of("First", "Duplicate"), items.stream().map(WebSearchAndReadItem::title).toList());
+    assertEquals(List.of("shared", "shared"), items.stream().map(WebSearchAndReadItem::content).toList());
+    Mockito.verify(urlContentFetchService, Mockito.times(1)).fetch("https://example.com/same");
+  }
 }
