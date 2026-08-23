@@ -9,6 +9,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
 class WebSearchToolsTest {
 
@@ -47,5 +48,21 @@ class WebSearchToolsTest {
     org.junit.jupiter.api.Assertions.assertTrue(tool.description().contains("webSearch"));
     org.junit.jupiter.api.Assertions.assertTrue(tool.description().contains("fetchUrlContent"));
     org.junit.jupiter.api.Assertions.assertTrue(tool.description().contains("readTop = 0"));
+  }
+
+  @Test
+  void methodToolProviderRegistersCompositeToolWithRequestSchema() {
+    WebSearchTools tools = new WebSearchTools(Mockito.mock(WebSearchService.class),
+        Mockito.mock(WebSearchAndReadService.class));
+    var callbacks = MethodToolCallbackProvider.builder().toolObjects(tools).build().getToolCallbacks();
+    var callback = java.util.Arrays.stream(callbacks)
+        .filter(candidate -> "webSearchAndRead".equals(candidate.getToolDefinition().name()))
+        .findFirst()
+        .orElseThrow();
+
+    String schema = callback.getToolDefinition().inputSchema();
+    org.junit.jupiter.api.Assertions.assertTrue(schema.contains("query"));
+    org.junit.jupiter.api.Assertions.assertTrue(schema.contains("maxResults"));
+    org.junit.jupiter.api.Assertions.assertTrue(schema.contains("readTop"));
   }
 }
