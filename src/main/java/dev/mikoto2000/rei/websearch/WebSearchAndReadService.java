@@ -57,7 +57,7 @@ public class WebSearchAndReadService {
     }
     WebSearchPage page = webPageExtractor.extract(result, fetched.content());
     return new WebSearchAndReadItem(page.title(), page.url(), page.snippet(), page.publishedAt(),
-        page.content(), null, "success", null, null, page.truncated());
+        page.content(), fetched.contentType(), "success", null, null, page.truncated());
   }
 
   private UrlContentFetchResult safeFetch(String url) {

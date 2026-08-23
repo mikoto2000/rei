@@ -5,17 +5,27 @@ public record UrlContentFetchResult(
     String content,
     String errorType,
     String errorMessage,
-    Integer statusCode) {
+    Integer statusCode,
+    String contentType) {
+
+  public UrlContentFetchResult(boolean success, String content, String errorType, String errorMessage,
+      Integer statusCode) {
+    this(success, content, errorType, errorMessage, statusCode, null);
+  }
 
   public static UrlContentFetchResult success(String content) {
-    return new UrlContentFetchResult(true, content, null, null, null);
+    return success(content, null);
+  }
+
+  public static UrlContentFetchResult success(String content, String contentType) {
+    return new UrlContentFetchResult(true, content, null, null, null, contentType);
   }
 
   public static UrlContentFetchResult failure(String errorType, String errorMessage) {
-    return new UrlContentFetchResult(false, null, errorType, errorMessage, null);
+    return new UrlContentFetchResult(false, null, errorType, errorMessage, null, null);
   }
 
   public static UrlContentFetchResult failure(String errorType, String errorMessage, Integer statusCode) {
-    return new UrlContentFetchResult(false, null, errorType, errorMessage, statusCode);
+    return new UrlContentFetchResult(false, null, errorType, errorMessage, statusCode, null);
   }
 }

@@ -8,7 +8,10 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.net.http.HttpClient;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpResponse;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -22,6 +25,8 @@ class UrlContentFetchServiceTest {
     HttpResponse<String> response = (HttpResponse<String>) Mockito.mock(HttpResponse.class);
     when(response.statusCode()).thenReturn(200);
     when(response.body()).thenReturn("hello");
+    when(response.headers()).thenReturn(HttpHeaders.of(
+        Map.of("Content-Type", List.of("text/plain; charset=utf-8")), (name, value) -> true));
     when(httpClient.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response);
     UrlContentFetchService service = new UrlContentFetchService(new UrlValidator(), httpClient);
 
@@ -29,6 +34,7 @@ class UrlContentFetchServiceTest {
 
     assertTrue(result.success());
     assertEquals("hello", result.content());
+    assertEquals("text/plain", result.contentType());
   }
 
   @Test

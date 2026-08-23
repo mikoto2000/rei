@@ -77,12 +77,13 @@ class WebSearchAndReadServiceTest {
     org.mockito.Mockito.when(webSearchService.search("query", 2)).thenReturn(List.of(first, second));
     org.mockito.Mockito.when(urlContentFetchService.fetch(first.url())).thenReturn(UrlContentFetchResult.success("""
         <html><body><nav>menu</nav><article><p>Readable content.</p></article><script>ignore()</script></body></html>
-        """));
+        """, "text/html"));
 
     WebSearchAndReadResponse response = service.searchAndRead(new WebSearchAndReadRequest("query", 2, 1));
 
     assertEquals("success", response.results().get(0).fetchStatus());
     assertEquals("Readable content.", response.results().get(0).content());
+    assertEquals("text/html", response.results().get(0).contentType());
     assertEquals("not_requested", response.results().get(1).fetchStatus());
     Mockito.verify(urlContentFetchService).fetch("https://example.com/1");
     Mockito.verify(urlContentFetchService, Mockito.never()).fetch("https://example.com/2");

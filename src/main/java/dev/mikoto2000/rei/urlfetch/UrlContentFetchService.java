@@ -51,7 +51,10 @@ public class UrlContentFetchService {
       if (response.body() == null) {
         return UrlContentFetchResult.failure("EXTRACTION_ERROR", "Response body is empty");
       }
-      return UrlContentFetchResult.success(response.body());
+      String contentType = response.headers() == null ? null : response.headers().firstValue("Content-Type")
+          .map(value -> value.split(";", 2)[0].trim().toLowerCase(java.util.Locale.ROOT))
+          .orElse(null);
+      return UrlContentFetchResult.success(response.body(), contentType);
     } catch (IOException e) {
       return UrlContentFetchResult.failure("NETWORK_ERROR", "Network error: " + e.getMessage());
     } catch (InterruptedException e) {
