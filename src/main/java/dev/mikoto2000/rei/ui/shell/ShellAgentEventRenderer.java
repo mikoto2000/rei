@@ -14,6 +14,8 @@ import dev.mikoto2000.rei.event.ToolFailedPayload;
 import dev.mikoto2000.rei.event.ToolStartedPayload;
 import dev.mikoto2000.rei.event.WorkingSetItemAddedPayload;
 import dev.mikoto2000.rei.event.WorkingSetItemRemovedPayload;
+import dev.mikoto2000.rei.event.WorkingSetSearchCompletedPayload;
+import dev.mikoto2000.rei.event.WorkingSetSearchStartedPayload;
 
 /** Append-only Shell presentation adapter for Agent events. */
 public final class ShellAgentEventRenderer implements AgentEventListener {
@@ -100,6 +102,20 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         WorkingSetItemRemovedPayload payload = (WorkingSetItemRemovedPayload) event.payload();
         output.println("[working-set] - " + displayName(null, payload.itemId()) + reasonSuffix(payload.reason()));
       }
+      case WORKING_SET_SEARCH_STARTED -> {
+        closeAssistantLine();
+        WorkingSetSearchStartedPayload payload = (WorkingSetSearchStartedPayload) event.payload();
+        output.println("[working-set] → search \"" + boundedSummary(payload.query(), 120).replace('"', '\'') + "\"");
+      }
+      case WORKING_SET_SEARCH_COMPLETED -> {
+        closeAssistantLine();
+        WorkingSetSearchCompletedPayload payload = (WorkingSetSearchCompletedPayload) event.payload();
+        String alreadyPresent = payload.alreadyPresentCount() == 0
+            ? "" : ", " + payload.alreadyPresentCount() + " already present";
+        output.println("[working-set] ✓ " + payload.hitCount() + " hits → " + payload.candidateCount()
+            + " candidates → " + payload.selectedCount() + " selected" + alreadyPresent
+            + " (" + payload.durationMs() + " ms)");
+      }
       default -> { }
     }
     output.flush();
@@ -175,5 +191,10 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     int maxLength = 120;
     if (safe.length() > maxLength) safe = safe.substring(0, maxLength - 1) + "…";
     return " (" + safe + ")";
+  }
+
+  private String boundedSummary(String value, int maxLength) {
+    String safe = oneLineSummary(value);
+    return safe.length() <= maxLength ? safe : safe.substring(0, maxLength - 1) + "…";
   }
 }

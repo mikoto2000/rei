@@ -113,6 +113,17 @@ class ShellAgentEventRendererTest {
     assertTrue(lines[1].length() <= 170);
   }
 
+  @Test
+  void rendersWorkingSetSearchLifecycleAsCompactSummaries() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.workingSetSearchStarted("search-1", "ToolCallbackProvider\nsecret", "searchAndRead", 1));
+    renderer.onEvent(events.workingSetSearchCompleted("search-1", 91, 18, 5, 2, 1, 1, 2));
+    assertEquals("[working-set] → search \"ToolCallbackProvider secret\"\n"
+        + "[working-set] ✓ 18 hits → 5 candidates → 2 selected, 1 already present (91 ms)\n",
+        output.text());
+  }
+
   private static final class RecordingOutput implements ShellEventOutput {
     private final StringBuilder value = new StringBuilder();
     public void print(String text) { value.append(text); }
