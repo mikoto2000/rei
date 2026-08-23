@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +27,8 @@ import dev.mikoto2000.rei.event.AgentEventFactory;
 public class WorkingSet {
 
   private static final Logger log = LoggerFactory.getLogger(WorkingSet.class);
+  private static final Pattern SECRET_ASSIGNMENT = Pattern.compile(
+      "(?i)((?:api[_-]?key|access[_-]?token|token|password|secret)\\s*[:=]\\s*)(?:\\\"[^\\\"]*\\\"|'[^']*'|\\S+)");
 
   static final int DEFAULT_MAX_FILES = 20;
 
@@ -255,7 +258,8 @@ public class WorkingSet {
 
   private String bounded(String value, int maxLength) {
     if (value == null) return "";
-    String safe = value.replaceAll("[\\p{Cntrl}]+", " ").replaceAll("\\s+", " ").trim();
+    String redacted = SECRET_ASSIGNMENT.matcher(value).replaceAll("$1[REDACTED]");
+    String safe = redacted.replaceAll("[\\p{Cntrl}]+", " ").replaceAll("\\s+", " ").trim();
     return safe.length() <= maxLength ? safe : safe.substring(0, maxLength - 1) + "…";
   }
 

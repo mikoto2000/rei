@@ -75,6 +75,23 @@ class WorkingSetTest {
   }
 
   @Test
+  void searchQueryPayloadIsBoundedSingleLineAndRedactsCommonSecrets() {
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    List<AgentEvent> received = new ArrayList<>();
+    bus.subscribe(received::add);
+    Clock clock = Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE);
+    WorkingSet ws = new WorkingSet(20, clock, new AgentEventFactory(clock), bus);
+
+    ws.beginSearch("api_key=supersecret\n" + "x".repeat(600), "searchAndRead");
+
+    dev.mikoto2000.rei.event.WorkingSetSearchStartedPayload payload =
+        (dev.mikoto2000.rei.event.WorkingSetSearchStartedPayload) received.getFirst().payload();
+    assertFalse(payload.query().contains("supersecret"));
+    assertFalse(payload.query().contains("\n"));
+    assertTrue(payload.query().length() <= 500);
+  }
+
+  @Test
   void readFileIsAddedToWorkingSet() {
     WorkingSet ws = workingSet(20, Instant.parse("2026-08-17T00:00:00Z"));
     ws.recordRead(Path.of("foo.txt"));
