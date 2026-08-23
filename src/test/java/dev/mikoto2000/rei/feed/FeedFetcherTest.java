@@ -23,6 +23,8 @@ class FeedFetcherTest {
               <title>First Post</title>
               <link>https://example.com/posts/1</link>
               <pubDate>Tue, 21 Apr 2026 09:30:00 GMT</pubDate>
+              <description>First post description</description>
+              <content:encoded xmlns:content="http://purl.org/rss/1.0/modules/content/">First post full content</content:encoded>
             </item>
             <item>
               <title>Second Post</title>
@@ -41,6 +43,8 @@ class FeedFetcherTest {
     assertEquals("First Post", fetched.items().getFirst().title());
     assertEquals("https://example.com/posts/1", fetched.items().getFirst().url());
     assertEquals(OffsetDateTime.parse("2026-04-21T09:30:00Z"), fetched.items().getFirst().publishedAt());
+    assertEquals("First post description", fetched.items().getFirst().description());
+    assertEquals("First post full content", fetched.items().getFirst().content());
     assertNull(fetched.items().get(1).publishedAt());
   }
 
@@ -56,6 +60,8 @@ class FeedFetcherTest {
             <title>Atom Entry</title>
             <link href="https://example.com/entries/1"/>
             <published>2026-04-22T01:23:45Z</published>
+            <summary>Atom summary</summary>
+            <content type="html">Atom full content</content>
           </entry>
         </feed>
         """));
@@ -65,7 +71,8 @@ class FeedFetcherTest {
     assertEquals("Example Atom", fetched.title());
     assertEquals("https://example.com/", fetched.siteUrl());
     assertEquals("Atom Description", fetched.description());
-    assertEquals(List.of(new FetchedFeedItem("Atom Entry", "https://example.com/entries/1", OffsetDateTime.parse("2026-04-22T01:23:45Z"))),
+    assertEquals(List.of(new FetchedFeedItem("Atom Entry", "https://example.com/entries/1",
+        OffsetDateTime.parse("2026-04-22T01:23:45Z"), "Atom summary", "Atom full content")),
         fetched.items());
   }
 
@@ -90,9 +97,8 @@ class FeedFetcherTest {
     FetchedFeed fetched = fetcher.fetch("https://example.com/atom.xml");
 
     assertEquals("Example Atom", fetched.title());
-    assertEquals(List.of(
-        new FetchedFeedItem("Large Entry", "https://example.com/entries/large", OffsetDateTime.parse("2026-04-22T01:23:45Z"))),
-        fetched.items());
+    assertEquals("Large Entry", fetched.items().getFirst().title());
+    assertEquals(20050, fetched.items().getFirst().content().length());
   }
 
   @Test
@@ -118,9 +124,8 @@ class FeedFetcherTest {
     FetchedFeed fetched = fetcher.fetch("https://example.com/rss.xml");
 
     assertEquals("Example RSS", fetched.title());
-    assertEquals(List.of(
-        new FetchedFeedItem("Large RSS Entry", "https://example.com/rss/large", OffsetDateTime.parse("2026-04-21T09:30:00Z"))),
-        fetched.items());
+    assertEquals("Large RSS Entry", fetched.items().getFirst().title());
+    assertEquals(20050, fetched.items().getFirst().description().length());
   }
 
   @Test

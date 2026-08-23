@@ -7,6 +7,8 @@ public record FeedItem(
     long feedId,
     String title,
     String url,
+    String description,
+    String content,
     OffsetDateTime publishedAt,
     OffsetDateTime fetchedAt,
     OffsetDateTime createdAt,

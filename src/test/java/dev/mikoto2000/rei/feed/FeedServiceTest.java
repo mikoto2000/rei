@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.time.OffsetDateTime;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -14,6 +16,20 @@ class FeedServiceTest {
 
   @TempDir
   Path tempDir;
+
+  @Test
+  void savesEmbeddedFeedContentForSummaryFallback() {
+    FeedService service = newService();
+    Feed feed = service.add("https://example.com/feed.xml", "Example");
+    service.saveFetchedItems(feed.id(), List.of(new FetchedFeedItem(
+        "Title", "https://example.com/article", OffsetDateTime.parse("2026-04-22T01:23:45Z"),
+        "Description marker", "Embedded content marker")), OffsetDateTime.parse("2026-04-22T02:00:00Z"));
+
+    FeedItem item = service.listItemsForFeed(feed.id()).getFirst();
+
+    assertEquals("Description marker", item.description());
+    assertEquals("Embedded content marker", item.content());
+  }
 
   @Test
   void addAndListFeeds() {

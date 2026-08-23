@@ -68,7 +68,9 @@ public class FeedFetcher {
     return new FetchedFeedItem(
         text(item, "title"),
         text(item, "link"),
-        parseDate(firstNonBlank(text(item, "pubDate"), text(item, "date"))));
+        parseDate(firstNonBlank(text(item, "pubDate"), text(item, "date"))),
+        text(item, "description"),
+        firstNonBlank(text(item, "content:encoded"), text(item, "encoded")));
   }
 
   private FetchedFeed parseAtom(Element root) {
@@ -86,7 +88,9 @@ public class FeedFetcher {
     return new FetchedFeedItem(
         text(entry, "title"),
         atomLink(entry),
-        parseDate(firstNonBlank(text(entry, "published"), text(entry, "updated"))));
+        parseDate(firstNonBlank(text(entry, "published"), text(entry, "updated"))),
+        text(entry, "summary"),
+        text(entry, "content"));
   }
 
   private String atomLink(Element parent) {

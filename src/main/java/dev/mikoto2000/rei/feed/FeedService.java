@@ -114,13 +114,15 @@ public class FeedService {
       OffsetDateTime now = fetchedAt == null ? OffsetDateTime.now(ZoneOffset.UTC) : fetchedAt;
       int updated = jdbcClient.sql("""
           INSERT OR IGNORE INTO feed_items
-            (feed_id, title, url, published_at, fetched_at, created_at, updated_at, dedupe_key)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (feed_id, title, url, description, content, published_at, fetched_at, created_at, updated_at, dedupe_key)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """)
           .params(
               feedId,
               item.title(),
               item.url(),
+              item.description(),
+              item.content(),
               item.publishedAt() == null ? null : item.publishedAt().toString(),
               now.toString(),
               now.toString(),
@@ -134,7 +136,7 @@ public class FeedService {
 
   public List<FeedItem> listItemsForFeed(long feedId) {
     return jdbcClient.sql("""
-        SELECT id, feed_id, title, url, published_at, fetched_at, created_at, updated_at
+        SELECT id, feed_id, title, url, description, content, published_at, fetched_at, created_at, updated_at
         FROM feed_items
         WHERE feed_id = ?
         ORDER BY published_at DESC, id DESC
@@ -167,9 +169,9 @@ public class FeedService {
 
   public List<FeedBriefingItem> listBriefingItems(OffsetDateTime from, OffsetDateTime to, int maxItemsPerFeed) {
     return jdbcClient.sql("""
-        SELECT id, title, url, published_at, feed_name
+        SELECT id, title, url, description, content, published_at, feed_name
         FROM (
-          SELECT i.id, i.title, i.url, i.published_at,
+          SELECT i.id, i.title, i.url, i.description, i.content, i.published_at,
                  COALESCE(NULLIF(f.display_name, ''), NULLIF(f.title, ''), f.url) AS feed_name,
                  ROW_NUMBER() OVER (PARTITION BY i.feed_id ORDER BY i.published_at DESC, i.id DESC) AS row_num
           FROM feed_items i
@@ -189,7 +191,7 @@ public class FeedService {
 
   public FeedBriefingItem findBriefingItem(long itemId) {
     return jdbcClient.sql("""
-        SELECT i.id, i.title, i.url, i.published_at,
+        SELECT i.id, i.title, i.url, i.description, i.content, i.published_at,
                COALESCE(NULLIF(f.display_name, ''), NULLIF(f.title, ''), f.url) AS feed_name
         FROM feed_items i
         JOIN feeds f ON f.id = i.feed_id
@@ -243,6 +245,8 @@ public class FeedService {
         rs.getLong("feed_id"),
         rs.getString("title"),
         rs.getString("url"),
+        rs.getString("description"),
+        rs.getString("content"),
         publishedAt == null ? null : OffsetDateTime.parse(publishedAt),
         OffsetDateTime.parse(rs.getString("fetched_at")),
         OffsetDateTime.parse(rs.getString("created_at")),
@@ -264,6 +268,8 @@ public class FeedService {
         rs.getLong("id"),
         rs.getString("title"),
         rs.getString("url"),
+        rs.getString("description"),
+        rs.getString("content"),
         OffsetDateTime.parse(rs.getString("published_at")),
         rs.getString("feed_name"));
   }
@@ -300,6 +306,8 @@ public class FeedService {
             feed_id INTEGER NOT NULL,
             title TEXT NOT NULL,
             url TEXT,
+            description TEXT,
+            content TEXT,
             published_at TEXT,
             fetched_at TEXT NOT NULL,
             created_at TEXT NOT NULL,
@@ -308,6 +316,8 @@ public class FeedService {
             FOREIGN KEY(feed_id) REFERENCES feeds(id) ON DELETE CASCADE
           )
           """);
+      addColumnIfMissing(connection, "feed_items", "description", "TEXT");
+      addColumnIfMissing(connection, "feed_items", "content", "TEXT");
       statement.executeUpdate("""
           CREATE UNIQUE INDEX IF NOT EXISTS idx_feed_items_dedupe_key
           ON feed_items(dedupe_key)
@@ -324,6 +334,18 @@ public class FeedService {
           """);
     } catch (java.sql.SQLException e) {
       throw new IllegalStateException("feeds テーブルの初期化に失敗しました", e);
+    }
+  }
+
+  private void addColumnIfMissing(java.sql.Connection connection, String table, String column, String type)
+      throws java.sql.SQLException {
+    try (var resultSet = connection.getMetaData().getColumns(null, null, table, column)) {
+      if (resultSet.next()) {
+        return;
+      }
+    }
+    try (var statement = connection.createStatement()) {
+      statement.executeUpdate("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
     }
   }
 }
