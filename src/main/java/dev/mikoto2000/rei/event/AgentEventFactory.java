@@ -136,13 +136,32 @@ public class AgentEventFactory {
   // ---- Working Set ----
 
   public AgentEvent workingSetItemAdded(String itemId, String kind, String identifier, String path, String reason) {
-    return newEvent(AgentEventType.WORKING_SET_ITEM_ADDED, null, null,
+    return workingSetItemAdded(itemId, kind, identifier, path, reason, null);
+  }
+
+  public AgentEvent workingSetItemAdded(String itemId, String kind, String identifier, String path, String reason,
+      String correlationId) {
+    return newEvent(AgentEventType.WORKING_SET_ITEM_ADDED, null, correlationId,
         new WorkingSetItemAddedPayload(itemId, kind, identifier, path, reason));
   }
 
   public AgentEvent workingSetItemRemoved(String itemId, String reason) {
     return newEvent(AgentEventType.WORKING_SET_ITEM_REMOVED, null, null,
         new WorkingSetItemRemovedPayload(itemId, reason));
+  }
+
+  public AgentEvent workingSetSearchStarted(String searchId, String query, String strategy,
+      int workingSetSizeBefore) {
+    return newEvent(AgentEventType.WORKING_SET_SEARCH_STARTED, null, searchId,
+        new WorkingSetSearchStartedPayload(searchId, query, strategy, workingSetSizeBefore));
+  }
+
+  public AgentEvent workingSetSearchCompleted(String searchId, long durationMs, int hitCount,
+      int candidateCount, int selectedCount, int alreadyPresentCount, int workingSetSizeBefore,
+      int workingSetSizeAfter) {
+    return newEvent(AgentEventType.WORKING_SET_SEARCH_COMPLETED, null, searchId,
+        new WorkingSetSearchCompletedPayload(searchId, durationMs, hitCount, candidateCount, selectedCount,
+            alreadyPresentCount, workingSetSizeBefore, workingSetSizeAfter));
   }
 
   // ---- Context ----

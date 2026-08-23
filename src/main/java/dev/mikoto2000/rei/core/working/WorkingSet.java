@@ -9,9 +9,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import dev.mikoto2000.rei.event.AgentEventBus;
+import dev.mikoto2000.rei.event.AgentEventFactory;
 
 /**
  * 現在のタスクで実際に使用されたファイルの集合を保持する。
@@ -22,20 +27,31 @@ import org.slf4j.LoggerFactory;
 public class WorkingSet {
 
   private static final Logger log = LoggerFactory.getLogger(WorkingSet.class);
+  private static final Pattern SECRET_ASSIGNMENT = Pattern.compile(
+      "(?i)((?:api[_-]?key|access[_-]?token|token|password|secret)\\s*[:=]\\s*)(?:\\\"[^\\\"]*\\\"|'[^']*'|\\S+)");
 
   static final int DEFAULT_MAX_FILES = 20;
 
   private final int maxFiles;
   private final Clock clock;
+  private final AgentEventFactory events;
+  private final AgentEventBus eventBus;
   private final Map<String, FileReference> files = new LinkedHashMap<>();
+  private final ThreadLocal<String> activeSearchId = new ThreadLocal<>();
 
   public WorkingSet() {
     this(DEFAULT_MAX_FILES, Clock.systemDefaultZone());
   }
 
   public WorkingSet(int maxFiles, Clock clock) {
+    this(maxFiles, clock, null, null);
+  }
+
+  public WorkingSet(int maxFiles, Clock clock, AgentEventFactory events, AgentEventBus eventBus) {
     this.maxFiles = Math.max(1, maxFiles);
     this.clock = clock;
+    this.events = events;
+    this.eventBus = eventBus;
   }
 
   /**
@@ -73,18 +89,14 @@ public class WorkingSet {
    * 指定パスを Working Set から削除する。
    */
   public void remove(Path path) {
-    String normalized = normalize(path);
-    FileReference removed = files.remove(normalized);
-    if (removed != null) {
-      log.debug("Working set: removed {}", normalized);
-    }
+    remove(normalize(path), "explicit removal");
   }
 
   /**
    * Working Set を空にする。
    */
   public void clear() {
-    files.clear();
+    List.copyOf(files.keySet()).forEach(path -> remove(path, "clear"));
   }
 
   /**
@@ -137,6 +149,7 @@ public class WorkingSet {
     }
     files.put(normalized, reference);
     log.debug("Working set: added {} ({})", normalized, reference.accessType());
+    publishAdded(reference);
     evictIfNeeded();
   }
 
@@ -149,7 +162,7 @@ public class WorkingSet {
       if (oldest == null) {
         return;
       }
-      files.remove(oldest);
+      remove(oldest, "capacity eviction");
       log.debug("Working set: evicted {}", oldest);
     }
   }
@@ -193,8 +206,63 @@ public class WorkingSet {
    */
   public void removeIfMissing(Path path) {
     if (!java.nio.file.Files.exists(path)) {
-      remove(path);
+      remove(normalize(path), "missing file");
       log.debug("Working set: removed missing file {}", normalize(path));
     }
+  }
+
+  private void remove(String normalized, String reason) {
+    FileReference removed = files.remove(normalized);
+    if (removed == null) {
+      return;
+    }
+    log.debug("Working set: removed {}", normalized);
+    if (events != null && eventBus != null) {
+      eventBus.publish(events.workingSetItemRemoved(normalized, reason));
+    }
+  }
+
+  private void publishAdded(FileReference reference) {
+    if (events != null && eventBus != null) {
+      eventBus.publish(events.workingSetItemAdded(reference.path(), "file", reference.path(), reference.path(),
+          reference.accessType(), activeSearchId.get()));
+    }
+  }
+
+  /** Begins the observable lifecycle around the existing search-and-select path. */
+  public SearchObservation beginSearch(String query, String strategy) {
+    String searchId = "ws-search-" + UUID.randomUUID();
+    SearchObservation observation = new SearchObservation(searchId, System.nanoTime(), files.size());
+    activeSearchId.set(searchId);
+    if (events != null && eventBus != null) {
+      eventBus.publish(events.workingSetSearchStarted(searchId, bounded(query, 500), strategy, files.size()));
+    }
+    return observation;
+  }
+
+  /** Completes a search using aggregate values already produced by the search algorithm. */
+  public void completeSearch(SearchObservation observation, int hitCount, int candidateCount, int selectedCount,
+      int alreadyPresentCount) {
+    long durationMs = Math.max(0L, (System.nanoTime() - observation.startedAtNanos()) / 1_000_000L);
+    if (events != null && eventBus != null) {
+      eventBus.publish(events.workingSetSearchCompleted(observation.searchId(), durationMs, hitCount, candidateCount,
+          selectedCount, alreadyPresentCount, observation.workingSetSizeBefore(), files.size()));
+    }
+    activeSearchId.remove();
+  }
+
+  /** Clears correlation state if the underlying search aborts before producing metrics. */
+  public void abandonSearch(SearchObservation observation) {
+    activeSearchId.remove();
+  }
+
+  private String bounded(String value, int maxLength) {
+    if (value == null) return "";
+    String redacted = SECRET_ASSIGNMENT.matcher(value).replaceAll("$1[REDACTED]");
+    String safe = redacted.replaceAll("[\\p{Cntrl}]+", " ").replaceAll("\\s+", " ").trim();
+    return safe.length() <= maxLength ? safe : safe.substring(0, maxLength - 1) + "…";
+  }
+
+  public record SearchObservation(String searchId, long startedAtNanos, int workingSetSizeBefore) {
   }
 }

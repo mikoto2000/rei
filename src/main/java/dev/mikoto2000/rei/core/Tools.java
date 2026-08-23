@@ -85,12 +85,12 @@ public class Tools {
     this(projectService, systemShellService, backgroundProcessManager, Clock.systemDefaultZone());
   }
 
-  @Autowired
   public Tools(ProjectService projectService, SystemShellService systemShellService,
       BackgroundProcessManager backgroundProcessManager, Clock clock) {
     this(projectService, systemShellService, backgroundProcessManager, clock, new WorkingSet());
   }
 
+  @Autowired
   public Tools(ProjectService projectService, SystemShellService systemShellService,
       BackgroundProcessManager backgroundProcessManager, Clock clock, WorkingSet workingSet) {
     this(projectService, systemShellService, backgroundProcessManager, clock, workingSet, new RecentChanges());
@@ -770,8 +770,12 @@ public class Tools {
     int effectiveMaxFiles = request.maxFiles() == null || request.maxFiles() <= 0
         ? MAX_SEARCH_AND_READ_FILES : request.maxFiles();
 
+    String observableQuery = request.queries().stream().map(GrepQuery::pattern).collect(Collectors.joining(" | "));
+    WorkingSet.SearchObservation searchObservation = workingSet.beginSearch(observableQuery, "searchAndRead");
+
     // 1. 検索を実行する（grepMultiQuery と同じ共通ロジックを再利用）
-    List<GrepQueryResult> queryResults = grepMultiQuery(request.queries(), workingDirectory);
+    try {
+      List<GrepQueryResult> queryResults = grepMultiQuery(request.queries(), workingDirectory);
 
     // 2. ファイルごとにヒットをまとめる（重複排除、queryIndex と line を保持）
     LinkedHashMap<String, List<SearchMatch>> fileMatches = new LinkedHashMap<>();
@@ -787,6 +791,10 @@ public class Tools {
             .add(new SearchMatch(queryResult.queryIndex(), match.line(), match.content()));
       }
     }
+    int selectedCount = Math.min(fileMatches.size(), effectiveMaxFiles);
+    int alreadyPresentCount = fileMatches.keySet().stream().limit(selectedCount)
+        .map(path -> resolveProjectPath(path, workingDirectory))
+        .mapToInt(path -> workingSet.contains(path) ? 1 : 0).sum();
 
     // 3. ファイルを選び、ヒット行の前後を読み込む
     List<SearchAndReadResult> fileResults = new ArrayList<>();
@@ -818,7 +826,14 @@ public class Tools {
             r.error(), r.truncated(), true));
       }
     }
+    int hitCount = queryResults.stream().filter(result -> result.error() == null)
+        .mapToInt(result -> (int) result.matches().stream().filter(GrepMatch::matched).count()).sum();
+    workingSet.completeSearch(searchObservation, hitCount, fileMatches.size(), selectedCount, alreadyPresentCount);
     return fileResults;
+    } catch (IOException | InterruptedException | RuntimeException e) {
+      workingSet.abandonSearch(searchObservation);
+      throw e;
+    }
   }
 
   /** 1 ファイルのヒットから、マージした範囲を読み込む。 */

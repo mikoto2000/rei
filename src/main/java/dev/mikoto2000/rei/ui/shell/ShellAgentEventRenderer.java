@@ -12,6 +12,10 @@ import dev.mikoto2000.rei.event.SkillSelectionFailedPayload;
 import dev.mikoto2000.rei.event.ToolCompletedPayload;
 import dev.mikoto2000.rei.event.ToolFailedPayload;
 import dev.mikoto2000.rei.event.ToolStartedPayload;
+import dev.mikoto2000.rei.event.WorkingSetItemAddedPayload;
+import dev.mikoto2000.rei.event.WorkingSetItemRemovedPayload;
+import dev.mikoto2000.rei.event.WorkingSetSearchCompletedPayload;
+import dev.mikoto2000.rei.event.WorkingSetSearchStartedPayload;
 
 /** Append-only Shell presentation adapter for Agent events. */
 public final class ShellAgentEventRenderer implements AgentEventListener {
@@ -87,6 +91,31 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         SkillSelectionFailedPayload payload = (SkillSelectionFailedPayload) event.payload();
         output.println("[skill] selection failed: " + errorMessage(payload.error()));
       }
+      case WORKING_SET_ITEM_ADDED -> {
+        closeAssistantLine();
+        WorkingSetItemAddedPayload payload = (WorkingSetItemAddedPayload) event.payload();
+        output.println("[working-set] + " + displayName(payload.identifier(), payload.path())
+            + reasonSuffix(payload.reason()));
+      }
+      case WORKING_SET_ITEM_REMOVED -> {
+        closeAssistantLine();
+        WorkingSetItemRemovedPayload payload = (WorkingSetItemRemovedPayload) event.payload();
+        output.println("[working-set] - " + displayName(null, payload.itemId()) + reasonSuffix(payload.reason()));
+      }
+      case WORKING_SET_SEARCH_STARTED -> {
+        closeAssistantLine();
+        WorkingSetSearchStartedPayload payload = (WorkingSetSearchStartedPayload) event.payload();
+        output.println("[working-set] → search \"" + boundedSummary(payload.query(), 120).replace('"', '\'') + "\"");
+      }
+      case WORKING_SET_SEARCH_COMPLETED -> {
+        closeAssistantLine();
+        WorkingSetSearchCompletedPayload payload = (WorkingSetSearchCompletedPayload) event.payload();
+        String alreadyPresent = payload.alreadyPresentCount() == 0
+            ? "" : ", " + payload.alreadyPresentCount() + " already present";
+        output.println("[working-set] ✓ " + payload.hitCount() + " hits → " + payload.candidateCount()
+            + " candidates → " + payload.selectedCount() + " selected" + alreadyPresent
+            + " (" + payload.durationMs() + " ms)");
+      }
       default -> { }
     }
     output.flush();
@@ -146,5 +175,26 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       sanitized.append(Character.isISOControl(character) ? ' ' : character);
     }
     return sanitized.toString().replaceAll("\\s+", " ").trim();
+  }
+
+  private String displayName(String identifier, String path) {
+    String value = identifier == null || identifier.isBlank() ? path : identifier;
+    if (value == null || value.isBlank()) return "item";
+    String normalized = value.replace('\\', '/');
+    int separator = normalized.lastIndexOf('/');
+    return separator < 0 ? normalized : normalized.substring(separator + 1);
+  }
+
+  private String reasonSuffix(String reason) {
+    String safe = oneLineSummary(reason);
+    if (safe.isEmpty()) return "";
+    int maxLength = 120;
+    if (safe.length() > maxLength) safe = safe.substring(0, maxLength - 1) + "…";
+    return " (" + safe + ")";
+  }
+
+  private String boundedSummary(String value, int maxLength) {
+    String safe = oneLineSummary(value);
+    return safe.length() <= maxLength ? safe : safe.substring(0, maxLength - 1) + "…";
   }
 }

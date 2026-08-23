@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -86,6 +87,41 @@ class ShellAgentEventRendererTest {
     assertEquals("[skill] selecting\n[warn] missing skill\n"
         + "[skill] selected: explicit-skill (explicit), implicit-skill (implicit)\n"
         + "[skill] selection failed: selection unavailable\n", output.text());
+  }
+
+  @Test
+  void rendersWorkingSetItemChangesWithExistingReasons() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.workingSetItemAdded("item-1", "file", "Foo.java", "/project/src/Foo.java",
+        "search selection"));
+    renderer.onEvent(events.workingSetItemRemoved("/project/src/Old.java", "capacity eviction"));
+    assertEquals("[working-set] + Foo.java (search selection)\n"
+        + "[working-set] - Old.java (capacity eviction)\n", output.text());
+  }
+
+  @Test
+  void rendersWorkingSetItemsWithoutInventingAReasonAndTruncatesLongReasons() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.workingSetItemAdded("item-1", "file", "Foo.java", "Foo.java", null));
+    renderer.onEvent(events.workingSetItemRemoved("Old.java", "x".repeat(200) + "\nsecret"));
+    String[] lines = output.text().split("\n");
+    assertEquals("[working-set] + Foo.java", lines[0]);
+    assertTrue(lines[1].startsWith("[working-set] - Old.java ("));
+    assertTrue(lines[1].endsWith("…)"));
+    assertTrue(lines[1].length() <= 170);
+  }
+
+  @Test
+  void rendersWorkingSetSearchLifecycleAsCompactSummaries() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.workingSetSearchStarted("search-1", "ToolCallbackProvider\nsecret", "searchAndRead", 1));
+    renderer.onEvent(events.workingSetSearchCompleted("search-1", 91, 18, 5, 2, 1, 1, 2));
+    assertEquals("[working-set] → search \"ToolCallbackProvider secret\"\n"
+        + "[working-set] ✓ 18 hits → 5 candidates → 2 selected, 1 already present (91 ms)\n",
+        output.text());
   }
 
   private static final class RecordingOutput implements ShellEventOutput {
