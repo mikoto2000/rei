@@ -104,6 +104,28 @@ class ToolsTest {
   }
 
   @Test
+  void codeAndFileToolDescriptionsRouteByIntent() throws Exception {
+    Tool search = Tools.class.getDeclaredMethod("searchAndRead", Tools.SearchAndReadRequest.class)
+        .getAnnotation(Tool.class);
+    Tool grep = Tools.class.getDeclaredMethod("grepMultiQuery", List.class).getAnnotation(Tool.class);
+    Tool read = Tools.class.getDeclaredMethod("readMultiFile", List.class).getAnnotation(Tool.class);
+    Tool write = Tools.class.getDeclaredMethod("writeMultiFile", List.class).getAnnotation(Tool.class);
+    Tool diff = Tools.class.getDeclaredMethod("applyTextDiff", String.class, String.class, String.class, String.class)
+        .getAnnotation(Tool.class);
+
+    assertTrue(search.description().contains("default tool"));
+    assertTrue(search.description().contains("exact file locations are not known"));
+    assertTrue(grep.description().contains("match locations"));
+    assertTrue(grep.description().contains("searchAndRead"));
+    assertTrue(read.description().contains("known file paths"));
+    assertTrue(read.description().contains("searchAndRead"));
+    assertTrue(write.description().contains("replace complete contents"));
+    assertTrue(write.description().contains("applyTextDiff"));
+    assertTrue(diff.description().contains("small, localized edits"));
+    assertTrue(diff.description().contains("surrounding file unchanged"));
+  }
+
+  @Test
   void gitLsFilesIncludesTrackedAndUntrackedButExcludesIgnored() throws Exception {
     initGitRepo();
     Files.createDirectories(tempDir.resolve("docs"));

@@ -473,7 +473,8 @@ public class Tools {
    * <p>検索条件が 1 件だけの場合もこのツールを使用する。</p>
    */
   @Tool(name = "grepMultiQuery", description = """
-      1 件以上の独立した検索条件を 1 回のツール呼び出しで実行します。検索条件が 1 件だけの場合もこのツールを使用してください。
+      Search one or more patterns and return structured match locations without reading whole file sections.
+      Use this primitive when match locations are sufficient. When locating and inspecting code, prefer searchAndRead.
       @param queries 検索条件のリスト。
       @return query ごとの結果。queryIndex で入力順と対応する。
       """)
@@ -697,9 +698,8 @@ public class Tools {
    */
   @Tool(name = "searchAndRead", description = """
       Search for one or more code patterns and immediately read the relevant surrounding source code in a single tool call.
-      Prefer this tool when searching for code is likely to be followed by reading the matching files.
-      Use grep or grepMultiQuery when only match locations are needed.
-      Use readFile or readMultiFile when the target files are already known.
+      Use this as the default tool for locating and inspecting code or text when exact file locations are not known.
+      Use grepMultiQuery when only match locations are needed, or readMultiFile when file paths are already known.
       @param queries 検索条件のリスト。
       @param contextLines ヒット行の前後何行を取得するか。デフォルト 25。
       @param maxFiles 読み込む最大ファイル数。デフォルト 8。
@@ -858,7 +858,8 @@ public class Tools {
    * <p>ファイルが 1 件だけの場合もこのツールを使用する。</p>
    */
   @Tool(name = "readMultiFile", description = """
-      1 件以上のファイルまたは行範囲を 1 回のツール呼び出しで読み込みます。ファイルが 1 件だけの場合もこのツールを使用してください。
+      Read one or more known file paths or line ranges in a single call.
+      Use this when target paths are already known. If relevant files must first be located, prefer searchAndRead.
       @param files 読み込むファイルのリスト。各要素は path と任意の startLine / endLine を持つ。
       @return ファイルごとの読み込み結果。path で識別できる。
       """)
@@ -947,7 +948,8 @@ public class Tools {
    * <p>ファイルが 1 件だけの場合もこのツールを使用する。</p>
    */
   @Tool(name = "writeMultiFile", description = """
-      1 件以上の既知ファイルを 1 回のツール呼び出しで書き込みます。ファイルが 1 件だけの場合もこのツールを使用してください。
+      Write one or more known files and replace complete contents in a single call.
+      Use this for coordinated full-file writes. For a small edit to an existing file, prefer applyTextDiff.
       @param files 書き込むファイルのリスト。各要素は path と content を持つ。
       @return ファイルごとの書き込み結果。path で識別できる。
       """)
@@ -1202,7 +1204,8 @@ public class Tools {
 
   @Tool(name = "applyTextDiff", description =
   """
-  テキストファイルに小さな差分を適用します。
+  Apply a targeted textual replacement to an existing file.
+  Prefer this for small, localized edits that should leave the surrounding file unchanged.
   oldText がファイル内に一意に存在する場合だけ newText に置換します。
   @param pathStr 対象ファイルのパス
   @param oldText 置換前の期待文字列
