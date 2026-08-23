@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.Future;
 
 class ManagedBackgroundProcess {
   final String processId;
@@ -18,6 +19,8 @@ class ManagedBackgroundProcess {
   final Instant startedAt;
   final long startedAtNanos;
   volatile Instant endedAt;
+  volatile Future<?> stdoutReader;
+  volatile Future<?> stderrReader;
 
   ManagedBackgroundProcess(String processId, Process process, List<String> commandLine, Path workingDirectory,
       int logLineCapacity, Instant startedAt, long startedAtNanos) {

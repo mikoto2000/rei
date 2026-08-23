@@ -271,7 +271,7 @@ public class Tools {
     return switch (request.mode()) {
       case FOREGROUND -> foregroundResult(request, workingDirectory);
       case BACKGROUND -> backgroundResult(request, workingDirectory);
-      case AUTO -> throw new UnsupportedOperationException("auto mode is not implemented");
+      case AUTO -> autoResult(request, workingDirectory, autoWait);
     };
   }
 
@@ -292,6 +292,25 @@ public class Tools {
     }
     return new RunCommandResult("running", request.mode().name().toLowerCase(), "background", null,
         joinLines(snapshot.stdout()), joinLines(snapshot.stderr()), snapshot.processId(), snapshot.pid(), false, null);
+  }
+
+  private RunCommandResult autoResult(RunCommandRequest request, java.nio.file.Path workingDirectory,
+      Duration autoWait) throws InterruptedException {
+    BackgroundProcessSnapshot started = backgroundProcessManager.spawnShell(request.command(), workingDirectory);
+    if (started.status() == BackgroundProcessStatus.FAILED) {
+      return new RunCommandResult("failed", "auto", null, started.exitCode(), joinLines(started.stdout()),
+          joinLines(started.stderr()), null, null, false, started.message());
+    }
+    BackgroundProcessSnapshot observed = backgroundProcessManager.await(started.processId(), autoWait);
+    if (observed.status() == BackgroundProcessStatus.RUNNING) {
+      return new RunCommandResult("running", "auto", "background", null, joinLines(observed.stdout()),
+          joinLines(observed.stderr()), observed.processId(), observed.pid(), false, null);
+    }
+    backgroundProcessManager.forgetCompleted(started.processId());
+    int exitCode = observed.exitCode() == null ? -1 : observed.exitCode();
+    return new RunCommandResult(exitCode == 0 ? "completed" : "failed", "auto", "foreground", exitCode,
+        joinLines(observed.stdout()), joinLines(observed.stderr()), null, null, false,
+        exitCode == 0 ? null : "command exited with code " + exitCode);
   }
 
   private String joinLines(List<String> lines) {

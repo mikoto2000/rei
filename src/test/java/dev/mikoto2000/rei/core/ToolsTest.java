@@ -1067,6 +1067,56 @@ class ToolsTest {
   }
 
   @Test
+  void runCommandAutoCompletesShortProcessAsForeground() throws Exception {
+    SystemShellService shellService = new SystemShellService();
+    BackgroundProcessManager manager = new BackgroundProcessManager(shellService);
+    Tools tools = new Tools(null, shellService, manager);
+    String command = System.getProperty("os.name").toLowerCase().contains("win")
+        ? "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Write-Output '短時間'"
+        : "printf '短時間\\n'";
+    try {
+      RunCommandResult result = tools.runCommand(
+          new RunCommandRequest(command, null, null), tempDir, Duration.ofSeconds(1));
+
+      assertEquals("completed", result.status());
+      assertEquals("auto", result.executionMode());
+      assertEquals("foreground", result.resolvedExecutionMode());
+      assertEquals(0, result.exitCode());
+      assertTrue(result.stdout().contains("短時間"));
+      assertEquals(null, result.processId());
+    } finally {
+      manager.shutdown();
+    }
+  }
+
+  @Test
+  void runCommandAutoPromotesSameLongProcessWithoutStartingTwice() throws Exception {
+    SystemShellService shellService = new SystemShellService();
+    BackgroundProcessManager manager = new BackgroundProcessManager(shellService);
+    Tools tools = new Tools(null, shellService, manager);
+    Path marker = tempDir.resolve("starts.txt");
+    String escapedMarker = marker.toString().replace("'", "''");
+    String command = System.getProperty("os.name").toLowerCase().contains("win")
+        ? "Add-Content -LiteralPath '" + escapedMarker + "' -Value started; Write-Output ready; Start-Sleep -Seconds 10"
+        : "printf 'started\\n' >> '" + marker + "'; printf 'ready\\n'; sleep 10";
+    try {
+      RunCommandResult result = tools.runCommand(
+          new RunCommandRequest(command, "auto", null), tempDir, Duration.ofMillis(200));
+
+      assertEquals("running", result.status());
+      assertEquals("background", result.resolvedExecutionMode());
+      assertTrue(result.processId().startsWith("proc-"));
+      long deadline = System.currentTimeMillis() + 3_000;
+      while (!Files.exists(marker) && System.currentTimeMillis() < deadline) Thread.sleep(25);
+      assertEquals(1, Files.readAllLines(marker).size());
+      assertTrue(manager.status(result.processId(), 100).found());
+      manager.kill(result.processId());
+    } finally {
+      manager.shutdown();
+    }
+  }
+
+  @Test
   void todayAndNowUseInjectedClock() {
     Clock fixed = Clock.fixed(Instant.parse("2026-08-16T16:35:42Z"), ZoneId.of("Asia/Tokyo"));
     SystemShellService shellService = new SystemShellService();

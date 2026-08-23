@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -73,13 +74,48 @@ public class BackgroundProcessManager {
           monotonicTimeSource.nanoTime());
       processes.put(processId, managedProcess);
       managedProcess.status.set(BackgroundProcessStatus.RUNNING);
-      executor.submit(() -> readLines(process.getInputStream(), managedProcess.stdout));
-      executor.submit(() -> readLines(process.getErrorStream(), managedProcess.stderr));
+      managedProcess.stdoutReader = executor.submit(() -> readLines(process.getInputStream(), managedProcess.stdout));
+      managedProcess.stderrReader = executor.submit(() -> readLines(process.getErrorStream(), managedProcess.stderr));
       CompletableFuture.runAsync(() -> watchProcess(managedProcess), executor);
       return snapshot(managedProcess, DEFAULT_TAIL_LINES, "started");
     } catch (IOException e) {
       return new BackgroundProcessSnapshot(processId, -1, BackgroundProcessStatus.FAILED, null, null, null,
           0.0d, List.of(), List.of(), false, e.getMessage());
+    }
+  }
+
+  /** 同じ管理対象 Process を指定時間だけ待つ。timeout しても終了しない。 */
+  public BackgroundProcessSnapshot await(String processId, Duration wait) throws InterruptedException {
+    ManagedBackgroundProcess managedProcess = processes.get(processId);
+    if (managedProcess == null) {
+      return new BackgroundProcessSnapshot(processId, -1, BackgroundProcessStatus.FAILED, null, null, null,
+          0.0d, List.of(), List.of(), false, "process not found");
+    }
+    boolean completed = managedProcess.process.waitFor(Math.max(0L, wait.toMillis()), TimeUnit.MILLISECONDS);
+    if (!completed && !managedProcess.process.isAlive()) completed = true;
+    if (completed) {
+      managedProcess.exitCode.compareAndSet(null, managedProcess.process.exitValue());
+      managedProcess.endedAt = managedProcess.endedAt == null ? Instant.now(clock) : managedProcess.endedAt;
+      managedProcess.status.compareAndSet(BackgroundProcessStatus.RUNNING, BackgroundProcessStatus.EXITED);
+      awaitReader(managedProcess.stdoutReader);
+      awaitReader(managedProcess.stderrReader);
+      return snapshot(managedProcess, DEFAULT_TAIL_LINES, "completed");
+    }
+    return snapshot(managedProcess, DEFAULT_TAIL_LINES, "running");
+  }
+
+  /** foreground 解決した終了済み Process を registry から除く。 */
+  public void forgetCompleted(String processId) {
+    processes.computeIfPresent(processId, (id, process) -> process.process.isAlive() ? process : null);
+  }
+
+  private void awaitReader(java.util.concurrent.Future<?> reader) {
+    if (reader == null) return;
+    try {
+      reader.get(1, TimeUnit.SECONDS);
+    } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException ignored) {
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
     }
   }
 
