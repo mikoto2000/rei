@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +34,7 @@ public class WorkingSet {
   private final AgentEventFactory events;
   private final AgentEventBus eventBus;
   private final Map<String, FileReference> files = new LinkedHashMap<>();
+  private final ThreadLocal<String> activeSearchId = new ThreadLocal<>();
 
   public WorkingSet() {
     this(DEFAULT_MAX_FILES, Clock.systemDefaultZone());
@@ -220,7 +222,43 @@ public class WorkingSet {
   private void publishAdded(FileReference reference) {
     if (events != null && eventBus != null) {
       eventBus.publish(events.workingSetItemAdded(reference.path(), "file", reference.path(), reference.path(),
-          reference.accessType()));
+          reference.accessType(), activeSearchId.get()));
     }
+  }
+
+  /** Begins the observable lifecycle around the existing search-and-select path. */
+  public SearchObservation beginSearch(String query, String strategy) {
+    String searchId = "ws-search-" + UUID.randomUUID();
+    SearchObservation observation = new SearchObservation(searchId, System.nanoTime(), files.size());
+    activeSearchId.set(searchId);
+    if (events != null && eventBus != null) {
+      eventBus.publish(events.workingSetSearchStarted(searchId, bounded(query, 500), strategy, files.size()));
+    }
+    return observation;
+  }
+
+  /** Completes a search using aggregate values already produced by the search algorithm. */
+  public void completeSearch(SearchObservation observation, int hitCount, int candidateCount, int selectedCount,
+      int alreadyPresentCount) {
+    long durationMs = Math.max(0L, (System.nanoTime() - observation.startedAtNanos()) / 1_000_000L);
+    if (events != null && eventBus != null) {
+      eventBus.publish(events.workingSetSearchCompleted(observation.searchId(), durationMs, hitCount, candidateCount,
+          selectedCount, alreadyPresentCount, observation.workingSetSizeBefore(), files.size()));
+    }
+    activeSearchId.remove();
+  }
+
+  /** Clears correlation state if the underlying search aborts before producing metrics. */
+  public void abandonSearch(SearchObservation observation) {
+    activeSearchId.remove();
+  }
+
+  private String bounded(String value, int maxLength) {
+    if (value == null) return "";
+    String safe = value.replaceAll("[\\p{Cntrl}]+", " ").replaceAll("\\s+", " ").trim();
+    return safe.length() <= maxLength ? safe : safe.substring(0, maxLength - 1) + "…";
+  }
+
+  public record SearchObservation(String searchId, long startedAtNanos, int workingSetSizeBefore) {
   }
 }

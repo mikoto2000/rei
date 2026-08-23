@@ -136,7 +136,12 @@ public class AgentEventFactory {
   // ---- Working Set ----
 
   public AgentEvent workingSetItemAdded(String itemId, String kind, String identifier, String path, String reason) {
-    return newEvent(AgentEventType.WORKING_SET_ITEM_ADDED, null, null,
+    return workingSetItemAdded(itemId, kind, identifier, path, reason, null);
+  }
+
+  public AgentEvent workingSetItemAdded(String itemId, String kind, String identifier, String path, String reason,
+      String correlationId) {
+    return newEvent(AgentEventType.WORKING_SET_ITEM_ADDED, null, correlationId,
         new WorkingSetItemAddedPayload(itemId, kind, identifier, path, reason));
   }
 

@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -36,6 +37,12 @@ import dev.mikoto2000.rei.core.process.RunCommandResult;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.searchcache.SearchResultCache;
 import dev.mikoto2000.rei.core.service.SystemShellService;
+import dev.mikoto2000.rei.core.working.WorkingSet;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
+import dev.mikoto2000.rei.event.WorkingSetSearchCompletedPayload;
 
 class ToolsTest {
 
@@ -545,6 +552,45 @@ class ToolsTest {
     assertEquals(2, results.size());
     assertEquals("docs/a.txt", results.get(0).path());
     assertEquals("docs/b.txt", results.get(1).path());
+  }
+
+  @Test
+  void searchAndReadPublishesWorkingSetMetricsAndCorrelatesActualAdds() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/a.txt"), "needle\n");
+    Files.writeString(tempDir.resolve("docs/b.txt"), "needle\n");
+    runGit("add", "docs");
+    runGit("commit", "-m", "initial");
+    Clock fixedClock = Clock.fixed(Instant.parse("2026-08-24T00:00:00Z"), ZoneId.of("UTC"));
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    List<AgentEvent> received = new ArrayList<>();
+    bus.subscribe(received::add);
+    WorkingSet workingSet = new WorkingSet(20, fixedClock, new AgentEventFactory(fixedClock), bus);
+    workingSet.recordRead(tempDir.resolve("docs/a.txt"));
+    received.clear();
+    Tools tools = new Tools(null, new SystemShellService(), new BackgroundProcessManager(new SystemShellService()),
+        fixedClock, workingSet);
+
+    tools.searchAndRead(new Tools.SearchAndReadRequest(
+        List.of(new Tools.GrepQuery("needle", "docs", null, null, null, null, null, null, null, null, null, null)),
+        0, 2), tempDir);
+
+    AgentEvent started = received.stream()
+        .filter(event -> event.type() == AgentEventType.WORKING_SET_SEARCH_STARTED).findFirst().orElseThrow();
+    AgentEvent completed = received.stream()
+        .filter(event -> event.type() == AgentEventType.WORKING_SET_SEARCH_COMPLETED).findFirst().orElseThrow();
+    WorkingSetSearchCompletedPayload payload = (WorkingSetSearchCompletedPayload) completed.payload();
+    assertEquals(2, payload.hitCount());
+    assertEquals(2, payload.candidateCount());
+    assertEquals(2, payload.selectedCount());
+    assertEquals(1, payload.alreadyPresentCount());
+    assertEquals(1, payload.workingSetSizeBefore());
+    assertEquals(2, payload.workingSetSizeAfter());
+    assertEquals(started.correlationId(), completed.correlationId());
+    AgentEvent added = received.stream()
+        .filter(event -> event.type() == AgentEventType.WORKING_SET_ITEM_ADDED).findFirst().orElseThrow();
+    assertEquals(started.correlationId(), added.correlationId());
   }
 
   @Test
