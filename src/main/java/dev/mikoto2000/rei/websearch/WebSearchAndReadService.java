@@ -7,6 +7,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchService;
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchResult;
@@ -15,6 +17,7 @@ import dev.mikoto2000.rei.urlfetch.UrlContentFetchResult;
 @Service
 public class WebSearchAndReadService {
   static final int DEFAULT_READ_TOP = 3;
+  private static final Logger log = LoggerFactory.getLogger(WebSearchAndReadService.class);
 
   private final WebSearchService webSearchService;
   private final UrlContentFetchService urlContentFetchService;
@@ -39,6 +42,10 @@ public class WebSearchAndReadService {
       if (results.size() >= validated.maxResults()) break;
       results.add(results.size() < validated.readTop() ? fetch(result, fetchCache) : notRequested(result));
     }
+    long successes = results.stream().filter(result -> "success".equals(result.fetchStatus())).count();
+    long failures = results.stream().filter(result -> "failed".equals(result.fetchStatus())).count();
+    log.debug("webSearchAndRead completed: searchResults={}, fetchAttempts={}, fetchSuccesses={}, fetchFailures={}",
+        results.size(), fetchCache.size(), successes, failures);
     return new WebSearchAndReadResponse(validated.query(), results);
   }
 

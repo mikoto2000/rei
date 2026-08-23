@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
+import java.io.IOException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -154,5 +155,32 @@ class WebSearchAndReadServiceTest {
     assertEquals(List.of("First", "Duplicate"), items.stream().map(WebSearchAndReadItem::title).toList());
     assertEquals(List.of("shared", "shared"), items.stream().map(WebSearchAndReadItem::content).toList());
     Mockito.verify(urlContentFetchService, Mockito.times(1)).fetch("https://example.com/same");
+  }
+
+  @Test
+  void defaultsToConfiguredMaxResultsAndThreePageReads() throws Exception {
+    List<WebSearchResult> results = java.util.stream.IntStream.rangeClosed(1, 5)
+        .mapToObj(index -> new WebSearchResult("T" + index, "https://example.com/" + index, "S" + index, null))
+        .toList();
+    org.mockito.Mockito.when(webSearchService.search("query", 5)).thenReturn(results);
+    org.mockito.Mockito.when(urlContentFetchService.fetch(Mockito.anyString()))
+        .thenReturn(UrlContentFetchResult.success("<p>content</p>"));
+
+    List<WebSearchAndReadItem> items = service.searchAndRead(
+        new WebSearchAndReadRequest("query", null, null)).results();
+
+    assertEquals(List.of("success", "success", "success", "not_requested", "not_requested"),
+        items.stream().map(WebSearchAndReadItem::fetchStatus).toList());
+  }
+
+  @Test
+  void propagatesSearchFailureAsWholeToolFailure() throws Exception {
+    org.mockito.Mockito.when(webSearchService.search("query", 5)).thenThrow(new IOException("search offline"));
+
+    IOException error = assertThrows(IOException.class,
+        () -> service.searchAndRead(new WebSearchAndReadRequest("query", 5, 3)));
+
+    assertEquals("search offline", error.getMessage());
+    Mockito.verifyNoInteractions(urlContentFetchService);
   }
 }

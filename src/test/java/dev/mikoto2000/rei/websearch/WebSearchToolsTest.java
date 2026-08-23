@@ -8,13 +8,14 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.ai.tool.annotation.Tool;
 
 class WebSearchToolsTest {
 
   @Test
   void webSearchDelegatesToService() throws Exception {
     WebSearchService service = Mockito.mock(WebSearchService.class);
-    WebSearchTools tools = new WebSearchTools(service);
+    WebSearchTools tools = new WebSearchTools(service, Mockito.mock(WebSearchAndReadService.class));
     List<WebSearchResult> expected = List.of(new WebSearchResult("Title", "https://example.com", "Snippet", null));
     when(service.search("spring ai", 3)).thenReturn(expected);
 
@@ -22,5 +23,29 @@ class WebSearchToolsTest {
 
     assertEquals(expected, actual);
     verify(service).search("spring ai", 3);
+  }
+
+  @Test
+  void webSearchAndReadDelegatesToCompositeService() throws Exception {
+    WebSearchService searchService = Mockito.mock(WebSearchService.class);
+    WebSearchAndReadService compositeService = Mockito.mock(WebSearchAndReadService.class);
+    WebSearchTools tools = new WebSearchTools(searchService, compositeService);
+    WebSearchAndReadRequest request = new WebSearchAndReadRequest("spring ai", 5, 3);
+    WebSearchAndReadResponse expected = new WebSearchAndReadResponse("spring ai", List.of());
+    when(compositeService.searchAndRead(request)).thenReturn(expected);
+
+    assertEquals(expected, tools.webSearchAndRead(request));
+    verify(compositeService).searchAndRead(request);
+  }
+
+  @Test
+  void toolDescriptionExplainsWhenToUseCompositeAndPrimitiveTools() throws Exception {
+    Tool tool = WebSearchTools.class.getDeclaredMethod("webSearchAndRead", WebSearchAndReadRequest.class)
+        .getAnnotation(Tool.class);
+
+    org.junit.jupiter.api.Assertions.assertTrue(tool.description().contains("default tool"));
+    org.junit.jupiter.api.Assertions.assertTrue(tool.description().contains("webSearch"));
+    org.junit.jupiter.api.Assertions.assertTrue(tool.description().contains("fetchUrlContent"));
+    org.junit.jupiter.api.Assertions.assertTrue(tool.description().contains("readTop = 0"));
   }
 }
