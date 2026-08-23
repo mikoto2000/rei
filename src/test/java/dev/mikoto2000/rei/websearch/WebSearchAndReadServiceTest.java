@@ -184,4 +184,26 @@ class WebSearchAndReadServiceTest {
     assertEquals("search offline", error.getMessage());
     Mockito.verifyNoInteractions(urlContentFetchService);
   }
+
+  @Test
+  void treatsContentExtractionExceptionAsIndividualFailure() throws Exception {
+    WebSearchResult result = new WebSearchResult("Title", "https://example.com/page", "Snippet", null);
+    WebPageExtractor extractor = Mockito.mock(WebPageExtractor.class);
+    WebSearchProperties properties = new WebSearchProperties();
+    properties.setMaxResults(5);
+    WebSearchAndReadService extractingService = new WebSearchAndReadService(
+        webSearchService, urlContentFetchService, extractor, properties);
+    org.mockito.Mockito.when(webSearchService.search("query", 1)).thenReturn(List.of(result));
+    org.mockito.Mockito.when(urlContentFetchService.fetch(result.url()))
+        .thenReturn(UrlContentFetchResult.success("broken content", "text/html"));
+    org.mockito.Mockito.when(extractor.extract(result, "broken content"))
+        .thenThrow(new IllegalStateException("cannot parse"));
+
+    WebSearchAndReadItem item = extractingService.searchAndRead(
+        new WebSearchAndReadRequest("query", 1, 1)).results().getFirst();
+
+    assertEquals("failed", item.fetchStatus());
+    assertEquals("EXTRACTION_ERROR", item.errorType());
+    assertEquals("cannot parse", item.errorMessage());
+  }
 }

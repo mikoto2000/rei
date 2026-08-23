@@ -55,9 +55,15 @@ public class WebSearchAndReadService {
       return new WebSearchAndReadItem(result.title(), result.url(), result.snippet(), result.publishedAt(),
           null, null, "failed", fetched.errorType(), fetched.errorMessage(), false);
     }
-    WebSearchPage page = webPageExtractor.extract(result, fetched.content());
-    return new WebSearchAndReadItem(page.title(), page.url(), page.snippet(), page.publishedAt(),
-        page.content(), fetched.contentType(), "success", null, null, page.truncated());
+    try {
+      WebSearchPage page = webPageExtractor.extract(result, fetched.content());
+      return new WebSearchAndReadItem(page.title(), page.url(), page.snippet(), page.publishedAt(),
+          page.content(), fetched.contentType(), "success", null, null, page.truncated());
+    } catch (RuntimeException exception) {
+      return new WebSearchAndReadItem(result.title(), result.url(), result.snippet(), result.publishedAt(),
+          null, fetched.contentType(), "failed", "EXTRACTION_ERROR",
+          exception.getMessage() == null ? "Failed to extract page content" : exception.getMessage(), false);
+    }
   }
 
   private UrlContentFetchResult safeFetch(String url) {
