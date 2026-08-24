@@ -1197,6 +1197,41 @@ class ToolsTest {
   }
 
   @Test
+  void runCommandForegroundMatchesLegacyCommandSemantics() throws Exception {
+    Tools tools = new Tools();
+    String command = System.getProperty("os.name").toLowerCase().contains("win")
+        ? "Write-Output (Get-Location).Path; Write-Output $env:PATH; [Console]::Error.WriteLine('warning'); exit 7"
+        : "pwd; printf '%s\n' \"$PATH\"; printf 'warning\n' >&2; exit 7";
+
+    Tools.ShellCommandResult legacy = tools.executeShellCommand(command, 10, tempDir);
+    RunCommandResult unified = tools.runCommand(
+        new RunCommandRequest(command, "foreground", 10), tempDir, Duration.ofMillis(10));
+
+    assertEquals(legacy.exitCode(), unified.exitCode());
+    assertEquals(legacy.stdout(), unified.stdout());
+    assertEquals(legacy.stderr(), unified.stderr());
+    assertEquals(legacy.timedOut(), unified.timedOut());
+    assertTrue(unified.stdout().contains(tempDir.toString()));
+  }
+
+  @Test
+  void runCommandForegroundMatchesLegacyTimeoutSemantics() throws Exception {
+    Tools tools = new Tools();
+    String command = System.getProperty("os.name").toLowerCase().contains("win")
+        ? "Start-Sleep -Seconds 3"
+        : "sleep 3";
+
+    Tools.ShellCommandResult legacy = tools.executeShellCommand(command, 1, tempDir);
+    RunCommandResult unified = tools.runCommand(
+        new RunCommandRequest(command, "foreground", 1), tempDir, Duration.ofMillis(10));
+
+    assertTrue(legacy.timedOut());
+    assertEquals(legacy.exitCode(), unified.exitCode());
+    assertEquals(legacy.timedOut(), unified.timedOut());
+    assertEquals("failed", unified.status());
+  }
+
+  @Test
   void runCommandBackgroundRegistersWithExistingProcessManager() throws Exception {
     SystemShellService shellService = new SystemShellService();
     BackgroundProcessManager manager = new BackgroundProcessManager(shellService);
@@ -1214,6 +1249,31 @@ class ToolsTest {
       BackgroundProcessSnapshot status = manager.status(result.processId(), 100);
       assertTrue(status.found());
       manager.kill(result.processId());
+    } finally {
+      manager.shutdown();
+    }
+  }
+
+  @Test
+  void runCommandBackgroundMatchesLegacyRegistryStatusOutputAndKillSemantics() throws Exception {
+    SystemShellService shellService = new SystemShellService();
+    BackgroundProcessManager manager = new BackgroundProcessManager(shellService);
+    Tools tools = new Tools(null, shellService, manager);
+    String command = System.getProperty("os.name").toLowerCase().contains("win")
+        ? "Write-Output (Get-Location).Path; [Console]::Error.WriteLine('warning'); Start-Sleep -Seconds 10"
+        : "pwd; printf 'warning\n' >&2; sleep 10";
+    try {
+      BackgroundProcessSnapshot legacy = tools.spawnShellCommand(command);
+      RunCommandResult unified = tools.runCommand(
+          new RunCommandRequest(command, "background", null), tempDir, Duration.ofMillis(10));
+
+      assertTrue(legacy.processId().startsWith("proc-"));
+      assertTrue(unified.processId().startsWith("proc-"));
+      BackgroundProcessSnapshot status = awaitToolStdout(tools, unified.processId(), tempDir.toString());
+      assertTrue(status.found());
+      assertTrue(status.stderr().stream().anyMatch(line -> line.contains("warning")));
+      assertEquals(BackgroundProcessStatus.KILLED, tools.killShellProcess(unified.processId()).status());
+      tools.killShellProcess(legacy.processId());
     } finally {
       manager.shutdown();
     }
