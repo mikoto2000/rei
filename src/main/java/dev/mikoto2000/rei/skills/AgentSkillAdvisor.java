@@ -22,6 +22,8 @@ import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 @Component
 public class AgentSkillAdvisor implements BaseAdvisor {
 
+  public static final String ROUTING_CONTEXT_KEY = AgentSkillAdvisor.class.getName() + ".routingContext";
+
   private final AgentSkillSelectionService selectionService;
   private final AgentSkillPromptRenderer promptRenderer;
   private final AgentSkillRepository repository;
@@ -64,21 +66,25 @@ public class AgentSkillAdvisor implements BaseAdvisor {
       return request;
     }
 
+    SkillRoutingRunContext routingContext = request.context().get(ROUTING_CONTEXT_KEY) instanceof SkillRoutingRunContext context
+        ? context : null;
+    String runId = routingContext == null ? null : routingContext.runId();
+    int routingInvocation = routingContext == null ? 1 : routingContext.nextInvocation();
     long startedAtNanos = nanoTime.getAsLong();
     int candidateCount = repository == null ? 0 : repository.findEnabled().size();
     String routingId = UUID.randomUUID().toString();
-    eventPublisher.publish(eventFactory.skillRoutingStarted(null, routingId, candidateCount, 1));
+    eventPublisher.publish(eventFactory.skillRoutingStarted(runId, routingId, candidateCount, routingInvocation));
     AgentSkillSelection selection;
     try {
       selection = selectionService.select(userMessage.getText());
       java.util.List<String> selectedNames = skillNames(selection.selectedSkills());
-      eventPublisher.publish(eventFactory.skillRoutingCompleted(null, routingId, elapsedMillis(startedAtNanos),
-          candidateCount, selectedNames.isEmpty() ? null : selectedNames.getFirst(), 1,
+      eventPublisher.publish(eventFactory.skillRoutingCompleted(runId, routingId, elapsedMillis(startedAtNanos),
+          candidateCount, selectedNames.isEmpty() ? null : selectedNames.getFirst(), routingInvocation,
           selection.selectorDurationMs(), null, null,
           skillNames(selection.explicitSkills()), skillNames(selection.implicitSkills()), selection.warnings()));
     } catch (RuntimeException exception) {
-      eventPublisher.publish(eventFactory.skillRoutingFailed(null, routingId, elapsedMillis(startedAtNanos),
-          candidateCount, 1, ErrorInformation.from(exception)));
+      eventPublisher.publish(eventFactory.skillRoutingFailed(runId, routingId, elapsedMillis(startedAtNanos),
+          candidateCount, routingInvocation, ErrorInformation.from(exception)));
       throw exception;
     }
     if (selection.selectedSkills().isEmpty() && selection.sanitizedPrompt().equals(userMessage.getText())) {

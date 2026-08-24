@@ -110,14 +110,42 @@ class AgentSkillAdvisorTest {
     assertThat(advised).isSameAs(request);
   }
 
+  @Test
+  void routingInvocationIncrementsWithinRunAndIsIndependentBetweenRuns() {
+    AgentSkillSelectionService selectionService = Mockito.mock(AgentSkillSelectionService.class);
+    when(selectionService.select("hello")).thenReturn(new AgentSkillSelection(List.of(), List.of(), List.of(), "hello"));
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    List<AgentEvent> events = new java.util.ArrayList<>();
+    bus.subscribe(events::add);
+    AgentSkillAdvisor advisor = new AgentSkillAdvisor(selectionService, new AgentSkillPromptRenderer(),
+        Mockito.mock(AgentSkillRepository.class), new AgentEventFactory(Clock.systemUTC()), bus, System::nanoTime);
+    SkillRoutingRunContext firstRun = new SkillRoutingRunContext("run-1");
+    SkillRoutingRunContext secondRun = new SkillRoutingRunContext("run-2");
+
+    advisor.before(request("hello", firstRun), Mockito.mock(AdvisorChain.class));
+    advisor.before(request("hello", firstRun), Mockito.mock(AdvisorChain.class));
+    advisor.before(request("hello", secondRun), Mockito.mock(AdvisorChain.class));
+
+    assertThat(events.stream().filter(event -> event.type() == AgentEventType.SKILL_ROUTING_STARTED)
+        .map(event -> (SkillRoutingStartedPayload) event.payload())
+        .map(SkillRoutingStartedPayload::routingInvocation)).containsExactly(1, 2, 1);
+    assertThat(events.stream().filter(event -> event.type() == AgentEventType.SKILL_ROUTING_STARTED)
+        .map(AgentEvent::runId)).containsExactly("run-1", "run-1", "run-2");
+  }
+
   private ChatClientRequest request(String text) {
+    return request(text, null);
+  }
+
+  private ChatClientRequest request(String text, SkillRoutingRunContext routingContext) {
     Prompt prompt = new Prompt(UserMessage.builder()
         .text(text)
         .build(),
         OpenAiChatOptions.builder()
             .model("test-model")
             .build());
-    return new ChatClientRequest(prompt, Map.of());
+    return new ChatClientRequest(prompt, routingContext == null ? Map.of()
+        : Map.of(AgentSkillAdvisor.ROUTING_CONTEXT_KEY, routingContext));
   }
 
   private AgentSkill skill(String name) {
