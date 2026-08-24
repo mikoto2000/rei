@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.charset.CharacterCodingException;
-import java.nio.charset.MalformedInputException;
 import java.nio.charset.StandardCharsets;
 import java.nio.charset.CodingErrorAction;
 import java.nio.file.Files;
@@ -506,7 +505,8 @@ public class Tools {
       Search one or more patterns and return structured match locations without reading whole file sections.
       Use this primitive when match locations are sufficient. When locating and inspecting code, prefer searchAndRead.
       @param queries 検索条件のリスト。
-      @return query ごとの結果。queryIndex で入力順と対応する。
+      Each query may specify charset; otherwise BOM, strict UTF-8, then CP932 are tried.
+      @return query ごとの結果。queryIndex で入力順と対応し、読めないファイルは fileErrors に含む。
       """)
   List<GrepQueryResult> grepMultiQuery(List<GrepQuery> queries) throws IOException, InterruptedException {
     return grepMultiQuery(queries, currentWorkingDirectory());
@@ -525,15 +525,16 @@ public class Tools {
     for (int i = 0; i < queries.size(); i++) {
       GrepQuery query = queries.get(i);
       try {
-        List<GrepMatch> matches = cachedGrepMatches(query, workingDirectory);
+        GrepScanResult scanResult = cachedGrepMatches(query, workingDirectory);
+        List<GrepMatch> matches = scanResult.matches();
         int remaining = MAX_GREP_TOTAL_MATCHES - totalMatches;
         if (matches.size() > remaining) {
           matches = matches.subList(0, Math.max(0, remaining));
         }
         totalMatches += matches.size();
-        results.add(new GrepQueryResult(i, query.pattern(), matches, null));
+        results.add(new GrepQueryResult(i, query.pattern(), matches, null, scanResult.fileErrors()));
       } catch (IllegalArgumentException e) {
-        results.add(new GrepQueryResult(i, query.pattern(), List.of(), e.getMessage()));
+        results.add(new GrepQueryResult(i, query.pattern(), List.of(), e.getMessage(), List.of()));
       }
     }
     discoverRelationsFromSearch(queries, results, workingDirectory);
@@ -577,18 +578,17 @@ public class Tools {
   }
 
   /** キャッシュを利用して 1 query の検索結果を返す。失敗結果はキャッシュしない。 */
-  @SuppressWarnings("unchecked")
-  private List<GrepMatch> cachedGrepMatches(GrepQuery query, java.nio.file.Path workingDirectory)
+  private GrepScanResult cachedGrepMatches(GrepQuery query, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
     SearchCacheKey key = grepCacheKey(query);
     Object cached = searchResultCache.get(key).orElse(null);
     if (cached != null) {
       IO.println("search cache hit: " + key.canonical());
-      return (List<GrepMatch>) cached;
+      return (GrepScanResult) cached;
     }
-    List<GrepMatch> matches = grepMatches(query, workingDirectory);
-    searchResultCache.put(key, matches);
-    return matches;
+    GrepScanResult result = scanGrepMatches(query, workingDirectory);
+    searchResultCache.put(key, result);
+    return result;
   }
 
   /** grep query から決定的なキャッシュキーを作成する。 */
@@ -605,12 +605,18 @@ public class Tools {
     sb.append("maxMatches=").append(query.maxMatches()).append('|');
     sb.append("includeLineNumber=").append(query.includeLineNumber()).append('|');
     sb.append("includeGlob=").append(query.includeGlob()).append('|');
-    sb.append("excludeGlob=").append(query.excludeGlob());
+    sb.append("excludeGlob=").append(query.excludeGlob()).append('|');
+    sb.append("charset=").append(query.charset());
     return new SearchCacheKey("grepMultiQuery", sb.toString());
   }
 
   /** 1 query の検索を実行し、構造化された match のリストを返す。 */
   private List<GrepMatch> grepMatches(GrepQuery query, java.nio.file.Path workingDirectory)
+      throws IOException, InterruptedException {
+    return scanGrepMatches(query, workingDirectory).matches();
+  }
+
+  private GrepScanResult scanGrepMatches(GrepQuery query, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
     if (query.pattern() == null || query.pattern().isBlank()) {
       throw new IllegalArgumentException("pattern must not be blank");
@@ -632,6 +638,7 @@ public class Tools {
 
     List<String> candidates = listFile(query.baseDir(), workingDirectory);
     List<GrepMatch> matches = new ArrayList<>();
+    List<GrepFileError> fileErrors = new ArrayList<>();
     for (String relativePath : candidates) {
       if (!matchesGlob(relativePath, includeMatcher, excludeMatcher, workingDirectory)) {
         continue;
@@ -642,8 +649,9 @@ public class Tools {
       }
       List<String> lines;
       try {
-        lines = readTextFileLines(filePath, relativePath, "");
+        lines = readTextFileLines(filePath, relativePath, query.charset());
       } catch (IOException ex) {
+        fileErrors.add(new GrepFileError(relativePath, "Unable to decode file: " + ex.getMessage()));
         continue;
       }
       Set<Integer> contextLineIndexes = new LinkedHashSet<>();
@@ -671,15 +679,15 @@ public class Tools {
           matches.add(new GrepMatch(relativePath, lineIndex + 1, lines.get(lineIndex),
               isMatchedLine(compiled, lines.get(lineIndex), effectiveInvertMatch)));
           if (matches.size() >= effectiveMaxMatches) {
-            return matches;
+            return new GrepScanResult(matches, fileErrors);
           }
         }
       }
       if (matches.size() >= effectiveMaxMatches) {
-        return matches;
+        return new GrepScanResult(matches, fileErrors);
       }
     }
-    return matches;
+    return new GrepScanResult(matches, fileErrors);
   }
 
   /** 1 つの grep 検索条件。grep ツールのパラメータと 1:1 対応する。 */
@@ -695,7 +703,14 @@ public class Tools {
       Integer maxMatches,
       Boolean includeLineNumber,
       String includeGlob,
-      String excludeGlob) {
+      String excludeGlob,
+      String charset) {
+    public GrepQuery(String pattern, String baseDir, Boolean ignoreCase, Boolean fixedString, Boolean invertMatch,
+        Boolean fileNamesOnly, Integer beforeContext, Integer afterContext, Integer maxMatches,
+        Boolean includeLineNumber, String includeGlob, String excludeGlob) {
+      this(pattern, baseDir, ignoreCase, fixedString, invertMatch, fileNamesOnly, beforeContext, afterContext,
+          maxMatches, includeLineNumber, includeGlob, excludeGlob, null);
+    }
   }
 
   /** 1 行の grep 検索結果。 */
@@ -703,7 +718,17 @@ public class Tools {
   }
 
   /** 1 query の検索結果。queryIndex は入力順と対応する。 */
-  public record GrepQueryResult(int queryIndex, String pattern, List<GrepMatch> matches, String error) {
+  public record GrepFileError(String path, String message) {
+  }
+
+  private record GrepScanResult(List<GrepMatch> matches, List<GrepFileError> fileErrors) {
+  }
+
+  public record GrepQueryResult(int queryIndex, String pattern, List<GrepMatch> matches, String error,
+      List<GrepFileError> fileErrors) {
+    public GrepQueryResult(int queryIndex, String pattern, List<GrepMatch> matches, String error) {
+      this(queryIndex, pattern, matches, error, List.of());
+    }
   }
 
   /** 1 リクエストあたりの最大 query 数。 */
@@ -764,9 +789,14 @@ public class Tools {
 
     // 2. ファイルごとにヒットをまとめる（重複排除、queryIndex と line を保持）
     LinkedHashMap<String, List<SearchMatch>> fileMatches = new LinkedHashMap<>();
+    LinkedHashMap<String, String> fileCharsets = new LinkedHashMap<>();
+    LinkedHashMap<String, String> fileErrors = new LinkedHashMap<>();
     for (GrepQueryResult queryResult : queryResults) {
       if (queryResult.error() != null) {
         continue;
+      }
+      for (GrepFileError fileError : queryResult.fileErrors()) {
+        fileErrors.putIfAbsent(fileError.path(), fileError.message());
       }
       for (GrepMatch match : queryResult.matches()) {
         if (!match.matched()) {
@@ -774,6 +804,7 @@ public class Tools {
         }
         fileMatches.computeIfAbsent(match.path(), k -> new ArrayList<>())
             .add(new SearchMatch(queryResult.queryIndex(), match.line(), match.content()));
+        fileCharsets.putIfAbsent(match.path(), request.queries().get(queryResult.queryIndex()).charset());
       }
     }
     int selectedCount = Math.min(fileMatches.size(), effectiveMaxFiles);
@@ -792,7 +823,7 @@ public class Tools {
       }
       try {
         SearchAndReadResult fileResult = readFileSections(entry.getKey(), entry.getValue(),
-            effectiveContextLines, workingDirectory);
+            effectiveContextLines, fileCharsets.get(entry.getKey()), workingDirectory);
         int remaining = MAX_SEARCH_AND_READ_TOTAL_LINES - totalLines;
         if (fileResult.totalLines() > remaining) {
           fileResult = fileResult.withTruncated(true);
@@ -811,6 +842,12 @@ public class Tools {
             r.error(), r.truncated(), true));
       }
     }
+    for (var entry : fileErrors.entrySet()) {
+      if (!fileMatches.containsKey(entry.getKey())) {
+        fileResults.add(new SearchAndReadResult(entry.getKey(), List.of(), List.of(),
+            entry.getValue(), false, filesTruncated));
+      }
+    }
     int hitCount = queryResults.stream().filter(result -> result.error() == null)
         .mapToInt(result -> (int) result.matches().stream().filter(GrepMatch::matched).count()).sum();
     workingSet.completeSearch(searchObservation, hitCount, fileMatches.size(), selectedCount, alreadyPresentCount);
@@ -823,9 +860,9 @@ public class Tools {
 
   /** 1 ファイルのヒットから、マージした範囲を読み込む。 */
   private SearchAndReadResult readFileSections(String relativePath, List<SearchMatch> matches,
-      int contextLines, java.nio.file.Path workingDirectory) throws IOException {
+      int contextLines, String charset, java.nio.file.Path workingDirectory) throws IOException {
     java.nio.file.Path filePath = resolveProjectPath(relativePath, workingDirectory);
-    List<String> lines = readTextFileLines(filePath, relativePath, "");
+    List<String> lines = readTextFileLines(filePath, relativePath, charset);
     workingSet.recordRead(filePath);
 
     // ヒット行から前後コンテキストを計算し、overlapping / adjacent をマージする
@@ -1456,34 +1493,79 @@ public class Tools {
   private ResolvedTextFile readTextFileContent(java.nio.file.Path path, String charset) throws IOException {
     if (charset != null && !charset.isBlank()) {
       Charset resolvedCharset = resolveCharset(charset);
-      return new ResolvedTextFile(Files.readString(path, resolvedCharset), resolvedCharset);
+      return new ResolvedTextFile(stripBom(readStringStrict(path, resolvedCharset)), resolvedCharset);
+    }
+    byte[] bytes = Files.readAllBytes(path);
+    ResolvedTextFile bomDecoded = decodeBom(bytes);
+    if (bomDecoded != null) {
+      return bomDecoded;
     }
     try {
-      return new ResolvedTextFile(readStringStrict(path, StandardCharsets.UTF_8), StandardCharsets.UTF_8);
+      return new ResolvedTextFile(decodeStrict(bytes, StandardCharsets.UTF_8), StandardCharsets.UTF_8);
     } catch (CharacterCodingException e) {
-      return new ResolvedTextFile(Files.readString(path, CP932), CP932);
+      return new ResolvedTextFile(decodeStrict(bytes, CP932), CP932);
     }
   }
 
   private List<String> readTextFileLines(java.nio.file.Path path, String displayPath, String charset) throws IOException {
-    if (charset != null && !charset.isBlank()) {
-      return Files.readAllLines(path, resolveCharset(charset));
+    ResolvedTextFile resolved = readTextFileContent(path, charset);
+    if ((charset == null || charset.isBlank()) && resolved.charset().equals(CP932)) {
+      IO.println(String.format("%s は UTF-8 として読めなかったため CP932 で読み直したよ", displayPath));
     }
-    try {
-      return Files.readAllLines(path, StandardCharsets.UTF_8);
-    } catch (MalformedInputException e) {
-      IO.println(String.format("%s は UTF-8 として読めなかったため CP932 で読み直すよ", displayPath));
-      return Files.readAllLines(path, CP932);
-    }
+    return resolved.content().lines().toList();
   }
 
   private String readStringStrict(java.nio.file.Path path, Charset charset) throws IOException {
-    byte[] bytes = Files.readAllBytes(path);
+    return decodeStrict(Files.readAllBytes(path), charset);
+  }
+
+  private String decodeStrict(byte[] bytes, Charset charset) throws CharacterCodingException {
     return charset.newDecoder()
         .onMalformedInput(CodingErrorAction.REPORT)
         .onUnmappableCharacter(CodingErrorAction.REPORT)
         .decode(java.nio.ByteBuffer.wrap(bytes))
         .toString();
+  }
+
+  private ResolvedTextFile decodeBom(byte[] bytes) throws CharacterCodingException {
+    if (startsWith(bytes, 0x00, 0x00, 0xfe, 0xff)) {
+      return decodeAfterBom(bytes, 4, Charset.forName("UTF-32BE"));
+    }
+    if (startsWith(bytes, 0xff, 0xfe, 0x00, 0x00)) {
+      return decodeAfterBom(bytes, 4, Charset.forName("UTF-32LE"));
+    }
+    if (startsWith(bytes, 0xef, 0xbb, 0xbf)) {
+      return decodeAfterBom(bytes, 3, StandardCharsets.UTF_8);
+    }
+    if (startsWith(bytes, 0xfe, 0xff)) {
+      return decodeAfterBom(bytes, 2, StandardCharsets.UTF_16BE);
+    }
+    if (startsWith(bytes, 0xff, 0xfe)) {
+      return decodeAfterBom(bytes, 2, StandardCharsets.UTF_16LE);
+    }
+    return null;
+  }
+
+  private ResolvedTextFile decodeAfterBom(byte[] bytes, int bomLength, Charset charset)
+      throws CharacterCodingException {
+    byte[] content = Arrays.copyOfRange(bytes, bomLength, bytes.length);
+    return new ResolvedTextFile(decodeStrict(content, charset), charset);
+  }
+
+  private boolean startsWith(byte[] bytes, int... prefix) {
+    if (bytes.length < prefix.length) {
+      return false;
+    }
+    for (int i = 0; i < prefix.length; i++) {
+      if ((bytes[i] & 0xff) != prefix[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private String stripBom(String content) {
+    return content.startsWith("\ufeff") ? content.substring(1) : content;
   }
 
   private record ResolvedTextFile(String content, Charset charset) {

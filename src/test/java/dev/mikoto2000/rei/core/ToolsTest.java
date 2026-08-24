@@ -11,6 +11,7 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.Duration;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -356,6 +357,112 @@ class ToolsTest {
     assertEquals(1, results.size());
     assertEquals(1, results.get(0).matches().size());
     assertEquals("docs/tracked.txt", results.get(0).matches().get(0).path());
+  }
+
+  @Test
+  void grepMultiQueryStripsUtf8BomBeforeMatching() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/bom.md"), "\ufeff# heading", StandardCharsets.UTF_8);
+    runGit("add", "docs/bom.md");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
+        new Tools.GrepQuery("^# heading", "docs", null, null, null, null, null, null, null, null, null, null)
+    ), tempDir);
+
+    assertEquals(1, results.get(0).matches().size());
+    assertTrue(results.get(0).fileErrors().isEmpty());
+  }
+
+  @Test
+  void grepMultiQueryDecodesUtf16Bom() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/utf16.txt"), "検索対象", StandardCharsets.UTF_16);
+    runGit("add", "docs/utf16.txt");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
+        new Tools.GrepQuery("検索対象", "docs", null, null, null, null, null, null, null, null, null, null)
+    ), tempDir);
+
+    assertEquals(1, results.get(0).matches().size());
+    assertTrue(results.get(0).fileErrors().isEmpty());
+  }
+
+  @Test
+  void grepMultiQueryUsesExplicitCharset() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/euc-jp.txt"), "検索対象", Charset.forName("EUC-JP"));
+    runGit("add", "docs/euc-jp.txt");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
+        new Tools.GrepQuery("検索対象", "docs", null, null, null, null, null, null, null, null, null, null,
+            "EUC-JP")
+    ), tempDir);
+
+    assertEquals(1, results.get(0).matches().size());
+    assertTrue(results.get(0).fileErrors().isEmpty());
+  }
+
+  @Test
+  void grepMultiQueryFallsBackToCp932() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/cp932.txt"), "検索対象", Charset.forName("windows-31j"));
+    runGit("add", "docs/cp932.txt");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
+        new Tools.GrepQuery("検索対象", "docs", null, null, null, null, null, null, null, null, null, null)
+    ), tempDir);
+
+    assertEquals(1, results.get(0).matches().size());
+    assertTrue(results.get(0).fileErrors().isEmpty());
+  }
+
+  @Test
+  void grepMultiQueryReportsUndecodableFiles() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.write(tempDir.resolve("docs/broken.txt"), new byte[] {(byte) 0x81});
+    runGit("add", "docs/broken.txt");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
+        new Tools.GrepQuery("anything", "docs", null, null, null, null, null, null, null, null, null, null)
+    ), tempDir);
+
+    assertTrue(results.get(0).matches().isEmpty());
+    assertEquals(1, results.get(0).fileErrors().size());
+    assertEquals("docs/broken.txt", results.get(0).fileErrors().get(0).path());
+  }
+
+  @Test
+  void searchAndReadReportsUndecodableFiles() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.write(tempDir.resolve("docs/broken.txt"), new byte[] {(byte) 0x81});
+    runGit("add", "docs/broken.txt");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
+        new Tools.SearchAndReadRequest(List.of(
+            new Tools.GrepQuery("anything", "docs", null, null, null, null, null, null, null, null, null, null)),
+            null, null), tempDir);
+
+    assertEquals(1, results.size());
+    assertEquals("docs/broken.txt", results.get(0).path());
+    assertTrue(results.get(0).error().startsWith("Unable to decode file:"));
   }
 
   @Test
