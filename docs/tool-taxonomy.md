@@ -7,7 +7,7 @@ LLM に公開する Tool は、ユーザーの目的に近い workflow Tool を�
 | Role | Tools |
 |---|---|
 | Workflow / preferred | `runCommand`, `searchAndRead`, `readMultiFile`, `writeMultiFile`, `webSearchAndRead`, `searchKnowledge`, `feedSummarizeItem`, `feedSummarizeBriefing`, `dailyBriefing` |
-| Shell primitive / process control | `executeExternalProgram`, `executeShellCommand`, `spawnShellCommand`, `getShellProcessStatus`, `killShellProcess` |
+| Shell / process control | `executeExternalProgram`, `getShellProcessStatus`, `killShellProcess` |
 | Code and file primitive | `findFile`, `listFile`, `grepMultiQuery`, `applyTextDiff`, `readPdfFile`, `readBinaryFile`, `writeBinaryFile`, `createDirectories`, `copyFile`, `moveFile`, `deleteFile` |
 | Web primitive | `webSearch`, `fetchUrlContent` |
 | Feed management | `feedList`, `feedAdd`, `feedDelete`, `feedUpdate` |
@@ -33,14 +33,14 @@ LLM に公開する Tool は、ユーザーの目的に近い workflow Tool を�
 - 既知 URL の取得: `fetchUrlContent`
 - 登録済み Knowledge Base と Web の統合調査: `searchKnowledge`
 - 通常の Shell 実行: `runCommand(auto)`
-- 明示的 foreground/background 制御: `executeShellCommand` / `spawnShellCommand` または `runCommand` の明示 mode
+- 明示的 foreground/background 制御: `runCommand` の `foreground` / `background` mode
 - 場所が不明なコードやテキストの検索と読取: `searchAndRead`
 - 一致位置だけ: `grepMultiQuery`
 - 既知ファイルの読取: `readMultiFile`
 - 複数ファイルの全内容書込: `writeMultiFile`
 - 既存ファイルの局所編集: `applyTextDiff`
 
-Tool 名は会話履歴、Tool event、retry/replayとの互換性を優先して変更しない。Tool object 内の annotation method 順序を framework が公開順として保証していないため、表示順制御にも依存しない。
+旧 Shell メソッドは内部互換コードとして残し、新規 LLM Tool definition からだけ除外する。保存済み Tool event や会話履歴の表示データは書き換えない。Tool object 内の annotation method 順序を framework が公開順として保証していないため、表示順制御にも依存しない。
 
 ## 整理候補
 

@@ -2,7 +2,7 @@
 
 ## 目的
 
-`runCommand` は通常の Shell 実行入口である。既定の `auto` はコマンド内容を解析せず、実際の Process が3秒以内に終了したかだけで foreground/background を解決する。既存 `executeShellCommand` と `spawnShellCommand` は明示モード用 primitive として残す。
+`runCommand` は LLM に公開する唯一の Shell command 実行入口である。既定の `auto` はコマンド内容を解析せず、実際の Process が3秒以内に終了したかだけで foreground/background を解決する。旧 foreground/background メソッドは内部互換コードとして残すが、Tool definition には公開しない。
 
 ## 入力
 
@@ -41,7 +41,7 @@ working directory は既存 Tool と同じ現在の project directory を使用�
 
 ## モード
 
-- `foreground`: 既存 `executeShellCommand` を再利用する。終了または timeout まで待ち、timeout 時は既存どおり強制終了する。
+- `foreground`: 既存の同期実行ロジックを再利用する。終了または timeout まで待ち、timeout 時は既存どおり強制終了する。
 - `background`: 既存 `BackgroundProcessManager.spawnShell` を再利用し、待たずに管理 ID を返す。
 - `auto`: 最初から既存 Manager に一つの Process を登録して stdout/stderr reader と watcher を開始する。同じ Process を3秒だけ待ち、終了済みなら reader をdrainして通常結果へ変換し registry から除去する。生存中なら登録を残して background 結果を返す。
 
