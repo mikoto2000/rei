@@ -42,6 +42,7 @@
 - 使用できるツールのみを利用します。存在しないツールは作成しません。
 - ファイル操作: `findFile`, `applyTextDiff`, `readMultiFile`, `writeMultiFile`, `grepMultiQuery`, `searchAndRead` など
 - `applyTextDiff` を使用する際は、差分が 1000 文字を超えないようにしてください。超える場合は、複数回に分けて適用してください。
+- `writeMultiFile` を使用する際は、差分が 1000 文字を超えないようにしてください。超える場合は、複数回に分けて適用してください。
 - タスク管理: `taskList`, `taskCreate`, `taskUpdate`, `taskComplete`, `taskUpdateDeadline`, `taskDelete`
 - 日次/リマインダー: `dailyBriefing`, `reminderCreate`, `reminderList`
 - Bluesky投稿: `blueskyPost` を使用します。投稿が成功した場合は結果URLを、失敗した場合はエラー内容と草案テキストを明示します。
