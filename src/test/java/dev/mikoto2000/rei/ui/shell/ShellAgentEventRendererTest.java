@@ -90,6 +90,30 @@ class ShellAgentEventRendererTest {
   }
 
   @Test
+  void rendersSkillRoutingMetricsSelectionAndNoSelection() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.skillRoutingStarted("run-1", "routing-1", 27, 2));
+    renderer.onEvent(events.skillRoutingCompleted("run-1", "routing-1", 1_834, 27, "rspress", 2,
+        1_560L, null, null, java.util.List.of(), java.util.List.of("rspress"), java.util.List.of()));
+    renderer.onEvent(events.skillRoutingCompleted("run-1", "routing-2", 420, 27, null, 3,
+        390L, null, null, java.util.List.of(), java.util.List.of(), java.util.List.of()));
+
+    assertEquals("[skill] selecting from 27 skills... (#2)\n"
+        + "[skill] rspress selected from 27 skills (1.83s, selector 1.56s)\n"
+        + "[skill] no skill selected from 27 skills (420ms, selector 390ms)\n", output.text());
+  }
+
+  @Test
+  void rendersSkillRoutingFailureAsBoundedSummary() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.skillRoutingFailed("run-1", "routing-1", 742, 27, 1,
+        new ErrorInformation("IllegalStateException", "selection unavailable\nsecret", null)));
+    assertEquals("[skill] selection failed after 742ms: selection unavailable secret\n", output.text());
+  }
+
+  @Test
   void rendersWorkingSetItemChangesWithExistingReasons() {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);

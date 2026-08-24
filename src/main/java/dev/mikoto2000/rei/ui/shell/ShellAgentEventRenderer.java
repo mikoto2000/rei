@@ -9,6 +9,9 @@ import dev.mikoto2000.rei.event.MessageDeltaPayload;
 import dev.mikoto2000.rei.event.MessageStartedPayload;
 import dev.mikoto2000.rei.event.SkillSelectionCompletedPayload;
 import dev.mikoto2000.rei.event.SkillSelectionFailedPayload;
+import dev.mikoto2000.rei.event.SkillRoutingCompletedPayload;
+import dev.mikoto2000.rei.event.SkillRoutingFailedPayload;
+import dev.mikoto2000.rei.event.SkillRoutingStartedPayload;
 import dev.mikoto2000.rei.event.ToolCompletedPayload;
 import dev.mikoto2000.rei.event.ToolFailedPayload;
 import dev.mikoto2000.rei.event.ToolStartedPayload;
@@ -91,6 +94,27 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         SkillSelectionFailedPayload payload = (SkillSelectionFailedPayload) event.payload();
         output.println("[skill] selection failed: " + errorMessage(payload.error()));
       }
+      case SKILL_ROUTING_STARTED -> {
+        closeAssistantLine();
+        SkillRoutingStartedPayload payload = (SkillRoutingStartedPayload) event.payload();
+        String invocation = payload.routingInvocation() > 1 ? " (#" + payload.routingInvocation() + ")" : "";
+        output.println("[skill] selecting from " + payload.candidateCount() + " skills..." + invocation);
+      }
+      case SKILL_ROUTING_COMPLETED -> {
+        closeAssistantLine();
+        SkillRoutingCompletedPayload payload = (SkillRoutingCompletedPayload) event.payload();
+        payload.warnings().forEach(output::println);
+        String selection = payload.selectedSkill() == null
+            ? "no skill selected" : payload.selectedSkill() + " selected";
+        output.println("[skill] " + selection + " from " + payload.candidateCount() + " skills ("
+            + formatDuration(payload.durationMs()) + selectorSuffix(payload.selectorDurationMs()) + ")");
+      }
+      case SKILL_ROUTING_FAILED -> {
+        closeAssistantLine();
+        SkillRoutingFailedPayload payload = (SkillRoutingFailedPayload) event.payload();
+        output.println("[skill] selection failed after " + formatDuration(payload.durationMs()) + ": "
+            + oneLineSummary(errorMessage(payload.error())));
+      }
       case WORKING_SET_ITEM_ADDED -> {
         closeAssistantLine();
         WorkingSetItemAddedPayload payload = (WorkingSetItemAddedPayload) event.payload();
@@ -161,6 +185,15 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   private String formatSeconds(long durationMillis) {
     return formatDecimal(durationMillis / 1_000.0d);
+  }
+
+  private String formatDuration(long durationMillis) {
+    return durationMillis < 1_000L ? durationMillis + "ms"
+        : String.format(java.util.Locale.ROOT, "%.2fs", durationMillis / 1_000.0d);
+  }
+
+  private String selectorSuffix(Long durationMillis) {
+    return durationMillis == null ? "" : ", selector " + formatDuration(durationMillis);
   }
 
   private String formatDecimal(double value) {
