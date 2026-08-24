@@ -88,16 +88,24 @@ class AgentEventFactoryTest {
   }
 
   @Test
-  void createsSkillSelectionLifecycleEventsWithSharedCorrelationId() {
-    AgentEvent started = factory.skillSelectionStarted("selection-1");
-    AgentEvent completed = factory.skillSelectionCompleted("selection-1", java.util.List.of("explicit"),
-        java.util.List.of("implicit"), java.util.List.of("warning"));
+  void createsSkillRoutingLifecycleEventsWithTypedMetrics() {
+    AgentEvent started = factory.skillRoutingStarted("run-1", "routing-1", 27, 1);
+    AgentEvent completed = factory.skillRoutingCompleted("run-1", "routing-1", 1_834, 27, "rspress", 1,
+        1_560L, 21L, null, java.util.List.of("explicit"), java.util.List.of("implicit"),
+        java.util.List.of("warning"));
 
-    assertEquals(AgentEventType.SKILL_SELECTION_STARTED, started.type());
-    assertEquals(AgentEventType.SKILL_SELECTION_COMPLETED, completed.type());
-    assertEquals("selection-1", started.correlationId());
-    assertEquals("selection-1", completed.correlationId());
-    SkillSelectionCompletedPayload payload = (SkillSelectionCompletedPayload) completed.payload();
+    assertEquals(AgentEventType.SKILL_ROUTING_STARTED, started.type());
+    assertEquals(AgentEventType.SKILL_ROUTING_COMPLETED, completed.type());
+    assertEquals("run-1", started.runId());
+    assertEquals("routing-1", started.correlationId());
+    assertEquals("routing-1", completed.correlationId());
+    SkillRoutingStartedPayload startedPayload = (SkillRoutingStartedPayload) started.payload();
+    assertEquals(27, startedPayload.candidateCount());
+    assertEquals(1, startedPayload.routingInvocation());
+    SkillRoutingCompletedPayload payload = (SkillRoutingCompletedPayload) completed.payload();
+    assertEquals(1_834, payload.durationMs());
+    assertEquals("rspress", payload.selectedSkill());
+    assertEquals(1_560L, payload.selectorDurationMs());
     assertEquals(java.util.List.of("explicit"), payload.explicitSkillNames());
     assertEquals(java.util.List.of("implicit"), payload.implicitSkillNames());
     assertEquals(java.util.List.of("warning"), payload.warnings());
