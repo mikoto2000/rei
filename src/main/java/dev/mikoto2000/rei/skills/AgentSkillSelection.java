@@ -6,7 +6,13 @@ public record AgentSkillSelection(
     List<AgentSkill> explicitSkills,
     List<AgentSkill> implicitSkills,
     List<String> warnings,
-    String sanitizedPrompt) {
+    String sanitizedPrompt,
+    Long selectorDurationMs) {
+
+  public AgentSkillSelection(List<AgentSkill> explicitSkills, List<AgentSkill> implicitSkills,
+      List<String> warnings, String sanitizedPrompt) {
+    this(explicitSkills, implicitSkills, warnings, sanitizedPrompt, null);
+  }
 
   public List<AgentSkill> selectedSkills() {
     return java.util.stream.Stream.concat(explicitSkills.stream(), implicitSkills.stream()).toList();
