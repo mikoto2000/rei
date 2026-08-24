@@ -6,7 +6,7 @@
 
 ```text
 Agent Core -> Agent Event Bus -> ShellAgentEventRenderer -> JLineShellEventOutput
-                           \-> AgentUiProjection -> TUI
+                           \-> AgentUiProjection -> future UI consumer
 ```
 
 ShellはProjectionをpollingせずEvent Busを直接購読し、受信順（Busのsequence順）に表示する。対象は `agent.run.started/completed/failed`、`message.started/delta/completed`、`tool.started/completed/failed`、`skill.selection.started/completed/failed`。Task、Working Set、Context、File eventはv1対象外。
@@ -42,7 +42,7 @@ Tool failure eventにはdurationがないため算出せず、event内のtool名
 
 ## Subscription lifecycleとTUI排他
 
-Shell開始後、LineReader構築時に `ShellEventSession` がsubscribeする。Shell終了のfinallyでunsubscribeする。Shellから `/tui` へ入る直前にsessionをpauseし、TUI終了後にresumeするため、Shell rendererとTUI Projectionが同時に画面出力しない。`--tui` startup modeはShell loopを起動しないためShell listenerを作らない。
+Shell開始後、LineReader構築時に `ShellEventSession` がsubscribeする。Shell終了のfinallyでunsubscribeする。
 
 ## Testとmanual smoke
 
@@ -55,11 +55,10 @@ Shell開始後、LineReader構築時に `ShellEventSession` がsubscribeする�
 3. Tool interleave後もassistantと次promptが正しい行にあることを確認する。
 4. background event中に文字を編集中にして、event表示後に入力とcursorが復元されることを確認する。
 5. `/help` の出力を確認する。
-6. `/tui` 中にShell eventが混入せず、`/exit` 後のShell chatで再びevent表示されることを確認する。
 
 外部LLMが利用できない環境では、event列は `ShellAgentEventRendererTest` で再現する。実LLM/Toolのend-to-end確認は接続可能なterminalで上記手順を実施する。
 
-2026-08-23のCodex PTYでは最新クラスによるShell起動とprompt表示を確認した。ただし同PTYはJLineへのEnterを通常の対話terminalとして配送しないため、chat、`/help`、`/tui` の操作完了は観測できなかった。event表示、interleave、入力行復元、購読排他は上記自動testで確認し、完全なend-to-endはWindows Terminal等で実施する。
+2026-08-23のCodex PTYでは最新クラスによるShell起動とprompt表示を確認した。ただし同PTYはJLineへのEnterを通常の対話terminalとして配送しないため、chat、`/help` の操作完了は観測できなかった。event表示、interleave、入力行復元は上記自動testで確認し、完全なend-to-endはWindows Terminal等で実施する。
 
 ## v1対象外
 

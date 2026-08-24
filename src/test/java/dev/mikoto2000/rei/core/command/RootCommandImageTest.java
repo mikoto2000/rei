@@ -14,4 +14,12 @@ class RootCommandImageTest {
 
     assertThat(commandLine.getSubcommands()).containsKey("image");
   }
+
+  @Test
+  void rootCommandDoesNotRegisterRemovedTuiCommand() {
+    CommandLine commandLine = new CommandLine(new RootCommand());
+
+    assertThat(commandLine.getSubcommands()).doesNotContainKey("tui");
+    assertThat(commandLine.getUsageMessage()).doesNotContain("tui");
+  }
 }

@@ -2,13 +2,13 @@
 
 ## 目的と境界
 
-Agent UI Projection は、append-only な [Agent Event API v1](agent-event-api-v1.md) の Event 列を、TUI / GUI が描画しやすい immutable な現在状態へ変換する consumer である。
+Agent UI Projection は、append-only な [Agent Event API v1](agent-event-api-v1.md) の Event 列を、将来の GUI 等が描画しやすい immutable な現在状態へ変換する consumer である。
 
 ```text
-Agent Core -> Agent Event Bus -> AgentUiProjection -> AgentUiState -> TUI / GUI
+Agent Core -> Agent Event Bus -> AgentUiProjection -> AgentUiState -> UI consumer
 ```
 
-Agent Core は Projection や UI に依存しない。Projection は Event payload の履歴や UI widget を公開せず、UI framework、terminal、HTTP にも依存しない。TUI / GUI は Event の lifecycle を個別解釈せず `currentState()` を描画する。
+Agent Core は Projection や UI に依存しない。Projection は Event payload の履歴や UI widget を公開せず、UI framework、terminal、HTTP にも依存しない。UI consumer は Event の lifecycle を個別解釈せず `currentState()` を描画する。
 
 ## State
 
@@ -51,6 +51,6 @@ UI は Event 到着を再描画契機として利用できる。v1 では UI fra
 
 ## v1 の範囲
 
-対象は `agent.run.*`, `message.*`, `tool.*` の9種。Task、Working Set、Context、File Event、TUI、GUI、SSE、永続化、Event replay は対象外。
+対象は `agent.run.*`, `message.*`, `tool.*` の9種。Task、Working Set、Context、File Event、具体的な UI、SSE、永続化、Event replay は対象外。
 
 将来の View を追加する場合は、`AgentUiState` に immutable collection/value を追加し、`DefaultAgentUiProjection.apply` の対応 Event branch と小さな accumulator update を追加する。Event handler framework は必要になるまで導入しない。

@@ -30,7 +30,6 @@
 		<java.version>25</java.version>
 		<spring-ai.version>2.0.0-M3</spring-ai.version>
 		<picocli.version>4.7.7</picocli.version>
-		<tamboui.version>0.5.0-SNAPSHOT</tamboui.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 	</properties>
@@ -110,14 +109,6 @@
 			<version>4.7.7</version>
 		</dependency>
 		<dependency>
-			<groupId>dev.tamboui</groupId>
-			<artifactId>tamboui-tui</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>dev.tamboui</groupId>
-			<artifactId>tamboui-jline3-backend</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>info.picocli</groupId>
 			<artifactId>picocli</artifactId>
 			<version>${picocli.version}</version>
@@ -160,13 +151,6 @@
 	<dependencyManagement>
 		<dependencies>
 			<dependency>
-				<groupId>dev.tamboui</groupId>
-				<artifactId>tamboui-bom</artifactId>
-				<version>${tamboui.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
-			<dependency>
 				<groupId>org.springframework.ai</groupId>
 				<artifactId>spring-ai-bom</artifactId>
 				<version>${spring-ai.version}</version>
@@ -175,19 +159,6 @@
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
-	<repositories>
-		<repository>
-			<id>ossrh-snapshots</id>
-			<url>https://central.sonatype.com/repository/maven-snapshots/</url>
-			<releases>
-				<enabled>false</enabled>
-			</releases>
-			<snapshots>
-				<enabled>true</enabled>
-			</snapshots>
-		</repository>
-	</repositories>
-
 	<build>
 		<plugins>
 			<plugin>

@@ -49,8 +49,6 @@ import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.sound.SoundNotificationService;
-import dev.mikoto2000.rei.ui.tui.AgentTuiCommand;
-import dev.mikoto2000.rei.ui.tui.AgentTuiLauncher;
 import dev.mikoto2000.rei.ui.shell.JLineShellEventOutput;
 import dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer;
 import dev.mikoto2000.rei.ui.shell.ShellEventSession;
@@ -90,20 +88,15 @@ public class ReiApplication {
     int exitCode;
     try {
       var app = context.getBean(ReiApplication.class);
-      launch(StartupMode.from(args), app, context.getBean(AgentTuiLauncher.class), args);
+      launch(app, args);
     } finally {
       exitCode = SpringApplication.exit(context);
     }
     System.exit(exitCode);
   }
 
-  static void launch(StartupMode mode, ReiApplication app, AgentTuiLauncher tui, String[] args)
-      throws IOException {
-    if (mode == StartupMode.TUI) {
-      tui.run(null);
-    } else {
-      app.run(args);
-    }
+  static void launch(ReiApplication app, String[] args) throws IOException {
+    app.run(args);
   }
 
   void run(String[] args) throws IOException {
@@ -162,13 +155,7 @@ public class ReiApplication {
               String[] commandArgs = input.arguments();
               printUserInputIfNeeded(input.text(), terminal, commandArgs);
               if (isInteractiveShellCommand(commandArgs)) {
-                boolean enteringTui = "tui".equals(commandArgs[0]);
-                if (enteringTui) shellEvents.pause();
-                try {
-                  executeInteractiveShellCommand(cmd, reader, terminal, inputSession.completer(), commandArgs);
-                } finally {
-                  if (enteringTui) shellEvents.resume();
-                }
+                executeInteractiveShellCommand(cmd, reader, terminal, inputSession.completer(), commandArgs);
               } else {
                 executeInterruptibly(cmd, terminal, commandExecutor, commandArgs);
               }
@@ -238,7 +225,7 @@ public class ReiApplication {
 
   boolean isInteractiveShellCommand(String... args) {
     return args != null && args.length > 0
-        && ("sh".equals(args[0]) || "tui".equals(args[0]));
+        && "sh".equals(args[0]);
   }
 
   void executeInteractiveShellCommand(CommandLine cmd, LineReader reader, Terminal terminal, String... args) {
@@ -247,16 +234,6 @@ public class ReiApplication {
 
   void executeInteractiveShellCommand(CommandLine cmd, LineReader reader, Terminal terminal,
       Completer completer, String... args) {
-    if (args != null && args.length > 0 && "tui".equals(args[0])) {
-      try {
-        AgentTuiCommand tui = (AgentTuiCommand) cmd.getSubcommands().get("tui").getCommand();
-        tui.run(terminal, reader, completer);
-      } finally {
-        clearPendingInputAfterInteractiveShell(reader, terminal);
-      }
-      return;
-    }
-
     boolean paused = false;
     try {
       if (terminal.canPauseResume()) {

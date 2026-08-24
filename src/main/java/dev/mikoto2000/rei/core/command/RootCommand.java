@@ -12,7 +12,6 @@ import dev.mikoto2000.rei.memory.command.MemoryCommand;
 import dev.mikoto2000.rei.reminder.command.ReminderCommand;
 import dev.mikoto2000.rei.skills.command.SkillCommand;
 import dev.mikoto2000.rei.task.command.TaskCommand;
-import dev.mikoto2000.rei.ui.tui.AgentTuiCommand;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 
@@ -42,8 +41,7 @@ subcommands = {
   InterestCommand.class,
   MemoryCommand.class,
   SkillCommand.class,
-  ImageCommand.class,
-  AgentTuiCommand.class
+  ImageCommand.class
 },
 mixinStandardHelpOptions = false)
 @RequiredArgsConstructor
