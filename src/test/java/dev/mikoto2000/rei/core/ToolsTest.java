@@ -339,6 +339,24 @@ class ToolsTest {
   }
 
   @Test
+  void grepMultiQuerySearchesRepositoryRootWithDotBaseDir() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("docs"));
+    Files.writeString(tempDir.resolve("docs/tracked.txt"), "needle at repository root");
+    runGit("add", "docs/tracked.txt");
+    runGit("commit", "-m", "initial");
+
+    Tools tools = new Tools();
+    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
+        new Tools.GrepQuery("needle", ".", null, null, null, null, null, null, null, null, null, null)
+    ), tempDir);
+
+    assertEquals(1, results.size());
+    assertEquals(1, results.get(0).matches().size());
+    assertEquals("docs/tracked.txt", results.get(0).matches().get(0).path());
+  }
+
+  @Test
   void grepMultiQueryExecutesMultipleQueriesAndPreservesOrder() throws Exception {
     initGitRepo();
     Files.createDirectories(tempDir.resolve("docs"));

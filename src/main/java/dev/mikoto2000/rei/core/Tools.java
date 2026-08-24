@@ -459,9 +459,10 @@ public class Tools {
         .toList();
     }
 
-    return gitListedFiles.stream()
-      .filter(s -> s.startsWith(baseDir))
-      .collect(Collectors.toList());
+    // git ls-files already applies baseDir as a pathspec. Filtering the returned
+    // repository-relative paths again breaks root pathspecs such as ".", because
+    // entries like "src/main/App.java" do not start with ".".
+    return gitListedFiles;
   }
 
   List<String> grep(String pattern, String baseDir, Boolean ignoreCase, Boolean fixedString, Boolean invertMatch,
