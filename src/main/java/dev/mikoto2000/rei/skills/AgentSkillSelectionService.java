@@ -16,6 +16,7 @@ public class AgentSkillSelectionService {
   private final AgentSkillImplicitSelection implicitSelector;
   private final LongSupplier nanoTime;
 
+  @org.springframework.beans.factory.annotation.Autowired
   public AgentSkillSelectionService(AgentSkillsProperties properties, AgentSkillExplicitSelector explicitSelector,
       AgentSkillImplicitSelection implicitSelector) {
     this(properties, explicitSelector, implicitSelector, System::nanoTime);
