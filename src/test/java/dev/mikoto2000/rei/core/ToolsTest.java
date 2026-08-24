@@ -78,28 +78,30 @@ class ToolsTest {
     assertTrue(toolNames.contains("writeMultiFile"));
     assertTrue(toolNames.contains("searchAndRead"));
     assertTrue(toolNames.contains("runCommand"));
-    assertTrue(toolNames.contains("executeShellCommand"));
-    assertTrue(toolNames.contains("spawnShellCommand"));
+    assertFalse(toolNames.contains("executeShellCommand"));
+    assertFalse(toolNames.contains("spawnShellCommand"));
+    assertTrue(toolNames.contains("getShellProcessStatus"));
+    assertTrue(toolNames.contains("killShellProcess"));
   }
 
   @Test
   void runCommandToolSchemaAndDescriptionsPreferAutoHighLevelEntry() throws Exception {
     Tool run = Tools.class.getDeclaredMethod("runCommand", RunCommandRequest.class).getAnnotation(Tool.class);
-    Tool foreground = Tools.class.getDeclaredMethod("executeShellCommand", String.class, Integer.class)
-        .getAnnotation(Tool.class);
-    Tool background = Tools.class.getDeclaredMethod("spawnShellCommand", String.class).getAnnotation(Tool.class);
-    assertTrue(run.description().contains("default tool"));
+    assertEquals(null, Tools.class.getDeclaredMethod("executeShellCommand", String.class, Integer.class)
+        .getAnnotation(Tool.class));
+    assertEquals(null, Tools.class.getDeclaredMethod("spawnShellCommand", String.class).getAnnotation(Tool.class));
+    assertTrue(run.description().contains("default and primary tool"));
     assertTrue(run.description().contains("auto mode"));
-    assertTrue(foreground.description().contains("low-level foreground"));
-    assertTrue(foreground.description().contains("runCommand"));
-    assertTrue(background.description().contains("low-level background"));
-    assertTrue(background.description().contains("runCommand"));
+    assertFalse(run.description().contains("executeShellCommand"));
+    assertFalse(run.description().contains("spawnShellCommand"));
 
     Tool status = Tools.class.getDeclaredMethod("getShellProcessStatus", String.class, Integer.class)
         .getAnnotation(Tool.class);
     Tool kill = Tools.class.getDeclaredMethod("killShellProcess", String.class).getAnnotation(Tool.class);
     assertTrue(status.description().contains("runCommand"));
     assertTrue(kill.description().contains("runCommand"));
+    assertFalse(status.description().contains("spawnShellCommand"));
+    assertFalse(kill.description().contains("spawnShellCommand"));
 
     var callback = java.util.Arrays.stream(MethodToolCallbackProvider.builder().toolObjects(new Tools()).build()
         .getToolCallbacks())

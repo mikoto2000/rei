@@ -178,15 +178,6 @@ public class Tools {
       return output;
     }
 
-  @Tool(name = "executeShellCommand",
-  description = """
-  Execute a shell command with explicit completion waiting. This is the low-level foreground primitive.
-  Use this for deliberate synchronous control; for normal shell execution, prefer runCommand in auto mode.
-  $SHELL が未設定の場合、Windows は powershell、Linux と macOS は bash を使います。
-  @param command 実行するシェルコマンド文字列
-  @param timeoutSeconds タイムアウト秒数。null の場合は 30 秒、最大 600 秒です。
-  @return 終了コード、標準出力、標準エラー、タイムアウト有無
-  """)
   ShellCommandResult executeShellCommand(String command, Integer timeoutSeconds) throws IOException, InterruptedException {
     return executeShellCommand(command, timeoutSeconds, currentWorkingDirectory());
   }
@@ -254,10 +245,11 @@ public class Tools {
   }
 
   @Tool(name = "runCommand", description = """
-  Run a shell command. Use this as the default tool for shell commands.
+  Run a shell command. Use this as the default and primary tool for shell command execution.
   In auto mode, short-lived commands return normally while long-running commands continue as managed background processes.
-  Prefer this over manually choosing between executeShellCommand and spawnShellCommand.
-  Use foreground only when explicitly waiting for completion, and background only when explicitly starting a managed process.
+  Use executionMode=auto for normal commands.
+  Use executionMode=foreground when you explicitly need to wait for completion.
+  Use executionMode=background when you explicitly want a managed background process.
   @param request command, optional executionMode (auto/foreground/background), and optional foreground timeoutSeconds
   @return normalized completion or managed-process result
   """)
@@ -317,22 +309,14 @@ public class Tools {
     return lines == null ? "" : String.join(System.lineSeparator(), lines);
   }
 
-  @Tool(name = "spawnShellCommand",
-  description = """
-  Start a command explicitly as a managed process. This is the low-level background primitive.
-  Use this only when background execution is intentional; for normal shell execution, prefer runCommand in auto mode.
-  It returns processId, OS pid, status, and recent logs without waiting for completion.
-  @param command 実行するシェルコマンド文字列
-  @return logical processId、OS pid、状態、終了コード、直近の標準出力/標準エラー
-  """)
   BackgroundProcessSnapshot spawnShellCommand(String command) {
     return backgroundProcessManager.spawnShell(command, currentWorkingDirectory());
   }
 
   @Tool(name = "getShellProcessStatus",
   description = """
-  Get status and recent logs for a managed background process started by runCommand or spawnShellCommand.
-  @param processId runCommand または spawnShellCommand が返した logical processId
+  Get the status and recent logs of a managed shell process created by runCommand.
+  @param processId runCommand が返した logical processId
   @param tailLines 返すログ末尾行数。null の場合は既定値です。
   @return 状態、終了コード、直近の標準出力/標準エラー
   """)
@@ -342,9 +326,9 @@ public class Tools {
 
   @Tool(name = "killShellProcess",
   description = """
-  Stop a managed background process started by runCommand or spawnShellCommand.
+  Kill a managed shell process created by runCommand.
   processId に一致する管理対象プロセスと、その子プロセスツリーを graceful に停止し、残った場合は強制終了します。
-  @param processId runCommand または spawnShellCommand が返した logical processId
+  @param processId runCommand が返した logical processId
   @return 終了後の状態、終了コード、直近の標準出力/標準エラー
   """)
   BackgroundProcessSnapshot killShellProcess(String processId) {
