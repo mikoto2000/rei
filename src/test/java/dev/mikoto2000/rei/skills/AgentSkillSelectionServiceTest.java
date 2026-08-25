@@ -1,13 +1,33 @@
 package dev.mikoto2000.rei.skills;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.when;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 class AgentSkillSelectionServiceTest {
+
+  @Test
+  void measuresImplicitSelectorWithMonotonicClock() {
+    AgentSkillsProperties properties = new AgentSkillsProperties();
+    AgentSkillExplicitSelector explicitSelector = Mockito.mock(AgentSkillExplicitSelector.class);
+    AgentSkillImplicitSelection implicitSelector = Mockito.mock(AgentSkillImplicitSelection.class);
+    when(explicitSelector.select("hello")).thenReturn(
+        new AgentSkillExplicitSelector.ExplicitSelection(List.of(), List.of(), "hello"));
+    when(implicitSelector.select("hello", Set.of())).thenReturn(List.of(skill("implicit")));
+    java.util.concurrent.atomic.AtomicLong nanos = new java.util.concurrent.atomic.AtomicLong();
+    AgentSkillSelectionService service = new AgentSkillSelectionService(properties, explicitSelector,
+        implicitSelector, () -> nanos.getAndAdd(23_000_000L));
+
+    AgentSkillSelection selection = service.select("hello");
+
+    assertThat(selection.selectorDurationMs()).isEqualTo(23L);
+  }
 
   @Test
   void explicitSelectionTakesPrecedenceOverImplicitSelection() {

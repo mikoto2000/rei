@@ -32,6 +32,8 @@ import dev.mikoto2000.rei.llm.OutputLimitReplanSubgoal;
 import dev.mikoto2000.rei.llm.OutputLimitReplanner;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
+import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
+import dev.mikoto2000.rei.skills.SkillRoutingRunContext;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 import reactor.core.Disposable;
@@ -128,6 +130,7 @@ public class ChatCommand implements Runnable {
     cancellationService.begin(Thread.currentThread());
     chatResponseNarrator.reset();
     String runId = UUID.randomUUID().toString();
+    SkillRoutingRunContext skillRoutingContext = new SkillRoutingRunContext(runId);
     AtomicLong runCompletionTokens = new AtomicLong();
     AtomicBoolean usageAvailable = new AtomicBoolean();
     AtomicReference<Double> lastTokensPerSecond = new AtomicReference<>();
@@ -143,10 +146,11 @@ public class ChatCommand implements Runnable {
         return;
       }
       eventPublisher.publish(eventFactory.runStarted(runId, "user-request", null));
-      ChatRunResult result = executePrompt(promptText, true, startedAtNanos, budget, runId,
+      ChatRunResult result = executePrompt(promptText, true, startedAtNanos, budget, runId, skillRoutingContext,
           runCompletionTokens, usageAvailable, lastTokensPerSecond);
       if (result.status() == ChatRunStatus.OUTPUT_LIMIT) {
         result = handleOutputLimit(promptText, promptText, "", result.text(), budget, startedAtNanos, runId,
+            skillRoutingContext,
             runCompletionTokens, usageAvailable, lastTokensPerSecond);
       }
       if (result.status() == ChatRunStatus.SUCCESS) {
@@ -173,6 +177,7 @@ public class ChatCommand implements Runnable {
 
   private ChatRunResult handleOutputLimit(String originalUserRequest, String currentGoal, String progressSoFar,
       String partialOutput, OutputLimitRunBudget budget, long startedAtNanos, String runId,
+      SkillRoutingRunContext skillRoutingContext,
       AtomicLong runCompletionTokens, AtomicBoolean usageAvailable, AtomicReference<Double> lastTokensPerSecond) {
     if (outputLimitReplanner.isEmpty()) {
       System.err.println("[error] output token limit reached");
@@ -224,11 +229,12 @@ public class ChatCommand implements Runnable {
       }
       log.info("Output limit subgoal started: id={}, goal={}", subgoal.id(), subgoal.goal());
       ChatRunResult subgoalResult = executePrompt(subgoal.goal(), false, startedAtNanos, budget, runId,
+          skillRoutingContext,
           runCompletionTokens, usageAvailable, lastTokensPerSecond);
       log.info("Output limit subgoal finished: id={}, status={}", subgoal.id(), subgoalResult.status());
       if (subgoalResult.status() == ChatRunStatus.OUTPUT_LIMIT) {
         subgoalResult = handleOutputLimit(originalUserRequest, subgoal.goal(), subgoalResults.toString(),
-            subgoalResult.text(), budget, startedAtNanos, runId, runCompletionTokens, usageAvailable,
+            subgoalResult.text(), budget, startedAtNanos, runId, skillRoutingContext, runCompletionTokens, usageAvailable,
             lastTokensPerSecond);
       }
       if (subgoalResult.status() != ChatRunStatus.SUCCESS) {
@@ -244,11 +250,13 @@ public class ChatCommand implements Runnable {
       return ChatRunResult.outputLimit(subgoalResults.toString());
     }
     return executePrompt(buildIntegrationPrompt(originalUserRequest, plan.finalGoal(), subgoalResults.toString()),
-        false, startedAtNanos, budget, runId, runCompletionTokens, usageAvailable, lastTokensPerSecond);
+        false, startedAtNanos, budget, runId, skillRoutingContext, runCompletionTokens, usageAvailable,
+        lastTokensPerSecond);
   }
 
   private ChatRunResult executePrompt(String promptText, boolean resolveAttachments, long startedAtNanos,
-      OutputLimitRunBudget budget, String runId, AtomicLong runCompletionTokens, AtomicBoolean usageAvailable,
+      OutputLimitRunBudget budget, String runId, SkillRoutingRunContext skillRoutingContext,
+      AtomicLong runCompletionTokens, AtomicBoolean usageAvailable,
       AtomicReference<Double> lastTokensPerSecond) {
     InlineFileAttachmentResolver.ResolvedPrompt resolvedPrompt = resolveAttachments
         ? inlineFileAttachmentResolver.resolve(promptText)
@@ -264,7 +272,9 @@ public class ChatCommand implements Runnable {
               .media(resolvedPrompt.media())
               .build(),
           modelProvider.chatOptions(LlmFeature.CHAT, currentModelHolder.get(), true)))
-      .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.chat()));
+      .advisors(advisor -> advisor
+          .param(ChatMemory.CONVERSATION_ID, ConversationIds.chat())
+          .param(AgentSkillAdvisor.ROUTING_CONTEXT_KEY, skillRoutingContext));
 
     CountDownLatch latch = new CountDownLatch(1);
     AtomicReference<Throwable> errorRef = new AtomicReference<>();

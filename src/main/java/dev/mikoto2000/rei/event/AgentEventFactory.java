@@ -111,6 +111,28 @@ public class AgentEventFactory {
         new SkillSelectionFailedPayload(selectionId, error));
   }
 
+  public AgentEvent skillRoutingStarted(String runId, String routingId, int candidateCount,
+      int routingInvocation) {
+    return newEvent(AgentEventType.SKILL_ROUTING_STARTED, runId, routingId,
+        new SkillRoutingStartedPayload(candidateCount, routingInvocation));
+  }
+
+  public AgentEvent skillRoutingCompleted(String runId, String routingId, long durationMs, int candidateCount,
+      String selectedSkill, int routingInvocation, Long selectorDurationMs, Long metadataLoadDurationMs,
+      Long skillLoadDurationMs, java.util.List<String> explicitSkillNames,
+      java.util.List<String> implicitSkillNames, java.util.List<String> warnings) {
+    return newEvent(AgentEventType.SKILL_ROUTING_COMPLETED, runId, routingId,
+        new SkillRoutingCompletedPayload(durationMs, candidateCount, selectedSkill, routingInvocation,
+            selectorDurationMs, metadataLoadDurationMs, skillLoadDurationMs, explicitSkillNames,
+            implicitSkillNames, warnings));
+  }
+
+  public AgentEvent skillRoutingFailed(String runId, String routingId, long durationMs, int candidateCount,
+      int routingInvocation, ErrorInformation error) {
+    return newEvent(AgentEventType.SKILL_ROUTING_FAILED, runId, routingId,
+        new SkillRoutingFailedPayload(durationMs, candidateCount, routingInvocation, error));
+  }
+
   // ---- Task ----
 
   public AgentEvent taskCreated(String taskId, String parentTaskId, String title, String status) {

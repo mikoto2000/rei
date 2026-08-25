@@ -10,6 +10,7 @@ public sealed interface AgentEventPayload
         MessageStartedPayload, MessageDeltaPayload, MessageCompletedPayload,
         ToolStartedPayload, ToolCompletedPayload, ToolFailedPayload,
         SkillSelectionStartedPayload, SkillSelectionCompletedPayload, SkillSelectionFailedPayload,
+        SkillRoutingStartedPayload, SkillRoutingCompletedPayload, SkillRoutingFailedPayload,
         TaskCreatedPayload, TaskStartedPayload, TaskCompletedPayload, TaskFailedPayload,
         WorkingSetItemAddedPayload, WorkingSetItemRemovedPayload,
         WorkingSetSearchStartedPayload, WorkingSetSearchCompletedPayload,
