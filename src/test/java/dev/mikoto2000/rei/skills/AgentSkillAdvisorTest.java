@@ -23,6 +23,7 @@ import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.event.SkillRoutingCompletedPayload;
 import dev.mikoto2000.rei.event.SkillRoutingFailedPayload;
 import dev.mikoto2000.rei.event.SkillRoutingStartedPayload;
+import dev.mikoto2000.rei.event.SkillCandidatesEvaluatedPayload;
 
 class AgentSkillAdvisorTest {
 
@@ -131,6 +132,42 @@ class AgentSkillAdvisorTest {
         .map(SkillRoutingStartedPayload::routingInvocation)).containsExactly(1, 2, 1);
     assertThat(events.stream().filter(event -> event.type() == AgentEventType.SKILL_ROUTING_STARTED)
         .map(AgentEvent::runId)).containsExactly("run-1", "run-1", "run-2");
+  }
+
+  @Test
+  void evaluatesCandidatesInShadowModeWithoutChangingExistingSelection() {
+    AgentSkill actual = skill("actual");
+    AgentSkill lexical = new AgentSkill("rspress", "Rspress plugin development", true,
+        Path.of("rspress"), Path.of("rspress", "SKILL.md"), "instructions");
+    AgentSkillSelectionService selectionService = Mockito.mock(AgentSkillSelectionService.class);
+    when(selectionService.select("Rspress plugin を作る")).thenReturn(
+        new AgentSkillSelection(List.of(), List.of(actual), List.of(), "Rspress plugin を作る"));
+    AgentSkillRepository repository = Mockito.mock(AgentSkillRepository.class);
+    when(repository.findEnabled()).thenReturn(List.of(actual, lexical));
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    List<AgentEvent> events = new java.util.ArrayList<>();
+    bus.subscribe(events::add);
+    java.util.concurrent.atomic.AtomicLong nanos = new java.util.concurrent.atomic.AtomicLong();
+    AgentSkillAdvisor advisor = new AgentSkillAdvisor(selectionService, new AgentSkillPromptRenderer(), repository,
+        new SkillCandidateSelector(), new SkillCandidateStatistics(),
+        new AgentEventFactory(Clock.systemUTC()), bus, () -> nanos.getAndAdd(2_000_000L));
+
+    ChatClientRequest advised = advisor.before(request("Rspress plugin を作る"), Mockito.mock(AdvisorChain.class));
+
+    Mockito.verify(selectionService).select("Rspress plugin を作る");
+    assertThat(advised.prompt().getUserMessage().getText()).contains("## Skill: actual");
+    assertThat(events).extracting(AgentEvent::type).containsExactly(
+        AgentEventType.SKILL_ROUTING_STARTED,
+        AgentEventType.SKILL_CANDIDATES_EVALUATED,
+        AgentEventType.SKILL_ROUTING_COMPLETED);
+    SkillCandidatesEvaluatedPayload payload = (SkillCandidatesEvaluatedPayload) events.get(1).payload();
+    assertThat(payload.totalSkillCount()).isEqualTo(2);
+    assertThat(payload.topCandidates()).extracting(SkillCandidatesEvaluatedPayload.CandidateScore::skill)
+        .containsExactly("rspress");
+    assertThat(payload.actualSelectedSkill()).isEqualTo("actual");
+    assertThat(payload.top1Hit()).isFalse();
+    assertThat(payload.top3Hit()).isFalse();
+    assertThat(payload.top5Hit()).isFalse();
   }
 
   private ChatClientRequest request(String text) {

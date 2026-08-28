@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.ErrorInformation;
+import dev.mikoto2000.rei.event.SkillCandidatesEvaluatedPayload;
 
 class ShellAgentEventRendererTest {
   private final AgentEventFactory events = new AgentEventFactory(
@@ -111,6 +112,18 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.skillRoutingFailed("run-1", "routing-1", 742, 27, 1,
         new ErrorInformation("IllegalStateException", "selection unavailable\nsecret", null)));
     assertEquals("[skill] selection failed after 742ms: selection unavailable secret\n", output.text());
+  }
+
+  @Test
+  void rendersSkillCandidateShadowEvaluationCompactly() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.skillCandidatesEvaluated("run-1", "routing-1", 42, 4, "rspress", true,
+        false, true, true, java.util.List.of(
+            new SkillCandidatesEvaluatedPayload.CandidateScore("typescript", 7),
+            new SkillCandidatesEvaluatedPayload.CandidateScore("rspress", 6))));
+
+    assertEquals("[skill-candidate] 42 -> 2 skills (4ms), actual=rspress, top5=hit\n", output.text());
   }
 
   @Test

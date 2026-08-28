@@ -11,6 +11,7 @@ public sealed interface AgentEventPayload
         ToolStartedPayload, ToolCompletedPayload, ToolFailedPayload,
         SkillSelectionStartedPayload, SkillSelectionCompletedPayload, SkillSelectionFailedPayload,
         SkillRoutingStartedPayload, SkillRoutingCompletedPayload, SkillRoutingFailedPayload,
+        SkillCandidatesEvaluatedPayload,
         TaskCreatedPayload, TaskStartedPayload, TaskCompletedPayload, TaskFailedPayload,
         WorkingSetItemAddedPayload, WorkingSetItemRemovedPayload,
         WorkingSetSearchStartedPayload, WorkingSetSearchCompletedPayload,

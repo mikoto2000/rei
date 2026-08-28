@@ -21,6 +21,7 @@ public enum AgentEventType {
   SKILL_ROUTING_STARTED("skill.routing.started"),
   SKILL_ROUTING_COMPLETED("skill.routing.completed"),
   SKILL_ROUTING_FAILED("skill.routing.failed"),
+  SKILL_CANDIDATES_EVALUATED("skill.candidates.evaluated"),
   TASK_CREATED("task.created"),
   TASK_STARTED("task.started"),
   TASK_COMPLETED("task.completed"),

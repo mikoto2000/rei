@@ -18,6 +18,7 @@ Agent Core で外部から観測する価値のある状態変化を、UI や LL
 | `message.started`, `message.delta`, `message.completed` | `ChatCommand` の正規化済み response stream へ統合済み |
 | `tool.started`, `tool.completed`, `tool.failed` | MCP Tool と Method Tool の `ToolCallback.call` 境界へ統合済み |
 | `skill.selection.started`, `skill.selection.completed`, `skill.selection.failed` | `AgentSkillAdvisor` の選定境界へ統合済み |
+| `skill.candidates.evaluated` | lexical candidate selector の shadow mode 評価。最大5候補、Top1/3/5 hitを含む |
 | `task.created`, `task.started`, `task.completed`, `task.failed` | 型と factory のみ |
 | `working_set.item.added`, `working_set.item.removed` | 型と factory のみ |
 | `context.snapshot.updated` | 型と factory のみ |

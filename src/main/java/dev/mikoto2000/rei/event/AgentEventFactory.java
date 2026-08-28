@@ -133,6 +133,14 @@ public class AgentEventFactory {
         new SkillRoutingFailedPayload(durationMs, candidateCount, routingInvocation, error));
   }
 
+  public AgentEvent skillCandidatesEvaluated(String runId, String routingId, int totalSkillCount,
+      long durationMs, String actualSelectedSkill, boolean selected, Boolean top1Hit, Boolean top3Hit,
+      Boolean top5Hit, java.util.List<SkillCandidatesEvaluatedPayload.CandidateScore> topCandidates) {
+    return newEvent(AgentEventType.SKILL_CANDIDATES_EVALUATED, runId, routingId,
+        new SkillCandidatesEvaluatedPayload(totalSkillCount, topCandidates.size(), durationMs, actualSelectedSkill,
+            selected, top1Hit, top3Hit, top5Hit, topCandidates));
+  }
+
   // ---- Task ----
 
   public AgentEvent taskCreated(String taskId, String parentTaskId, String title, String status) {

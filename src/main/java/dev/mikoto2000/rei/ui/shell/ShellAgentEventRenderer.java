@@ -12,6 +12,7 @@ import dev.mikoto2000.rei.event.SkillSelectionFailedPayload;
 import dev.mikoto2000.rei.event.SkillRoutingCompletedPayload;
 import dev.mikoto2000.rei.event.SkillRoutingFailedPayload;
 import dev.mikoto2000.rei.event.SkillRoutingStartedPayload;
+import dev.mikoto2000.rei.event.SkillCandidatesEvaluatedPayload;
 import dev.mikoto2000.rei.event.ToolCompletedPayload;
 import dev.mikoto2000.rei.event.ToolFailedPayload;
 import dev.mikoto2000.rei.event.ToolStartedPayload;
@@ -114,6 +115,14 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         SkillRoutingFailedPayload payload = (SkillRoutingFailedPayload) event.payload();
         output.println("[skill] selection failed after " + formatDuration(payload.durationMs()) + ": "
             + oneLineSummary(errorMessage(payload.error())));
+      }
+      case SKILL_CANDIDATES_EVALUATED -> {
+        closeAssistantLine();
+        SkillCandidatesEvaluatedPayload payload = (SkillCandidatesEvaluatedPayload) event.payload();
+        String actual = payload.selected() ? payload.actualSelectedSkill() : "none";
+        String top5 = !payload.selected() ? "n/a" : Boolean.TRUE.equals(payload.top5Hit()) ? "hit" : "miss";
+        output.println("[skill-candidate] " + payload.totalSkillCount() + " -> " + payload.candidateCount()
+            + " skills (" + payload.durationMs() + "ms), actual=" + actual + ", top5=" + top5);
       }
       case WORKING_SET_ITEM_ADDED -> {
         closeAssistantLine();
