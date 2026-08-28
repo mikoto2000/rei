@@ -80,7 +80,8 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
       }
       String description = parsed.metadata().getOrDefault("description", "");
       boolean enabled = Boolean.parseBoolean(parsed.metadata().getOrDefault("enabled", "true"));
-      return Optional.of(new AgentSkill(name, description, enabled, skillFile.getParent(), skillFile, parsed.instructions()));
+      return Optional.of(new AgentSkill(name, description, parsed.keywords(), enabled, skillFile.getParent(), skillFile,
+          parsed.instructions()));
     } catch (Exception e) {
       log.warn("Failed to load Agent Skill: {}", skillFile, e);
       return Optional.empty();
@@ -98,12 +99,13 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
     }
     String frontMatter = normalized.substring(4, end);
     String instructions = normalized.substring(end + "\n---".length()).stripLeading();
-    Map<String, String> metadata = parseFrontMatter(frontMatter);
-    return new ParsedSkill(metadata, instructions);
+    ParsedMetadata metadata = parseFrontMatter(frontMatter);
+    return new ParsedSkill(metadata.values(), metadata.keywords(), instructions);
   }
 
-  private Map<String, String> parseFrontMatter(String frontMatter) {
+  private ParsedMetadata parseFrontMatter(String frontMatter) {
     Map<String, String> metadata = new LinkedHashMap<>();
+    List<String> keywords = new ArrayList<>();
     String blockKey = null;
     String blockStyle = null;
     StringBuilder blockValue = new StringBuilder();
@@ -115,6 +117,11 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
         continue;
       }
       if (blockKey != null && isIndented(line)) {
+        if ("keywords".equals(blockKey) && line.strip().startsWith("-")) {
+          String keyword = unquote(line.strip().substring(1).strip());
+          if (!keyword.isBlank()) keywords.add(keyword);
+          continue;
+        }
         appendBlockLine(blockValue, blockStyle, line.strip());
         continue;
       }
@@ -130,7 +137,10 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
       }
       String key = line.substring(0, separator).strip().toLowerCase(Locale.ROOT);
       String value = line.substring(separator + 1).strip();
-      if (value.equals(">") || value.equals("|")) {
+      if ("keywords".equals(key) && value.isEmpty()) {
+        blockKey = key;
+        blockStyle = "list";
+      } else if (value.equals(">") || value.equals("|")) {
         blockKey = key;
         blockStyle = value;
       } else {
@@ -140,7 +150,7 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
     if (blockKey != null) {
       metadata.put(blockKey, blockValue.toString().stripTrailing());
     }
-    return metadata;
+    return new ParsedMetadata(metadata, List.copyOf(keywords));
   }
 
   private boolean isIndented(String line) {
@@ -181,6 +191,9 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
     return names.contains(".kiro");
   }
 
-  private record ParsedSkill(Map<String, String> metadata, String instructions) {
+  private record ParsedMetadata(Map<String, String> values, List<String> keywords) {
+  }
+
+  private record ParsedSkill(Map<String, String> metadata, List<String> keywords, String instructions) {
   }
 }

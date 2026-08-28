@@ -91,6 +91,42 @@ class FileSystemAgentSkillRepositoryTest {
   }
 
   @Test
+  void loadsOptionalKeywordsFromFrontMatter() throws Exception {
+    Path skillsDir = tempDir.resolve(".rei").resolve("skills");
+    writeSkill(skillsDir.resolve("powershell"), """
+        ---
+        name: powershell
+        description: PowerShell operations
+        keywords:
+          - invoke-webrequest
+          - pwsh
+          - "PowerShell"
+        ---
+        instructions
+        """);
+
+    AgentSkill skill = new FileSystemAgentSkillRepository(properties(skillsDir)).findAll().getFirst();
+
+    assertThat(skill.keywords()).containsExactly("invoke-webrequest", "pwsh", "PowerShell");
+  }
+
+  @Test
+  void defaultsKeywordsToEmptyList() throws Exception {
+    Path skillsDir = tempDir.resolve(".rei").resolve("skills");
+    writeSkill(skillsDir.resolve("sample"), """
+        ---
+        name: sample
+        description: Sample
+        ---
+        instructions
+        """);
+
+    AgentSkill skill = new FileSystemAgentSkillRepository(properties(skillsDir)).findAll().getFirst();
+
+    assertThat(skill.keywords()).isEmpty();
+  }
+
+  @Test
   void skipsBrokenSkillButKeepsOtherSkills() throws Exception {
     Path skillsDir = tempDir.resolve(".rei").resolve("skills");
     writeSkill(skillsDir.resolve("valid"), """
