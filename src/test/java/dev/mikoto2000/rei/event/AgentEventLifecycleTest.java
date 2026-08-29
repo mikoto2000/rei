@@ -56,6 +56,22 @@ class AgentEventLifecycleTest {
   }
 
   @Test
+  void thinkingLifecycleEmitsStartedDeltaCompleted() {
+    subscribe();
+
+    bus.publish(factory.thinkingStarted("thinking-1"));
+    bus.publish(factory.thinkingDelta("thinking-1", "考え"));
+    bus.publish(factory.thinkingDelta("thinking-1", "ます"));
+    bus.publish(factory.thinkingCompleted("thinking-1", "考えます"));
+
+    assertEquals(AgentEventType.THINKING_STARTED, received.get(0).type());
+    assertEquals(AgentEventType.THINKING_DELTA, received.get(1).type());
+    assertEquals(AgentEventType.THINKING_DELTA, received.get(2).type());
+    assertEquals(AgentEventType.THINKING_COMPLETED, received.get(3).type());
+    assertEquals("考えます", ((ThinkingCompletedPayload) received.get(3).payload()).text());
+  }
+
+  @Test
   void toolStartedAndCompletedShareCorrelationId() {
     subscribe();
 

@@ -19,6 +19,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
+import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.DefaultUsage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -91,6 +92,33 @@ class ChatCommandEventTest {
 
     assertEquals(AgentEventType.AGENT_RUN_STARTED, received.getFirst().type());
     assertEquals(AgentEventType.AGENT_RUN_FAILED, received.getLast().type());
+  }
+
+  @Test
+  void runEmitsThinkingLifecycleBeforeMessageLifecycle() {
+    bus.subscribe(received::add);
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    ChatGenerationMetadata thinkingMetadata = ChatGenerationMetadata.builder()
+        .metadata("reasoning_content", "考えています")
+        .build();
+    when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(
+        new ChatResponse(List.of(new Generation(new AssistantMessage(""), thinkingMetadata))),
+        response("回答")));
+
+    new CommandLine(new ChatCommand(chatClient, modelHolderService, new CommandCancellationService(),
+        Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty(), factory, bus)).execute("hello");
+
+    assertEquals(AgentEventType.THINKING_STARTED, received.get(1).type());
+    assertEquals(AgentEventType.THINKING_DELTA, received.get(2).type());
+    assertEquals(AgentEventType.THINKING_COMPLETED, received.get(3).type());
+    assertEquals(AgentEventType.MESSAGE_STARTED, received.get(4).type());
+    assertEquals(AgentEventType.MESSAGE_DELTA, received.get(5).type());
+    assertEquals(AgentEventType.MESSAGE_COMPLETED, received.get(6).type());
   }
 
   @Test

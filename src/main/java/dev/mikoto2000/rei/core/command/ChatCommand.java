@@ -296,6 +296,10 @@ public class ChatCommand implements Runnable {
     AtomicBoolean headerPrinted = new AtomicBoolean(false);
     AtomicBoolean thinkingHeaderPrinted = new AtomicBoolean(false);
     AtomicReference<String> previousThinking = new AtomicReference<>("");
+    AtomicBoolean thinkingEventStarted = new AtomicBoolean(false);
+    AtomicBoolean thinkingEventCompleted = new AtomicBoolean(false);
+    String thinkingId = UUID.randomUUID().toString();
+    StringBuilder thinkingBuilder = new StringBuilder();
     AtomicLong answerStartedAtNanos = new AtomicLong(0L);
     AtomicInteger completionTokens = new AtomicInteger(0);
     AtomicBoolean outputLimitReached = new AtomicBoolean(false);
@@ -313,13 +317,15 @@ public class ChatCommand implements Runnable {
               }
               captureCompletionTokens(response, completionTokens);
               if (!headerPrinted.get()) {
-                printThinking(response, thinkingHeaderPrinted, previousThinking);
+                printThinking(response, thinkingHeaderPrinted, previousThinking, thinkingEventStarted,
+                    thinkingId, thinkingBuilder);
               }
               String chunk = answerText(response);
               if (chunk == null || chunk.isEmpty()) {
                 return;
               }
               if (messageStarted.compareAndSet(false, true)) {
+                completeThinking(thinkingEventStarted, thinkingEventCompleted, thinkingId, thinkingBuilder);
                 eventPublisher.publish(eventFactory.messageStarted(messageId, "assistant"));
               }
               if (headerPrinted.compareAndSet(false, true)) {
@@ -351,6 +357,7 @@ public class ChatCommand implements Runnable {
         runCompletionTokens.addAndGet(completionTokens.get());
         usageAvailable.set(true);
       }
+      completeThinking(thinkingEventStarted, thinkingEventCompleted, thinkingId, thinkingBuilder);
       System.out.println();
       Throwable error = errorRef.get();
       if (error != null) {
@@ -369,6 +376,7 @@ public class ChatCommand implements Runnable {
       lastTokensPerSecond.set(printGenerationSpeed(answerStartedAtNanos.get(), completionTokens.get()));
       return ChatRunResult.success(responseBuilder.toString());
     } catch (InterruptedException e) {
+      completeThinking(thinkingEventStarted, thinkingEventCompleted, thinkingId, thinkingBuilder);
       if (cancellationService.consumeCancellationRequested()) {
         System.out.println();
         IO.println("[cancelled]");
@@ -464,7 +472,8 @@ public class ChatCommand implements Runnable {
   }
 
   private void printThinking(ChatResponse response, AtomicBoolean thinkingHeaderPrinted,
-      AtomicReference<String> previousThinking) {
+      AtomicReference<String> previousThinking, AtomicBoolean thinkingEventStarted,
+      String thinkingId, StringBuilder thinkingBuilder) {
     String thinking = thinkingText(response);
     if (thinking == null || thinking.isEmpty()) {
       return;
@@ -477,6 +486,18 @@ public class ChatCommand implements Runnable {
       IO.println("=== thinking ===");
     }
     System.out.print(delta);
+    if (thinkingEventStarted.compareAndSet(false, true)) {
+      eventPublisher.publish(eventFactory.thinkingStarted(thinkingId));
+    }
+    thinkingBuilder.append(delta);
+    eventPublisher.publish(eventFactory.thinkingDelta(thinkingId, delta));
+  }
+
+  private void completeThinking(AtomicBoolean thinkingEventStarted, AtomicBoolean thinkingEventCompleted,
+      String thinkingId, StringBuilder thinkingBuilder) {
+    if (thinkingEventStarted.get() && thinkingEventCompleted.compareAndSet(false, true)) {
+      eventPublisher.publish(eventFactory.thinkingCompleted(thinkingId, thinkingBuilder.toString()));
+    }
   }
 
   private String answerText(ChatResponse response) {

@@ -43,7 +43,22 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.messageDelta("m1", "既存実装を"));
     renderer.onEvent(events.messageDelta("m1", "確認します。"));
     renderer.onEvent(events.messageCompleted("m1", "assistant", "既存実装を確認します。"));
-    assertEquals("既存実装を確認します。\n", output.text());
+    assertEquals("=== answer ===\n既存実装を確認します。\n", output.text());
+  }
+
+  @Test
+  void streamsThinkingWithAnExplicitHeadingBeforeTheAnswer() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.thinkingStarted("t1"));
+    renderer.onEvent(events.thinkingDelta("t1", "状況を"));
+    renderer.onEvent(events.thinkingDelta("t1", "確認します。"));
+    renderer.onEvent(events.thinkingCompleted("t1", "状況を確認します。"));
+    renderer.onEvent(events.messageStarted("m1", "assistant"));
+    renderer.onEvent(events.messageDelta("m1", "回答です。"));
+    renderer.onEvent(events.messageCompleted("m1", "assistant", "回答です。"));
+
+    assertEquals("=== thinking ===\n状況を確認します。\n=== answer ===\n回答です。\n", output.text());
   }
 
   @Test
@@ -56,7 +71,7 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.toolCompleted("c1", "readMultiFile", 121, "ok"));
     renderer.onEvent(events.messageDelta("m1", "続けます。"));
     renderer.onEvent(events.messageCompleted("m1", "assistant", "確認します。続けます。"));
-    assertEquals("確認します。\n  → readMultiFile files=8\n  ✓ readMultiFile (121 ms)\n\n続けます。\n", output.text());
+    assertEquals("=== answer ===\n確認します。\n  → readMultiFile files=8\n  ✓ readMultiFile (121 ms)\n\n続けます。\n", output.text());
   }
 
   @Test

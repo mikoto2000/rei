@@ -65,6 +65,23 @@ public class AgentEventFactory {
         new MessageCompletedPayload(messageId, role, text));
   }
 
+  // ---- Thinking ----
+
+  public AgentEvent thinkingStarted(String thinkingId) {
+    return newEvent(AgentEventType.THINKING_STARTED, null, null,
+        new ThinkingStartedPayload(thinkingId));
+  }
+
+  public AgentEvent thinkingDelta(String thinkingId, String delta) {
+    return newEvent(AgentEventType.THINKING_DELTA, null, null,
+        new ThinkingDeltaPayload(thinkingId, delta));
+  }
+
+  public AgentEvent thinkingCompleted(String thinkingId, String text) {
+    return newEvent(AgentEventType.THINKING_COMPLETED, null, null,
+        new ThinkingCompletedPayload(thinkingId, text));
+  }
+
   // ---- Tool ----
 
   public AgentEvent toolStarted(String toolCallId, String toolName, String argumentsSummary) {

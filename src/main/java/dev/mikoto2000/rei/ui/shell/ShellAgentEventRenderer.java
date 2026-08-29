@@ -16,6 +16,9 @@ import dev.mikoto2000.rei.event.SkillCandidatesEvaluatedPayload;
 import dev.mikoto2000.rei.event.ToolCompletedPayload;
 import dev.mikoto2000.rei.event.ToolFailedPayload;
 import dev.mikoto2000.rei.event.ToolStartedPayload;
+import dev.mikoto2000.rei.event.ThinkingCompletedPayload;
+import dev.mikoto2000.rei.event.ThinkingDeltaPayload;
+import dev.mikoto2000.rei.event.ThinkingStartedPayload;
 import dev.mikoto2000.rei.event.WorkingSetItemAddedPayload;
 import dev.mikoto2000.rei.event.WorkingSetItemRemovedPayload;
 import dev.mikoto2000.rei.event.WorkingSetSearchCompletedPayload;
@@ -27,6 +30,8 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   private String assistantMessageId;
   private boolean assistantLineOpen;
   private boolean toolInterruptedMessage;
+  private String thinkingId;
+  private boolean thinkingLineOpen;
 
   public ShellAgentEventRenderer(ShellEventOutput output) {
     this.output = output;
@@ -37,12 +42,15 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     switch (event.type()) {
       case AGENT_RUN_STARTED -> {
         closeAssistantLine();
+        closeThinkingLine();
         assistantMessageId = null;
+        thinkingId = null;
         toolInterruptedMessage = false;
         output.println("[agent] running");
       }
       case AGENT_RUN_COMPLETED -> {
         closeAssistantLine();
+        closeThinkingLine();
         AgentRunCompletedPayload payload = (AgentRunCompletedPayload) event.payload();
         String tokens = payload.completionTokens() == null
             ? "tokens unavailable"
@@ -55,12 +63,16 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       }
       case AGENT_RUN_FAILED -> {
         closeAssistantLine();
+        closeThinkingLine();
         AgentRunFailedPayload payload = (AgentRunFailedPayload) event.payload();
         output.println("[agent] failed: " + errorMessage(payload.error()));
       }
       case MESSAGE_STARTED -> messageStarted((MessageStartedPayload) event.payload());
       case MESSAGE_DELTA -> messageDelta((MessageDeltaPayload) event.payload());
       case MESSAGE_COMPLETED -> messageCompleted((MessageCompletedPayload) event.payload());
+      case THINKING_STARTED -> thinkingStarted((ThinkingStartedPayload) event.payload());
+      case THINKING_DELTA -> thinkingDelta((ThinkingDeltaPayload) event.payload());
+      case THINKING_COMPLETED -> thinkingCompleted((ThinkingCompletedPayload) event.payload());
       case TOOL_STARTED -> {
         beforeTool();
         ToolStartedPayload payload = (ToolStartedPayload) event.payload();
@@ -155,7 +167,30 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   }
 
   private void messageStarted(MessageStartedPayload payload) {
-    if ("assistant".equalsIgnoreCase(payload.role())) assistantMessageId = payload.messageId();
+    if ("assistant".equalsIgnoreCase(payload.role())) {
+      closeThinkingLine();
+      assistantMessageId = payload.messageId();
+      output.println("=== answer ===");
+    }
+  }
+
+  private void thinkingStarted(ThinkingStartedPayload payload) {
+    closeAssistantLine();
+    thinkingId = payload.thinkingId();
+    thinkingLineOpen = false;
+    output.println("=== thinking ===");
+  }
+
+  private void thinkingDelta(ThinkingDeltaPayload payload) {
+    if (!payload.thinkingId().equals(thinkingId) || payload.delta() == null) return;
+    output.print(payload.delta());
+    thinkingLineOpen = true;
+  }
+
+  private void thinkingCompleted(ThinkingCompletedPayload payload) {
+    if (!payload.thinkingId().equals(thinkingId)) return;
+    closeThinkingLine();
+    thinkingId = null;
   }
 
   private void messageDelta(MessageDeltaPayload payload) {
@@ -184,6 +219,13 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     if (assistantLineOpen) {
       output.println("");
       assistantLineOpen = false;
+    }
+  }
+
+  private void closeThinkingLine() {
+    if (thinkingLineOpen) {
+      output.println("");
+      thinkingLineOpen = false;
     }
   }
 

@@ -54,6 +54,16 @@ class AgentEventFactoryTest {
   }
 
   @Test
+  void createsThinkingDeltaEvent() {
+    AgentEvent event = factory.thinkingDelta("thinking-1", "hello");
+
+    assertEquals(AgentEventType.THINKING_DELTA, event.type());
+    ThinkingDeltaPayload payload = (ThinkingDeltaPayload) event.payload();
+    assertEquals("thinking-1", payload.thinkingId());
+    assertEquals("hello", payload.delta());
+  }
+
+  @Test
   void createsToolStartedEvent() {
     AgentEvent event = factory.toolStarted("call-1", "readMultiFile", "files=[a.txt]");
 
