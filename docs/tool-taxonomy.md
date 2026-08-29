@@ -14,6 +14,7 @@ LLM に公開する Tool は、ユーザーの目的に近い workflow Tool を�
 | Task and reminder | `taskList`, `taskCreate`, `taskUpdate`, `taskComplete`, `taskUpdateDeadline`, `taskDelete`, `reminderCreate`, `reminderList`, `updateTaskState` |
 | Calendar and scheduling | `googleCalendarListEvents`, `googleCalendarListEventsForDate`, `googleCalendarCreateEvent`, `scheduleAt`, `scheduleAfter`, `listScheduledActions` |
 | Utility / integration | `today`, `now`, `getCurrentTime`, `soundNotify`, `blueskyPost` |
+| Conversation history | `searchConversationHistory`, `getConversationHistory` |
 
 `rollDice` は利用箇所のない demo utility だったためメソッドを残したまま `@Tool` を外し、default Tool set から除外した。
 
@@ -21,10 +22,9 @@ LLM に公開する Tool は、ユーザーの目的に近い workflow Tool を�
 
 次の Tool class はコード上に存在するが、`AiConfiguration` / `LlmChatClientProvider` の default Tool object 一覧には含まれない。
 
-- Conversation history: `getConversationHistory`, `searchConversationHistory`
 - Vector document: `vectorDocumentAdd`, `vectorDocumentList`, `vectorDocumentSearch`, `vectorDocumentDeleteByDocId`, `vectorDocumentDeleteBySource`
 
-これらは用途と公開方針が明確になるまで今回変更しない。
+これは用途と公開方針が明確になるまで変更しない。
 
 ## Routing
 
@@ -46,5 +46,5 @@ LLM に公開する Tool は、ユーザーの目的に近い workflow Tool を�
 
 - `today` / `now` と `getCurrentTime` の重複
 - `executeExternalProgram` と Shell workflow の境界
-- default registration 外の conversation-history / vector-document Tool の公開方針
+- default registration 外の vector-document Tool の公開方針
 - domain CRUD Tool が増えた場合の feature 単位 Tool set 分割

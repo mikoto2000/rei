@@ -28,6 +28,7 @@ import dev.mikoto2000.rei.core.relatedgraph.RelatedFileGraphAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
+import dev.mikoto2000.rei.conversation.ConversationHistoryTools;
 import dev.mikoto2000.rei.event.ToolEventCallbackProvider;
 import dev.mikoto2000.rei.feed.FeedProperties;
 import dev.mikoto2000.rei.feed.FeedTools;
@@ -74,6 +75,7 @@ public class AiConfiguration {
   private final UrlContentFetchTools urlContentFetchTools;
   private final ClockTools clockTools;
   private final SchedulerTools schedulerTools;
+  private final ConversationHistoryTools conversationHistoryTools;
   private final RuntimeContextAdvisor runtimeContextAdvisor;
   private final WorkingSetAdvisor workingSetAdvisor;
   private final TaskStateAdvisor taskStateAdvisor;
@@ -115,7 +117,8 @@ public class AiConfiguration {
             .build())
         .defaultAdvisors(advisors)
         .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
-            soundNotificationTools, blueskyPostTools, urlContentFetchTools, clockTools, schedulerTools, taskStateTools);
+            soundNotificationTools, blueskyPostTools, urlContentFetchTools, clockTools, schedulerTools, taskStateTools,
+            conversationHistoryTools);
 
     ToolEventCallbackProvider toolCallbackProvider = toolEventCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {

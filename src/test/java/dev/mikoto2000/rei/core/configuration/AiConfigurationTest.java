@@ -28,6 +28,7 @@ import dev.mikoto2000.rei.core.stagnation.StagnationAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
+import dev.mikoto2000.rei.conversation.ConversationHistoryTools;
 import dev.mikoto2000.rei.event.ToolEventCallbackProvider;
 import dev.mikoto2000.rei.feed.FeedTools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
@@ -70,6 +71,7 @@ class AiConfigurationTest {
         Mockito.mock(UrlContentFetchTools.class),
         Mockito.mock(ClockTools.class),
         Mockito.mock(SchedulerTools.class),
+        Mockito.mock(ConversationHistoryTools.class),
         Mockito.mock(RuntimeContextAdvisor.class),
         Mockito.mock(WorkingSetAdvisor.class),
         Mockito.mock(TaskStateAdvisor.class),
@@ -113,6 +115,7 @@ class AiConfigurationTest {
         Mockito.mock(UrlContentFetchTools.class),
         Mockito.mock(ClockTools.class),
         Mockito.mock(SchedulerTools.class),
+        Mockito.mock(ConversationHistoryTools.class),
         Mockito.mock(RuntimeContextAdvisor.class),
         Mockito.mock(WorkingSetAdvisor.class),
         Mockito.mock(TaskStateAdvisor.class),
@@ -155,6 +158,7 @@ class AiConfigurationTest {
         Mockito.mock(UrlContentFetchTools.class),
         Mockito.mock(ClockTools.class),
         Mockito.mock(SchedulerTools.class),
+        Mockito.mock(ConversationHistoryTools.class),
         Mockito.mock(RuntimeContextAdvisor.class),
         Mockito.mock(WorkingSetAdvisor.class),
         Mockito.mock(TaskStateAdvisor.class),
@@ -198,6 +202,7 @@ class AiConfigurationTest {
         Mockito.mock(UrlContentFetchTools.class),
         Mockito.mock(ClockTools.class),
         Mockito.mock(SchedulerTools.class),
+        Mockito.mock(ConversationHistoryTools.class),
         Mockito.mock(RuntimeContextAdvisor.class),
         Mockito.mock(WorkingSetAdvisor.class),
         Mockito.mock(TaskStateAdvisor.class),
