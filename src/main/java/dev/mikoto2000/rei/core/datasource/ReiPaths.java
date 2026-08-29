@@ -51,6 +51,10 @@ public final class ReiPaths {
     return historyFilePath(workDirectory());
   }
 
+  public static Path conversationLogsDirectory() {
+    return conversationLogsDirectory(workDirectory());
+  }
+
   /**
    * 現在の実行環境に応じた外部設定ファイルの保存先を返します。
    *
@@ -96,6 +100,10 @@ public final class ReiPaths {
 
   public static Path historyFilePath(Path workDirectory) {
     return workDirectory.resolve(".rei").resolve("history");
+  }
+
+  public static Path conversationLogsDirectory(Path workDirectory) {
+    return workDirectory.resolve(".rei").resolve("conversation-logs");
   }
 
   public static Path configFilePath(Path workDirectory) {

@@ -8,6 +8,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 
 import javax.sql.DataSource;
@@ -27,9 +28,11 @@ public class ConversationHistorySearchService {
   private static final int CONTENT_MAX_LENGTH = 500;
 
   private final JdbcClient jdbcClient;
+  private final ConversationLogStore conversationLogStore;
 
-  public ConversationHistorySearchService(DataSource dataSource) {
+  public ConversationHistorySearchService(DataSource dataSource, ConversationLogStore conversationLogStore) {
     this.jdbcClient = JdbcClient.create(dataSource);
+    this.conversationLogStore = conversationLogStore;
   }
 
   public List<ConversationSearchResult> search(String query, String scope, String speaker, String since, String until,
@@ -42,6 +45,7 @@ public class ConversationHistorySearchService {
     TimeRange timeRange = parseTimeRange(since, until);
     int safeLimit = normalizeLimit(limit, DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT);
     List<ConversationSearchResult> results = new ArrayList<>();
+    results.addAll(searchPersistentLogs(query, normalizedScope, normalizedSpeaker, timeRange));
     if (normalizedScope.equals("all") || normalizedScope.equals("chat")) {
       results.addAll(searchChat(query, normalizedSpeaker, timeRange, safeLimit));
     }
@@ -55,7 +59,12 @@ public class ConversationHistorySearchService {
       results.addAll(searchTool(query, normalizedSpeaker, timeRange, safeLimit));
     }
     results.sort((a, b) -> b.timestamp().compareTo(a.timestamp()));
-    return results.stream().limit(safeLimit).toList();
+    LinkedHashMap<String, ConversationSearchResult> unique = new LinkedHashMap<>();
+    for (ConversationSearchResult result : results) {
+      String key = String.join("\u0000", result.conversationId(), result.speaker(), result.timestamp(), result.content());
+      unique.putIfAbsent(key, result);
+    }
+    return unique.values().stream().limit(safeLimit).toList();
   }
 
   public ConversationHistoryDetail detail(String conversationId, Integer limit) {
@@ -63,6 +72,10 @@ public class ConversationHistorySearchService {
       throw new IllegalArgumentException("conversationId must not be blank");
     }
     int safeLimit = normalizeLimit(limit, DEFAULT_DETAIL_LIMIT, MAX_DETAIL_LIMIT);
+    List<ConversationHistoryMessage> persisted = findPersistentLogDetail(conversationId, safeLimit);
+    if (!persisted.isEmpty()) {
+      return new ConversationHistoryDetail(conversationId, ConversationLogStore.scopeOf(conversationId), persisted);
+    }
     if (conversationId.startsWith("chat:")) {
       return new ConversationHistoryDetail(conversationId, "chat", findChatDetailWithFallback(conversationId, "chat:".length(), safeLimit));
     }
@@ -77,6 +90,34 @@ public class ConversationHistorySearchService {
       return new ConversationHistoryDetail(conversationId, "tool", findChatDetailWithFallback(conversationId, "tool:".length(), safeLimit));
     }
     throw new IllegalArgumentException("conversationId must start with chat:, bluesky-reply:, bluesky-manual:, or tool:");
+  }
+
+  private List<ConversationSearchResult> searchPersistentLogs(String query, String scope, String speaker,
+      TimeRange timeRange) {
+    List<String> terms = List.of(query.strip().toLowerCase(Locale.ROOT).split("\\s+"));
+    return conversationLogStore.readAll().stream()
+        .filter(entry -> scope.equals("all") || entry.scope().equals(scope))
+        .filter(entry -> speaker == null || entry.speaker().equalsIgnoreCase(speaker))
+        .filter(entry -> timeRange.sinceEpochMillis() == null
+            || entry.timestamp().toInstant().toEpochMilli() >= timeRange.sinceEpochMillis())
+        .filter(entry -> timeRange.untilEpochMillis() == null
+            || entry.timestamp().toInstant().toEpochMilli() <= timeRange.untilEpochMillis())
+        .filter(entry -> terms.stream().allMatch(term -> entry.content().toLowerCase(Locale.ROOT).contains(term)))
+        .map(entry -> new ConversationSearchResult(
+            entry.conversationId(), entry.scope(), entry.speaker(), entry.timestamp().toInstant().toString(),
+            preview(entry.content(), SUMMARY_MAX_LENGTH), preview(entry.content(), CONTENT_MAX_LENGTH)))
+        .toList();
+  }
+
+  private List<ConversationHistoryMessage> findPersistentLogDetail(String conversationId, int limit) {
+    List<ConversationLogEntry> entries = conversationLogStore.readAll().stream()
+        .filter(entry -> entry.conversationId().equals(conversationId))
+        .toList();
+    return entries.stream()
+        .skip(Math.max(0, entries.size() - limit))
+        .map(entry -> new ConversationHistoryMessage(
+            entry.speaker(), entry.timestamp().toInstant().toString(), entry.content()))
+        .toList();
   }
 
   private List<ConversationSearchResult> searchChat(String query, String speaker, TimeRange timeRange, int limit) {

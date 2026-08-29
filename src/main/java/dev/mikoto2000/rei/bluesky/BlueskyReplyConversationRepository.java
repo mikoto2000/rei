@@ -6,15 +6,26 @@ import java.util.List;
 import javax.sql.DataSource;
 
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
+
+import dev.mikoto2000.rei.conversation.ConversationLogStore;
+import dev.mikoto2000.rei.llm.ConversationIds;
 
 @Repository
 public class BlueskyReplyConversationRepository {
 
   private final JdbcClient jdbcClient;
+  private final ConversationLogStore conversationLogStore;
 
   public BlueskyReplyConversationRepository(DataSource dataSource) {
+    this(dataSource, null);
+  }
+
+  @Autowired
+  public BlueskyReplyConversationRepository(DataSource dataSource, ConversationLogStore conversationLogStore) {
     this.jdbcClient = JdbcClient.create(dataSource);
+    this.conversationLogStore = conversationLogStore;
     initializeSchema();
   }
 
@@ -61,6 +72,9 @@ public class BlueskyReplyConversationRepository {
         """)
         .params(handle, role, content, OffsetDateTime.now().toString())
         .update();
+    if (conversationLogStore != null) {
+      conversationLogStore.append(ConversationIds.blueskyReply(handle), role, content);
+    }
   }
 
   private void initializeSchema() {

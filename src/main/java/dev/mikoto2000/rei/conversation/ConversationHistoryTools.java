@@ -15,8 +15,8 @@ public class ConversationHistoryTools {
   }
 
   @Tool(name = "searchConversationHistory", description = """
-      会話履歴を検索します。query は必須です。
-      scope は all, chat, bluesky-reply を指定できます。未指定時は all です。
+      永続化された会話ログを含む会話履歴を検索します。query は必須です。
+      scope は all, chat, bluesky-reply, bluesky-manual, tool を指定できます。未指定時は all です。
       speaker は user, assistant, system, tool などで絞り込めます。
       since / until は yyyy-MM-dd または ISO-8601 日時で指定できます。
       limit は最大 50 件です。
@@ -32,8 +32,8 @@ public class ConversationHistoryTools {
   }
 
   @Tool(name = "getConversationHistory", description = """
-      searchConversationHistory が返した conversationId を指定して、会話履歴の詳細を取得します。
-      conversationId は chat:<id> または bluesky-reply:<handle> 形式です。
+      searchConversationHistory が返した conversationId を指定して、永続ログを含む会話履歴の詳細を取得します。
+      conversationId は chat:<id>, bluesky-reply:<handle>, bluesky-manual:<id>, tool:<name> 形式です。
       limit は最大 100 件です。
       """)
   public ConversationHistoryDetail getConversationHistory(String conversationId, Integer limit) {

@@ -21,12 +21,17 @@ class ConversationHistorySearchServiceTest {
 
   private DriverManagerDataSource dataSource;
   private ConversationHistorySearchService service;
+  private ConversationLogStore conversationLogStore;
 
   @BeforeEach
   void setUp() throws Exception {
     dataSource = new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("conversation-search.db"));
     initializeSchema();
-    service = new ConversationHistorySearchService(dataSource);
+    conversationLogStore = new ConversationLogStore(
+        tempDir.resolve("conversation-logs"), java.time.Clock.systemUTC(),
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    service = new ConversationHistorySearchService(dataSource, conversationLogStore);
   }
 
   @Test
@@ -146,6 +151,20 @@ class ConversationHistorySearchServiceTest {
     assertThatThrownBy(() -> service.search(" ", "all", null, null, null, 10))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("query");
+  }
+
+  @Test
+  void searchesAndReturnsDetailsFromPersistentLogsAfterMemoryWindowIsGone() {
+    conversationLogStore.append("chat:main", "user", "永続ログだけに残った設計相談");
+    conversationLogStore.append("chat:main", "assistant", "日次ログから検索できます");
+
+    var results = service.search("設計相談", "chat", "user", null, null, 10);
+    ConversationHistoryDetail detail = service.detail("chat:main", 10);
+
+    assertThat(results).hasSize(1);
+    assertThat(results.getFirst().conversationId()).isEqualTo("chat:main");
+    assertThat(detail.messages()).extracting(ConversationHistoryMessage::content)
+        .containsExactly("永続ログだけに残った設計相談", "日次ログから検索できます");
   }
 
   private void initializeSchema() throws Exception {

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.ErrorInformation;
@@ -76,6 +77,12 @@ public class ChatCommand implements Runnable {
   private final AgentEventFactory eventFactory;
   private final AgentEventPublisher eventPublisher;
   private final InlineFileAttachmentResolver inlineFileAttachmentResolver = new InlineFileAttachmentResolver();
+  private ConversationLogStore conversationLogStore;
+
+  @Autowired
+  void setConversationLogStore(ConversationLogStore conversationLogStore) {
+    this.conversationLogStore = conversationLogStore;
+  }
 
   public ChatCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
       CommandCancellationService cancellationService, ChatResponseNarrator chatResponseNarrator,
@@ -137,6 +144,7 @@ public class ChatCommand implements Runnable {
 
     try {
       String promptText = String.join(" ", prompts);
+      appendConversationLog("user", promptText);
       OutputLimitRunBudget budget = new OutputLimitRunBudget(
           llmProperties.getOutputLimit().getMaxReplansPerGoal(),
           llmProperties.getOutputLimit().getMaxLlmCallsPerRun());
@@ -154,6 +162,7 @@ public class ChatCommand implements Runnable {
             runCompletionTokens, usageAvailable, lastTokensPerSecond);
       }
       if (result.status() == ChatRunStatus.SUCCESS) {
+        appendConversationLog("assistant", result.text());
         eventPublisher.publish(eventFactory.runCompleted(runId, elapsedMillis(startedAtNanos),
             usageAvailable.get() ? runCompletionTokens.get() : null, lastTokensPerSecond.get()));
         chatResponseNarrator.narrateIfCompleted(result.text());
@@ -163,6 +172,12 @@ public class ChatCommand implements Runnable {
       }
     } finally {
       cancellationService.clear();
+    }
+  }
+
+  private void appendConversationLog(String speaker, String content) {
+    if (conversationLogStore != null) {
+      conversationLogStore.append(ConversationIds.chat(), speaker, content);
     }
   }
 
