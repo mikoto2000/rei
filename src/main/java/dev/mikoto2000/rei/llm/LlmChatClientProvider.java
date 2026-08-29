@@ -108,9 +108,11 @@ public class LlmChatClientProvider {
     advisors.add(PromptChatMemoryAdvisor.builder(chatMemory)
         .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
         .build());
-    AgentSkillAdvisor skillAdvisor = agentSkillAdvisor.getIfAvailable();
-    if (skillAdvisor != null) {
-      advisors.add(skillAdvisor);
+    if (supportsAgentSkills(feature)) {
+      AgentSkillAdvisor skillAdvisor = agentSkillAdvisor.getIfAvailable();
+      if (skillAdvisor != null) {
+        advisors.add(skillAdvisor);
+      }
     }
     WorkingSetAdvisor workingSetAdvisorInstance = workingSetAdvisor.getIfAvailable();
     if (workingSetAdvisorInstance != null) {
@@ -153,6 +155,10 @@ public class LlmChatClientProvider {
       builder.defaultToolCallbacks(toolCallbackProvider);
     }
     return builder.build();
+  }
+
+  static boolean supportsAgentSkills(String feature) {
+    return LlmFeature.CHAT.equals(feature);
   }
 
   private void addIfAvailable(List<Object> toolObjects, ObjectProvider<?> provider) {
