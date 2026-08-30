@@ -32,6 +32,7 @@ import dev.mikoto2000.rei.search.SearchTools;
 import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
 import dev.mikoto2000.rei.sound.SoundNotificationTools;
 import dev.mikoto2000.rei.task.TaskTools;
+import dev.mikoto2000.rei.temporal.RuntimeContextAdvisor;
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchTools;
 import dev.mikoto2000.rei.websearch.WebSearchTools;
 
@@ -53,6 +54,7 @@ public class LlmChatClientProvider {
   private final ObjectProvider<SoundNotificationTools> soundNotificationTools;
   private final ObjectProvider<BlueskyPostTools> blueskyPostTools;
   private final ObjectProvider<UrlContentFetchTools> urlContentFetchTools;
+  private final ObjectProvider<RuntimeContextAdvisor> runtimeContextAdvisor;
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
   private final ObjectProvider<WorkingSetAdvisor> workingSetAdvisor;
   private final ObjectProvider<TaskStateAdvisor> taskStateAdvisor;
@@ -69,7 +71,9 @@ public class LlmChatClientProvider {
       ObjectProvider<FeedTools> feedTools, ObjectProvider<ReminderTools> reminderTools,
       ObjectProvider<SearchTools> searchTools, ObjectProvider<WebSearchTools> webSearchTools,
       ObjectProvider<SoundNotificationTools> soundNotificationTools, ObjectProvider<BlueskyPostTools> blueskyPostTools,
-      ObjectProvider<UrlContentFetchTools> urlContentFetchTools, ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor,
+      ObjectProvider<UrlContentFetchTools> urlContentFetchTools,
+      ObjectProvider<RuntimeContextAdvisor> runtimeContextAdvisor,
+      ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor,
       ObjectProvider<WorkingSetAdvisor> workingSetAdvisor,
       ObjectProvider<TaskStateAdvisor> taskStateAdvisor,
       ObjectProvider<TaskStateTools> taskStateTools,
@@ -90,6 +94,7 @@ public class LlmChatClientProvider {
     this.soundNotificationTools = soundNotificationTools;
     this.blueskyPostTools = blueskyPostTools;
     this.urlContentFetchTools = urlContentFetchTools;
+    this.runtimeContextAdvisor = runtimeContextAdvisor;
     this.agentSkillAdvisor = agentSkillAdvisor;
     this.workingSetAdvisor = workingSetAdvisor;
     this.taskStateAdvisor = taskStateAdvisor;
@@ -108,6 +113,10 @@ public class LlmChatClientProvider {
     advisors.add(PromptChatMemoryAdvisor.builder(chatMemory)
         .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
         .build());
+    RuntimeContextAdvisor runtimeContextAdvisorInstance = runtimeContextAdvisor.getIfAvailable();
+    if (runtimeContextAdvisorInstance != null) {
+      advisors.add(runtimeContextAdvisorInstance);
+    }
     if (supportsAgentSkills(feature)) {
       AgentSkillAdvisor skillAdvisor = agentSkillAdvisor.getIfAvailable();
       if (skillAdvisor != null) {
