@@ -39,8 +39,14 @@ public class AgentEventFactory {
   }
 
   public AgentEvent runCompleted(String runId, long duration, Long completionTokens, Double tokensPerSecond) {
+    return runCompleted(runId, duration, completionTokens, null, tokensPerSecond, null);
+  }
+
+  public AgentEvent runCompleted(String runId, long duration, Long completionTokens, Double timeToFirstTokenMillis,
+      Double outputTokensPerSecond, Double endToEndTokensPerSecond) {
     return newEvent(AgentEventType.AGENT_RUN_COMPLETED, runId, null,
-        new AgentRunCompletedPayload(runId, duration, completionTokens, tokensPerSecond));
+        new AgentRunCompletedPayload(runId, duration, completionTokens, timeToFirstTokenMillis,
+            outputTokensPerSecond, endToEndTokensPerSecond));
   }
 
   public AgentEvent runFailed(String runId, ErrorInformation error) {

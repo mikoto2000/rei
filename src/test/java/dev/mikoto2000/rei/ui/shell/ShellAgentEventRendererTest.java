@@ -22,9 +22,9 @@ class ShellAgentEventRendererTest {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
     renderer.onEvent(events.runStarted("run-1", "user", null));
-    renderer.onEvent(events.runCompleted("run-1", 1_234, 456L, 78.94d));
+    renderer.onEvent(events.runCompleted("run-1", 1_234, 456L, 123.45d, 78.94d, 65.43d));
     renderer.onEvent(events.runFailed("run-2", new ErrorInformation("IO", "permission denied", "stack")));
-    assertEquals("[agent] running\n[agent] completed (1.2 s, 456 tokens, 78.9 tok/s)\n[agent] failed: permission denied\n", output.text());
+    assertEquals("[agent] running\n[agent] completed (1.2 s, 456 tokens, TTFT 123.5 ms, output 78.9 tok/s, end-to-end 65.4 tok/s)\n[agent] failed: permission denied\n", output.text());
   }
 
   @Test
@@ -32,7 +32,7 @@ class ShellAgentEventRendererTest {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
     renderer.onEvent(events.runCompleted("run-1", 20, null));
-    assertEquals("[agent] completed (0.0 s, tokens unavailable, speed unavailable)\n", output.text());
+    assertEquals("[agent] completed (0.0 s, tokens unavailable, TTFT unavailable, output speed unavailable, end-to-end speed unavailable)\n", output.text());
   }
 
   @Test

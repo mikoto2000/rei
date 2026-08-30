@@ -134,15 +134,19 @@ class ChatCommandEventTest {
         .usage(new DefaultUsage(0, 42))
         .build();
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(
-        new ChatResponse(List.of(new Generation(new AssistantMessage("answer"))), metadata)));
+        response("an"),
+        new ChatResponse(List.of(new Generation(new AssistantMessage("swer"))), metadata)));
 
     new CommandLine(new ChatCommand(chatClient, modelHolderService, new CommandCancellationService(),
         Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty(), factory, bus)).execute("hello");
 
     AgentRunCompletedPayload payload = (AgentRunCompletedPayload) received.getLast().payload();
     assertEquals(42L, payload.completionTokens());
-    org.junit.jupiter.api.Assertions.assertNotNull(payload.tokensPerSecond());
-    org.junit.jupiter.api.Assertions.assertTrue(payload.tokensPerSecond() > 0.0d);
+    org.junit.jupiter.api.Assertions.assertNotNull(payload.timeToFirstTokenMillis());
+    org.junit.jupiter.api.Assertions.assertNotNull(payload.outputTokensPerSecond());
+    org.junit.jupiter.api.Assertions.assertTrue(payload.outputTokensPerSecond() > 0.0d);
+    org.junit.jupiter.api.Assertions.assertNotNull(payload.endToEndTokensPerSecond());
+    org.junit.jupiter.api.Assertions.assertTrue(payload.endToEndTokensPerSecond() > 0.0d);
   }
 
   private static ChatResponse response(String text) {

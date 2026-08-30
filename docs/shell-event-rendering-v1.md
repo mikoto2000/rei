@@ -21,12 +21,12 @@ assistant streaming text
   → toolName
   ✓ toolName (84 ms)
   ✗ toolName: error summary
-[agent] completed (1.2 s, 456 tokens, 78.9 tok/s)
+[agent] completed (1.2 s, 456 tokens, TTFT 123.5 ms, output 78.9 tok/s, end-to-end 65.4 tok/s)
 ```
 
 `message.delta` はprefixを付けず `print` とflushを行い、`message.completed` で行を閉じる。Tool eventがassistant行へ割り込む場合は先に改行し、Toolを独立行で表示した後、空行を挟んでassistant streamingを再開する。Rendererは表示上の「assistant行が開いているか」だけを持ち、新しいRunでリセットする。全event処理は`synchronized`で文字単位の競合を防ぐ。
 
-Run完了行にはコマンド全体の経過時間、completion token数、回答生成速度を表示する。出力上限による再計画やサブゴールで複数回LLMを呼び出した場合は各呼び出しのcompletion tokenを合算し、速度は従来の `=== speed(... tok/s) ===` と同じ計算による最後の回答ストリームの値を表示する。プロバイダーがusageを返さない場合は `tokens unavailable, speed unavailable` と表示する。
+Run完了行にはコマンド全体の経過時間、completion token数、最後の回答ストリームの TTFT、output tok/s、end-to-end tok/s を表示する。TTFT はリクエスト開始から最初の可視回答チャンクまで、output tok/s は `(completion tokens - 1) / (最後の回答チャンク時刻 - 最初の回答チャンク時刻)`、end-to-end tok/s は `completion tokens / (ストリーム完了時刻 - リクエスト開始時刻)` とする。出力上限による再計画やサブゴールで複数回LLMを呼び出した場合、completion token数は各呼び出し分を合算し、時間系の指標は最後の回答ストリームの値を表示する。usage がない指標、または回答が単一チャンクで output tok/s を測定できない場合は unavailable と表示する。
 
 Tool開始行は `→ toolName argumentsSummary` として、redact・120文字制限済みの引数要約をTool名の横に表示する。改行と端末制御文字は空白へ変換し、空の引数は表示しない。
 

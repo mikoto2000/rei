@@ -55,11 +55,17 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         String tokens = payload.completionTokens() == null
             ? "tokens unavailable"
             : payload.completionTokens() + " tokens";
-        String speed = payload.tokensPerSecond() == null
-            ? "speed unavailable"
-            : formatDecimal(payload.tokensPerSecond()) + " tok/s";
+        String ttft = payload.timeToFirstTokenMillis() == null
+            ? "TTFT unavailable"
+            : "TTFT " + formatDecimal(payload.timeToFirstTokenMillis()) + " ms";
+        String outputSpeed = payload.outputTokensPerSecond() == null
+            ? "output speed unavailable"
+            : "output " + formatDecimal(payload.outputTokensPerSecond()) + " tok/s";
+        String endToEndSpeed = payload.endToEndTokensPerSecond() == null
+            ? "end-to-end speed unavailable"
+            : "end-to-end " + formatDecimal(payload.endToEndTokensPerSecond()) + " tok/s";
         output.println("[agent] completed (" + formatSeconds(payload.duration()) + " s, " + tokens + ", "
-            + speed + ")");
+            + ttft + ", " + outputSpeed + ", " + endToEndSpeed + ")");
       }
       case AGENT_RUN_FAILED -> {
         closeAssistantLine();

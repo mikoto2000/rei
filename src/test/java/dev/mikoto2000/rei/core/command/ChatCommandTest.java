@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.command;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -67,7 +68,7 @@ class ChatCommandTest {
   }
 
   @Test
-  void runPrintsTokensPerSecondWhenCompletionUsageIsAvailable() {
+  void runPrintsGenerationMetricsWhenCompletionUsageIsAvailable() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
@@ -92,7 +93,9 @@ class ChatCommandTest {
 
     String output = out.toString();
     assertTrue(output.contains("answer "));
-    assertTrue(output.contains("=== speed("));
+    assertTrue(output.contains("=== metrics(TTFT "));
+    assertTrue(output.contains(", output "));
+    assertTrue(output.contains(", end-to-end "));
     assertTrue(output.contains(" tok/s) ==="));
   }
 
@@ -119,6 +122,24 @@ class ChatCommandTest {
     }
 
     assertTrue(!out.toString().contains(" tok/s"));
+  }
+
+  @Test
+  void calculatesGenerationMetricsFromDefinedTimeBoundaries() {
+    ChatCommand.GenerationMetrics metrics = ChatCommand.calculateGenerationMetrics(
+        1_000_000_000L, 1_200_000_000L, 2_200_000_000L, 2_500_000_000L, 11, 3);
+
+    assertEquals(200.0d, metrics.timeToFirstTokenMillis(), 0.0001d);
+    assertEquals(10.0d, metrics.outputTokensPerSecond(), 0.0001d);
+    assertEquals(11.0d / 1.5d, metrics.endToEndTokensPerSecond(), 0.0001d);
+  }
+
+  @Test
+  void outputSpeedIsUnavailableWhenProviderDeliversAnswerInOneChunk() {
+    ChatCommand.GenerationMetrics metrics = ChatCommand.calculateGenerationMetrics(
+        1_000_000_000L, 1_200_000_000L, 1_200_000_100L, 1_500_000_000L, 11, 1);
+
+    assertTrue(metrics.outputTokensPerSecond() == null);
   }
 
   @Test
