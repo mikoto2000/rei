@@ -5,9 +5,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
@@ -26,51 +23,46 @@ import dev.mikoto2000.rei.event.SkillCandidatesEvaluatedPayload;
 @Component
 public class AgentSkillAdvisor implements BaseAdvisor {
 
-  private static final Logger log = LoggerFactory.getLogger(AgentSkillAdvisor.class);
-
   public static final String ROUTING_CONTEXT_KEY = AgentSkillAdvisor.class.getName() + ".routingContext";
 
   private final AgentSkillSelectionService selectionService;
   private final AgentSkillPromptRenderer promptRenderer;
   private final AgentSkillRepository repository;
-  private final SkillCandidateSelector candidateSelector;
   private final SkillCandidateStatistics candidateStatistics;
   private final AgentEventFactory eventFactory;
   private final AgentEventPublisher eventPublisher;
   private final LongSupplier nanoTime;
 
   public AgentSkillAdvisor(AgentSkillSelectionService selectionService, AgentSkillPromptRenderer promptRenderer) {
-    this(selectionService, promptRenderer, null, null, null, new AgentEventFactory(java.time.Clock.systemDefaultZone()),
+    this(selectionService, promptRenderer, null, null, new AgentEventFactory(java.time.Clock.systemDefaultZone()),
         new InMemoryAgentEventBus(), System::nanoTime);
   }
 
   public AgentSkillAdvisor(AgentSkillSelectionService selectionService, AgentSkillPromptRenderer promptRenderer,
       AgentEventFactory eventFactory, AgentEventPublisher eventPublisher) {
-    this(selectionService, promptRenderer, null, null, null, eventFactory, eventPublisher, System::nanoTime);
+    this(selectionService, promptRenderer, null, null, eventFactory, eventPublisher, System::nanoTime);
   }
 
   @org.springframework.beans.factory.annotation.Autowired
   public AgentSkillAdvisor(AgentSkillSelectionService selectionService, AgentSkillPromptRenderer promptRenderer,
-      AgentSkillRepository repository, SkillCandidateSelector candidateSelector,
-      SkillCandidateStatistics candidateStatistics, AgentEventFactory eventFactory, AgentEventPublisher eventPublisher) {
-    this(selectionService, promptRenderer, repository, candidateSelector, candidateStatistics, eventFactory,
+      AgentSkillRepository repository, SkillCandidateStatistics candidateStatistics,
+      AgentEventFactory eventFactory, AgentEventPublisher eventPublisher) {
+    this(selectionService, promptRenderer, repository, candidateStatistics, eventFactory,
         eventPublisher, System::nanoTime);
   }
 
   AgentSkillAdvisor(AgentSkillSelectionService selectionService, AgentSkillPromptRenderer promptRenderer,
       AgentSkillRepository repository, AgentEventFactory eventFactory, AgentEventPublisher eventPublisher,
       LongSupplier nanoTime) {
-    this(selectionService, promptRenderer, repository, null, null, eventFactory, eventPublisher, nanoTime);
+    this(selectionService, promptRenderer, repository, null, eventFactory, eventPublisher, nanoTime);
   }
 
   AgentSkillAdvisor(AgentSkillSelectionService selectionService, AgentSkillPromptRenderer promptRenderer,
-      AgentSkillRepository repository, SkillCandidateSelector candidateSelector,
-      SkillCandidateStatistics candidateStatistics, AgentEventFactory eventFactory, AgentEventPublisher eventPublisher,
-      LongSupplier nanoTime) {
+      AgentSkillRepository repository, SkillCandidateStatistics candidateStatistics,
+      AgentEventFactory eventFactory, AgentEventPublisher eventPublisher, LongSupplier nanoTime) {
     this.selectionService = selectionService;
     this.promptRenderer = promptRenderer;
     this.repository = repository;
-    this.candidateSelector = candidateSelector;
     this.candidateStatistics = candidateStatistics;
     this.eventFactory = eventFactory;
     this.eventPublisher = eventPublisher;
@@ -98,8 +90,8 @@ public class AgentSkillAdvisor implements BaseAdvisor {
     try {
       selection = selectionService.select(userMessage.getText());
       java.util.List<String> selectedNames = skillNames(selection.selectedSkills());
-      evaluateCandidates(userMessage.getText(), allSkills, selectedNames.isEmpty() ? null : selectedNames.getFirst(),
-          runId, routingId);
+      publishCandidateEvaluation(selection, allSkills.size(),
+          selectedNames.isEmpty() ? null : selectedNames.getFirst(), runId, routingId);
       eventPublisher.publish(eventFactory.skillRoutingCompleted(runId, routingId, elapsedMillis(startedAtNanos),
           candidateCount, selectedNames.isEmpty() ? null : selectedNames.getFirst(), routingInvocation,
           selection.selectorDurationMs(), null, null,
@@ -125,25 +117,17 @@ public class AgentSkillAdvisor implements BaseAdvisor {
         .build();
   }
 
-  private void evaluateCandidates(String userRequest, List<AgentSkill> allSkills, String actualSelectedSkill,
-      String runId, String routingId) {
-    if (candidateSelector == null) return;
-    try {
-      long startedAtNanos = nanoTime.getAsLong();
-      List<SkillCandidate> candidates = candidateSelector.selectCandidates(userRequest, allSkills, 5);
-      long durationMs = elapsedMillis(startedAtNanos);
-      SkillCandidateEvaluation evaluation = SkillCandidateEvaluator.evaluate(candidates, actualSelectedSkill);
-      if (candidateStatistics != null) candidateStatistics.record(evaluation);
-      List<SkillCandidatesEvaluatedPayload.CandidateScore> topCandidates = candidates.stream()
-          .map(candidate -> new SkillCandidatesEvaluatedPayload.CandidateScore(
-              candidate.skill().name(), candidate.score()))
-          .toList();
-      eventPublisher.publish(eventFactory.skillCandidatesEvaluated(runId, routingId, allSkills.size(), durationMs,
-          actualSelectedSkill, evaluation.selected(), evaluation.top1Hit(), evaluation.top3Hit(),
-          evaluation.top5Hit(), topCandidates));
-    } catch (RuntimeException exception) {
-      log.debug("Skill candidate shadow evaluation failed", exception);
-    }
+  private void publishCandidateEvaluation(AgentSkillSelection selection, int totalSkillCount,
+      String actualSelectedSkill, String runId, String routingId) {
+    if (selection.candidateDurationMs() == null) return;
+    SkillCandidateEvaluation evaluation = SkillCandidateEvaluator.evaluate(selection.candidates(), actualSelectedSkill);
+    if (candidateStatistics != null) candidateStatistics.record(evaluation);
+    List<SkillCandidatesEvaluatedPayload.CandidateScore> topCandidates = selection.candidates().stream()
+        .map(candidate -> new SkillCandidatesEvaluatedPayload.CandidateScore(candidate.skill().name(), candidate.score()))
+        .toList();
+    eventPublisher.publish(eventFactory.skillCandidatesEvaluated(runId, routingId, totalSkillCount,
+        selection.candidateDurationMs(), actualSelectedSkill, evaluation.selected(), evaluation.top1Hit(),
+        evaluation.top3Hit(), evaluation.top5Hit(), topCandidates));
   }
 
   @Override

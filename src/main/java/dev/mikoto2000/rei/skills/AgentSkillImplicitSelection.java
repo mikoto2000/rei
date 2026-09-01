@@ -6,5 +6,5 @@ import java.util.Set;
 @FunctionalInterface
 public interface AgentSkillImplicitSelection {
 
-  List<AgentSkill> select(String prompt, Set<String> excludedSkillNames);
+  List<AgentSkill> select(String prompt, Set<String> excludedSkillNames, List<AgentSkill> candidates);
 }

@@ -37,8 +37,8 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
   }
 
   @Override
-  public List<AgentSkill> select(String prompt, Set<String> excludedSkillNames) {
-    List<AgentSkill> candidates = repository.findEnabled().stream()
+  public List<AgentSkill> select(String prompt, Set<String> excludedSkillNames, List<AgentSkill> providedCandidates) {
+    List<AgentSkill> candidates = (providedCandidates == null ? repository.findEnabled() : providedCandidates).stream()
         .filter(skill -> excludedSkillNames == null || !excludedSkillNames.contains(skill.name()))
         .toList();
     if (candidates.isEmpty()) {

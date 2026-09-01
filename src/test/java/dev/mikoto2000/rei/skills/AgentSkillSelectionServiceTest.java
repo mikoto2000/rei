@@ -19,14 +19,41 @@ class AgentSkillSelectionServiceTest {
     AgentSkillImplicitSelection implicitSelector = Mockito.mock(AgentSkillImplicitSelection.class);
     when(explicitSelector.select("hello")).thenReturn(
         new AgentSkillExplicitSelector.ExplicitSelection(List.of(), List.of(), "hello"));
-    when(implicitSelector.select("hello", Set.of())).thenReturn(List.of(skill("implicit")));
+    AgentSkill candidate = skill("implicit");
+    when(implicitSelector.select("hello", Set.of(), List.of(candidate))).thenReturn(List.of(candidate));
     java.util.concurrent.atomic.AtomicLong nanos = new java.util.concurrent.atomic.AtomicLong();
     AgentSkillSelectionService service = new AgentSkillSelectionService(properties, explicitSelector,
-        implicitSelector, () -> nanos.getAndAdd(23_000_000L));
+        implicitSelector, new InMemoryAgentSkillRepository(List.of(candidate)), new SkillCandidateSelector(),
+        () -> nanos.getAndAdd(23_000_000L));
 
     AgentSkillSelection selection = service.select("hello");
 
     assertThat(selection.selectorDurationMs()).isEqualTo(23L);
+  }
+
+  @Test
+  void passesOnlyLexicalTopFiveToImplicitSelector() {
+    AgentSkillsProperties properties = new AgentSkillsProperties();
+    AgentSkillExplicitSelector explicitSelector = Mockito.mock(AgentSkillExplicitSelector.class);
+    when(explicitSelector.select("target request")).thenReturn(
+        new AgentSkillExplicitSelector.ExplicitSelection(List.of(), List.of(), "target request"));
+    List<AgentSkill> allSkills = java.util.stream.IntStream.range(0, 8)
+        .mapToObj(index -> new AgentSkill("skill-" + index, "target", true, Path.of("skill-" + index),
+            Path.of("skill-" + index, "SKILL.md"), "instructions"))
+        .toList();
+    AgentSkillImplicitSelection implicitSelector = Mockito.mock(AgentSkillImplicitSelection.class);
+    when(implicitSelector.select(Mockito.eq("target request"), Mockito.eq(Set.of()), Mockito.anyList()))
+        .thenReturn(List.of());
+    AgentSkillSelectionService service = new AgentSkillSelectionService(properties, explicitSelector,
+        implicitSelector, new InMemoryAgentSkillRepository(allSkills), new SkillCandidateSelector(), System::nanoTime);
+
+    AgentSkillSelection selection = service.select("target request");
+
+    @SuppressWarnings("unchecked")
+    org.mockito.ArgumentCaptor<List<AgentSkill>> captor = org.mockito.ArgumentCaptor.forClass(List.class);
+    Mockito.verify(implicitSelector).select(Mockito.eq("target request"), Mockito.eq(Set.of()), captor.capture());
+    assertThat(captor.getValue()).hasSize(5);
+    assertThat(selection.candidateSkills()).isEqualTo(captor.getValue());
   }
 
   @Test
@@ -37,7 +64,7 @@ class AgentSkillSelectionServiceTest {
     AgentSkillSelectionService service = new AgentSkillSelectionService(
         properties,
         new AgentSkillExplicitSelector(new InMemoryAgentSkillRepository(List.of(explicit))),
-        (prompt, excludedSkillNames) -> List.of(implicit));
+        (prompt, excludedSkillNames, candidates) -> List.of(implicit));
 
     AgentSkillSelection selection = service.select("@skill:explicit do it");
 
@@ -54,7 +81,7 @@ class AgentSkillSelectionServiceTest {
     AgentSkillSelectionService service = new AgentSkillSelectionService(
         properties,
         new AgentSkillExplicitSelector(new InMemoryAgentSkillRepository(List.of(first))),
-        (prompt, excludedSkillNames) -> List.of(first, second));
+        (prompt, excludedSkillNames, candidates) -> List.of(first, second));
 
     AgentSkillSelection selection = service.select("@skill:first do it");
 
@@ -68,7 +95,7 @@ class AgentSkillSelectionServiceTest {
     AgentSkillSelectionService service = new AgentSkillSelectionService(
         properties,
         new AgentSkillExplicitSelector(new InMemoryAgentSkillRepository(List.of(skill("sample")))),
-        (prompt, excludedSkillNames) -> List.of(skill("implicit")));
+        (prompt, excludedSkillNames, candidates) -> List.of(skill("implicit")));
 
     AgentSkillSelection selection = service.select("@skill:sample do it");
 

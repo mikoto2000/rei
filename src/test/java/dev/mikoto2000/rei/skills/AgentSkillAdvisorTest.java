@@ -135,13 +135,14 @@ class AgentSkillAdvisorTest {
   }
 
   @Test
-  void evaluatesCandidatesInShadowModeWithoutChangingExistingSelection() {
+  void reportsCandidatesUsedForProductionRouting() {
     AgentSkill actual = skill("actual");
     AgentSkill lexical = new AgentSkill("rspress", "Rspress plugin development", true,
         Path.of("rspress"), Path.of("rspress", "SKILL.md"), "instructions");
     AgentSkillSelectionService selectionService = Mockito.mock(AgentSkillSelectionService.class);
     when(selectionService.select("Rspress plugin を作る")).thenReturn(
-        new AgentSkillSelection(List.of(), List.of(actual), List.of(), "Rspress plugin を作る"));
+        new AgentSkillSelection(List.of(), List.of(actual), List.of(), "Rspress plugin を作る", 10L,
+            List.of(new SkillCandidate(lexical, 11, List.of("name"), List.of())), 2L));
     AgentSkillRepository repository = Mockito.mock(AgentSkillRepository.class);
     when(repository.findEnabled()).thenReturn(List.of(actual, lexical));
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
@@ -149,8 +150,8 @@ class AgentSkillAdvisorTest {
     bus.subscribe(events::add);
     java.util.concurrent.atomic.AtomicLong nanos = new java.util.concurrent.atomic.AtomicLong();
     AgentSkillAdvisor advisor = new AgentSkillAdvisor(selectionService, new AgentSkillPromptRenderer(), repository,
-        new SkillCandidateSelector(), new SkillCandidateStatistics(),
-        new AgentEventFactory(Clock.systemUTC()), bus, () -> nanos.getAndAdd(2_000_000L));
+        new SkillCandidateStatistics(), new AgentEventFactory(Clock.systemUTC()), bus,
+        () -> nanos.getAndAdd(2_000_000L));
 
     ChatClientRequest advised = advisor.before(request("Rspress plugin を作る"), Mockito.mock(AdvisorChain.class));
 

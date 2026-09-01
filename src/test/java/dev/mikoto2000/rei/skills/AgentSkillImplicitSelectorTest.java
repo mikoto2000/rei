@@ -19,30 +19,42 @@ class AgentSkillImplicitSelectorTest {
     AgentSkill skill = skill("skill-a");
     AgentSkillImplicitSelector selector = selector("[\"skill-a\"]", skill);
 
-    List<AgentSkill> selected = selector.select("please use it", Set.of());
+    List<AgentSkill> selected = selector.select("please use it", Set.of(), List.of(skill));
 
     assertThat(selected).containsExactly(skill);
   }
 
   @Test
   void returnsEmptyWhenLlmReturnsEmptyArray() {
-    AgentSkillImplicitSelector selector = selector("[]", skill("skill-a"));
+    AgentSkill skill = skill("skill-a");
+    AgentSkillImplicitSelector selector = selector("[]", skill);
 
-    assertThat(selector.select("general chat", Set.of())).isEmpty();
+    assertThat(selector.select("general chat", Set.of(), List.of(skill))).isEmpty();
   }
 
   @Test
   void ignoresUnknownSkillNames() {
-    AgentSkillImplicitSelector selector = selector("[\"missing\"]", skill("skill-a"));
+    AgentSkill skill = skill("skill-a");
+    AgentSkillImplicitSelector selector = selector("[\"missing\"]", skill);
 
-    assertThat(selector.select("please use it", Set.of())).isEmpty();
+    assertThat(selector.select("please use it", Set.of(), List.of(skill))).isEmpty();
   }
 
   @Test
   void returnsEmptyWhenJsonParsingFails() {
-    AgentSkillImplicitSelector selector = selector("not json", skill("skill-a"));
+    AgentSkill skill = skill("skill-a");
+    AgentSkillImplicitSelector selector = selector("not json", skill);
 
-    assertThat(selector.select("please use it", Set.of())).isEmpty();
+    assertThat(selector.select("please use it", Set.of(), List.of(skill))).isEmpty();
+  }
+
+  @Test
+  void cannotSelectSkillOutsideProvidedCandidates() {
+    AgentSkill included = skill("included");
+    AgentSkill excluded = skill("excluded");
+    AgentSkillImplicitSelector selector = selector("[\"excluded\"]", included, excluded);
+
+    assertThat(selector.select("request", Set.of(), List.of(included))).isEmpty();
   }
 
   private AgentSkillImplicitSelector selector(String llmResponse, AgentSkill... skills) {
