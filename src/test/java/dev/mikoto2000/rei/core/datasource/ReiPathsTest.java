@@ -61,6 +61,14 @@ class ReiPathsTest {
   }
 
   @Test
+  void profileLogPathUsesWorkingDirectory() {
+    Path workDirectory = Path.of("/work/rei");
+
+    assertEquals(Path.of("/work/rei", ".rei", "profile.log"),
+        ReiPaths.profileLogPath(workDirectory));
+  }
+
+  @Test
   void configFilePathUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
     Path expected = Path.of(

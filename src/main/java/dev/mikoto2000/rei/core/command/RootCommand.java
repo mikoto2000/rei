@@ -41,7 +41,8 @@ subcommands = {
   InterestCommand.class,
   MemoryCommand.class,
   SkillCommand.class,
-  ImageCommand.class
+  ImageCommand.class,
+  ProfileCommand.class
 },
 mixinStandardHelpOptions = false)
 @RequiredArgsConstructor
