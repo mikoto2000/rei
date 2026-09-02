@@ -9,6 +9,8 @@ public enum AgentEventType {
   AGENT_RUN_STARTED("agent.run.started"),
   AGENT_RUN_COMPLETED("agent.run.completed"),
   AGENT_RUN_FAILED("agent.run.failed"),
+  LLM_REQUEST_STARTED("llm.request.started"),
+  LLM_RESPONSE_COMPLETED("llm.response.completed"),
   MESSAGE_STARTED("message.started"),
   MESSAGE_DELTA("message.delta"),
   MESSAGE_COMPLETED("message.completed"),

@@ -10,6 +10,10 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.ai.retry.RetryUtils;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
 
 import io.micrometer.observation.ObservationRegistry;
 
@@ -18,20 +22,36 @@ public class LlmModelProvider {
 
   private final ChatModel defaultChatModel;
   private final LlmProperties properties;
+  private final AgentEventFactory eventFactory;
+  private final AgentEventPublisher eventPublisher;
   private final Map<String, ChatModel> cache = new ConcurrentHashMap<>();
 
   public LlmModelProvider(ChatModel defaultChatModel, LlmProperties properties) {
+    this(defaultChatModel, properties, null, null);
+  }
+
+  @Autowired
+  public LlmModelProvider(ChatModel defaultChatModel, LlmProperties properties,
+      AgentEventFactory eventFactory, AgentEventPublisher eventPublisher) {
     this.defaultChatModel = defaultChatModel;
     this.properties = properties;
+    this.eventFactory = eventFactory;
+    this.eventPublisher = eventPublisher;
   }
 
   public ChatModel chatModel(String feature) {
+    return cache.computeIfAbsent(feature, this::createFeatureModel);
+  }
+
+  private ChatModel createFeatureModel(String feature) {
     LlmProperties.Server server = properties.feature(feature);
-    if (server == null || !server.hasCustomServer()) {
-      return defaultChatModel;
-    }
-    return cache.computeIfAbsent(feature, ignored -> new FallbackChatModel(feature,
-        createOpenAiCompatibleChatModel(server), defaultChatModel, server.getModel()));
+    ChatModel model = server == null || !server.hasCustomServer()
+        ? defaultChatModel
+        : new FallbackChatModel(feature, createOpenAiCompatibleChatModel(server), defaultChatModel,
+            server.getModel());
+    return eventFactory == null || eventPublisher == null
+        ? model
+        : new AgentEventChatModel(feature, model, eventFactory, eventPublisher);
   }
 
   public String model(String feature, String defaultModel) {

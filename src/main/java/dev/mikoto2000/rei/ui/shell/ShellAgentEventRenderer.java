@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventListener;
 import dev.mikoto2000.rei.event.AgentRunCompletedPayload;
 import dev.mikoto2000.rei.event.AgentRunFailedPayload;
+import dev.mikoto2000.rei.event.LlmRequestStartedPayload;
+import dev.mikoto2000.rei.event.LlmResponseCompletedPayload;
 import dev.mikoto2000.rei.event.MessageCompletedPayload;
 import dev.mikoto2000.rei.event.MessageDeltaPayload;
 import dev.mikoto2000.rei.event.MessageStartedPayload;
@@ -72,6 +74,18 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         closeThinkingLine();
         AgentRunFailedPayload payload = (AgentRunFailedPayload) event.payload();
         output.println("[agent] failed: " + errorMessage(payload.error()));
+      }
+      case LLM_REQUEST_STARTED -> {
+        closeAssistantLine();
+        closeThinkingLine();
+        LlmRequestStartedPayload payload = (LlmRequestStartedPayload) event.payload();
+        output.println("[llm] request sent (" + payload.feature() + ")");
+      }
+      case LLM_RESPONSE_COMPLETED -> {
+        closeAssistantLine();
+        closeThinkingLine();
+        LlmResponseCompletedPayload payload = (LlmResponseCompletedPayload) event.payload();
+        output.println("[llm] response received (" + payload.durationMs() + " ms)");
       }
       case MESSAGE_STARTED -> messageStarted((MessageStartedPayload) event.payload());
       case MESSAGE_DELTA -> messageDelta((MessageDeltaPayload) event.payload());

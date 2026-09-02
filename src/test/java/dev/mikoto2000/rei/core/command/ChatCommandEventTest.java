@@ -67,7 +67,7 @@ class ChatCommandEventTest {
       System.setOut(originalOut);
     }
 
-    // agent.run.started → message.started → message.delta → message.delta → message.completed → agent.run.completed
+    // The fixed ChatClient used by this unit test bypasses LlmModelProvider instrumentation.
     assertEquals(AgentEventType.AGENT_RUN_STARTED, received.get(0).type());
     assertEquals(AgentEventType.MESSAGE_STARTED, received.get(1).type());
     assertEquals(AgentEventType.MESSAGE_DELTA, received.get(2).type());

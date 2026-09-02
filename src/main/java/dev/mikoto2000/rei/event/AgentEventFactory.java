@@ -54,6 +54,18 @@ public class AgentEventFactory {
         new AgentRunFailedPayload(runId, error));
   }
 
+  // ---- LLM ----
+
+  public AgentEvent llmRequestStarted(String runId, String requestId, String feature) {
+    return newEvent(AgentEventType.LLM_REQUEST_STARTED, runId, requestId,
+        new LlmRequestStartedPayload(requestId, feature));
+  }
+
+  public AgentEvent llmResponseCompleted(String runId, String requestId, long durationMs) {
+    return newEvent(AgentEventType.LLM_RESPONSE_COMPLETED, runId, requestId,
+        new LlmResponseCompletedPayload(requestId, durationMs));
+  }
+
   // ---- Message ----
 
   public AgentEvent messageStarted(String messageId, String role) {

@@ -36,6 +36,15 @@ class ShellAgentEventRendererTest {
   }
 
   @Test
+  void rendersLlmRequestAndResponseLifecycle() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.llmRequestStarted("run-1", "request-1", "chat"));
+    renderer.onEvent(events.llmResponseCompleted("run-1", "request-1", 1_234));
+    assertEquals("[llm] request sent (chat)\n[llm] response received (1234 ms)\n", output.text());
+  }
+
+  @Test
   void streamsJapaneseMessageWithoutRepeatingPrefixes() {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);

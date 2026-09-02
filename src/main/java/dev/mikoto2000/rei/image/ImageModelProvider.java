@@ -17,6 +17,8 @@ import org.springframework.web.client.RestClient;
 
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmProperties;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
 import io.micrometer.observation.ObservationRegistry;
 import io.netty.resolver.DefaultAddressResolverGroup;
 import reactor.netty.http.client.HttpClient;
@@ -27,28 +29,38 @@ public class ImageModelProvider {
   private final ObjectProvider<ImageModel> defaultImageModelProvider;
   private final LlmProperties properties;
   private final ImageProperties imageProperties;
+  private final AgentEventFactory eventFactory;
+  private final AgentEventPublisher eventPublisher;
   private final Map<String, ImageModel> cache = new ConcurrentHashMap<>();
 
   @Autowired
   public ImageModelProvider(ObjectProvider<ImageModel> defaultImageModelProvider, LlmProperties properties,
-      ImageProperties imageProperties) {
+      ImageProperties imageProperties, AgentEventFactory eventFactory, AgentEventPublisher eventPublisher) {
     this.defaultImageModelProvider = defaultImageModelProvider;
     this.properties = properties;
     this.imageProperties = imageProperties;
+    this.eventFactory = eventFactory;
+    this.eventPublisher = eventPublisher;
   }
 
   ImageModelProvider(ImageModel defaultImageModel, LlmProperties properties) {
-    this(new FixedObjectProvider<>(defaultImageModel), properties, new ImageProperties());
+    this(new FixedObjectProvider<>(defaultImageModel), properties, new ImageProperties(), null, null);
   }
 
   public ImageModel imageModel() {
+    return cache.computeIfAbsent(LlmFeature.IMAGE_GENERATION, ignored -> createImageModel());
+  }
+
+  private ImageModel createImageModel() {
     ImageModel defaultImageModel = defaultImageModel();
     LlmProperties.Server server = properties.feature(LlmFeature.IMAGE_GENERATION);
-    if (server == null || !server.hasCustomServer()) {
-      return defaultImageModel;
-    }
-    return cache.computeIfAbsent(LlmFeature.IMAGE_GENERATION, ignored -> new FallbackImageModel(
-        LlmFeature.IMAGE_GENERATION, createOpenAiCompatibleImageModel(server), defaultImageModel, server.getModel()));
+    ImageModel model = server == null || !server.hasCustomServer()
+        ? defaultImageModel
+        : new FallbackImageModel(LlmFeature.IMAGE_GENERATION, createOpenAiCompatibleImageModel(server),
+            defaultImageModel, server.getModel());
+    return eventFactory == null || eventPublisher == null
+        ? model
+        : new AgentEventImageModel(LlmFeature.IMAGE_GENERATION, model, eventFactory, eventPublisher);
   }
 
   public String model(String overrideModel) {

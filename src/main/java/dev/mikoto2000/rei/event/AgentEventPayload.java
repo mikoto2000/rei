@@ -7,6 +7,7 @@ package dev.mikoto2000.rei.event;
  */
 public sealed interface AgentEventPayload
     permits AgentRunStartedPayload, AgentRunCompletedPayload, AgentRunFailedPayload,
+        LlmRequestStartedPayload, LlmResponseCompletedPayload,
         MessageStartedPayload, MessageDeltaPayload, MessageCompletedPayload,
         ThinkingStartedPayload, ThinkingDeltaPayload, ThinkingCompletedPayload,
         ToolStartedPayload, ToolCompletedPayload, ToolFailedPayload,
