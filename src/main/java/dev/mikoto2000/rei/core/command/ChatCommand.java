@@ -654,7 +654,7 @@ public class ChatCommand implements Runnable {
 
     public FixedLlmChatClientProvider(ChatClient chatClient) {
       super(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-          null, null, null, null, null);
+          null, null, null, null, null, null);
       this.chatClient = chatClient;
     }
 

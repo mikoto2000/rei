@@ -39,6 +39,7 @@ import dev.mikoto2000.rei.search.SearchTools;
 import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
 import dev.mikoto2000.rei.sound.SoundNotificationTools;
 import dev.mikoto2000.rei.task.TaskTools;
+import dev.mikoto2000.rei.text.TextTools;
 import dev.mikoto2000.rei.temporal.ClockTools;
 import dev.mikoto2000.rei.temporal.RuntimeContextAdvisor;
 import dev.mikoto2000.rei.temporal.SchedulerTools;
@@ -69,6 +70,7 @@ class AiConfigurationTest {
         Mockito.mock(SoundNotificationTools.class),
         Mockito.mock(BlueskyPostTools.class),
         Mockito.mock(UrlContentFetchTools.class),
+        Mockito.mock(TextTools.class),
         Mockito.mock(ClockTools.class),
         Mockito.mock(SchedulerTools.class),
         Mockito.mock(ConversationHistoryTools.class),
@@ -113,6 +115,7 @@ class AiConfigurationTest {
         Mockito.mock(SoundNotificationTools.class),
         Mockito.mock(BlueskyPostTools.class),
         Mockito.mock(UrlContentFetchTools.class),
+        Mockito.mock(TextTools.class),
         Mockito.mock(ClockTools.class),
         Mockito.mock(SchedulerTools.class),
         Mockito.mock(ConversationHistoryTools.class),
@@ -156,6 +159,7 @@ class AiConfigurationTest {
         Mockito.mock(SoundNotificationTools.class),
         Mockito.mock(BlueskyPostTools.class),
         Mockito.mock(UrlContentFetchTools.class),
+        Mockito.mock(TextTools.class),
         Mockito.mock(ClockTools.class),
         Mockito.mock(SchedulerTools.class),
         Mockito.mock(ConversationHistoryTools.class),
@@ -200,6 +204,7 @@ class AiConfigurationTest {
         Mockito.mock(SoundNotificationTools.class),
         Mockito.mock(BlueskyPostTools.class),
         Mockito.mock(UrlContentFetchTools.class),
+        Mockito.mock(TextTools.class),
         Mockito.mock(ClockTools.class),
         Mockito.mock(SchedulerTools.class),
         Mockito.mock(ConversationHistoryTools.class),

@@ -44,6 +44,7 @@ import dev.mikoto2000.rei.skills.AgentSkillsProperties;
 import dev.mikoto2000.rei.sound.SoundNotificationProperties;
 import dev.mikoto2000.rei.sound.SoundNotificationTools;
 import dev.mikoto2000.rei.task.TaskTools;
+import dev.mikoto2000.rei.text.TextTools;
 import dev.mikoto2000.rei.temporal.ClockTools;
 import dev.mikoto2000.rei.temporal.RuntimeContextAdvisor;
 import dev.mikoto2000.rei.temporal.SchedulerTools;
@@ -73,6 +74,7 @@ public class AiConfiguration {
   private final SoundNotificationTools soundNotificationTools;
   private final BlueskyPostTools blueskyPostTools;
   private final UrlContentFetchTools urlContentFetchTools;
+  private final TextTools textTools;
   private final ClockTools clockTools;
   private final SchedulerTools schedulerTools;
   private final ConversationHistoryTools conversationHistoryTools;
@@ -117,7 +119,7 @@ public class AiConfiguration {
             .build())
         .defaultAdvisors(advisors)
         .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
-            soundNotificationTools, blueskyPostTools, urlContentFetchTools, clockTools, schedulerTools, taskStateTools,
+            soundNotificationTools, blueskyPostTools, urlContentFetchTools, textTools, clockTools, schedulerTools, taskStateTools,
             conversationHistoryTools);
 
     ToolEventCallbackProvider toolCallbackProvider = toolEventCallbackProvider.getIfAvailable();
