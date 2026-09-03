@@ -42,6 +42,17 @@ class ReiPathsTest {
   }
 
   @Test
+  void curiosityDbPathUsesWorkingDirectory() {
+    Path workDirectory = Path.of("/work/rei");
+    Path expected = Path.of(
+        "/work/rei",
+        ".rei",
+        "curiosity.db");
+
+    assertEquals(expected, ReiPaths.curiosityDbPath(workDirectory));
+  }
+
+  @Test
   void historyFilePathUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
     Path expected = Path.of(

@@ -12,6 +12,11 @@ import org.junit.jupiter.api.Test;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.ErrorInformation;
 import dev.mikoto2000.rei.event.SkillCandidatesEvaluatedPayload;
+import dev.mikoto2000.rei.topic.IdleTriggerRejectReason;
+import dev.mikoto2000.rei.topic.TopicGenerationStage;
+import dev.mikoto2000.rei.topic.TopicRejectionReason;
+import dev.mikoto2000.rei.topic.TopicScoreBreakdown;
+import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
 
 class ShellAgentEventRendererTest {
   private final AgentEventFactory events = new AgentEventFactory(
@@ -183,6 +188,81 @@ class ShellAgentEventRendererTest {
     assertEquals("[working-set] → search \"ToolCallbackProvider secret\"\n"
         + "[working-set] ✓ 18 hits → 5 candidates → 2 selected, 1 already present (91 ms)\n",
         output.text());
+  }
+
+  @Test
+  void rendersTopicEventsAndUnknownEventsDoNotBreakRenderer() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    TopicScoreBreakdown score = new TopicScoreBreakdown(0.16, 0.17, 0.27, 0.18, 0.05, 0.01, 0.82);
+    renderer.onEvent(events.topicGenerationStarted("run-1", "tg-1", "agent-run"));
+    renderer.onEvent(events.topicIdleTriggerEvaluated(IdleTriggerRejectReason.INSUFFICIENT_IDLE, false,
+        java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(2)));
+    renderer.onEvent(events.topicCandidatesRefreshed(2));
+    renderer.onEvent(events.topicCandidateGenerated("run-1", "tg-1", "topic-1", "UNFINISHED_WORK",
+        "WORKING_SET", "Working Set 測定", "効果測定が未実施", 1.0, 1.0, 1.0, 0.0, 1.0));
+    renderer.onEvent(events.topicCandidateScored("run-1", "tg-1", "topic-1", score));
+    renderer.onEvent(events.topicCandidateRejected("run-1", "tg-1", "topic-2", TopicRejectionReason.LOW_SCORE, 0.43));
+    renderer.onEvent(events.topicSelected("run-1", "tg-1", "topic-1", 0.82, 1));
+    renderer.onEvent(events.topicSpeakSkipped("run-1", "tg-1", "topic-1", TopicSpeakSkipReason.COOLDOWN,
+        Instant.parse("2026-08-23T00:30:00Z")));
+    renderer.onEvent(events.topicAutoSpeakSuppressed("stale activity"));
+    renderer.onEvent(events.topicSpoken("run-1", "tg-1", "topic-1", "m1",
+        Instant.parse("2026-08-23T00:00:00Z"), "話題です"));
+    renderer.onEvent(events.topicGenerationCompleted("run-1", "tg-1", 2, 2, 1, "topic-1", true, 184));
+    renderer.onEvent(events.topicGenerationFailed("run-1", "tg-2", TopicGenerationStage.RANKING,
+        new IllegalStateException("ranking failed")));
+
+    assertEquals("[topic] generation started\n"
+        + "        id: tg-1\n"
+        + "[topic] idle trigger skipped\n"
+        + "        idle: 30.00s\n"
+        + "        required: 120.00s\n"
+        + "        reason: INSUFFICIENT_IDLE\n"
+        + "[topic] candidates refreshed\n"
+        + "        candidates: 2\n"
+        + "[topic] candidate\n"
+        + "        id: topic-1\n"
+        + "        type: unfinished_work\n"
+        + "        source: working_set\n"
+        + "        topic: Working Set 測定\n"
+        + "        reason: 効果測定が未実施\n"
+        + "[topic] scored\n"
+        + "        id: topic-1\n"
+        + "        score: 0.82\n"
+        + "        priority: +0.16\n"
+        + "        freshness: +0.17\n"
+        + "        usefulness: +0.27\n"
+        + "        confidence: +0.18\n"
+        + "        intrusiveness: -0.05\n"
+        + "        repetition: -0.01\n"
+        + "[topic] rejected\n"
+        + "        id: topic-2\n"
+        + "        reason: LOW_SCORE\n"
+        + "        score: 0.43\n"
+        + "[topic] selected\n"
+        + "        id: topic-1\n"
+        + "        score: 0.82\n"
+        + "        rank: 1\n"
+        + "[topic] speak skipped\n"
+        + "        id: topic-1\n"
+        + "        reason: COOLDOWN\n"
+        + "        nextAllowedAt: 2026-08-23T00:30:00Z\n"
+        + "[topic] auto speak suppressed\n"
+        + "        reason: stale activity\n"
+        + "[topic] spoken\n"
+        + "        id: topic-1\n"
+        + "        message: m1\n"
+        + "[topic] generation completed\n"
+        + "        candidates: 2\n"
+        + "        scored: 2\n"
+        + "        rejected: 1\n"
+        + "        selected: topic-1\n"
+        + "        spoken: true\n"
+        + "        duration: 184ms\n"
+        + "[topic] generation failed\n"
+        + "        stage: RANKING\n"
+        + "        error: IllegalStateException: ranking failed\n", output.text());
   }
 
   private static final class RecordingOutput implements ShellEventOutput {

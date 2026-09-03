@@ -42,6 +42,10 @@ public final class ReiPaths {
     return memoryConsolidationDbPath(workDirectory());
   }
 
+  public static Path curiosityDbPath() {
+    return curiosityDbPath(workDirectory());
+  }
+
   /**
    * 現在の実行環境に応じた履歴ファイルの保存先を返します。
    *
@@ -100,6 +104,10 @@ public final class ReiPaths {
 
   public static Path memoryConsolidationDbPath(Path workDirectory) {
     return workDirectory.resolve(".rei").resolve("memory-consolidation.db");
+  }
+
+  public static Path curiosityDbPath(Path workDirectory) {
+    return workDirectory.resolve(".rei").resolve("curiosity.db");
   }
 
   public static Path historyFilePath(Path workDirectory) {

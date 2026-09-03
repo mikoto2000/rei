@@ -1,10 +1,17 @@
 package dev.mikoto2000.rei.event;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
 import org.springframework.stereotype.Component;
+
+import dev.mikoto2000.rei.topic.IdleTriggerRejectReason;
+import dev.mikoto2000.rei.topic.TopicGenerationStage;
+import dev.mikoto2000.rei.topic.TopicRejectionReason;
+import dev.mikoto2000.rei.topic.TopicScoreBreakdown;
+import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
 
 /**
  * Agent Event を作成する Factory。
@@ -229,6 +236,87 @@ public class AgentEventFactory {
             alreadyPresentCount, workingSetSizeBefore, workingSetSizeAfter));
   }
 
+  // ---- Topic Generator ----
+
+  public AgentEvent topicGenerationStarted(String runId, String topicGenerationId, String trigger) {
+    Instant now = Instant.now(clock);
+    return newEvent(AgentEventType.TOPIC_GENERATION_STARTED, runId, topicGenerationId,
+        new TopicGenerationStartedPayload(topicGenerationId, bounded(trigger, 80), now));
+  }
+
+  public AgentEvent topicIdleTriggerEvaluated(IdleTriggerRejectReason reason, boolean accepted,
+      Duration idleDuration, Duration requiredIdle) {
+    Instant now = Instant.now(clock);
+    return newEvent(AgentEventType.TOPIC_IDLE_TRIGGER_EVALUATED, null, null,
+        new TopicIdleTriggerEvaluatedPayload(accepted, millis(idleDuration), millis(requiredIdle), reason, now));
+  }
+
+  public AgentEvent topicCandidatesRefreshed(int candidateCount) {
+    Instant now = Instant.now(clock);
+    return newEvent(AgentEventType.TOPIC_CANDIDATES_REFRESHED, null, null,
+        new TopicCandidatesRefreshedPayload(candidateCount, now));
+  }
+
+  public AgentEvent topicCandidateGenerated(String runId, String topicGenerationId, String topicCandidateId,
+      String topicType, String source, String topic, String reason, Double priority, Double freshness,
+      Double usefulness, Double intrusiveness, Double confidence) {
+    return newEvent(AgentEventType.TOPIC_CANDIDATE_GENERATED, runId, topicGenerationId,
+        new TopicCandidateGeneratedPayload(topicGenerationId, topicCandidateId, topicType, source, bounded(topic, 160),
+            bounded(reason, 240), priority, freshness, usefulness, intrusiveness, confidence));
+  }
+
+  public AgentEvent topicCandidateScored(String runId, String topicGenerationId, String topicCandidateId,
+      TopicScoreBreakdown score) {
+    return newEvent(AgentEventType.TOPIC_CANDIDATE_SCORED, runId, topicGenerationId,
+        new TopicCandidateScoredPayload(topicGenerationId, topicCandidateId, score));
+  }
+
+  public AgentEvent topicCandidateRejected(String runId, String topicGenerationId, String topicCandidateId,
+      TopicRejectionReason reason, Double score) {
+    return newEvent(AgentEventType.TOPIC_CANDIDATE_REJECTED, runId, topicGenerationId,
+        new TopicCandidateRejectedPayload(topicGenerationId, topicCandidateId, reason, score));
+  }
+
+  public AgentEvent topicSelected(String runId, String topicGenerationId, String topicCandidateId,
+      Double score, Integer rank) {
+    return newEvent(AgentEventType.TOPIC_SELECTED, runId, topicGenerationId,
+        new TopicSelectedPayload(topicGenerationId, topicCandidateId, score, rank));
+  }
+
+  public AgentEvent topicSpoken(String runId, String topicGenerationId, String topicCandidateId, String messageId,
+      Instant spokenAt, String message) {
+    return newEvent(AgentEventType.TOPIC_SPOKEN, runId, topicGenerationId,
+        new TopicSpokenPayload(topicGenerationId, topicCandidateId, messageId, spokenAt, bounded(message, 240)));
+  }
+
+  public AgentEvent topicSpeakSkipped(String runId, String topicGenerationId, String topicCandidateId,
+      TopicSpeakSkipReason reason, Instant nextSpeakAllowedAt) {
+    return newEvent(AgentEventType.TOPIC_SPEAK_SKIPPED, runId, topicGenerationId,
+        new TopicSpeakSkippedPayload(topicGenerationId, topicCandidateId, reason, nextSpeakAllowedAt));
+  }
+
+  public AgentEvent topicGenerationCompleted(String runId, String topicGenerationId, int candidateCount,
+      int scoredCount, int rejectedCount, String selectedCandidateId, boolean spoken, long durationMs) {
+    Instant now = Instant.now(clock);
+    return newEvent(AgentEventType.TOPIC_GENERATION_COMPLETED, runId, topicGenerationId,
+        new TopicGenerationCompletedPayload(topicGenerationId, candidateCount, scoredCount, rejectedCount,
+            selectedCandidateId, spoken, durationMs, now));
+  }
+
+  public AgentEvent topicGenerationFailed(String runId, String topicGenerationId, TopicGenerationStage stage,
+      Throwable error) {
+    Instant now = Instant.now(clock);
+    String message = error == null ? "unknown error" : error.getClass().getSimpleName() + ": " + error.getMessage();
+    return newEvent(AgentEventType.TOPIC_GENERATION_FAILED, runId, topicGenerationId,
+        new TopicGenerationFailedPayload(topicGenerationId, stage, bounded(message, 240), now));
+  }
+
+  public AgentEvent topicAutoSpeakSuppressed(String reason) {
+    Instant now = Instant.now(clock);
+    return newEvent(AgentEventType.TOPIC_AUTO_SPEAK_SUPPRESSED, null, null,
+        new TopicAutoSpeakSuppressedPayload(bounded(reason, 160), now));
+  }
+
   // ---- Context ----
 
   public AgentEvent contextSnapshotUpdated(Long usedTokens, Long maxTokens, Double utilization) {
@@ -268,5 +356,19 @@ public class AgentEventFactory {
         correlationId,
         null,
         payload);
+  }
+
+  private String bounded(String value, int maxLength) {
+    if (value == null) return null;
+    String safe = value
+        .replaceAll("(?i)((?:api[_-]?key|access[_-]?token|token|password|secret|credential)\\s*[:=]\\s*)(?:\\\"[^\\\"]*\\\"|'[^']*'|\\S+)", "$1[REDACTED]")
+        .replaceAll("[\\p{Cntrl}]+", " ")
+        .replaceAll("\\s+", " ")
+        .trim();
+    return safe.length() <= maxLength ? safe : safe.substring(0, maxLength - 1) + "…";
+  }
+
+  private long millis(Duration duration) {
+    return duration == null ? 0L : Math.max(0L, duration.toMillis());
   }
 }

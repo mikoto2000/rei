@@ -33,6 +33,7 @@ import org.jline.utils.AttributedStyle;
 import org.jline.utils.NonBlockingReader;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
@@ -49,16 +50,15 @@ import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.sound.SoundNotificationService;
+import dev.mikoto2000.rei.topic.AgentActivityTracker;
 import dev.mikoto2000.rei.ui.shell.JLineShellEventOutput;
 import dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer;
 import dev.mikoto2000.rei.ui.shell.ShellEventSession;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
-import lombok.RequiredArgsConstructor;
 import picocli.CommandLine;
 import picocli.shell.jline3.PicocliJLineCompleter;
 
 @EnableScheduling
-@RequiredArgsConstructor
 @SpringBootApplication
 public class ReiApplication {
 
@@ -73,6 +73,7 @@ public class ReiApplication {
   private final SoundNotificationService soundNotificationService;
   private final ChatResponseNarrator chatResponseNarrator;
   private final AgentEventBus agentEventBus;
+  private final AgentActivityTracker agentActivityTracker;
 
   private static final String COMMAND_COMPLETION_MESSAGE = "コマンド実行が完了しました";
   private static final String MULTILINE_CONTINUATION = "\\";
@@ -81,7 +82,41 @@ public class ReiApplication {
   private static final String PASTE_PROMPT = "paste> ";
   private static final DateTimeFormatter PROMPT_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
 
-  public  static void main(String[] args) throws IOException {
+  @Autowired
+  public ReiApplication(RootCommand rootCommand, CommandLine.IFactory factory, ModelHolderService currentModelHolder,
+      EscCancellationMonitor escCancellationMonitor, CommandCancellationService commandCancellationService,
+      CommandCompletionNotificationPolicy commandCompletionNotificationPolicy,
+      CommandUserInputDisplayPolicy commandUserInputDisplayPolicy,
+      AsyncVectorDocumentService asyncVectorDocumentService, SoundNotificationService soundNotificationService,
+      ChatResponseNarrator chatResponseNarrator, AgentEventBus agentEventBus,
+      AgentActivityTracker agentActivityTracker) {
+    this.rootCommand = rootCommand;
+    this.factory = factory;
+    this.currentModelHolder = currentModelHolder;
+    this.escCancellationMonitor = escCancellationMonitor;
+    this.commandCancellationService = commandCancellationService;
+    this.commandCompletionNotificationPolicy = commandCompletionNotificationPolicy;
+    this.commandUserInputDisplayPolicy = commandUserInputDisplayPolicy;
+    this.asyncVectorDocumentService = asyncVectorDocumentService;
+    this.soundNotificationService = soundNotificationService;
+    this.chatResponseNarrator = chatResponseNarrator;
+    this.agentEventBus = agentEventBus;
+    this.agentActivityTracker = agentActivityTracker;
+  }
+
+  ReiApplication(RootCommand rootCommand, CommandLine.IFactory factory, ModelHolderService currentModelHolder,
+      EscCancellationMonitor escCancellationMonitor, CommandCancellationService commandCancellationService,
+      CommandCompletionNotificationPolicy commandCompletionNotificationPolicy,
+      CommandUserInputDisplayPolicy commandUserInputDisplayPolicy,
+      AsyncVectorDocumentService asyncVectorDocumentService, SoundNotificationService soundNotificationService,
+      ChatResponseNarrator chatResponseNarrator, AgentEventBus agentEventBus) {
+    this(rootCommand, factory, currentModelHolder, escCancellationMonitor, commandCancellationService,
+        commandCompletionNotificationPolicy, commandUserInputDisplayPolicy, asyncVectorDocumentService,
+        soundNotificationService, chatResponseNarrator, agentEventBus,
+        new dev.mikoto2000.rei.topic.DefaultAgentActivityTracker(java.time.Clock.systemDefaultZone()));
+  }
+
+  public static void main(String[] args) throws IOException {
     SpringApplication application = new SpringApplication(ReiApplication.class);
     application.setDefaultProperties(ExternalConfigSupport.defaultProperties());
     ConfigurableApplicationContext context = application.run(args);
@@ -126,6 +161,7 @@ public class ReiApplication {
           if (line == null) {
             break;
           }
+          agentActivityTracker.recordUserActivity(java.time.Instant.now());
           line = readPossiblyMultilineInput(line, reader);
 
           UserInputService.Input input = inputService.interpret(line);

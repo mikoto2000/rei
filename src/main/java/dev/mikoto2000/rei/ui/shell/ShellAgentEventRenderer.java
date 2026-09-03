@@ -18,6 +18,18 @@ import dev.mikoto2000.rei.event.SkillCandidatesEvaluatedPayload;
 import dev.mikoto2000.rei.event.ToolCompletedPayload;
 import dev.mikoto2000.rei.event.ToolFailedPayload;
 import dev.mikoto2000.rei.event.ToolStartedPayload;
+import dev.mikoto2000.rei.event.TopicCandidateGeneratedPayload;
+import dev.mikoto2000.rei.event.TopicCandidateRejectedPayload;
+import dev.mikoto2000.rei.event.TopicCandidateScoredPayload;
+import dev.mikoto2000.rei.event.TopicCandidatesRefreshedPayload;
+import dev.mikoto2000.rei.event.TopicAutoSpeakSuppressedPayload;
+import dev.mikoto2000.rei.event.TopicGenerationCompletedPayload;
+import dev.mikoto2000.rei.event.TopicGenerationFailedPayload;
+import dev.mikoto2000.rei.event.TopicGenerationStartedPayload;
+import dev.mikoto2000.rei.event.TopicIdleTriggerEvaluatedPayload;
+import dev.mikoto2000.rei.event.TopicSelectedPayload;
+import dev.mikoto2000.rei.event.TopicSpeakSkippedPayload;
+import dev.mikoto2000.rei.event.TopicSpokenPayload;
 import dev.mikoto2000.rei.event.ThinkingCompletedPayload;
 import dev.mikoto2000.rei.event.ThinkingDeltaPayload;
 import dev.mikoto2000.rei.event.ThinkingStartedPayload;
@@ -181,6 +193,110 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
             + " candidates → " + payload.selectedCount() + " selected" + alreadyPresent
             + " (" + payload.durationMs() + " ms)");
       }
+      case TOPIC_GENERATION_STARTED -> {
+        closeAssistantLine();
+        TopicGenerationStartedPayload payload = (TopicGenerationStartedPayload) event.payload();
+        output.println("[topic] generation started");
+        output.println("        id: " + payload.topicGenerationId());
+      }
+      case TOPIC_IDLE_TRIGGER_EVALUATED -> {
+        closeAssistantLine();
+        TopicIdleTriggerEvaluatedPayload payload = (TopicIdleTriggerEvaluatedPayload) event.payload();
+        output.println("[topic] idle trigger " + (payload.accepted() ? "accepted" : "skipped"));
+        output.println("        idle: " + formatDuration(payload.idleDurationMs()));
+        output.println("        required: " + formatDuration(payload.requiredIdleMs()));
+        if (payload.rejectReason() != null) {
+          output.println("        reason: " + payload.rejectReason());
+        }
+      }
+      case TOPIC_CANDIDATES_REFRESHED -> {
+        closeAssistantLine();
+        TopicCandidatesRefreshedPayload payload = (TopicCandidatesRefreshedPayload) event.payload();
+        output.println("[topic] candidates refreshed");
+        output.println("        candidates: " + payload.candidateCount());
+      }
+      case TOPIC_CANDIDATE_GENERATED -> {
+        closeAssistantLine();
+        TopicCandidateGeneratedPayload payload = (TopicCandidateGeneratedPayload) event.payload();
+        output.println("[topic] candidate");
+        output.println("        id: " + payload.candidateId());
+        output.println("        type: " + lower(payload.topicType()));
+        output.println("        source: " + lower(payload.source()));
+        output.println("        topic: " + oneLineSummary(payload.topicSummary()));
+        output.println("        reason: " + oneLineSummary(payload.reasonSummary()));
+      }
+      case TOPIC_CANDIDATE_SCORED -> {
+        closeAssistantLine();
+        TopicCandidateScoredPayload payload = (TopicCandidateScoredPayload) event.payload();
+        output.println("[topic] scored");
+        output.println("        id: " + payload.candidateId());
+        output.println("        score: " + formatNullableScore(payload.score() == null ? null : payload.score().finalScore()));
+        if (payload.score() != null) {
+          output.println("        priority: +" + formatNullableScore(payload.score().priorityContribution()));
+          output.println("        freshness: +" + formatNullableScore(payload.score().freshnessContribution()));
+          output.println("        usefulness: +" + formatNullableScore(payload.score().usefulnessContribution()));
+          output.println("        confidence: +" + formatNullableScore(payload.score().confidenceContribution()));
+          output.println("        intrusiveness: -" + formatNullableScore(payload.score().intrusivenessPenalty()));
+          output.println("        repetition: -" + formatNullableScore(payload.score().repetitionPenalty()));
+        }
+      }
+      case TOPIC_CANDIDATE_REJECTED -> {
+        closeAssistantLine();
+        TopicCandidateRejectedPayload payload = (TopicCandidateRejectedPayload) event.payload();
+        output.println("[topic] rejected");
+        output.println("        id: " + payload.candidateId());
+        output.println("        reason: " + payload.reason());
+        output.println("        score: " + formatNullableScore(payload.score()));
+      }
+      case TOPIC_SELECTED -> {
+        closeAssistantLine();
+        TopicSelectedPayload payload = (TopicSelectedPayload) event.payload();
+        output.println("[topic] selected");
+        output.println("        id: " + payload.candidateId());
+        output.println("        score: " + formatNullableScore(payload.score()));
+        output.println("        rank: " + payload.rank());
+      }
+      case TOPIC_SPOKEN -> {
+        closeAssistantLine();
+        TopicSpokenPayload payload = (TopicSpokenPayload) event.payload();
+        output.println("[topic] spoken");
+        output.println("        id: " + payload.candidateId());
+        output.println("        message: " + payload.messageId());
+      }
+      case TOPIC_SPEAK_SKIPPED -> {
+        closeAssistantLine();
+        TopicSpeakSkippedPayload payload = (TopicSpeakSkippedPayload) event.payload();
+        output.println("[topic] speak skipped");
+        output.println("        id: " + valueOr(payload.candidateId(), "none"));
+        output.println("        reason: " + payload.reason());
+        if (payload.nextSpeakAllowedAt() != null) {
+          output.println("        nextAllowedAt: " + payload.nextSpeakAllowedAt());
+        }
+      }
+      case TOPIC_AUTO_SPEAK_SUPPRESSED -> {
+        closeAssistantLine();
+        TopicAutoSpeakSuppressedPayload payload = (TopicAutoSpeakSuppressedPayload) event.payload();
+        output.println("[topic] auto speak suppressed");
+        output.println("        reason: " + oneLineSummary(payload.reason()));
+      }
+      case TOPIC_GENERATION_COMPLETED -> {
+        closeAssistantLine();
+        TopicGenerationCompletedPayload payload = (TopicGenerationCompletedPayload) event.payload();
+        output.println("[topic] generation completed");
+        output.println("        candidates: " + payload.candidateCount());
+        output.println("        scored: " + payload.scoredCount());
+        output.println("        rejected: " + payload.rejectedCount());
+        output.println("        selected: " + valueOr(payload.selectedCandidateId(), "none"));
+        output.println("        spoken: " + payload.spoken());
+        output.println("        duration: " + payload.durationMs() + "ms");
+      }
+      case TOPIC_GENERATION_FAILED -> {
+        closeAssistantLine();
+        TopicGenerationFailedPayload payload = (TopicGenerationFailedPayload) event.payload();
+        output.println("[topic] generation failed");
+        output.println("        stage: " + payload.stage());
+        output.println("        error: " + oneLineSummary(payload.errorSummary()));
+      }
       default -> { }
     }
     output.flush();
@@ -271,6 +387,14 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     return String.format(java.util.Locale.ROOT, "%.1f", value);
   }
 
+  private String formatNullableScore(Double value) {
+    return value == null ? "n/a" : String.format(java.util.Locale.ROOT, "%.2f", value);
+  }
+
+  private String lower(String value) {
+    return value == null ? "" : value.toLowerCase(java.util.Locale.ROOT);
+  }
+
   private String oneLineSummary(String value) {
     if (value == null || value.isBlank()) return "";
     StringBuilder sanitized = new StringBuilder(value.length());
@@ -300,5 +424,9 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   private String boundedSummary(String value, int maxLength) {
     String safe = oneLineSummary(value);
     return safe.length() <= maxLength ? safe : safe.substring(0, maxLength - 1) + "…";
+  }
+
+  private String valueOr(String preferred, String fallback) {
+    return preferred == null ? fallback : preferred;
   }
 }

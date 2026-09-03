@@ -33,8 +33,11 @@ import dev.mikoto2000.rei.llm.OutputLimitReplanSubgoal;
 import dev.mikoto2000.rei.llm.OutputLimitReplanner;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import dev.mikoto2000.rei.sound.ChatResponseNarrator;
+import dev.mikoto2000.rei.core.working.WorkingSet;
 import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
 import dev.mikoto2000.rei.skills.SkillRoutingRunContext;
+import dev.mikoto2000.rei.topic.AgentActivityTracker;
+import dev.mikoto2000.rei.topic.TopicOrchestrator;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 import reactor.core.Disposable;
@@ -74,6 +77,10 @@ public class ChatCommand implements Runnable {
   private final ChatResponseNarrator chatResponseNarrator;
   private final Optional<MemoryConsolidatorService> memoryConsolidatorService;
   private final Optional<OutputLimitReplanner> outputLimitReplanner;
+  private final Optional<TopicOrchestrator> topicOrchestrator;
+  private final Optional<WorkingSet> workingSet;
+  private final Clock clock;
+  private final Optional<AgentActivityTracker> activityTracker;
   private final AgentEventFactory eventFactory;
   private final AgentEventPublisher eventPublisher;
   private final InlineFileAttachmentResolver inlineFileAttachmentResolver = new InlineFileAttachmentResolver();
@@ -89,6 +96,7 @@ public class ChatCommand implements Runnable {
       Optional<MemoryConsolidatorService> memoryConsolidatorService) {
     this(new FixedLlmChatClientProvider(chatClient), currentModelHolder, new FixedLlmModelProvider(),
         new LlmProperties(), cancellationService, chatResponseNarrator, memoryConsolidatorService, Optional.empty(),
+        Optional.empty(), Optional.empty(), Clock.systemDefaultZone(), Optional.empty(),
         new AgentEventFactory(Clock.systemDefaultZone()), new InMemoryAgentEventBus());
   }
 
@@ -98,7 +106,7 @@ public class ChatCommand implements Runnable {
       AgentEventPublisher eventPublisher) {
     this(new FixedLlmChatClientProvider(chatClient), currentModelHolder, new FixedLlmModelProvider(),
         new LlmProperties(), cancellationService, chatResponseNarrator, memoryConsolidatorService, Optional.empty(),
-        eventFactory, eventPublisher);
+        Optional.empty(), Optional.empty(), Clock.systemDefaultZone(), Optional.empty(), eventFactory, eventPublisher);
   }
 
   public ChatCommand(LlmChatClientProvider chatClientProvider, ModelHolderService currentModelHolder,
@@ -107,6 +115,7 @@ public class ChatCommand implements Runnable {
       Optional<OutputLimitReplanner> outputLimitReplanner) {
     this(chatClientProvider, currentModelHolder, modelProvider, llmProperties, cancellationService,
         chatResponseNarrator, memoryConsolidatorService, outputLimitReplanner,
+        Optional.empty(), Optional.empty(), Clock.systemDefaultZone(), Optional.empty(),
         new AgentEventFactory(Clock.systemDefaultZone()), new InMemoryAgentEventBus());
   }
 
@@ -114,8 +123,10 @@ public class ChatCommand implements Runnable {
   public ChatCommand(LlmChatClientProvider chatClientProvider, ModelHolderService currentModelHolder,
       LlmModelProvider modelProvider, LlmProperties llmProperties, CommandCancellationService cancellationService,
       ChatResponseNarrator chatResponseNarrator, Optional<MemoryConsolidatorService> memoryConsolidatorService,
-      Optional<OutputLimitReplanner> outputLimitReplanner, AgentEventFactory eventFactory,
-      AgentEventPublisher eventPublisher) {
+      Optional<OutputLimitReplanner> outputLimitReplanner,
+      Optional<TopicOrchestrator> topicOrchestrator, Optional<WorkingSet> workingSet, Clock clock,
+      Optional<AgentActivityTracker> activityTracker,
+      AgentEventFactory eventFactory, AgentEventPublisher eventPublisher) {
     this.chatClientProvider = chatClientProvider;
     this.currentModelHolder = currentModelHolder;
     this.modelProvider = modelProvider;
@@ -124,6 +135,10 @@ public class ChatCommand implements Runnable {
     this.chatResponseNarrator = chatResponseNarrator;
     this.memoryConsolidatorService = memoryConsolidatorService;
     this.outputLimitReplanner = outputLimitReplanner;
+    this.topicOrchestrator = topicOrchestrator;
+    this.workingSet = workingSet;
+    this.clock = clock;
+    this.activityTracker = activityTracker;
     this.eventFactory = eventFactory;
     this.eventPublisher = eventPublisher;
   }
@@ -144,6 +159,7 @@ public class ChatCommand implements Runnable {
 
     try {
       String promptText = String.join(" ", prompts);
+      activityTracker.ifPresent(tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));
       appendConversationLog("user", promptText);
       OutputLimitRunBudget budget = new OutputLimitRunBudget(
           llmProperties.getOutputLimit().getMaxReplansPerGoal(),
@@ -154,6 +170,7 @@ public class ChatCommand implements Runnable {
         return;
       }
       eventPublisher.publish(eventFactory.runStarted(runId, "user-request", null));
+      activityTracker.ifPresent(tracker -> tracker.recordAgentStarted(java.time.Instant.now(clock)));
       ChatRunResult result = executePrompt(promptText, true, startedAtNanos, budget, runId, skillRoutingContext,
           runCompletionTokens, usageAvailable, lastGenerationMetrics);
       if (result.status() == ChatRunStatus.OUTPUT_LIMIT) {
@@ -169,10 +186,13 @@ public class ChatCommand implements Runnable {
             metrics == null ? null : metrics.timeToFirstTokenMillis(),
             metrics == null ? null : metrics.outputTokensPerSecond(),
             metrics == null ? null : metrics.endToEndTokensPerSecond()));
+        activityTracker.ifPresent(tracker -> tracker.recordAgentCompleted(java.time.Instant.now(clock)));
         chatResponseNarrator.narrateIfCompleted(result.text());
         maybeSuggestConsolidation();
+        maybeRefreshTopicCandidates();
       } else {
         eventPublisher.publish(eventFactory.runFailed(runId, terminalError(result.status())));
+        activityTracker.ifPresent(tracker -> tracker.recordAgentCompleted(java.time.Instant.now(clock)));
       }
     } finally {
       cancellationService.clear();
@@ -441,6 +461,16 @@ public class ChatCommand implements Runnable {
           IO.println("[memory] 記憶整理を実行することをお勧めします。/memory consolidate を実行してください。");
         }
       } catch (Exception ignored) {
+      }
+    });
+  }
+
+  private void maybeRefreshTopicCandidates() {
+    topicOrchestrator.ifPresent(orchestrator -> {
+      try {
+        orchestrator.onChatCompleted();
+      } catch (Exception e) {
+        log.warn("Topic candidate refresh failed", e);
       }
     });
   }

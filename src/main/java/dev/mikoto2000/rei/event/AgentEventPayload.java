@@ -17,6 +17,10 @@ public sealed interface AgentEventPayload
         TaskCreatedPayload, TaskStartedPayload, TaskCompletedPayload, TaskFailedPayload,
         WorkingSetItemAddedPayload, WorkingSetItemRemovedPayload,
         WorkingSetSearchStartedPayload, WorkingSetSearchCompletedPayload,
+        TopicGenerationStartedPayload, TopicIdleTriggerEvaluatedPayload, TopicCandidatesRefreshedPayload,
+        TopicCandidateGeneratedPayload, TopicCandidateScoredPayload,
+        TopicCandidateRejectedPayload, TopicSelectedPayload, TopicSpeakSkippedPayload, TopicSpokenPayload,
+        TopicGenerationCompletedPayload, TopicGenerationFailedPayload, TopicAutoSpeakSuppressedPayload,
         ContextSnapshotUpdatedPayload,
         FileCreatedPayload, FileModifiedPayload, FileDeletedPayload {
 }

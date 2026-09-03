@@ -138,6 +138,24 @@ rei:
     cron: ${REI_INTEREST_CRON:0 0 7 * * *}
     notification-enabled: ${REI_INTEREST_NOTIFICATION_ENABLED:false}
     notification-cron: ${REI_INTEREST_NOTIFICATION_CRON:0 0 12 * * *}
+  topic-generator:
+    enabled: ${REI_TOPIC_GENERATOR_ENABLED:false}
+    max-candidates: ${REI_TOPIC_GENERATOR_MAX_CANDIDATES:5}
+    minimum-score: ${REI_TOPIC_GENERATOR_MINIMUM_SCORE:0.65}
+    minimum-confidence: ${REI_TOPIC_GENERATOR_MINIMUM_CONFIDENCE:0.70}
+    minimum-topic-speak-interval: ${REI_TOPIC_GENERATOR_MINIMUM_SPEAK_INTERVAL:30m}
+    candidate-max-age: ${REI_TOPIC_GENERATOR_CANDIDATE_MAX_AGE:30m}
+    idle-trigger:
+      enabled: ${REI_TOPIC_GENERATOR_IDLE_TRIGGER_ENABLED:true}
+      check-interval: ${REI_TOPIC_GENERATOR_IDLE_TRIGGER_CHECK_INTERVAL:30s}
+      minimum-idle: ${REI_TOPIC_GENERATOR_IDLE_TRIGGER_MINIMUM_IDLE:2m}
+    curiosity:
+      expiration: ${REI_TOPIC_GENERATOR_CURIOSITY_EXPIRATION:30d}
+    discovery:
+      enabled: ${REI_TOPIC_GENERATOR_DISCOVERY_ENABLED:true}
+      max-seeds: ${REI_TOPIC_GENERATOR_DISCOVERY_MAX_SEEDS:3}
+      minimum-relevance: ${REI_TOPIC_GENERATOR_DISCOVERY_MINIMUM_RELEVANCE:0.70}
+      freshness-window-days: ${REI_TOPIC_GENERATOR_DISCOVERY_FRESHNESS_WINDOW_DAYS:30}
   feed:
     briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:3}
     cron: ${REI_FEED_CRON:0 0 4 * * *}
