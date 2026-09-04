@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
+import dev.mikoto2000.rei.ui.shell.RootCommand;
 import picocli.CommandLine;
 
 class RootCommandImageTest {

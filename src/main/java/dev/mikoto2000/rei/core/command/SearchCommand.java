@@ -18,6 +18,8 @@ import org.springframework.stereotype.Component;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.llm.ConversationIds;
+import dev.mikoto2000.rei.llm.FixedLlmChatClientProvider;
+import dev.mikoto2000.rei.llm.FixedLlmModelProvider;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
@@ -50,8 +52,8 @@ public class SearchCommand implements Runnable {
 
   public SearchCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
       SearchKnowledgeService searchKnowledgeService, CommandCancellationService cancellationService) {
-    this(new ChatCommand.FixedLlmChatClientProvider(chatClient), currentModelHolder,
-        new ChatCommand.FixedLlmModelProvider(), searchKnowledgeService, cancellationService);
+    this(new FixedLlmChatClientProvider(chatClient), currentModelHolder,
+        new FixedLlmModelProvider(), searchKnowledgeService, cancellationService);
   }
 
   @Autowired

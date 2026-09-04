@@ -12,6 +12,7 @@ import org.jline.reader.LineReader;
 import org.jline.reader.impl.DefaultParser;
 import org.junit.jupiter.api.Test;
 
+import dev.mikoto2000.rei.ui.shell.RootCommand;
 import picocli.CommandLine;
 
 class ReiLineReaderFactoryTest {

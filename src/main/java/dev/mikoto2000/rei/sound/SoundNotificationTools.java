@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.sound;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
 import lombok.RequiredArgsConstructor;
 
 @Component

@@ -1,9 +1,17 @@
-package dev.mikoto2000.rei.core.command;
+package dev.mikoto2000.rei.ui.shell;
 
 import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.bluesky.command.BskyCommand;
 import dev.mikoto2000.rei.briefing.command.BriefingCommand;
+import dev.mikoto2000.rei.core.command.ConfigCommand;
+import dev.mikoto2000.rei.core.command.EmbedCommand;
+import dev.mikoto2000.rei.core.command.ModelCommand;
+import dev.mikoto2000.rei.core.command.ModelsCommand;
+import dev.mikoto2000.rei.core.command.ProfileCommand;
+import dev.mikoto2000.rei.core.command.ProjectCommand;
+import dev.mikoto2000.rei.core.command.SearchCommand;
+import dev.mikoto2000.rei.core.command.ShCommand;
 import dev.mikoto2000.rei.feed.command.FeedCommand;
 import dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand;
 import dev.mikoto2000.rei.image.command.ImageCommand;

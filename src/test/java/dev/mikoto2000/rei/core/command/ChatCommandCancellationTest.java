@@ -4,8 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
+import java.time.Clock;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -23,7 +22,12 @@ import org.springframework.ai.chat.prompt.Prompt;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
-import dev.mikoto2000.rei.sound.ChatResponseNarrator;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
+import dev.mikoto2000.rei.ui.shell.ChatCommand;
+import dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer;
+import dev.mikoto2000.rei.ui.shell.ShellEventOutput;
+import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
 
@@ -45,13 +49,15 @@ class ChatCommandCancellationTest {
         Flux.<ChatResponse>never()
             .doOnSubscribe(ignored -> subscribed.countDown())));
 
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    PrintStream originalOut = System.out;
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    RecordingOutput output = new RecordingOutput();
+    bus.subscribe(new ShellAgentEventRenderer(output));
     var executor = Executors.newSingleThreadExecutor();
-    System.setOut(new PrintStream(out));
     try {
       var future = executor.submit(() ->
-          new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService, Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty())).execute("hello"));
+          new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
+              Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty(),
+              new AgentEventFactory(Clock.systemDefaultZone()), bus)).execute("hello"));
       assertTrue(subscribed.await(1, TimeUnit.SECONDS));
 
       cancellationService.cancel();
@@ -59,12 +65,18 @@ class ChatCommandCancellationTest {
       future.get(1, TimeUnit.SECONDS);
     } finally {
       executor.shutdownNow();
-      System.setOut(originalOut);
     }
 
-    String output = out.toString();
-    assertTrue(output.contains("partial "));
-    assertTrue(output.contains("[cancelled]"));
+    assertTrue(output.text().contains("partial "));
+    assertTrue(output.text().contains("[agent] failed: chat run cancelled"));
+  }
+
+  private static final class RecordingOutput implements ShellEventOutput {
+    private final StringBuilder value = new StringBuilder();
+    public void print(String text) { value.append(text); }
+    public void println(String text) { value.append(text).append('\n'); }
+    public void flush() { }
+    String text() { return value.toString(); }
   }
 
   private static ChatResponse response(String text) {

@@ -1,4 +1,4 @@
-package dev.mikoto2000.rei.sound;
+package dev.mikoto2000.rei.ui.shell.sound;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;

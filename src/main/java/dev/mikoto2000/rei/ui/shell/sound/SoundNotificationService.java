@@ -1,4 +1,4 @@
-package dev.mikoto2000.rei.sound;
+package dev.mikoto2000.rei.ui.shell.sound;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;

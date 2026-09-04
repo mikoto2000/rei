@@ -13,9 +13,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
-import dev.mikoto2000.rei.core.command.ChatCommand;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.llm.ConversationIds;
+import dev.mikoto2000.rei.llm.FixedLlmChatClientProvider;
+import dev.mikoto2000.rei.llm.FixedLlmModelProvider;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
@@ -30,8 +31,8 @@ public class BlueskyReplyTextGenerator {
 
   public BlueskyReplyTextGenerator(ObjectProvider<ChatClient> chatClientProvider,
       ModelHolderService modelHolderService) {
-    this(new ChatCommand.FixedLlmChatClientProvider(chatClientProvider.getObject()), modelHolderService,
-        new ChatCommand.FixedLlmModelProvider(), new BlueskyProperties());
+    this(new FixedLlmChatClientProvider(chatClientProvider.getObject()), modelHolderService,
+        new FixedLlmModelProvider(), new BlueskyProperties());
   }
 
   @Autowired

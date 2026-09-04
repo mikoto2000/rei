@@ -23,6 +23,7 @@ import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.search.SearchKnowledgeResult;
 import dev.mikoto2000.rei.search.SearchKnowledgeService;
+import dev.mikoto2000.rei.ui.shell.RootCommand;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.websearch.WebSearchContext;
 import dev.mikoto2000.rei.websearch.WebSearchPage;
