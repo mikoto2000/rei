@@ -13,6 +13,7 @@ public final class LlmFeature {
   public static final String OUTPUT_LIMIT_PLANNER = "output-limit-planner";
   public static final String IMAGE_PROMPT = "image-prompt";
   public static final String IMAGE_GENERATION = "image-generation";
+  public static final String WEB_PAGE_SUMMARY = "web-page-summary";
 
   private LlmFeature() {
   }

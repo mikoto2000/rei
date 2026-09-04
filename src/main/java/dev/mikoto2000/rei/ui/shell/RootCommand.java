@@ -19,6 +19,7 @@ import dev.mikoto2000.rei.interest.command.InterestCommand;
 import dev.mikoto2000.rei.memory.command.MemoryCommand;
 import dev.mikoto2000.rei.reminder.command.ReminderCommand;
 import dev.mikoto2000.rei.skills.command.SkillCommand;
+import dev.mikoto2000.rei.summarize.command.SummarizeCommand;
 import dev.mikoto2000.rei.task.command.TaskCommand;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
@@ -50,6 +51,7 @@ subcommands = {
   MemoryCommand.class,
   SkillCommand.class,
   ImageCommand.class,
+  SummarizeCommand.class,
   ProfileCommand.class
 },
 mixinStandardHelpOptions = false)
