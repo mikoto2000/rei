@@ -1,4 +1,4 @@
-package dev.mikoto2000.rei.sound;
+package dev.mikoto2000.rei.ui.shell.sound;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

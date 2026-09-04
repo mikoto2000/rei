@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.time.Clock;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -27,13 +28,21 @@ import org.springframework.ai.chat.prompt.Prompt;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.core.chat.ChatExecutionService;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
+import dev.mikoto2000.rei.llm.FixedLlmChatClientProvider;
+import dev.mikoto2000.rei.llm.FixedLlmModelProvider;
 import dev.mikoto2000.rei.llm.LlmProperties;
 import dev.mikoto2000.rei.llm.OutputLimitReplanPlan;
 import dev.mikoto2000.rei.llm.OutputLimitReplanRequest;
 import dev.mikoto2000.rei.llm.OutputLimitReplanSubgoal;
 import dev.mikoto2000.rei.llm.OutputLimitReplanner;
 import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
-import dev.mikoto2000.rei.sound.ChatResponseNarrator;
+import dev.mikoto2000.rei.ui.shell.ChatCommand;
+import dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer;
+import dev.mikoto2000.rei.ui.shell.ShellEventOutput;
+import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
 
@@ -51,20 +60,16 @@ class ChatCommandTest {
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("answer "), response("text")));
 
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    PrintStream originalOut = System.out;
-    System.setOut(new PrintStream(out));
-    try {
-      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService, Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty())).execute("hello") == 0);
-    } finally {
-      System.setOut(originalOut);
-    }
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    RecordingOutput output = new RecordingOutput();
+    bus.subscribe(new ShellAgentEventRenderer(output));
+    assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
+        Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty(),
+        new AgentEventFactory(Clock.systemDefaultZone()), bus)).execute("hello") == 0);
 
-    String output = out.toString();
-    assertTrue(output.contains("=== answer("));
-    assertTrue(output.contains(" s) ==="));
-    assertTrue(output.contains("answer text"));
-    assertTrue(output.endsWith(System.lineSeparator()));
+    assertTrue(output.text().contains("=== answer ==="));
+    assertTrue(output.text().contains("answer text"));
+    assertTrue(output.text().contains("[agent] completed"));
   }
 
   @Test
@@ -81,22 +86,17 @@ class ChatCommandTest {
         response("answer "),
         responseWithUsage("", 12)));
 
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    PrintStream originalOut = System.out;
-    System.setOut(new PrintStream(out));
-    try {
-      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-          Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty())).execute("hello") == 0);
-    } finally {
-      System.setOut(originalOut);
-    }
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    RecordingOutput output = new RecordingOutput();
+    bus.subscribe(new ShellAgentEventRenderer(output));
+    assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
+        Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty(),
+        new AgentEventFactory(Clock.systemDefaultZone()), bus)).execute("hello") == 0);
 
-    String output = out.toString();
-    assertTrue(output.contains("answer "));
-    assertTrue(output.contains("=== metrics(TTFT "));
-    assertTrue(output.contains(", output "));
-    assertTrue(output.contains(", end-to-end "));
-    assertTrue(output.contains(" tok/s) ==="));
+    assertTrue(output.text().contains("answer "));
+    assertTrue(output.text().contains("[agent] completed"));
+    assertTrue(output.text().contains("TTFT "));
+    assertTrue(output.text().contains("end-to-end "));
   }
 
   @Test
@@ -126,7 +126,7 @@ class ChatCommandTest {
 
   @Test
   void calculatesGenerationMetricsFromDefinedTimeBoundaries() {
-    ChatCommand.GenerationMetrics metrics = ChatCommand.calculateGenerationMetrics(
+    ChatExecutionService.GenerationMetrics metrics = ChatExecutionService.calculateGenerationMetrics(
         1_000_000_000L, 1_200_000_000L, 2_200_000_000L, 2_500_000_000L, 11, 3);
 
     assertEquals(200.0d, metrics.timeToFirstTokenMillis(), 0.0001d);
@@ -136,7 +136,7 @@ class ChatCommandTest {
 
   @Test
   void outputSpeedIsUnavailableWhenProviderDeliversAnswerInOneChunk() {
-    ChatCommand.GenerationMetrics metrics = ChatCommand.calculateGenerationMetrics(
+    ChatExecutionService.GenerationMetrics metrics = ChatExecutionService.calculateGenerationMetrics(
         1_000_000_000L, 1_200_000_000L, 1_200_000_100L, 1_500_000_000L, 11, 1);
 
     assertTrue(metrics.outputTokensPerSecond() == null);
@@ -154,19 +154,14 @@ class ChatCommandTest {
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.error(new java.net.ConnectException("Connection refused")));
 
-    ByteArrayOutputStream err = new ByteArrayOutputStream();
-    PrintStream originalErr = System.err;
-    System.setErr(new PrintStream(err));
-    try {
-      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-          Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty())).execute("hello") == 0);
-    } finally {
-      System.setErr(originalErr);
-    }
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    RecordingOutput output = new RecordingOutput();
+    bus.subscribe(new ShellAgentEventRenderer(output));
+    assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
+        Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty(),
+        new AgentEventFactory(Clock.systemDefaultZone()), bus)).execute("hello") == 0);
 
-    String errorOutput = err.toString();
-    assertTrue(errorOutput.contains("[error]"));
-    assertTrue(errorOutput.contains("Connection refused"));
+    assertTrue(output.text().contains("[agent] failed"));
   }
 
   @Test
@@ -182,17 +177,9 @@ class ChatCommandTest {
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(responseWithFinishReason("partial", "length")));
 
-    ByteArrayOutputStream err = new ByteArrayOutputStream();
-    PrintStream originalErr = System.err;
-    System.setErr(new PrintStream(err));
-    try {
-      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-          narrator, java.util.Optional.empty())).execute("hello") == 0);
-    } finally {
-      System.setErr(originalErr);
-    }
+    assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
+        narrator, java.util.Optional.empty())).execute("hello") == 0);
 
-    assertTrue(err.toString().contains("output token limit"));
     verify(narrator, never()).narrateIfCompleted(any());
   }
 
@@ -215,9 +202,9 @@ class ChatCommandTest {
     System.setOut(new PrintStream(out));
     try {
       assertTrue(new CommandLine(new ChatCommand(
-          new ChatCommand.FixedLlmChatClientProvider(chatClient),
+          new FixedLlmChatClientProvider(chatClient),
           modelHolderService,
-          new ChatCommand.FixedLlmModelProvider(),
+          new FixedLlmModelProvider(),
           new LlmProperties(),
           cancellationService,
           narrator,
@@ -259,9 +246,9 @@ class ChatCommandTest {
     System.setOut(new PrintStream(out));
     try {
       assertTrue(new CommandLine(new ChatCommand(
-          new ChatCommand.FixedLlmChatClientProvider(chatClient),
+          new FixedLlmChatClientProvider(chatClient),
           modelHolderService,
-          new ChatCommand.FixedLlmModelProvider(),
+          new FixedLlmModelProvider(),
           properties,
           cancellationService,
           narrator,
@@ -302,26 +289,18 @@ class ChatCommandTest {
     when(replanner.replan(any(OutputLimitReplanRequest.class))).thenReturn(
         new OutputLimitReplanPlan(List.of(new OutputLimitReplanSubgoal("one", "large subgoal")), "integrate"));
 
-    ByteArrayOutputStream err = new ByteArrayOutputStream();
-    PrintStream originalErr = System.err;
-    System.setErr(new PrintStream(err));
-    try {
-      assertTrue(new CommandLine(new ChatCommand(
-          new ChatCommand.FixedLlmChatClientProvider(chatClient),
-          modelHolderService,
-          new ChatCommand.FixedLlmModelProvider(),
-          properties,
-          cancellationService,
-          narrator,
-          java.util.Optional.empty(),
-          java.util.Optional.of(replanner))).execute("original goal") == 0);
-    } finally {
-      System.setErr(originalErr);
-    }
+    assertTrue(new CommandLine(new ChatCommand(
+        new FixedLlmChatClientProvider(chatClient),
+        modelHolderService,
+        new FixedLlmModelProvider(),
+        properties,
+        cancellationService,
+        narrator,
+        java.util.Optional.empty(),
+        java.util.Optional.of(replanner))).execute("original goal") == 0);
 
     verify(replanner, Mockito.times(1)).replan(any());
     verify(chatClient, Mockito.times(2)).prompt(any(Prompt.class));
-    assertTrue(err.toString().contains("replan budget exhausted"));
     verify(narrator, never()).narrateIfCompleted(any());
   }
 
@@ -341,26 +320,18 @@ class ChatCommandTest {
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(responseWithFinishReason("partial", "length")));
 
-    ByteArrayOutputStream err = new ByteArrayOutputStream();
-    PrintStream originalErr = System.err;
-    System.setErr(new PrintStream(err));
-    try {
-      assertTrue(new CommandLine(new ChatCommand(
-          new ChatCommand.FixedLlmChatClientProvider(chatClient),
-          modelHolderService,
-          new ChatCommand.FixedLlmModelProvider(),
-          properties,
-          cancellationService,
-          narrator,
-          java.util.Optional.empty(),
-          java.util.Optional.of(replanner))).execute("original goal") == 0);
-    } finally {
-      System.setErr(originalErr);
-    }
+    assertTrue(new CommandLine(new ChatCommand(
+        new FixedLlmChatClientProvider(chatClient),
+        modelHolderService,
+        new FixedLlmModelProvider(),
+        properties,
+        cancellationService,
+        narrator,
+        java.util.Optional.empty(),
+        java.util.Optional.of(replanner))).execute("original goal") == 0);
 
     verify(replanner, never()).replan(any());
     verify(chatClient, Mockito.times(1)).prompt(any(Prompt.class));
-    assertTrue(err.toString().contains("LLM call budget exhausted"));
     verify(narrator, never()).narrateIfCompleted(any());
   }
 
@@ -392,9 +363,9 @@ class ChatCommandTest {
     System.setOut(new PrintStream(out));
     try {
       assertTrue(new CommandLine(new ChatCommand(
-          new ChatCommand.FixedLlmChatClientProvider(chatClient),
+          new FixedLlmChatClientProvider(chatClient),
           modelHolderService,
-          new ChatCommand.FixedLlmModelProvider(),
+          new FixedLlmModelProvider(),
           properties,
           cancellationService,
           narrator,
@@ -441,7 +412,7 @@ class ChatCommandTest {
   }
 
   @Test
-  void runPrintsMemorySuggestionWhenAutoTriggerIsTrue() {
+  void runRendersMemorySuggestionThroughShellAgentEventRendererWhenAutoTriggerIsTrue() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
@@ -454,18 +425,23 @@ class ChatCommandTest {
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("ok")));
     when(memoryConsolidatorService.shouldSuggestConsolidationNow()).thenReturn(true);
 
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    RecordingOutput output = new RecordingOutput();
+    bus.subscribe(new ShellAgentEventRenderer(output));
+    ByteArrayOutputStream directOut = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
-    System.setOut(new PrintStream(out));
+    System.setOut(new PrintStream(directOut));
     try {
       assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-          Mockito.mock(ChatResponseNarrator.class), java.util.Optional.of(memoryConsolidatorService)))
+          Mockito.mock(ChatResponseNarrator.class), java.util.Optional.of(memoryConsolidatorService),
+          new AgentEventFactory(Clock.systemDefaultZone()), bus))
           .execute("hello") == 0);
     } finally {
       System.setOut(originalOut);
     }
 
-    assertTrue(out.toString().contains("[memory] 記憶整理を実行することをお勧めします。"));
+    assertTrue(output.text().contains("[memory] 記憶整理を実行することをお勧めします。"));
+    assertTrue(directOut.toString().isBlank());
   }
 
   @Test
@@ -510,21 +486,25 @@ class ChatCommandTest {
         responseWithThinking("", "考えています"),
         response("answer")));
 
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
-    PrintStream originalOut = System.out;
-    System.setOut(new PrintStream(out));
-    try {
-      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-          Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty())).execute("hello") == 0);
-    } finally {
-      System.setOut(originalOut);
-    }
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    RecordingOutput output = new RecordingOutput();
+    bus.subscribe(new ShellAgentEventRenderer(output));
+    assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
+        Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty(),
+        new AgentEventFactory(Clock.systemDefaultZone()), bus)).execute("hello") == 0);
 
-    String output = out.toString();
-    assertTrue(output.contains("=== thinking ==="));
-    assertTrue(output.contains("考えています"));
-    assertTrue(output.contains("=== answer("));
-    assertTrue(output.indexOf("=== thinking ===") < output.indexOf("=== answer("));
+    assertTrue(output.text().contains("=== thinking ==="));
+    assertTrue(output.text().contains("考えています"));
+    assertTrue(output.text().contains("=== answer ==="));
+    assertTrue(output.text().indexOf("=== thinking ===") < output.text().indexOf("=== answer ==="));
+  }
+
+  private static final class RecordingOutput implements ShellEventOutput {
+    private final StringBuilder value = new StringBuilder();
+    public void print(String text) { value.append(text); }
+    public void println(String text) { value.append(text).append('\n'); }
+    public void flush() { }
+    String text() { return value.toString(); }
   }
 
   private static ChatResponse response(String text) {

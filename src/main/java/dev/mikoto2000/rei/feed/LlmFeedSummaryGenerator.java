@@ -16,7 +16,7 @@ public class LlmFeedSummaryGenerator implements FeedSummaryGenerator {
   private final LlmChatClientProvider chatClientProvider;
 
   public LlmFeedSummaryGenerator(ChatModel chatModel, CoreProperties coreProperties) {
-    this(new dev.mikoto2000.rei.core.command.ChatCommand.FixedLlmChatClientProvider(
+    this(new dev.mikoto2000.rei.llm.FixedLlmChatClientProvider(
         org.springframework.ai.chat.client.ChatClient.builder(chatModel)
             .defaultSystem(coreProperties.systemPrompt())
             .build()));

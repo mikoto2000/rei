@@ -11,13 +11,13 @@ import org.jline.reader.EndOfFileException;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import dev.mikoto2000.rei.core.command.RootCommand;
+import dev.mikoto2000.rei.ui.shell.RootCommand;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
-import dev.mikoto2000.rei.sound.ChatResponseNarrator;
-import dev.mikoto2000.rei.sound.SoundNotificationService;
+import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
+import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import picocli.CommandLine;
 

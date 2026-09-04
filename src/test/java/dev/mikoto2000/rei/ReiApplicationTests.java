@@ -9,7 +9,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import dev.mikoto2000.rei.core.command.ChatCommand;
+import dev.mikoto2000.rei.ui.shell.ChatCommand;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentRepository;
 
 @SpringBootTest(properties = "spring.ai.openai.api-key=test-key")

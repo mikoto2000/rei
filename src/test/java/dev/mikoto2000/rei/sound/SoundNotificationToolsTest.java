@@ -6,6 +6,8 @@ import static org.mockito.Mockito.verify;
 
 import org.junit.jupiter.api.Test;
 
+import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
+
 class SoundNotificationToolsTest {
 
   @Test

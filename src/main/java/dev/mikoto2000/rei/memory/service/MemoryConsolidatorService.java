@@ -36,7 +36,7 @@ public class MemoryConsolidatorService {
   public MemoryConsolidatorService(ChatClient chatClient,
       @Qualifier("dataSource") javax.sql.DataSource dataSource,
       MemoryProperties memoryProperties) {
-    this(new dev.mikoto2000.rei.core.command.ChatCommand.FixedLlmChatClientProvider(chatClient), dataSource,
+    this(new dev.mikoto2000.rei.llm.FixedLlmChatClientProvider(chatClient), dataSource,
         memoryProperties);
   }
 

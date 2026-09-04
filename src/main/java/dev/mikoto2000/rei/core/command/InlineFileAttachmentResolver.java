@@ -29,7 +29,7 @@ import org.springframework.util.MimeTypeUtils;
 /**
  * Resolves inline attachment markers in chat prompts.
  */
-class InlineFileAttachmentResolver {
+public class InlineFileAttachmentResolver {
 
   private static final Pattern FILE_TOKEN_PATTERN = Pattern.compile("(?<!\\\\)`@file:([^`]+)`");
   private static final Pattern CLIPBOARD_TOKEN_PATTERN = Pattern.compile("(?<!\\\\)`@clipboard`");
@@ -38,7 +38,7 @@ class InlineFileAttachmentResolver {
 
   private final ClipboardMediaProvider clipboardMediaProvider;
 
-  InlineFileAttachmentResolver() {
+  public InlineFileAttachmentResolver() {
     this(new AwtClipboardMediaProvider());
   }
 
@@ -46,7 +46,7 @@ class InlineFileAttachmentResolver {
     this.clipboardMediaProvider = clipboardMediaProvider;
   }
 
-  ResolvedPrompt resolve(String input) {
+  public ResolvedPrompt resolve(String input) {
     if (input == null || input.isEmpty()) {
       return new ResolvedPrompt("", List.of(), List.of());
     }
@@ -206,6 +206,6 @@ class InlineFileAttachmentResolver {
     }
   }
 
-  record ResolvedPrompt(String prompt, List<Media> media, List<String> warnings) {
+  public record ResolvedPrompt(String prompt, List<Media> media, List<String> warnings) {
   }
 }

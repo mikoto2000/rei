@@ -1,4 +1,4 @@
-package dev.mikoto2000.rei.core.command;
+package dev.mikoto2000.rei.core.chat;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,11 +17,14 @@ import org.springframework.stereotype.Component;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
+import dev.mikoto2000.rei.core.command.InlineFileAttachmentResolver;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.ErrorInformation;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.llm.ConversationIds;
+import dev.mikoto2000.rei.llm.FixedLlmChatClientProvider;
+import dev.mikoto2000.rei.llm.FixedLlmModelProvider;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
@@ -32,14 +35,11 @@ import dev.mikoto2000.rei.llm.OutputLimitReplanRequest;
 import dev.mikoto2000.rei.llm.OutputLimitReplanSubgoal;
 import dev.mikoto2000.rei.llm.OutputLimitReplanner;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
-import dev.mikoto2000.rei.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.core.working.WorkingSet;
 import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
 import dev.mikoto2000.rei.skills.SkillRoutingRunContext;
 import dev.mikoto2000.rei.topic.AgentActivityTracker;
 import dev.mikoto2000.rei.topic.TopicOrchestrator;
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Parameters;
 import reactor.core.Disposable;
 
 import java.time.Clock;
@@ -55,16 +55,10 @@ import java.util.Optional;
 
 import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 
-/**
- * ChatCommand
- */
-@Command(
-name = "chat",
-description = "Chat with AI")
 @Component
-public class ChatCommand implements Runnable {
+public class ChatExecutionService {
 
-  private static final Logger log = LoggerFactory.getLogger(ChatCommand.class);
+  private static final Logger log = LoggerFactory.getLogger(ChatExecutionService.class);
 
   private final LlmChatClientProvider chatClientProvider;
 
@@ -74,7 +68,6 @@ public class ChatCommand implements Runnable {
 
   private final CommandCancellationService cancellationService;
 
-  private final ChatResponseNarrator chatResponseNarrator;
   private final Optional<MemoryConsolidatorService> memoryConsolidatorService;
   private final Optional<OutputLimitReplanner> outputLimitReplanner;
   private final Optional<TopicOrchestrator> topicOrchestrator;
@@ -91,38 +84,38 @@ public class ChatCommand implements Runnable {
     this.conversationLogStore = conversationLogStore;
   }
 
-  public ChatCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
-      CommandCancellationService cancellationService, ChatResponseNarrator chatResponseNarrator,
+  public ChatExecutionService(ChatClient chatClient, ModelHolderService currentModelHolder,
+      CommandCancellationService cancellationService,
       Optional<MemoryConsolidatorService> memoryConsolidatorService) {
     this(new FixedLlmChatClientProvider(chatClient), currentModelHolder, new FixedLlmModelProvider(),
-        new LlmProperties(), cancellationService, chatResponseNarrator, memoryConsolidatorService, Optional.empty(),
+        new LlmProperties(), cancellationService, memoryConsolidatorService, Optional.empty(),
         Optional.empty(), Optional.empty(), Clock.systemDefaultZone(), Optional.empty(),
         new AgentEventFactory(Clock.systemDefaultZone()), new InMemoryAgentEventBus());
   }
 
-  public ChatCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
-      CommandCancellationService cancellationService, ChatResponseNarrator chatResponseNarrator,
+  public ChatExecutionService(ChatClient chatClient, ModelHolderService currentModelHolder,
+      CommandCancellationService cancellationService,
       Optional<MemoryConsolidatorService> memoryConsolidatorService, AgentEventFactory eventFactory,
       AgentEventPublisher eventPublisher) {
     this(new FixedLlmChatClientProvider(chatClient), currentModelHolder, new FixedLlmModelProvider(),
-        new LlmProperties(), cancellationService, chatResponseNarrator, memoryConsolidatorService, Optional.empty(),
+        new LlmProperties(), cancellationService, memoryConsolidatorService, Optional.empty(),
         Optional.empty(), Optional.empty(), Clock.systemDefaultZone(), Optional.empty(), eventFactory, eventPublisher);
   }
 
-  public ChatCommand(LlmChatClientProvider chatClientProvider, ModelHolderService currentModelHolder,
+  public ChatExecutionService(LlmChatClientProvider chatClientProvider, ModelHolderService currentModelHolder,
       LlmModelProvider modelProvider, LlmProperties llmProperties, CommandCancellationService cancellationService,
-      ChatResponseNarrator chatResponseNarrator, Optional<MemoryConsolidatorService> memoryConsolidatorService,
+      Optional<MemoryConsolidatorService> memoryConsolidatorService,
       Optional<OutputLimitReplanner> outputLimitReplanner) {
     this(chatClientProvider, currentModelHolder, modelProvider, llmProperties, cancellationService,
-        chatResponseNarrator, memoryConsolidatorService, outputLimitReplanner,
+        memoryConsolidatorService, outputLimitReplanner,
         Optional.empty(), Optional.empty(), Clock.systemDefaultZone(), Optional.empty(),
         new AgentEventFactory(Clock.systemDefaultZone()), new InMemoryAgentEventBus());
   }
 
   @Autowired
-  public ChatCommand(LlmChatClientProvider chatClientProvider, ModelHolderService currentModelHolder,
+  public ChatExecutionService(LlmChatClientProvider chatClientProvider, ModelHolderService currentModelHolder,
       LlmModelProvider modelProvider, LlmProperties llmProperties, CommandCancellationService cancellationService,
-      ChatResponseNarrator chatResponseNarrator, Optional<MemoryConsolidatorService> memoryConsolidatorService,
+      Optional<MemoryConsolidatorService> memoryConsolidatorService,
       Optional<OutputLimitReplanner> outputLimitReplanner,
       Optional<TopicOrchestrator> topicOrchestrator, Optional<WorkingSet> workingSet, Clock clock,
       Optional<AgentActivityTracker> activityTracker,
@@ -132,7 +125,6 @@ public class ChatCommand implements Runnable {
     this.modelProvider = modelProvider;
     this.llmProperties = llmProperties;
     this.cancellationService = cancellationService;
-    this.chatResponseNarrator = chatResponseNarrator;
     this.memoryConsolidatorService = memoryConsolidatorService;
     this.outputLimitReplanner = outputLimitReplanner;
     this.topicOrchestrator = topicOrchestrator;
@@ -143,14 +135,9 @@ public class ChatCommand implements Runnable {
     this.eventPublisher = eventPublisher;
   }
 
-  @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
-  private String[] prompts;
-
-  @Override
-  public void run() {
+  public ChatExecutionResult execute(String promptText) {
     long startedAtNanos = System.nanoTime();
     cancellationService.begin(Thread.currentThread());
-    chatResponseNarrator.reset();
     String runId = UUID.randomUUID().toString();
     SkillRoutingRunContext skillRoutingContext = new SkillRoutingRunContext(runId);
     AtomicLong runCompletionTokens = new AtomicLong();
@@ -158,7 +145,6 @@ public class ChatCommand implements Runnable {
     AtomicReference<GenerationMetrics> lastGenerationMetrics = new AtomicReference<>();
 
     try {
-      String promptText = String.join(" ", prompts);
       activityTracker.ifPresent(tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));
       appendConversationLog("user", promptText);
       OutputLimitRunBudget budget = new OutputLimitRunBudget(
@@ -166,8 +152,7 @@ public class ChatCommand implements Runnable {
           llmProperties.getOutputLimit().getMaxLlmCallsPerRun());
       if (!budget.tryConsumeLlmCall()) {
         log.warn("Chat skipped: LLM call budget exhausted before initial prompt");
-        System.err.println("[error] LLM call budget exhausted before initial prompt");
-        return;
+        return ChatExecutionResult.failed("LLM call budget exhausted before initial prompt");
       }
       eventPublisher.publish(eventFactory.runStarted(runId, "user-request", null));
       activityTracker.ifPresent(tracker -> tracker.recordAgentStarted(java.time.Instant.now(clock)));
@@ -187,12 +172,16 @@ public class ChatCommand implements Runnable {
             metrics == null ? null : metrics.outputTokensPerSecond(),
             metrics == null ? null : metrics.endToEndTokensPerSecond()));
         activityTracker.ifPresent(tracker -> tracker.recordAgentCompleted(java.time.Instant.now(clock)));
-        chatResponseNarrator.narrateIfCompleted(result.text());
-        maybeSuggestConsolidation();
+        boolean consolidationSuggested = shouldSuggestConsolidation();
+        if (consolidationSuggested) {
+          eventPublisher.publish(eventFactory.memoryConsolidationSuggested());
+        }
         maybeRefreshTopicCandidates();
+        return ChatExecutionResult.success(result.text(), consolidationSuggested);
       } else {
         eventPublisher.publish(eventFactory.runFailed(runId, terminalError(result.status())));
         activityTracker.ifPresent(tracker -> tracker.recordAgentCompleted(java.time.Instant.now(clock)));
+        return ChatExecutionResult.failed(terminalError(result.status()).message());
       }
     } finally {
       cancellationService.clear();
@@ -220,25 +209,21 @@ public class ChatCommand implements Runnable {
       AtomicLong runCompletionTokens, AtomicBoolean usageAvailable,
       AtomicReference<GenerationMetrics> lastGenerationMetrics) {
     if (outputLimitReplanner.isEmpty()) {
-      System.err.println("[error] output token limit reached");
       return ChatRunResult.outputLimit(partialOutput);
     }
     if (!budget.hasRemainingLlmCalls()) {
       log.warn("Output limit replan skipped: goal={}, reason=llm_call_budget_exhausted_before_planner",
           summarizeForLog(currentGoal));
-      System.err.println("[error] output token limit reached and LLM call budget exhausted");
       return ChatRunResult.outputLimit(partialOutput);
     }
     if (!budget.tryConsumeReplan()) {
       log.warn("Output limit replan skipped: goal={}, reason=replan_budget_exhausted, replanCount={}",
           summarizeForLog(currentGoal), budget.replanCount());
-      System.err.println("[error] output token limit reached and replan budget exhausted");
       return ChatRunResult.outputLimit(partialOutput);
     }
     if (!budget.tryConsumeLlmCall()) {
       log.warn("Output limit replan skipped: goal={}, reason=llm_call_budget_exhausted_before_planner",
           summarizeForLog(currentGoal));
-      System.err.println("[error] output token limit reached and LLM call budget exhausted");
       return ChatRunResult.outputLimit(partialOutput);
     }
 
@@ -256,7 +241,6 @@ public class ChatCommand implements Runnable {
           budget.remainingLlmCalls()));
     } catch (Exception e) {
       log.warn("Output limit replan failed", e);
-      System.err.println("[error] output token limit reached and replan failed: " + e.getMessage());
       return ChatRunResult.outputLimit(partialOutput);
     }
 
@@ -264,7 +248,6 @@ public class ChatCommand implements Runnable {
     for (OutputLimitReplanSubgoal subgoal : plan.subgoals()) {
       if (!budget.tryConsumeLlmCall()) {
         log.warn("Output limit subgoal skipped: LLM call budget exhausted");
-        System.err.println("[error] LLM call budget exhausted before subgoal: " + subgoal.id());
         return ChatRunResult.outputLimit(subgoalResults.toString());
       }
       log.info("Output limit subgoal started: id={}, goal={}", subgoal.id(), subgoal.goal());
@@ -286,7 +269,6 @@ public class ChatCommand implements Runnable {
 
     if (!budget.tryConsumeLlmCall()) {
       log.warn("Output limit final integration skipped: LLM call budget exhausted");
-      System.err.println("[error] LLM call budget exhausted before final integration");
       return ChatRunResult.outputLimit(subgoalResults.toString());
     }
     return executePrompt(buildIntegrationPrompt(originalUserRequest, plan.finalGoal(), subgoalResults.toString()),
@@ -302,7 +284,7 @@ public class ChatCommand implements Runnable {
         ? inlineFileAttachmentResolver.resolve(promptText)
         : new InlineFileAttachmentResolver.ResolvedPrompt(promptText, java.util.List.of(), java.util.List.of());
     for (String warning : resolvedPrompt.warnings()) {
-      IO.println(warning);
+      log.warn("Prompt attachment warning: {}", warning);
     }
 
     ChatClientRequestSpec requestSpec = chatClientProvider.chatClient(LlmFeature.CHAT)
@@ -318,8 +300,6 @@ public class ChatCommand implements Runnable {
 
     CountDownLatch latch = new CountDownLatch(1);
     AtomicReference<Throwable> errorRef = new AtomicReference<>();
-    AtomicBoolean headerPrinted = new AtomicBoolean(false);
-    AtomicBoolean thinkingHeaderPrinted = new AtomicBoolean(false);
     AtomicReference<String> previousThinking = new AtomicReference<>("");
     AtomicBoolean thinkingEventStarted = new AtomicBoolean(false);
     AtomicBoolean thinkingEventCompleted = new AtomicBoolean(false);
@@ -345,9 +325,8 @@ public class ChatCommand implements Runnable {
                 outputLimitReached.set(true);
               }
               captureCompletionTokens(response, completionTokens);
-              if (!headerPrinted.get()) {
-                printThinking(response, thinkingHeaderPrinted, previousThinking, thinkingEventStarted,
-                    thinkingId, thinkingBuilder);
+              if (!messageStarted.get()) {
+                publishThinking(response, previousThinking, thinkingEventStarted, thinkingId, thinkingBuilder);
               }
               String chunk = answerText(response);
               if (chunk == null || chunk.isEmpty()) {
@@ -356,17 +335,10 @@ public class ChatCommand implements Runnable {
               if (messageStarted.compareAndSet(false, true)) {
                 completeThinking(thinkingEventStarted, thinkingEventCompleted, thinkingId, thinkingBuilder);
                 eventPublisher.publish(eventFactory.messageStarted(messageId, "assistant"));
-              }
-              if (headerPrinted.compareAndSet(false, true)) {
-                if (thinkingHeaderPrinted.get()) {
-                  System.out.println();
-                }
-                IO.println(answerHeader(startedAtNanos));
                 answerStartedAtNanos.compareAndSet(0L, System.nanoTime());
               }
               answerLastChunkAtNanos.set(System.nanoTime());
               answerChunkCount.incrementAndGet();
-              System.out.print(chunk);
               responseBuilder.append(chunk);
               eventPublisher.publish(eventFactory.messageDelta(messageId, chunk));
             },
@@ -380,7 +352,6 @@ public class ChatCommand implements Runnable {
             });
     } catch (RuntimeException e) {
       log.warn("Chat response stream failed to start", e);
-      System.err.println("[error] " + buildUserFacingMessage(e));
       return ChatRunResult.failed();
     }
     cancellationService.register(disposable);
@@ -392,11 +363,9 @@ public class ChatCommand implements Runnable {
         usageAvailable.set(true);
       }
       completeThinking(thinkingEventStarted, thinkingEventCompleted, thinkingId, thinkingBuilder);
-      System.out.println();
       Throwable error = errorRef.get();
       if (error != null) {
         log.warn("Chat response failed", error);
-        System.err.println("[error] " + buildUserFacingMessage(error));
         return ChatRunResult.failed();
       }
       if (outputLimitReached.get()) {
@@ -410,18 +379,14 @@ public class ChatCommand implements Runnable {
       GenerationMetrics metrics = calculateGenerationMetrics(requestStartedAtNanos, answerStartedAtNanos.get(),
           answerLastChunkAtNanos.get(), streamCompletedAtNanos.get(), completionTokens.get(), answerChunkCount.get());
       lastGenerationMetrics.set(metrics);
-      printGenerationMetrics(metrics);
       return ChatRunResult.success(responseBuilder.toString());
     } catch (InterruptedException e) {
       completeThinking(thinkingEventStarted, thinkingEventCompleted, thinkingId, thinkingBuilder);
       if (cancellationService.consumeCancellationRequested()) {
-        System.out.println();
-        IO.println("[cancelled]");
         return ChatRunResult.cancelled();
       }
       Thread.currentThread().interrupt();
       log.warn("Chat response wait interrupted", e);
-      IO.println("[error] 回答待機が中断されました");
       return ChatRunResult.failed();
     }
   }
@@ -454,15 +419,17 @@ public class ChatCommand implements Runnable {
     return normalized.length() <= maxLength ? normalized : normalized.substring(0, maxLength) + "...";
   }
 
-  private void maybeSuggestConsolidation() {
+  private boolean shouldSuggestConsolidation() {
+    AtomicBoolean suggested = new AtomicBoolean(false);
     memoryConsolidatorService.ifPresent(service -> {
       try {
         if (service.shouldSuggestConsolidationNow()) {
-          IO.println("[memory] 記憶整理を実行することをお勧めします。/memory consolidate を実行してください。");
+          suggested.set(true);
         }
       } catch (Exception ignored) {
       }
     });
+    return suggested.get();
   }
 
   private void maybeRefreshTopicCandidates() {
@@ -492,11 +459,6 @@ public class ChatCommand implements Runnable {
     return current;
   }
 
-  String answerHeader(long startedAtNanos) {
-    double elapsedSeconds = (System.nanoTime() - startedAtNanos) / 1_000_000_000.0d;
-    return "=== answer(" + String.format(Locale.ROOT, "%.1f", elapsedSeconds) + " s) ===";
-  }
-
   private void captureCompletionTokens(ChatResponse response, AtomicInteger completionTokens) {
     if (response == null || response.getMetadata() == null) {
       return;
@@ -508,7 +470,7 @@ public class ChatCommand implements Runnable {
     completionTokens.set(usage.getCompletionTokens());
   }
 
-  static GenerationMetrics calculateGenerationMetrics(long requestStartedAtNanos, long answerStartedAtNanos,
+  public static GenerationMetrics calculateGenerationMetrics(long requestStartedAtNanos, long answerStartedAtNanos,
       long answerLastChunkAtNanos, long completedAtNanos, int completionTokens, int answerChunkCount) {
     if (requestStartedAtNanos <= 0L || answerStartedAtNanos <= 0L || completionTokens <= 0) return null;
     double ttftMillis = Math.max((answerStartedAtNanos - requestStartedAtNanos) / 1_000_000.0d, 0.0d);
@@ -521,20 +483,10 @@ public class ChatCommand implements Runnable {
     return new GenerationMetrics(ttftMillis, outputTokensPerSecond, completionTokens / endToEndSeconds);
   }
 
-  private void printGenerationMetrics(GenerationMetrics metrics) {
-    if (metrics == null) return;
-    String outputSpeed = metrics.outputTokensPerSecond() == null
-        ? "unavailable" : String.format(Locale.ROOT, "%.1f tok/s", metrics.outputTokensPerSecond());
-    IO.println("=== metrics(TTFT " + String.format(Locale.ROOT, "%.1f ms", metrics.timeToFirstTokenMillis())
-        + ", output " + outputSpeed + ", end-to-end "
-        + String.format(Locale.ROOT, "%.1f tok/s", metrics.endToEndTokensPerSecond()) + ") ===");
-  }
-
-  record GenerationMetrics(Double timeToFirstTokenMillis, Double outputTokensPerSecond,
+  public record GenerationMetrics(Double timeToFirstTokenMillis, Double outputTokensPerSecond,
       Double endToEndTokensPerSecond) { }
 
-  private void printThinking(ChatResponse response, AtomicBoolean thinkingHeaderPrinted,
-      AtomicReference<String> previousThinking, AtomicBoolean thinkingEventStarted,
+  private void publishThinking(ChatResponse response, AtomicReference<String> previousThinking, AtomicBoolean thinkingEventStarted,
       String thinkingId, StringBuilder thinkingBuilder) {
     String thinking = thinkingText(response);
     if (thinking == null || thinking.isEmpty()) {
@@ -544,10 +496,6 @@ public class ChatCommand implements Runnable {
     if (delta.isEmpty()) {
       return;
     }
-    if (thinkingHeaderPrinted.compareAndSet(false, true)) {
-      IO.println("=== thinking ===");
-    }
-    System.out.print(delta);
     if (thinkingEventStarted.compareAndSet(false, true)) {
       eventPublisher.publish(eventFactory.thinkingStarted(thinkingId));
     }
@@ -679,29 +627,4 @@ public class ChatCommand implements Runnable {
     }
   }
 
-  public static class FixedLlmChatClientProvider extends LlmChatClientProvider {
-    private final ChatClient chatClient;
-
-    public FixedLlmChatClientProvider(ChatClient chatClient) {
-      super(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-          null, null, null, null, null, null);
-      this.chatClient = chatClient;
-    }
-
-    @Override
-    public ChatClient chatClient(String feature) {
-      return chatClient;
-    }
-  }
-
-  public static class FixedLlmModelProvider extends LlmModelProvider {
-    public FixedLlmModelProvider() {
-      super(null, new dev.mikoto2000.rei.llm.LlmProperties());
-    }
-
-    @Override
-    public String model(String feature, String defaultModel) {
-      return defaultModel;
-    }
-  }
 }

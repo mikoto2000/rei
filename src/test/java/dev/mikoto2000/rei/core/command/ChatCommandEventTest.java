@@ -32,7 +32,8 @@ import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.AgentRunCompletedPayload;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
-import dev.mikoto2000.rei.sound.ChatResponseNarrator;
+import dev.mikoto2000.rei.ui.shell.ChatCommand;
+import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
 
