@@ -6,7 +6,7 @@ public class FixedLlmChatClientProvider extends LlmChatClientProvider {
   private final ChatClient chatClient;
 
   public FixedLlmChatClientProvider(ChatClient chatClient) {
-    super(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+    super(null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
         null, null, null, null, null, null);
     this.chatClient = chatClient;
   }

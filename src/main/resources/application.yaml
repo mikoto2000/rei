@@ -104,6 +104,14 @@ rei:
     timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
     prompt-enhancement:
       enabled: ${REI_IMAGE_PROMPT_ENHANCEMENT_ENABLED:true}
+  computer-use:
+    enabled: ${REI_COMPUTER_USE_ENABLED:false}
+    max-depth: ${REI_COMPUTER_USE_MAX_DEPTH:3}
+    max-elements: ${REI_COMPUTER_USE_MAX_ELEMENTS:80}
+    max-actions: ${REI_COMPUTER_USE_MAX_ACTIONS:12}
+    active-window-only: ${REI_COMPUTER_USE_ACTIVE_WINDOW_ONLY:true}
+    visible-only: ${REI_COMPUTER_USE_VISIBLE_ONLY:true}
+    stabilization-delay: ${REI_COMPUTER_USE_STABILIZATION_DELAY:150ms}
   skills:
     enabled: ${REI_SKILLS_ENABLED:true}
     directories:

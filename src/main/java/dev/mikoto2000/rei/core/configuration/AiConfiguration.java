@@ -19,6 +19,7 @@ import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.bluesky.BlueskyProperties;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
+import dev.mikoto2000.rei.computer.ComputerUseTools;
 import dev.mikoto2000.rei.core.actionplan.ActionPlanAdvisor;
 import dev.mikoto2000.rei.core.checkpoint.CheckpointAdvisor;
 import dev.mikoto2000.rei.core.filesummary.FileSummaryAdvisor;
@@ -77,6 +78,7 @@ public class AiConfiguration {
   private final ClockTools clockTools;
   private final SchedulerTools schedulerTools;
   private final ConversationHistoryTools conversationHistoryTools;
+  private final ObjectProvider<ComputerUseTools> computerUseTools;
   private final RuntimeContextAdvisor runtimeContextAdvisor;
   private final WorkingSetAdvisor workingSetAdvisor;
   private final TaskStateAdvisor taskStateAdvisor;
@@ -117,9 +119,15 @@ public class AiConfiguration {
             .maxTokens(llmProperties.getMaxOutputTokens())
             .build())
         .defaultAdvisors(advisors)
-        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
-            soundNotificationTools, blueskyPostTools, urlContentFetchTools, textTools, clockTools, schedulerTools, taskStateTools,
+        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools,
+            webSearchTools, soundNotificationTools, blueskyPostTools, urlContentFetchTools, textTools, clockTools,
+            schedulerTools, taskStateTools,
             conversationHistoryTools);
+
+    ComputerUseTools computerUseToolsInstance = computerUseTools.getIfAvailable();
+    if (computerUseToolsInstance != null) {
+      builder.defaultTools(computerUseToolsInstance);
+    }
 
     ToolEventCallbackProvider toolCallbackProvider = toolEventCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {

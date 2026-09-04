@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
+import dev.mikoto2000.rei.computer.ComputerUseTools;
 import dev.mikoto2000.rei.core.configuration.CoreProperties;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
@@ -56,6 +57,7 @@ public class LlmChatClientProvider {
   private final ObjectProvider<BlueskyPostTools> blueskyPostTools;
   private final ObjectProvider<UrlContentFetchTools> urlContentFetchTools;
   private final ObjectProvider<TextTools> textTools;
+  private final ObjectProvider<ComputerUseTools> computerUseTools;
   private final ObjectProvider<RuntimeContextAdvisor> runtimeContextAdvisor;
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
   private final ObjectProvider<WorkingSetAdvisor> workingSetAdvisor;
@@ -75,6 +77,7 @@ public class LlmChatClientProvider {
       ObjectProvider<SoundNotificationTools> soundNotificationTools, ObjectProvider<BlueskyPostTools> blueskyPostTools,
       ObjectProvider<UrlContentFetchTools> urlContentFetchTools,
       ObjectProvider<TextTools> textTools,
+      ObjectProvider<ComputerUseTools> computerUseTools,
       ObjectProvider<RuntimeContextAdvisor> runtimeContextAdvisor,
       ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor,
       ObjectProvider<WorkingSetAdvisor> workingSetAdvisor,
@@ -98,6 +101,7 @@ public class LlmChatClientProvider {
     this.blueskyPostTools = blueskyPostTools;
     this.urlContentFetchTools = urlContentFetchTools;
     this.textTools = textTools;
+    this.computerUseTools = computerUseTools;
     this.runtimeContextAdvisor = runtimeContextAdvisor;
     this.agentSkillAdvisor = agentSkillAdvisor;
     this.workingSetAdvisor = workingSetAdvisor;
@@ -153,6 +157,7 @@ public class LlmChatClientProvider {
     addIfAvailable(toolObjects, blueskyPostTools);
     addIfAvailable(toolObjects, urlContentFetchTools);
     addIfAvailable(toolObjects, textTools);
+    addIfAvailable(toolObjects, computerUseTools);
     TaskStateTools taskStateToolsInstance = taskStateTools.getIfAvailable();
     if (taskStateToolsInstance != null) {
       toolObjects.add(taskStateToolsInstance);

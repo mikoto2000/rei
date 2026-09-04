@@ -18,6 +18,7 @@ import org.springframework.beans.factory.ObjectProvider;
 
 import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.briefing.BriefingTools;
+import dev.mikoto2000.rei.computer.ComputerUseTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.core.actionplan.ActionPlanAdvisor;
 import dev.mikoto2000.rei.core.checkpoint.CheckpointAdvisor;
@@ -74,6 +75,7 @@ class AiConfigurationTest {
         Mockito.mock(ClockTools.class),
         Mockito.mock(SchedulerTools.class),
         Mockito.mock(ConversationHistoryTools.class),
+        mockProviderReturning(Mockito.mock(ComputerUseTools.class)),
         Mockito.mock(RuntimeContextAdvisor.class),
         Mockito.mock(WorkingSetAdvisor.class),
         Mockito.mock(TaskStateAdvisor.class),
@@ -119,6 +121,7 @@ class AiConfigurationTest {
         Mockito.mock(ClockTools.class),
         Mockito.mock(SchedulerTools.class),
         Mockito.mock(ConversationHistoryTools.class),
+        mockProviderReturning(Mockito.mock(ComputerUseTools.class)),
         Mockito.mock(RuntimeContextAdvisor.class),
         Mockito.mock(WorkingSetAdvisor.class),
         Mockito.mock(TaskStateAdvisor.class),
@@ -163,6 +166,7 @@ class AiConfigurationTest {
         Mockito.mock(ClockTools.class),
         Mockito.mock(SchedulerTools.class),
         Mockito.mock(ConversationHistoryTools.class),
+        mockProviderReturning(Mockito.mock(ComputerUseTools.class)),
         Mockito.mock(RuntimeContextAdvisor.class),
         Mockito.mock(WorkingSetAdvisor.class),
         Mockito.mock(TaskStateAdvisor.class),
@@ -208,6 +212,7 @@ class AiConfigurationTest {
         Mockito.mock(ClockTools.class),
         Mockito.mock(SchedulerTools.class),
         Mockito.mock(ConversationHistoryTools.class),
+        mockProviderReturning(Mockito.mock(ComputerUseTools.class)),
         Mockito.mock(RuntimeContextAdvisor.class),
         Mockito.mock(WorkingSetAdvisor.class),
         Mockito.mock(TaskStateAdvisor.class),
