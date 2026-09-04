@@ -8,9 +8,11 @@ import java.io.PrintWriter;
 import java.net.URI;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import dev.mikoto2000.rei.summarize.SummaryResult;
 import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
+import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import picocli.CommandLine;
 
 class SummarizeCommandTest {
@@ -55,6 +57,19 @@ class SummarizeCommandTest {
     assertEquals(0, exitCode);
     assertEquals(URI.create("https://example.com/article"), summarizer.uri);
     assertTrue(out.toString().contains("要約結果"));
+  }
+
+  @Test
+  void narratesSummaryWhenSummarizationSucceeds() {
+    RecordingSummarizer summarizer = new RecordingSummarizer("要約結果");
+    ChatResponseNarrator narrator = Mockito.mock(ChatResponseNarrator.class);
+    CommandLine command = new CommandLine(new SummarizeCommand(summarizer, narrator));
+
+    int exitCode = command.execute("https://example.com/article");
+
+    assertEquals(0, exitCode);
+    Mockito.verify(narrator).reset();
+    Mockito.verify(narrator).narrateIfCompleted("要約結果");
   }
 
   private static final class RecordingSummarizer implements WebPageSummarizerService {

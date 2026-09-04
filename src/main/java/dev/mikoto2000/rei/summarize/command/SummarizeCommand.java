@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import dev.mikoto2000.rei.summarize.SummarizationException;
 import dev.mikoto2000.rei.summarize.SummaryResult;
 import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
+import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
@@ -20,6 +21,7 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
   private static final String USAGE = "Usage: /summarize <URL>";
 
   private WebPageSummarizerService summarizerService;
+  private ChatResponseNarrator chatResponseNarrator;
 
   @Parameters(index = "0", arity = "0..1", paramLabel = "URL", description = "要約する URL")
   private String url;
@@ -30,13 +32,21 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
   public SummarizeCommand() {
   }
 
-  @Autowired
   public SummarizeCommand(WebPageSummarizerService summarizerService) {
+    this(summarizerService, null);
+  }
+
+  @Autowired
+  public SummarizeCommand(WebPageSummarizerService summarizerService, ChatResponseNarrator chatResponseNarrator) {
     this.summarizerService = summarizerService;
+    this.chatResponseNarrator = chatResponseNarrator;
   }
 
   @Override
   public Integer call() {
+    if (chatResponseNarrator != null) {
+      chatResponseNarrator.reset();
+    }
     URI uri = parseUrl();
     if (uri == null) {
       return 2;
@@ -48,6 +58,9 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
     try {
       SummaryResult result = summarizerService.summarize(uri);
       spec.commandLine().getOut().println(result.summary());
+      if (chatResponseNarrator != null) {
+        chatResponseNarrator.narrateIfCompleted(result.summary());
+      }
       return 0;
     } catch (SummarizationException e) {
       spec.commandLine().getErr().println(errorMessage(e));
