@@ -22,4 +22,12 @@ class UserInputParserTest {
     assertArrayEquals(new String[] {"project", "add", "C:\\work dir"},
         parser.parse("/project add \"C:\\work dir\"").arguments());
   }
+
+  @Test
+  void recognizesSummarizeSlashCommand() {
+    UserInputParser.ParsedInput parsed = parser.parse("/summarize https://example.com");
+
+    assertEquals(UserInputParser.Kind.SLASH_COMMAND, parsed.kind());
+    assertArrayEquals(new String[] {"summarize", "https://example.com"}, parsed.arguments());
+  }
 }
