@@ -14,6 +14,10 @@ public class WindowsUiAutomationBackend implements UiAutomationBackend {
     this.automation = createAutomation();
   }
 
+  WindowsUiAutomationBackend(Object automation) {
+    this.automation = automation;
+  }
+
   @Override
   public ComputerObservation observe(ComputerObservationRequest request) {
     if (automation == null) {
@@ -78,6 +82,10 @@ public class WindowsUiAutomationBackend implements UiAutomationBackend {
       return ComputerActionResult.failure("UIA target not found", ComputerActionBackend.UI_AUTOMATION, false);
     }
     Object result = callAny(target, "focus", "setFocus");
+    if (result == FAILED) {
+      Object rawElement = callAny(target, "getElement");
+      result = callAny(rawElement, "setFocus");
+    }
     return result == FAILED ? ComputerActionResult.failure("UIA focus failed", ComputerActionBackend.UI_AUTOMATION,
         false) : ComputerActionResult.success(ComputerActionBackend.UI_AUTOMATION, false);
   }
@@ -256,7 +264,25 @@ public class WindowsUiAutomationBackend implements UiAutomationBackend {
         return byName;
       }
     }
+    Object children = callAny(window, new Class<?>[] {boolean.class}, new Object[] {false}, "getChildren");
+    if (children instanceof Iterable<?> iterable) {
+      for (Object child : iterable) {
+        ComputerElement candidate = toElement(child);
+        if (matchesObservedElement(element, candidate)) {
+          return child;
+        }
+      }
+    }
     return null;
+  }
+
+  private boolean matchesObservedElement(ComputerElement observed, ComputerElement candidate) {
+    if (observed.bounds() != null && candidate.bounds() != null && observed.bounds().equals(candidate.bounds())) {
+      return true;
+    }
+    boolean sameRole = observed.role() != null && observed.role().equals(candidate.role());
+    boolean sameName = observed.name() != null && !observed.name().isBlank() && observed.name().equals(candidate.name());
+    return sameRole && sameName;
   }
 
   private String normalize(String role) {
