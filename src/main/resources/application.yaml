@@ -149,6 +149,10 @@ rei:
       enabled: ${REI_TOPIC_GENERATOR_IDLE_TRIGGER_ENABLED:true}
       check-interval: ${REI_TOPIC_GENERATOR_IDLE_TRIGGER_CHECK_INTERVAL:30s}
       minimum-idle: ${REI_TOPIC_GENERATOR_IDLE_TRIGGER_MINIMUM_IDLE:2m}
+    shell-notification:
+      verbosity: ${REI_TOPIC_GENERATOR_SHELL_NOTIFICATION_VERBOSITY:summary}
+      minimum-interval: ${REI_TOPIC_GENERATOR_SHELL_NOTIFICATION_MINIMUM_INTERVAL:30m}
+      show-idle-skipped: ${REI_TOPIC_GENERATOR_SHELL_NOTIFICATION_SHOW_IDLE_SKIPPED:false}
     curiosity:
       expiration: ${REI_TOPIC_GENERATOR_CURIOSITY_EXPIRATION:30d}
     discovery:

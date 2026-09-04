@@ -1,5 +1,8 @@
 package dev.mikoto2000.rei.ui.shell;
 
+import java.time.Duration;
+import java.time.Instant;
+
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventListener;
 import dev.mikoto2000.rei.event.AgentRunCompletedPayload;
@@ -37,22 +40,38 @@ import dev.mikoto2000.rei.event.WorkingSetItemAddedPayload;
 import dev.mikoto2000.rei.event.WorkingSetItemRemovedPayload;
 import dev.mikoto2000.rei.event.WorkingSetSearchCompletedPayload;
 import dev.mikoto2000.rei.event.WorkingSetSearchStartedPayload;
+import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
+import org.springframework.core.env.Environment;
 
 /** Append-only Shell presentation adapter for Agent events. */
 public final class ShellAgentEventRenderer implements AgentEventListener {
   private final ShellEventOutput output;
+  private final TopicNotificationOptions topicNotificationOptions;
   private String assistantMessageId;
   private boolean assistantLineOpen;
   private boolean toolInterruptedMessage;
   private String thinkingId;
   private boolean thinkingLineOpen;
+  private Instant lastThrottledTopicSummaryAt;
 
   public ShellAgentEventRenderer(ShellEventOutput output) {
+    this(output, TopicNotificationOptions.summary());
+  }
+
+  public ShellAgentEventRenderer(ShellEventOutput output, TopicNotificationOptions topicNotificationOptions) {
     this.output = output;
+    this.topicNotificationOptions = topicNotificationOptions == null
+        ? TopicNotificationOptions.summary()
+        : topicNotificationOptions;
   }
 
   @Override
   public synchronized void onEvent(AgentEvent event) {
+    if (isTopicEvent(event) && topicNotificationOptions.verbosity() != TopicNotificationVerbosity.VERBOSE) {
+      renderTopicSummary(event);
+      output.flush();
+      return;
+    }
     switch (event.type()) {
       case AGENT_RUN_STARTED -> {
         closeAssistantLine();
@@ -307,6 +326,66 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     output.flush();
   }
 
+  private boolean isTopicEvent(AgentEvent event) {
+    return event.type().name().startsWith("TOPIC_");
+  }
+
+  private void renderTopicSummary(AgentEvent event) {
+    if (topicNotificationOptions.verbosity() == TopicNotificationVerbosity.QUIET) return;
+    switch (event.type()) {
+      case TOPIC_CANDIDATES_REFRESHED -> {
+        closeAssistantLine();
+        TopicCandidatesRefreshedPayload payload = (TopicCandidatesRefreshedPayload) event.payload();
+        output.println("[topic] candidates refreshed: " + payload.candidateCount());
+      }
+      case TOPIC_SPOKEN -> {
+        if (!allowThrottledTopicSummary(event)) return;
+        closeAssistantLine();
+        TopicSpokenPayload payload = (TopicSpokenPayload) event.payload();
+        output.println("[topic] spoken: " + valueOr(payload.candidateId(), "none")
+            + " -> " + payload.messageId());
+      }
+      case TOPIC_SPEAK_SKIPPED -> {
+        TopicSpeakSkippedPayload payload = (TopicSpeakSkippedPayload) event.payload();
+        if (payload.reason() == TopicSpeakSkipReason.COOLDOWN) return;
+        if (!allowThrottledTopicSummary(event)) return;
+        closeAssistantLine();
+        output.println("[topic] speak skipped: " + payload.reason());
+      }
+      case TOPIC_AUTO_SPEAK_SUPPRESSED -> {
+        if (!allowThrottledTopicSummary(event)) return;
+        closeAssistantLine();
+        TopicAutoSpeakSuppressedPayload payload = (TopicAutoSpeakSuppressedPayload) event.payload();
+        output.println("[topic] auto speak suppressed: " + oneLineSummary(payload.reason()));
+      }
+      case TOPIC_IDLE_TRIGGER_EVALUATED -> {
+        TopicIdleTriggerEvaluatedPayload payload = (TopicIdleTriggerEvaluatedPayload) event.payload();
+        if (!payload.accepted() && !topicNotificationOptions.showIdleSkipped()) return;
+        if (!allowThrottledTopicSummary(event)) return;
+        closeAssistantLine();
+        output.println("[topic] idle trigger " + (payload.accepted() ? "accepted" : "skipped"));
+      }
+      case TOPIC_GENERATION_FAILED -> {
+        closeAssistantLine();
+        TopicGenerationFailedPayload payload = (TopicGenerationFailedPayload) event.payload();
+        output.println("[topic] generation failed: " + payload.stage() + " "
+            + oneLineSummary(payload.errorSummary()));
+      }
+      default -> { }
+    }
+  }
+
+  private boolean allowThrottledTopicSummary(AgentEvent event) {
+    Duration interval = topicNotificationOptions.minimumInterval();
+    if (interval == null || interval.isZero() || interval.isNegative()) return true;
+    if (lastThrottledTopicSummaryAt == null
+        || !event.timestamp().isBefore(lastThrottledTopicSummaryAt.plus(interval))) {
+      lastThrottledTopicSummaryAt = event.timestamp();
+      return true;
+    }
+    return false;
+  }
+
   private void messageStarted(MessageStartedPayload payload) {
     if ("assistant".equalsIgnoreCase(payload.role())) {
       closeThinkingLine();
@@ -433,5 +512,46 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   private String valueOr(String preferred, String fallback) {
     return preferred == null ? fallback : preferred;
+  }
+
+  public enum TopicNotificationVerbosity {
+    QUIET,
+    SUMMARY,
+    VERBOSE
+  }
+
+  public record TopicNotificationOptions(
+      TopicNotificationVerbosity verbosity,
+      Duration minimumInterval,
+      boolean showIdleSkipped) {
+
+    public static TopicNotificationOptions summary() {
+      return new TopicNotificationOptions(TopicNotificationVerbosity.SUMMARY, Duration.ofMinutes(30), false);
+    }
+
+    public static TopicNotificationOptions verbose() {
+      return new TopicNotificationOptions(TopicNotificationVerbosity.VERBOSE, Duration.ZERO, true);
+    }
+
+    public static TopicNotificationOptions from(Environment environment) {
+      if (environment == null) return summary();
+      String verbosityValue = environment.getProperty(
+          "rei.topic-generator.shell-notification.verbosity", "summary");
+      TopicNotificationVerbosity verbosity = parseVerbosity(verbosityValue);
+      Duration minimumInterval = environment.getProperty(
+          "rei.topic-generator.shell-notification.minimum-interval", Duration.class, Duration.ofMinutes(30));
+      boolean showIdleSkipped = environment.getProperty(
+          "rei.topic-generator.shell-notification.show-idle-skipped", Boolean.class, Boolean.FALSE);
+      return new TopicNotificationOptions(verbosity, minimumInterval, showIdleSkipped);
+    }
+
+    private static TopicNotificationVerbosity parseVerbosity(String value) {
+      if (value == null || value.isBlank()) return TopicNotificationVerbosity.SUMMARY;
+      try {
+        return TopicNotificationVerbosity.valueOf(value.trim().replace('-', '_').toUpperCase(java.util.Locale.ROOT));
+      } catch (IllegalArgumentException ignored) {
+        return TopicNotificationVerbosity.SUMMARY;
+      }
+    }
   }
 }

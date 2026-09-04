@@ -203,7 +203,8 @@ class ShellAgentEventRendererTest {
   @Test
   void rendersTopicEventsAndUnknownEventsDoNotBreakRenderer() {
     RecordingOutput output = new RecordingOutput();
-    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output,
+        ShellAgentEventRenderer.TopicNotificationOptions.verbose());
     TopicScoreBreakdown score = new TopicScoreBreakdown(0.16, 0.17, 0.27, 0.18, 0.05, 0.01, 0.82);
     renderer.onEvent(events.topicGenerationStarted("run-1", "tg-1", "agent-run"));
     renderer.onEvent(events.topicIdleTriggerEvaluated(IdleTriggerRejectReason.INSUFFICIENT_IDLE, false,
@@ -273,6 +274,21 @@ class ShellAgentEventRendererTest {
         + "[topic] generation failed\n"
         + "        stage: RANKING\n"
         + "        error: IllegalStateException: ranking failed\n", output.text());
+  }
+
+  @Test
+  void rendersTopicSummaryWithoutFillingShellDuringIdleCooldown() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.topicIdleTriggerEvaluated(null, true,
+        java.time.Duration.ofMinutes(3), java.time.Duration.ofMinutes(2)));
+    renderer.onEvent(events.topicGenerationStarted("run-1", "tg-1", "idle"));
+    renderer.onEvent(events.topicSelected("run-1", "tg-1", "topic-1", 0.82, 1));
+    renderer.onEvent(events.topicSpeakSkipped("run-1", "tg-1", "topic-1", TopicSpeakSkipReason.COOLDOWN,
+        Instant.parse("2026-08-23T00:30:00Z")));
+    renderer.onEvent(events.topicGenerationCompleted("run-1", "tg-1", 1, 1, 0, "topic-1", false, 184));
+
+    assertEquals("[topic] idle trigger accepted\n", output.text());
   }
 
   private static final class RecordingOutput implements ShellEventOutput {

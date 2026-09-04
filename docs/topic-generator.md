@@ -150,7 +150,16 @@ idle scheduler は、判定が `accepted` になったとき、または rejecte
 
 ## Shell 表示
 
-Shell は Topic lifecycle を簡潔に表示します。
+Shell の Topic 表示は、放置中に画面を埋め尽くさないよう `summary` がデフォルトです。
+イベント自体は Event Bus に publish されますが、Shell には重要な要約だけを表示します。
+
+`summary` では、候補更新、発話、重大な失敗、クールダウン以外の skip、抑制理由だけを表示します。
+`topic.generation.started`, `topic.candidate.generated`, `topic.candidate.scored`, `topic.candidate.rejected`, `topic.selected`, `topic.generation.completed` は `verbose` のときだけ表示します。
+`COOLDOWN` の `topic.speak.skipped` は、idle 放置中に繰り返されやすいため `summary` では表示しません。
+`topic.idle_trigger.evaluated` の skipped もデフォルトでは表示しません。
+背景系の要約通知には `minimum-interval` を適用し、長時間放置しても同じ種類の通知が増え続けないようにします。
+
+`verbose` では Topic lifecycle を詳細に表示します。
 
 ```text
 [topic] generation started
@@ -208,6 +217,10 @@ rei:
       enabled: true
       check-interval: 30s
       minimum-idle: 2m
+    shell-notification:
+      verbosity: summary
+      minimum-interval: 30m
+      show-idle-skipped: false
     curiosity:
       expiration: 30d
     discovery:

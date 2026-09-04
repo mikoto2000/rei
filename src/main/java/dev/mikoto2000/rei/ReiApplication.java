@@ -35,6 +35,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 import dev.mikoto2000.rei.core.command.ProjectAddDirectoryCompletion;
@@ -74,6 +75,7 @@ public class ReiApplication {
   private final ChatResponseNarrator chatResponseNarrator;
   private final AgentEventBus agentEventBus;
   private final AgentActivityTracker agentActivityTracker;
+  private final Environment environment;
 
   private static final String COMMAND_COMPLETION_MESSAGE = "コマンド実行が完了しました";
   private static final String MULTILINE_CONTINUATION = "\\";
@@ -89,7 +91,7 @@ public class ReiApplication {
       CommandUserInputDisplayPolicy commandUserInputDisplayPolicy,
       AsyncVectorDocumentService asyncVectorDocumentService, SoundNotificationService soundNotificationService,
       ChatResponseNarrator chatResponseNarrator, AgentEventBus agentEventBus,
-      AgentActivityTracker agentActivityTracker) {
+      AgentActivityTracker agentActivityTracker, Environment environment) {
     this.rootCommand = rootCommand;
     this.factory = factory;
     this.currentModelHolder = currentModelHolder;
@@ -102,6 +104,7 @@ public class ReiApplication {
     this.chatResponseNarrator = chatResponseNarrator;
     this.agentEventBus = agentEventBus;
     this.agentActivityTracker = agentActivityTracker;
+    this.environment = environment;
   }
 
   ReiApplication(RootCommand rootCommand, CommandLine.IFactory factory, ModelHolderService currentModelHolder,
@@ -113,7 +116,7 @@ public class ReiApplication {
     this(rootCommand, factory, currentModelHolder, escCancellationMonitor, commandCancellationService,
         commandCompletionNotificationPolicy, commandUserInputDisplayPolicy, asyncVectorDocumentService,
         soundNotificationService, chatResponseNarrator, agentEventBus,
-        new dev.mikoto2000.rei.topic.DefaultAgentActivityTracker(java.time.Clock.systemDefaultZone()));
+        new dev.mikoto2000.rei.topic.DefaultAgentActivityTracker(java.time.Clock.systemDefaultZone()), null);
   }
 
   public static void main(String[] args) throws IOException {
@@ -145,7 +148,8 @@ public class ReiApplication {
     LineReader reader = inputSession.reader();
     configureMultilineKeyBinding(reader);
     ShellEventSession shellEvents = new ShellEventSession(agentEventBus,
-        new ShellAgentEventRenderer(new JLineShellEventOutput(reader)));
+        new ShellAgentEventRenderer(new JLineShellEventOutput(reader),
+            ShellAgentEventRenderer.TopicNotificationOptions.from(environment)));
 
     System.out.println("AI Shell");
     System.out.println("通常入力は chat として扱います。/exit で終了します。");
