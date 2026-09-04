@@ -9,6 +9,7 @@ public sealed interface AgentEventPayload
     permits AgentRunStartedPayload, AgentRunCompletedPayload, AgentRunFailedPayload,
         LlmRequestStartedPayload, LlmResponseCompletedPayload,
         MessageStartedPayload, MessageDeltaPayload, MessageCompletedPayload,
+        MemoryConsolidationSuggestedPayload,
         ThinkingStartedPayload, ThinkingDeltaPayload, ThinkingCompletedPayload,
         ToolStartedPayload, ToolCompletedPayload, ToolFailedPayload,
         SkillSelectionStartedPayload, SkillSelectionCompletedPayload, SkillSelectionFailedPayload,

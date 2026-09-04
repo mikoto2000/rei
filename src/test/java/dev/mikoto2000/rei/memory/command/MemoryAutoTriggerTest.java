@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.time.Clock;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -21,7 +22,11 @@ import org.springframework.ai.chat.prompt.Prompt;
 import dev.mikoto2000.rei.ui.shell.ChatCommand;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
+import dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer;
+import dev.mikoto2000.rei.ui.shell.ShellEventOutput;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
@@ -29,7 +34,7 @@ import reactor.core.publisher.Flux;
 class MemoryAutoTriggerTest {
 
   @Test
-  void chatPrintsSuggestionWhenAutoTriggerEnabled() {
+  void chatRendersSuggestionThroughShellAgentEventRendererWhenAutoTriggerEnabled() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
@@ -42,17 +47,22 @@ class MemoryAutoTriggerTest {
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("ok")));
     when(memoryConsolidatorService.shouldSuggestConsolidationNow()).thenReturn(true);
 
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    RecordingOutput output = new RecordingOutput();
+    bus.subscribe(new ShellAgentEventRenderer(output));
+    ByteArrayOutputStream directOut = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
-    System.setOut(new PrintStream(out));
+    System.setOut(new PrintStream(directOut));
     try {
       new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-          Mockito.mock(ChatResponseNarrator.class), Optional.of(memoryConsolidatorService))).execute("hello");
+          Mockito.mock(ChatResponseNarrator.class), Optional.of(memoryConsolidatorService),
+          new AgentEventFactory(Clock.systemDefaultZone()), bus)).execute("hello");
     } finally {
       System.setOut(originalOut);
     }
 
-    assertTrue(out.toString().contains("/memory consolidate"));
+    assertTrue(output.text().contains("/memory consolidate"));
+    assertTrue(directOut.toString().isBlank());
   }
 
   @Test
@@ -82,5 +92,13 @@ class MemoryAutoTriggerTest {
 
   private static ChatResponse response(String text) {
     return new ChatResponse(java.util.List.of(new Generation(new AssistantMessage(text))));
+  }
+
+  private static final class RecordingOutput implements ShellEventOutput {
+    private final StringBuilder value = new StringBuilder();
+    public void print(String text) { value.append(text); }
+    public void println(String text) { value.append(text).append('\n'); }
+    public void flush() { }
+    String text() { return value.toString(); }
   }
 }

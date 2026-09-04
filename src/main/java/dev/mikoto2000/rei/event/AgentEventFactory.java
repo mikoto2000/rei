@@ -90,6 +90,11 @@ public class AgentEventFactory {
         new MessageCompletedPayload(messageId, role, text));
   }
 
+  public AgentEvent memoryConsolidationSuggested() {
+    return newEvent(AgentEventType.MEMORY_CONSOLIDATION_SUGGESTED, null, null,
+        new MemoryConsolidationSuggestedPayload());
+  }
+
   // ---- Thinking ----
 
   public AgentEvent thinkingStarted(String thinkingId) {

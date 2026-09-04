@@ -14,6 +14,7 @@ public enum AgentEventType {
   MESSAGE_STARTED("message.started"),
   MESSAGE_DELTA("message.delta"),
   MESSAGE_COMPLETED("message.completed"),
+  MEMORY_CONSOLIDATION_SUGGESTED("memory.consolidation.suggested"),
   THINKING_STARTED("thinking.started"),
   THINKING_DELTA("thinking.delta"),
   THINKING_COMPLETED("thinking.completed"),

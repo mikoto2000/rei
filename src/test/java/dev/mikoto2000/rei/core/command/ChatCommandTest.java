@@ -412,7 +412,7 @@ class ChatCommandTest {
   }
 
   @Test
-  void runPrintsMemorySuggestionWhenAutoTriggerIsTrue() {
+  void runRendersMemorySuggestionThroughShellAgentEventRendererWhenAutoTriggerIsTrue() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
@@ -425,18 +425,23 @@ class ChatCommandTest {
     when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("ok")));
     when(memoryConsolidatorService.shouldSuggestConsolidationNow()).thenReturn(true);
 
-    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    RecordingOutput output = new RecordingOutput();
+    bus.subscribe(new ShellAgentEventRenderer(output));
+    ByteArrayOutputStream directOut = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
-    System.setOut(new PrintStream(out));
+    System.setOut(new PrintStream(directOut));
     try {
       assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-          Mockito.mock(ChatResponseNarrator.class), java.util.Optional.of(memoryConsolidatorService)))
+          Mockito.mock(ChatResponseNarrator.class), java.util.Optional.of(memoryConsolidatorService),
+          new AgentEventFactory(Clock.systemDefaultZone()), bus))
           .execute("hello") == 0);
     } finally {
       System.setOut(originalOut);
     }
 
-    assertTrue(out.toString().contains("[memory] 記憶整理を実行することをお勧めします。"));
+    assertTrue(output.text().contains("[memory] 記憶整理を実行することをお勧めします。"));
+    assertTrue(directOut.toString().isBlank());
   }
 
   @Test

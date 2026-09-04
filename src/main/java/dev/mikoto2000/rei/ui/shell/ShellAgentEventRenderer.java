@@ -102,6 +102,11 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       case MESSAGE_STARTED -> messageStarted((MessageStartedPayload) event.payload());
       case MESSAGE_DELTA -> messageDelta((MessageDeltaPayload) event.payload());
       case MESSAGE_COMPLETED -> messageCompleted((MessageCompletedPayload) event.payload());
+      case MEMORY_CONSOLIDATION_SUGGESTED -> {
+        closeAssistantLine();
+        closeThinkingLine();
+        output.println("[memory] 記憶整理を実行することをお勧めします。/memory consolidate を実行してください。");
+      }
       case THINKING_STARTED -> thinkingStarted((ThinkingStartedPayload) event.payload());
       case THINKING_DELTA -> thinkingDelta((ThinkingDeltaPayload) event.payload());
       case THINKING_COMPLETED -> thinkingCompleted((ThinkingCompletedPayload) event.payload());

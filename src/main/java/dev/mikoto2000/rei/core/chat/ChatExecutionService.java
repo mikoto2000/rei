@@ -173,6 +173,9 @@ public class ChatExecutionService {
             metrics == null ? null : metrics.endToEndTokensPerSecond()));
         activityTracker.ifPresent(tracker -> tracker.recordAgentCompleted(java.time.Instant.now(clock)));
         boolean consolidationSuggested = shouldSuggestConsolidation();
+        if (consolidationSuggested) {
+          eventPublisher.publish(eventFactory.memoryConsolidationSuggested());
+        }
         maybeRefreshTopicCandidates();
         return ChatExecutionResult.success(result.text(), consolidationSuggested);
       } else {

@@ -191,6 +191,16 @@ class ShellAgentEventRendererTest {
   }
 
   @Test
+  void rendersMemoryConsolidationSuggestion() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.memoryConsolidationSuggested());
+
+    assertEquals("[memory] 記憶整理を実行することをお勧めします。/memory consolidate を実行してください。\n",
+        output.text());
+  }
+
+  @Test
   void rendersTopicEventsAndUnknownEventsDoNotBreakRenderer() {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);

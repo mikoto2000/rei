@@ -27,9 +27,6 @@ description = "Chat with AI")
 @Component
 public class ChatCommand implements Runnable {
 
-  private static final String MEMORY_CONSOLIDATION_SUGGESTION =
-      "[memory] 記憶整理を実行することをお勧めします。/memory consolidate を実行してください。";
-
   private final ChatExecutionService chatExecutionService;
   private final ChatResponseNarrator chatResponseNarrator;
 
@@ -71,9 +68,6 @@ public class ChatCommand implements Runnable {
     ChatExecutionResult result = chatExecutionService.execute(String.join(" ", prompts));
     if (result.success()) {
       chatResponseNarrator.narrateIfCompleted(result.text());
-      if (result.memoryConsolidationSuggested()) {
-        System.out.println(MEMORY_CONSOLIDATION_SUGGESTION);
-      }
     }
   }
 }
