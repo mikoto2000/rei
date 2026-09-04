@@ -20,22 +20,28 @@ public class WindowsUiAutomationBackend implements UiAutomationBackend {
 
   @Override
   public ComputerObservation observe(ComputerObservationRequest request) {
+    ComputerObservationRequest effectiveRequest = normalize(request);
     if (automation == null) {
       return new ComputerObservation("raw", Optional.empty(), List.of(), List.of());
     }
     try {
       List<?> rawWindows = asList(callAny(automation, "getDesktopWindows"));
-      Object window = rawWindows.isEmpty() ? null : rawWindows.getFirst();
-      ComputerWindow activeWindow = window == null ? null : toWindow(window, true);
+      ComputerBounds focusedBounds = bounds(callAny(automation, "getFocusedElement"));
+      Object activeRawWindow = activeWindow(rawWindows, focusedBounds);
+      ComputerWindow activeWindow = activeRawWindow == null ? null : toWindow(activeRawWindow, true);
       List<ComputerWindow> windows = new ArrayList<>();
       int index = 1;
       for (Object rawWindow : rawWindows) {
-        ComputerWindow candidate = toWindow(rawWindow, index == 1);
+        boolean active = rawWindow == activeRawWindow;
+        ComputerWindow candidate = toWindow(rawWindow, active);
         windows.add(new ComputerWindow("w" + index, candidate.title(), candidate.className(), candidate.bounds(),
             candidate.active(), candidate.focused()));
         index++;
       }
-      List<ComputerElement> elements = window == null ? List.of() : childElements(window, request);
+      List<?> targetWindows = effectiveRequest.effectiveActiveWindowOnly(true)
+          ? (activeRawWindow == null ? List.of() : List.of(activeRawWindow))
+          : rawWindows;
+      List<ComputerElement> elements = childElements(targetWindows, effectiveRequest);
       return new ComputerObservation("raw", Optional.ofNullable(activeWindow), windows, elements);
     } catch (RuntimeException e) {
       return new ComputerObservation("raw", Optional.empty(), List.of(), List.of());
@@ -90,22 +96,36 @@ public class WindowsUiAutomationBackend implements UiAutomationBackend {
         false) : ComputerActionResult.success(ComputerActionBackend.UI_AUTOMATION, false);
   }
 
-  private List<ComputerElement> childElements(Object window, ComputerObservationRequest request) {
+  private List<ComputerElement> childElements(List<?> windows, ComputerObservationRequest request) {
     int max = request.effectiveMaxElements(80);
     List<ComputerElement> elements = new ArrayList<>();
-    Object children = callAny(window, new Class<?>[] {boolean.class}, new Object[] {false}, "getChildren");
+    for (Object window : windows) {
+      if (elements.size() >= max) {
+        break;
+      }
+      collectElements(window, request.effectiveMaxDepth(3), request.effectiveVisibleOnly(true), max, elements);
+    }
+    return elements;
+  }
+
+  private void collectElements(Object parent, int remainingDepth, boolean visibleOnly, int max,
+      List<ComputerElement> elements) {
+    if (remainingDepth <= 0 || elements.size() >= max) {
+      return;
+    }
+    Object children = callAny(parent, new Class<?>[] {boolean.class}, new Object[] {false}, "getChildren");
     if (children instanceof Iterable<?> iterable) {
       for (Object child : iterable) {
         if (elements.size() >= max) {
           break;
         }
         ComputerElement element = toElement(child);
-        if (!request.effectiveVisibleOnly(true) || !element.offscreen()) {
+        if (!visibleOnly || !element.offscreen()) {
           elements.add(element);
         }
+        collectElements(child, remainingDepth - 1, visibleOnly, max, elements);
       }
     }
-    return elements;
   }
 
   private ComputerWindow toWindow(Object window, boolean active) {
@@ -237,6 +257,27 @@ public class WindowsUiAutomationBackend implements UiAutomationBackend {
     return List.of();
   }
 
+  private Object activeWindow(List<?> windows, ComputerBounds focusedBounds) {
+    if (focusedBounds != null) {
+      for (Object window : windows) {
+        ComputerBounds windowBounds = bounds(window);
+        if (contains(windowBounds, focusedBounds)) {
+          return window;
+        }
+      }
+    }
+    return windows.isEmpty() ? null : windows.getFirst();
+  }
+
+  private boolean contains(ComputerBounds outer, ComputerBounds inner) {
+    if (outer == null || inner == null || !outer.valid() || !inner.valid()) {
+      return false;
+    }
+    java.awt.Point center = inner.center();
+    return center.x >= outer.x() && center.x <= outer.x() + outer.width()
+        && center.y >= outer.y() && center.y <= outer.y() + outer.height();
+  }
+
   private Object findCurrentElement(ComputerElement element) {
     List<?> windows = asList(callAny(automation, "getDesktopWindows"));
     for (Object window : windows) {
@@ -287,6 +328,13 @@ public class WindowsUiAutomationBackend implements UiAutomationBackend {
 
   private String normalize(String role) {
     return role == null ? "" : role.toLowerCase(Locale.ROOT);
+  }
+
+  private ComputerObservationRequest normalize(ComputerObservationRequest request) {
+    if (request == null) {
+      return new ComputerObservationRequest(3, 80, true, true);
+    }
+    return request;
   }
 
   private Object createAutomation() {
