@@ -5,47 +5,70 @@ import java.awt.Robot;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.util.Locale;
+import java.util.function.Supplier;
 
 public class RobotPhysicalInputBackend implements PhysicalInputBackend {
-  private final Robot robot;
+  private final Supplier<Robot> robotSupplier;
+  private volatile Robot robot;
 
   public RobotPhysicalInputBackend() {
-    this(createRobot());
+    this(RobotPhysicalInputBackend::createRobot);
   }
 
   RobotPhysicalInputBackend(Robot robot) {
-    this.robot = robot;
-    this.robot.setAutoDelay(30);
+    this(() -> robot);
+  }
+
+  RobotPhysicalInputBackend(Supplier<Robot> robotSupplier) {
+    this.robotSupplier = robotSupplier;
   }
 
   @Override
   public ComputerActionResult click(ComputerBounds bounds) {
-    moveToCenter(bounds);
-    robot.mousePress(InputEvent.BUTTON1_DOWN_MASK);
-    robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK);
+    Robot current = availableRobot();
+    if (current == null) {
+      return unavailable();
+    }
+    moveToCenter(current, bounds);
+    current.mousePress(InputEvent.BUTTON1_DOWN_MASK);
+    current.mouseRelease(InputEvent.BUTTON1_DOWN_MASK);
     return ComputerActionResult.success(ComputerActionBackend.ROBOT, true);
   }
 
   @Override
   public ComputerActionResult doubleClick(ComputerBounds bounds) {
-    click(bounds);
-    click(bounds);
+    ComputerActionResult first = click(bounds);
+    if (!first.success()) {
+      return first;
+    }
+    ComputerActionResult second = click(bounds);
+    if (!second.success()) {
+      return second;
+    }
     return ComputerActionResult.success(ComputerActionBackend.ROBOT, false);
   }
 
   @Override
   public ComputerActionResult moveMouse(int x, int y) {
-    robot.mouseMove(x, y);
+    Robot current = availableRobot();
+    if (current == null) {
+      return unavailable();
+    }
+    current.mouseMove(x, y);
     return ComputerActionResult.success(ComputerActionBackend.ROBOT, false);
   }
 
   @Override
   public ComputerActionResult typeText(String text) {
+    Robot current = availableRobot();
+    if (current == null) {
+      return unavailable();
+    }
     if (text == null || text.isEmpty()) {
       return ComputerActionResult.success(ComputerActionBackend.ROBOT, false);
     }
     for (char c : text.toCharArray()) {
-      typeChar(c);
+      typeChar(current, c);
     }
     return ComputerActionResult.success(ComputerActionBackend.ROBOT, false);
   }
@@ -56,32 +79,44 @@ public class RobotPhysicalInputBackend implements PhysicalInputBackend {
     if (code == null) {
       return ComputerActionResult.failure("unsupported key: " + keyStroke, ComputerActionBackend.ROBOT, false);
     }
-    robot.keyPress(code);
-    robot.keyRelease(code);
+    Robot current = availableRobot();
+    if (current == null) {
+      return unavailable();
+    }
+    current.keyPress(code);
+    current.keyRelease(code);
     return ComputerActionResult.success(ComputerActionBackend.ROBOT, false);
   }
 
   @Override
   public ComputerActionResult scroll(int wheelAmount) {
-    robot.mouseWheel(wheelAmount);
+    Robot current = availableRobot();
+    if (current == null) {
+      return unavailable();
+    }
+    current.mouseWheel(wheelAmount);
     return ComputerActionResult.success(ComputerActionBackend.ROBOT, false);
   }
 
   @Override
   public ComputerActionResult drag(ComputerBounds from, ComputerBounds to) {
-    moveToCenter(from);
-    robot.mousePress(InputEvent.BUTTON1_DOWN_MASK);
-    moveToCenter(to);
-    robot.mouseRelease(InputEvent.BUTTON1_DOWN_MASK);
+    Robot current = availableRobot();
+    if (current == null) {
+      return unavailable();
+    }
+    moveToCenter(current, from);
+    current.mousePress(InputEvent.BUTTON1_DOWN_MASK);
+    moveToCenter(current, to);
+    current.mouseRelease(InputEvent.BUTTON1_DOWN_MASK);
     return ComputerActionResult.success(ComputerActionBackend.ROBOT, false);
   }
 
-  private void moveToCenter(ComputerBounds bounds) {
+  private void moveToCenter(Robot robot, ComputerBounds bounds) {
     java.awt.Point center = bounds.center();
     robot.mouseMove(center.x, center.y);
   }
 
-  private void typeChar(char c) {
+  private void typeChar(Robot robot, char c) {
     int code = KeyEvent.getExtendedKeyCodeForChar(c);
     if (code == KeyEvent.VK_UNDEFINED) {
       throw new IllegalArgumentException("unsupported character: " + c);
@@ -110,9 +145,29 @@ public class RobotPhysicalInputBackend implements PhysicalInputBackend {
 
   private static Robot createRobot() {
     try {
-      return new Robot();
+      Robot robot = new Robot();
+      robot.setAutoDelay(30);
+      return robot;
     } catch (AWTException e) {
       throw new IllegalStateException("Robot backend is not available", e);
     }
+  }
+
+  private Robot availableRobot() {
+    Robot current = robot;
+    if (current != null) {
+      return current;
+    }
+    try {
+      current = robotSupplier.get();
+      robot = current;
+      return current;
+    } catch (IllegalStateException e) {
+      return null;
+    }
+  }
+
+  private ComputerActionResult unavailable() {
+    return ComputerActionResult.failure("Robot backend is not available", ComputerActionBackend.ROBOT, false);
   }
 }
