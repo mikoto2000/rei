@@ -10,7 +10,12 @@ import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
 
 /**
  * 各ユーザーターンの LLM 呼び出し前に、最新 Checkpoint をコンテキストとして注入する。
@@ -19,9 +24,23 @@ import org.springframework.stereotype.Component;
 public class CheckpointAdvisor implements BaseAdvisor {
 
   private final CheckpointStore checkpointStore;
+  private final AgentEventFactory events;
+  private final AgentEventPublisher eventPublisher;
 
   public CheckpointAdvisor(CheckpointStore checkpointStore) {
+    this(checkpointStore, (AgentEventFactory) null, (AgentEventPublisher) null);
+  }
+
+  @Autowired
+  public CheckpointAdvisor(CheckpointStore checkpointStore, ObjectProvider<AgentEventFactory> events,
+      ObjectProvider<AgentEventPublisher> eventPublisher) {
+    this(checkpointStore, events.getIfAvailable(), eventPublisher.getIfAvailable());
+  }
+
+  public CheckpointAdvisor(CheckpointStore checkpointStore, AgentEventFactory events, AgentEventPublisher eventPublisher) {
     this.checkpointStore = checkpointStore;
+    this.events = events;
+    this.eventPublisher = eventPublisher;
   }
 
   CheckpointStore checkpointStore() {
@@ -38,6 +57,7 @@ public class CheckpointAdvisor implements BaseAdvisor {
     if (context.isBlank()) {
       return request;
     }
+    publishInjected(context);
     UserMessage contextualMessage = userMessage.mutate()
         .text(context + "\n\n" + userMessage.getText())
         .build();
@@ -70,5 +90,11 @@ public class CheckpointAdvisor implements BaseAdvisor {
       }
     }
     return List.copyOf(replaced);
+  }
+
+  private void publishInjected(String context) {
+    if (events != null && eventPublisher != null) {
+      eventPublisher.publish(events.contextInjected("checkpoint", null, context.length()));
+    }
   }
 }

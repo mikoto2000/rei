@@ -4,6 +4,9 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
+
 /**
  * 再開に必要な要点を固定したスナップショットを保持する。
  *
@@ -12,6 +15,8 @@ import java.util.Optional;
 public class CheckpointStore {
 
   private final Clock clock;
+  private final AgentEventFactory events;
+  private final AgentEventPublisher eventPublisher;
   private TurnCheckpoint latest;
 
   public CheckpointStore() {
@@ -19,7 +24,13 @@ public class CheckpointStore {
   }
 
   public CheckpointStore(Clock clock) {
+    this(clock, null, null);
+  }
+
+  public CheckpointStore(Clock clock, AgentEventFactory events, AgentEventPublisher eventPublisher) {
     this.clock = clock;
+    this.events = events;
+    this.eventPublisher = eventPublisher;
   }
 
   /** 最新 checkpoint を返す。なければ空。 */
@@ -35,6 +46,10 @@ public class CheckpointStore {
   /** checkpoint を保存する。最新 1 件を保持する。 */
   public void save(TurnCheckpoint checkpoint) {
     this.latest = checkpoint;
+    if (events != null && eventPublisher != null) {
+      int workingFileCount = checkpoint.workingFiles() == null ? 0 : checkpoint.workingFiles().size();
+      eventPublisher.publish(events.checkpointSaved(checkpoint.taskId(), checkpoint.reason(), workingFileCount));
+    }
   }
 
   /** LLM コンテキストに渡す簡潔な表現を組み立てる。 */

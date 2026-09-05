@@ -7,9 +7,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.CheckpointSavedPayload;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 
 class CheckpointStoreTest {
 
@@ -120,5 +127,24 @@ class CheckpointStoreTest {
     store.save(new TurnCheckpoint("task-2", "new goal", "step-1", List.of(), List.of(), List.of(), null, null, null, "TURN_END", "2026-08-17T01:00:00Z"));
     assertEquals("task-2", store.latest().get().taskId());
     assertEquals("new goal", store.latest().get().goal());
+  }
+
+  @Test
+  void savingCheckpointPublishesEvent() {
+    Clock clock = Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE);
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    List<AgentEvent> events = new ArrayList<>();
+    bus.subscribe(events::add);
+    CheckpointStore store = new CheckpointStore(clock, new AgentEventFactory(clock), bus);
+
+    store.save(new TurnCheckpoint("task-1", "goal", "step-1", List.of(), List.of(),
+        List.of("src/UserService.java", "src/UserServiceTest.java"), null, null, null, "TURN_END",
+        "2026-08-17T00:00:00Z"));
+
+    assertEquals(AgentEventType.CHECKPOINT_SAVED, events.getFirst().type());
+    CheckpointSavedPayload payload = (CheckpointSavedPayload) events.getFirst().payload();
+    assertEquals("task-1", payload.taskId());
+    assertEquals("TURN_END", payload.reason());
+    assertEquals(2, payload.workingFileCount());
   }
 }

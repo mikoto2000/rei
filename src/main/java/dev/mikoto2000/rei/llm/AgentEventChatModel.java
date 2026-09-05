@@ -32,9 +32,14 @@ final class AgentEventChatModel implements ChatModel {
     String requestId = UUID.randomUUID().toString();
     long startedAtNanos = System.nanoTime();
     eventPublisher.publish(eventFactory.llmRequestStarted(null, requestId, feature));
-    ChatResponse response = delegate.call(prompt);
-    eventPublisher.publish(eventFactory.llmResponseCompleted(null, requestId, elapsedMillis(startedAtNanos)));
-    return response;
+    try {
+      ChatResponse response = delegate.call(prompt);
+      eventPublisher.publish(eventFactory.llmResponseCompleted(null, requestId, elapsedMillis(startedAtNanos)));
+      return response;
+    } catch (RuntimeException e) {
+      eventPublisher.publish(eventFactory.llmRequestFailed(null, requestId, elapsedMillis(startedAtNanos), e));
+      throw e;
+    }
   }
 
   @Override
@@ -42,10 +47,18 @@ final class AgentEventChatModel implements ChatModel {
     return Flux.defer(() -> {
       String requestId = UUID.randomUUID().toString();
       long startedAtNanos = System.nanoTime();
+      java.util.concurrent.atomic.AtomicBoolean firstTokenPublished = new java.util.concurrent.atomic.AtomicBoolean();
       eventPublisher.publish(eventFactory.llmRequestStarted(null, requestId, feature));
       return delegate.stream(prompt)
+          .doOnNext(response -> {
+            if (firstTokenPublished.compareAndSet(false, true)) {
+              eventPublisher.publish(eventFactory.llmResponseFirstToken(null, requestId, elapsedMillis(startedAtNanos)));
+            }
+          })
           .doOnComplete(() -> eventPublisher.publish(
-              eventFactory.llmResponseCompleted(null, requestId, elapsedMillis(startedAtNanos))));
+              eventFactory.llmResponseCompleted(null, requestId, elapsedMillis(startedAtNanos))))
+          .doOnError(error -> eventPublisher.publish(
+              eventFactory.llmRequestFailed(null, requestId, elapsedMillis(startedAtNanos), error)));
     });
   }
 

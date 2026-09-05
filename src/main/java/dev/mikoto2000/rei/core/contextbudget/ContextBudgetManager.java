@@ -6,6 +6,9 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
+
 /**
  * 限られた context budget の中で、現在のタスクに重要な情報を優先して LLM に渡す。
  *
@@ -21,11 +24,20 @@ public class ContextBudgetManager {
   private final int modelContextLimit;
   private final int outputReserve;
   private final int safetyMargin;
+  private final AgentEventFactory events;
+  private final AgentEventPublisher eventPublisher;
 
   public ContextBudgetManager(int modelContextLimit, int outputReserve, int safetyMargin) {
+    this(modelContextLimit, outputReserve, safetyMargin, null, null);
+  }
+
+  public ContextBudgetManager(int modelContextLimit, int outputReserve, int safetyMargin,
+      AgentEventFactory events, AgentEventPublisher eventPublisher) {
     this.modelContextLimit = modelContextLimit;
     this.outputReserve = outputReserve;
     this.safetyMargin = safetyMargin;
+    this.events = events;
+    this.eventPublisher = eventPublisher;
   }
 
   /** 入力用 budget を計算する。 */
@@ -64,7 +76,18 @@ public class ContextBudgetManager {
     log.debug("Context budget: {} estimated tokens", total);
     log.debug("Included: {}", included);
     log.debug("Dropped: {}", dropped);
+    publishAllocation(budget, total, included, dropped);
     return new AllocationResult(List.copyOf(included), List.copyOf(dropped), total);
+  }
+
+  private void publishAllocation(int budget, int total, List<String> included, List<String> dropped) {
+    if (events == null || eventPublisher == null) {
+      return;
+    }
+    eventPublisher.publish(events.contextBudgetEvaluated(budget, total, included, dropped));
+    if (!dropped.isEmpty()) {
+      eventPublisher.publish(events.contextBudgetTrimmed(budget, total, dropped));
+    }
   }
 
   /** 絶対に削ってはいけないセクション。 */

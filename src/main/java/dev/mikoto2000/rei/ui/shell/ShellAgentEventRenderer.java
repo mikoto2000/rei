@@ -7,8 +7,24 @@ import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventListener;
 import dev.mikoto2000.rei.event.AgentRunCompletedPayload;
 import dev.mikoto2000.rei.event.AgentRunFailedPayload;
+import dev.mikoto2000.rei.event.BackgroundProcessCompletedPayload;
+import dev.mikoto2000.rei.event.BackgroundProcessFailedPayload;
+import dev.mikoto2000.rei.event.BackgroundProcessKilledPayload;
+import dev.mikoto2000.rei.event.BackgroundProcessStartedPayload;
+import dev.mikoto2000.rei.event.CheckpointSavedPayload;
+import dev.mikoto2000.rei.event.ContextBudgetEvaluatedPayload;
+import dev.mikoto2000.rei.event.ContextBudgetTrimmedPayload;
+import dev.mikoto2000.rei.event.ContextInjectedPayload;
+import dev.mikoto2000.rei.event.FileCreatedPayload;
+import dev.mikoto2000.rei.event.FileDeletedPayload;
+import dev.mikoto2000.rei.event.FileModifiedPayload;
+import dev.mikoto2000.rei.event.FileSummaryInvalidatedPayload;
+import dev.mikoto2000.rei.event.FileSummarySavedPayload;
+import dev.mikoto2000.rei.event.FileSummaryStaleSkippedPayload;
+import dev.mikoto2000.rei.event.LlmRequestFailedPayload;
 import dev.mikoto2000.rei.event.LlmRequestStartedPayload;
 import dev.mikoto2000.rei.event.LlmResponseCompletedPayload;
+import dev.mikoto2000.rei.event.LlmResponseFirstTokenPayload;
 import dev.mikoto2000.rei.event.MessageCompletedPayload;
 import dev.mikoto2000.rei.event.MessageDeltaPayload;
 import dev.mikoto2000.rei.event.MessageStartedPayload;
@@ -38,6 +54,7 @@ import dev.mikoto2000.rei.event.ThinkingDeltaPayload;
 import dev.mikoto2000.rei.event.ThinkingStartedPayload;
 import dev.mikoto2000.rei.event.WorkingSetItemAddedPayload;
 import dev.mikoto2000.rei.event.WorkingSetItemRemovedPayload;
+import dev.mikoto2000.rei.event.WorkingSetContextInjectedPayload;
 import dev.mikoto2000.rei.event.WorkingSetSearchCompletedPayload;
 import dev.mikoto2000.rei.event.WorkingSetSearchStartedPayload;
 import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
@@ -111,6 +128,18 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         closeThinkingLine();
         LlmRequestStartedPayload payload = (LlmRequestStartedPayload) event.payload();
         output.println("[llm] request sent (" + payload.feature() + ")");
+      }
+      case LLM_REQUEST_FAILED -> {
+        closeAssistantLine();
+        closeThinkingLine();
+        LlmRequestFailedPayload payload = (LlmRequestFailedPayload) event.payload();
+        output.println("[llm] request failed (" + payload.durationMs() + " ms): " + errorMessage(payload.error()));
+      }
+      case LLM_RESPONSE_FIRST_TOKEN -> {
+        closeAssistantLine();
+        closeThinkingLine();
+        LlmResponseFirstTokenPayload payload = (LlmResponseFirstTokenPayload) event.payload();
+        output.println("[llm] first token (" + payload.durationMs() + " ms)");
       }
       case LLM_RESPONSE_COMPLETED -> {
         closeAssistantLine();
@@ -217,6 +246,52 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
             + " candidates → " + payload.selectedCount() + " selected" + alreadyPresent
             + " (" + payload.durationMs() + " ms)");
       }
+      case WORKING_SET_CONTEXT_INJECTED -> {
+        closeAssistantLine();
+        WorkingSetContextInjectedPayload payload = (WorkingSetContextInjectedPayload) event.payload();
+        output.println("[working-set] injected " + payload.itemCount() + " items into context ("
+            + payload.contextCharacters() + " chars)");
+      }
+      case CONTEXT_INJECTED -> {
+        closeAssistantLine();
+        ContextInjectedPayload payload = (ContextInjectedPayload) event.payload();
+        String items = payload.itemCount() == null ? "" : ", " + payload.itemCount() + " items";
+        output.println("[context] injected " + lower(payload.source()) + items + " ("
+            + payload.contextCharacters() + " chars)");
+      }
+      case CONTEXT_BUDGET_EVALUATED -> {
+        closeAssistantLine();
+        ContextBudgetEvaluatedPayload payload = (ContextBudgetEvaluatedPayload) event.payload();
+        output.println("[context] budget evaluated: " + payload.totalTokens() + "/" + payload.inputBudget()
+            + " tokens, included " + payload.included().size() + ", dropped " + payload.dropped().size());
+      }
+      case CONTEXT_BUDGET_TRIMMED -> {
+        closeAssistantLine();
+        ContextBudgetTrimmedPayload payload = (ContextBudgetTrimmedPayload) event.payload();
+        output.println("[context] budget trimmed: dropped " + String.join(", ", payload.dropped()));
+      }
+      case FILE_SUMMARY_SAVED -> {
+        closeAssistantLine();
+        FileSummarySavedPayload payload = (FileSummarySavedPayload) event.payload();
+        output.println("[file-summary] saved " + displayName(null, payload.path()) + " ("
+            + payload.summaryCharacters() + " chars)");
+      }
+      case FILE_SUMMARY_INVALIDATED -> {
+        closeAssistantLine();
+        FileSummaryInvalidatedPayload payload = (FileSummaryInvalidatedPayload) event.payload();
+        output.println("[file-summary] invalidated " + displayName(null, payload.path()));
+      }
+      case FILE_SUMMARY_STALE_SKIPPED -> {
+        closeAssistantLine();
+        FileSummaryStaleSkippedPayload payload = (FileSummaryStaleSkippedPayload) event.payload();
+        output.println("[file-summary] skipped stale " + displayName(null, payload.path()));
+      }
+      case CHECKPOINT_SAVED -> {
+        closeAssistantLine();
+        CheckpointSavedPayload payload = (CheckpointSavedPayload) event.payload();
+        output.println("[checkpoint] saved " + valueOr(payload.taskId(), "task") + reasonSuffix(payload.reason())
+            + ", " + payload.workingFileCount() + " files");
+      }
       case TOPIC_GENERATION_STARTED -> {
         closeAssistantLine();
         TopicGenerationStartedPayload payload = (TopicGenerationStartedPayload) event.payload();
@@ -320,6 +395,43 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         output.println("[topic] generation failed");
         output.println("        stage: " + payload.stage());
         output.println("        error: " + oneLineSummary(payload.errorSummary()));
+      }
+      case FILE_CREATED -> {
+        closeAssistantLine();
+        FileCreatedPayload payload = (FileCreatedPayload) event.payload();
+        output.println("[file] created " + displayName(null, payload.path()));
+      }
+      case FILE_MODIFIED -> {
+        closeAssistantLine();
+        FileModifiedPayload payload = (FileModifiedPayload) event.payload();
+        output.println("[file] modified " + displayName(null, payload.path()) + lineDeltaSuffix(payload));
+      }
+      case FILE_DELETED -> {
+        closeAssistantLine();
+        FileDeletedPayload payload = (FileDeletedPayload) event.payload();
+        output.println("[file] deleted " + displayName(null, payload.path()));
+      }
+      case BACKGROUND_PROCESS_STARTED -> {
+        closeAssistantLine();
+        BackgroundProcessStartedPayload payload = (BackgroundProcessStartedPayload) event.payload();
+        output.println("[process] started " + payload.processId() + " pid=" + payload.pid());
+      }
+      case BACKGROUND_PROCESS_COMPLETED -> {
+        closeAssistantLine();
+        BackgroundProcessCompletedPayload payload = (BackgroundProcessCompletedPayload) event.payload();
+        output.println("[process] completed " + payload.processId() + " exit=" + payload.exitCode()
+            + " (" + formatDecimal(payload.elapsedSeconds()) + " s)");
+      }
+      case BACKGROUND_PROCESS_FAILED -> {
+        closeAssistantLine();
+        BackgroundProcessFailedPayload payload = (BackgroundProcessFailedPayload) event.payload();
+        output.println("[process] failed " + payload.processId() + ": " + errorMessage(payload.error()));
+      }
+      case BACKGROUND_PROCESS_KILLED -> {
+        closeAssistantLine();
+        BackgroundProcessKilledPayload payload = (BackgroundProcessKilledPayload) event.payload();
+        output.println("[process] killed " + payload.processId() + " exit=" + payload.exitCode()
+            + " (" + formatDecimal(payload.elapsedSeconds()) + " s)");
       }
       default -> { }
     }
@@ -512,6 +624,15 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   private String valueOr(String preferred, String fallback) {
     return preferred == null ? fallback : preferred;
+  }
+
+  private int valueOr(Integer preferred, int fallback) {
+    return preferred == null ? fallback : preferred;
+  }
+
+  private String lineDeltaSuffix(FileModifiedPayload payload) {
+    if (payload.addedLines() == null && payload.removedLines() == null) return "";
+    return " (+" + valueOr(payload.addedLines(), 0) + "/-" + valueOr(payload.removedLines(), 0) + ")";
   }
 
   public enum TopicNotificationVerbosity {

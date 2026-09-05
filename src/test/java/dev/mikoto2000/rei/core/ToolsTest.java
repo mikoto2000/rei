@@ -36,6 +36,7 @@ import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.core.process.RunCommandRequest;
 import dev.mikoto2000.rei.core.process.RunCommandResult;
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.core.relatedgraph.RelatedFileGraph;
 import dev.mikoto2000.rei.core.searchcache.SearchResultCache;
 import dev.mikoto2000.rei.core.service.SystemShellService;
 import dev.mikoto2000.rei.core.working.WorkingSet;
@@ -59,6 +60,26 @@ class ToolsTest {
     String actual = tools.readPdfFile(pdf.toString());
 
     assertTrue(actual.contains("PDF reading test"));
+  }
+
+  @Test
+  void fileWritesAndDeletesPublishFileEvents() throws Exception {
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    List<AgentEvent> events = new ArrayList<>();
+    bus.subscribe(events::add);
+    Tools tools = new Tools(null, new SystemShellService(), new BackgroundProcessManager(new SystemShellService()),
+        Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZoneId.of("Asia/Tokyo")),
+        new WorkingSet(), new dev.mikoto2000.rei.core.recentchanges.RecentChanges(), new FileSummaryCache(),
+        new SearchResultCache(), new RelatedFileGraph(), new AgentEventFactory(Clock.systemUTC()), bus);
+    Path path = tempDir.resolve("events.txt");
+
+    tools.writeTextFile(path.toString(), "hello", false, "UTF-8");
+    tools.writeTextFile(path.toString(), " world", true, "UTF-8");
+    tools.deleteFile(path.toString());
+
+    assertTrue(events.stream().anyMatch(event -> event.type() == AgentEventType.FILE_CREATED));
+    assertTrue(events.stream().anyMatch(event -> event.type() == AgentEventType.FILE_MODIFIED));
+    assertTrue(events.stream().anyMatch(event -> event.type() == AgentEventType.FILE_DELETED));
   }
 
   @Test

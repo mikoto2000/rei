@@ -9,6 +9,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
+
 /**
  * ファイルの要約を version と紐付けて保持するキャッシュ。
  *
@@ -21,6 +24,8 @@ public class FileSummaryCache {
 
   private final int maxEntries;
   private final Clock clock;
+  private final AgentEventFactory events;
+  private final AgentEventPublisher eventPublisher;
   private final Map<String, FileSummary> entries = new LinkedHashMap<>();
 
   public FileSummaryCache() {
@@ -28,8 +33,14 @@ public class FileSummaryCache {
   }
 
   public FileSummaryCache(int maxEntries, Clock clock) {
+    this(maxEntries, clock, null, null);
+  }
+
+  public FileSummaryCache(int maxEntries, Clock clock, AgentEventFactory events, AgentEventPublisher eventPublisher) {
     this.maxEntries = Math.max(1, maxEntries);
     this.clock = clock;
+    this.events = events;
+    this.eventPublisher = eventPublisher;
   }
 
   /** 現在のキャッシュエントリ一覧（新しい順）。 */
@@ -50,6 +61,8 @@ public class FileSummaryCache {
   /** ファイル要約を保存する。 */
   public void save(FileSummary summary) {
     entries.put(summary.path(), summary);
+    publish(events == null ? null : events.fileSummarySaved(summary.path(),
+        summary.summary() == null ? 0 : summary.summary().length()));
     evictIfNeeded();
   }
 
@@ -65,7 +78,9 @@ public class FileSummaryCache {
 
   /** 指定パスの要約を無効化（削除）する。 */
   public void invalidate(String path) {
-    entries.remove(path);
+    if (entries.remove(path) != null) {
+      publish(events == null ? null : events.fileSummaryInvalidated(path));
+    }
   }
 
   /**
@@ -78,6 +93,7 @@ public class FileSummaryCache {
     for (FileSummary summary : entries.values()) {
       String currentVersion = versionProvider.apply(summary.path());
       if (currentVersion == null || !currentVersion.equals(summary.version())) {
+        publish(events == null ? null : events.fileSummaryStaleSkipped(summary.path()));
         continue;
       }
       sb.append("- ").append(summary.path()).append("\n");
@@ -101,5 +117,11 @@ public class FileSummaryCache {
 
   private OffsetDateTime now() {
     return OffsetDateTime.now(clock);
+  }
+
+  private void publish(dev.mikoto2000.rei.event.AgentEvent event) {
+    if (eventPublisher != null && event != null) {
+      eventPublisher.publish(event);
+    }
   }
 }

@@ -30,9 +30,15 @@ final class AgentEventImageModel implements ImageModel {
     String requestId = UUID.randomUUID().toString();
     long startedAtNanos = System.nanoTime();
     eventPublisher.publish(eventFactory.llmRequestStarted(null, requestId, feature));
-    ImageResponse response = delegate.call(prompt);
-    eventPublisher.publish(eventFactory.llmResponseCompleted(null, requestId,
-        (System.nanoTime() - startedAtNanos) / 1_000_000L));
-    return response;
+    try {
+      ImageResponse response = delegate.call(prompt);
+      eventPublisher.publish(eventFactory.llmResponseCompleted(null, requestId,
+          (System.nanoTime() - startedAtNanos) / 1_000_000L));
+      return response;
+    } catch (RuntimeException e) {
+      eventPublisher.publish(eventFactory.llmRequestFailed(null, requestId,
+          (System.nanoTime() - startedAtNanos) / 1_000_000L, e));
+      throw e;
+    }
   }
 }

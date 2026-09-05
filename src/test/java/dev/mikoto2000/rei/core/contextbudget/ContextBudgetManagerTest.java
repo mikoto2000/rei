@@ -4,8 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.ArrayList;
 
 import org.junit.jupiter.api.Test;
+
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.ContextBudgetEvaluatedPayload;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 
 class ContextBudgetManagerTest {
 
@@ -156,5 +163,24 @@ class ContextBudgetManagerTest {
     ContextSection system = new ContextSection("SYSTEM", "system");
     AllocationResult result = manager.allocate(List.of(system));
     assertTrue(result.totalTokens() > 0);
+  }
+
+  @Test
+  void allocationPublishesBudgetEvents() {
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    List<AgentEvent> events = new ArrayList<>();
+    bus.subscribe(events::add);
+    ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100,
+        new AgentEventFactory(java.time.Clock.systemUTC()), bus);
+    ContextSection system = new ContextSection("SYSTEM", "system");
+    ContextSection history = new ContextSection("CONVERSATION_HISTORY", "x".repeat(5000));
+
+    manager.allocate(List.of(system, history));
+
+    assertEquals(AgentEventType.CONTEXT_BUDGET_EVALUATED, events.get(0).type());
+    ContextBudgetEvaluatedPayload payload = (ContextBudgetEvaluatedPayload) events.get(0).payload();
+    assertTrue(payload.included().contains("SYSTEM"));
+    assertTrue(payload.dropped().contains("CONVERSATION_HISTORY"));
+    assertEquals(AgentEventType.CONTEXT_BUDGET_TRIMMED, events.get(1).type());
   }
 }

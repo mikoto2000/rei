@@ -68,6 +68,16 @@ public class AgentEventFactory {
         new LlmRequestStartedPayload(requestId, feature));
   }
 
+  public AgentEvent llmRequestFailed(String runId, String requestId, long durationMs, Throwable error) {
+    return newEvent(AgentEventType.LLM_REQUEST_FAILED, runId, requestId,
+        new LlmRequestFailedPayload(requestId, durationMs, ErrorInformation.from(error)));
+  }
+
+  public AgentEvent llmResponseFirstToken(String runId, String requestId, long durationMs) {
+    return newEvent(AgentEventType.LLM_RESPONSE_FIRST_TOKEN, runId, requestId,
+        new LlmResponseFirstTokenPayload(requestId, durationMs));
+  }
+
   public AgentEvent llmResponseCompleted(String runId, String requestId, long durationMs) {
     return newEvent(AgentEventType.LLM_RESPONSE_COMPLETED, runId, requestId,
         new LlmResponseCompletedPayload(requestId, durationMs));
@@ -239,6 +249,67 @@ public class AgentEventFactory {
     return newEvent(AgentEventType.WORKING_SET_SEARCH_COMPLETED, null, searchId,
         new WorkingSetSearchCompletedPayload(searchId, durationMs, hitCount, candidateCount, selectedCount,
             alreadyPresentCount, workingSetSizeBefore, workingSetSizeAfter));
+  }
+
+  public AgentEvent workingSetContextInjected(int itemCount, int contextCharacters) {
+    return newEvent(AgentEventType.WORKING_SET_CONTEXT_INJECTED, null, null,
+        new WorkingSetContextInjectedPayload(itemCount, contextCharacters));
+  }
+
+  public AgentEvent contextInjected(String source, Integer itemCount, int contextCharacters) {
+    return newEvent(AgentEventType.CONTEXT_INJECTED, null, null,
+        new ContextInjectedPayload(source, itemCount, contextCharacters));
+  }
+
+  public AgentEvent contextBudgetEvaluated(int inputBudget, int totalTokens, java.util.List<String> included,
+      java.util.List<String> dropped) {
+    return newEvent(AgentEventType.CONTEXT_BUDGET_EVALUATED, null, null,
+        new ContextBudgetEvaluatedPayload(inputBudget, totalTokens, included, dropped));
+  }
+
+  public AgentEvent contextBudgetTrimmed(int inputBudget, int totalTokens, java.util.List<String> dropped) {
+    return newEvent(AgentEventType.CONTEXT_BUDGET_TRIMMED, null, null,
+        new ContextBudgetTrimmedPayload(inputBudget, totalTokens, dropped));
+  }
+
+  public AgentEvent fileSummarySaved(String path, int summaryCharacters) {
+    return newEvent(AgentEventType.FILE_SUMMARY_SAVED, null, null,
+        new FileSummarySavedPayload(path, summaryCharacters));
+  }
+
+  public AgentEvent fileSummaryInvalidated(String path) {
+    return newEvent(AgentEventType.FILE_SUMMARY_INVALIDATED, null, null,
+        new FileSummaryInvalidatedPayload(path));
+  }
+
+  public AgentEvent fileSummaryStaleSkipped(String path) {
+    return newEvent(AgentEventType.FILE_SUMMARY_STALE_SKIPPED, null, null,
+        new FileSummaryStaleSkippedPayload(path));
+  }
+
+  public AgentEvent checkpointSaved(String taskId, String reason, int workingFileCount) {
+    return newEvent(AgentEventType.CHECKPOINT_SAVED, null, null,
+        new CheckpointSavedPayload(taskId, reason, workingFileCount));
+  }
+
+  public AgentEvent backgroundProcessStarted(String processId, long pid, String command, String workingDirectory) {
+    return newEvent(AgentEventType.BACKGROUND_PROCESS_STARTED, null, processId,
+        new BackgroundProcessStartedPayload(processId, pid, bounded(command, 200), workingDirectory));
+  }
+
+  public AgentEvent backgroundProcessCompleted(String processId, long pid, Integer exitCode, double elapsedSeconds) {
+    return newEvent(AgentEventType.BACKGROUND_PROCESS_COMPLETED, null, processId,
+        new BackgroundProcessCompletedPayload(processId, pid, exitCode, elapsedSeconds));
+  }
+
+  public AgentEvent backgroundProcessFailed(String processId, String command, Throwable error) {
+    return newEvent(AgentEventType.BACKGROUND_PROCESS_FAILED, null, processId,
+        new BackgroundProcessFailedPayload(processId, bounded(command, 200), ErrorInformation.from(error)));
+  }
+
+  public AgentEvent backgroundProcessKilled(String processId, long pid, Integer exitCode, double elapsedSeconds) {
+    return newEvent(AgentEventType.BACKGROUND_PROCESS_KILLED, null, processId,
+        new BackgroundProcessKilledPayload(processId, pid, exitCode, elapsedSeconds));
   }
 
   // ---- Topic Generator ----

@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.Future;
 
 class ManagedBackgroundProcess {
@@ -16,6 +17,7 @@ class ManagedBackgroundProcess {
   final AtomicReference<BackgroundProcessStatus> status =
       new AtomicReference<>(BackgroundProcessStatus.STARTING);
   final AtomicReference<Integer> exitCode = new AtomicReference<>();
+  final AtomicBoolean terminalEventPublished = new AtomicBoolean(false);
   final Instant startedAt;
   final long startedAtNanos;
   volatile Instant endedAt;

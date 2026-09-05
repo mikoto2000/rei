@@ -10,7 +10,12 @@ import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
+
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
 
 /**
  * 各ユーザーターンの LLM 呼び出し前に、有効な File Summary をコンテキストとして注入する。
@@ -19,9 +24,24 @@ import org.springframework.stereotype.Component;
 public class FileSummaryAdvisor implements BaseAdvisor {
 
   private final FileSummaryCache fileSummaryCache;
+  private final AgentEventFactory events;
+  private final AgentEventPublisher eventPublisher;
 
   public FileSummaryAdvisor(FileSummaryCache fileSummaryCache) {
+    this(fileSummaryCache, (AgentEventFactory) null, (AgentEventPublisher) null);
+  }
+
+  @Autowired
+  public FileSummaryAdvisor(FileSummaryCache fileSummaryCache, ObjectProvider<AgentEventFactory> events,
+      ObjectProvider<AgentEventPublisher> eventPublisher) {
+    this(fileSummaryCache, events.getIfAvailable(), eventPublisher.getIfAvailable());
+  }
+
+  public FileSummaryAdvisor(FileSummaryCache fileSummaryCache, AgentEventFactory events,
+      AgentEventPublisher eventPublisher) {
     this.fileSummaryCache = fileSummaryCache;
+    this.events = events;
+    this.eventPublisher = eventPublisher;
   }
 
   FileSummaryCache fileSummaryCache() {
@@ -38,6 +58,7 @@ public class FileSummaryAdvisor implements BaseAdvisor {
     if (context.isBlank()) {
       return request;
     }
+    publishInjected(context);
     UserMessage contextualMessage = userMessage.mutate()
         .text(context + "\n\n" + userMessage.getText())
         .build();
@@ -93,5 +114,11 @@ public class FileSummaryAdvisor implements BaseAdvisor {
       }
     }
     return List.copyOf(replaced);
+  }
+
+  private void publishInjected(String context) {
+    if (events != null && eventPublisher != null) {
+      eventPublisher.publish(events.contextInjected("file_summaries", null, context.length()));
+    }
   }
 }

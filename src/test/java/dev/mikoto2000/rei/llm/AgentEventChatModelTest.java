@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.llm;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -56,5 +57,40 @@ class AgentEventChatModelTest {
 
     assertEquals(AgentEventType.LLM_REQUEST_STARTED, events.getFirst().type());
     assertFalse(events.stream().anyMatch(event -> event.type() == AgentEventType.LLM_RESPONSE_COMPLETED));
+  }
+
+  @Test
+  void publishesFailureForSynchronousCallErrors() {
+    ChatModel delegate = mock(ChatModel.class);
+    Prompt prompt = new Prompt("fail");
+    when(delegate.call(prompt)).thenThrow(new IllegalStateException("boom"));
+    List<AgentEvent> events = new ArrayList<>();
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    bus.subscribe(events::add);
+
+    assertThrows(IllegalStateException.class, () -> new AgentEventChatModel(LlmFeature.CHAT, delegate,
+        new AgentEventFactory(Clock.systemUTC()), bus).call(prompt));
+
+    assertEquals(AgentEventType.LLM_REQUEST_STARTED, events.get(0).type());
+    assertEquals(AgentEventType.LLM_REQUEST_FAILED, events.get(1).type());
+  }
+
+  @Test
+  void publishesFirstTokenForStreams() {
+    ChatModel delegate = mock(ChatModel.class);
+    Prompt prompt = new Prompt("stream");
+    ChatResponse response = mock(ChatResponse.class);
+    when(delegate.stream(prompt)).thenReturn(Flux.just(response, response));
+    List<AgentEvent> events = new ArrayList<>();
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    bus.subscribe(events::add);
+
+    new AgentEventChatModel(LlmFeature.CHAT, delegate,
+        new AgentEventFactory(Clock.systemUTC()), bus).stream(prompt).blockLast();
+
+    assertEquals(AgentEventType.LLM_REQUEST_STARTED, events.get(0).type());
+    assertEquals(AgentEventType.LLM_RESPONSE_FIRST_TOKEN, events.get(1).type());
+    assertEquals(AgentEventType.LLM_RESPONSE_COMPLETED, events.get(2).type());
+    assertEquals(3, events.size());
   }
 }

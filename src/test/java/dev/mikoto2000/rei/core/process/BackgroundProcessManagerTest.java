@@ -15,7 +15,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import dev.mikoto2000.rei.core.service.SystemShellService;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.temporal.ManualMonotonicTimeSource;
+import dev.mikoto2000.rei.temporal.MonotonicTimeSource;
 
 class BackgroundProcessManagerTest {
   private final BackgroundProcessManager manager = new BackgroundProcessManager(new SystemShellService());
@@ -124,6 +129,25 @@ class BackgroundProcessManagerTest {
     assertTrue(manager.status(spawned.processId(), 100).found());
   }
 
+  @Test
+  void processLifecyclePublishesEvents() throws Exception {
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    List<AgentEvent> events = new java.util.ArrayList<>();
+    bus.subscribe(events::add);
+    BackgroundProcessManager manager = new BackgroundProcessManager(new SystemShellService(),
+        Clock.fixed(Instant.parse("2026-08-16T16:30:00Z"), ZoneId.of("Asia/Tokyo")),
+        MonotonicTimeSource.system(), new AgentEventFactory(Clock.systemUTC()), bus);
+    try {
+      BackgroundProcessSnapshot spawned = manager.spawnCommandLine(javaCommand("exit", "0"), tempDir);
+      awaitStatus(spawned.processId(), BackgroundProcessStatus.EXITED, manager);
+
+      assertEquals(AgentEventType.BACKGROUND_PROCESS_STARTED, events.get(0).type());
+      assertTrue(events.stream().anyMatch(event -> event.type() == AgentEventType.BACKGROUND_PROCESS_COMPLETED));
+    } finally {
+      manager.shutdown();
+    }
+  }
+
   private BackgroundProcessSnapshot awaitStdout(String processId, String expectedLine) throws Exception {
     return awaitStdout(processId, expectedLine, manager);
   }
@@ -144,6 +168,11 @@ class BackgroundProcessManagerTest {
 
   private BackgroundProcessSnapshot awaitStatus(String processId, BackgroundProcessStatus expectedStatus)
       throws Exception {
+    return awaitStatus(processId, expectedStatus, manager);
+  }
+
+  private BackgroundProcessSnapshot awaitStatus(String processId, BackgroundProcessStatus expectedStatus,
+      BackgroundProcessManager manager) throws Exception {
     long deadline = System.currentTimeMillis() + 5000;
     BackgroundProcessSnapshot snapshot;
     do {

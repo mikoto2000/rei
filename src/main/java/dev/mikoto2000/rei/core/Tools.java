@@ -51,6 +51,8 @@ import dev.mikoto2000.rei.core.searchcache.SearchCacheKey;
 import dev.mikoto2000.rei.core.searchcache.SearchResultCache;
 import dev.mikoto2000.rei.core.service.SystemShellService;
 import dev.mikoto2000.rei.core.working.WorkingSet;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
 
 @Component
 public class Tools {
@@ -66,6 +68,8 @@ public class Tools {
   private final FileSummaryCache fileSummaryCache;
   private final SearchResultCache searchResultCache;
   private final RelatedFileGraph relatedFileGraph;
+  private final AgentEventFactory eventFactory;
+  private final AgentEventPublisher eventPublisher;
 
   public Tools() {
     this(null, new SystemShellService());
@@ -90,6 +94,13 @@ public class Tools {
   }
 
   @Autowired
+  public Tools(ProjectService projectService, SystemShellService systemShellService,
+      BackgroundProcessManager backgroundProcessManager, Clock clock, WorkingSet workingSet,
+      AgentEventFactory eventFactory, AgentEventPublisher eventPublisher) {
+    this(projectService, systemShellService, backgroundProcessManager, clock, workingSet, new RecentChanges(),
+        new FileSummaryCache(), new SearchResultCache(), new RelatedFileGraph(), eventFactory, eventPublisher);
+  }
+
   public Tools(ProjectService projectService, SystemShellService systemShellService,
       BackgroundProcessManager backgroundProcessManager, Clock clock, WorkingSet workingSet) {
     this(projectService, systemShellService, backgroundProcessManager, clock, workingSet, new RecentChanges());
@@ -120,6 +131,14 @@ public class Tools {
       BackgroundProcessManager backgroundProcessManager, Clock clock, WorkingSet workingSet,
       RecentChanges recentChanges, FileSummaryCache fileSummaryCache, SearchResultCache searchResultCache,
       RelatedFileGraph relatedFileGraph) {
+    this(projectService, systemShellService, backgroundProcessManager, clock, workingSet, recentChanges,
+        fileSummaryCache, searchResultCache, relatedFileGraph, null, null);
+  }
+
+  public Tools(ProjectService projectService, SystemShellService systemShellService,
+      BackgroundProcessManager backgroundProcessManager, Clock clock, WorkingSet workingSet,
+      RecentChanges recentChanges, FileSummaryCache fileSummaryCache, SearchResultCache searchResultCache,
+      RelatedFileGraph relatedFileGraph, AgentEventFactory eventFactory, AgentEventPublisher eventPublisher) {
     this.projectService = projectService;
     this.systemShellService = systemShellService;
     this.backgroundProcessManager = backgroundProcessManager;
@@ -129,6 +148,8 @@ public class Tools {
     this.fileSummaryCache = fileSummaryCache;
     this.searchResultCache = searchResultCache;
     this.relatedFileGraph = relatedFileGraph;
+    this.eventFactory = eventFactory;
+    this.eventPublisher = eventPublisher;
   }
 
   /**
@@ -1103,15 +1124,19 @@ public class Tools {
     if (parent != null) {
       Files.createDirectories(parent);
     }
+    boolean existed = Files.exists(path);
     Files.writeString(path, request.content(), resolvedCharset, options);
     if (Boolean.TRUE.equals(request.append())) {
       workingSet.recordEdit(path);
       recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
       fileSummaryCache.invalidate(path.toString());
+      publishFileModified(path, null, null);
     } else {
       workingSet.recordWrite(path);
-      recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
+      recentChanges.record(path.toString(), existed ? RecentChanges.OP_EDIT : RecentChanges.OP_CREATE,
+          existed ? "edited" : "created");
       fileSummaryCache.invalidate(path.toString());
+      publishFileCreatedOrModified(path, existed);
     }
     relatedFileGraph.removeRelationsFor(path.toString());
     searchResultCache.clear();
@@ -1270,15 +1295,19 @@ public class Tools {
       if (parent != null) {
         Files.createDirectories(parent);
       }
+      boolean existed = Files.exists(path);
       Files.writeString(path, contents, resolvedCharset, options);
       if (append) {
         workingSet.recordEdit(path);
         recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
         fileSummaryCache.invalidate(path.toString());
+        publishFileModified(path, null, null);
       } else {
         workingSet.recordWrite(path);
-        recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
+        recentChanges.record(path.toString(), existed ? RecentChanges.OP_EDIT : RecentChanges.OP_CREATE,
+            existed ? "edited" : "created");
         fileSummaryCache.invalidate(path.toString());
+        publishFileCreatedOrModified(path, existed);
       }
       relatedFileGraph.removeRelationsFor(path.toString());
       searchResultCache.clear();
@@ -1328,6 +1357,7 @@ public class Tools {
       workingSet.recordEdit(path);
       recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
       fileSummaryCache.invalidate(path.toString());
+      publishFileModified(path, null, null);
       relatedFileGraph.removeRelationsFor(path.toString());
       searchResultCache.clear();
       return new TextDiffApplyResult(true, true, "差分を適用しました");
@@ -1376,15 +1406,19 @@ public class Tools {
     }
 
     java.nio.file.Path path = resolveProjectPath(pathStr);
+    boolean existed = Files.exists(path);
     Files.write(path, contents, options);
     if (append) {
       workingSet.recordEdit(path);
       recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
       fileSummaryCache.invalidate(path.toString());
+      publishFileModified(path, null, null);
     } else {
       workingSet.recordWrite(path);
-      recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
+      recentChanges.record(path.toString(), existed ? RecentChanges.OP_EDIT : RecentChanges.OP_CREATE,
+          existed ? "edited" : "created");
       fileSummaryCache.invalidate(path.toString());
+      publishFileCreatedOrModified(path, existed);
     }
     relatedFileGraph.removeRelationsFor(path.toString());
     searchResultCache.clear();
@@ -1400,6 +1434,7 @@ public class Tools {
     fileSummaryCache.invalidate(path.toString());
     relatedFileGraph.removeRelationsFor(path.toString());
     searchResultCache.clear();
+    publishFileDeleted(path);
   }
 
   @Tool(name = "copyFile", description = "ファイルをコピーします。上書きする場合は false を指定します。ファイルが存在しない場合はエラーになります。")
@@ -1415,10 +1450,12 @@ public class Tools {
 
     Files.copy(resolvedSourcePath, resolvedDestPath, overwrite ? StandardCopyOption.REPLACE_EXISTING : StandardCopyOption.COPY_ATTRIBUTES);
     workingSet.recordCreate(resolvedDestPath);
-    recentChanges.record(resolvedDestPath.toString(), RecentChanges.OP_CREATE, "created");
+    recentChanges.record(resolvedDestPath.toString(), exists ? RecentChanges.OP_EDIT : RecentChanges.OP_CREATE,
+        exists ? "edited" : "created");
     fileSummaryCache.invalidate(resolvedDestPath.toString());
     relatedFileGraph.removeRelationsFor(resolvedDestPath.toString());
     searchResultCache.clear();
+    publishFileCreatedOrModified(resolvedDestPath, exists);
   }
 
   @Tool(name = "moveFile", description = "ファイルを移動します。上書きする場合は false を指定します。ファイルが存在しない場合はエラーになります。")
@@ -1434,10 +1471,13 @@ public class Tools {
 
     Files.move(resolvedSourcePath, resolvedDestPath, overwrite ? StandardCopyOption.REPLACE_EXISTING : StandardCopyOption.ATOMIC_MOVE);
     workingSet.recordCreate(resolvedDestPath);
-    recentChanges.record(resolvedDestPath.toString(), RecentChanges.OP_CREATE, "created");
+    recentChanges.record(resolvedDestPath.toString(), exists ? RecentChanges.OP_EDIT : RecentChanges.OP_CREATE,
+        exists ? "edited" : "created");
     fileSummaryCache.invalidate(resolvedDestPath.toString());
     relatedFileGraph.removeRelationsFor(resolvedDestPath.toString());
     searchResultCache.clear();
+    publishFileDeleted(resolvedSourcePath);
+    publishFileCreatedOrModified(resolvedDestPath, exists);
   }
 
   WorkingSet workingSet() {
@@ -1566,6 +1606,32 @@ public class Tools {
 
   private String stripBom(String content) {
     return content.startsWith("\ufeff") ? content.substring(1) : content;
+  }
+
+  private void publishFileCreatedOrModified(java.nio.file.Path path, boolean existed) {
+    if (existed) {
+      publishFileModified(path, null, null);
+    } else {
+      publishFileCreated(path);
+    }
+  }
+
+  private void publishFileCreated(java.nio.file.Path path) {
+    if (eventFactory != null && eventPublisher != null) {
+      eventPublisher.publish(eventFactory.fileCreated(path.toAbsolutePath().normalize().toString()));
+    }
+  }
+
+  private void publishFileModified(java.nio.file.Path path, Integer addedLines, Integer removedLines) {
+    if (eventFactory != null && eventPublisher != null) {
+      eventPublisher.publish(eventFactory.fileModified(path.toAbsolutePath().normalize().toString(), addedLines, removedLines));
+    }
+  }
+
+  private void publishFileDeleted(java.nio.file.Path path) {
+    if (eventFactory != null && eventPublisher != null) {
+      eventPublisher.publish(eventFactory.fileDeleted(path.toAbsolutePath().normalize().toString()));
+    }
   }
 
   private record ResolvedTextFile(String content, Charset charset) {

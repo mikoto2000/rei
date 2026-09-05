@@ -7,8 +7,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
+
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 
 class FileSummaryCacheTest {
 
@@ -95,5 +102,23 @@ class FileSummaryCacheTest {
     cache.save(new FileSummary("src/UserService.java", "abc123", "User の作成・更新を担当",
         Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
     assertFalse(cache.isUsable("src/UserService.java", null));
+  }
+
+  @Test
+  void cachePublishesSaveInvalidateAndStaleSkippedEvents() {
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    List<AgentEvent> events = new ArrayList<>();
+    bus.subscribe(events::add);
+    Clock clock = Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE);
+    FileSummaryCache cache = new FileSummaryCache(20, clock, new AgentEventFactory(clock), bus);
+
+    cache.save(new FileSummary("src/UserService.java", "abc123", "summary",
+        Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
+    cache.renderForPrompt(path -> "def456");
+    cache.invalidate("src/UserService.java");
+
+    assertEquals(AgentEventType.FILE_SUMMARY_SAVED, events.get(0).type());
+    assertEquals(AgentEventType.FILE_SUMMARY_STALE_SKIPPED, events.get(1).type());
+    assertEquals(AgentEventType.FILE_SUMMARY_INVALIDATED, events.get(2).type());
   }
 }

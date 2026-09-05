@@ -191,6 +191,54 @@ class ShellAgentEventRendererTest {
   }
 
   @Test
+  void rendersWorkingSetContextInjectionAsCompactSummary() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.workingSetContextInjected(2, 427));
+
+    assertEquals("[working-set] injected 2 items into context (427 chars)\n", output.text());
+  }
+
+  @Test
+  void rendersAdditionalOperationalEventsAsCompactSummaries() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.llmResponseFirstToken("run-1", "request-1", 42));
+    renderer.onEvent(events.llmRequestFailed("run-1", "request-1", 84, new IllegalStateException("boom")));
+    renderer.onEvent(events.contextInjected("task_state", null, 123));
+    renderer.onEvent(events.contextBudgetEvaluated(800, 700, java.util.List.of("SYSTEM"), java.util.List.of()));
+    renderer.onEvent(events.contextBudgetTrimmed(800, 700, java.util.List.of("OLD_HISTORY")));
+    renderer.onEvent(events.fileSummarySaved("/project/src/Foo.java", 55));
+    renderer.onEvent(events.fileSummaryInvalidated("/project/src/Foo.java"));
+    renderer.onEvent(events.fileSummaryStaleSkipped("/project/src/Foo.java"));
+    renderer.onEvent(events.checkpointSaved("task-1", "TURN_END", 2));
+    renderer.onEvent(events.fileCreated("/project/src/New.java"));
+    renderer.onEvent(events.fileModified("/project/src/Foo.java", 3, 1));
+    renderer.onEvent(events.fileDeleted("/project/src/Old.java"));
+    renderer.onEvent(events.backgroundProcessStarted("proc-1", 1234L, "pwsh -Command test", "/project"));
+    renderer.onEvent(events.backgroundProcessCompleted("proc-1", 1234L, 0, 1.25d));
+    renderer.onEvent(events.backgroundProcessFailed("proc-2", "missing", new IllegalStateException("nope")));
+    renderer.onEvent(events.backgroundProcessKilled("proc-3", 1235L, null, 2.5d));
+
+    assertEquals("[llm] first token (42 ms)\n"
+        + "[llm] request failed (84 ms): boom\n"
+        + "[context] injected task_state (123 chars)\n"
+        + "[context] budget evaluated: 700/800 tokens, included 1, dropped 0\n"
+        + "[context] budget trimmed: dropped OLD_HISTORY\n"
+        + "[file-summary] saved Foo.java (55 chars)\n"
+        + "[file-summary] invalidated Foo.java\n"
+        + "[file-summary] skipped stale Foo.java\n"
+        + "[checkpoint] saved task-1 (TURN_END), 2 files\n"
+        + "[file] created New.java\n"
+        + "[file] modified Foo.java (+3/-1)\n"
+        + "[file] deleted Old.java\n"
+        + "[process] started proc-1 pid=1234\n"
+        + "[process] completed proc-1 exit=0 (1.3 s)\n"
+        + "[process] failed proc-2: nope\n"
+        + "[process] killed proc-3 exit=null (2.5 s)\n", output.text());
+  }
+
+  @Test
   void rendersMemoryConsolidationSuggestion() {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);

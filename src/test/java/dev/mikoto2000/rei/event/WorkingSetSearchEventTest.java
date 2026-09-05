@@ -31,4 +31,14 @@ class WorkingSetSearchEventTest {
     assertEquals(1, payload.alreadyPresentCount());
     assertTrue(payload.durationMs() >= 0);
   }
+
+  @Test
+  void contextInjectedCapturesInjectedContextSize() {
+    AgentEvent event = events.workingSetContextInjected(3, 429);
+
+    assertEquals(AgentEventType.WORKING_SET_CONTEXT_INJECTED, event.type());
+    WorkingSetContextInjectedPayload payload = (WorkingSetContextInjectedPayload) event.payload();
+    assertEquals(3, payload.itemCount());
+    assertEquals(429, payload.contextCharacters());
+  }
 }
