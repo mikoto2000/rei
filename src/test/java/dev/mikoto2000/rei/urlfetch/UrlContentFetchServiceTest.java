@@ -10,6 +10,8 @@ import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpResponse;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -22,9 +24,9 @@ class UrlContentFetchServiceTest {
   void returnsContentOn2xxTextResponse() throws Exception {
     HttpClient httpClient = Mockito.mock(HttpClient.class);
     @SuppressWarnings("unchecked")
-    HttpResponse<String> response = (HttpResponse<String>) Mockito.mock(HttpResponse.class);
+    HttpResponse<byte[]> response = (HttpResponse<byte[]>) Mockito.mock(HttpResponse.class);
     when(response.statusCode()).thenReturn(200);
-    when(response.body()).thenReturn("hello");
+    when(response.body()).thenReturn("hello".getBytes(StandardCharsets.UTF_8));
     when(response.headers()).thenReturn(HttpHeaders.of(
         Map.of("Content-Type", List.of("text/plain; charset=utf-8")), (name, value) -> true));
     when(httpClient.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response);
@@ -38,10 +40,53 @@ class UrlContentFetchServiceTest {
   }
 
   @Test
+  void decodesBodyUsingCharsetFromContentType() throws Exception {
+    HttpClient httpClient = Mockito.mock(HttpClient.class);
+    @SuppressWarnings("unchecked")
+    HttpResponse<byte[]> response = (HttpResponse<byte[]>) Mockito.mock(HttpResponse.class);
+    when(response.statusCode()).thenReturn(200);
+    when(response.body()).thenReturn("日本語の本文".getBytes(Charset.forName("Shift_JIS")));
+    when(response.headers()).thenReturn(HttpHeaders.of(
+        Map.of("Content-Type", List.of("text/html; charset=Shift_JIS")), (name, value) -> true));
+    when(httpClient.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response);
+    UrlContentFetchService service = new UrlContentFetchService(new UrlValidator(), httpClient);
+
+    UrlContentFetchResult result = service.fetch("https://example.com");
+
+    assertTrue(result.success());
+    assertEquals("日本語の本文", result.content());
+    assertEquals("text/html", result.contentType());
+  }
+
+  @Test
+  void decodesHtmlBodyUsingMetaCharsetWhenContentTypeHasNoCharset() throws Exception {
+    HttpClient httpClient = Mockito.mock(HttpClient.class);
+    @SuppressWarnings("unchecked")
+    HttpResponse<byte[]> response = (HttpResponse<byte[]>) Mockito.mock(HttpResponse.class);
+    when(response.statusCode()).thenReturn(200);
+    when(response.body()).thenReturn("""
+        <html>
+          <head><meta charset="Shift_JIS"></head>
+          <body>日本語の本文</body>
+        </html>
+        """.getBytes(Charset.forName("Shift_JIS")));
+    when(response.headers()).thenReturn(HttpHeaders.of(
+        Map.of("Content-Type", List.of("text/html")), (name, value) -> true));
+    when(httpClient.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response);
+    UrlContentFetchService service = new UrlContentFetchService(new UrlValidator(), httpClient);
+
+    UrlContentFetchResult result = service.fetch("https://example.com");
+
+    assertTrue(result.success());
+    assertTrue(result.content().contains("日本語の本文"));
+    assertEquals("text/html", result.contentType());
+  }
+
+  @Test
   void returnsHttpErrorOn4xx() throws Exception {
     HttpClient httpClient = Mockito.mock(HttpClient.class);
     @SuppressWarnings("unchecked")
-    HttpResponse<String> response = (HttpResponse<String>) Mockito.mock(HttpResponse.class);
+    HttpResponse<byte[]> response = (HttpResponse<byte[]>) Mockito.mock(HttpResponse.class);
     when(response.statusCode()).thenReturn(404);
     when(httpClient.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response);
     UrlContentFetchService service = new UrlContentFetchService(new UrlValidator(), httpClient);
@@ -57,7 +102,7 @@ class UrlContentFetchServiceTest {
   void returnsHttpErrorOn5xx() throws Exception {
     HttpClient httpClient = Mockito.mock(HttpClient.class);
     @SuppressWarnings("unchecked")
-    HttpResponse<String> response = (HttpResponse<String>) Mockito.mock(HttpResponse.class);
+    HttpResponse<byte[]> response = (HttpResponse<byte[]>) Mockito.mock(HttpResponse.class);
     when(response.statusCode()).thenReturn(503);
     when(httpClient.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response);
     UrlContentFetchService service = new UrlContentFetchService(new UrlValidator(), httpClient);
@@ -97,7 +142,7 @@ class UrlContentFetchServiceTest {
   void returnsExtractionErrorWhenBodyExtractionFails() throws Exception {
     HttpClient httpClient = Mockito.mock(HttpClient.class);
     @SuppressWarnings("unchecked")
-    HttpResponse<String> response = (HttpResponse<String>) Mockito.mock(HttpResponse.class);
+    HttpResponse<byte[]> response = (HttpResponse<byte[]>) Mockito.mock(HttpResponse.class);
     when(response.statusCode()).thenReturn(200);
     when(response.body()).thenReturn(null);
     when(httpClient.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response);
