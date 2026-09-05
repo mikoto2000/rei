@@ -23,6 +23,7 @@ import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 @Component
 public class DefaultBlueskyApiClient implements BlueskyApiClient {
@@ -63,7 +64,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
         .build();
     try {
       HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-      log.debug("Bluesky createSession response: status={}, body={}", response.statusCode(), response.body());
+      log.debug("Bluesky createSession response: status={}, body={}", response.statusCode(), maskSessionResponse(response.body()));
       if (response.statusCode() / 100 != 2) {
         return new AuthResult(false, null, null);
       }
@@ -284,6 +285,25 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     JsonNode body = objectMapper.readTree(response.body());
     String uri = textOrNull(body, "uri");
     return postUri.equals(uri);
+  }
+
+  String maskSessionResponse(String responseBody) {
+    try {
+      JsonNode body = objectMapper.readTree(responseBody);
+      if (!(body instanceof ObjectNode object)) {
+        return "[REDACTED]";
+      }
+      if (object.has("accessJwt")) {
+        object.put("accessJwt", "[REDACTED]");
+      }
+      if (object.has("refreshJwt")) {
+        object.put("refreshJwt", "[REDACTED]");
+      }
+      return objectMapper.writeValueAsString(object);
+    } catch (IOException e) {
+      // Never fall back to logging an unparsed authentication response.
+      return "[REDACTED]";
+    }
   }
 
   private HttpRequest.Builder requestBuilder(URI uri) {

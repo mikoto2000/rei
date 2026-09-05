@@ -12,6 +12,39 @@ import org.junit.jupiter.api.Test;
 class DefaultBlueskyApiClientTest {
 
   @Test
+  void masksBothSessionTokensAndPreservesMetadata() throws Exception {
+    String response = """
+        {"accessJwt":"access.secret.token","refreshJwt":"refresh.secret.token",
+         "did":"did:plc:abc","handle":"test.bsky.social","active":true}
+        """;
+
+    String masked = new DefaultBlueskyApiClient().maskSessionResponse(response);
+    var body = new com.fasterxml.jackson.databind.ObjectMapper().readTree(masked);
+
+    assertEquals("[REDACTED]", body.get("accessJwt").asText());
+    assertEquals("[REDACTED]", body.get("refreshJwt").asText());
+    assertEquals("did:plc:abc", body.get("did").asText());
+    assertEquals("test.bsky.social", body.get("handle").asText());
+    assertTrue(body.get("active").asBoolean());
+    assertTrue(response.contains("access.secret.token"));
+  }
+
+  @Test
+  void preservesSessionErrorResponseWithoutTokens() {
+    String response = "{\"error\":\"AuthenticationRequired\",\"message\":\"Invalid credentials\"}";
+    assertEquals(response, new DefaultBlueskyApiClient().maskSessionResponse(response));
+  }
+
+  @Test
+  void hidesMalformedSessionResponse() {
+    var client = new DefaultBlueskyApiClient();
+    assertEquals("[REDACTED]", client.maskSessionResponse("{\"accessJwt\":\"secret"));
+    assertEquals("[REDACTED]", client.maskSessionResponse("not-json secret"));
+    assertEquals("[REDACTED]", client.maskSessionResponse("[]"));
+    assertEquals("[REDACTED]", client.maskSessionResponse(""));
+  }
+
+  @Test
   void extractLinkFacetsReturnsUtf8ByteIndexes() {
     String text = "日本語 https://example.com/abc test";
     List<DefaultBlueskyApiClient.LinkFacet> facets = DefaultBlueskyApiClient.extractLinkFacets(text);
