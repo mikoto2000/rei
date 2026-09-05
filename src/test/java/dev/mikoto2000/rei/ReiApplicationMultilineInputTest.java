@@ -64,8 +64,10 @@ class ReiApplicationMultilineInputTest {
   @Test
   void configureCommandOutputSetsPicocliWriters() {
     CommandLine commandLine = new CommandLine(new RootCommand());
+    Terminal terminal = Mockito.mock(Terminal.class);
+    when(terminal.writer()).thenReturn(new java.io.PrintWriter(new java.io.StringWriter()));
 
-    ReiApplication.configureCommandOutput(commandLine);
+    ReiApplication.configureCommandOutput(commandLine, terminal);
 
     assertNotNull(commandLine.getOut());
     assertNotNull(commandLine.getErr());

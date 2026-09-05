@@ -3,7 +3,6 @@
 package dev.mikoto2000.rei;
 
 
-import java.io.Console;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
@@ -139,10 +138,10 @@ public class ReiApplication {
 
   void run(String[] args) throws IOException {
     var cmd = new picocli.CommandLine(rootCommand, factory);
-    configureCommandOutput(cmd);
     var terminal = TerminalBuilder.builder()
       .system(true)
       .build();
+    configureCommandOutput(cmd, terminal);
 
     ReiLineReaderFactory.Session inputSession = ReiLineReaderFactory.create(terminal, cmd);
     LineReader reader = inputSession.reader();
@@ -219,17 +218,11 @@ public class ReiApplication {
     }
   }
 
-  static void configureCommandOutput(CommandLine cmd) {
-    cmd.setOut(consoleWriterOrFallback(System.out));
-    cmd.setErr(consoleWriterOrFallback(System.err));
-  }
-
-  private static PrintWriter consoleWriterOrFallback(PrintStream fallback) {
-    Console console = System.console();
-    if (console != null) {
-      return new PrintWriter(console.writer(), true);
-    }
-    return new PrintWriter(fallback, true);
+  static void configureCommandOutput(CommandLine cmd, Terminal terminal) {
+    // Use JLine's encoding for command output as well as prompts and events.
+    PrintWriter writer = new PrintWriter(terminal.writer(), true);
+    cmd.setOut(writer);
+    cmd.setErr(writer);
   }
 
   protected void executeInterruptibly(CommandLine cmd, Terminal terminal, ExecutorService commandExecutor, String... args)
