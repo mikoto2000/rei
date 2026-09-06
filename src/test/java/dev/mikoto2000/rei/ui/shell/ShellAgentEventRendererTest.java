@@ -336,7 +336,7 @@ class ShellAgentEventRendererTest {
         Instant.parse("2026-08-23T00:30:00Z")));
     renderer.onEvent(events.topicGenerationCompleted("run-1", "tg-1", 1, 1, 0, "topic-1", false, 184));
 
-    assertEquals("[topic] idle trigger accepted\n", output.text());
+    assertEquals("", output.text());
   }
 
   private static final class RecordingOutput implements ShellEventOutput {

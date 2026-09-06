@@ -472,10 +472,10 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       }
       case TOPIC_IDLE_TRIGGER_EVALUATED -> {
         TopicIdleTriggerEvaluatedPayload payload = (TopicIdleTriggerEvaluatedPayload) event.payload();
-        if (!payload.accepted() && !topicNotificationOptions.showIdleSkipped()) return;
+        if (payload.accepted() || !topicNotificationOptions.showIdleSkipped()) return;
         if (!allowThrottledTopicSummary(event)) return;
         closeAssistantLine();
-        output.println("[topic] idle trigger " + (payload.accepted() ? "accepted" : "skipped"));
+        output.println("[topic] idle trigger skipped");
       }
       case TOPIC_GENERATION_FAILED -> {
         closeAssistantLine();

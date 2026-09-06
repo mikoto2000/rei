@@ -156,7 +156,7 @@ Shell の Topic 表示は、放置中に画面を埋め尽くさないよう `su
 `summary` では、候補更新、発話、重大な失敗、クールダウン以外の skip、抑制理由だけを表示します。
 `topic.generation.started`, `topic.candidate.generated`, `topic.candidate.scored`, `topic.candidate.rejected`, `topic.selected`, `topic.generation.completed` は `verbose` のときだけ表示します。
 `COOLDOWN` の `topic.speak.skipped` は、idle 放置中に繰り返されやすいため `summary` では表示しません。
-`topic.idle_trigger.evaluated` の skipped もデフォルトでは表示しません。
+`topic.idle_trigger.evaluated` は `summary` では accepted を表示しません。skipped もデフォルトでは表示せず、`show-idle-skipped=true` のときだけ表示します。
 背景系の要約通知には `minimum-interval` を適用し、長時間放置しても同じ種類の通知が増え続けないようにします。
 
 `verbose` では Topic lifecycle を詳細に表示します。
