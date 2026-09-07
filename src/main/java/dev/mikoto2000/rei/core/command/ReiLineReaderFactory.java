@@ -45,16 +45,18 @@ public final class ReiLineReaderFactory {
   }
 
   public static Completer completer(CommandLine command) {
-    return new SlashCompleter(new PicocliJLineCompleter(command.getCommandSpec()),
+    return new SlashCompleter(command, new PicocliJLineCompleter(command.getCommandSpec()),
         command.getSubcommands().keySet().stream().sorted().toList());
   }
 
   private static final class SlashCompleter implements Completer {
+    private final CommandLine command;
     private final Completer delegate;
     private final List<String> rootCommands;
     private final Parser parser = new DefaultParser();
 
-    private SlashCompleter(Completer delegate, List<String> rootCommands) {
+    private SlashCompleter(CommandLine command, Completer delegate, List<String> rootCommands) {
+      this.command = command;
       this.delegate = delegate;
       this.rootCommands = rootCommands;
     }
@@ -78,7 +80,14 @@ public final class ReiLineReaderFactory {
         String stripped = raw.length() <= 1 ? "" : raw.substring(1);
         delegate.complete(reader,
             parser.parse(stripped, Math.max(0, line.cursor() - 1), Parser.ParseContext.COMPLETE), candidates);
-      } catch (SyntaxError ignored) { }
+      } catch (SyntaxError ignored) {
+      } finally {
+        // Picocli completion rebuilds CommandLine instances and rebinds @Spec fields.
+        // Keep those instances on the shell writers instead of the default streams.
+        CommandLine completionCommand = command.getCommandSpec().commandLine();
+        completionCommand.setOut(command.getOut());
+        completionCommand.setErr(command.getErr());
+      }
     }
   }
 }
