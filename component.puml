@@ -1,0 +1,77 @@
+@startuml
+' Rei コンポーネント図（ui / core 分離 俯瞰版）
+' 生成: 2026-09-04
+
+skinparam componentStyle rectangle
+skinparam defaultFontName SansSerif
+
+package "Rei (AI 秘書シェル)" {
+
+  ' ===== ui 層（プレゼンテーション / シェル） =====
+  package "ui" {
+    [ReiApplication] as APP
+    [RootCommand] as ROOT
+    [ChatCommand] as CHAT
+    [ShellAgentEventRenderer] as RENDERER
+    [ChatResponseNarrator] as NARRATOR
+    [AgentUiProjection] as PROJECTION
+  }
+
+  ' ===== core 層（エンジン / ドメイン） =====
+  package "core" {
+    [ChatExecutionService] as CHATEX
+    [Tools] as TOOLS
+    [AgentEventBus] as BUS
+    [AgentScheduler] as SCHED
+    [TopicOrchestrator] as TOPIC
+    [AgentSkillSelectionService] as SKILL
+    [MemoryConsolidatorService] as MEM
+    [ChatModel] as CMODEL
+    [InterestDiscoveryJob] as INTEREST
+    [FileSystemAgentSkillRepository] as SKILLREPO
+
+    component "外部サービス連携" as EXTSVC
+    component "ストレージ" as STORE
+    component "ツール群" as TOOLGRP
+  }
+}
+
+' ===== ui -> core の境界 =====
+APP --> ROOT : 起動
+ROOT --> CHAT : 対話
+ROOT --> "CLI サブコマンド群" : 設定 / RSS / 予定 / タスク / 日次 / リマインド / Bluesky / 記憶 / スキル / 画像 / 埋め込み / 検索
+CHAT --> CHATEX : 呼び出し（ui -> core）
+
+' ===== core 内部（対話エンジン） =====
+CHATEX --> CMODEL : LLM 呼び出し
+CHATEX --> TOOLS : ツール実行
+CHATEX --> BUS : イベント発行
+CHATEX --> TOPIC : 完了通知
+CHATEX --> MEM : 記憶統合
+CHATEX --> SKILL : スキル選択
+CHATEX --> STORE : 会話履歴・記憶の保存
+
+' ===== core のイベント -> ui の描画 =====
+BUS --> RENDERER : 描画
+BUS --> NARRATOR : 音声
+BUS --> PROJECTION : UI 状態投影
+
+' ===== core 内部（ツール連携） =====
+TOOLS --> TOOLGRP
+TOOLGRP --> EXTSVC
+TOOLGRP --> STORE
+
+' ===== core 内部（外部サービス） =====
+EXTSVC --> "Google Calendar / Bluesky / Web検索 / OpenAI画像 API"
+EXTSVC --> STORE
+
+' ===== core 内部（スケジュール・バックグラウンド） =====
+SCHED --> INTEREST
+INTEREST --> STORE
+INTEREST --> CMODEL
+SKILL --> SKILLREPO
+
+' ===== core 内部（ストレージ） =====
+STORE --> "SQLite (memory / vector)"
+
+@enduml
