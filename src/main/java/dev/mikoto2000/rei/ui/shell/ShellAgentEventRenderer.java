@@ -309,10 +309,12 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         }
       }
       case TOPIC_CANDIDATES_REFRESHED -> {
-        closeAssistantLine();
         TopicCandidatesRefreshedPayload payload = (TopicCandidatesRefreshedPayload) event.payload();
+        if (payload.candidateCount() == 0) return;
+        closeAssistantLine();
         output.println("[topic] candidates refreshed");
         output.println("        candidates: " + payload.candidateCount());
+        payload.topics().forEach(topic -> output.println("        - " + oneLineSummary(topic)));
       }
       case TOPIC_CANDIDATE_GENERATED -> {
         closeAssistantLine();
@@ -446,9 +448,11 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     if (topicNotificationOptions.verbosity() == TopicNotificationVerbosity.QUIET) return;
     switch (event.type()) {
       case TOPIC_CANDIDATES_REFRESHED -> {
-        closeAssistantLine();
         TopicCandidatesRefreshedPayload payload = (TopicCandidatesRefreshedPayload) event.payload();
+        if (payload.candidateCount() == 0) return;
+        closeAssistantLine();
         output.println("[topic] candidates refreshed: " + payload.candidateCount());
+        payload.topics().forEach(topic -> output.println("        - " + oneLineSummary(topic)));
       }
       case TOPIC_SPOKEN -> {
         if (!allowThrottledTopicSummary(event)) return;

@@ -257,7 +257,8 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.topicGenerationStarted("run-1", "tg-1", "agent-run"));
     renderer.onEvent(events.topicIdleTriggerEvaluated(IdleTriggerRejectReason.INSUFFICIENT_IDLE, false,
         java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(2)));
-    renderer.onEvent(events.topicCandidatesRefreshed(2));
+    renderer.onEvent(events.topicCandidatesRefreshed(2,
+        java.util.List.of("Working Set 測定", "前回の作業の続き")));
     renderer.onEvent(events.topicCandidateGenerated("run-1", "tg-1", "topic-1", "UNFINISHED_WORK",
         "WORKING_SET", "Working Set 測定", "効果測定が未実施", 1.0, 1.0, 1.0, 0.0, 1.0));
     renderer.onEvent(events.topicCandidateScored("run-1", "tg-1", "topic-1", score));
@@ -280,6 +281,8 @@ class ShellAgentEventRendererTest {
         + "        reason: INSUFFICIENT_IDLE\n"
         + "[topic] candidates refreshed\n"
         + "        candidates: 2\n"
+        + "        - Working Set 測定\n"
+        + "        - 前回の作業の続き\n"
         + "[topic] candidate\n"
         + "        id: topic-1\n"
         + "        type: unfinished_work\n"

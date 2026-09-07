@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.event;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Component;
@@ -328,9 +329,13 @@ public class AgentEventFactory {
   }
 
   public AgentEvent topicCandidatesRefreshed(int candidateCount) {
+    return topicCandidatesRefreshed(candidateCount, List.of());
+  }
+
+  public AgentEvent topicCandidatesRefreshed(int candidateCount, List<String> topics) {
     Instant now = Instant.now(clock);
     return newEvent(AgentEventType.TOPIC_CANDIDATES_REFRESHED, null, null,
-        new TopicCandidatesRefreshedPayload(candidateCount, now));
+        new TopicCandidatesRefreshedPayload(candidateCount, topics, now));
   }
 
   public AgentEvent topicCandidateGenerated(String runId, String topicGenerationId, String topicCandidateId,

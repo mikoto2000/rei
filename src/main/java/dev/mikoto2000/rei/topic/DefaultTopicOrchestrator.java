@@ -46,7 +46,8 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
     if (!properties.isEnabled()) return;
     List<TopicCandidate> candidates = topicGeneratorService.prepareCandidates(contextProvider.currentContext());
     candidateStore.replace(candidates, Instant.now(clock));
-    eventPublisher.publish(eventFactory.topicCandidatesRefreshed(candidates.size()));
+    eventPublisher.publish(eventFactory.topicCandidatesRefreshed(candidates.size(),
+        candidates.stream().map(TopicCandidate::topic).toList()));
   }
 
   @Override

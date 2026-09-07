@@ -154,6 +154,7 @@ Shell の Topic 表示は、放置中に画面を埋め尽くさないよう `su
 イベント自体は Event Bus に publish されますが、Shell には重要な要約だけを表示します。
 
 `summary` では、候補更新、発話、重大な失敗、クールダウン以外の skip、抑制理由だけを表示します。
+候補更新通知は `summary` / `verbose` ともに候補が1件以上ある場合だけ件数と話題一覧を表示し、0件の場合は表示しません。
 `topic.generation.started`, `topic.candidate.generated`, `topic.candidate.scored`, `topic.candidate.rejected`, `topic.selected`, `topic.generation.completed` は `verbose` のときだけ表示します。
 `COOLDOWN` の `topic.speak.skipped` は、idle 放置中に繰り返されやすいため `summary` では表示しません。
 `topic.idle_trigger.evaluated` は `summary` では accepted を表示しません。skipped もデフォルトでは表示せず、`show-idle-skipped=true` のときだけ表示します。
@@ -170,6 +171,9 @@ Shell の Topic 表示は、放置中に画面を埋め尽くさないよう `su
         reason: INSUFFICIENT_IDLE
 [topic] candidates refreshed
         candidates: 3
+        - Working Set の効果測定
+        - 前回の作業の続き
+        - テスト結果の確認
 [topic] candidate
         id: topic-001
         type: unfinished_work
