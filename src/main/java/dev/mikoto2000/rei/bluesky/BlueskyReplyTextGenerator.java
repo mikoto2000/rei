@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.bluesky;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.client.ChatClient;
@@ -23,6 +25,9 @@ import dev.mikoto2000.rei.llm.LlmModelProvider;
 
 @Component
 public class BlueskyReplyTextGenerator {
+
+  private static final Pattern THINK_END = Pattern.compile("</think\\s*>", Pattern.CASE_INSENSITIVE);
+  private static final Pattern THINK_MARKER = Pattern.compile("<\\s*/?\\s*think\\b", Pattern.CASE_INSENSITIVE);
 
   private final LlmChatClientProvider chatClientProvider;
   private final ModelHolderService modelHolderService;
@@ -137,7 +142,23 @@ public class BlueskyReplyTextGenerator {
         .map(this::answerText)
         .collectList()
         .map(parts -> String.join("", parts))
+        .map(this::removeThinking)
         .block(generationTimeout());
+  }
+
+  private String removeThinking(String content) {
+    // Some providers omit <think>, leaving reasoning (and draft answers) before </think>.
+    // Inspect the complete response so even tags split across stream chunks are handled.
+    Matcher end = THINK_END.matcher(content);
+    int answerStart = 0;
+    while (end.find()) {
+      answerStart = end.end();
+    }
+    String answer = content.substring(answerStart);
+    if (THINK_MARKER.matcher(answer).find()) {
+      throw new IllegalStateException("Bluesky reply text generation returned an incomplete thinking block");
+    }
+    return answer;
   }
 
   Duration generationTimeout() {

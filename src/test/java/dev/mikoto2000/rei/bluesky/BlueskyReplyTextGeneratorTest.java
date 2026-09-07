@@ -11,6 +11,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import java.util.function.Consumer;
@@ -181,5 +183,63 @@ class BlueskyReplyTextGeneratorTest {
 
   private static ChatResponse response(String text) {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "  返信本文  ",
+      "<think>Let me count: roughly 70 characters. Good.</think>返信本文",
+      "返信本文\n\nLet me count: roughly 70 characters. Good.</think>返信本文",
+      "<think>first draft</think>draft<think>reconsider</think>返信本文",
+      "<THINK>reasoning\nmore reasoning</THINK > 返信本文"
+  })
+  void removesThinkingAcrossStreamChunksForAllReplyPaths(String content) {
+    BlueskyReplyTextGenerator generator = generatorStreaming(content);
+
+    assertThat(generator.generate("alice.bsky.social", "元投稿", List.of())).isEqualTo("返信本文");
+    assertThat(generator.generateForManualReply("元投稿")).isEqualTo("返信本文");
+    assertThat(generator.generateForManualReply("元投稿", "post-id")).isEqualTo("返信本文");
+    assertThat(generator.generateForManualReply("元投稿", "alice.bsky.social", "post-id"))
+        .isEqualTo("返信本文");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "<think>unfinished reasoning",
+      "draft<think>unfinished reasoning",
+      "<think>reasoning</think>",
+      "reasoning</think>  ",
+      "<think>reasoning</think>draft<think>reconsider",
+      "reasoning</think",
+      "<think>"
+  })
+  void rejectsRepliesWithoutASafeAnswerForAllReplyPaths(String content) {
+    BlueskyReplyTextGenerator generator = generatorStreaming(content);
+
+    assertThatThrownBy(() -> generator.generate("alice.bsky.social", "元投稿", List.of()))
+        .isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> generator.generateForManualReply("元投稿"))
+        .isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> generator.generateForManualReply("元投稿", "post-id"))
+        .isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> generator.generateForManualReply("元投稿", "alice.bsky.social", "post-id"))
+        .isInstanceOf(IllegalStateException.class);
+  }
+
+  private BlueskyReplyTextGenerator generatorStreaming(String content) {
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ObjectProvider<ChatClient> chatClientProvider = Mockito.mock(ObjectProvider.class);
+    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class);
+    StreamResponseSpec streamSpec = Mockito.mock(StreamResponseSpec.class);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    when(chatClientProvider.getObject()).thenReturn(chatClient);
+    when(modelHolderService.get()).thenReturn("qwen-test");
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.stream()).thenReturn(streamSpec);
+    // One character per chunk exercises every possible tag boundary.
+    when(streamSpec.chatResponse()).thenReturn(Flux.fromStream(
+        () -> content.chars().mapToObj(c -> response(String.valueOf((char) c)))));
+    return new BlueskyReplyTextGenerator(chatClientProvider, modelHolderService);
   }
 }
