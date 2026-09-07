@@ -82,6 +82,8 @@ public class ExternalConfigFileService {
               image: openai
 
         rei:
+          embedding:
+            enabled: ${REI_EMBEDDING_ENABLED:true}
           llm:
             max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}
             output-limit:

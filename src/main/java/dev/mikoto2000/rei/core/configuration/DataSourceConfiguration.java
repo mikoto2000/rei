@@ -25,6 +25,7 @@ public class DataSourceConfiguration {
 
   @Bean
   @Qualifier("vectorStoreDataSource")
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "rei.embedding.enabled", havingValue = "true", matchIfMissing = true)
   public DataSource vectorStoreDataSource(SqliteVecExtensionLoader sqliteVecExtensionLoader) throws Exception {
     return new SqliteVecDataSource(sqliteVecCapableDataSource(ReiPaths.vectorStoreDbPath()), sqliteVecExtensionLoader);
   }

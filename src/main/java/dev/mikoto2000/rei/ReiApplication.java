@@ -138,6 +138,7 @@ public class ReiApplication {
 
   void run(String[] args) throws IOException {
     var cmd = new picocli.CommandLine(rootCommand, factory);
+    rootCommand.configureCommands(cmd);
     var terminal = TerminalBuilder.builder()
       .system(true)
       .build();

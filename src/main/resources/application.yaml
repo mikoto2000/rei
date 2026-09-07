@@ -43,6 +43,8 @@ spring:
     restart:
       enabled: false
 rei:
+  embedding:
+    enabled: ${REI_EMBEDDING_ENABLED:true}
   core:
     system-prompt: ${REI_AI_SYSTEM_PROMPT:classpath:/system-prompt.md}
     chat-memory-max-messages: ${REI_CHAT_MEMORY_MAX_MESSAGES:100}

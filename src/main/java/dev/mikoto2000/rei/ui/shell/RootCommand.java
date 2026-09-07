@@ -56,4 +56,13 @@ subcommands = {
 },
 mixinStandardHelpOptions = false)
 @RequiredArgsConstructor
-public class RootCommand {}
+public class RootCommand {
+  @org.springframework.beans.factory.annotation.Value("${rei.embedding.enabled:true}")
+  private boolean embeddingEnabled = true;
+
+  public void configureCommands(picocli.CommandLine command) {
+    if (!embeddingEnabled) {
+      command.getCommandSpec().removeSubcommand("embed");
+    }
+  }
+}

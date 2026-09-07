@@ -568,6 +568,8 @@ rei:
 
 ### 文書の埋め込み
 
+embedding は既定で有効です。環境変数 `REI_EMBEDDING_ENABLED=false`、または外部設定の `rei.embedding.enabled: false` で無効化できます（再起動後に反映）。無効時は `/embed` がヘルプ・補完から消え、実行できなくなります。`/search` と `searchKnowledge` は Web 検索のみを行い、ブリーフィングの関連文書検索もベクトルDBへアクセスしません。保存済みの文書・ベクトルは削除されず、再度有効化すると利用できます。
+
 追加:
 
 ```text
