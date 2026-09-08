@@ -33,6 +33,10 @@ public class AgentEventFactory {
 
   // ---- Agent Run ----
 
+  public AgentEvent executionProgress(AgentEventType type, String runId, ExecutionProgressPayload payload) {
+    return newEvent(type, runId, null, payload);
+  }
+
   public AgentEvent runStarted(String runId, String reason, String parentRunId) {
     return newEvent(AgentEventType.AGENT_RUN_STARTED, runId, null,
         new AgentRunStartedPayload(runId, reason, parentRunId));

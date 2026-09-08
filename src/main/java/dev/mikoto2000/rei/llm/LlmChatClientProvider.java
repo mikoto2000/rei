@@ -135,7 +135,8 @@ public class LlmChatClientProvider {
     if (taskStateAdvisorInstance != null) {
       advisors.add(taskStateAdvisorInstance);
     }
-    ChatClient.Builder builder = ChatClient.builder(modelProvider.chatModel(feature))
+    ChatClient.Builder builder = ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
+        modelProvider.chatModel(feature)))
         .defaultSystem(systemPromptService.systemPrompt())
         .defaultOptions(modelProvider.chatOptions(feature, null))
         .defaultAdvisors(advisors);

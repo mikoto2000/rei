@@ -36,6 +36,11 @@ import dev.mikoto2000.rei.llm.OutputLimitReplanSubgoal;
 import dev.mikoto2000.rei.llm.OutputLimitReplanner;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import dev.mikoto2000.rei.core.working.WorkingSet;
+import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
+import dev.mikoto2000.rei.core.stagnation.ProgressEvaluator;
+import dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException;
+import dev.mikoto2000.rei.core.actionplan.ActionPlan;
+import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
 import dev.mikoto2000.rei.skills.SkillRoutingRunContext;
 import dev.mikoto2000.rei.topic.AgentActivityTracker;
@@ -78,6 +83,14 @@ public class ChatExecutionService {
   private final AgentEventPublisher eventPublisher;
   private final InlineFileAttachmentResolver inlineFileAttachmentResolver = new InlineFileAttachmentResolver();
   private ConversationLogStore conversationLogStore;
+  private ProjectService projectService;
+  private ActionPlan actionPlan;
+
+  @Autowired(required = false)
+  void setExecutionState(ProjectService projectService, ActionPlan actionPlan) {
+    this.projectService = projectService;
+    this.actionPlan = actionPlan;
+  }
 
   @Autowired
   void setConversationLogStore(ConversationLogStore conversationLogStore) {
@@ -143,23 +156,26 @@ public class ChatExecutionService {
     AtomicLong runCompletionTokens = new AtomicLong();
     AtomicBoolean usageAvailable = new AtomicBoolean();
     AtomicReference<GenerationMetrics> lastGenerationMetrics = new AtomicReference<>();
+    OutputLimitRunBudget budget = new OutputLimitRunBudget(
+        llmProperties.getOutputLimit().getMaxReplansPerGoal(),
+        llmProperties.getOutputLimit().getMaxLlmCallsPerRun());
+    RunExecutionContext execution = new RunExecutionContext(runId, budget,
+        new ProgressEvaluator(projectService == null ? java.nio.file.Path.of(".") : projectService.currentProject(),
+            actionPlan), eventFactory, eventPublisher);
 
     try {
       activityTracker.ifPresent(tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));
       appendConversationLog("user", promptText);
-      OutputLimitRunBudget budget = new OutputLimitRunBudget(
-          llmProperties.getOutputLimit().getMaxReplansPerGoal(),
-          llmProperties.getOutputLimit().getMaxLlmCallsPerRun());
       if (!budget.tryConsumeLlmCall()) {
         log.warn("Chat skipped: LLM call budget exhausted before initial prompt");
         return ChatExecutionResult.failed("LLM call budget exhausted before initial prompt");
       }
       eventPublisher.publish(eventFactory.runStarted(runId, "user-request", null));
       activityTracker.ifPresent(tracker -> tracker.recordAgentStarted(java.time.Instant.now(clock)));
-      ChatRunResult result = executePrompt(promptText, true, startedAtNanos, budget, runId, skillRoutingContext,
+      ChatRunResult result = executePrompt(promptText, true, startedAtNanos, budget, execution, runId, skillRoutingContext,
           runCompletionTokens, usageAvailable, lastGenerationMetrics);
       if (result.status() == ChatRunStatus.OUTPUT_LIMIT) {
-        result = handleOutputLimit(promptText, promptText, "", result.text(), budget, startedAtNanos, runId,
+        result = handleOutputLimit(promptText, promptText, "", result.text(), budget, execution, startedAtNanos, runId,
             skillRoutingContext,
             runCompletionTokens, usageAvailable, lastGenerationMetrics);
       }
@@ -184,6 +200,7 @@ public class ChatExecutionService {
         return ChatExecutionResult.failed(terminalError(result.status()).message());
       }
     } finally {
+      execution.close();
       cancellationService.clear();
     }
   }
@@ -197,6 +214,9 @@ public class ChatExecutionService {
   private ErrorInformation terminalError(ChatRunStatus status) {
     return switch (status) {
       case OUTPUT_LIMIT -> new ErrorInformation("OutputLimit", "output token limit reached", "output_limit");
+      case STAGNATED -> new ErrorInformation("Stagnated", "STAGNATED: no meaningful progress after replanning", "stagnated");
+      case LLM_CALL_BUDGET_EXCEEDED -> new ErrorInformation("LlmCallBudgetExceeded", "LLM call budget exceeded", "llm_call_budget_exceeded");
+      case REPLAN_BUDGET_EXCEEDED -> new ErrorInformation("ReplanBudgetExceeded", "replan hard budget exceeded", "replan_budget_exceeded");
       case CANCELLED -> new ErrorInformation("Cancelled", "chat run cancelled", "cancelled");
       case FAILED -> new ErrorInformation("ChatRunFailed", "chat run failed", null);
       case SUCCESS -> throw new IllegalArgumentException("SUCCESS is not a failed terminal state");
@@ -204,7 +224,7 @@ public class ChatExecutionService {
   }
 
   private ChatRunResult handleOutputLimit(String originalUserRequest, String currentGoal, String progressSoFar,
-      String partialOutput, OutputLimitRunBudget budget, long startedAtNanos, String runId,
+      String partialOutput, OutputLimitRunBudget budget, RunExecutionContext execution, long startedAtNanos, String runId,
       SkillRoutingRunContext skillRoutingContext,
       AtomicLong runCompletionTokens, AtomicBoolean usageAvailable,
       AtomicReference<GenerationMetrics> lastGenerationMetrics) {
@@ -214,17 +234,17 @@ public class ChatExecutionService {
     if (!budget.hasRemainingLlmCalls()) {
       log.warn("Output limit replan skipped: goal={}, reason=llm_call_budget_exhausted_before_planner",
           summarizeForLog(currentGoal));
-      return ChatRunResult.outputLimit(partialOutput);
+      return new ChatRunResult(ChatRunStatus.LLM_CALL_BUDGET_EXCEEDED, partialOutput);
     }
     if (!budget.tryConsumeReplan()) {
       log.warn("Output limit replan skipped: goal={}, reason=replan_budget_exhausted, replanCount={}",
           summarizeForLog(currentGoal), budget.replanCount());
-      return ChatRunResult.outputLimit(partialOutput);
+      return new ChatRunResult(ChatRunStatus.REPLAN_BUDGET_EXCEEDED, partialOutput);
     }
     if (!budget.tryConsumeLlmCall()) {
       log.warn("Output limit replan skipped: goal={}, reason=llm_call_budget_exhausted_before_planner",
           summarizeForLog(currentGoal));
-      return ChatRunResult.outputLimit(partialOutput);
+      return new ChatRunResult(ChatRunStatus.LLM_CALL_BUDGET_EXCEEDED, partialOutput);
     }
 
     OutputLimitReplanPlan plan;
@@ -248,36 +268,37 @@ public class ChatExecutionService {
     for (OutputLimitReplanSubgoal subgoal : plan.subgoals()) {
       if (!budget.tryConsumeLlmCall()) {
         log.warn("Output limit subgoal skipped: LLM call budget exhausted");
-        return ChatRunResult.outputLimit(subgoalResults.toString());
+        return new ChatRunResult(ChatRunStatus.LLM_CALL_BUDGET_EXCEEDED, subgoalResults.toString());
       }
       log.info("Output limit subgoal started: id={}, goal={}", subgoal.id(), subgoal.goal());
-      ChatRunResult subgoalResult = executePrompt(subgoal.goal(), false, startedAtNanos, budget, runId,
+      ChatRunResult subgoalResult = executePrompt(subgoal.goal(), false, startedAtNanos, budget, execution, runId,
           skillRoutingContext,
            runCompletionTokens, usageAvailable, lastGenerationMetrics);
       log.info("Output limit subgoal finished: id={}, status={}", subgoal.id(), subgoalResult.status());
       if (subgoalResult.status() == ChatRunStatus.OUTPUT_LIMIT) {
         subgoalResult = handleOutputLimit(originalUserRequest, subgoal.goal(), subgoalResults.toString(),
-            subgoalResult.text(), budget, startedAtNanos, runId, skillRoutingContext, runCompletionTokens, usageAvailable,
+            subgoalResult.text(), budget, execution, startedAtNanos, runId, skillRoutingContext, runCompletionTokens, usageAvailable,
              lastGenerationMetrics);
       }
       if (subgoalResult.status() != ChatRunStatus.SUCCESS) {
         return subgoalResult;
       }
+      execution.completeSubgoal(subgoal.goal());
       subgoalResults.append("## ").append(subgoal.id()).append("\n")
           .append(subgoalResult.text()).append("\n\n");
     }
 
     if (!budget.tryConsumeLlmCall()) {
       log.warn("Output limit final integration skipped: LLM call budget exhausted");
-      return ChatRunResult.outputLimit(subgoalResults.toString());
+      return new ChatRunResult(ChatRunStatus.LLM_CALL_BUDGET_EXCEEDED, subgoalResults.toString());
     }
     return executePrompt(buildIntegrationPrompt(originalUserRequest, plan.finalGoal(), subgoalResults.toString()),
-        false, startedAtNanos, budget, runId, skillRoutingContext, runCompletionTokens, usageAvailable,
+        false, startedAtNanos, budget, execution, runId, skillRoutingContext, runCompletionTokens, usageAvailable,
         lastGenerationMetrics);
   }
 
   private ChatRunResult executePrompt(String promptText, boolean resolveAttachments, long startedAtNanos,
-      OutputLimitRunBudget budget, String runId, SkillRoutingRunContext skillRoutingContext,
+      OutputLimitRunBudget budget, RunExecutionContext execution, String runId, SkillRoutingRunContext skillRoutingContext,
       AtomicLong runCompletionTokens, AtomicBoolean usageAvailable,
       AtomicReference<GenerationMetrics> lastGenerationMetrics) {
     InlineFileAttachmentResolver.ResolvedPrompt resolvedPrompt = resolveAttachments
@@ -287,13 +308,15 @@ public class ChatExecutionService {
       log.warn("Prompt attachment warning: {}", warning);
     }
 
+    var options = modelProvider.chatOptions(LlmFeature.CHAT, currentModelHolder.get(), true);
+    options.setToolContext(Map.of(RunExecutionContext.KEY, execution));
     ChatClientRequestSpec requestSpec = chatClientProvider.chatClient(LlmFeature.CHAT)
       .prompt(new Prompt(
           UserMessage.builder()
               .text(resolvedPrompt.prompt())
               .media(resolvedPrompt.media())
               .build(),
-          modelProvider.chatOptions(LlmFeature.CHAT, currentModelHolder.get(), true)))
+          options))
       .advisors(advisor -> advisor
           .param(ChatMemory.CONVERSATION_ID, ConversationIds.chat())
           .param(AgentSkillAdvisor.ROUTING_CONTEXT_KEY, skillRoutingContext));
@@ -316,13 +339,16 @@ public class ChatExecutionService {
     StringBuilder responseBuilder = new StringBuilder();
     Disposable disposable;
     long requestStartedAtNanos = System.nanoTime();
+    long tokensBeforePrompt = execution.completionTokens();
     try {
       disposable = requestSpec.stream()
         .chatResponse()
         .subscribe(
             response -> {
-              if (OutputLimitDetector.isOutputLimitReached(response)) {
-                outputLimitReached.set(true);
+              if (response.getResult() != null && response.getResult().getMetadata() != null
+                  && response.getResult().getMetadata().getFinishReason() != null
+                  && !response.getResult().getMetadata().getFinishReason().isBlank()) {
+                outputLimitReached.set(OutputLimitDetector.isOutputLimitReached(response));
               }
               captureCompletionTokens(response, completionTokens);
               if (!messageStarted.get()) {
@@ -352,12 +378,14 @@ public class ChatExecutionService {
             });
     } catch (RuntimeException e) {
       log.warn("Chat response stream failed to start", e);
-      return ChatRunResult.failed();
+      return failureResult(e);
     }
     cancellationService.register(disposable);
 
     try {
       latch.await();
+      long iterationTokens = execution.completionTokens() - tokensBeforePrompt;
+      if (iterationTokens > 0) completionTokens.set((int) Math.min(Integer.MAX_VALUE, iterationTokens));
       if (completionTokens.get() > 0) {
         runCompletionTokens.addAndGet(completionTokens.get());
         usageAvailable.set(true);
@@ -365,8 +393,10 @@ public class ChatExecutionService {
       completeThinking(thinkingEventStarted, thinkingEventCompleted, thinkingId, thinkingBuilder);
       Throwable error = errorRef.get();
       if (error != null) {
-        log.warn("Chat response failed", error);
-        return ChatRunResult.failed();
+        ChatRunResult failure = failureResult(error);
+        if (failure.status() == ChatRunStatus.FAILED) log.warn("Chat response failed", error);
+        else log.info("Chat execution stopped: runId={}, reason={}", runId, failure.status());
+        return failure;
       }
       if (outputLimitReached.get()) {
         log.warn("Chat output token limit reached: goal={}, promptLength={}, generatedLength={}",
@@ -393,6 +423,16 @@ public class ChatExecutionService {
 
   private long elapsedMillis(long startedAtNanos) {
     return (System.nanoTime() - startedAtNanos) / 1_000_000L;
+  }
+
+  private ChatRunResult failureResult(Throwable error) {
+    for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+      if (cause instanceof ExecutionStoppedException stopped) {
+        return new ChatRunResult(ChatRunStatus.valueOf(stopped.reason().name()), "");
+      }
+      if (cause instanceof java.util.concurrent.CancellationException) return ChatRunResult.cancelled();
+    }
+    return ChatRunResult.failed();
   }
 
   private String buildIntegrationPrompt(String originalUserRequest, String finalGoal, String subgoalResults) {
@@ -604,6 +644,9 @@ public class ChatExecutionService {
 
   private enum ChatRunStatus {
     SUCCESS,
+    STAGNATED,
+    LLM_CALL_BUDGET_EXCEEDED,
+    REPLAN_BUDGET_EXCEEDED,
     OUTPUT_LIMIT,
     FAILED,
     CANCELLED

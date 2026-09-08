@@ -6,7 +6,7 @@ import java.util.List;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarEventSummary;
 import dev.mikoto2000.rei.task.Task;
 
-record BriefingContext(
+public record BriefingContext(
     LocalDate date,
     List<GoogleCalendarEventSummary> events,
     List<Task> openTasks,
