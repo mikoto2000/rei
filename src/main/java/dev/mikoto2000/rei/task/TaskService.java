@@ -1,12 +1,5 @@
 package dev.mikoto2000.rei.task;
 
-import java.awt.Desktop;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -16,37 +9,33 @@ import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
-import com.google.api.client.auth.oauth2.Credential;
-import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
-import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
-import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
-import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.client.util.DateTime;
-import com.google.api.client.util.store.FileDataStoreFactory;
-import com.google.api.services.calendar.CalendarScopes;
 import com.google.api.services.tasks.Tasks;
-import com.google.api.services.tasks.TasksScopes;
 
+import dev.mikoto2000.rei.google.GoogleOAuthService;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 
 @Service
 public class TaskService {
 
   private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
-  private static final List<String> SCOPES = List.of(CalendarScopes.CALENDAR_EVENTS, TasksScopes.TASKS);
   private static final String DEFAULT_TASK_LIST_ID = "@default";
-  private static final String OAUTH_USER_ID = "user";
 
   private final GoogleCalendarProperties googleCalendarProperties;
+  private final GoogleOAuthService googleOAuthService;
 
   @Autowired
-  public TaskService(GoogleCalendarProperties googleCalendarProperties) {
+  public TaskService(GoogleCalendarProperties googleCalendarProperties, GoogleOAuthService googleOAuthService) {
     this.googleCalendarProperties = googleCalendarProperties;
+    this.googleOAuthService = googleOAuthService;
+  }
+
+  public TaskService(GoogleCalendarProperties properties) {
+    this(properties, new GoogleOAuthService(properties));
   }
 
   public TaskService(javax.sql.DataSource ignoredDataSource) {
@@ -151,18 +140,14 @@ public class TaskService {
   }
 
   public void refreshGoogleToken() throws Exception {
-    Credential credential = authorizeCredential(GoogleNetHttpTransport.newTrustedTransport(), false);
-    boolean refreshed = credential.refreshToken();
-    if (!refreshed) {
-      throw new IllegalStateException("Google token refresh failed");
-    }
+    googleOAuthService.refreshToken();
   }
 
   public void authorize() throws Exception {
     if (!googleCalendarProperties.task().enabled()) {
       throw new IllegalStateException("Google Task integration is disabled");
     }
-    authorizeCredential(GoogleNetHttpTransport.newTrustedTransport(), true);
+    googleOAuthService.authorize(GoogleNetHttpTransport.newTrustedTransport(), true);
   }
 
   private com.google.api.services.tasks.model.Task fetchByHashId(long id, boolean includeCompleted) throws Exception {
@@ -209,50 +194,9 @@ public class TaskService {
       throw new IllegalStateException("Google Task integration is disabled");
     }
     NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
-    return new Tasks.Builder(httpTransport, JSON_FACTORY, authorizeCredential(httpTransport, false))
+    return new Tasks.Builder(httpTransport, JSON_FACTORY, googleOAuthService.authorize(httpTransport, false))
         .setApplicationName(googleCalendarProperties.applicationName())
         .build();
   }
 
-  private Credential authorizeCredential(NetHttpTransport httpTransport, boolean forceReauthorize) throws Exception {
-    Path credentialsPath = Path.of(googleCalendarProperties.credentialsPath());
-    if (!Files.exists(credentialsPath)) {
-      throw new IllegalStateException("Google OAuth credentials file was not found: " + credentialsPath);
-    }
-    Files.createDirectories(Path.of(googleCalendarProperties.tokensDirectory()));
-
-    try (InputStream in = Files.newInputStream(credentialsPath)) {
-      GoogleClientSecrets clientSecrets = GoogleClientSecrets.load(JSON_FACTORY, new InputStreamReader(in));
-      AuthorizationCodeFlow flow = new GoogleAuthorizationCodeFlow.Builder(
-          httpTransport,
-          JSON_FACTORY,
-          clientSecrets,
-          SCOPES)
-          .setDataStoreFactory(new FileDataStoreFactory(Path.of(googleCalendarProperties.tokensDirectory()).toFile()))
-          .setAccessType("offline")
-          .build();
-      if (forceReauthorize) {
-        flow.getCredentialDataStore().delete(OAUTH_USER_ID);
-      }
-
-      LocalServerReceiver receiver = new LocalServerReceiver.Builder()
-          .setHost("127.0.0.1")
-          .setPort(8888)
-          .build();
-
-      AuthorizationCodeInstalledApp app = new AuthorizationCodeInstalledApp(flow, receiver, this::browse);
-      return app.authorize(OAUTH_USER_ID);
-    }
-  }
-
-  private void browse(String url) throws IOException {
-    IO.println("Google OAuth を開始します。ブラウザが開かない場合は次の URL を開いてください:");
-    IO.println(url);
-    if (Desktop.isDesktopSupported()) {
-      Desktop desktop = Desktop.getDesktop();
-      if (desktop.isSupported(Desktop.Action.BROWSE)) {
-        desktop.browse(URI.create(url));
-      }
-    }
-  }
 }

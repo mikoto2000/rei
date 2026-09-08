@@ -208,6 +208,22 @@ LLM 応答の `finish_reason` が `length` の場合は正常完了扱いせず�
 
 ### Google Calendar
 
+Google Calendar と Google Tasks は OAuth 認証情報・トークン・更新処理を共有します。
+認可後は、Rei の起動中に保存済みのアクセストークンの期限を5分ごとに確認し、
+残り5分以内（期限切れを含む）ならリフレッシュします。更新結果は既存のトークン保存先に保存されます。
+期限が不明な場合も更新を試みます。未認可・リフレッシュトークン未取得・両連携が無効の場合はスキップし、
+バックグラウンドでブラウザ認証は開始しません。通信エラー等の更新失敗はログに記録し、次回確認時に再試行します。
+認可が失効した場合は `/schedule auth`（Calendar 有効時）または `/task auth` で再認可してください。
+手動更新の `/schedule refresh-token` も引き続き使用できます。
+
+| 環境変数 | デフォルト | 用途 |
+| --- | --- | --- |
+| `REI_GOOGLE_TOKEN_REFRESH_ENABLED` | `true` | 自動更新の有効・無効 |
+| `REI_GOOGLE_TOKEN_REFRESH_CHECK_INTERVAL` | `5m` | 期限の確認間隔 |
+| `REI_GOOGLE_TOKEN_REFRESH_ADVANCE` | `5m` | 有効期限の何分前から更新するか |
+
+Rei の停止中は更新されません。
+
 Google Calendar 連携を使う場合は、Google Cloud で Desktop app の OAuth クライアントを作成し、資格情報 JSON を `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` に配置してください。
 
 手順の概要:

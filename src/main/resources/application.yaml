@@ -115,6 +115,10 @@ rei:
     application-name: Rei
     credentials-path: ${REI_GOOGLE_CREDENTIALS_PATH:.rei/google-credentials.json}
     tokens-directory: ${REI_GOOGLE_TOKENS_DIR:.rei/google-tokens}
+    token-refresh:
+      enabled: ${REI_GOOGLE_TOKEN_REFRESH_ENABLED:true}
+      check-interval: ${REI_GOOGLE_TOKEN_REFRESH_CHECK_INTERVAL:5m}
+      advance: ${REI_GOOGLE_TOKEN_REFRESH_ADVANCE:5m}
     calendar:
       enabled: ${REI_GOOGLE_CALENDAR_ENABLED:false}
       default-calendar-id: ${REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID:primary}
