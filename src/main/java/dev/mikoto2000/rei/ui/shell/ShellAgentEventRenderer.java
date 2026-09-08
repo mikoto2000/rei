@@ -90,6 +90,24 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       return;
     }
     switch (event.type()) {
+      case PROGRESS_DETECTED, STAGNATION_UPDATED, STAGNATION_DETECTED,
+          STAGNATION_REPLAN_REQUESTED, STAGNATION_RECOVERED, STAGNATION_STOPPED -> {
+        closeAssistantLine();
+        closeThinkingLine();
+        var payload = (dev.mikoto2000.rei.event.ExecutionProgressPayload) event.payload();
+        String text = switch (event.type()) {
+          case PROGRESS_DETECTED -> "[progress] " + payload.evidence().kind() + ": "
+              + payload.evidence().description() + " (" + payload.evidence().source() + ")";
+          case STAGNATION_UPDATED -> "[stagnation] no progress: " + payload.consecutiveNoProgressIterations()
+              + "/" + payload.threshold();
+          case STAGNATION_DETECTED -> "[stagnation] threshold reached";
+          case STAGNATION_REPLAN_REQUESTED -> "[stagnation] replanning (" + payload.stagnationReplanCount()
+              + "/" + payload.maxStagnationReplans() + ")";
+          case STAGNATION_RECOVERED -> "[stagnation] recovered: meaningful progress detected";
+          default -> "[stagnation] repeated after replanning -> stopped (STAGNATED)";
+        };
+        output.println(text);
+      }
       case AGENT_RUN_STARTED -> {
         closeAssistantLine();
         closeThinkingLine();

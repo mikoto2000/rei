@@ -1,5 +1,10 @@
 package dev.mikoto2000.rei.llm;
 
+/**
+ * Absolute run budget, shared by output-limit splitting and stagnation replanning.
+ * Meaningful progress never replenishes it. The executor reserves each outer prompt/planner call;
+ * the controlled model loop reserves every additional LLM/tool cycle before invoking the model.
+ */
 public class OutputLimitRunBudget {
 
   private final int maxReplans;

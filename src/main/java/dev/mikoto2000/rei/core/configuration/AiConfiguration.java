@@ -111,7 +111,7 @@ public class AiConfiguration {
       advisors.add(skillAdvisor);
     }
 
-    ChatClient.Builder builder = ChatClient.builder(chatModel)
+    ChatClient.Builder builder = ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(chatModel))
         .defaultSystem(systemPromptService.systemPrompt())
         .defaultOptions(OpenAiChatOptions.builder()
             .maxTokens(llmProperties.getMaxOutputTokens())

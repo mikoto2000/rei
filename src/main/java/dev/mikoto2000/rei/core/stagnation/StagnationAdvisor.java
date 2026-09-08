@@ -37,12 +37,7 @@ public class StagnationAdvisor implements BaseAdvisor {
     if (!stagnationDetector.isReplanRequested()) {
       return request;
     }
-    String context = """
-        ## Replan Notice
-
-        現在の方針では進展していません。
-        同じ操作を繰り返さず、原因を見直し、別の手順へ再計画してください。
-        """;
+    String context = replanNotice("unavailable", "unavailable");
     UserMessage contextualMessage = userMessage.mutate()
         .text(context + "\n\n" + userMessage.getText())
         .build();
@@ -51,6 +46,20 @@ public class StagnationAdvisor implements BaseAdvisor {
         .prompt(new Prompt(replaceUserMessage(prompt.getInstructions(), userMessage, contextualMessage),
             prompt.getOptions()))
         .build();
+  }
+
+  /** Used at the internal LLM/tool iteration boundary as well as the outer advisor chain. */
+  public String replanNotice(String recentActions, String lastError) {
+    return """
+        ## Replan Notice
+
+        現在の方針では進展していません。
+        同じ操作を繰り返さず、原因を見直し、別の手順へ再計画してください。
+        No-progress iterations: %d. Stagnation replan: %d/%d.
+        Recent attempted actions (tool name and argument digest): %s
+        Last failure: %s
+        """.formatted(stagnationDetector.stagnationCount(), stagnationDetector.replanCount() + 1,
+            stagnationDetector.maxReplans(), recentActions, lastError);
   }
 
   @Override

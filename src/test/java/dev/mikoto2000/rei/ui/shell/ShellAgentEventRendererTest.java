@@ -19,6 +19,25 @@ import dev.mikoto2000.rei.topic.TopicScoreBreakdown;
 import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
 
 class ShellAgentEventRendererTest {
+  @Test
+  void rendersProgressAndStagnationLifecycle() {
+    RecordingOutput output = new RecordingOutput();
+    var renderer = new ShellAgentEventRenderer(output);
+    var payload = new dev.mikoto2000.rei.event.ExecutionProgressPayload(
+        new dev.mikoto2000.rei.core.stagnation.ProgressEvidence(
+            dev.mikoto2000.rei.core.stagnation.ProgressEvent.STATE_CHANGED, "File changed", "A"),
+        4, 4, 1, 2, "stagnation");
+    for (var type : java.util.List.of(dev.mikoto2000.rei.event.AgentEventType.PROGRESS_DETECTED,
+        dev.mikoto2000.rei.event.AgentEventType.STAGNATION_REPLAN_REQUESTED,
+        dev.mikoto2000.rei.event.AgentEventType.STAGNATION_RECOVERED,
+        dev.mikoto2000.rei.event.AgentEventType.STAGNATION_STOPPED)) {
+      renderer.onEvent(events.executionProgress(type, "run", payload));
+    }
+    assertTrue(output.text().contains("[progress] STATE_CHANGED"));
+    assertTrue(output.text().contains("replanning (1/2)"));
+    assertTrue(output.text().contains("recovered"));
+    assertTrue(output.text().contains("STAGNATED"));
+  }
   private final AgentEventFactory events = new AgentEventFactory(
       Clock.fixed(Instant.parse("2026-08-23T00:00:00Z"), ZoneOffset.UTC));
 

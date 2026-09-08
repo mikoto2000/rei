@@ -6,6 +6,12 @@ package dev.mikoto2000.rei.event;
  * <p>文字列の直書きを各所に散らさず、型安全に扱えるようにするための enum。</p>
  */
 public enum AgentEventType {
+  PROGRESS_DETECTED("progress.detected"),
+  STAGNATION_UPDATED("stagnation.updated"),
+  STAGNATION_DETECTED("stagnation.detected"),
+  STAGNATION_REPLAN_REQUESTED("stagnation.replan_requested"),
+  STAGNATION_RECOVERED("stagnation.recovered"),
+  STAGNATION_STOPPED("stagnation.stopped"),
   AGENT_RUN_STARTED("agent.run.started"),
   AGENT_RUN_COMPLETED("agent.run.completed"),
   AGENT_RUN_FAILED("agent.run.failed"),

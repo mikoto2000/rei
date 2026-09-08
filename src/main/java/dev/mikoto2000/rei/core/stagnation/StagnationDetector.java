@@ -22,6 +22,11 @@ public class StagnationDetector {
   private boolean replanRequested;
   private String lastToolFingerprint;
   private String lastFailureFingerprint;
+  private boolean repeatedToolCall;
+  private boolean repeatedFailure;
+
+  public int threshold() { return threshold; }
+  public int maxReplans() { return maxReplans; }
 
   public StagnationDetector() {
     this(DEFAULT_THRESHOLD, DEFAULT_MAX_REPLANS);
@@ -63,18 +68,19 @@ public class StagnationDetector {
 
   /** 同一 tool call が繰り返されたか。 */
   public boolean hasRepeatedToolCall() {
-    return lastToolFingerprint != null;
+    return repeatedToolCall;
   }
 
   /** 同一 failure が繰り返されたか。 */
   public boolean hasRepeatedFailure() {
-    return lastFailureFingerprint != null;
+    return repeatedFailure;
   }
 
   /** 1 iteration を記録する。progress があればカウントをリセットする。 */
   public void recordIteration(boolean progress) {
     if (progress) {
       stagnationCount = 0;
+      replanCount = 0;
       replanRequested = false;
       log.debug("Progress detected");
     } else {
@@ -89,7 +95,9 @@ public class StagnationDetector {
 
   /** 進展イベントを記録する。 */
   public void recordProgress(ProgressEvent event) {
+    if (event == ProgressEvent.FAILURE || event == ProgressEvent.TOOL_CALL) return;
     stagnationCount = 0;
+    replanCount = 0;
     replanRequested = false;
     log.debug("Progress detected: {}", event);
   }
@@ -97,6 +105,7 @@ public class StagnationDetector {
   /** replan を記録する。 */
   public void recordReplan() {
     replanCount++;
+    stagnationCount = 0;
     replanRequested = false;
     log.debug("Replan recorded: count={}", replanCount);
     if (isMaxReplanReached()) {
@@ -107,6 +116,7 @@ public class StagnationDetector {
   /** tool call を記録する。完全一致を検出する。 */
   public void recordToolCall(String toolName, String normalizedArguments) {
     String fingerprint = toolName + "|" + normalizedArguments;
+    repeatedToolCall = fingerprint.equals(lastToolFingerprint);
     if (fingerprint.equals(lastToolFingerprint)) {
       log.debug("Repeated tool call detected");
     }
@@ -116,6 +126,7 @@ public class StagnationDetector {
   /** failure を記録する。fingerprint は error type + 主要 message。 */
   public void recordFailure(String errorType, String message) {
     String fingerprint = errorType + "|" + message;
+    repeatedFailure = fingerprint.equals(lastFailureFingerprint);
     if (fingerprint.equals(lastFailureFingerprint)) {
       log.debug("Repeated failure detected");
     }
