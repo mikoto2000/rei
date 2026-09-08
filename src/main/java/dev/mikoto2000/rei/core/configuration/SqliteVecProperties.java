@@ -12,7 +12,7 @@ public class SqliteVecProperties {
 
   private String version = "0.1.9";
   private boolean autoDownload = true;
-  private String cacheDir = ".rei/extensions/sqlite-vec";
+  private String cacheDir = dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve("extensions/sqlite-vec").toString();
   private String extensionPath;
   private String releaseBaseUrl = "https://github.com/asg017/sqlite-vec/releases/download";
 }

@@ -13,7 +13,7 @@ public class ExternalConfigFileService {
   private final Path workDirectory;
 
   public ExternalConfigFileService() {
-    this(Path.of("").toAbsolutePath().normalize());
+    this(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current());
   }
 
   public ExternalConfigFileService(Path workDirectory) {
@@ -136,7 +136,7 @@ public class ExternalConfigFileService {
                 api-key: ${REI_LLM_IMAGE_GENERATION_API_KEY:}
                 model: ${REI_LLM_IMAGE_GENERATION_MODEL:}
           image:
-            output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:${user.dir}/.rei/images}
+            output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:${rei.data-dir}/images}
             size: ${REI_IMAGE_SIZE:1024x1024}
             response-format: ${REI_IMAGE_RESPONSE_FORMAT:auto}
             timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
@@ -145,7 +145,7 @@ public class ExternalConfigFileService {
           skills:
             enabled: true
             directories:
-              - ${user.dir}/.rei/skills
+              - ${rei.data-dir}/skills
             max-selected: 3
           web-search:
             enabled: true
@@ -183,8 +183,8 @@ public class ExternalConfigFileService {
                   max-replies-per-day: 3
           google:
             application-name: Rei
-            credentials-path: ${REI_GOOGLE_CREDENTIALS_PATH:${user.dir}/.rei/google-calendar-credentials.json}
-            tokens-directory: ${REI_GOOGLE_TOKENS_DIR:${user.dir}/.rei/google-calendar-tokens}
+            credentials-path: ${REI_GOOGLE_CREDENTIALS_PATH:${rei.data-dir}/google-calendar-credentials.json}
+            tokens-directory: ${REI_GOOGLE_TOKENS_DIR:${rei.data-dir}/google-calendar-tokens}
             calendar:
               enabled: false
               default-calendar-id: ${REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID:primary}

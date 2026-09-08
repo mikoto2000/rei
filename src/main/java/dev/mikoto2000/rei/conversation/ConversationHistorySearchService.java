@@ -46,6 +46,10 @@ public class ConversationHistorySearchService {
     int safeLimit = normalizeLimit(limit, DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT);
     List<ConversationSearchResult> results = new ArrayList<>();
     results.addAll(searchPersistentLogs(query, normalizedScope, normalizedSpeaker, timeRange));
+    if (dev.mikoto2000.rei.core.project.ProjectService.contextForOperation() != null) {
+      // Project logs are authoritative for scoped audit/search; never fall back to unowned legacy rows.
+      return results.stream().sorted((a, b) -> b.timestamp().compareTo(a.timestamp())).limit(safeLimit).toList();
+    }
     if (normalizedScope.equals("all") || normalizedScope.equals("chat")) {
       results.addAll(searchChat(query, normalizedSpeaker, timeRange, safeLimit));
     }
@@ -72,6 +76,15 @@ public class ConversationHistorySearchService {
       throw new IllegalArgumentException("conversationId must not be blank");
     }
     int safeLimit = normalizeLimit(limit, DEFAULT_DETAIL_LIMIT, MAX_DETAIL_LIMIT);
+    var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
+    if (project != null) {
+      String id = conversationId.startsWith("project:") ? conversationId : project.conversationId(conversationId);
+      if (!project.id().equals(dev.mikoto2000.rei.core.project.ProjectStorage.projectId(id)))
+        throw new IllegalArgumentException("Conversation belongs to a different project");
+      var messages = findPersistentLogDetail(id, safeLimit);
+      if (messages.isEmpty()) messages = findChatDetail(id, safeLimit);
+      return new ConversationHistoryDetail(id, ConversationLogStore.scopeOf(id), messages);
+    }
     List<ConversationHistoryMessage> persisted = findPersistentLogDetail(conversationId, safeLimit);
     if (!persisted.isEmpty()) {
       return new ConversationHistoryDetail(conversationId, ConversationLogStore.scopeOf(conversationId), persisted);

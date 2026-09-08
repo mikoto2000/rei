@@ -24,17 +24,17 @@ public class CurrentConversationHistoryAppender implements ConversationHistoryAp
 
   @Override
   public void appendUserMessage(String content) {
-    chatMemory.add(ConversationIds.chat(), List.of(new UserMessage(content)));
+    chatMemory.add(ConversationIds.currentChat(), List.of(new UserMessage(content)));
     appendLog("user", content);
   }
 
   @Override
   public void appendAssistantMessage(String content) {
-    chatMemory.add(ConversationIds.chat(), List.of(new AssistantMessage(content)));
+    chatMemory.add(ConversationIds.currentChat(), List.of(new AssistantMessage(content)));
     appendLog("assistant", content);
   }
 
   private void appendLog(String speaker, String content) {
-    conversationLogStore.ifPresent(store -> store.append(ConversationIds.chat(), speaker, content));
+    conversationLogStore.ifPresent(store -> store.append(ConversationIds.currentChat(), speaker, content));
   }
 }

@@ -1,10 +1,14 @@
 # Rei
 
+保存先は Windows では `%LOCALAPPDATA%\Rei`、Linux では `$XDG_DATA_HOME/rei`（未設定時 `~/.local/share/rei`）、macOS では `~/Library/Application Support/Rei` です。`REI_DATA_DIR` で上書きできます。以下の `<rei-data-dir>` はこの保存先を表します。旧 `.rei` の扱いとプロジェクト別保存形式は [移行・設計メモ](docs/agent-run-project-state.md) を参照してください。
+
+Agent 実行中も追加入力できます。同じプロジェクトへの通常入力は実行中の Run に順番に渡され、LLM／Tool の境界で適用されます。`/cancel` は選択中プロジェクトの Run をキャンセルします。`/project cd` は未登録プロジェクトも登録して会話・Working Set の scope を切り替えます。
+
 Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API を使った対話を中心に、Google Calendar、タスク管理、RSS 管理、日次ブリーフィング、リマインド、文書埋め込み、Web 検索、MCP ツール連携を 1 つの CLI にまとめています。
 
 日々の確認や調査をターミナル上で完結させたいときに向いています。ローカルファイルや埋め込み済み文書を参照しながら対話でき、必要に応じて外部 API や MCP サーバーのツールも利用できます。
 
-ユーザー設定は、組み込みの `application.yaml` に加えて、起動ディレクトリ配下の `.rei/application.yaml` から上書きできます。
+ユーザー設定は、組み込みの `application.yaml` に加えて、グローバル Rei Data Directory 配下の `<rei-data-dir>/application.yaml` から上書きできます。
 
 ## 主な機能
 
@@ -31,12 +35,12 @@ Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API 
 
 ### 外部設定ファイル
 
-Rei は起動時に、組み込みの `application.yaml` に加えて、起動ディレクトリ配下の `.rei/application.yaml` を自動で読み込みます。ファイルが存在しない場合は無視されます。
+Rei は起動時に、組み込みの `application.yaml` に加えて、グローバル Rei Data Directory 配下の `<rei-data-dir>/application.yaml` を自動で読み込みます。ファイルが存在しない場合は無視されます。
 
 設定の優先順位:
 
 1. 環境変数
-2. `.rei/application.yaml`
+2. `<rei-data-dir>/application.yaml`
 3. 組み込み `application.yaml`
 
 外部設定ファイルのパス確認:
@@ -52,7 +56,7 @@ Rei は起動時に、組み込みの `application.yaml` に加えて、起動�
 /config init --force
 ```
 
-`/config init` は `.rei/application.yaml` と同じディレクトリに `.rei/additional-system-prompt.md` も作成します。
+`/config init` は `<rei-data-dir>/application.yaml` と同じディレクトリに `<rei-data-dir>/additional-system-prompt.md` も作成します。
 この Markdown ファイルに書いた内容は、既定の system prompt の末尾へ追記されます。空の場合は何も追加されません。
 
 例:
@@ -77,7 +81,7 @@ rei:
       max-subgoals-per-replan: 8
       max-llm-calls-per-run: 30
   image:
-    output-directory: ${user.dir}/.rei/images
+    output-directory: ${rei.data-dir}/images
     size: 1024x1024
     response-format: auto
     timeout-seconds: 300
@@ -236,19 +240,19 @@ Google Calendar 連携を使う場合は、Google Cloud で Desktop app の OAut
 
 ```bash
 export REI_GOOGLE_CALENDAR_ENABLED=true
-export REI_GOOGLE_CALENDAR_CREDENTIALS_PATH=$PWD/.rei/google-calendar-credentials.json
+export REI_GOOGLE_CALENDAR_CREDENTIALS_PATH=$REI_DATA_DIR/google-calendar-credentials.json
 export REI_GOOGLE_CALENDAR_TIME_ZONE=Asia/Tokyo  # タイムゾーン
 ```
 
-Google Calendar の資格情報と OAuth token は、デフォルトでは起動ディレクトリ配下の `.rei` に保存されます。必要に応じて `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` と `REI_GOOGLE_CALENDAR_TOKENS_DIR` で上書きできます。
+Google Calendar の資格情報と OAuth token は、デフォルトではグローバル Rei Data Directory 配下の `<rei-data-dir>` に保存されます。必要に応じて `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` と `REI_GOOGLE_CALENDAR_TOKENS_DIR` で上書きできます。
 
 主な環境変数:
 
 | 変数 | 要否 | デフォルト | 説明 |
 | --- | --- | --- | --- |
 | `REI_GOOGLE_CALENDAR_ENABLED` | 任意 | `false` | Google Calendar 連携を有効化 |
-| `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` | 利用時必須 | `${user.dir}/.rei/google-calendar-credentials.json` | OAuth クライアント資格情報 JSON |
-| `REI_GOOGLE_CALENDAR_TOKENS_DIR` | 任意 | `${user.dir}/.rei/google-calendar-tokens` | OAuth token 保存先 |
+| `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` | 利用時必須 | `${rei.data-dir}/google-calendar-credentials.json` | OAuth クライアント資格情報 JSON |
+| `REI_GOOGLE_CALENDAR_TOKENS_DIR` | 任意 | `${rei.data-dir}/google-calendar-tokens` | OAuth token 保存先 |
 | `REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID` | 任意 | `primary` | 既定カレンダー ID |
 | `REI_GOOGLE_CALENDAR_TIME_ZONE` | 任意 | 空 | オフセットなし日時の解釈に使うタイムゾーン |
 
@@ -290,7 +294,7 @@ rei:
 
 ### RSS Feed
 
-RSS/Atom フィードは `.rei/application.yaml` または環境変数で設定できます。保存するのは本文ではなく、タイトル、URL、公開日時、取得日時などの最小メタデータだけです。
+RSS/Atom フィードは `<rei-data-dir>/application.yaml` または環境変数で設定できます。保存するのは本文ではなく、タイトル、URL、公開日時、取得日時などの最小メタデータだけです。
 
 ```yaml
 rei:
@@ -336,10 +340,10 @@ MCP サーバーを有効にする場合は、JSON 設定ファイルを用意�
 
 ```bash
 export REI_MCP_ENABLED=true
-export REI_MCP_STDIO_SERVERS_CONFIG=file:$PWD/.rei/mcp-servers.json
+export REI_MCP_STDIO_SERVERS_CONFIG=file:$REI_DATA_DIR/mcp-servers.json
 ```
 
-`REI_MCP_STDIO_SERVERS_CONFIG` には `file:` 付きの URI を指定します。`.rei/mcp-servers.json` は Claude Desktop 互換形式です。
+`REI_MCP_STDIO_SERVERS_CONFIG` には `file:` 付きの URI を指定します。`<rei-data-dir>/mcp-servers.json` は Claude Desktop 互換形式です。
 
 ```json
 {
@@ -375,9 +379,9 @@ export REI_MCP_STDIO_SERVERS_CONFIG=file:$PWD/.rei/mcp-servers.json
 mvn spring-boot:run
 ```
 
-アプリが生成する履歴ファイルと SQLite のローカルデータは、起動したカレントディレクトリ配下の `.rei` に保存されます。
+アプリが生成する履歴ファイルと SQLite のローカルデータは、起動したカレントディレクトリ配下の `<rei-data-dir>` に保存されます。
 
-通常チャットとBluesky会話の追記専用ログは `.rei/conversation-logs/yyyy-MM-dd.jsonl` に保存され、日ごとにファイルが切り替わります。このログはLLMへ渡す短期会話メモリの件数上限とは独立して保持され、会話履歴検索ツールから検索・詳細確認できます。
+通常チャットとBluesky会話の追記専用ログは `<rei-data-dir>/conversation-logs/yyyy-MM-dd.jsonl` に保存され、日ごとにファイルが切り替わります。このログはLLMへ渡す短期会話メモリの件数上限とは独立して保持され、会話履歴検索ツールから検索・詳細確認できます。
 
 ### 対話
 
@@ -453,7 +457,7 @@ gpt-oss:120b
 ```yaml
 rei:
   image:
-    output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:${user.dir}/.rei/images}
+    output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:${rei.data-dir}/images}
     size: ${REI_IMAGE_SIZE:1024x1024}
     response-format: ${REI_IMAGE_RESPONSE_FORMAT:auto}
     timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
@@ -614,7 +618,7 @@ embedding は既定で有効です。環境変数 `REI_EMBEDDING_ENABLED=false`�
 
 読み込んだ文書はベクトルストアに保存され、対話時の RAG に使われます。
 
-現状のベクトルストアは、起動したカレントディレクトリ配下の `.rei/vectorstore.db` に保存されます。アプリ本体の履歴やタスクなどで使う `.rei/memory.db` とは別ファイルです。
+現状のベクトルストアは、起動したカレントディレクトリ配下の `<rei-data-dir>/vectorstore.db` に保存されます。アプリ本体の履歴やタスクなどで使う `<rei-data-dir>/memory.db` とは別ファイルです。
 
 検索には `sqlite-vec` を使います。埋め込みは `vec0` 仮想テーブルに保持し、KNN 検索に lexical prefilter と軽い rerank を組み合わせています。`source` / `docId` の絞り込みも検索時に適用されます。
 
@@ -739,7 +743,7 @@ export REI_BLUESKY_MAX_POST_LENGTH=300
 export REI_BLUESKY_TIMEOUT_SECONDS=30
 ```
 
-`application.yaml`（または `.rei/application.yaml`）に `rei.bluesky.reply` を定義すると、対象ユーザーの投稿を定期チェックし、条件を満たした投稿に自動返信します。
+`application.yaml`（または `<rei-data-dir>/application.yaml`）に `rei.bluesky.reply` を定義すると、対象ユーザーの投稿を定期チェックし、条件を満たした投稿に自動返信します。
 
 ```yaml
 rei:

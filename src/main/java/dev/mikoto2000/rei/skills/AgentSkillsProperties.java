@@ -9,7 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class AgentSkillsProperties {
 
   private boolean enabled = true;
-  private List<String> directories = new ArrayList<>(List.of("${user.dir}/.rei/skills"));
+  private List<String> directories = new ArrayList<>(List.of(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve("skills").toString()));
   private int maxSelected = 3;
 
   public boolean isEnabled() {

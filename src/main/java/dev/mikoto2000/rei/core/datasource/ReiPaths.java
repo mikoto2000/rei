@@ -6,8 +6,8 @@ import java.nio.file.Path;
 /**
  * Rei が利用する作業用ファイルの保存先パスを解決するユーティリティです。
  * <p>
- * すべての永続ファイルは、起動時のカレントディレクトリ配下にある
- * {@code .rei} ディレクトリへ保存します。
+ * Rei 自身のデータは OS 標準のグローバルデータディレクトリへ保存します。
+ * Path を受け取るオーバーロードは明示的に指定されたデータディレクトリを使用します。
  * </p>
  */
 public final class ReiPaths {
@@ -77,7 +77,7 @@ public final class ReiPaths {
   }
 
   public static Path projectsFilePath() {
-    return projectsFilePath(startupDirectory());
+    return projectsFilePath(workDirectory());
   }
 
   /**
@@ -91,46 +91,46 @@ public final class ReiPaths {
   }
 
   static Path workDirectory() {
-    return startupDirectory();
+    return ReiDataDirectory.current();
   }
 
   public static Path memoryDbPath(Path workDirectory) {
-    return workDirectory.resolve(".rei").resolve("memory.db");
+    return workDirectory.resolve("memory.db");
   }
 
   public static Path vectorStoreDbPath(Path workDirectory) {
-    return workDirectory.resolve(".rei").resolve("vectorstore.db");
+    return workDirectory.resolve("vectorstore.db");
   }
 
   public static Path memoryConsolidationDbPath(Path workDirectory) {
-    return workDirectory.resolve(".rei").resolve("memory-consolidation.db");
+    return workDirectory.resolve("memory-consolidation.db");
   }
 
   public static Path curiosityDbPath(Path workDirectory) {
-    return workDirectory.resolve(".rei").resolve("curiosity.db");
+    return workDirectory.resolve("curiosity.db");
   }
 
   public static Path historyFilePath(Path workDirectory) {
-    return workDirectory.resolve(".rei").resolve("history");
+    return workDirectory.resolve("history");
   }
 
   public static Path conversationLogsDirectory(Path workDirectory) {
-    return workDirectory.resolve(".rei").resolve("conversation-logs");
+    return workDirectory.resolve("conversation-logs");
   }
 
   public static Path profileLogPath(Path workDirectory) {
-    return workDirectory.resolve(".rei").resolve("profile.log");
+    return workDirectory.resolve("profile.log");
   }
 
   public static Path configFilePath(Path workDirectory) {
-    return workDirectory.resolve(".rei").resolve("application.yaml");
+    return workDirectory.resolve("application.yaml");
   }
 
   public static Path additionalSystemPromptFilePath(Path workDirectory) {
-    return workDirectory.resolve(".rei").resolve("additional-system-prompt.md");
+    return workDirectory.resolve("additional-system-prompt.md");
   }
 
   public static Path projectsFilePath(Path workDirectory) {
-    return workDirectory.resolve(".rei").resolve("projects");
+    return workDirectory.resolve("projects.json");
   }
 }

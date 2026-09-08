@@ -132,12 +132,13 @@ public class MemoryCommand {
   public static class ExportCommand implements Runnable {
     private final MemoryExporter memoryExporter;
 
-    @Option(names = "--dir", defaultValue = ".rei/memory-export")
+    @Option(names = "--dir")
     String exportDir;
 
     @Override
     public void run() {
-      MemoryExporter.ExportResult result = memoryExporter.export(Path.of(exportDir));
+      MemoryExporter.ExportResult result = memoryExporter.export(exportDir == null
+          ? dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve("memory-export") : Path.of(exportDir));
       if (result.count() == 0) {
         System.out.println("エクスポート対象の記憶がありません");
         return;

@@ -46,11 +46,11 @@ class ProjectServiceTest {
   }
 
   @Test
-  void cdRejectsUnregisteredDirectory() throws Exception {
+  void cdRegistersUnregisteredDirectory() throws Exception {
     Path project = Files.createDirectories(tempDir.resolve("project-a"));
     ProjectService service = newService();
 
-    assertThrows(IllegalArgumentException.class, () -> service.cd(project.toString()));
+    assertEquals(project.toRealPath(), service.cd(project.toString()));
   }
 
   @Test

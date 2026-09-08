@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class SearchResultCacheConfiguration {
 
+  @org.springframework.context.annotation.Scope(value = "reiProject", proxyMode = org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS)
   @Bean
   public SearchResultCache searchResultCache(Clock clock) {
     return new SearchResultCache(SearchResultCache.DEFAULT_TTL, SearchResultCache.DEFAULT_MAX_ENTRIES, clock);

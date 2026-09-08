@@ -30,14 +30,14 @@ class CurrentConversationHistoryAppenderTest {
     appender.appendAssistantMessage("要約結果");
 
     ArgumentCaptor<List<Message>> messages = ArgumentCaptor.forClass(List.class);
-    verify(chatMemory, Mockito.times(2)).add(eq(ConversationIds.chat()), messages.capture());
+    verify(chatMemory, Mockito.times(2)).add(eq(ConversationIds.currentChat()), messages.capture());
     assertEquals("次のWebページを要約してください: https://example.com/article",
         messages.getAllValues().get(0).getFirst().getText());
     assertEquals("要約結果", messages.getAllValues().get(1).getFirst().getText());
     var inOrder = Mockito.inOrder(logStore);
-    inOrder.verify(logStore).append(ConversationIds.chat(), "user",
+    inOrder.verify(logStore).append(ConversationIds.currentChat(), "user",
         "次のWebページを要約してください: https://example.com/article");
-    inOrder.verify(logStore).append(ConversationIds.chat(), "assistant", "要約結果");
+    inOrder.verify(logStore).append(ConversationIds.currentChat(), "assistant", "要約結果");
   }
 
   @Test
@@ -50,6 +50,6 @@ class CurrentConversationHistoryAppenderTest {
     appender.appendAssistantMessage("要約結果");
 
     assertEquals(List.of("次のWebページを要約してください: https://example.com/article", "要約結果"),
-        chatMemory.get(ConversationIds.chat()).stream().map(Message::getText).toList());
+        chatMemory.get(ConversationIds.currentChat()).stream().map(Message::getText).toList());
   }
 }

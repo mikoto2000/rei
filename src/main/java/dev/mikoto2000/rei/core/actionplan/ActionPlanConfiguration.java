@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class ActionPlanConfiguration {
 
+  @org.springframework.context.annotation.Scope(value = "reiProject", proxyMode = org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS)
   @Bean
   public ActionPlan actionPlan() {
     return new ActionPlan();

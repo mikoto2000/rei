@@ -36,7 +36,35 @@ public class WorkingSet {
   private final Clock clock;
   private final AgentEventFactory events;
   private final AgentEventBus eventBus;
-  private final Map<String, FileReference> files = new LinkedHashMap<>();
+  private final Map<String, FileReference> files = java.util.Collections.synchronizedMap(new LinkedHashMap<>());
+  private Path storagePath;
+  private final com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper()
+      .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
+      .disable(com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+      .disable(com.fasterxml.jackson.databind.DeserializationFeature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE);
+
+  public void enablePersistence(Path path) {
+    this.storagePath = path;
+    if (java.nio.file.Files.exists(path)) {
+      try {
+        for (FileReference reference : mapper.readValue(java.nio.file.Files.readString(path), FileReference[].class))
+          files.put(reference.path(), reference);
+      } catch (java.io.IOException error) { throw new IllegalStateException("Cannot restore Working Set: " + path, error); }
+    }
+  }
+  private synchronized void persist() {
+    if (storagePath == null) return;
+    try {
+      java.nio.file.Files.createDirectories(storagePath.getParent());
+      Path temporary = storagePath.resolveSibling(storagePath.getFileName() + ".tmp");
+      java.nio.file.Files.writeString(temporary, mapper.writeValueAsString(getFiles()));
+      try { java.nio.file.Files.move(temporary, storagePath, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+          java.nio.file.StandardCopyOption.REPLACE_EXISTING); }
+      catch (java.nio.file.AtomicMoveNotSupportedException e) {
+        java.nio.file.Files.move(temporary, storagePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+      }
+    } catch (java.io.IOException error) { log.warn("Cannot persist Working Set: {}", storagePath, error); }
+  }
   private final ThreadLocal<String> activeSearchId = new ThreadLocal<>();
 
   public WorkingSet() {
@@ -96,16 +124,18 @@ public class WorkingSet {
    * Working Set を空にする。
    */
   public void clear() {
-    List.copyOf(files.keySet()).forEach(path -> remove(path, "clear"));
+    getFiles().forEach(reference -> remove(reference.path(), "clear"));
   }
 
   /**
    * 現在の Working Set をアクセス順（新しい順）で返す。
    */
   public List<FileReference> getFiles() {
+    synchronized (files) {
     return files.values().stream()
         .sorted(Comparator.comparing(FileReference::lastAccessedAt).reversed())
         .toList();
+    }
   }
 
   /**
@@ -144,6 +174,7 @@ public class WorkingSet {
         updated = updated.withModifiedAt(reference.lastModifiedAt());
       }
       files.put(normalized, updated);
+      persist();
       log.debug("Working set: touched {} ({})", normalized, updated.accessType());
       return;
     }
@@ -151,11 +182,12 @@ public class WorkingSet {
     log.debug("Working set: added {} ({})", normalized, reference.accessType());
     publishAdded(reference);
     evictIfNeeded();
+    persist();
   }
 
   private void evictIfNeeded() {
     while (files.size() > maxFiles) {
-      String oldest = files.values().stream()
+      String oldest = getFiles().stream()
           .min(Comparator.comparing(FileReference::lastAccessedAt))
           .map(FileReference::path)
           .orElse(null);
@@ -213,6 +245,7 @@ public class WorkingSet {
 
   private void remove(String normalized, String reason) {
     FileReference removed = files.remove(normalized);
+    persist();
     if (removed == null) {
       return;
     }

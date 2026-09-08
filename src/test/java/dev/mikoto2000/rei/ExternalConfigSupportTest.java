@@ -11,7 +11,7 @@ class ExternalConfigSupportTest {
   @Test
   void additionalLocationUsesOptionalExternalApplicationYaml() {
     Path workDirectory = Path.of("/work/rei");
-    String expected = "optional:file:" + workDirectory.resolve(".rei").resolve("application.yaml");
+    String expected = "optional:file:" + workDirectory.resolve("application.yaml");
 
     assertEquals(expected, ExternalConfigSupport.additionalLocation(workDirectory));
   }

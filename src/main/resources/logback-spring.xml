@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-  <springProperty scope="context" name="LOG_FILE" source="logging.file.name" defaultValue="./.rei/rei.log" />
+  <springProperty scope="context" name="LOG_FILE" source="logging.file.name" defaultValue="${user.home}/.local/share/rei/logs/rei.log" />
 
   <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
     <file>${LOG_FILE}</file>

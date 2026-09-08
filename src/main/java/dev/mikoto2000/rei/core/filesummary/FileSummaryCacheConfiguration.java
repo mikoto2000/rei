@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class FileSummaryCacheConfiguration {
 
+  @org.springframework.context.annotation.Scope(value = "reiProject", proxyMode = org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS)
   @Bean
   public FileSummaryCache fileSummaryCache(Clock clock) {
     return new FileSummaryCache(FileSummaryCache.DEFAULT_MAX_ENTRIES, clock);

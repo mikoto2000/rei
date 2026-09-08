@@ -38,7 +38,7 @@ public class RunExecutionContext {
     if (interventions == null) return List.of();
     return interventions.drainEntries().stream().map(entry -> {
       interventionApplied.accept(entry.text());
-      publisher.publish(factory.intervention(runId, entry.id(), entry.text(), true));
+      publisher.publish(factory.intervention(runId, entry.id(), entry.text(), true).withOwnership(runContext));
       return (org.springframework.ai.chat.messages.Message) new org.springframework.ai.chat.messages.UserMessage(entry.text());
     }).toList();
   }
@@ -121,6 +121,6 @@ public class RunExecutionContext {
   }
   private void emit(AgentEventType type, ProgressEvidence evidence, String reason) {
     publisher.publish(factory.executionProgress(type, runId, new ExecutionProgressPayload(evidence,
-        detector.stagnationCount(), detector.threshold(), detector.replanCount(), detector.maxReplans(), reason)));
+        detector.stagnationCount(), detector.threshold(), detector.replanCount(), detector.maxReplans(), reason)).withOwnership(runContext));
   }
 }

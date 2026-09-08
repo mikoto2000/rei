@@ -119,6 +119,7 @@ public class ReiApplication {
   }
 
   public static void main(String[] args) throws IOException {
+    System.setProperty("rei.data-dir", dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().toString());
     SpringApplication application = new SpringApplication(ReiApplication.class);
     application.setDefaultProperties(ExternalConfigSupport.defaultProperties());
     ConfigurableApplicationContext context = application.run(args);

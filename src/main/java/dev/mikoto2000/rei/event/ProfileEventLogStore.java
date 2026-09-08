@@ -34,7 +34,7 @@ public class ProfileEventLogStore implements AgentEventListener {
   private final Object writeLock = new Object();
 
   public ProfileEventLogStore() {
-    this(ReiPaths.profileLogPath(), new ObjectMapper().registerModule(new JavaTimeModule()));
+    this(null, new ObjectMapper().registerModule(new JavaTimeModule()));
   }
 
   public ProfileEventLogStore(Path file, ObjectMapper objectMapper) {
@@ -43,7 +43,7 @@ public class ProfileEventLogStore implements AgentEventListener {
   }
 
   public Path file() {
-    return file;
+    return file != null ? file : dev.mikoto2000.rei.core.project.ProjectStorage.currentDirectory().resolve("logs/activity.jsonl");
   }
 
   @Override
@@ -56,6 +56,9 @@ public class ProfileEventLogStore implements AgentEventListener {
       return;
     }
     ProfileEventLogEntry entry = toEntry(event);
+    Path file = this.file != null ? this.file : (event.projectId() != null
+        ? dev.mikoto2000.rei.core.project.ProjectStorage.directory(event.projectId())
+        : dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current()).resolve("logs/activity.jsonl");
     synchronized (writeLock) {
       try {
         Files.createDirectories(file.getParent());
@@ -68,6 +71,7 @@ public class ProfileEventLogStore implements AgentEventListener {
   }
 
   public List<ProfileEventLogEntry> readAll() {
+    Path file = file();
     if (!Files.isRegularFile(file)) {
       return List.of();
     }

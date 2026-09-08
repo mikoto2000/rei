@@ -9,5 +9,5 @@ import picocli.CommandLine.Command;
 public class CancelCommand implements Runnable {
   private final CommandCancellationService cancellation;
   public CancelCommand(CommandCancellationService cancellation) { this.cancellation = cancellation; }
-  public void run() { cancellation.cancel(); }
+  public void run() { cancellation.cancelCurrentProject(); }
 }

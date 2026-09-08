@@ -24,6 +24,12 @@ public final class ConversationIds {
   public static String chat() {
     return CHAT_PREFIX + "main";
   }
+  public static String currentChat() {
+    var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    if (run != null) return run.conversationId();
+    var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
+    return project == null ? chat() : project.conversationId(chat());
+  }
 
   /**
    * 通常チャット用の conversation ID（既存 conversation ID を保持する場合）。

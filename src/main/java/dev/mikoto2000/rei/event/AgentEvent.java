@@ -30,7 +30,18 @@ public record AgentEvent(
     String runId,
     String correlationId,
     String parentEventId,
-    AgentEventPayload payload) {
+    AgentEventPayload payload,
+    String projectId) {
+
+  public AgentEvent(String id, long sequence, Instant timestamp, AgentEventType type, int version,
+      String sessionId, String turnId, String runId, String correlationId, String parentEventId, AgentEventPayload payload) {
+    this(id, sequence, timestamp, type, version, sessionId, turnId, runId, correlationId, parentEventId, payload, null);
+  }
+  public AgentEvent withOwnership(dev.mikoto2000.rei.core.chat.AgentRunContext context) {
+    if (context == null) return this;
+    return new AgentEvent(id, sequence, timestamp, type, version, context.conversationId(), turnId,
+        runId == null ? context.runId() : runId, correlationId, parentEventId, payload, context.projectId());
+  }
 
   public AgentEvent {
     if (id == null || id.isBlank()) {
@@ -52,6 +63,6 @@ public record AgentEvent(
    */
   public AgentEvent withContext(String sessionId, String turnId) {
     return new AgentEvent(id, sequence, timestamp, type, version, sessionId, turnId, runId,
-        correlationId, parentEventId, payload);
+        correlationId, parentEventId, payload, projectId);
   }
 }

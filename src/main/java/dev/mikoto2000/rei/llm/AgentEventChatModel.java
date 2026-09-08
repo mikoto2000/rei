@@ -31,13 +31,13 @@ final class AgentEventChatModel implements ChatModel {
   public ChatResponse call(Prompt prompt) {
     String requestId = UUID.randomUUID().toString();
     long startedAtNanos = System.nanoTime();
-    eventPublisher.publish(eventFactory.llmRequestStarted(null, requestId, feature));
+    publisher(prompt).publish(eventFactory.llmRequestStarted(null, requestId, feature));
     try {
       ChatResponse response = delegate.call(prompt);
-      eventPublisher.publish(eventFactory.llmResponseCompleted(null, requestId, elapsedMillis(startedAtNanos)));
+      publisher(prompt).publish(eventFactory.llmResponseCompleted(null, requestId, elapsedMillis(startedAtNanos)));
       return response;
     } catch (RuntimeException e) {
-      eventPublisher.publish(eventFactory.llmRequestFailed(null, requestId, elapsedMillis(startedAtNanos), e));
+      publisher(prompt).publish(eventFactory.llmRequestFailed(null, requestId, elapsedMillis(startedAtNanos), e));
       throw e;
     }
   }
@@ -48,16 +48,16 @@ final class AgentEventChatModel implements ChatModel {
       String requestId = UUID.randomUUID().toString();
       long startedAtNanos = System.nanoTime();
       java.util.concurrent.atomic.AtomicBoolean firstTokenPublished = new java.util.concurrent.atomic.AtomicBoolean();
-      eventPublisher.publish(eventFactory.llmRequestStarted(null, requestId, feature));
+      publisher(prompt).publish(eventFactory.llmRequestStarted(null, requestId, feature));
       return delegate.stream(prompt)
           .doOnNext(response -> {
             if (firstTokenPublished.compareAndSet(false, true)) {
-              eventPublisher.publish(eventFactory.llmResponseFirstToken(null, requestId, elapsedMillis(startedAtNanos)));
+              publisher(prompt).publish(eventFactory.llmResponseFirstToken(null, requestId, elapsedMillis(startedAtNanos)));
             }
           })
-          .doOnComplete(() -> eventPublisher.publish(
+          .doOnComplete(() -> publisher(prompt).publish(
               eventFactory.llmResponseCompleted(null, requestId, elapsedMillis(startedAtNanos))))
-          .doOnError(error -> eventPublisher.publish(
+          .doOnError(error -> publisher(prompt).publish(
               eventFactory.llmRequestFailed(null, requestId, elapsedMillis(startedAtNanos), error)));
     });
   }
@@ -67,6 +67,21 @@ final class AgentEventChatModel implements ChatModel {
     return delegate.getDefaultOptions();
   }
 
+  private AgentEventPublisher publisher(Prompt prompt) {
+    dev.mikoto2000.rei.core.chat.AgentRunContext owner = null;
+    if (prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
+        && options.getToolContext() != null
+        && options.getToolContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+            instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution) owner = execution.runContext();
+    var captured = owner;
+    if (captured == null && prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
+        && options.getToolContext() != null
+        && options.getToolContext().get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName())
+            instanceof dev.mikoto2000.rei.core.chat.AgentRunContext context) {
+      return event -> eventPublisher.publish(event.withOwnership(context));
+    }
+    return event -> eventPublisher.publish(event.withOwnership(captured));
+  }
   private long elapsedMillis(long startedAtNanos) {
     return (System.nanoTime() - startedAtNanos) / 1_000_000L;
   }

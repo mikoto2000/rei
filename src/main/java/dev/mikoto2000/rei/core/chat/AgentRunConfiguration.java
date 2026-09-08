@@ -23,6 +23,6 @@ public class AgentRunConfiguration {
       } catch (RuntimeException error) {
         org.slf4j.LoggerFactory.getLogger(AgentRunConfiguration.class).error("Agent run failed: {}", context.runId(), error);
       }
-    }, (context, entry) -> publisher.publish(events.intervention(context.runId(), entry.id(), entry.text(), false)));
+    }, (context, entry) -> publisher.publish(events.intervention(context.runId(), entry.id(), entry.text(), false).withOwnership(context)));
   }
 }

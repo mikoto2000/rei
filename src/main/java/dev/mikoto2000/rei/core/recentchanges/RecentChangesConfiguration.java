@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class RecentChangesConfiguration {
 
+  @org.springframework.context.annotation.Scope(value = "reiProject", proxyMode = org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS)
   @Bean
   public RecentChanges recentChanges(Clock clock) {
     return new RecentChanges(RecentChanges.DEFAULT_MAX_ENTRIES, clock);

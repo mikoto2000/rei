@@ -29,7 +29,8 @@ public final class ConversationInputRouter {
     Path key = root.toAbsolutePath().normalize();
     var existing = active.get(key);
     if (existing != null && existing.offer(prompt)) return Disposition.QUEUED;
-    var context = new AgentRunContext(UUID.randomUUID().toString(), conversation, key);
+    var context = new AgentRunContext(UUID.randomUUID().toString(), conversation, key,
+        dev.mikoto2000.rei.core.project.ProjectStorage.projectId(conversation));
     var queue = new UserInterventionQueue(entry -> received.accept(context, entry));
     active.put(key, queue);
     try {

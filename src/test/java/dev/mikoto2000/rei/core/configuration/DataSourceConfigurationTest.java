@@ -28,7 +28,7 @@ class DataSourceConfigurationTest {
     DataSource dataSource = configuration.dataSource(tempDir);
 
     try (Connection connection = dataSource.getConnection()) {
-      assertEquals("jdbc:sqlite:" + tempDir.resolve(".rei").resolve("memory.db"), connection.getMetaData().getURL());
+      assertEquals("jdbc:sqlite:" + tempDir.resolve("memory.db"), connection.getMetaData().getURL());
     }
   }
 
@@ -42,7 +42,7 @@ class DataSourceConfigurationTest {
 
     assertInstanceOf(SqliteVecDataSource.class, dataSource);
     try (Connection connection = dataSource.getConnection()) {
-      assertEquals("jdbc:sqlite:" + tempDir.resolve(".rei").resolve("vectorstore.db") + "?enable_load_extension=true",
+      assertEquals("jdbc:sqlite:" + tempDir.resolve("vectorstore.db") + "?enable_load_extension=true",
           connection.getMetaData().getURL());
     }
   }

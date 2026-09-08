@@ -139,7 +139,7 @@ public class LlmChatClientProvider {
         modelProvider.chatModel(feature)))
         .defaultSystem(systemPromptService.systemPrompt())
         .defaultOptions(modelProvider.chatOptions(feature, null))
-        .defaultAdvisors(advisors);
+        .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors));
 
     List<Object> toolObjects = new ArrayList<>();
     addIfAvailable(toolObjects, tools);

@@ -23,21 +23,21 @@ Rei の開発者向けドキュメントです。利用手順は [README.md](./R
 
 ## ローカルデータ
 
-起動したカレントディレクトリ配下の `.rei` にローカルデータを保存します。
+OS 標準の Rei Data Directory に保存します。Windows は `%LOCALAPPDATA%\Rei`、他 OS と移行方法は [設計メモ](docs/agent-run-project-state.md) を参照してください。`REI_DATA_DIR` で上書きできます。
 
-- `.rei/history`
+- `<rei-data-dir>/history`
   - REPL 履歴
-- `.rei/memory.db`
+- `<rei-data-dir>/memory.db`
   - アプリ本体の SQLite
-- `.rei/vectorstore.db`
+- `<rei-data-dir>/vectorstore.db`
   - ベクトルストア専用 SQLite
-- `.rei/extensions/sqlite-vec/...`
+- `<rei-data-dir>/extensions/sqlite-vec/...`
   - `sqlite-vec` のキャッシュ
 
 ## ベクトルストア実装
 
 - ベクトルストアは `sqlite-vec` を使用します
-- 保存先は `.rei/vectorstore.db` です
+- 保存先は `<rei-data-dir>/vectorstore.db` です
 - 主実装は [`SqliteVectorStore.java`](./src/main/java/dev/mikoto2000/rei/vectorstore/SqliteVectorStore.java) です
 - 文書一覧、削除、検索は `document_chunks_vec` の集約で処理します
 
@@ -91,7 +91,7 @@ Rei の開発者向けドキュメントです。利用手順は [README.md](./R
 ## MCP
 
 - Spring AI MCP client を使用
-- `.rei/mcp-servers.json` の静的設定を起動時に読み込み
+- `<rei-data-dir>/mcp-servers.json` の静的設定を起動時に読み込み
 - 動的登録やホットリロードは未実装
 
 ## AI ツール
@@ -130,4 +130,4 @@ Rei の開発者向けドキュメントです。利用手順は [README.md](./R
 ## 補足
 
 - [`application.yaml`](./src/main/resources/application.yaml) にはローカル差分が入りやすいので、コミット時は注意してください
-- `.rei/` などの作業生成物は通常コミットしません
+- `<rei-data-dir>/` などの作業生成物は通常コミットしません

@@ -35,7 +35,7 @@ public class ConversationLogStore {
   private final Object writeLock = new Object();
 
   public ConversationLogStore() {
-    this(ReiPaths.conversationLogsDirectory(), Clock.systemDefaultZone(),
+    this(null, Clock.systemDefaultZone(),
         new ObjectMapper().registerModule(new JavaTimeModule()));
   }
 
@@ -52,6 +52,7 @@ public class ConversationLogStore {
     OffsetDateTime timestamp = OffsetDateTime.now(clock);
     ConversationLogEntry entry = new ConversationLogEntry(
         conversationId.strip(), scopeOf(conversationId), normalizeSpeaker(speaker), timestamp, content);
+    Path directory = directoryFor(conversationId);
     Path file = directory.resolve(FILE_DATE.format(timestamp) + ".jsonl");
     synchronized (writeLock) {
       try {
@@ -65,6 +66,7 @@ public class ConversationLogStore {
   }
 
   public List<ConversationLogEntry> readAll() {
+    Path directory = directoryFor(null);
     if (!Files.isDirectory(directory)) {
       return List.of();
     }
@@ -99,6 +101,7 @@ public class ConversationLogStore {
   }
 
   static String scopeOf(String conversationId) {
+    if (conversationId.startsWith("project:")) conversationId = conversationId.substring(conversationId.indexOf(':', 8) + 1);
     if (conversationId.startsWith("bluesky-reply:")) return "bluesky-reply";
     if (conversationId.startsWith("bluesky-manual:")) return "bluesky-manual";
     if (conversationId.startsWith("tool:")) return "tool";
@@ -107,5 +110,11 @@ public class ConversationLogStore {
 
   private String normalizeSpeaker(String speaker) {
     return speaker == null ? "" : speaker.toLowerCase(Locale.ROOT);
+  }
+  private Path directoryFor(String conversationId) {
+    if (directory != null) return directory;
+    String id = dev.mikoto2000.rei.core.project.ProjectStorage.projectId(conversationId);
+    return (id == null ? dev.mikoto2000.rei.core.project.ProjectStorage.currentDirectory()
+        : dev.mikoto2000.rei.core.project.ProjectStorage.directory(id)).resolve("conversations");
   }
 }

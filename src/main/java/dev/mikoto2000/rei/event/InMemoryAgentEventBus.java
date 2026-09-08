@@ -75,6 +75,6 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
         event.runId(),
         event.correlationId(),
         event.parentEventId(),
-        event.payload());
+        event.payload(), event.projectId());
   }
 }

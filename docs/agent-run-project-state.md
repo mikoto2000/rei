@@ -31,3 +31,23 @@ Build logs are retained in `target/phase1-*.log`. Maven requires the existing lo
 ```
 
 An initial baseline attempt overlapped test compilation and produced missing generated test classes. That run is invalid as regression evidence; subsequent builds are serialized.
+
+Phase 1 passed the full suite after replacing an existing cancellation-test startup race with a latch. Offline networking initially prevented sqlite-vec integration tests from fetching their extension; the full passing run used network access. Commit: `34cb685 feat: allow user intervention during agent runs`.
+
+## Phase 2 storage and compatibility
+
+- Windows default: `%LOCALAPPDATA%\Rei` (on this host, `C:\Users\mikoto\AppData\Local\Rei`). `REI_DATA_DIR` overrides it; `-Drei.data-dir=...` supports an explicit Java/test override. Linux uses `$XDG_DATA_HOME/rei` or `~/.local/share/rei`; macOS uses `~/Library/Application Support/Rei`.
+- `projects.json` stores a `projects` array of UUID, display name and canonical path. Registration persists before switching. Explicit registry relocation preserves identity; automatic move detection is not implemented.
+- `projects/<uuid>/conversations` contains conversation JSONL. Chat memory uses `project:<uuid>:chat:main`; the logical `chat:main` API remains available.
+- `projects/<uuid>/working-set/files.json` is the Working Set snapshot. `state/last-run.json` is an independent last-run snapshot. `logs/activity.jsonl` contains structured profile activity; system logging lives under global `logs/rei.log`.
+- Existing state-service APIs use a Spring project scope. Run Tool callbacks and Advisor before/after callbacks explicitly enter the captured scope. ActionPlan, TaskState, checkpoints, file summaries, recent changes and search caches therefore have separate in-process instances. Working Set and last-run state additionally survive restart.
+- Agent execution remains serialized across projects in v1. Each project has at most one accepted active/queued run; further input joins its mailbox. Switching projects does not change a running request's paths, history or log ownership.
+- `/cancel` is scoped to the selected project; it does not interrupt an agent belonging to another project.
+
+### Legacy `.rei`
+
+No old file is deleted or rewritten. Automatic import of unnamespaced conversations is intentionally not performed because the owning project cannot reliably be inferred. The new application does not automatically read old `.rei/application.yaml`; when adopting an existing configuration, copy it to the new global `application.yaml` and replace any `.rei` paths with the chosen data directory. Skill definitions and MCP/Google configuration can likewise be copied explicitly. Keep credentials local.
+
+Keep old `memory.db`, `conversation-logs`, profile logs and other databases as a backup. Copying the old database wholesale into a new installation does **not** attach `chat:main` rows to a ProjectId. A future importer must ask for the owning project, namespace those rows, and avoid collisions; this release does not claim to migrate these rows. Old events were not persisted as typed AgentEvent records and cannot be reconstructed losslessly from notification strings.
+
+The registry API supports explicit relocation. Path-management compatibility constructors remain for embedded callers; the runtime default constructor enables project scoping.

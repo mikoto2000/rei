@@ -38,11 +38,12 @@ spring:
         toolcallback:
           enabled: true
         stdio:
-          servers-configuration: ${REI_MCP_STDIO_SERVERS_CONFIG:file:.rei/mcp-servers.json}
+          servers-configuration: ${REI_MCP_STDIO_SERVERS_CONFIG:file:${rei.data-dir}/mcp-servers.json}
   devtools:
     restart:
       enabled: false
 rei:
+  data-dir: ${REI_DATA_DIR:${LOCALAPPDATA:${user.home}/.local/share}/Rei}
   embedding:
     enabled: ${REI_EMBEDDING_ENABLED:true}
   core:
@@ -100,7 +101,7 @@ rei:
         api-key: ${REI_LLM_IMAGE_GENERATION_API_KEY:}
         model: ${REI_LLM_IMAGE_GENERATION_MODEL:}
   image:
-    output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:${user.dir}/.rei/images}
+    output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:${rei.data-dir}/images}
     size: ${REI_IMAGE_SIZE:1024x1024}
     response-format: ${REI_IMAGE_RESPONSE_FORMAT:auto}
     timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
@@ -109,12 +110,12 @@ rei:
   skills:
     enabled: ${REI_SKILLS_ENABLED:true}
     directories:
-      - ${REI_SKILLS_DIRECTORY:${user.dir}/.rei/skills}
+      - ${REI_SKILLS_DIRECTORY:${rei.data-dir}/skills}
     max-selected: ${REI_SKILLS_MAX_SELECTED:3}
   google:
     application-name: Rei
-    credentials-path: ${REI_GOOGLE_CREDENTIALS_PATH:.rei/google-credentials.json}
-    tokens-directory: ${REI_GOOGLE_TOKENS_DIR:.rei/google-tokens}
+    credentials-path: ${REI_GOOGLE_CREDENTIALS_PATH:${rei.data-dir}/google-credentials.json}
+    tokens-directory: ${REI_GOOGLE_TOKENS_DIR:${rei.data-dir}/google-tokens}
     token-refresh:
       enabled: ${REI_GOOGLE_TOKEN_REFRESH_ENABLED:true}
       check-interval: ${REI_GOOGLE_TOKEN_REFRESH_CHECK_INTERVAL:5m}
@@ -175,7 +176,7 @@ rei:
   sqlite-vec:
     version: ${REI_SQLITE_VEC_VERSION:0.1.9}
     auto-download: ${REI_SQLITE_VEC_AUTO_DOWNLOAD:true}
-    cache-dir: ${REI_SQLITE_VEC_CACHE_DIR:${user.dir}/.rei/extensions/sqlite-vec}
+    cache-dir: ${REI_SQLITE_VEC_CACHE_DIR:${rei.data-dir}/extensions/sqlite-vec}
     extension-path: ${REI_SQLITE_VEC_EXTENSION_PATH:}
     release-base-url: ${REI_SQLITE_VEC_RELEASE_BASE_URL:https://github.com/asg017/sqlite-vec/releases/download}
   bluesky:
@@ -207,6 +208,6 @@ rei:
 
 logging:
   file:
-    name: ${REI_LOG_FILE:${user.dir}/.rei/rei.log}
+    name: ${REI_LOG_FILE:${rei.data-dir}/logs/rei.log}
   level:
     dev.mikoto2000.rei.bluesky: DEBUG

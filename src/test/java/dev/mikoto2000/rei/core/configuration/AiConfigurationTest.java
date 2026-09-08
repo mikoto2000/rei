@@ -180,7 +180,7 @@ class AiConfigurationTest {
     ChatClient chatClient = configuration.chatClient();
 
     List<?> advisors = getDefaultAdvisors(chatClient);
-    assertSame(agentSkillAdvisor, advisors.getLast());
+    assertSame(agentSkillAdvisor, ((dev.mikoto2000.rei.core.chat.RunScopedAdvisor) advisors.getLast()).delegate());
   }
 
   @Test

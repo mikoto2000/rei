@@ -116,7 +116,7 @@ public class AiConfiguration {
         .defaultOptions(OpenAiChatOptions.builder()
             .maxTokens(llmProperties.getMaxOutputTokens())
             .build())
-        .defaultAdvisors(advisors)
+        .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors))
         .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
             soundNotificationTools, blueskyPostTools, urlContentFetchTools, textTools, clockTools, schedulerTools, taskStateTools,
             conversationHistoryTools);

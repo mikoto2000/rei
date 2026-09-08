@@ -18,7 +18,7 @@ class ExternalConfigLoadingTest {
 
   @Test
   void externalApplicationYamlOverridesClasspathDefaults() throws Exception {
-    Path configFile = tempDir.resolve(".rei").resolve("application.yaml");
+    Path configFile = tempDir.resolve("application.yaml");
     Files.createDirectories(configFile.getParent());
     Files.writeString(configFile, """
         rei:
@@ -29,7 +29,7 @@ class ExternalConfigLoadingTest {
     SpringApplication application = new SpringApplication(TestConfiguration.class);
     application.setDefaultProperties(ExternalConfigSupport.defaultProperties(tempDir));
 
-    try (ConfigurableApplicationContext context = application.run("--spring.main.web-application-type=none")) {
+    try (ConfigurableApplicationContext context = application.run("--spring.main.web-application-type=none", "--rei.data-dir=" + tempDir, "--logging.file.name=target/test-external-config.log")) {
       assertEquals("false", context.getEnvironment().getProperty("rei.web-search.enabled"));
     }
   }

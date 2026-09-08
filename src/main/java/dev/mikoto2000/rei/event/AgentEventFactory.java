@@ -444,7 +444,7 @@ public class AgentEventFactory {
         runId,
         correlationId,
         null,
-        payload);
+        payload).withOwnership(dev.mikoto2000.rei.core.chat.AgentRunScope.current());
   }
 
   private String bounded(String value, int maxLength) {

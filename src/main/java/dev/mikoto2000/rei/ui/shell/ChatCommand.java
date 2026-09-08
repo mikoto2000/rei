@@ -71,7 +71,7 @@ public class ChatCommand implements Runnable {
   public void run() {
     if (inputRouter != null) {
       inputRouter.submit(dev.mikoto2000.rei.core.project.ProjectService.currentProjectOrStartupDirectory(),
-          dev.mikoto2000.rei.llm.ConversationIds.chat(), String.join(" ", prompts));
+          dev.mikoto2000.rei.llm.ConversationIds.currentChat(), String.join(" ", prompts));
       return;
     }
     chatResponseNarrator.reset();

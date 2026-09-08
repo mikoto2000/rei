@@ -153,8 +153,10 @@ public class ChatExecutionService {
   }
 
   public ChatExecutionResult execute(String promptText) {
-    return execute(new AgentRunContext(UUID.randomUUID().toString(), ConversationIds.chat(),
-        projectService == null ? java.nio.file.Path.of(".") : projectService.currentProject()),
+    String conversationId = ConversationIds.currentChat();
+    return execute(new AgentRunContext(UUID.randomUUID().toString(), conversationId,
+        projectService == null ? java.nio.file.Path.of(".") : projectService.currentProject(),
+        dev.mikoto2000.rei.core.project.ProjectStorage.projectId(conversationId)),
         promptText, new UserInterventionQueue());
   }
 
@@ -348,6 +350,7 @@ public class ChatExecutionService {
               .build(),
           options))
       .advisors(advisor -> advisor
+          .param(AgentRunContext.class.getName(), execution.runContext())
           .param(ChatMemory.CONVERSATION_ID, execution.runContext().conversationId())
           .param(AgentSkillAdvisor.ROUTING_CONTEXT_KEY, skillRoutingContext));
 
@@ -375,6 +378,7 @@ public class ChatExecutionService {
         .chatResponse()
         .subscribe(
             response -> {
+              try (var scope = AgentRunScope.open(execution.runContext())) {
               if (response.getResult() != null && response.getResult().getMetadata() != null
                   && response.getResult().getMetadata().getFinishReason() != null
                   && !response.getResult().getMetadata().getFinishReason().isBlank()) {
@@ -397,6 +401,7 @@ public class ChatExecutionService {
               answerChunkCount.incrementAndGet();
               responseBuilder.append(chunk);
               eventPublisher.publish(eventFactory.messageDelta(messageId, chunk));
+              }
             },
             error -> {
               errorRef.set(error);

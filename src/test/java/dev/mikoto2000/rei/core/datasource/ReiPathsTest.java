@@ -13,7 +13,6 @@ class ReiPathsTest {
     Path workDirectory = Path.of("/work/rei");
     Path expected = Path.of(
         "/work/rei",
-        ".rei",
         "memory.db");
 
     assertEquals(expected, ReiPaths.memoryDbPath(workDirectory));
@@ -24,7 +23,6 @@ class ReiPathsTest {
     Path workDirectory = Path.of("/work/rei");
     Path expected = Path.of(
         "/work/rei",
-        ".rei",
         "vectorstore.db");
 
     assertEquals(expected, ReiPaths.vectorStoreDbPath(workDirectory));
@@ -35,7 +33,6 @@ class ReiPathsTest {
     Path workDirectory = Path.of("/work/rei");
     Path expected = Path.of(
         "/work/rei",
-        ".rei",
         "memory-consolidation.db");
 
     assertEquals(expected, ReiPaths.memoryConsolidationDbPath(workDirectory));
@@ -46,7 +43,6 @@ class ReiPathsTest {
     Path workDirectory = Path.of("/work/rei");
     Path expected = Path.of(
         "/work/rei",
-        ".rei",
         "curiosity.db");
 
     assertEquals(expected, ReiPaths.curiosityDbPath(workDirectory));
@@ -57,7 +53,6 @@ class ReiPathsTest {
     Path workDirectory = Path.of("/work/rei");
     Path expected = Path.of(
         "/work/rei",
-        ".rei",
         "history");
 
     assertEquals(expected, ReiPaths.historyFilePath(workDirectory));
@@ -67,7 +62,7 @@ class ReiPathsTest {
   void conversationLogsDirectoryUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
 
-    assertEquals(Path.of("/work/rei", ".rei", "conversation-logs"),
+    assertEquals(Path.of("/work/rei", "conversation-logs"),
         ReiPaths.conversationLogsDirectory(workDirectory));
   }
 
@@ -75,7 +70,7 @@ class ReiPathsTest {
   void profileLogPathUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
 
-    assertEquals(Path.of("/work/rei", ".rei", "profile.log"),
+    assertEquals(Path.of("/work/rei", "profile.log"),
         ReiPaths.profileLogPath(workDirectory));
   }
 
@@ -84,7 +79,6 @@ class ReiPathsTest {
     Path workDirectory = Path.of("/work/rei");
     Path expected = Path.of(
         "/work/rei",
-        ".rei",
         "application.yaml");
 
     assertEquals(expected, ReiPaths.configFilePath(workDirectory));
@@ -95,7 +89,6 @@ class ReiPathsTest {
     Path workDirectory = Path.of("/work/rei");
     Path expected = Path.of(
         "/work/rei",
-        ".rei",
         "additional-system-prompt.md");
 
     assertEquals(expected, ReiPaths.additionalSystemPromptFilePath(workDirectory));
@@ -106,8 +99,7 @@ class ReiPathsTest {
     Path workDirectory = Path.of("/work/rei");
     Path expected = Path.of(
         "/work/rei",
-        ".rei",
-        "projects");
+        "projects.json");
 
     assertEquals(expected, ReiPaths.projectsFilePath(workDirectory));
   }
