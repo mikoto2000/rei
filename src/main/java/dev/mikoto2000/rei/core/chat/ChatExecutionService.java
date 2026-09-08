@@ -230,10 +230,13 @@ public class ChatExecutionService {
         return ChatExecutionResult.failed(terminalError(result.status()).message());
       }
     } finally {
-      // Accepted input remains part of history even when cancellation or a hard budget stops the run.
-      while (!interventions.finishIfEmpty()) execution.applyInterventions();
-      execution.close();
-      cancellationService.clear();
+      try {
+        // Accepted input remains part of history even when cancellation or a hard budget stops the run.
+        while (!interventions.finishIfEmpty()) execution.applyInterventions();
+      } finally {
+        execution.close();
+        cancellationService.clear();
+      }
     }
   }
 

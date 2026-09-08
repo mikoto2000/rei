@@ -51,3 +51,11 @@ No old file is deleted or rewritten. Automatic import of unnamespaced conversati
 Keep old `memory.db`, `conversation-logs`, profile logs and other databases as a backup. Copying the old database wholesale into a new installation does **not** attach `chat:main` rows to a ProjectId. A future importer must ask for the owning project, namespace those rows, and avoid collisions; this release does not claim to migrate these rows. Old events were not persisted as typed AgentEvent records and cannot be reconstructed losslessly from notification strings.
 
 The registry API supports explicit relocation. Path-management compatibility constructors remain for embedded callers; the runtime default constructor enables project scoping.
+
+## Phase 3 and final verification
+
+Typed AgentEvent JSONL is stored at `projects/<uuid>/events/events.jsonl`, with persistent per-project sequence numbers. The existing bus retains its process sequence API. Queue-based delivery orders concurrent and reentrant publication. Shell restoration uses the existing renderer's compact mode, a default of 20 recent events (`rei.events.recent-limit`), and independent Conversation/Working Set/last-run snapshots. Forward replay pagination remains a separate API.
+
+Tests cover typed round trips, independent project sequences across reopening, malformed tail recovery, listener failure isolation, concurrent/reentrant order, project-switch restoration, hidden-project rendering state, bounded streaming output during input, and a real ChatClient with a controllable tool finishing in A after the Shell switches to B.
+
+Final regression result: **1,380 tests, 0 failures, 0 errors, 0 skipped; BUILD SUCCESS**. See `target/final-all-tests.log`. `git diff --check` also passed. Full Japanese completion report: `docs/implementation-report-agent-projects.md`.

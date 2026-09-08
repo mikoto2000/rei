@@ -463,6 +463,28 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     output.flush();
   }
 
+  /** Compact restore mode; audit records remain unchanged and can also be fed to onEvent for full replay. */
+  public synchronized void onRecentEvent(AgentEvent event) {
+    String detail = switch (event.payload()) {
+      case ToolCompletedPayload tool -> tool.toolName();
+      case ToolStartedPayload tool -> tool.toolName();
+      case ToolFailedPayload tool -> tool.toolName();
+      case WorkingSetItemAddedPayload item -> item.path();
+      case WorkingSetItemRemovedPayload item -> item.itemId();
+      case dev.mikoto2000.rei.event.UserInterventionPayload input -> input.text();
+      case null, default -> "";
+    };
+    detail = detail == null ? "" : detail.replaceAll("\\s+", " ");
+    if (detail.length() > 100) detail = detail.substring(0, 100) + "…";
+    String time = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
+        .withZone(java.time.ZoneId.systemDefault()).format(event.timestamp());
+    output.println("  " + time + " " + event.type().value() + (detail.isBlank() ? "" : " " + detail));
+  }
+
+  public synchronized void finish() {
+    closeAssistantLine(); closeThinkingLine(); output.flush();
+  }
+
   private boolean isTopicEvent(AgentEvent event) {
     return event.type().name().startsWith("TOPIC_");
   }

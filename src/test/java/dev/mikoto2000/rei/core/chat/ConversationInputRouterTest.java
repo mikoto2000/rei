@@ -7,6 +7,15 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class ConversationInputRouterTest {
+  @Test void persistentProjectIdentityOwnsMailboxEvenIfLocationChanges() {
+    List<Runnable> tasks = new ArrayList<>();
+    String conversation = "project:" + UUID.randomUUID() + ":chat:main";
+    var router = new ConversationInputRouter(tasks::add, (context, prompt, queue) -> {});
+    router.submit(Path.of("old-location"), conversation, "start");
+    assertThat(router.submit(Path.of("new-location"), conversation, "guidance"))
+        .isEqualTo(ConversationInputRouter.Disposition.QUEUED);
+    assertThat(tasks).hasSize(1);
+  }
   @Test void idleStartsAndRunningInputQueuesWithoutAnotherTask() {
     List<Runnable> tasks = new ArrayList<>();
     List<String> prompts = new ArrayList<>();

@@ -75,6 +75,9 @@ public class ProjectCommand {
   @Command(name = "cd", description = "現在の作業ディレクトリを変更します")
   public static class CdCommand implements Runnable {
     private final ProjectService projectService;
+    private dev.mikoto2000.rei.ui.shell.ProjectShellActivity activity;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setActivity(dev.mikoto2000.rei.ui.shell.ProjectShellActivity activity) { this.activity = activity; }
 
     @Parameters(index = "0", paramLabel = "DIR", completionCandidates = RegisteredProjectCandidates.class)
     String directory;
@@ -83,6 +86,7 @@ public class ProjectCommand {
     public void run() {
       Path changed = projectService.cd(directory);
       System.out.println("current project: " + changed);
+      if (activity != null) activity.restore(projectService.currentContext());
     }
   }
 

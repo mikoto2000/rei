@@ -14,6 +14,22 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ChatExecutionInterventionTest {
+  @Test void cancellationStateIsClearedEvenWhenFinalHistoryWriteFails() {
+    ChatModel model = new ChatModel() {
+      public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
+      public Flux<ChatResponse> stream(Prompt p) { return Flux.error(new IllegalStateException("request failed")); }
+    };
+    var holder = mock(ModelHolderService.class); when(holder.get()).thenReturn("test");
+    var cancellation = spy(new CommandCancellationService());
+    var service = new ChatExecutionService(ChatClient.builder(model).build(), holder, cancellation, Optional.empty());
+    var memory = mock(ChatMemory.class);
+    doThrow(new IllegalStateException("memory unavailable")).when(memory).add(anyString(), anyList());
+    service.setChatMemory(memory);
+    var queue = new UserInterventionQueue(); queue.offer("guidance");
+    assertThatThrownBy(() -> service.execute(new AgentRunContext("run", "chat:main", Path.of(".")), "start", queue))
+        .hasMessage("memory unavailable");
+    verify(cancellation).clear();
+  }
   @Test void lateGuidanceContinuesSameRunAndIsSavedAsUserMessage() {
     var queue = new UserInterventionQueue();
     List<Prompt> requests = new ArrayList<>();

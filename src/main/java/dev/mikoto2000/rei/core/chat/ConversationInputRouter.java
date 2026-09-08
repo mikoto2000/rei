@@ -13,7 +13,7 @@ public final class ConversationInputRouter {
   private final Executor executor;
   private final Runner runner;
   private final java.util.function.BiConsumer<AgentRunContext, UserInterventionQueue.Entry> received;
-  private final Map<Path, UserInterventionQueue> active = new HashMap<>();
+  private final Map<String, UserInterventionQueue> active = new HashMap<>();
 
   public ConversationInputRouter(Executor executor, Runner runner) {
     this(executor, runner, (context, entry) -> {});
@@ -26,11 +26,12 @@ public final class ConversationInputRouter {
   }
 
   public synchronized Disposition submit(Path root, String conversation, String prompt) {
-    Path key = root.toAbsolutePath().normalize();
+    Path location = root.toAbsolutePath().normalize();
+    String projectId = dev.mikoto2000.rei.core.project.ProjectStorage.projectId(conversation);
+    String key = projectId == null ? location.toString() : projectId;
     var existing = active.get(key);
     if (existing != null && existing.offer(prompt)) return Disposition.QUEUED;
-    var context = new AgentRunContext(UUID.randomUUID().toString(), conversation, key,
-        dev.mikoto2000.rei.core.project.ProjectStorage.projectId(conversation));
+    var context = new AgentRunContext(UUID.randomUUID().toString(), conversation, location, projectId);
     var queue = new UserInterventionQueue(entry -> received.accept(context, entry));
     active.put(key, queue);
     try {

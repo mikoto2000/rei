@@ -21,6 +21,8 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
 
   private final List<AgentEventListener> listeners = new CopyOnWriteArrayList<>();
   private final AtomicLong sequence = new AtomicLong(0L);
+  private final java.util.ArrayDeque<AgentEvent> pending = new java.util.ArrayDeque<>();
+  private boolean dispatching;
 
   @Override
   public Subscription subscribe(AgentEventListener listener) {
@@ -43,17 +45,26 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
   }
 
   @Override
-  public void publish(AgentEvent event) {
+  public synchronized void publish(AgentEvent event) {
     if (event == null) {
       throw new IllegalArgumentException("event must not be null");
     }
-    AgentEvent sequenced = withSequence(event);
-    for (AgentEventListener listener : listeners) {
-      try {
-        listener.onEvent(sequenced);
-      } catch (RuntimeException e) {
-        log.warn("Agent event listener failed: type={}, listener={}", sequenced.type(), listener.getClass().getName(), e);
+    pending.addLast(withSequence(event));
+    if (dispatching) return;
+    dispatching = true;
+    try {
+      while (!pending.isEmpty()) {
+        AgentEvent sequenced = pending.removeFirst();
+        for (AgentEventListener listener : listeners) {
+          try {
+            listener.onEvent(sequenced);
+          } catch (RuntimeException e) {
+            log.warn("Agent event listener failed: type={}, listener={}", sequenced.type(), listener.getClass().getName(), e);
+          }
+        }
       }
+    } finally {
+      dispatching = false;
     }
   }
 

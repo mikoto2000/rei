@@ -39,6 +39,11 @@ public final class JLineShellEventOutput implements ShellEventOutput {
   @Override
   public synchronized void flush() {
     if (!reader.isReading()) writer.flush();
+    else if (pending.length() >= Math.max(80, reader.getTerminal().getWidth()) || pending.indexOf("\n") >= 0) {
+      // Bound buffering while the input editor stays active; JLine redraws the user's input safely.
+      reader.printAbove(pending.toString());
+      pending.setLength(0);
+    }
   }
 
   private void flushPendingToWriter() {

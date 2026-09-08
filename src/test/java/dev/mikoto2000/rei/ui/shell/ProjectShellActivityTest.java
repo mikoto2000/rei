@@ -1,0 +1,55 @@
+package dev.mikoto2000.rei.ui.shell;
+
+import java.nio.file.*;
+import java.time.Clock;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.ai.chat.memory.ChatMemory;
+import dev.mikoto2000.rei.core.chat.*;
+import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.core.working.WorkingSet;
+import dev.mikoto2000.rei.event.*;
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+class ProjectShellActivityTest {
+  @TempDir Path temp;
+  @Test void switchRestoresOnlyRecentOwnedActivityAndFiltersLiveEvents() throws Exception {
+    Path a = Files.createDirectory(temp.resolve("a")); Path b = Files.createDirectory(temp.resolve("b"));
+    var projects = new ProjectService(a, new ProjectRegistry(temp.resolve("projects.json")));
+    var runA = new AgentRunContext("run-a", projects.currentContext(), "chat:main");
+    projects.cd(b.toString());
+    var runB = new AgentRunContext("run-b", projects.currentContext(), "chat:main");
+    var store = new ProjectAgentEventStore(temp);
+    var factory = new AgentEventFactory(Clock.systemUTC());
+    var eventA = factory.toolCompleted("tool-a", "read-A", 1, "ok").withOwnership(runA);
+    var eventB = factory.toolCompleted("tool-b", "read-B", 1, "ok").withOwnership(runB);
+    store.append(eventA); store.append(eventB);
+    var activity = new ProjectShellActivity(projects, store, new ProjectRunStateStore(temp), new WorkingSet(), mock(ChatMemory.class));
+    var text = new StringBuilder();
+    activity.attach(new ShellEventOutput() {
+      public void print(String value) { text.append(value); }
+      public void println(String value) { text.append(value).append('\n'); }
+      public void flush() {}
+    });
+    projects.cd(a.toString()); activity.restore(projects.currentContext());
+    assertThat(text.toString()).contains("read-A", "Conversation restored: chat:main", "Working Set restored: 0").doesNotContain("read-B");
+    text.setLength(0);
+    projects.cd(b.toString()); activity.restore(projects.currentContext());
+    assertThat(text.toString()).contains("read-B").doesNotContain("read-A");
+    projects.cd(a.toString()); activity.restore(projects.currentContext());
+    activity.onEvent(factory.messageStarted("message-a", "assistant").withOwnership(runA));
+    projects.cd(b.toString()); activity.restore(projects.currentContext());
+    text.setLength(0);
+    activity.onEvent(factory.messageDelta("message-a", "hidden").withOwnership(runA));
+    assertThat(text).isEmpty();
+    projects.cd(a.toString()); activity.restore(projects.currentContext());
+    text.setLength(0);
+    activity.onEvent(factory.messageDelta("message-a", "visible continuation").withOwnership(runA));
+    assertThat(text.toString()).contains("visible continuation");
+    text.setLength(0);
+    projects.cd(b.toString()); activity.restore(projects.currentContext()); text.setLength(0);
+    activity.onEvent(eventA); activity.onEvent(eventB);
+    assertThat(text.toString()).contains("read-B").doesNotContain("read-A");
+  }
+}

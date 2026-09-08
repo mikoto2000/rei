@@ -75,6 +75,8 @@ public class ReiApplication {
   private final AgentEventBus agentEventBus;
   private final AgentActivityTracker agentActivityTracker;
   private final Environment environment;
+  @Autowired(required = false)
+  private dev.mikoto2000.rei.ui.shell.ProjectShellActivity projectShellActivity;
 
   private static final String COMMAND_COMPLETION_MESSAGE = "コマンド実行が完了しました";
   private static final String MULTILINE_CONTINUATION = "\\";
@@ -148,9 +150,16 @@ public class ReiApplication {
     ReiLineReaderFactory.Session inputSession = ReiLineReaderFactory.create(terminal, cmd);
     LineReader reader = inputSession.reader();
     configureMultilineKeyBinding(reader);
-    ShellEventSession shellEvents = new ShellEventSession(agentEventBus,
-        new ShellAgentEventRenderer(new JLineShellEventOutput(reader),
-            ShellAgentEventRenderer.TopicNotificationOptions.from(environment)));
+    var eventOutput = new JLineShellEventOutput(reader);
+    var notificationOptions = ShellAgentEventRenderer.TopicNotificationOptions.from(environment);
+    dev.mikoto2000.rei.event.AgentEventListener shellListener;
+    if (projectShellActivity != null) {
+      projectShellActivity.attach(eventOutput, notificationOptions);
+      shellListener = projectShellActivity;
+    } else {
+      shellListener = new ShellAgentEventRenderer(eventOutput, notificationOptions);
+    }
+    ShellEventSession shellEvents = new ShellEventSession(agentEventBus, shellListener);
 
     System.out.println("AI Shell");
     System.out.println("通常入力は chat として扱います。/exit で終了します。");
@@ -159,7 +168,7 @@ public class ReiApplication {
 
     ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
     UserInputService inputService = new UserInputService(new UserInputParser());
-    try {
+    try (var consoleSession = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession()) {
       shellLoop: while (true) {
         try {
           String line = reader.readLine(buildPrompt());
