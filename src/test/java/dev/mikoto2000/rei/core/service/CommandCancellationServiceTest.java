@@ -17,18 +17,19 @@ class CommandCancellationServiceTest {
     CommandCancellationService service = new CommandCancellationService();
     CountDownLatch interrupted = new CountDownLatch(1);
     CountDownLatch disposed = new CountDownLatch(1);
+    CountDownLatch started = new CountDownLatch(1);
 
     Thread executionThread = new Thread(() -> {
       service.begin(Thread.currentThread());
+      started.countDown();
       try {
-        while (true) {
-          Thread.sleep(1000);
-        }
+        new CountDownLatch(1).await();
       } catch (InterruptedException e) {
         interrupted.countDown();
       }
     });
     executionThread.start();
+    assertTrue(started.await(5, TimeUnit.SECONDS));
 
     service.register(new Disposable() {
       @Override

@@ -427,6 +427,10 @@ public class AgentEventFactory {
   }
 
   // ---- 共通 ----
+  public AgentEvent intervention(String runId, String inputId, String text, boolean applied) {
+    return newEvent(applied ? AgentEventType.USER_INTERVENTION_APPLIED : AgentEventType.USER_INTERVENTION_RECEIVED,
+        runId, inputId, new UserInterventionPayload(inputId, text));
+  }
 
   private AgentEvent newEvent(AgentEventType type, String runId, String correlationId, AgentEventPayload payload) {
     return new AgentEvent(

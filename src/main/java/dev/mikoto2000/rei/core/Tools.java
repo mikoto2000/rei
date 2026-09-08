@@ -1501,6 +1501,8 @@ public class Tools {
   }
 
   private java.nio.file.Path currentWorkingDirectory() {
+    var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    if (run != null) return run.projectRoot();
     if (projectService == null) {
       return Paths.get(".").toAbsolutePath().normalize();
     }

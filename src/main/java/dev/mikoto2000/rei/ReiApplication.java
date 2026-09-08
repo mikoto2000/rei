@@ -228,6 +228,13 @@ public class ReiApplication {
 
   protected void executeInterruptibly(CommandLine cmd, Terminal terminal, ExecutorService commandExecutor, String... args)
       throws IOException {
+    if (args.length > 0 && ("cancel".equals(args[0]) || ("chat".equals(args[0])
+        && cmd.getSubcommands().get("chat") != null
+        && cmd.getSubcommands().get("chat").getCommand() instanceof dev.mikoto2000.rei.ui.shell.ChatCommand chat
+        && chat.acceptsAsynchronously()))) {
+      cmd.execute(args);
+      return;
+    }
     Attributes originalAttributes = terminal.enterRawMode();
     try {
       var future = commandExecutor.submit(() -> executeWithOutputPolicy(cmd, args));

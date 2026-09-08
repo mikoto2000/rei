@@ -90,6 +90,11 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       return;
     }
     switch (event.type()) {
+      case USER_INTERVENTION_RECEIVED, USER_INTERVENTION_APPLIED -> {
+        closeAssistantLine();
+        output.println(event.type() == dev.mikoto2000.rei.event.AgentEventType.USER_INTERVENTION_RECEIVED
+            ? "[user] guidance queued" : "[user] guidance applied");
+      }
       case PROGRESS_DETECTED, STAGNATION_UPDATED, STAGNATION_DETECTED,
           STAGNATION_REPLAN_REQUESTED, STAGNATION_RECOVERED, STAGNATION_STOPPED -> {
         closeAssistantLine();

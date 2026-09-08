@@ -6,7 +6,7 @@ package dev.mikoto2000.rei.event;
  * <p>各イベント種別ごとに型安全な record を定義する。巨大な Map 中心の設計は避ける。</p>
  */
 public sealed interface AgentEventPayload
-    permits ExecutionProgressPayload, AgentRunStartedPayload, AgentRunCompletedPayload, AgentRunFailedPayload,
+    permits UserInterventionPayload, ExecutionProgressPayload, AgentRunStartedPayload, AgentRunCompletedPayload, AgentRunFailedPayload,
         LlmRequestStartedPayload, LlmResponseCompletedPayload,
         LlmRequestFailedPayload, LlmResponseFirstTokenPayload,
         MessageStartedPayload, MessageDeltaPayload, MessageCompletedPayload,

@@ -1,4 +1,5 @@
 package dev.mikoto2000.rei.core.stagnation;
+import org.springframework.ai.chat.messages.*;
 
 import static org.assertj.core.api.Assertions.*;
 import java.nio.file.Path;
@@ -118,6 +119,36 @@ class StagnationChatModelTest {
     assertThat(response.getLast().getResult().getOutput().getText()).isEqualTo("done");
     assertThat(events).anyMatch(e -> e.type() == AgentEventType.STAGNATION_RECOVERED);
     assertThat(context.detector().replanCount()).isZero();
+  }
+
+  @Test
+  void guidanceDuringToolIsAppliedAfterResultAndBeforeNextRequest() {
+    var context = context(10, new ArrayList<>());
+    var queue = new dev.mikoto2000.rei.core.chat.UserInterventionQueue();
+    List<String> history = new ArrayList<>();
+    context.setInterventions(queue, history::add);
+    List<Prompt> requests = new ArrayList<>();
+    var delegate = new ChatModel() {
+      public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
+      public Flux<ChatResponse> stream(Prompt p) {
+        requests.add(p);
+        return Flux.just(new ChatResponse(List.of(new Generation(requests.size() == 1
+            ? AssistantMessage.builder().content("").toolCalls(List.of(
+                new AssistantMessage.ToolCall("id", "function", "readFile", "{}"))).build()
+            : new AssistantMessage("done")))));
+      }
+    };
+    new StagnationChatModel(delegate).stream(prompt(context, () -> {
+      queue.offer("do not change README");
+      queue.offer("keep API");
+      assertThat(history).isEmpty();
+      return "tool succeeded";
+    })).blockLast();
+    assertThat(history).containsExactly("do not change README", "keep API");
+    assertThat(requests).hasSize(2);
+    assertThat(requests.get(1).getInstructions()).anyMatch(m -> m instanceof ToolResponseMessage);
+    assertThat(requests.get(1).getInstructions().stream().filter(m -> m instanceof UserMessage)
+        .map(Message::getText)).containsSubsequence("do not change README", "keep API");
   }
 
   private RunExecutionContext context(int limit, List<AgentEvent> events) {

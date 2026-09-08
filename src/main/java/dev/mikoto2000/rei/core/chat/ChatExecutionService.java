@@ -85,6 +85,10 @@ public class ChatExecutionService {
   private ConversationLogStore conversationLogStore;
   private ProjectService projectService;
   private ActionPlan actionPlan;
+  private ChatMemory chatMemory;
+
+  @Autowired
+  void setChatMemory(ChatMemory chatMemory) { this.chatMemory = chatMemory; }
 
   @Autowired(required = false)
   void setExecutionState(ProjectService projectService, ActionPlan actionPlan) {
@@ -149,9 +153,21 @@ public class ChatExecutionService {
   }
 
   public ChatExecutionResult execute(String promptText) {
+    return execute(new AgentRunContext(UUID.randomUUID().toString(), ConversationIds.chat(),
+        projectService == null ? java.nio.file.Path.of(".") : projectService.currentProject()),
+        promptText, new UserInterventionQueue());
+  }
+
+  public ChatExecutionResult execute(AgentRunContext context, String promptText, UserInterventionQueue interventions) {
+    try (var scope = AgentRunScope.open(context)) {
+      return executeInScope(context, promptText, interventions);
+    }
+  }
+
+  private ChatExecutionResult executeInScope(AgentRunContext context, String promptText, UserInterventionQueue interventions) {
     long startedAtNanos = System.nanoTime();
     cancellationService.begin(Thread.currentThread());
-    String runId = UUID.randomUUID().toString();
+    String runId = context.runId();
     SkillRoutingRunContext skillRoutingContext = new SkillRoutingRunContext(runId);
     AtomicLong runCompletionTokens = new AtomicLong();
     AtomicBoolean usageAvailable = new AtomicBoolean();
@@ -160,12 +176,17 @@ public class ChatExecutionService {
         llmProperties.getOutputLimit().getMaxReplansPerGoal(),
         llmProperties.getOutputLimit().getMaxLlmCallsPerRun());
     RunExecutionContext execution = new RunExecutionContext(runId, budget,
-        new ProgressEvaluator(projectService == null ? java.nio.file.Path.of(".") : projectService.currentProject(),
+        new ProgressEvaluator(context.projectRoot(),
             actionPlan), eventFactory, eventPublisher);
+    execution.setRunContext(context);
+    execution.setInterventions(interventions, text -> {
+      if (chatMemory != null) chatMemory.add(context.conversationId(), java.util.List.of(new UserMessage(text)));
+      appendConversationLog(context.conversationId(), "user", text);
+    });
 
     try {
       activityTracker.ifPresent(tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));
-      appendConversationLog("user", promptText);
+      appendConversationLog(context.conversationId(), "user", promptText);
       if (!budget.tryConsumeLlmCall()) {
         log.warn("Chat skipped: LLM call budget exhausted before initial prompt");
         return ChatExecutionResult.failed("LLM call budget exhausted before initial prompt");
@@ -179,8 +200,15 @@ public class ChatExecutionService {
             skillRoutingContext,
             runCompletionTokens, usageAvailable, lastGenerationMetrics);
       }
+      while (result.status() == ChatRunStatus.SUCCESS && !interventions.finishIfEmpty()) {
+        var guidance = execution.applyInterventions();
+        if (!budget.tryConsumeLlmCall()) { result = new ChatRunResult(ChatRunStatus.LLM_CALL_BUDGET_EXCEEDED, ""); break; }
+        result = executePrompt(guidance.stream().map(org.springframework.ai.chat.messages.Message::getText)
+            .collect(java.util.stream.Collectors.joining("\n")), false, startedAtNanos, budget, execution, runId,
+            skillRoutingContext, runCompletionTokens, usageAvailable, lastGenerationMetrics);
+      }
       if (result.status() == ChatRunStatus.SUCCESS) {
-        appendConversationLog("assistant", result.text());
+        appendConversationLog(context.conversationId(), "assistant", result.text());
         GenerationMetrics metrics = lastGenerationMetrics.get();
         eventPublisher.publish(eventFactory.runCompleted(runId, elapsedMillis(startedAtNanos),
             usageAvailable.get() ? runCompletionTokens.get() : null,
@@ -200,14 +228,16 @@ public class ChatExecutionService {
         return ChatExecutionResult.failed(terminalError(result.status()).message());
       }
     } finally {
+      // Accepted input remains part of history even when cancellation or a hard budget stops the run.
+      while (!interventions.finishIfEmpty()) execution.applyInterventions();
       execution.close();
       cancellationService.clear();
     }
   }
 
-  private void appendConversationLog(String speaker, String content) {
+  private void appendConversationLog(String conversationId, String speaker, String content) {
     if (conversationLogStore != null) {
-      conversationLogStore.append(ConversationIds.chat(), speaker, content);
+      conversationLogStore.append(conversationId, speaker, content);
     }
   }
 
@@ -318,7 +348,7 @@ public class ChatExecutionService {
               .build(),
           options))
       .advisors(advisor -> advisor
-          .param(ChatMemory.CONVERSATION_ID, ConversationIds.chat())
+          .param(ChatMemory.CONVERSATION_ID, execution.runContext().conversationId())
           .param(AgentSkillAdvisor.ROUTING_CONTEXT_KEY, skillRoutingContext));
 
     CountDownLatch latch = new CountDownLatch(1);

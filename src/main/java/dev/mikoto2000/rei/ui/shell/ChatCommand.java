@@ -29,6 +29,11 @@ public class ChatCommand implements Runnable {
 
   private final ChatExecutionService chatExecutionService;
   private final ChatResponseNarrator chatResponseNarrator;
+  private dev.mikoto2000.rei.core.chat.ConversationInputRouter inputRouter;
+
+  @Autowired
+  public void setInputRouter(dev.mikoto2000.rei.core.chat.ConversationInputRouter router) { this.inputRouter = router; }
+  public boolean acceptsAsynchronously() { return inputRouter != null; }
 
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
   private String[] prompts;
@@ -64,6 +69,11 @@ public class ChatCommand implements Runnable {
 
   @Override
   public void run() {
+    if (inputRouter != null) {
+      inputRouter.submit(dev.mikoto2000.rei.core.project.ProjectService.currentProjectOrStartupDirectory(),
+          dev.mikoto2000.rei.llm.ConversationIds.chat(), String.join(" ", prompts));
+      return;
+    }
     chatResponseNarrator.reset();
     ChatExecutionResult result = chatExecutionService.execute(String.join(" ", prompts));
     if (result.success()) {

@@ -22,6 +22,26 @@ public class RunExecutionContext {
   private long completionTokens;
   private boolean closed;
   private boolean iterationOpen;
+  private dev.mikoto2000.rei.core.chat.AgentRunContext runContext;
+  public void setRunContext(dev.mikoto2000.rei.core.chat.AgentRunContext context) { this.runContext = context; }
+  public dev.mikoto2000.rei.core.chat.AgentRunContext runContext() { return runContext; }
+  private dev.mikoto2000.rei.core.chat.UserInterventionQueue interventions;
+  private java.util.function.Consumer<String> interventionApplied = text -> {};
+
+  public void setInterventions(dev.mikoto2000.rei.core.chat.UserInterventionQueue queue,
+      java.util.function.Consumer<String> applied) {
+    this.interventions = queue;
+    this.interventionApplied = applied;
+  }
+
+  public List<org.springframework.ai.chat.messages.Message> applyInterventions() {
+    if (interventions == null) return List.of();
+    return interventions.drainEntries().stream().map(entry -> {
+      interventionApplied.accept(entry.text());
+      publisher.publish(factory.intervention(runId, entry.id(), entry.text(), true));
+      return (org.springframework.ai.chat.messages.Message) new org.springframework.ai.chat.messages.UserMessage(entry.text());
+    }).toList();
+  }
 
   public RunExecutionContext(String runId, OutputLimitRunBudget budget, ProgressEvaluator evaluator,
       AgentEventFactory factory, AgentEventPublisher publisher) {

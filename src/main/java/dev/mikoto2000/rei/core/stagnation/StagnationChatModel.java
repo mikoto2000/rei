@@ -58,13 +58,21 @@ public class StagnationChatModel implements ChatModel {
           }).subscribeOn(Schedulers.boundedElastic()).flatMapMany(toolResult -> {
             if (toolResult.returnDirect()) return Flux.just(new ChatResponse(ToolExecutionResult.buildGenerations(toolResult)));
             List<Message> messages = new ArrayList<>(toolResult.conversationHistory());
+            messages.addAll(context.applyInterventions());
             String notice = context.requestReplan();
             if (notice != null) messages.add(new UserMessage(notice));
             return iteration(new Prompt(messages, prompt.getOptions()), context, false, progressAtLimit);
           });
         }
         context.endIteration();
-        if (!OutputLimitDetector.isOutputLimitReached(result)) return Flux.empty();
+        if (!OutputLimitDetector.isOutputLimitReached(result)) {
+          var guidance = context.applyInterventions();
+          if (guidance.isEmpty()) return Flux.empty();
+          List<Message> messages = new ArrayList<>(prompt.getInstructions());
+          messages.add(result.getResult().getOutput());
+          messages.addAll(guidance);
+          return iteration(new Prompt(messages, prompt.getOptions()), context, false, progressAtLimit);
+        }
         String notice = context.requestReplan();
         if (notice != null || context.progressVersion() > progressAtLimit) {
           List<Message> messages = new ArrayList<>(prompt.getInstructions());
@@ -94,6 +102,7 @@ public class StagnationChatModel implements ChatModel {
       public ToolMetadata getToolMetadata() { return delegateTool.getToolMetadata(); }
       public String call(String input) { return call(input, null); }
       public String call(String input, ToolContext toolContext) {
+        try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext())) {
         context.checkActive();
         String name = getToolDefinition().name();
         var before = context.evaluator().beforeTool(name, input);
@@ -104,6 +113,7 @@ public class StagnationChatModel implements ChatModel {
         } catch (RuntimeException error) {
           context.recordFailure(name, input, error);
           throw error;
+        }
         }
       }
     };
