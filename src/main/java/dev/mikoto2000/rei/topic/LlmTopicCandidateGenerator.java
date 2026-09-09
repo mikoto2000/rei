@@ -50,6 +50,11 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
 
         この処理では発話そのものを生成しません。話題候補だけを生成してください。
 
+        出力言語:
+        - 入力の言語にかかわらず、topic と reason は必ず日本語で記述してください。
+        - ファイル名、コマンド、コードの識別子、URL、固有名詞は原文のまま保持してください。
+        - JSON のキーと type、source の列挙値は翻訳しないでください。
+
         対象 type:
         - unfinished_work
         - follow_up
@@ -62,7 +67,7 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
         - 単なる過去情報の繰り返し
 
         Output must be a JSON object only:
-        {"candidates":[{"topic":"...","reason":"...","type":"unfinished_work","source":"working_set","priority":0.8,"freshness":0.9,"usefulness":0.8,"intrusiveness":0.2,"confidence":0.9}]}
+        {"candidates":[{"topic":"スクリプトの実行・テスト状況を確認する","reason":"最近の会話では実行結果がまだ確認できていないため","type":"unfinished_work","source":"working_set","priority":0.8,"freshness":0.9,"usefulness":0.8,"intrusiveness":0.2,"confidence":0.9}]}
         Max candidates: %d
         Model hint: %s
 
