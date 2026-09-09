@@ -10,8 +10,19 @@ public final class RunScopedAdvisor implements BaseAdvisor {
   public BaseAdvisor delegate() { return delegate; }
   public int getOrder() { return delegate.getOrder(); }
   public String getName() { return delegate.getName(); }
+  @Override public reactor.core.scheduler.Scheduler getScheduler() { return delegate.getScheduler(); }
   @Override public reactor.core.publisher.Flux<ChatClientResponse> adviseStream(ChatClientRequest request,
       StreamAdvisorChain chain) {
+    if (delegate instanceof BaseChatMemoryAdvisor) {
+      // Memory advisors save the aggregate on completion, not the finish-reason delta.
+      // That final delta can have null text even after a complete answer was streamed.
+      var responses = reactor.core.publisher.Mono.just(capture(request))
+          .publishOn(getScheduler())
+          .map(captured -> before(captured, chain))
+          .flatMapMany(chain::nextStream);
+      return new ChatClientMessageAggregator().aggregateChatClientResponse(responses,
+          response -> after(response, chain));
+    }
     return BaseAdvisor.super.adviseStream(capture(request), chain);
   }
   @Override public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
