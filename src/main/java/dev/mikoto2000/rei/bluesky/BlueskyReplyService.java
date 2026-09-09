@@ -118,6 +118,11 @@ public class BlueskyReplyService {
         BlueskyApiClient.PostResult result;
         try {
           text = replyTextGenerator.generate(handle, post.text(), history);
+          if (!repository.tryClaimReply(post.uri())) {
+            skipped++;
+            log.debug("Bluesky reply skipped: handle={}, postUri={}, reason=already_claimed", handle, post.uri());
+            continue;
+          }
           result = blueskyApiClient.createReply(
               botAuth.accessJwt(),
               botAuth.did(),
@@ -128,7 +133,7 @@ public class BlueskyReplyService {
               post.rootCid() == null ? post.cid() : post.rootCid());
         } catch (Exception e) {
           skipped++;
-          log.warn("Bluesky reply skipped: handle={}, postUri={}, reason=reply_generation_failed, message={}",
+          log.warn("Bluesky reply skipped: handle={}, postUri={}, reason=reply_failed, message={}",
               handle, post.uri(), e.getMessage(), e);
           continue;
         }
@@ -138,6 +143,7 @@ public class BlueskyReplyService {
           conversationRepository.appendAssistantMessage(handle, text);
           replied++;
         } else {
+          repository.releaseReplyClaim(post.uri());
           skipped++;
         }
       }

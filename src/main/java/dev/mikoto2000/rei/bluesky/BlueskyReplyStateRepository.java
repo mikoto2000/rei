@@ -53,6 +53,23 @@ public class BlueskyReplyStateRepository {
         .update();
   }
 
+  /** Atomically reserves a target across manual replies, scheduled runs and processes sharing this DB. */
+  public boolean tryClaimReply(String postUri) {
+    return jdbcClient.sql("""
+        INSERT OR IGNORE INTO bluesky_reply_claims(post_uri, claimed_at)
+        SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM bluesky_replied_posts WHERE post_uri = ?)
+        """)
+        .params(postUri, OffsetDateTime.now().toString(), postUri)
+        .update() == 1;
+  }
+
+  /** Release only when the API explicitly reports failure; an exception may follow a successful send. */
+  public void releaseReplyClaim(String postUri) {
+    jdbcClient.sql("DELETE FROM bluesky_reply_claims WHERE post_uri = ?")
+        .param(postUri)
+        .update();
+  }
+
   public int countToday(String handle, LocalDate date) {
     Integer count = jdbcClient.sql("SELECT count FROM bluesky_reply_daily_count WHERE handle = ? AND date = ?")
         .params(handle, date.toString())
@@ -74,6 +91,12 @@ public class BlueskyReplyStateRepository {
   }
 
   private void initializeSchema() {
+    jdbcClient.sql("""
+        CREATE TABLE IF NOT EXISTS bluesky_reply_claims (
+          post_uri TEXT PRIMARY KEY,
+          claimed_at TEXT NOT NULL
+        )
+        """).update();
     jdbcClient.sql("""
         CREATE TABLE IF NOT EXISTS bluesky_reply_user_state (
           handle TEXT PRIMARY KEY,

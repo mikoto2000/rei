@@ -54,4 +54,24 @@ class BlueskyReplyStateRepositoryTest {
 
     assertTrue(repository.countToday("alice.bsky.social", today) == 2);
   }
+
+  @Test
+  void claimIsExclusiveAcrossRepositoryInstances() throws Exception {
+    var other = new BlueskyReplyStateRepository(
+        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("bluesky-reply-state.db")));
+    var start = new java.util.concurrent.CountDownLatch(1);
+    try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+      var first = executor.submit(() -> { start.await(); return repository.tryClaimReply("at://post/claim"); });
+      var second = executor.submit(() -> { start.await(); return other.tryClaimReply("at://post/claim"); });
+      start.countDown();
+      assertTrue(first.get(5, java.util.concurrent.TimeUnit.SECONDS)
+          ^ second.get(5, java.util.concurrent.TimeUnit.SECONDS));
+    }
+  }
+
+  @Test
+  void existingReplyCannotBeClaimed() {
+    repository.markReplied("at://post/existing", "alice", "at://reply");
+    assertFalse(repository.tryClaimReply("at://post/existing"));
+  }
 }

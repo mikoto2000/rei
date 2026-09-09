@@ -94,6 +94,7 @@ class BlueskyReplyServiceTest {
 
   @Test
   void postsReplyAndUpdatesState() {
+    when(repository.tryClaimReply("at://u/a")).thenReturn(true);
     BlueskyProperties properties = baseProperties(true, false, 1.0d, 2);
     BlueskyReplyService service = new BlueskyReplyService(
         properties, validator, authorFeedClient, repository, conversationRepository, replyTextGenerator, blueskyApiClient, () -> 0.0d,
@@ -193,6 +194,7 @@ class BlueskyReplyServiceTest {
 
   @Test
   void alwaysRepliesToMentionToReiFromConfiguredUser() {
+    when(repository.tryClaimReply("at://u/m1")).thenReturn(true);
     BlueskyProperties properties = baseProperties(true, false, 0.0d, 1);
     properties.setHandle("rei.bsky.social");
     BlueskyReplyService service = new BlueskyReplyService(

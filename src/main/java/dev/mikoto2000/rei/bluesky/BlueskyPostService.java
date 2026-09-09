@@ -71,6 +71,9 @@ public class BlueskyPostService {
         return new BlueskyPostResult(false, "Failed to resolve reply target", null, null);
       }
 
+      if (!replyStateRepository.tryClaimReply(target.parentUri())) {
+        return new BlueskyPostResult(false, "A reply has already been sent or attempted for this post", null, null);
+      }
       BlueskyApiClient.PostResult replyResult = blueskyApiClient.createReply(
           authResult.accessJwt(),
           authResult.did(),
@@ -80,10 +83,11 @@ public class BlueskyPostService {
           target.rootUri(),
           target.rootCid());
       if (!replyResult.success()) {
+        replyStateRepository.releaseReplyClaim(target.parentUri());
         return new BlueskyPostResult(false, "Bluesky reply failed", null, null);
       }
-      appendConversation(target, text);
       replyStateRepository.markReplied(target.parentUri(), conversationHandle(target), replyResult.postUri());
+      appendConversation(target, text);
       String postUrl = toPostUrl(replyResult.postUri());
       return new BlueskyPostResult(true, "Bluesky reply created", replyResult.postUri(), postUrl);
     } catch (Exception e) {

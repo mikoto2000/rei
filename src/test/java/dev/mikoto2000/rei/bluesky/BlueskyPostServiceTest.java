@@ -145,6 +145,7 @@ class BlueskyPostServiceTest {
         .thenReturn(new BlueskyApiClient.PostResult(true, "at://did:plc:abc/app.bsky.feed.post/reply1"));
     BlueskyReplyConversationRepository conversationRepository = mock(BlueskyReplyConversationRepository.class);
     BlueskyReplyStateRepository stateRepository = mock(BlueskyReplyStateRepository.class);
+    when(stateRepository.tryClaimReply("at://did:plc:target/app.bsky.feed.post/xyz")).thenReturn(true);
     BlueskyPostService service = createService(props, client, conversationRepository, mock(BlueskyReplyTextGenerator.class),
         stateRepository);
 
@@ -197,6 +198,7 @@ class BlueskyPostServiceTest {
         .thenReturn(new BlueskyApiClient.PostResult(true, "at://did:plc:abc/app.bsky.feed.post/reply2"));
     BlueskyReplyConversationRepository conversationRepository = mock(BlueskyReplyConversationRepository.class);
     BlueskyReplyStateRepository stateRepository = mock(BlueskyReplyStateRepository.class);
+    when(stateRepository.tryClaimReply("at://did:plc:target/app.bsky.feed.post/xyz")).thenReturn(true);
     BlueskyPostService service = createService(props, client, conversationRepository, generator, stateRepository);
 
     BlueskyPostResult result = service.reply("at://did:plc:target/app.bsky.feed.post/xyz");
