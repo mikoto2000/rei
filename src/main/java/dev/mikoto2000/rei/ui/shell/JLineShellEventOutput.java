@@ -28,8 +28,8 @@ public final class JLineShellEventOutput implements ShellEventOutput {
   @Override
   public synchronized void println(String text) {
     if (reader.isReading()) {
-      reader.printAbove(pending + text);
-      pending.setLength(0);
+      pending.append(text).append('\n');
+      flushCompleteLines();
     } else {
       flushPendingToWriter();
       writer.println(text);
@@ -38,11 +38,40 @@ public final class JLineShellEventOutput implements ShellEventOutput {
 
   @Override
   public synchronized void flush() {
-    if (!reader.isReading()) writer.flush();
-    else if (pending.length() >= Math.max(80, reader.getTerminal().getWidth()) || pending.indexOf("\n") >= 0) {
-      // Bound buffering while the input editor stays active; JLine redraws the user's input safely.
-      reader.printAbove(pending.toString());
-      pending.setLength(0);
+    if (!reader.isReading()) {
+      flushPendingToWriter();
+      writer.flush();
+    } else {
+      flushCompleteLines();
+    }
+  }
+
+  private void flushCompleteLines() {
+    int width = reader.getTerminal().getWidth();
+    if (width <= 0) width = 80;
+    while (!pending.isEmpty()) {
+      int newline = pending.indexOf("\n");
+      int end = newline < 0 ? pending.length() : newline;
+      int columns = 0;
+      int wrap = -1;
+      for (int offset = 0; offset < end;) {
+        int codePoint = Character.codePointAt(pending, offset);
+        int cells = codePoint == '\t' ? 8 - columns % 8 : Math.max(0, org.jline.utils.WCWidth.wcwidth(codePoint));
+        if (columns + cells > width && offset > 0) { wrap = offset; break; }
+        columns += cells;
+        offset += Character.charCount(codePoint);
+      }
+      if (wrap > 0) {
+        reader.printAbove(pending.substring(0, wrap));
+        pending.delete(0, wrap);
+      } else if (newline >= 0) {
+        // printAbove supplies the newline. Never include the next incomplete line.
+        int lineEnd = end > 0 && pending.charAt(end - 1) == '\r' ? end - 1 : end;
+        reader.printAbove(pending.substring(0, lineEnd));
+        pending.delete(0, newline + 1);
+      } else {
+        break; // Retain the incomplete physical line until more text or println arrives.
+      }
     }
   }
 
