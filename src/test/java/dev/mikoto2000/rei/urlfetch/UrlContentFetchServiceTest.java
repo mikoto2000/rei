@@ -14,9 +14,16 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
+
+import dev.mikoto2000.rei.summarize.JsoupWebPageContentExtractor;
+import dev.mikoto2000.rei.summarize.UrlContentWebContentFetcher;
 
 class UrlContentFetchServiceTest {
 
@@ -80,6 +87,43 @@ class UrlContentFetchServiceTest {
     assertTrue(result.success());
     assertTrue(result.content().contains("日本語の本文"));
     assertEquals("text/html", result.contentType());
+  }
+
+  @ParameterizedTest
+  @MethodSource("htmlCharsetCases")
+  void decodesHtmlForSummarize(String contentType, String head, String encoding) throws Exception {
+    String html = "<html><head>" + head + "</head><body><article>日本語の本文</article></body></html>";
+    HttpClient httpClient = Mockito.mock(HttpClient.class);
+    @SuppressWarnings("unchecked")
+    HttpResponse<byte[]> response = (HttpResponse<byte[]>) Mockito.mock(HttpResponse.class);
+    when(response.statusCode()).thenReturn(200);
+    when(response.body()).thenReturn(html.getBytes(Charset.forName(encoding)));
+    when(response.headers()).thenReturn(HttpHeaders.of(
+        contentType == null ? Map.of() : Map.of("Content-Type", List.of(contentType)), (name, value) -> true));
+    when(httpClient.send(any(), any(HttpResponse.BodyHandler.class))).thenReturn(response);
+    var fetcher = new UrlContentWebContentFetcher(new UrlContentFetchService(new UrlValidator(), httpClient));
+
+    var result = fetcher.fetch(java.net.URI.create("https://example.com"));
+
+    assertTrue(result.success());
+    assertEquals(html, result.content());
+    assertEquals("日本語の本文", new JsoupWebPageContentExtractor().extract("https://example.com", result.content()));
+  }
+
+  private static Stream<Arguments> htmlCharsetCases() {
+    return Stream.of(
+        Arguments.of("text/html", "<META CHARSET=Shift_JIS>", "Shift_JIS"),
+        Arguments.of("text/html", "<meta charset='EUC-JP'>", "EUC-JP"),
+        Arguments.of(null, "<meta charset=windows-31j>", "windows-31j"),
+        Arguments.of("text/html", "<meta content='text/html; charset=EUC-JP' http-equiv='Content-Type'>", "EUC-JP"),
+        Arguments.of("text/html", "<!-- <meta charset=UTF-8> --><meta charset=Shift_JIS>", "Shift_JIS"),
+        Arguments.of("text/html", "<script>const example = '<meta charset=UTF-8>';</script><meta charset=EUC-JP>", "EUC-JP"),
+        Arguments.of("text/html", "<meta data-charset=UTF-8><meta charset=Shift_JIS>", "Shift_JIS"),
+        Arguments.of("text/html", "<meta charset=invalid-encoding><meta charset=EUC-JP>", "EUC-JP"),
+        Arguments.of("text/html; charset=invalid-encoding", "<meta charset=Shift_JIS>", "Shift_JIS"),
+        Arguments.of("text/html; charset=\"EUC-JP\"", "<meta charset=UTF-8>", "EUC-JP"),
+        Arguments.of("text/html", "<meta charset=invalid-encoding>", "UTF-8"),
+        Arguments.of("text/html", "", "UTF-8"));
   }
 
   @Test

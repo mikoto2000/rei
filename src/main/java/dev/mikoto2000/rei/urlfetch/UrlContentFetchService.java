@@ -13,6 +13,8 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Element;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -22,8 +24,6 @@ public class UrlContentFetchService {
   private static final int DEFAULT_TIMEOUT_SECONDS = 30;
   private static final int CHARSET_SCAN_BYTES = 4096;
   private static final Pattern CONTENT_TYPE_CHARSET = Pattern.compile("(?i)(?:^|;)\\s*charset\\s*=\\s*\"?([^;\\s\"]+)");
-  private static final Pattern META_CHARSET = Pattern.compile("(?is)<meta\\b[^>]*\\bcharset\\s*=\\s*['\"]?([^\\s'\"/>;]+)");
-  private static final Pattern META_CONTENT_CHARSET = Pattern.compile("(?is)<meta\\b[^>]*\\bcontent\\s*=\\s*['\"][^'\"]*?charset\\s*=\\s*([^\\s'\";]+)");
 
   private final UrlValidator urlValidator;
   private final HttpClient httpClient;
@@ -104,16 +104,17 @@ public class UrlContentFetchService {
       return Optional.empty();
     }
     String head = new String(body, 0, Math.min(body.length, CHARSET_SCAN_BYTES), StandardCharsets.ISO_8859_1);
-    Optional<Charset> metaCharset = charsetFrom(head, META_CHARSET);
-    return metaCharset.isPresent() ? metaCharset : charsetFrom(head, META_CONTENT_CHARSET);
-  }
-
-  private Optional<Charset> charsetFrom(String value, Pattern pattern) {
-    Matcher matcher = pattern.matcher(value);
-    if (!matcher.find()) {
-      return Optional.empty();
+    // Parse attributes rather than matching markup inside comments or scripts.
+    for (Element meta : Jsoup.parse(head).select("meta")) {
+      Optional<Charset> charset = charsetByName(meta.attr("charset"));
+      if (charset.isEmpty() && "content-type".equalsIgnoreCase(meta.attr("http-equiv").trim())) {
+        charset = charsetFromContentType(meta.attr("content"));
+      }
+      if (charset.isPresent()) {
+        return charset;
+      }
     }
-    return charsetByName(matcher.group(1));
+    return Optional.empty();
   }
 
   private Optional<Charset> charsetByName(String name) {

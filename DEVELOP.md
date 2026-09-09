@@ -74,6 +74,12 @@ OS 標準の Rei Data Directory に保存します。Windows は `%LOCALAPPDATA%
 - 一次情報優先の再ランキング
 - Web 検索失敗時は VectorStore のみで継続
 
+## URL 要約の文字コード
+
+`/summarize` が使う `UrlContentFetchService` はレスポンスをバイト列で取得し、HTTP の `Content-Type` に有効な `charset` があれば優先します。指定がない、または未対応の場合は、HTML の先頭 4096 バイトを Jsoup で解析して `meta charset` または `meta http-equiv="Content-Type"` の文字コードを使います。どちらからも判定できなければ UTF-8 で読み込みます。
+
+コメントやスクリプト内のタグ文字列は文字コード指定として扱いません。不正な文字コード指定は読み飛ばし、後続の有効な `meta` を探します。
+
 ## 文書埋め込み実装
 
 主なクラス:
