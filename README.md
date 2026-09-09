@@ -379,9 +379,15 @@ export REI_MCP_STDIO_SERVERS_CONFIG=file:$REI_DATA_DIR/mcp-servers.json
 mvn spring-boot:run
 ```
 
-アプリが生成する履歴ファイルと SQLite のローカルデータは、起動したカレントディレクトリ配下の `<rei-data-dir>` に保存されます。
+アプリが生成する履歴ファイルと SQLite のローカルデータは、グローバルな `<rei-data-dir>` に保存されます。Windows の既定は `%LOCALAPPDATA%\Rei` です。
 
-通常チャットとBluesky会話の追記専用ログは `<rei-data-dir>/conversation-logs/yyyy-MM-dd.jsonl` に保存され、日ごとにファイルが切り替わります。このログはLLMへ渡す短期会話メモリの件数上限とは独立して保持され、会話履歴検索ツールから検索・詳細確認できます。
+プロジェクトに所属する会話の追記専用ログは `<rei-data-dir>/projects/<ProjectId>/conversations/yyyy-MM-dd.jsonl` に保存されます。同じ `chat:main` でも ProjectId が異なれば別会話です。短期会話メモリの件数上限とは独立して保持します。
+
+会話履歴検索Toolの標準は `CURRENT_PROJECT_PREFERRED` です。実行元の履歴を優先し、関連度・件数が不十分な場合だけ他プロジェクトも検索します。`CURRENT_PROJECT_ONLY` は実行元限定、`ALL_PROJECTS` は全登録プロジェクトを関連度順で検索します。会話種別を指定する `scope`（chat / tool 等）とは別の `retrievalScope` 引数です。
+
+ユーザーが別プロジェクトを指定した場合は、`referencedProject` に登録名を渡すと、そのプロジェクトを実行元より優先できます。曖昧な名前・存在しない名前は解決しません。結果には出典の ProjectId・Project名と境界情報が含まれ、他プロジェクトのパスやbuild commandを現在の環境に自動適用しません。
+
+検索結果は実行元最大8件、他プロジェクト合計最大3件、本文各500文字です。他プロジェクトの詳細取得も最大3件・本文各500文字に制限します。Run中に `/project cd` しても、検索の実行元はそのRunのProjectIdのままです。検索状況は `[history.search]` 通知で確認できます。保存データを統合したり、検索結果をGlobal Memoryへ昇格したりする処理はありません。
 
 ### 対話
 

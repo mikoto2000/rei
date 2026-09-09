@@ -66,7 +66,17 @@ public class ConversationLogStore {
   }
 
   public List<ConversationLogEntry> readAll() {
-    Path directory = directoryFor(null);
+    return readDirectory(directoryFor(null));
+  }
+
+  /** Read a project's authoritative log without changing the selected project or run scope. */
+  public List<ConversationLogEntry> readProject(String projectId) {
+    return readDirectory(dev.mikoto2000.rei.core.project.ProjectStorage.directory(projectId).resolve("conversations"))
+        .stream().filter(e -> e.conversationId() != null
+            && e.conversationId().startsWith("project:" + projectId + ":")).toList();
+  }
+
+  private List<ConversationLogEntry> readDirectory(Path directory) {
     if (!Files.isDirectory(directory)) {
       return List.of();
     }

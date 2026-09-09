@@ -19,6 +19,12 @@ import dev.mikoto2000.rei.topic.TopicScoreBreakdown;
 import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
 
 class ShellAgentEventRendererTest {
+  @Test void rendersHistorySearchCountsWithoutMessageContent() {
+    var output = new RecordingOutput();
+    new ShellAgentEventRenderer(output).onEvent(events.historySearchCompleted(
+        new dev.mikoto2000.rei.event.HistorySearchCompletedPayload("project-a", "CURRENT_PROJECT_PREFERRED", 3, 2, 1)));
+    assertTrue(output.text().contains("[history.search] scope=CURRENT_PROJECT_PREFERRED currentHits=2 crossProjectHits=1 projectsSearched=3"));
+  }
   @Test
   void rendersProgressAndStagnationLifecycle() {
     RecordingOutput output = new RecordingOutput();

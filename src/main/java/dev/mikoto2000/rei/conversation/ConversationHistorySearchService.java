@@ -29,14 +29,29 @@ public class ConversationHistorySearchService {
 
   private final JdbcClient jdbcClient;
   private final ConversationLogStore conversationLogStore;
+  private final ProjectHistoryRetrieval projectRetrieval;
+  private dev.mikoto2000.rei.event.AgentEventFactory events;
+  private dev.mikoto2000.rei.event.AgentEventPublisher publisher;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setHistoryEvents(dev.mikoto2000.rei.event.AgentEventFactory events,
+      dev.mikoto2000.rei.event.AgentEventPublisher publisher) {
+    this.events = events;
+    this.publisher = publisher;
+  }
 
   public ConversationHistorySearchService(DataSource dataSource, ConversationLogStore conversationLogStore) {
     this.jdbcClient = JdbcClient.create(dataSource);
     this.conversationLogStore = conversationLogStore;
+    this.projectRetrieval = new ProjectHistoryRetrieval(conversationLogStore,
+        new dev.mikoto2000.rei.core.project.ProjectRegistry(dev.mikoto2000.rei.core.datasource.ReiPaths.projectsFilePath()));
   }
 
   public List<ConversationSearchResult> search(String query, String scope, String speaker, String since, String until,
       Integer limit) {
+    var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
+    if (project != null) return search(new HistorySearchRequest(query, project.id(), null,
+        HistorySearchScope.CURRENT_PROJECT_PREFERRED, scope, speaker, since, until, limit));
     if (query == null || query.isBlank()) {
       throw new IllegalArgumentException("query must not be blank");
     }
@@ -46,10 +61,6 @@ public class ConversationHistorySearchService {
     int safeLimit = normalizeLimit(limit, DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT);
     List<ConversationSearchResult> results = new ArrayList<>();
     results.addAll(searchPersistentLogs(query, normalizedScope, normalizedSpeaker, timeRange));
-    if (dev.mikoto2000.rei.core.project.ProjectService.contextForOperation() != null) {
-      // Project logs are authoritative for scoped audit/search; never fall back to unowned legacy rows.
-      return results.stream().sorted((a, b) -> b.timestamp().compareTo(a.timestamp())).limit(safeLimit).toList();
-    }
     if (normalizedScope.equals("all") || normalizedScope.equals("chat")) {
       results.addAll(searchChat(query, normalizedSpeaker, timeRange, safeLimit));
     }
@@ -71,19 +82,48 @@ public class ConversationHistorySearchService {
     return unique.values().stream().limit(safeLimit).toList();
   }
 
+  /** Explicit ownership is captured at the tool boundary; retrieval never switches ProjectService. */
+  public List<ConversationSearchResult> search(HistorySearchRequest request) {
+    String category = normalizeScope(request.conversationScope());
+    String speaker = normalizeSpeaker(request.speaker());
+    TimeRange range = parseTimeRange(request.since(), request.until());
+    int limit = normalizeLimit(request.limit(), DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT);
+    var outcome = projectRetrieval.search(request, e ->
+        (category.equals("all") || category.equals(e.scope()))
+        && (speaker == null || speaker.equalsIgnoreCase(e.speaker()))
+        && (range.sinceEpochMillis() == null || e.timestamp().toInstant().toEpochMilli() >= range.sinceEpochMillis())
+        && (range.untilEpochMillis() == null || e.timestamp().toInstant().toEpochMilli() <= range.untilEpochMillis()), limit);
+    if (events != null && publisher != null) {
+      int currentHits = (int) outcome.results().stream()
+          .filter(r -> r.sourceProjectId().equals(request.preferredProjectId())).count();
+      publisher.publish(events.historySearchCompleted(new dev.mikoto2000.rei.event.HistorySearchCompletedPayload(
+          request.preferredProjectId(), request.retrievalScope().name(), outcome.searchedProjectCount(), currentHits,
+          outcome.results().size() - currentHits)));
+    }
+    return outcome.results();
+  }
+
   public ConversationHistoryDetail detail(String conversationId, Integer limit) {
     if (conversationId == null || conversationId.isBlank()) {
       throw new IllegalArgumentException("conversationId must not be blank");
     }
     int safeLimit = normalizeLimit(limit, DEFAULT_DETAIL_LIMIT, MAX_DETAIL_LIMIT);
     var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
-    if (project != null) {
+    if (project != null || conversationId.startsWith("project:")) {
       String id = conversationId.startsWith("project:") ? conversationId : project.conversationId(conversationId);
-      if (!project.id().equals(dev.mikoto2000.rei.core.project.ProjectStorage.projectId(id)))
-        throw new IllegalArgumentException("Conversation belongs to a different project");
-      var messages = findPersistentLogDetail(id, safeLimit);
-      if (messages.isEmpty()) messages = findChatDetail(id, safeLimit);
-      return new ConversationHistoryDetail(id, ConversationLogStore.scopeOf(id), messages);
+      String sourceId = dev.mikoto2000.rei.core.project.ProjectStorage.projectId(id);
+      var source = projectRetrieval.projects().stream().filter(p -> p.id().equals(sourceId)).findFirst()
+          .orElseThrow(() -> new IllegalArgumentException("Unknown source project"));
+      boolean foreign = project == null || !source.id().equals(project.id());
+      int budget = foreign ? Math.min(safeLimit, HistoryRetrievalPolicy.CROSS_PROJECT_MAX_RESULTS) : safeLimit;
+      var entries = conversationLogStore.readProject(sourceId).stream().filter(e -> e.conversationId().equals(id)).toList();
+      var messages = entries.stream().skip(Math.max(0, entries.size() - budget))
+          .map(e -> new ConversationHistoryMessage(e.speaker(), e.timestamp().toInstant().toString(), e.content())).toList();
+      if (messages.isEmpty()) messages = findChatDetail(id, budget);
+      if (foreign) messages = messages.stream().map(m -> new ConversationHistoryMessage(m.speaker(), m.timestamp(),
+          HistoryRetrievalPolicy.clip(m.content(), HistoryRetrievalPolicy.CONTENT_MAX_CHARS))).toList();
+      return new ConversationHistoryDetail(id, ConversationLogStore.scopeOf(id), messages, source.id(), source.name(),
+          foreign ? HistoryRetrievalPolicy.FOREIGN_BOUNDARY : HistoryRetrievalPolicy.LOCAL_BOUNDARY);
     }
     List<ConversationHistoryMessage> persisted = findPersistentLogDetail(conversationId, safeLimit);
     if (!persisted.isEmpty()) {

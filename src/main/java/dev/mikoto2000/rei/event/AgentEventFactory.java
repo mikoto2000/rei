@@ -33,6 +33,13 @@ public class AgentEventFactory {
 
   // ---- Agent Run ----
 
+  public AgentEvent historySearchCompleted(HistorySearchCompletedPayload payload) {
+    var event = newEvent(AgentEventType.HISTORY_SEARCH_COMPLETED, null, null, payload);
+    return new AgentEvent(event.id(), event.sequence(), event.timestamp(), event.type(), event.version(),
+        event.sessionId(), event.turnId(), event.runId(), event.correlationId(), event.parentEventId(), event.payload(),
+        event.projectId() == null ? payload.preferredProjectId() : event.projectId());
+  }
+
   public AgentEvent executionProgress(AgentEventType type, String runId, ExecutionProgressPayload payload) {
     return newEvent(type, runId, null, payload);
   }

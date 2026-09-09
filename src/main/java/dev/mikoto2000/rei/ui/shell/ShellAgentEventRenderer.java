@@ -90,6 +90,13 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       return;
     }
     switch (event.type()) {
+      case HISTORY_SEARCH_COMPLETED -> {
+        closeAssistantLine();
+        closeThinkingLine();
+        var payload = (dev.mikoto2000.rei.event.HistorySearchCompletedPayload) event.payload();
+        output.println("[history.search] scope=" + payload.scope() + " currentHits=" + payload.currentProjectHitCount()
+            + " crossProjectHits=" + payload.crossProjectHitCount() + " projectsSearched=" + payload.searchedProjectCount());
+      }
       case USER_INTERVENTION_RECEIVED, USER_INTERVENTION_APPLIED -> {
         closeAssistantLine();
         output.println(event.type() == dev.mikoto2000.rei.event.AgentEventType.USER_INTERVENTION_RECEIVED

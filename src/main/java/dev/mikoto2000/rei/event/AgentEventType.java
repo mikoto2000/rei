@@ -6,6 +6,7 @@ package dev.mikoto2000.rei.event;
  * <p>文字列の直書きを各所に散らさず、型安全に扱えるようにするための enum。</p>
  */
 public enum AgentEventType {
+  HISTORY_SEARCH_COMPLETED("history.search.completed"),
   USER_INTERVENTION_RECEIVED("user.intervention.received"),
   USER_INTERVENTION_APPLIED("user.intervention.applied"),
   PROGRESS_DETECTED("progress.detected"),
