@@ -95,6 +95,20 @@ class ReiApplicationMultilineInputTest {
   }
 
   @Test
+  void historyControlsBypassAgentExecutorAndCancellationMonitor() throws Exception {
+    var app = newApp();
+    var command = Mockito.mock(CommandLine.class);
+    var terminal = Mockito.mock(Terminal.class);
+    var executor = Mockito.mock(java.util.concurrent.ExecutorService.class);
+    for (String[] args : java.util.List.of(new String[]{"history"}, new String[]{"history","show"},
+        new String[]{"history","search","needle"})) {
+      app.executeInterruptibly(command, terminal, executor, args);
+      verify(command).execute(args);
+    }
+    Mockito.verifyNoInteractions(terminal, executor);
+  }
+
+  @Test
   void detectsInteractiveShellCommand() {
     ReiApplication app = newApp();
 

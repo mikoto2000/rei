@@ -71,9 +71,51 @@ public class ConversationLogStore {
 
   /** Read a project's authoritative log without changing the selected project or run scope. */
   public List<ConversationLogEntry> readProject(String projectId) {
-    return readDirectory(dev.mikoto2000.rei.core.project.ProjectStorage.directory(projectId).resolve("conversations"))
-        .stream().filter(e -> e.conversationId() != null
-            && e.conversationId().startsWith("project:" + projectId + ":")).toList();
+    var entries = new ArrayList<ConversationLogEntry>();
+    visitProject(projectId, entries::add);
+    entries.sort(Comparator.comparing(ConversationLogEntry::timestamp));
+    return entries;
+  }
+
+  /** Streams one project without retaining message bodies or changing Shell/Agent scope. */
+  public void visitProject(String projectId, java.util.function.Consumer<ConversationLogEntry> visitor) {
+    Path location = dev.mikoto2000.rei.core.project.ProjectStorage.directory(projectId).resolve("conversations");
+    if (!Files.isDirectory(location)) return;
+    try (var files = Files.list(location)) {
+      for (Path file : files.filter(p -> p.getFileName().toString().endsWith(".jsonl")).sorted().toList()) {
+        readFile(file, entry -> {
+          if (entry.conversationId() != null && entry.conversationId().startsWith("project:" + projectId + ":")
+              && entry.timestamp() != null) visitor.accept(entry);
+        });
+      }
+    } catch (IOException error) { throw new IllegalStateException("Cannot read conversation history", error); }
+  }
+
+  public record ConversationSummary(String conversationId, OffsetDateTime updatedAt, long messageCount) {}
+
+  public List<ConversationSummary> listConversations(String projectId, int limit, int offset) {
+    if (limit < 1 || offset < 0) throw new IllegalArgumentException("Invalid history page");
+    var summaries = new java.util.HashMap<String, ConversationSummary>();
+    visitProject(projectId, entry -> summaries.compute(entry.conversationId(), (id, previous) ->
+        new ConversationSummary(id, previous == null || entry.timestamp().isAfter(previous.updatedAt())
+            ? entry.timestamp() : previous.updatedAt(), previous == null ? 1 : previous.messageCount() + 1)));
+    return summaries.values().stream().sorted(Comparator.comparing(ConversationSummary::updatedAt).reversed()
+        .thenComparing(ConversationSummary::conversationId)).skip(offset).limit(limit).toList();
+  }
+
+  public List<ConversationLogEntry> recentConversation(String projectId, String conversationId, int limit) {
+    if (limit < 1) throw new IllegalArgumentException("limit must be positive");
+    record Ordered(ConversationLogEntry entry, long sequence) {}
+    var order = Comparator.comparing((Ordered e) -> e.entry().timestamp()).thenComparingLong(Ordered::sequence);
+    var recent = new java.util.PriorityQueue<Ordered>(order);
+    long[] sequence = {0};
+    visitProject(projectId, entry -> {
+      if (entry.conversationId().equals(conversationId)) {
+        recent.add(new Ordered(entry, sequence[0]++));
+        if (recent.size() > limit) recent.remove();
+      }
+    });
+    return recent.stream().sorted(order).map(Ordered::entry).toList();
   }
 
   private List<ConversationLogEntry> readDirectory(Path directory) {
@@ -93,6 +135,10 @@ public class ConversationLogStore {
   }
 
   private void readFile(Path file, List<ConversationLogEntry> entries) {
+    readFile(file, entries::add);
+  }
+
+  private void readFile(Path file, java.util.function.Consumer<ConversationLogEntry> visitor) {
     try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
       String line;
       while ((line = reader.readLine()) != null) {
@@ -100,7 +146,7 @@ public class ConversationLogStore {
           continue;
         }
         try {
-          entries.add(objectMapper.readValue(line, ConversationLogEntry.class));
+          visitor.accept(objectMapper.readValue(line, ConversationLogEntry.class));
         } catch (IOException e) {
           log.warn("Skipping malformed conversation log line in {}", file);
         }

@@ -6,6 +6,22 @@ Agent 実行中も追加入力できます。同じプロジェクトへの通�
 
 異なるプロジェクトでは AgentRun を同時に実行できます。プロンプトの `[rei] [2 running]` は選択中のプロジェクト名とプロセス全体の実行件数です。`/runs` で全プロジェクトの実行状態・経過時間・最初の依頼を確認でき、別プロジェクトの終了も通知されます。実行状態は再起動時には復元しません。設計と検証内容は [ActiveRun 実装報告](docs/implementation-report-active-runs.md) を参照してください。
 
+`/history` は `/history show` と同じで、選択中プロジェクトの `chat:main` を直近50メッセージ表示します。Agent実行中にも利用でき、追加指示としては扱いません。
+
+```text
+/history
+/history list --project "MaCa Editor"
+/history list --limit 50 --offset 50
+/history show chat:test --project "MaCa Editor" --last 100
+/history show --all
+/history search Working Set 候補削減
+/history search --current "Working Set"
+/history search --all --limit 20 "OAuth OBO"
+/history --help
+```
+
+`--project` は登録名またはProjectIdです。同名の場合はProjectIdを指定してください。検索は既定で現在プロジェクトを優先し、不十分なら他プロジェクトも検索します。既存の検索予算（現在最大8件、他プロジェクト合計最大3件）も適用されます。本文は秘匿処理後、1メッセージ最大2,000コードポイントで短縮します。詳細は [履歴コマンド実装報告](docs/implementation-report-history-shell.md) を参照してください。
+
 Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API を使った対話を中心に、Google Calendar、タスク管理、RSS 管理、日次ブリーフィング、リマインド、文書埋め込み、Web 検索、MCP ツール連携を 1 つの CLI にまとめています。
 
 日々の確認や調査をターミナル上で完結させたいときに向いています。ローカルファイルや埋め込み済み文書を参照しながら対話でき、必要に応じて外部 API や MCP サーバーのツールも利用できます。

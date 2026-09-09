@@ -45,8 +45,8 @@ class ProjectHistoryRetrievalTest {
     add(b, "working set policy newer");
     var found = service.search(request("working set policy", HistorySearchScope.CURRENT_PROJECT_PREFERRED, null));
     assertThat(found).hasSize(3).allMatch(r -> r.sourceProjectId().equals(a.id()));
-    verify(logs, never()).readProject(b.id());
-    verify(logs, never()).readProject(c.id());
+    verify(logs, never()).visitProject(eq(b.id()), any());
+    verify(logs, never()).visitProject(eq(c.id()), any());
   }
   @Test void weakCurrentResultsAllowRelevantFallbackButCurrentComesFirst() {
     add(a, "working set"); add(b, "working set policy decisions"); add(c, "unrelated weather");
@@ -82,13 +82,13 @@ class ProjectHistoryRetrievalTest {
     add(a, "needle A"); add(b, "needle B");
     var found = service.search(request("needle", HistorySearchScope.CURRENT_PROJECT_ONLY, "MaCa Editor"));
     assertThat(found).extracting(ConversationSearchResult::sourceProjectId).containsExactly(a.id());
-    verify(logs, never()).readProject(b.id());
+    verify(logs, never()).visitProject(eq(b.id()), any());
   }
   @Test void allProjectsRanksByRelevanceWithoutCurrentBoost() {
     add(a, "working set"); add(b, "working set policy decisions");
     var found = service.search(request("working set policy decisions", HistorySearchScope.ALL_PROJECTS, null));
     assertThat(found).extracting(ConversationSearchResult::sourceProjectId).containsExactly(b.id(), a.id());
-    verify(logs).readProject(c.id());
+    verify(logs).visitProject(eq(c.id()), any());
   }
   @Test void defaultUsesCurrentPreferredAndRunKeepsOwnershipAcrossSwitchAndIntervention() {
     for (int i = 0; i < 3; i++) { add(a, "needle A " + i); add(b, "needle B " + i); }
@@ -175,14 +175,15 @@ class ProjectHistoryRetrievalTest {
   @Test void unknownProjectDetailDoesNotReadArbitraryStores() {
     String id = UUID.randomUUID().toString();
     assertThatThrownBy(() -> service.detail("project:" + id + ":chat:main", 10)).isInstanceOf(IllegalArgumentException.class);
-    verify(logs, never()).readProject(id);
+    verify(logs, never()).visitProject(eq(id), any());
   }
 
   @Test void equalRelevanceUsesActualInstantOrderIncludingFractionalSeconds() {
-    doReturn(List.of(
+    var entries = List.of(
         new ConversationLogEntry(a.conversationId("chat:main"), "chat", "user", java.time.OffsetDateTime.parse("2026-09-01T00:00:00Z"), "needle older"),
-        new ConversationLogEntry(a.conversationId("chat:main"), "chat", "user", java.time.OffsetDateTime.parse("2026-09-01T00:00:00.100Z"), "needle newer")))
-        .when(logs).readProject(a.id());
+        new ConversationLogEntry(a.conversationId("chat:main"), "chat", "user", java.time.OffsetDateTime.parse("2026-09-01T00:00:00.100Z"), "needle newer"));
+    doAnswer(call -> { entries.forEach(call.<java.util.function.Consumer<ConversationLogEntry>>getArgument(1)); return null; })
+        .when(logs).visitProject(eq(a.id()), any());
     assertThat(service.search(request("needle", HistorySearchScope.CURRENT_PROJECT_ONLY, null)))
         .extracting(ConversationSearchResult::content).containsExactly("needle newer", "needle older");
   }

@@ -84,6 +84,15 @@ public class ConversationHistorySearchService {
 
   /** Explicit ownership is captured at the tool boundary; retrieval never switches ProjectService. */
   public List<ConversationSearchResult> search(HistorySearchRequest request) {
+    return search(request, true);
+  }
+
+  /** Shell reads must not append retrieval events or inherit the active AgentRun's ownership. */
+  public List<ConversationSearchResult> searchForShell(HistorySearchRequest request) {
+    return search(request, false);
+  }
+
+  private List<ConversationSearchResult> search(HistorySearchRequest request, boolean emitEvents) {
     String category = normalizeScope(request.conversationScope());
     String speaker = normalizeSpeaker(request.speaker());
     TimeRange range = parseTimeRange(request.since(), request.until());
@@ -93,7 +102,7 @@ public class ConversationHistorySearchService {
         && (speaker == null || speaker.equalsIgnoreCase(e.speaker()))
         && (range.sinceEpochMillis() == null || e.timestamp().toInstant().toEpochMilli() >= range.sinceEpochMillis())
         && (range.untilEpochMillis() == null || e.timestamp().toInstant().toEpochMilli() <= range.untilEpochMillis()), limit);
-    if (events != null && publisher != null) {
+    if (emitEvents && events != null && publisher != null) {
       int currentHits = (int) outcome.results().stream()
           .filter(r -> r.sourceProjectId().equals(request.preferredProjectId())).count();
       publisher.publish(events.historySearchCompleted(new dev.mikoto2000.rei.event.HistorySearchCompletedPayload(

@@ -36,6 +36,7 @@ subcommands = {
   ChatCommand.class,
   CancelCommand.class,
   RunsCommand.class,
+  HistoryCommand.class,
   SearchCommand.class,
   ModelsCommand.class,
   ModelCommand.class,

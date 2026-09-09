@@ -456,8 +456,7 @@ public class AgentEventFactory {
 
   private String bounded(String value, int maxLength) {
     if (value == null) return null;
-    String safe = value
-        .replaceAll("(?i)((?:api[_-]?key|access[_-]?token|token|password|secret|credential)\\s*[:=]\\s*)(?:\\\"[^\\\"]*\\\"|'[^']*'|\\S+)", "$1[REDACTED]")
+    String safe = CredentialRedactor.redact(value)
         .replaceAll("[\\p{Cntrl}]+", " ")
         .replaceAll("\\s+", " ")
         .trim();

@@ -62,13 +62,20 @@ final class ProjectHistoryRetrieval {
   private List<ConversationSearchResult> scan(ProjectContext project, String preferred, List<String> terms,
       Predicate<ConversationLogEntry> filter, Map<String, List<ConversationSearchResult>> searched) {
     if (searched.containsKey(project.id())) return searched.get(project.id());
-    var found = logs.readProject(project.id()).stream().filter(filter).map(e -> {
+    int budget = project.id().equals(preferred) ? CURRENT_MAX_RESULTS : CROSS_PROJECT_MAX_RESULTS;
+    var best = new PriorityQueue<ConversationSearchResult>(RANK.reversed());
+    logs.visitProject(project.id(), e -> {
+      if (!filter.test(e) || e.content() == null) return;
       String text = normalized(e.content());
       double score = (double) terms.stream().filter(text::contains).count() / terms.size();
-      return new ConversationSearchResult(e.conversationId(), e.scope(), e.speaker(), e.timestamp().toInstant().toString(),
-          clip(e.content(), 120), excerpt(e.content(), terms), project.id(), project.name(),
-          project.id().equals(preferred) ? LOCAL_BOUNDARY : FOREIGN_BOUNDARY, score);
-    }).filter(r -> r.relevanceScore() >= MIN_RELEVANCE).sorted(RANK).toList();
+      if (score < MIN_RELEVANCE) return;
+      String safe = dev.mikoto2000.rei.event.CredentialRedactor.redact(e.content());
+      best.add(new ConversationSearchResult(e.conversationId(), e.scope(), e.speaker(), e.timestamp().toInstant().toString(),
+          clip(safe, 120), excerpt(safe, terms), project.id(), project.name(),
+          project.id().equals(preferred) ? LOCAL_BOUNDARY : FOREIGN_BOUNDARY, score));
+      if (best.size() > budget) best.remove();
+    });
+    var found = best.stream().sorted(RANK).toList();
     searched.put(project.id(), found);
     return found;
   }
