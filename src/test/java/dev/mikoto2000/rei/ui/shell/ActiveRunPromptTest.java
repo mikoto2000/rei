@@ -24,14 +24,14 @@ class ActiveRunPromptTest {
     when(reader.readLine(anyString())).thenAnswer(call -> {
       buffer.write("入力途中"); buffer.cursor(2);
       router.submit(Path.of("a"), "chat:main", "work");
-      verify(reader).setPrompt("[1 running] > ");
+      verify(reader).setPrompt("[rei] [1 running]\n09:42 test-model> ");
       tasks.getFirst().run();
-      verify(reader).setPrompt("[0 running] > ");
+      verify(reader).setPrompt("[rei] [0 running]\n09:42 test-model> ");
       assertThat(buffer.toString()).isEqualTo("入力途中");
       assertThat(buffer.cursor()).isEqualTo(2);
       return buffer.toString();
     });
-    try (var prompt = new ActiveRunPrompt(reader, router, () -> "[" + router.activeRuns().size() + " running] > ")) {
+    try (var prompt = new ActiveRunPrompt(reader, router, () -> "[rei] [" + router.activeRuns().size() + " running]\n09:42 test-model> ")) {
       assertThat(prompt.readLine()).isEqualTo("入力途中");
     }
     verify(reader, times(2)).redisplay();

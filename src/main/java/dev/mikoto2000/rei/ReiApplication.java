@@ -327,8 +327,8 @@ public class ReiApplication {
   }
 
   String buildPrompt() {
-    return now().format(PROMPT_TIME_FORMATTER) + " " + currentModelHolder.get()
-        + (activeRunDisplay == null ? "" : " " + activeRunDisplay.promptStatus()) + "> ";
+    return (activeRunDisplay == null ? "" : activeRunDisplay.promptStatus() + "\n")
+        + now().format(PROMPT_TIME_FORMATTER) + " " + currentModelHolder.get() + "> ";
   }
 
   LocalTime now() {
