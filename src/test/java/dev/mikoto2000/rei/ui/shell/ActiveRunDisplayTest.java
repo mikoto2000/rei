@@ -19,15 +19,19 @@ class ActiveRunDisplayTest {
     var tasks = new ArrayList<Runnable>();
     var router = new ConversationInputRouter(tasks::add, (c,p,q) -> {});
     var display = new ActiveRunDisplay(router, projects, Clock.fixed(java.time.Instant.EPOCH, java.time.ZoneOffset.UTC));
-    router.submit(a.root(), a.conversationId("chat:main"), "request A");
+    router.submit(a.root(), a.conversationId("chat:main"), "日本語の依頼 A");
     projects.cd(b.root().toString());
     router.submit(b.root(), b.conversationId("chat:main"), "request B");
     assertThat(display.promptStatus()).isEqualTo("[Beta] [2 running]");
     var output = new java.io.StringWriter();
-    var command = new picocli.CommandLine(new RunsCommand(display));
+    var command = new picocli.CommandLine(picocli.CommandLine.Model.CommandSpec.create().name("rei"));
+    command.addSubcommand("runs", new RunsCommand(display));
     command.setOut(new java.io.PrintWriter(output));
-    assertThat(command.execute()).isZero();
-    assertThat(output.toString()).contains("Alpha", "Beta", "RUNNING", "request A", "request B", "00:00");
+    var completer = dev.mikoto2000.rei.core.command.ReiLineReaderFactory.completer(command);
+    completer.complete(org.mockito.Mockito.mock(org.jline.reader.LineReader.class),
+        new org.jline.reader.impl.DefaultParser().parse("/runs ", 6), new ArrayList<>());
+    assertThat(command.execute("runs")).isZero();
+    assertThat(output.toString()).contains("Alpha", "Beta", "RUNNING", "日本語の依頼 A", "request B", "00:00");
     assertThat(router.activeRuns()).extracting(ActiveRun::projectId).containsExactlyInAnyOrder(a.id(), b.id());
     tasks.getFirst().run();
     assertThat(display.promptStatus()).isEqualTo("[Beta] [1 running]");

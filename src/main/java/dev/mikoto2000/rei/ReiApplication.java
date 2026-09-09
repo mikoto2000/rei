@@ -239,6 +239,10 @@ public class ReiApplication {
     PrintWriter writer = new PrintWriter(terminal.writer(), true);
     cmd.setOut(writer);
     cmd.setErr(writer);
+    var runs = cmd.getSubcommands().get("runs");
+    if (runs != null && runs.getCommand() instanceof dev.mikoto2000.rei.ui.shell.RunsCommand command) {
+      command.setShellOutput(writer);
+    }
   }
 
   protected void executeInterruptibly(CommandLine cmd, Terminal terminal, ExecutorService commandExecutor, String... args)

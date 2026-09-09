@@ -74,6 +74,27 @@ class ReiApplicationMultilineInputTest {
   }
 
   @Test
+  void runsKeepsTerminalEncodingWhenCommandSpecIsRebound() {
+    var display = Mockito.mock(dev.mikoto2000.rei.ui.shell.ActiveRunDisplay.class);
+    when(display.rows()).thenReturn(java.util.List.of("rei  RUNNING  01:35  全 md ファイルをレビューしてください"));
+    var runs = new dev.mikoto2000.rei.ui.shell.RunsCommand(display);
+    var command = new CommandLine(CommandLine.Model.CommandSpec.create().name("rei"));
+    command.addSubcommand("runs", runs);
+    var bytes = new java.io.ByteArrayOutputStream();
+    var encoding = java.nio.charset.Charset.forName("windows-31j");
+    Terminal terminal = Mockito.mock(Terminal.class);
+    when(terminal.writer()).thenReturn(new java.io.PrintWriter(new java.io.OutputStreamWriter(bytes, encoding)));
+    ReiApplication.configureCommandOutput(command, terminal);
+    // Rebinding must not replace the shell's writer with a default-encoding writer.
+    var rebound = new CommandLine(runs);
+    var wrongOutput = new java.io.StringWriter();
+    rebound.setOut(new java.io.PrintWriter(wrongOutput));
+    assertEquals(0, command.execute("runs"));
+    org.junit.jupiter.api.Assertions.assertTrue(bytes.toString(encoding).contains("全 md ファイルをレビューしてください"));
+    assertEquals("", wrongOutput.toString());
+  }
+
+  @Test
   void detectsInteractiveShellCommand() {
     ReiApplication app = newApp();
 
