@@ -162,7 +162,11 @@ public class ChatExecutionService {
 
   public ChatExecutionResult execute(AgentRunContext context, String promptText, UserInterventionQueue interventions) {
     try (var scope = AgentRunScope.open(context)) {
-      return executeInScope(context, promptText, interventions);
+      try { return executeInScope(context, promptText, interventions); }
+      finally {
+        cancellationService.clear();
+        activityTracker.ifPresent(tracker -> tracker.recordAgentCompleted(java.time.Instant.now(clock)));
+      }
     }
   }
 
@@ -217,7 +221,6 @@ public class ChatExecutionService {
             metrics == null ? null : metrics.timeToFirstTokenMillis(),
             metrics == null ? null : metrics.outputTokensPerSecond(),
             metrics == null ? null : metrics.endToEndTokensPerSecond()));
-        activityTracker.ifPresent(tracker -> tracker.recordAgentCompleted(java.time.Instant.now(clock)));
         boolean consolidationSuggested = shouldSuggestConsolidation();
         if (consolidationSuggested) {
           eventPublisher.publish(eventFactory.memoryConsolidationSuggested());
@@ -226,7 +229,6 @@ public class ChatExecutionService {
         return ChatExecutionResult.success(result.text(), consolidationSuggested);
       } else {
         eventPublisher.publish(eventFactory.runFailed(runId, terminalError(result.status())));
-        activityTracker.ifPresent(tracker -> tracker.recordAgentCompleted(java.time.Instant.now(clock)));
         return ChatExecutionResult.failed(terminalError(result.status()).message());
       }
     } finally {
@@ -235,7 +237,6 @@ public class ChatExecutionService {
         while (!interventions.finishIfEmpty()) execution.applyInterventions();
       } finally {
         execution.close();
-        cancellationService.clear();
       }
     }
   }

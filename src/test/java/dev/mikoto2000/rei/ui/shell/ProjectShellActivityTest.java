@@ -13,6 +13,21 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ProjectShellActivityTest {
+  @Test void projectSwitchShowsCountAndHiddenRunCompletionIsVisible() throws Exception {
+    var projects = new ProjectService(Files.createDirectory(temp.resolve("a")), new ProjectRegistry(temp.resolve("registry.json")));
+    var a = projects.currentContext();
+    var tasks = new java.util.ArrayList<Runnable>();
+    var runs = new ConversationInputRouter(tasks::add, (c,p,q) -> {});
+    runs.submit(a.root(), a.conversationId("chat:main"), "work");
+    var activity = new ProjectShellActivity(projects, new ProjectAgentEventStore(temp), new ProjectRunStateStore(temp), new WorkingSet(), mock(ChatMemory.class));
+    activity.setActiveRuns(new ActiveRunDisplay(runs, projects, Clock.systemUTC()));
+    var out = mock(ShellEventOutput.class); activity.attach(out);
+    projects.cd(Files.createDirectory(temp.resolve("b")).toString());
+    activity.restore(projects.currentContext());
+    verify(out).println("Active runs: 1 (/runs for details)");
+    activity.onEvent(new AgentEventFactory(Clock.systemUTC()).runCompleted("a", 1).withOwnership(new AgentRunContext("a", a, "chat:main")));
+    verify(out).println("[agent.run.completed] a");
+  }
   @TempDir Path temp;
   @Test void switchRestoresOnlyRecentOwnedActivityAndFiltersLiveEvents() throws Exception {
     Path a = Files.createDirectory(temp.resolve("a")); Path b = Files.createDirectory(temp.resolve("b"));

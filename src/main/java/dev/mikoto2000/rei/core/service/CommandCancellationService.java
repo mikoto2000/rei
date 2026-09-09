@@ -10,36 +10,56 @@ import reactor.core.Disposable;
 @Component
 public class CommandCancellationService {
 
-  private final AtomicReference<Disposable> disposableRef = new AtomicReference<>();
-  private final AtomicReference<Thread> executionThreadRef = new AtomicReference<>();
-  private final AtomicBoolean cancellationRequested = new AtomicBoolean(false);
-  private final AtomicReference<String> owningProject = new AtomicReference<>();
+  private static final class State {
+    final AtomicReference<Disposable> disposableRef = new AtomicReference<>();
+    final AtomicReference<Thread> executionThreadRef = new AtomicReference<>();
+    final AtomicBoolean cancellationRequested = new AtomicBoolean(false);
+    final String projectId;
+    State(String projectId) { this.projectId = projectId; }
+  }
+  private final java.util.concurrent.ConcurrentMap<String, State> runs = new java.util.concurrent.ConcurrentHashMap<>();
+  private final State legacy = new State(null);
+  private State state() {
+    var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    return run == null ? legacy : runs.get(run.runId());
+  }
 
   public void begin(Thread executionThread) {
     var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
-    owningProject.set(run == null ? null : run.projectId());
-    cancellationRequested.set(false);
-    disposableRef.set(null);
-    executionThreadRef.set(executionThread);
+    var state = run == null ? legacy : new State(run.projectId());
+    state.cancellationRequested.set(false);
+    state.disposableRef.set(null);
+    state.executionThreadRef.set(executionThread);
+    if (run != null) runs.put(run.runId(), state);
   }
 
   public void register(Disposable disposable) {
     if (disposable == null) {
       return;
     }
-    disposableRef.set(disposable);
-    if (cancellationRequested.get()) {
+    var state = state();
+    if (state == null) { disposable.dispose(); return; }
+    state.disposableRef.set(disposable);
+    if (state.cancellationRequested.get()) {
       disposable.dispose();
     }
   }
 
   public boolean cancel() {
-    boolean changed = cancellationRequested.compareAndSet(false, true);
-    Disposable disposable = disposableRef.get();
+    if (dev.mikoto2000.rei.core.chat.AgentRunScope.current() != null) return cancel(state());
+    // Compatibility for standalone ChatCommand, which has a RunId but no ProjectId.
+    boolean changed = cancel(legacy);
+    for (var state : runs.values()) if (state.projectId == null) changed |= cancel(state);
+    return changed;
+  }
+  private boolean cancel(State state) {
+    if (state == null) return false;
+    boolean changed = state.cancellationRequested.compareAndSet(false, true);
+    Disposable disposable = state.disposableRef.getAndSet(null);
     if (disposable != null) {
       disposable.dispose();
     }
-    Thread executionThread = executionThreadRef.get();
+    Thread executionThread = state.executionThreadRef.get();
     if (executionThread != null) {
       executionThread.interrupt();
     }
@@ -47,22 +67,35 @@ public class CommandCancellationService {
   }
   public boolean cancelCurrentProject() {
     var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
-    if (project != null && !project.id().equals(owningProject.get())) return false;
-    return cancel();
+    if (project == null) return cancel();
+    boolean changed = false;
+    for (var state : runs.values()) if (project.id().equals(state.projectId)) changed |= cancel(state);
+    return changed;
   }
 
   public boolean isCancellationRequested() {
-    return cancellationRequested.get();
+    var state = state();
+    return state != null && state.cancellationRequested.get();
   }
 
   public boolean consumeCancellationRequested() {
-    return cancellationRequested.compareAndSet(true, false);
+    var state = state();
+    return state != null && state.cancellationRequested.compareAndSet(true, false);
   }
 
   public void clear() {
-    owningProject.set(null);
-    disposableRef.set(null);
-    executionThreadRef.set(null);
-    cancellationRequested.set(false);
+    var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    if (run != null) {
+      var removed = runs.remove(run.runId());
+      if (removed != null) {
+        var disposable = removed.disposableRef.getAndSet(null);
+        if (disposable != null) disposable.dispose();
+      }
+      return;
+    }
+    var disposable = legacy.disposableRef.getAndSet(null);
+    if (disposable != null) disposable.dispose();
+    legacy.executionThreadRef.set(null);
+    legacy.cancellationRequested.set(false);
   }
 }

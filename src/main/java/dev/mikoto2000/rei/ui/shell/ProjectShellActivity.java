@@ -22,6 +22,9 @@ public class ProjectShellActivity implements AgentEventListener {
   private final java.util.Map<String, ShellAgentEventRenderer> renderers = new java.util.HashMap<>();
   private ShellAgentEventRenderer.TopicNotificationOptions options = ShellAgentEventRenderer.TopicNotificationOptions.summary();
   @Value("${rei.events.recent-limit:20}") private int recentLimit = 20;
+  private ActiveRunDisplay activeRuns;
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setActiveRuns(ActiveRunDisplay activeRuns) { this.activeRuns = activeRuns; }
 
   public ProjectShellActivity(ProjectService projects, ProjectAgentEventStore store, ProjectRunStateStore states,
       WorkingSet workingSet, ChatMemory memory) {
@@ -37,6 +40,12 @@ public class ProjectShellActivity implements AgentEventListener {
   }
   @Override public synchronized void onEvent(AgentEvent event) {
     if (renderer == null) return;
+    if (activeRuns != null && event.projectId() != null && !event.projectId().equals(visibleProject)
+        && (event.type() == AgentEventType.AGENT_RUN_COMPLETED || event.type() == AgentEventType.AGENT_RUN_FAILED)) {
+      renderer.finish();
+      output.println("[" + event.type().value() + "] " + activeRuns.projectName(event.projectId()));
+      output.flush();
+    }
     if (event.projectId() == null) globalRenderer.onEvent(event);
     else rendererFor(event.projectId()).onEvent(event);
   }
@@ -46,6 +55,7 @@ public class ProjectShellActivity implements AgentEventListener {
     visibleProject = project.id();
     renderer = rendererFor(visibleProject);
     output.println("Switched project: " + project.name());
+    if (activeRuns != null) output.println(activeRuns.summary());
     output.println("Conversation restored: chat:main (" + memory.get(project.conversationId("chat:main")).size() + " messages)");
     output.println("Working Set restored: " + workingSet.getFiles().size() + " items");
     output.println("Last run: " + states.read(project.id()).map(ProjectRunStateStore.State::status).orElse("none"));

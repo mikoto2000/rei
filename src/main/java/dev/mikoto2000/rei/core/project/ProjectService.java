@@ -29,6 +29,7 @@ public class ProjectService {
   public Path startupDirectory() { return startupDirectory; }
   public Path currentProject() { return currentProject.get(); }
   public ProjectContext currentContext() { return registry.resolve(currentProject()); }
+  public List<ProjectContext> registeredProjects() { return registry.list(); }
   public List<Path> list() {
     var paths = new LinkedHashSet<Path>();
     paths.add(startupDirectory);

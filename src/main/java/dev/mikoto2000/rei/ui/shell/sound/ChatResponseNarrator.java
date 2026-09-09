@@ -26,6 +26,13 @@ public class ChatResponseNarrator {
         narratedFlag.set(false);
     }
 
+    /** Background run narration does not alter the synchronous Shell command's notification flag. */
+    public void narrateCompletedRun(String responseText) {
+        if (responseText == null || responseText.isBlank()) return;
+        String sanitized = sanitize(responseText);
+        if (!sanitized.isBlank()) soundNotificationService.notify(sanitized);
+    }
+
     /**
      * 回答テキストが非空の場合に音声読み上げを実行し、読み上げスキップフラグを設定する。
      * 読み上げ前に絵文字・制御文字・非表示文字を除去する。

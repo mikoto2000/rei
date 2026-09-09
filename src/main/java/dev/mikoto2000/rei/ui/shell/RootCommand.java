@@ -35,6 +35,7 @@ description = "AI shell",
 subcommands = {
   ChatCommand.class,
   CancelCommand.class,
+  RunsCommand.class,
   SearchCommand.class,
   ModelsCommand.class,
   ModelCommand.class,

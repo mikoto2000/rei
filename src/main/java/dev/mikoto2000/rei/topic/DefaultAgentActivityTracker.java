@@ -15,6 +15,11 @@ public class DefaultAgentActivityTracker implements AgentActivityTracker {
   private final AtomicReference<Instant> lastAgentActivityAt;
   private final AtomicBoolean agentBusy = new AtomicBoolean(false);
   private final AtomicLong activityVersion = new AtomicLong();
+  private org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.chat.ConversationInputRouter> activeRuns;
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setActiveRuns(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.chat.ConversationInputRouter> activeRuns) {
+    this.activeRuns = activeRuns;
+  }
 
   public DefaultAgentActivityTracker(Clock clock) {
     Instant now = Instant.now(clock);
@@ -40,7 +45,8 @@ public class DefaultAgentActivityTracker implements AgentActivityTracker {
 
   @Override
   public boolean isAgentBusy() {
-    return agentBusy.get();
+    var router = activeRuns == null ? null : activeRuns.getIfAvailable();
+    return agentBusy.get() || (router != null && !router.activeRuns().isEmpty());
   }
 
   @Override

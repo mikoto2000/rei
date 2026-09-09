@@ -77,6 +77,10 @@ public class ReiApplication {
   private final Environment environment;
   @Autowired(required = false)
   private dev.mikoto2000.rei.ui.shell.ProjectShellActivity projectShellActivity;
+  @Autowired(required = false)
+  private dev.mikoto2000.rei.core.chat.ConversationInputRouter activeRuns;
+  @Autowired(required = false)
+  private dev.mikoto2000.rei.ui.shell.ActiveRunDisplay activeRunDisplay;
 
   private static final String COMMAND_COMPLETION_MESSAGE = "コマンド実行が完了しました";
   private static final String MULTILINE_CONTINUATION = "\\";
@@ -168,10 +172,11 @@ public class ReiApplication {
 
     ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
     UserInputService inputService = new UserInputService(new UserInputParser());
-    try (var consoleSession = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession()) {
+    try (var consoleSession = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession();
+        var runPrompt = new dev.mikoto2000.rei.ui.shell.ActiveRunPrompt(reader, activeRuns, this::buildPrompt)) {
       shellLoop: while (true) {
         try {
-          String line = reader.readLine(buildPrompt());
+          String line = runPrompt.readLine();
           if (line == null) {
             break;
           }
@@ -322,7 +327,8 @@ public class ReiApplication {
   }
 
   String buildPrompt() {
-    return now().format(PROMPT_TIME_FORMATTER) + " " + currentModelHolder.get() + "> ";
+    return now().format(PROMPT_TIME_FORMATTER) + " " + currentModelHolder.get()
+        + (activeRunDisplay == null ? "" : " " + activeRunDisplay.promptStatus()) + "> ";
   }
 
   LocalTime now() {
