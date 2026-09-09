@@ -23,10 +23,10 @@ public class RunsCommand implements Runnable {
       return;
     }
     var rows = display.rows();
-    out.println("Active Agent Runs");
+    out.println("Active Executions");
     if (rows.isEmpty()) out.println("No active runs.");
     else {
-      out.println("PROJECT  STATUS  ELAPSED  REQUEST");
+      out.println("PROJECT  TYPE  STATUS  ELAPSED  REQUEST");
       rows.forEach(out::println);
     }
     out.flush();

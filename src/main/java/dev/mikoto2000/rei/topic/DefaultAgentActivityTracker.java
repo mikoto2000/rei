@@ -46,7 +46,7 @@ public class DefaultAgentActivityTracker implements AgentActivityTracker {
   @Override
   public boolean isAgentBusy() {
     var router = activeRuns == null ? null : activeRuns.getIfAvailable();
-    return agentBusy.get() || (router != null && !router.activeRuns().isEmpty());
+    return agentBusy.get() || (router != null && !router.activeExecutions().isEmpty());
   }
 
   @Override

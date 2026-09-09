@@ -14,5 +14,19 @@ import picocli.CommandLine.Command;
     },
     mixinStandardHelpOptions = true)
 @RequiredArgsConstructor
-public class ImageCommand {
+public class ImageCommand implements java.util.concurrent.Callable<Integer> {
+  @picocli.CommandLine.Parameters(arity = "0..*", description = "画像生成プロンプト")
+  private java.util.List<String> promptParts;
+  @picocli.CommandLine.Spec
+  private picocli.CommandLine.Model.CommandSpec spec;
+
+  @Override
+  public Integer call() {
+    if (promptParts == null || promptParts.isEmpty()) {
+      spec.commandLine().usage(spec.commandLine().getErr());
+      return 2;
+    }
+    return spec.commandLine().getSubcommands().get("generate")
+        .execute("--", String.join(" ", promptParts));
+  }
 }

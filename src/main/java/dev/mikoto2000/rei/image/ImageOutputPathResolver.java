@@ -22,13 +22,16 @@ public class ImageOutputPathResolver {
   public Path resolve(Path outputPath) {
     Path path = outputPath == null ? defaultOutputPath() : outputPath;
     if (!path.isAbsolute()) {
-      path = workDirectory.resolve(path);
+      var execution=dev.mikoto2000.rei.core.execution.ExecutionScope.current();
+      path = (execution==null?workDirectory:execution.projectRoot()).resolve(path);
     }
     return path.toAbsolutePath().normalize();
   }
 
   private Path defaultOutputPath() {
-    String fileName = "image-" + LocalDateTime.now(clock).format(FILE_TIMESTAMP) + ".png";
+    var execution=dev.mikoto2000.rei.core.execution.ExecutionScope.current();
+    String suffix=execution==null?"":"-"+execution.id();
+    String fileName = "image-" + LocalDateTime.now(clock).format(FILE_TIMESTAMP) + suffix + ".png";
     return properties.getOutputDirectory().resolve(fileName);
   }
 }

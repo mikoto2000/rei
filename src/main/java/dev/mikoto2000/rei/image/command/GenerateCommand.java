@@ -19,12 +19,21 @@ import picocli.CommandLine.Parameters;
 
 @Component
 @Command(name = "generate", description = "プロンプトから画像を生成します。", mixinStandardHelpOptions = true)
-@RequiredArgsConstructor
+@RequiredArgsConstructor(onConstructor_ = @org.springframework.beans.factory.annotation.Autowired)
 public class GenerateCommand implements Callable<Integer> {
+
+  /** Supports picocli's help-only command tree without a Spring factory. */
+  public GenerateCommand() {
+    this(null, new ImageProperties(), new CommandCancellationService());
+  }
 
   private final ImageGenerationService service;
   private final ImageProperties properties;
   private final CommandCancellationService cancellationService;
+  private dev.mikoto2000.rei.core.execution.BackgroundCommands background;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setBackgroundCommands(dev.mikoto2000.rei.core.execution.BackgroundCommands background) { this.background=background; }
+  @picocli.CommandLine.Spec private picocli.CommandLine.Model.CommandSpec spec;
 
   @Option(names = "--output", description = "保存先ファイルパス")
   Path outputPath;
@@ -43,6 +52,18 @@ public class GenerateCommand implements Callable<Integer> {
 
   @Override
   public Integer call() {
+    if(background!=null) {
+      try {
+        var request=new ImageGenerationRequest(String.join(" ",promptParts),outputPath,model,
+            ImageSize.parse(size==null||size.isBlank()?properties.getSize():size),!raw);
+        background.image(request);
+        return 0;
+      } catch(RuntimeException error) {
+        var out=spec.commandLine().getErr();
+        out.println("画像生成を開始できません: "+new dev.mikoto2000.rei.conversation.HistoryFormatter().label(error.getMessage()));
+        out.flush(); return 1;
+      }
+    }
     try {
       cancellationService.begin(Thread.currentThread());
       ImageSize imageSize;

@@ -42,6 +42,11 @@ public record AgentEvent(
     return new AgentEvent(id, sequence, timestamp, type, version, context.conversationId(), turnId,
         runId == null ? context.runId() : runId, correlationId, parentEventId, payload, context.projectId());
   }
+  public AgentEvent withExecutionOwnership(dev.mikoto2000.rei.core.execution.ActiveExecution execution) {
+    if(execution==null) return this;
+    return new AgentEvent(id,sequence,timestamp,type,version,execution.conversationId(),turnId,
+        execution.id(),correlationId,parentEventId,payload,execution.projectId());
+  }
 
   public AgentEvent {
     if (id == null || id.isBlank()) {

@@ -13,12 +13,15 @@ public final class AgentConsoleSession implements AutoCloseable {
   public AgentConsoleSession() { System.setOut(routedOut); System.setErr(routedErr); }
   static PrintStream route(PrintStream original) {
     return new PrintStream(new OutputStream() {
-      @Override public void write(int value) { if (AgentRunScope.current() == null) original.write(value); }
+      @Override public void write(int value) { if (unscoped()) original.write(value); }
       @Override public void write(byte[] bytes, int offset, int length) {
-        if (AgentRunScope.current() == null) original.write(bytes, offset, length);
+        if (unscoped()) original.write(bytes, offset, length);
       }
       @Override public void flush() { original.flush(); }
     }, true, original.charset());
+  }
+  private static boolean unscoped() {
+    return AgentRunScope.current()==null && dev.mikoto2000.rei.core.execution.ExecutionScope.current()==null;
   }
   @Override public void close() {
     routedOut.flush(); routedErr.flush();

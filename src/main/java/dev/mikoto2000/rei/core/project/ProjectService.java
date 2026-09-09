@@ -49,6 +49,8 @@ public class ProjectService {
     return path;
   }
   public static ProjectContext contextForOperation() {
+    var execution=dev.mikoto2000.rei.core.execution.ExecutionScope.current();
+    if(execution!=null) return new ProjectContext(execution.projectId(),execution.projectRoot().getFileName().toString(),execution.projectRoot());
     var run = AgentRunScope.current();
     if (run != null && run.projectId() != null) return new ProjectContext(run.projectId(),
         run.projectRoot().getFileName().toString(), run.projectRoot());

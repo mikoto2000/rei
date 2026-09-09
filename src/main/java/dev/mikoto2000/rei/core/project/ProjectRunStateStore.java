@@ -16,6 +16,33 @@ public class ProjectRunStateStore implements AgentEventListener {
   private final Path base;
   private final ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
   private AgentEventBus.Subscription subscription;
+  private final java.util.concurrent.ConcurrentMap<String,Object> resultLocks=new java.util.concurrent.ConcurrentHashMap<>();
+  public void saveCompleted(dev.mikoto2000.rei.core.execution.CompletedExecution result) {
+    synchronized(resultLocks.computeIfAbsent(result.projectId()+":"+result.type(),ignored->new Object())) {
+      var previous=latestCompleted(result.projectId(),result.type());
+      if(previous.isPresent() && previous.get().completedAt().isAfter(result.completedAt())) return;
+      Path file=resultFile(result.projectId(),result.type());
+      Path temporary=null;
+      try {
+        Files.createDirectories(file.getParent());
+        temporary=Files.createTempFile(file.getParent(),"completed-",".tmp");
+        Files.writeString(temporary,mapper.writeValueAsString(result));
+        try { Files.move(temporary,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING); }
+        catch(AtomicMoveNotSupportedException e) { Files.move(temporary,file,StandardCopyOption.REPLACE_EXISTING); }
+      } catch(java.io.IOException e) { throw new IllegalStateException("Cannot save completed execution",e); }
+      finally { if(temporary!=null) try { Files.deleteIfExists(temporary); } catch(java.io.IOException ignored) {} }
+    }
+  }
+  public Optional<dev.mikoto2000.rei.core.execution.CompletedExecution> latestCompleted(String projectId,dev.mikoto2000.rei.core.execution.ExecutionType type) {
+    Path file=resultFile(projectId,type);
+    if(!Files.exists(file)) return Optional.empty();
+    try { return Optional.of(mapper.readValue(Files.readString(file),dev.mikoto2000.rei.core.execution.CompletedExecution.class)); }
+    catch(java.io.IOException e) { throw new IllegalStateException("Cannot read completed execution",e); }
+  }
+  private Path resultFile(String projectId,dev.mikoto2000.rei.core.execution.ExecutionType type) {
+    java.util.UUID.fromString(projectId);
+    return base.resolve("projects").resolve(projectId).resolve("state/latest-"+type.name().toLowerCase(java.util.Locale.ROOT)+".json");
+  }
   @Autowired public ProjectRunStateStore(AgentEventBus bus) {
     this(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current());
     subscription = bus.subscribe(this);

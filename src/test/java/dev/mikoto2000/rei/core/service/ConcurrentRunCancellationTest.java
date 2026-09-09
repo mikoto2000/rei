@@ -9,6 +9,19 @@ import static org.mockito.Mockito.*;
 import static org.assertj.core.api.Assertions.*;
 
 class ConcurrentRunCancellationTest {
+  @Test void backgroundCommandDoesNotConsumeAgentOrLegacyCancellation() {
+    var service = new CommandCancellationService();
+    service.begin(mock(Thread.class));
+    service.cancel();
+    var execution = new dev.mikoto2000.rei.core.execution.ActiveExecution("image", UUID.randomUUID().toString(),
+        "chat:main", Path.of("a"), dev.mikoto2000.rei.core.execution.ExecutionType.IMAGE, "picture", java.time.Instant.now());
+    try (var ignored = dev.mikoto2000.rei.core.execution.ExecutionScope.open(execution)) {
+      assertThat(service.isCancellationRequested()).isFalse();
+      assertThat(service.consumeCancellationRequested()).isFalse();
+    }
+    assertThat(service.consumeCancellationRequested()).isTrue();
+    service.clear();
+  }
   @Test void cleanupDisposesOnlyItsOwnLiveSubscription() {
     var service = new CommandCancellationService();
     var run = new AgentRunContext("run", "chat:main", Path.of("a"));

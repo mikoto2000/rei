@@ -40,6 +40,10 @@ public class ProjectShellActivity implements AgentEventListener {
   }
   @Override public synchronized void onEvent(AgentEvent event) {
     if (renderer == null) return;
+    if(event.payload() instanceof BackgroundExecutionPayload payload) {
+      renderer.renderBackgroundExecution(payload,activeRuns==null?event.projectId():activeRuns.projectName(event.projectId()));
+      return;
+    }
     if (activeRuns != null && event.projectId() != null && !event.projectId().equals(visibleProject)
         && (event.type() == AgentEventType.AGENT_RUN_COMPLETED || event.type() == AgentEventType.AGENT_RUN_FAILED)) {
       renderer.finish();

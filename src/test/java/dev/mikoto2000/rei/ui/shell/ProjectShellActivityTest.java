@@ -13,6 +13,24 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ProjectShellActivityTest {
+  @Test void backgroundNotificationsRemainVisibleAfterProjectSwitch() throws Exception {
+    var projects=new ProjectService(Files.createDirectory(temp.resolve("A")),new ProjectRegistry(temp.resolve("registry.json")));
+    var a=projects.currentContext();
+    var router=new ConversationInputRouter(new java.util.ArrayList<Runnable>()::add,(c,p,q)->{});
+    var activity=new ProjectShellActivity(projects,new ProjectAgentEventStore(temp),new ProjectRunStateStore(temp),new WorkingSet(),mock(ChatMemory.class));
+    activity.setActiveRuns(new ActiveRunDisplay(router,projects,Clock.systemUTC()));
+    var out=mock(ShellEventOutput.class); activity.attach(out);
+    projects.cd(Files.createDirectory(temp.resolve("B")).toString()); activity.restore(projects.currentContext());
+    var events=new AgentEventFactory(Clock.systemUTC());
+    for(var type:java.util.List.of(dev.mikoto2000.rei.core.execution.ExecutionType.SUMMARIZE,dev.mikoto2000.rei.core.execution.ExecutionType.IMAGE)) {
+      var execution=new dev.mikoto2000.rei.core.execution.ActiveExecution("execution",a.id(),a.conversationId("chat:main"),a.root(),type,"request",java.time.Instant.now());
+      activity.onEvent(events.backgroundExecution(execution,"COMPLETED","結果"));
+      activity.onEvent(events.backgroundExecution(execution,"FAILED","失敗"));
+      verify(out).println("["+type.name().toLowerCase()+".completed] A (execution)");
+      verify(out).println("["+type.name().toLowerCase()+".failed] A (execution)");
+    }
+    verify(out,times(2)).println("結果");
+  }
   @Test void projectSwitchShowsCountAndHiddenRunCompletionIsVisible() throws Exception {
     var projects = new ProjectService(Files.createDirectory(temp.resolve("a")), new ProjectRegistry(temp.resolve("registry.json")));
     var a = projects.currentContext();

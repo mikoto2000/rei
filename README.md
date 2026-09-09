@@ -6,6 +6,10 @@ Agent 実行中も追加入力できます。同じプロジェクトへの通�
 
 異なるプロジェクトでは AgentRun を同時に実行できます。プロンプトの `[rei] [2 running]` は選択中のプロジェクト名とプロセス全体の実行件数です。`/runs` で全プロジェクトの実行状態・経過時間・最初の依頼を確認でき、別プロジェクトの終了も通知されます。実行状態は再起動時には復元しません。設計と検証内容は [ActiveRun 実装報告](docs/implementation-report-active-runs.md) を参照してください。
 
+`/summarize <URL>` と `/image "プロンプト"` もバックグラウンドで動きます。既存の `/image generate ...` と各オプションも利用できます。実行中も chat やプロジェクト切り替えができ、`/runs` とプロンプト上の件数には `AGENT`・`SUMMARIZE`・`IMAGE` をすべて含めます。開始・終了通知には所属プロジェクトを表示します。
+
+引数なしの `/summarize` は、選択中プロジェクトの最後に成功した要約を再表示します。要約中なら現在の処理も表示します。結果は `<rei-data-dir>/projects/<ProjectId>/state/latest-summarize.json` に保存され、再起動後も参照できます。プロジェクトを切り替えても、結果と会話履歴は開始元に保存されます。`/image` 単体は使い方の表示、`/cancel` は選択中プロジェクトの AgentRun のキャンセルです。設計・検証の詳細は [バックグラウンドコマンド実装報告](docs/implementation-report-background-commands.md) を参照してください。
+
 `/history` は `/history show` と同じで、選択中プロジェクトの `chat:main` を直近50メッセージ表示します。Agent実行中にも利用でき、追加指示としては扱いません。
 
 ```text

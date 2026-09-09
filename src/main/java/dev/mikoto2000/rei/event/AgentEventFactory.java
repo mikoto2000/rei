@@ -434,6 +434,18 @@ public class AgentEventFactory {
   }
 
   // ---- 共通 ----
+  public AgentEvent backgroundExecution(dev.mikoto2000.rei.core.execution.ActiveExecution execution,String status,String output) {
+    var type=switch(status) {
+      case "RUNNING" -> AgentEventType.EXECUTION_STARTED;
+      case "COMPLETED" -> AgentEventType.EXECUTION_COMPLETED;
+      case "CANCELLED" -> AgentEventType.EXECUTION_CANCELLED;
+      default -> AgentEventType.EXECUTION_FAILED;
+    };
+    String safe=CredentialRedactor.redact(output).replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "");
+    if(safe.length()>20000) safe=safe.substring(0,20000)+"... (truncated)";
+    return newEvent(type,execution.id(),execution.id(),new BackgroundExecutionPayload(execution.id(),execution.type(),status,
+        bounded(execution.summary(),200),safe)).withExecutionOwnership(execution);
+  }
   public AgentEvent intervention(String runId, String inputId, String text, boolean applied) {
     return newEvent(applied ? AgentEventType.USER_INTERVENTION_APPLIED : AgentEventType.USER_INTERVENTION_RECEIVED,
         runId, inputId, new UserInterventionPayload(inputId, text));
@@ -451,7 +463,8 @@ public class AgentEventFactory {
         runId,
         correlationId,
         null,
-        payload).withOwnership(dev.mikoto2000.rei.core.chat.AgentRunScope.current());
+        payload).withOwnership(dev.mikoto2000.rei.core.chat.AgentRunScope.current())
+        .withExecutionOwnership(dev.mikoto2000.rei.core.execution.ExecutionScope.current());
   }
 
   private String bounded(String value, int maxLength) {

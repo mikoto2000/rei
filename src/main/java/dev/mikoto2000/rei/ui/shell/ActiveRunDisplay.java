@@ -14,8 +14,8 @@ public class ActiveRunDisplay {
   public ActiveRunDisplay(ConversationInputRouter runs, ProjectService projects, Clock clock) {
     this.runs = runs; this.projects = projects; this.clock = clock;
   }
-  public String promptStatus() { return "[" + ActiveRun.summary(projects.currentContext().name()) + "] [" + runs.activeRuns().size() + " running]"; }
-  public String summary() { return "Active runs: " + runs.activeRuns().size() + " (/runs for details)"; }
+  public String promptStatus() { return "[" + ActiveRun.summary(projects.currentContext().name()) + "] [" + runs.activeExecutions().size() + " running]"; }
+  public String summary() { return "Active runs: " + runs.activeExecutions().size() + " (/runs for details)"; }
   public String projectName(String id) {
     var all = projects.registeredProjects();
     var project = all.stream().filter(p -> p.id().equals(id)).findFirst().orElse(null);
@@ -24,10 +24,10 @@ public class ActiveRunDisplay {
     return all.stream().filter(p -> p.name().equals(project.name())).count() > 1 ? name + " [" + id.substring(0,8) + "]" : name;
   }
   public List<String> rows() {
-    return runs.activeRuns().stream().map(run -> {
+    return runs.activeExecutions().stream().map(run -> {
       long seconds = Math.max(0, Duration.between(run.startedAt(), clock.instant()).toSeconds());
-      return projectName(run.projectId()) + "  " + run.status() + "  " + String.format("%02d:%02d", seconds / 60, seconds % 60)
-          + "  " + run.requestSummary();
+      return projectName(run.projectId()) + "  " + run.type() + "  " + run.status() + "  " + String.format("%02d:%02d", seconds / 60, seconds % 60)
+          + "  " + run.summary();
     }).toList();
   }
 }

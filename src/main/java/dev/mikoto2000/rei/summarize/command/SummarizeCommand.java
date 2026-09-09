@@ -22,6 +22,11 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
 
   private WebPageSummarizerService summarizerService;
   private ChatResponseNarrator chatResponseNarrator;
+  private dev.mikoto2000.rei.core.execution.BackgroundCommands background;
+  private java.io.PrintWriter shellOutput;
+  @Autowired(required=false)
+  public void setBackgroundCommands(dev.mikoto2000.rei.core.execution.BackgroundCommands background) { this.background=background; }
+  public void setShellOutput(java.io.PrintWriter output) { shellOutput=output; }
 
   @Parameters(index = "0", arity = "0..1", paramLabel = "URL", description = "要約する URL")
   private String url;
@@ -44,6 +49,19 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
 
   @Override
   public Integer call() {
+    if(background!=null) {
+      var out=shellOutput==null?spec.commandLine().getOut():shellOutput;
+      try {
+        if(url==null || url.isBlank()) { background.showLastSummary(out::println); return 0; }
+        URI source=parseUrl();
+        if(source==null) return 2;
+        background.summarize(source);
+        return 0;
+      } catch(RuntimeException error) {
+        out.println("要約処理を開始・表示できません: "+new dev.mikoto2000.rei.conversation.HistoryFormatter().label(error.getMessage()));
+        return 1;
+      } finally { out.flush(); }
+    }
     if (chatResponseNarrator != null) {
       chatResponseNarrator.reset();
     }

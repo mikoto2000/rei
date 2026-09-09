@@ -16,6 +16,19 @@ class ImageOutputPathResolverTest {
   Path tempDir;
 
   @Test
+  void backgroundPathsUseCapturedProjectAndUniqueExecutionId() {
+    var properties=new ImageProperties(); properties.setOutputDirectory(Path.of("images"));
+    var resolver=new ImageOutputPathResolver(tempDir,properties,fixedClock());
+    var root=tempDir.resolve("project-a");
+    var execution=new dev.mikoto2000.rei.core.execution.ActiveExecution("unique-id",java.util.UUID.randomUUID().toString(),"chat:main",root,
+        dev.mikoto2000.rei.core.execution.ExecutionType.IMAGE,"picture",Instant.now());
+    try(var scope=dev.mikoto2000.rei.core.execution.ExecutionScope.open(execution)) {
+      assertThat(resolver.resolve(Path.of("out.png"))).isEqualTo(root.resolve("out.png"));
+      assertThat(resolver.resolve(null)).isEqualTo(root.resolve("images/image-20260814-123456-unique-id.png"));
+    }
+  }
+
+  @Test
   void resolvesExplicitRelativePathFromWorkDirectory() {
     ImageProperties properties = new ImageProperties();
     ImageOutputPathResolver resolver = new ImageOutputPathResolver(tempDir, properties, fixedClock());

@@ -18,6 +18,20 @@ import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.llm.ConversationIds;
 
 class CurrentConversationHistoryAppenderTest {
+  @Test void backgroundSummaryWritesCapturedConversationAfterShellSwitch() throws Exception {
+    var memory=MessageWindowChatMemory.builder().maxMessages(10).build();
+    var logs=Mockito.mock(ConversationLogStore.class);
+    var appender=new CurrentConversationHistoryAppender(memory,Optional.of(logs));
+    var id=java.util.UUID.randomUUID().toString();
+    String conversation="project:"+id+":chat:main";
+    var execution=new dev.mikoto2000.rei.core.execution.ActiveExecution("summary",id,conversation,java.nio.file.Path.of("A"),
+        dev.mikoto2000.rei.core.execution.ExecutionType.SUMMARIZE,"source",java.time.Instant.now());
+    try(var scope=dev.mikoto2000.rei.core.execution.ExecutionScope.open(execution)) {
+      appender.appendUserMessage("request"); appender.appendAssistantMessage("summary A");
+    }
+    assertEquals(List.of("request","summary A"),memory.get(conversation).stream().map(Message::getText).toList());
+    verify(logs).append(conversation,"assistant","summary A");
+  }
 
   @Test
   void appendsSlashCommandConversationToChatMemoryAndConversationLogInOrder() {

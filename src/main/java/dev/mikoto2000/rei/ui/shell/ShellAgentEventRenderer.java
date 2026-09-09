@@ -90,6 +90,9 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       return;
     }
     switch (event.type()) {
+      case EXECUTION_STARTED, EXECUTION_COMPLETED, EXECUTION_FAILED, EXECUTION_CANCELLED -> {
+        renderBackgroundExecution((dev.mikoto2000.rei.event.BackgroundExecutionPayload)event.payload(),event.projectId());
+      }
       case HISTORY_SEARCH_COMPLETED -> {
         closeAssistantLine();
         closeThinkingLine();
@@ -490,6 +493,20 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   public synchronized void finish() {
     closeAssistantLine(); closeThinkingLine(); output.flush();
+  }
+  public synchronized void renderBackgroundExecution(dev.mikoto2000.rei.event.BackgroundExecutionPayload payload,String projectName) {
+    finish();
+    String state=switch(payload.status()) {
+      case "RUNNING" -> "started";
+      case "COMPLETED" -> "completed";
+      case "CANCELLED" -> "cancelled";
+      default -> "failed";
+    };
+    output.println("["+payload.executionType().name().toLowerCase(java.util.Locale.ROOT)+"."+state+"] "+projectName+" ("+payload.executionId()+")");
+    if(payload.request()!=null&&!payload.request().isBlank()) output.println("Source / request: "+payload.request());
+    if("TIMED_OUT".equals(payload.status())) output.println("Status: TIMED_OUT");
+    if(payload.output()!=null&&!payload.output().isBlank()) output.println(payload.output());
+    output.flush();
   }
 
   private boolean isTopicEvent(AgentEvent event) {

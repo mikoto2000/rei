@@ -11,6 +11,22 @@ import static org.assertj.core.api.Assertions.*;
 
 class ActiveRunDisplayTest {
   @TempDir Path temp;
+  @Test void includesEveryExecutionTypeInRowsAndPrompt() throws Exception {
+    var registry=new ProjectRegistry(temp.resolve("projects.json"));
+    var a=registry.resolve(Files.createDirectory(temp.resolve("A")));
+    var b=registry.resolve(Files.createDirectory(temp.resolve("B")));
+    var projects=new ProjectService(a.root(),registry);
+    var tasks=new ArrayList<Runnable>();
+    var router=new ConversationInputRouter(tasks::add,(c,p,q)->{});
+    var display=new ActiveRunDisplay(router,projects,Clock.systemUTC());
+    router.submit(a.root(),a.conversationId("chat:main"),"chat work");
+    router.submitBackground(a,dev.mikoto2000.rei.core.execution.ExecutionType.SUMMARIZE,"https://example.com",e->{});
+    router.submitBackground(b,dev.mikoto2000.rei.core.execution.ExecutionType.IMAGE,"picture",e->{});
+    assertThat(display.promptStatus()).isEqualTo("[A] [3 running]");
+    assertThat(String.join("\n",display.rows())).contains("AGENT", "SUMMARIZE", "IMAGE", "picture", "https://example.com");
+    tasks.getFirst().run(); assertThat(display.promptStatus()).isEqualTo("[A] [2 running]");
+    tasks.get(1).run(); tasks.get(2).run(); assertThat(display.promptStatus()).isEqualTo("[A] [0 running]");
+  }
   @Test void runsCommandAndPromptShowAllProjectsAfterSwitchAndCompletion() throws Exception {
     var registry = new ProjectRegistry(temp.resolve("projects.json"));
     var a = registry.resolve(Files.createDirectory(temp.resolve("Alpha")));

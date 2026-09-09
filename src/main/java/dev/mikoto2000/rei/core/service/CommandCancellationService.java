@@ -20,6 +20,7 @@ public class CommandCancellationService {
   private final java.util.concurrent.ConcurrentMap<String, State> runs = new java.util.concurrent.ConcurrentHashMap<>();
   private final State legacy = new State(null);
   private State state() {
+    if(dev.mikoto2000.rei.core.execution.ExecutionScope.current()!=null) return null;
     var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     return run == null ? legacy : runs.get(run.runId());
   }

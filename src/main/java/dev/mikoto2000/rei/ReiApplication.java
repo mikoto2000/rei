@@ -247,11 +247,15 @@ public class ReiApplication {
     if (history != null && history.getCommand() instanceof dev.mikoto2000.rei.ui.shell.HistoryCommand command) {
       command.setShellOutput(writer);
     }
+    var summarize=cmd.getSubcommands().get("summarize");
+    if(summarize!=null && summarize.getCommand() instanceof dev.mikoto2000.rei.summarize.command.SummarizeCommand command) {
+      command.setShellOutput(writer);
+    }
   }
 
   protected void executeInterruptibly(CommandLine cmd, Terminal terminal, ExecutorService commandExecutor, String... args)
       throws IOException {
-    if (args.length > 0 && ("cancel".equals(args[0]) || "history".equals(args[0]) || ("chat".equals(args[0])
+    if (args.length > 0 && ("cancel".equals(args[0]) || "history".equals(args[0]) || "summarize".equals(args[0]) || "image".equals(args[0]) || ("chat".equals(args[0])
         && cmd.getSubcommands().get("chat") != null
         && cmd.getSubcommands().get("chat").getCommand() instanceof dev.mikoto2000.rei.ui.shell.ChatCommand chat
         && chat.acceptsAsynchronously()))) {

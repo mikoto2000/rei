@@ -21,6 +21,20 @@ import picocli.CommandLine;
 class ImageCommandTest {
 
   @Test
+  void directPromptUsesGenerateAndBareCommandOnlyShowsUsage() {
+    ImageGenerationService service = Mockito.mock(ImageGenerationService.class);
+    when(service.generate(Mockito.any())).thenReturn(ImageGenerationResult.success(Path.of("out.png")));
+    CommandLine command = newCommand(service);
+    command.setErr(new java.io.PrintWriter(new java.io.StringWriter()));
+    assertThat(command.execute()).isEqualTo(2);
+    Mockito.verifyNoInteractions(service);
+    assertThat(execute(command, "system architecture diagram").exitCode()).isZero();
+    var request = ArgumentCaptor.forClass(ImageGenerationRequest.class);
+    verify(service).generate(request.capture());
+    assertThat(request.getValue().prompt()).isEqualTo("system architecture diagram");
+  }
+
+  @Test
   void generateDelegatesToServiceAndPrintsSavedPath() {
     ImageGenerationService service = Mockito.mock(ImageGenerationService.class);
     Path output = Path.of("out.png").toAbsolutePath();

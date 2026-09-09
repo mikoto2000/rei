@@ -25,6 +25,8 @@ public final class ConversationIds {
     return CHAT_PREFIX + "main";
   }
   public static String currentChat() {
+    var execution=dev.mikoto2000.rei.core.execution.ExecutionScope.current();
+    if(execution!=null) return execution.conversationId();
     var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     if (run != null) return run.conversationId();
     var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
