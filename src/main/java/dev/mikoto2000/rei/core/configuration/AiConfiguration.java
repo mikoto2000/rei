@@ -57,6 +57,9 @@ import lombok.RequiredArgsConstructor;
 @EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, BlueskyProperties.class, AgentSkillsProperties.class, LlmProperties.class, ImageProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
+  private ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> subAgentTools;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setSubAgentTools(ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> tools) { this.subAgentTools = tools; }
 
   private final CoreProperties coreProperties;
   private final SystemPromptService systemPromptService;
@@ -126,6 +129,8 @@ public class AiConfiguration {
       builder.defaultToolCallbacks(toolCallbackProvider);
     }
 
+    // Lazy callback avoids a bean cycle through the model provider during ChatClient construction.
+    if (subAgentTools != null) builder.defaultToolCallbacks(new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools));
     return builder.build();
   }
 }

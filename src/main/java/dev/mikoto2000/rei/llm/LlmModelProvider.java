@@ -43,6 +43,14 @@ public class LlmModelProvider {
     return cache.computeIfAbsent(feature, this::createFeatureModel);
   }
 
+  /** Same server/model infrastructure; both primary and fallback must have no ambient tool defaults. */
+  public ChatModel subAgentChatModel() {
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(defaultChatModel);
+    var model = chatModel(LlmFeature.CHAT);
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+    return model;
+  }
+
   private ChatModel createFeatureModel(String feature) {
     LlmProperties.Server server = properties.feature(feature);
     ChatModel model = server == null || !server.hasCustomServer()

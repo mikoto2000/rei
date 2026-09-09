@@ -6,6 +6,9 @@ package dev.mikoto2000.rei.event;
  * <p>文字列の直書きを各所に散らさず、型安全に扱えるようにするための enum。</p>
  */
 public enum AgentEventType {
+  SUBAGENT_STARTED("subagent.started"),
+  SUBAGENT_COMPLETED("subagent.completed"),
+  SUBAGENT_FAILED("subagent.failed"),
   EXECUTION_STARTED("execution.started"),
   EXECUTION_COMPLETED("execution.completed"),
   EXECUTION_FAILED("execution.failed"),
