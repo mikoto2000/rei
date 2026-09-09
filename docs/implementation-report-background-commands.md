@@ -22,7 +22,7 @@ Shell の slash command は `ReiApplication.executeInterruptibly` の実行待�
 
 `/summarize <URL>` は検証後に登録し、直ちに Shell に戻る。worker が要約し、開始元の会話へ既存どおり追記する。成功結果は `projects/<ProjectId>/state/latest-summarize.json` に保存する。実行ID、project/conversation ID、開始・完了日時、URL、結果本文を保持する。失敗・中断では以前の成功結果を置き換えない。
 
-`/summarize` 単体は foreground read-only。選択中プロジェクトの現在実行中の要約と、最後に成功した要約を表示する。完了結果がなくても正常終了する。新しい実行、履歴追記、読み上げは行わない。
+`/summarize` 単体は foreground read-only。選択中プロジェクトの現在実行中の要約と、最後に成功した要約を表示する。完了結果がなくても正常終了する。新しい要約実行や履歴追記は行わない。要約完了時には音声通知せず、単体コマンドで保存済み結果を表示したときだけ、その本文を既存executorで非同期に読み上げる。完了結果がない場合は読み上げない。
 
 ## Image
 

@@ -53,10 +53,6 @@ public class BackgroundCommands {
           if(Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
           states.saveCompleted(CompletedExecution.of(e,source,result,clock.instant()));
           publish(e,"COMPLETED",result);
-          if(type==ExecutionType.SUMMARIZE && narrator!=null) {
-            try { runs.executeAuxiliary(()->{try(var scope=ExecutionScope.open(e)){narrator.narrateCompletedRun(result);}}); }
-            catch(java.util.concurrent.RejectedExecutionException ignored) {}
-          }
         } catch(Exception error) {
           publish(e,status(error),new HistoryFormatter().label(error.getMessage()==null?error.getClass().getSimpleName():error.getMessage()));
           org.slf4j.LoggerFactory.getLogger(getClass()).debug("Background execution failed: {}",e.id(),error);
@@ -96,7 +92,19 @@ public class BackgroundCommands {
       out.accept("Last completed summary:");
       out.accept("  Source: "+format.label(result.source()));
       out.accept("  Completed: "+format.timestamp(result.completedAt().toString()));
-      out.accept(CredentialRedactor.redact(result.result()).replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", ""));
+      String text=CredentialRedactor.redact(result.result()).replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "");
+      out.accept(text);
+      if(narrator!=null && !text.isBlank()) {
+        var execution=new ActiveExecution(result.id(),result.projectId(),result.conversationId(),
+            project.root(),result.type(),result.source(),result.startedAt());
+        try {
+          runs.executeAuxiliary(()->{
+            try(var scope=ExecutionScope.open(execution)) { narrator.narrateCompletedRun(text); }
+          });
+        } catch(java.util.concurrent.RejectedExecutionException error) {
+          org.slf4j.LoggerFactory.getLogger(getClass()).debug("Summary narration could not be scheduled",error);
+        }
+      }
     }
   }
 }

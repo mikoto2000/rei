@@ -34,6 +34,30 @@ class BackgroundCommandsTest {
     commands=new BackgroundCommands(router,projects,states,summaries,images,new AgentEventFactory(Clock.systemUTC()),events::add,Clock.systemUTC());
   }
   String show() { var out=new ArrayList<String>(); commands.showLastSummary(out::add); return String.join("\n",out); }
+  @Test void narratesOnlyWhenSavedSummaryIsDisplayedForCurrentProject() {
+    var narrator = mock(dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator.class);
+    commands.setNarrator(narrator);
+    when(summaries.summarize(any())).thenReturn(new SummaryResult(URI.create("https://a.example"), "summary A", null));
+    show();
+    assertThat(tasks).isEmpty();
+    commands.summarize(URI.create("https://a.example"));
+    show(); // No completed summary yet.
+    assertThat(tasks).hasSize(1);
+    tasks.removeFirst().run();
+    assertThat(tasks).isEmpty(); // Completion must not enqueue audio.
+    verifyNoInteractions(narrator);
+    projects.cd(b.root().toString());
+    show();
+    assertThat(tasks).isEmpty();
+    projects.cd(a.root().toString());
+    assertThat(show()).contains("summary A");
+    assertThat(router.activeExecutions()).isEmpty();
+    assertThat(tasks).hasSize(1);
+    projects.cd(b.root().toString());
+    tasks.removeFirst().run();
+    verify(narrator).narrateCompletedRun("summary A");
+    verifyNoMoreInteractions(narrator);
+  }
   @Test void snapshotsOwnershipPersistsLatestPerProjectAndBareDisplayDoesNotStartWork() {
     when(summaries.summarize(any())).thenAnswer(call->{
       var execution=ExecutionScope.current();
