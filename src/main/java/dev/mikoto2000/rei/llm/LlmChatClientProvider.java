@@ -181,7 +181,10 @@ public class LlmChatClientProvider {
     }
     if (LlmFeature.CHAT.equals(feature) && computerUseTools != null) {
       var computer = computerUseTools.getIfAvailable();
-      if (computer != null) builder.defaultToolCallbacks(computer.callback());
+      if (computer != null) {
+        builder.defaultToolCallbacks(computer.callback());
+        builder.defaultSystem(systemPromptService.systemPrompt() + "\n\n" + computer.orchestrationPrompt());
+      }
     }
     return builder.build();
   }

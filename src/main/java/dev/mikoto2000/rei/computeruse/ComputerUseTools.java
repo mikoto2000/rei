@@ -17,7 +17,16 @@ public final class ComputerUseTools {
     this.service = service; this.cancellation = cancellation; this.factory = factory; this.publisher = publisher;
   }
 
-  @Tool(description = "Preferred workflow for Windows primary-monitor GUI tasks. Observe screenshots and perform one action at a time toward goal. Returns DONE only when visually verified; safety-blocked actions require human approval. Do not retry blocked or failed workflows blindly.")
+  public String orchestrationPrompt() {
+    try {
+      return new org.springframework.core.io.ClassPathResource("computer-use/orchestration.md")
+          .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+    } catch (java.io.IOException error) {
+      throw new IllegalStateException("Missing desktop orchestration instructions", error);
+    }
+  }
+
+  @Tool(description = "Visual interaction with the Windows primary monitor. First use existing Shell/file/API tools for programmable preparation such as opening URLs or launching applications. Pass the remaining goal and completed preparation here; observe a fresh screenshot and perform one action at a time. Returns DONE only when visually verified; safety-blocked actions require human approval. Do not retry blocked or failed workflows blindly.")
   public ComputerUseResult computerUse(String goal) {
     var owner = AgentRunScope.current();
     Thread worker = Thread.currentThread();

@@ -64,6 +64,18 @@ Observation は goal、現在の PNG、直近 action summary、step / maxSteps �
 
 ## 有効化・設定
 
+### Shell と画面操作の使い分け
+
+有効な通常 chat と標準 ChatClient に computer-use/orchestration.md を追加する。
+通常エージェントは URL / ファイルを開く、アプリを探して起動するなどの準備に既存の
+runCommand / ファイル / API ツールを使い、画面の確認と操作を computerUse に渡す。
+アプリの事前登録は不要。たとえば Windows の Start-Process 'https://x.com/' で開き、
+起動結果を確認してから、残りの目的と準備済みの内容を computerUse の goal に含める。
+computerUse は新しい画像から現在の状態を確認する。起動コマンドの成功を完了とみなさない。
+ツールの選択順序はプロンプトによる誘導であり、固定の自動ディスパッチではない。
+内部 Vision モデルに Shell を公開する変更はなく、安全上の停止を別ツールで回避しない。
+feature 別の検索・記憶 client にはこの指示を追加しない。
+
 JDK 25 と対話可能な Windows desktop が必要。標準では無効。
 既存の設定ファイルへ次の設定を追加できる:
 
@@ -239,6 +251,7 @@ SafetyPolicy、Sleeper、RobotDriver、ローカル Clipboard を使用する。
 13. モデルの raw default tools（拒否されない failure → SDK merge 前の拒否）。
 14. 返答検証の診断（Tool 結果・終了イベントから理由が失われる failure → 安全な検証理由の伝達）。
 15. repair prompt（schema と具体的な修正理由がない failure → 専用 prompt への明示）。
+16. 通常 chat の使い分け指示（送信 Prompt にない failure → 有効時の指示追加、Shell との共存と他 feature への非追加を検証）。
 
 各 Green 後に summary / progress の共通化、adapter 分離、resource 化などを整理。
 追加の全 action / 実アプリ結合テストで回帰範囲を確認した。
@@ -286,6 +299,12 @@ in-memory HTTP transport で検証しており、実推論サーバーでの動�
 target/computer-use-diagnostics/rei-0.0.1-SNAPSHOT.jar。
 変更した 5 クラスの JAR 内 SHA-256 と検証済み class の一致を確認した。
 実モデルでの再現と GUI smoke は未実施であり、利用者の過去の不正返答の原因は未特定。
+
+Shell と画面操作の使い分け追加後も Maven verify で 1,542 件成功
+（failure / error / skipped は 0）。実行可能 JAR は
+target/computer-use-hybrid/rei-0.0.1-SNAPSHOT.jar。
+変更した 3 クラスと orchestration.md の JAR 内 SHA-256 の一致を確認した。
+実モデルによるツールの選択順序と GUI 操作は未検証。
 
 ## Manual Windows smoke test（CI では実行しない）
 

@@ -55,6 +55,12 @@ class ComputerUseApplicationTest {
         assertFalse(names.contains("captureScreen"));
         assertFalse(names.contains("click"));
         assertFalse(names.contains("typeText"));
+        String system = captured.get().getInstructions().stream()
+            .filter(m -> m instanceof org.springframework.ai.chat.messages.SystemMessage)
+            .map(m -> m.getText()).collect(java.util.stream.Collectors.joining("\n"));
+        assertEquals(feature.equals(dev.mikoto2000.rei.llm.LlmFeature.CHAT),
+            system.contains("Desktop task orchestration"));
+        if (feature.equals(dev.mikoto2000.rei.llm.LlmFeature.CHAT)) assertTrue(names.contains("runCommand"));
       } finally { history.clear(conversation); }
     }
     verifyNoInteractions(capture, vision, input, stabilizer);
