@@ -1,5 +1,10 @@
 # Rei
 
+Windows の screenshot / Vision を一次情報にして Java Robot で操作する
+`computerUse(goal)` workflow を追加しました（標準は無効、primary monitor のみ）。
+設定、Structured Output、安全制御、手動 smoke test は
+[Vision-first Computer Use](docs/vision-computer-use.md) を参照してください。
+
 保存先は Windows では `%LOCALAPPDATA%\Rei`、Linux では `$XDG_DATA_HOME/rei`（未設定時 `~/.local/share/rei`）、macOS では `~/Library/Application Support/Rei` です。`REI_DATA_DIR` で上書きできます。以下の `<rei-data-dir>` はこの保存先を表します。旧 `.rei` の扱いとプロジェクト別保存形式は [移行・設計メモ](docs/agent-run-project-state.md) を参照してください。
 
 Agent 実行中も追加入力できます。同じプロジェクトへの通常入力は実行中の Run に順番に渡され、LLM／Tool の境界で適用されます。`/cancel` は選択中プロジェクトの Run をキャンセルします。`/project cd` は未登録プロジェクトも登録して会話・Working Set の scope を切り替えます。

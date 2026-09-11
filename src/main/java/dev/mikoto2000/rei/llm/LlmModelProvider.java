@@ -52,6 +52,8 @@ public class LlmModelProvider {
   }
 
   private ChatModel createFeatureModel(String feature) {
+    if (LlmFeature.COMPUTER_USE.equals(feature))
+      dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(defaultChatModel);
     LlmProperties.Server server = properties.feature(feature);
     ChatModel model = server == null || !server.hasCustomServer()
         ? defaultChatModel
@@ -68,6 +70,12 @@ public class LlmModelProvider {
       return defaultModel;
     }
     return server.getModel();
+  }
+
+  public ChatModel computerUseChatModel() {
+    var model = chatModel(LlmFeature.COMPUTER_USE);
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+    return model;
   }
 
   public OpenAiChatOptions chatOptions(String feature, String defaultModel) {

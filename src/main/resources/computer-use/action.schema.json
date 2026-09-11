@@ -1,0 +1,102 @@
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "CLICK",
+        "DOUBLE_CLICK",
+        "TYPE_TEXT",
+        "PRESS_KEY",
+        "SCROLL",
+        "WAIT",
+        "DONE",
+        "FAILED",
+        "UNCERTAIN"
+      ]
+    },
+    "risk": {
+      "type": "string",
+      "enum": [
+        "LOW",
+        "CONFIRM_REQUIRED",
+        "PROHIBITED"
+      ]
+    },
+    "target": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "centerX": {
+              "type": "integer"
+            },
+            "centerY": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "description",
+            "centerX",
+            "centerY"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "confidence": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "text": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "key": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "amount": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "millis": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "action",
+    "risk",
+    "target",
+    "confidence",
+    "text",
+    "key",
+    "amount",
+    "millis",
+    "reason"
+  ],
+  "additionalProperties": false
+}

@@ -137,6 +137,15 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       return;
     }
     switch (event.type()) {
+      case COMPUTER_USE_PROGRESS -> {
+        closeAssistantLine();
+        closeThinkingLine();
+        var progress = (dev.mikoto2000.rei.event.ComputerUseProgressPayload) event.payload();
+        output.println("[computer_use] step=" + progress.step() + " " + progress.phase()
+            + (progress.action() == null ? "" : " " + progress.action())
+            + (progress.target() == null ? "" : " " + progress.target() + " (" + progress.x() + "," + progress.y() + ") confidence=" + progress.confidence())
+            + (progress.reason() == null ? "" : " " + progress.reason()));
+      }
       case EXECUTION_STARTED, EXECUTION_COMPLETED, EXECUTION_FAILED, EXECUTION_CANCELLED -> {
         renderBackgroundExecution((dev.mikoto2000.rei.event.BackgroundExecutionPayload)event.payload(),event.projectId());
       }
