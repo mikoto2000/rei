@@ -239,6 +239,10 @@ public class ReiApplication {
     PrintWriter writer = new PrintWriter(terminal.writer(), true);
     cmd.setOut(writer);
     cmd.setErr(writer);
+    var subagent = cmd.getSubcommands().get("subagent");
+    if (subagent != null && subagent.getCommand() instanceof dev.mikoto2000.rei.subagent.SubAgentCommand command) {
+      command.setShellOutput(writer);
+    }
     var runs = cmd.getSubcommands().get("runs");
     if (runs != null && runs.getCommand() instanceof dev.mikoto2000.rei.ui.shell.RunsCommand command) {
       command.setShellOutput(writer);

@@ -14,6 +14,7 @@ public class SubAgentCommand implements Callable<Integer> {
   private final SubAgentRegistry registry;
   private final SubAgentDefinitionLoader loader;
   private final SubAgentToolPolicy policy;
+  private java.io.PrintWriter shellOutput;
   @Spec CommandSpec spec;
   public SubAgentCommand() { this(null, null, null); }
   @org.springframework.beans.factory.annotation.Autowired
@@ -24,14 +25,17 @@ public class SubAgentCommand implements Callable<Integer> {
     if (registry.list().isEmpty()) out("SubAgents: none");
     for (var d : registry.list()) out(d.id() + " | " + d.name() + " | " + d.description());
   }); }
-  private void out(String text) { spec.commandLine().getOut().println(text); }
+  /** Keep JLine's encoding even when picocli rebinds the shared command's @Spec. */
+  public void setShellOutput(java.io.PrintWriter output) { this.shellOutput = output; }
+  private java.io.PrintWriter output() { return shellOutput == null ? spec.commandLine().getOut() : shellOutput; }
+  private void out(String text) { output().println(text); }
   private int execute(Action action) {
     try {
       if (registry == null) throw new IllegalArgumentException("SubAgent runtime unavailable");
       action.run(); return 0;
     } catch (Exception e) {
       out("[error] " + dev.mikoto2000.rei.event.CredentialRedactor.redact(e.getMessage())); return 2;
-    } finally { spec.commandLine().getOut().flush(); }
+    } finally { output().flush(); }
   }
   @FunctionalInterface private interface Action { void run() throws Exception; }
   @Command(name = "list") public static class ListCommand implements Callable<Integer> {

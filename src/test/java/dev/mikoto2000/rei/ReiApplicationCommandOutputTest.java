@@ -25,6 +25,59 @@ import picocli.CommandLine;
 
 class ReiApplicationCommandOutputTest {
 
+  @org.junit.jupiter.api.io.TempDir
+  java.nio.file.Path subagentDirectory;
+
+  @CommandLine.Command(name = "rei", subcommands = dev.mikoto2000.rei.subagent.SubAgentCommand.class)
+  static class SubagentRoot { }
+
+  @ParameterizedTest
+  @CsvSource({ "UTF-8, false", "UTF-8, true", "windows-31j, false", "windows-31j, true" })
+  void subagentUsesTerminalEncodingAfterCompletion(String encoding, boolean afterCompletion) throws Exception {
+    java.nio.file.Files.writeString(subagentDirectory.resolve("reviewer.yaml"), """
+        id: reviewer
+        name: レビュー担当
+        description: コードと設計を独立して検証します。
+        systemPrompt: レビューしてください。
+        tools: []
+        maxSteps: 2
+        timeout: 30s
+        """);
+    var policy = new dev.mikoto2000.rei.subagent.SubAgentToolPolicy(java.util.Set.of());
+    var loader = new dev.mikoto2000.rei.subagent.SubAgentDefinitionLoader(policy, model -> false);
+    var registry = new dev.mikoto2000.rei.subagent.SubAgentRegistry(subagentDirectory, loader);
+    assertEquals(java.util.List.of(), registry.reload());
+    var bean = new dev.mikoto2000.rei.subagent.SubAgentCommand(registry, loader, policy);
+    CommandLine root = new CommandLine(new SubagentRoot(), new CommandLine.IFactory() {
+      public <K> K create(Class<K> type) throws Exception {
+        return type == dev.mikoto2000.rei.subagent.SubAgentCommand.class ? type.cast(bean)
+            : CommandLine.defaultFactory().create(type);
+      }
+    });
+    var output = configureOutput(root, encoding);
+    // Shell startup constructs the completer after wiring the terminal, even before the first Tab.
+    var completer = ReiLineReaderFactory.completer(root);
+    if (afterCompletion) {
+      var parser = new DefaultParser();
+      for (String input : java.util.List.of("/subagent ", "/subagent show ")) {
+        completer.complete(mock(LineReader.class), parser.parse(input, input.length(), Parser.ParseContext.COMPLETE), new ArrayList<>());
+      }
+    }
+    // A shared Spring command can be materialized again, rebinding its @Spec to a default writer.
+    // The active Shell must keep using its captured JLine writer even after that happens.
+    new CommandLine(bean).setOut(new PrintWriter(new java.io.StringWriter()));
+    for (String[] arguments : java.util.List.of(new String[]{"subagent"}, new String[]{"subagent", "list"},
+        new String[]{"subagent", "show", "reviewer"})) {
+      output.reset();
+      assertEquals(0, root.execute(arguments));
+      org.assertj.core.api.Assertions.assertThat(output.toString(Charset.forName(encoding)))
+          .contains("レビュー担当", "コードと設計を独立して検証します。");
+    }
+    output.reset();
+    assertEquals(2, root.execute("subagent", "show", "存在しない担当"));
+    org.assertj.core.api.Assertions.assertThat(output.toString(Charset.forName(encoding))).contains("存在しない担当");
+  }
+
   @ParameterizedTest
   @CsvSource({ "UTF-8, false", "UTF-8, true", "windows-31j, false", "windows-31j, true" })
   void summaryUsesTerminalEncodingAndFlushes(String encoding, boolean afterCompletion) {
