@@ -12,6 +12,13 @@ import dev.mikoto2000.rei.llm.*;
 @ConditionalOnProperty(name = "rei.computer-use.enabled", havingValue = "true")
 public class ComputerUseConfiguration {
   @Bean RobotDriver computerRobotDriver() { return new AwtRobotDriver(); }
+  @Bean ComputerDiagnostics computerDiagnostics(
+      @org.springframework.beans.factory.annotation.Value("${rei.computer-use.diagnostics.enabled:false}") boolean enabled,
+      @org.springframework.beans.factory.annotation.Value("${rei.computer-use.diagnostics.directory:}") String directory) {
+    return new ComputerDiagnostics(!enabled ? null : directory.isBlank()
+        ? dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve("computer-use-diagnostics")
+        : java.nio.file.Path.of(directory));
+  }
   @Bean Sleeper computerSleeper() { return Thread::sleep; }
   @Bean ScreenCapture computerScreenCapture(RobotDriver driver) { return new RobotScreenCapture(driver); }
   @Bean ComputerInput computerInput(RobotDriver driver, Sleeper sleeper, ComputerUseProperties properties) {
@@ -30,9 +37,9 @@ public class ComputerUseConfiguration {
   }
   @Bean ComputerUseService computerUseService(ScreenCapture capture, ComputerVisionModel model, ComputerInput input,
       UiStabilizer stabilizer, SafetyPolicy safety, CommandCancellationService cancellation,
-      AgentEventFactory factory, AgentEventPublisher publisher, ComputerUseProperties properties) {
+      AgentEventFactory factory, AgentEventPublisher publisher, ComputerUseProperties properties, ComputerDiagnostics diagnostics) {
     return new ComputerUseService(capture, model, input, stabilizer, safety, cancellation::isCancellationRequested,
-        progress -> publisher.publish(factory.computerUseProgress(progress)), properties.maxSteps(), properties.historyLimit());
+        progress -> publisher.publish(factory.computerUseProgress(progress)), properties.maxSteps(), properties.historyLimit(), diagnostics);
   }
   @Bean ComputerUseTools computerUseTools(ComputerUseService service, CommandCancellationService cancellation,
       AgentEventFactory factory, AgentEventPublisher publisher) {

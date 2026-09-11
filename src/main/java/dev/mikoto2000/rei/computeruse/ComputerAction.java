@@ -3,7 +3,9 @@ package dev.mikoto2000.rei.computeruse;
 /** Exactly one decision; terminal and uncertain decisions never dispatch input. */
 public sealed interface ComputerAction {
   enum Risk { LOW, CONFIRM_REQUIRED, PROHIBITED }
-  record Target(int x, int y, String description) {}
+  record Target(String displayId, int x, int y, String description) {
+    public Target(int x, int y, String description) { this(null, x, y, description); }
+  }
   default Risk risk() { return Risk.LOW; }
   record Click(Target target, double confidence, Risk risk) implements ComputerAction {}
   record DoubleClick(Target target, double confidence, Risk risk) implements ComputerAction {}

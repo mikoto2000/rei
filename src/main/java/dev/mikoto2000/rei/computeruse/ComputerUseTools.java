@@ -26,7 +26,7 @@ public final class ComputerUseTools {
     }
   }
 
-  @Tool(description = "Visual interaction with the Windows primary monitor. First use existing Shell/file/API tools for programmable preparation such as opening URLs or launching applications. Pass the remaining goal and completed preparation here; observe a fresh screenshot and perform one action at a time. Returns DONE only when visually verified; safety-blocked actions require human approval. Do not retry blocked or failed workflows blindly.")
+  @Tool(description = "Visual interaction across attached Windows displays. First use existing Shell/file/API tools for programmable preparation such as opening URLs or launching applications. Pass the remaining goal and completed preparation here; observe a fresh screenshot and perform one action at a time. Returns DONE only when visually verified; safety-blocked actions require human approval. Do not retry blocked or failed workflows blindly.")
   public ComputerUseResult computerUse(String goal) {
     var owner = AgentRunScope.current();
     Thread worker = Thread.currentThread();

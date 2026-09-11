@@ -15,13 +15,21 @@ public final class RobotComputerInput implements ComputerInput {
     if (action instanceof ComputerAction.Done || action instanceof ComputerAction.Failed
         || action instanceof ComputerAction.Wait || action instanceof ComputerAction.Uncertain)
       throw new IllegalArgumentException("Not an input action");
-    var geometry = driver.geometry();
-    geometry.requirePrimary();
-    if (!geometry.bounds().equals(screen.bounds())) throw new IllegalArgumentException("Display changed since observation");
+    var current = RobotScreenCapture.currentDisplays(driver);
+    for (var captured : screen.displays()) {
+      var observed = captured.geometry();
+      if (current.stream().noneMatch(g -> g.id().equals(observed.id()) && g.bounds().equals(observed.bounds())
+          && g.scaleX() == observed.scaleX() && g.scaleY() == observed.scaleY() && g.primary() == observed.primary()))
+        throw new IllegalArgumentException("Display changed since observation");
+    }
+    if (current.size() != screen.displays().size()) throw new IllegalArgumentException("Display topology changed since observation");
+    var selected = action instanceof ComputerAction.Click a ? screen.display(a.target().displayId())
+        : action instanceof ComputerAction.DoubleClick a ? screen.display(a.target().displayId()) : screen.displays().getFirst();
+    driver.selectDisplay(selected.geometry());
     switch (action) {
-      case ComputerAction.Click a -> click(point(a.target(), screen, geometry));
+      case ComputerAction.Click a -> click(selected.desktopPoint(a.target()));
       case ComputerAction.DoubleClick a -> {
-        Point point = point(a.target(), screen, geometry);
+        Point point = selected.desktopPoint(a.target());
         click(point); sleeper.sleep(100); click(point);
       }
       case ComputerAction.TypeText a -> clipboard.paste(a.text(), () -> {
@@ -32,13 +40,6 @@ public final class RobotComputerInput implements ComputerInput {
       case ComputerAction.Scroll a -> driver.wheel(a.amount());
       default -> throw new IllegalArgumentException("Not an input action");
     }
-  }
-  private Point point(ComputerAction.Target target, CapturedScreen screen, ScreenGeometry geometry) {
-    var bounds = geometry.bounds();
-    var point = new Point(bounds.x + (int)((long)target.x() * bounds.width / screen.image().getWidth()),
-        bounds.y + (int)((long)target.y() * bounds.height / screen.image().getHeight()));
-    if (!bounds.contains(point) || !geometry.virtualBounds().contains(point)) throw new IllegalArgumentException("Outside desktop");
-    return point;
   }
   private void click(Point point) {
     driver.move(point.x, point.y);

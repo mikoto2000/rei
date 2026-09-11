@@ -66,7 +66,8 @@ null の返答とサイズ超過のどちらだったかは分からない。
 
 Observation は goal、現在の PNG、直近 action summary、step / maxSteps を持つ。
 履歴はデフォルト直近 5 件。入力文字列の全文や過去画像は履歴に追加しない。
-画像は推論リクエストだけに含め、イベントやディスクへ保存しない。
+画像は既定では推論リクエストだけに含める。イベントに画像は含めない。
+診断設定を有効にした場合だけ、送信元画像と座標診断をローカル保存する（後述）。
 
 ## 有効化・設定
 
@@ -143,7 +144,7 @@ risk は LOW / CONFIRM_REQUIRED / PROHIBITED。
 {
   "action": "CLICK",
   "risk": "LOW",
-  "target": {"description": "保存ボタン", "centerX": 123, "centerY": 45},
+  "target": {"displayId": "モニターの識別子", "description": "保存ボタン", "centerX": 123, "centerY": 45},
   "confidence": 0.94,
   "text": null,
   "key": null,
@@ -167,15 +168,18 @@ MOVE_MOUSE / DRAG / HOTKEY は v1 で不要と判断して未公開。
 
 - `ScreenCapture` → `RobotScreenCapture` → `RobotDriver` → `AwtRobotDriver`。
 - `ComputerInput` → `RobotComputerInput` → 同じ native driver。
-- driver だけが java.awt.Robot を所有し、capture は createScreenCapture を使う。
-- v1 の capture 対象は **primary monitor 一台のみ**。別モニター選択、仮想全画面、
-  active window 検出は提供しない。全対象ウィンドウを primary monitor に置く。
+- driver だけが java.awt.Robot を所有する。接続されたディスプレイを列挙し、各画面用の
+  Robot で createMultiResolutionScreenCapture の最大解像度画像を取得する。
+- 各画像を別々の添付として、添付順・displayId・画像サイズ・primary フラグと共に送信する。
+  全画面の結合や縮小は行わない。推論モデルには複数画像入力への対応が必要。
+  CLICK / DOUBLE_CLICK は target.displayId と画像内座標を使う。
+  未指定の displayId は単一画面の旧形式だけ許可し、複数画面では拒否する。
 - screenshot 座標は画像左上を (0,0) とする。Robot は AWT の画面論理座標を使用する。
   point の変換は `origin + floor(imagePixel * logicalSize / imageSize)`。
   HiDPI の倍率を画像へ重ねて掛けない。負の origin と画像 resize を Fake でテストする。
-- capture 前後で display geometry を比較。入力直前にも primary 選択、capture 時の
-  bounds との一致、画像内座標、virtual screen bounds 内の点であることをチェック。
-  モニター構成変更を検出したら入力を拒否する。
+- capture 前後で全画面の geometry を比較。入力直前にも画面数、各識別子、bounds、
+  倍率、primary フラグを再確認する。変更検出時は入力を拒否する。
+  対象画面の Robot を入力直前に作り直し、古い画面構成の Robot を再利用しない。
 - CLICK / DOUBLE_CLICK は左ボタン。PRESS_KEY は prompt に列挙した単一キーのみ。
   SCROLL は wheel notches（正:下、負:上）。スクロール対象はマウス位置に依存するため、
   先に対象領域へクリックしてマウス位置と focus を合わせる。
@@ -184,6 +188,37 @@ MOVE_MOUSE / DRAG / HOTKEY は v1 で不要と判断して未公開。
 AWT の座標仕様は [Java 25 Robot API](https://docs.oracle.com/en/java/javase/25/docs/api/java.desktop/java/awt/Robot.html)
 を参照。Structured Output は [Spring AI の公式説明](https://spring.io/blog/2024/08/09/spring-ai-embraces-openais-structured-outputs-enhancing-json-response/)
 を参照し、実際の API は本プロジェクトの 2.0.0-M3 jar で確認した。
+
+## 画像・座標の診断記録
+
+既定は無効。以下を外部 application.yaml の rei.computer-use に追加するか、
+JVM 引数 -Drei.computer-use.diagnostics.enabled=true を指定する。
+
+```yaml
+rei:
+  computer-use:
+    enabled: true
+    diagnostics:
+      enabled: true
+      # directory: F:/rei-diagnostics  # 任意の保存先
+```
+
+既定の保存先は Rei データディレクトリ配下 computer-use-diagnostics。
+Windows の通常設定では C:/Users/mikoto/AppData/Local/Rei/computer-use-diagnostics。
+実行ごとの日時・UUID フォルダーを作り、Shell の diagnostics イベントにパスを表示する。
+各 step-NNN フォルダーには次を保存する。
+
+- display-1.png など: モデルへ渡す元画像。画像の順序は添付順と一致。
+- displays.json: 画像ファイルと displayId、論理画面範囲、表示倍率、画像サイズの対応。
+- target.png: 選択画像に指定座標の赤い印を描いた診断画像。元画像・推論画像は変更しない。
+- decided.json: 選ばれた action とクリック座標の変換結果。安全判定などで未実行の場合も残る。
+- dispatched.json: 入力呼び出しが正常に戻った後の記録。robotX/Y は Robot に渡す座標であり、
+  OS が実際にクリックを受理した証明ではない。Wait / Uncertain はこのファイルを作らない。
+
+Shell にも input_coordinates イベントで displayId、画像内座標、Robot 座標を表示する。
+保存失敗は diagnostics_error として通知し、入力操作の再試行や失敗への置換は行わない。
+JSON には goal、入力文字列、モデルの自由文を保存しないが、PNG にはその時点の全画面内容が含まれる。
+診断ファイルは自動削除しない。調査終了後は診断を無効化し、不要な記録を削除する。
 
 ## Unicode / clipboard
 
@@ -234,7 +269,9 @@ SafetyPolicy、Sleeper、RobotDriver、ローカル Clipboard を使用する。
 | --- | --- |
 | ComputerUseServiceTest | Observe→Act→Observe 順序、DONE/FAILED、上限、履歴制限、cancel、低 confidence、エラー区別 |
 | ActionValidationTest | 全 action、必須値、厳密 JSON、座標、confidence、型 |
-| RobotAdaptersTest | 座標変換、primary 制約、入力順序、全 input action、release、stabilizer |
+| RobotAdaptersTest | 旧単一画面 adapter の互換性、座標変換、入力順序、release、stabilizer |
+| MultiDisplayTest | 複数画像入力、画面選択、負の原点、混在 DPI、切断・倍率変更時の拒否 |
+| ComputerDiagnosticsTest | 元画像と座標印、座標 JSON、Shell 通知、無効設定、保存失敗時の入力非再試行 |
 | ClipboardPasteTest | Unicode、復元、native 遅延取得、競合、失敗 |
 | SpringAiComputerVisionModelTest | image/goal/history、schema、Tool 禁止、bounded repair、cancel |
 | ComputerVisionWireTest | 実 SDK の JSON シリアライズ、tools / tool_choice の省略、画像と strict schema の維持（HTTP transport は mock） |
@@ -262,6 +299,9 @@ SafetyPolicy、Sleeper、RobotDriver、ローカル Clipboard を使用する。
 16. 通常 chat の使い分け指示（送信 Prompt にない failure → 有効時の指示追加、Shell との共存と他 feature への非追加を検証）。
 17. 操作への説明付与（reason を拒否する failure → 型・長さを検証して許可）。
 18. 返答なし・サイズ超過・出力上限（理由を識別できない failure → 診断分離、出力上限時の再試行停止）。
+19. 複数画面 adapter（未定義 API → 画面ごとの取得・座標変換・入力前の構成検証）。
+20. 複数画面 Vision（1画像のみ・識別子を拒否する failure → 全画像入力と displayId の検証）。
+21. 診断保存と実行ループ（未定義 API → 元画像・座標印・入力後記録、失敗時の非再試行）。
 
 各 Green 後に summary / progress の共通化、adapter 分離、resource 化などを整理。
 追加の全 action / 実アプリ結合テストで回帰範囲を確認した。
@@ -322,10 +362,16 @@ target/computer-use-response-fix/rei-0.0.1-SNAPSHOT.jar。
 変更した 3 クラスと 2 プロンプトの JAR 内 SHA-256 一致を確認した。
 実推論サーバーと GUI での成功は未検証。
 
+複数画面・座標診断追加後は Maven verify で 1,556 件成功
+（failure / error / skipped は 0）。実行可能 JAR は
+target/computer-use-multidisplay/rei-0.0.1-SNAPSHOT.jar。
+Computer Use の 28 クラスの JAR 内 SHA-256 が検証済み class と一致することを確認した。
+混在 DPI と負座標は Fake で検証済み。実機の複数画面でのモデル認識・クリック位置は未検証。
+
 ## Manual Windows smoke test（CI では実行しない）
 
 1. API / model を上記の Vision + Structured Output 対応構成にする。
-2. primary monitor に空のメモ帳を開く。Rei とメモ帳の双方が見えるよう配置する。
+2. 操作対象のディスプレイに空のメモ帳を開く。
 3. PowerShell から起動:
 
 ```powershell
@@ -338,17 +384,18 @@ target/computer-use-response-fix/rei-0.0.1-SNAPSHOT.jar。
 5. `[computer_use]` の observed / decided / action_completed を確認。
    メモ帳に文字が表示され、後続観測で DONE になることを確認する。
 6. 任意で日本語入力、既存の Esc cancellation、表示倍率 100/150/200%、
-   secondary monitor を含む構成を確認。全操作対象は primary に置く。
+   secondary monitor を含む構成、左・上側配置、100/150/200% の混在を確認。
+   診断を有効にし、元画像と target.png、dispatched.json の対応を確認する。
 7. 実行後に clipboard が元へ戻っていることを確認する。
 
 GUI smoke は手順の提供まで。自動テスト実行では実 desktop / 実モデルの成功は検証しない。
 
 ## 現在の制約と改善候補
 
-primary のみ、Windows の通常対話 desktop のみ。UAC secure desktop、
+Windows の通常対話 desktop のみ。UAC secure desktop、
 Remote Desktop、OCR、UIA、独自 detector、batching、複数プロセス間の desktop 排他は非対応。
 ユーザーの並行操作で screenshot と実画面が変わる競合は完全には排除できない。
 
 今後の候補は Human Approval UI と policy 強化、HTTP 推論の明示的 deadline / cancel、
-対象付き scroll / hotkey / drag、monitor 選択、画像差分による stabilization。
+対象付き scroll / hotkey / drag、画像差分による stabilization。
 画像差分は将来の observation metadata として検討し、goal 成功の判定器にはしない。

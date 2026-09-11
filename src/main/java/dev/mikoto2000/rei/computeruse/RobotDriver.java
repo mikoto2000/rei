@@ -4,6 +4,8 @@ import java.awt.image.BufferedImage;
 /** Narrow native boundary, permitting adapter tests without constructing Robot. */
 public interface RobotDriver {
   ScreenGeometry geometry() throws Exception;
+  default java.util.List<ScreenGeometry> displays() throws Exception { return java.util.List.of(geometry()); }
+  default void selectDisplay(ScreenGeometry geometry) throws Exception {}
   BufferedImage capture(Rectangle bounds) throws Exception;
   void move(int x, int y);
   void mousePress(int mask);

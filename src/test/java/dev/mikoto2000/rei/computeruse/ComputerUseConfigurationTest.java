@@ -10,6 +10,14 @@ import dev.mikoto2000.rei.event.*;
 import dev.mikoto2000.rei.llm.*;
 
 class ComputerUseConfigurationTest {
+  @org.junit.jupiter.api.io.TempDir java.nio.file.Path diagnosticsDirectory;
+  @Test void diagnosticsAreOptInAndUseConfiguredDirectory() {
+    runner.withPropertyValues("rei.computer-use.enabled=true").run(context ->
+        assertThat(context.getBean(ComputerDiagnostics.class).begin()).isNull());
+    runner.withPropertyValues("rei.computer-use.enabled=true", "rei.computer-use.diagnostics.enabled=true",
+        "rei.computer-use.diagnostics.directory=" + diagnosticsDirectory).run(context ->
+        assertThat(context.getBean(ComputerDiagnostics.class).begin().getParent()).isEqualTo(diagnosticsDirectory));
+  }
   private final ApplicationContextRunner runner = new ApplicationContextRunner()
       .withUserConfiguration(ComputerUseConfiguration.class)
       .withBean(LlmModelProvider.class, () -> new LlmModelProvider(mock(ChatModel.class),new LlmProperties()))
