@@ -17,7 +17,7 @@ import reactor.core.scheduler.Schedulers;
 /** Explicit streaming LLM -> tool-result loop. Existing client advisors still own prompt/memory handling. */
 public class StagnationChatModel implements ChatModel {
   private final ChatModel delegate;
-  private final ToolCallingManager tools = ToolCallingManager.builder().build();
+  private final dev.mikoto2000.rei.core.chat.ToolLoopSupport tools = new dev.mikoto2000.rei.core.chat.ToolLoopSupport();
 
   public StagnationChatModel(ChatModel delegate) { this.delegate = delegate; }
   @Override public ChatOptions getDefaultOptions() { return delegate.getDefaultOptions(); }
@@ -53,7 +53,7 @@ public class StagnationChatModel implements ChatModel {
         if (result.hasToolCalls() && !OutputLimitDetector.isOutputLimitReached(result)) {
           return Mono.fromCallable(() -> {
             context.checkActive();
-            try { return tools.executeToolCalls(prompt, result); }
+            try { return tools.execute(prompt, result); }
             finally { context.endIteration(); }
           }).subscribeOn(Schedulers.boundedElastic()).flatMapMany(toolResult -> {
             if (toolResult.returnDirect()) return Flux.just(new ChatResponse(ToolExecutionResult.buildGenerations(toolResult)));

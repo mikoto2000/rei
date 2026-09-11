@@ -84,6 +84,16 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   @Override
   public synchronized void onEvent(AgentEvent event) {
+    if (event.sessionId() != null && event.sessionId().startsWith("subagent:")
+        && !(event.payload() instanceof dev.mikoto2000.rei.event.SubAgentLifecyclePayload)) return;
+    if (event.payload() instanceof dev.mikoto2000.rei.event.SubAgentLifecyclePayload child) {
+      closeAssistantLine();
+      closeThinkingLine();
+      output.println("[subagent] " + child.agentId() + " " + child.status().toLowerCase(java.util.Locale.ROOT)
+          + " (" + formatSeconds(child.duration()) + " s)");
+      output.flush();
+      return;
+    }
     if (isTopicEvent(event) && topicNotificationOptions.verbosity() != TopicNotificationVerbosity.VERBOSE) {
       renderTopicSummary(event);
       output.flush();
@@ -475,7 +485,10 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   /** Compact restore mode; audit records remain unchanged and can also be fed to onEvent for full replay. */
   public synchronized void onRecentEvent(AgentEvent event) {
+    if (event.sessionId() != null && event.sessionId().startsWith("subagent:")
+        && !(event.payload() instanceof dev.mikoto2000.rei.event.SubAgentLifecyclePayload)) return;
     String detail = switch (event.payload()) {
+      case dev.mikoto2000.rei.event.SubAgentLifecyclePayload child -> child.agentId() + " " + child.status();
       case ToolCompletedPayload tool -> tool.toolName();
       case ToolStartedPayload tool -> tool.toolName();
       case ToolFailedPayload tool -> tool.toolName();

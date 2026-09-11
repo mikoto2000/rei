@@ -65,6 +65,9 @@ public class LlmChatClientProvider {
   private final AgentEventFactory eventFactory;
   private final AgentEventPublisher eventPublisher;
   private final Map<String, ChatClient> cache = new ConcurrentHashMap<>();
+  private ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> subAgentTools;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setSubAgentTools(ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> tools) { this.subAgentTools = tools; }
 
   public LlmChatClientProvider(LlmModelProvider modelProvider, CoreProperties coreProperties,
       SystemPromptService systemPromptService, ChatMemory chatMemory,
@@ -168,6 +171,10 @@ public class LlmChatClientProvider {
     ToolEventCallbackProvider toolCallbackProvider = toolEventCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {
       builder.defaultToolCallbacks(toolCallbackProvider);
+    }
+    if (LlmFeature.CHAT.equals(feature) && subAgentTools != null && subAgentTools.getIfAvailable() != null) {
+      builder.defaultToolCallbacks(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
+          subAgentTools.getObject().callback(), eventFactory, eventPublisher));
     }
     return builder.build();
   }

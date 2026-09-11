@@ -33,6 +33,11 @@ public final class DefaultAgentUiProjection implements AgentUiProjection {
     if (event == null) {
       return;
     }
+    // A child has its own ephemeral conversation; it must not replace the visible parent's state.
+    if (event.sessionId() != null && event.sessionId().startsWith("subagent:")) {
+      lastSequence = Math.max(lastSequence, event.sequence());
+      return;
+    }
     if (event.sequence() > 0 && event.sequence() <= lastSequence) {
       log.debug("Ignoring stale Agent Event: sequence={}, lastSequence={}", event.sequence(), lastSequence);
       return;

@@ -14,6 +14,7 @@ public class CommandCancellationService {
     final AtomicReference<Disposable> disposableRef = new AtomicReference<>();
     final AtomicReference<Thread> executionThreadRef = new AtomicReference<>();
     final AtomicBoolean cancellationRequested = new AtomicBoolean(false);
+    final java.util.concurrent.CopyOnWriteArrayList<Runnable> children = new java.util.concurrent.CopyOnWriteArrayList<>();
     final String projectId;
     State(String projectId) { this.projectId = projectId; }
   }
@@ -53,9 +54,18 @@ public class CommandCancellationService {
     for (var state : runs.values()) if (state.projectId == null) changed |= cancel(state);
     return changed;
   }
+  /** Adds a child without replacing the parent's streaming subscription. Safe against registration/cancel races. */
+  public Disposable onCancel(String runId, Runnable child) {
+    State state = runId == null ? legacy : runs.get(runId);
+    if (state == null) return () -> { };
+    state.children.add(child);
+    if (state.cancellationRequested.get()) child.run();
+    return () -> state.children.remove(child);
+  }
   private boolean cancel(State state) {
     if (state == null) return false;
     boolean changed = state.cancellationRequested.compareAndSet(false, true);
+    state.children.forEach(Runnable::run);
     Disposable disposable = state.disposableRef.getAndSet(null);
     if (disposable != null) {
       disposable.dispose();
@@ -89,6 +99,8 @@ public class CommandCancellationService {
     if (run != null) {
       var removed = runs.remove(run.runId());
       if (removed != null) {
+        removed.children.forEach(Runnable::run);
+        removed.children.clear();
         var disposable = removed.disposableRef.getAndSet(null);
         if (disposable != null) disposable.dispose();
       }

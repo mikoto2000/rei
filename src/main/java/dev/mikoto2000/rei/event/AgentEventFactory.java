@@ -33,6 +33,15 @@ public class AgentEventFactory {
 
   // ---- Agent Run ----
 
+  public AgentEvent subAgentLifecycle(AgentEventType type, String parentRunId, String subAgentRunId,
+      String agentId, String task, String status, long duration, String failureReason) {
+    if (type != AgentEventType.SUBAGENT_STARTED && type != AgentEventType.SUBAGENT_COMPLETED
+        && type != AgentEventType.SUBAGENT_FAILED) throw new IllegalArgumentException("Not a SubAgent lifecycle event");
+    return newEvent(type, subAgentRunId, parentRunId,
+        new SubAgentLifecyclePayload(parentRunId, subAgentRunId, bounded(agentId, 64), bounded(task, 120),
+            status, duration, bounded(failureReason, 120)));
+  }
+
   public AgentEvent historySearchCompleted(HistorySearchCompletedPayload payload) {
     var event = newEvent(AgentEventType.HISTORY_SEARCH_COMPLETED, null, null, payload);
     return new AgentEvent(event.id(), event.sequence(), event.timestamp(), event.type(), event.version(),
@@ -82,7 +91,8 @@ public class AgentEventFactory {
 
   public AgentEvent llmRequestFailed(String runId, String requestId, long durationMs, Throwable error) {
     return newEvent(AgentEventType.LLM_REQUEST_FAILED, runId, requestId,
-        new LlmRequestFailedPayload(requestId, durationMs, ErrorInformation.from(error)));
+        new LlmRequestFailedPayload(requestId, durationMs,
+            new ErrorInformation(error.getClass().getSimpleName(), bounded(error.getMessage(), 120), null)));
   }
 
   public AgentEvent llmResponseFirstToken(String runId, String requestId, long durationMs) {

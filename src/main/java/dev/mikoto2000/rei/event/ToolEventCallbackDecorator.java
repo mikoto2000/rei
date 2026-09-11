@@ -59,7 +59,8 @@ public class ToolEventCallbackDecorator implements ToolCallback {
       eventPublisher.publish(eventFactory.toolCompleted(toolCallId, toolName, duration, summarize(result)));
       return result;
     } catch (RuntimeException e) {
-      eventPublisher.publish(eventFactory.toolFailed(toolCallId, toolName, ErrorInformation.from(e)));
+      eventPublisher.publish(eventFactory.toolFailed(toolCallId, toolName,
+          new ErrorInformation(e.getClass().getSimpleName(), summarize(e.getMessage()), null)));
       throw e;
     }
     }
