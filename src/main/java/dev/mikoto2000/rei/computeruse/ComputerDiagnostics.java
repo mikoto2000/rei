@@ -57,6 +57,7 @@ public final class ComputerDiagnostics {
       data.putAll(geometry(display));
       var point = display.desktopPoint(target);
       data.put("imageX",target.x()); data.put("imageY",target.y());
+      data.put("normalizedX",target.normalizedX()); data.put("normalizedY",target.normalizedY());
       data.put("robotX",point.x); data.put("robotY",point.y);
       var source = display.image();
       var overlay = new BufferedImage(source.getWidth(),source.getHeight(),BufferedImage.TYPE_INT_RGB);

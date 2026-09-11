@@ -84,6 +84,12 @@ public final class ActionParser {
     JsonNode value = node.get("target");
     boolean legacy = screen.displays().size() == 1 && value != null && !value.has("displayId");
     fields(value, legacy ? Set.of("centerX", "centerY", "description") : Set.of("displayId", "centerX", "centerY", "description"));
-    return new Target(legacy ? null : string(value,"displayId"), integer(value, "centerX"), integer(value, "centerY"), string(value, "description"));
+    String id = legacy ? null : string(value,"displayId");
+    var image = screen.display(id).image();
+    double x = number(value,"centerX"), y = number(value,"centerY");
+    if (!Double.isFinite(x) || !Double.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1)
+      throw new InvalidComputerDecision("centerX/centerY must be normalized fractions in [0,1], not pixels or percentages in [0,100]");
+    return new Target(id, Math.min(image.getWidth()-1,(int)Math.floor(x * image.getWidth())),
+        Math.min(image.getHeight()-1,(int)Math.floor(y * image.getHeight())), string(value,"description"), x, y);
   }
 }

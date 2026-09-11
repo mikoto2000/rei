@@ -144,7 +144,7 @@ risk は LOW / CONFIRM_REQUIRED / PROHIBITED。
 {
   "action": "CLICK",
   "risk": "LOW",
-  "target": {"displayId": "モニターの識別子", "description": "保存ボタン", "centerX": 123, "centerY": 45},
+  "target": {"displayId": "モニターの識別子", "description": "保存ボタン", "centerX": 0.522, "centerY": 0.713},
   "confidence": 0.94,
   "text": null,
   "key": null,
@@ -154,7 +154,9 @@ risk は LOW / CONFIRM_REQUIRED / PROHIBITED。
 }
 ```
 
-Java 側で座標、有限の confidence [0,1]、必須フィールド、長さ、キー名、
+centerX / centerY は選択画面全体に対する 0〜1 の割合。ブラウザのウィンドウ内割合や
+ピクセル値、0〜100 の百分率ではない。0 は左・上、1 は右・下。
+Java 側で有限の正規化座標 [0,1]、有限の confidence [0,1]、必須フィールド、長さ、キー名、
 scroll / wait の上限を検証。0.8 未満のクリック confidence は dispatch せず UNCERTAIN に変換。
 不正応答は default 1 回だけ同一観測の schema 修復を依頼し、再失敗は MODEL_ERROR。
 通常の Provider HTTP retry / timeout は既存 AI 基盤の設定に従う。
@@ -172,9 +174,11 @@ MOVE_MOUSE / DRAG / HOTKEY は v1 で不要と判断して未公開。
   Robot で createMultiResolutionScreenCapture の最大解像度画像を取得する。
 - 各画像を別々の添付として、添付順・displayId・画像サイズ・primary フラグと共に送信する。
   全画面の結合や縮小は行わない。推論モデルには複数画像入力への対応が必要。
-  CLICK / DOUBLE_CLICK は target.displayId と画像内座標を使う。
+  CLICK / DOUBLE_CLICK のモデル返答は target.displayId と正規化座標を使う。
   未指定の displayId は単一画面の旧形式だけ許可し、複数画面では拒否する。
-- screenshot 座標は画像左上を (0,0) とする。Robot は AWT の画面論理座標を使用する。
+- 返答の割合を `min(imageSize - 1, floor(fraction * imageSize))` で画像内ピクセルに変換する。
+  内部 Target にはこの座標と元の割合を保持する。座標 1.0 は画像の最終ピクセルに収める。
+  screenshot 座標は画像左上を (0,0) とする。Robot は AWT の画面論理座標を使用する。
   point の変換は `origin + floor(imagePixel * logicalSize / imageSize)`。
   HiDPI の倍率を画像へ重ねて掛けない。負の origin と画像 resize を Fake でテストする。
 - capture 前後で全画面の geometry を比較。入力直前にも画面数、各識別子、bounds、
@@ -215,7 +219,9 @@ Windows の通常設定では C:/Users/mikoto/AppData/Local/Rei/computer-use-dia
 - dispatched.json: 入力呼び出しが正常に戻った後の記録。robotX/Y は Robot に渡す座標であり、
   OS が実際にクリックを受理した証明ではない。Wait / Uncertain はこのファイルを作らない。
 
-Shell にも input_coordinates イベントで displayId、画像内座標、Robot 座標を表示する。
+Shell にも input_coordinates イベントで displayId、返答の割合、画像内座標、Robot 座標を表示する。
+decided.json / dispatched.json の normalizedX/Y が元の返答値、imageX/Y が変換後の画像座標。
+内部 Fake などで直接ピクセルを指定した場合だけ normalizedX/Y は null になる。
 保存失敗は diagnostics_error として通知し、入力操作の再試行や失敗への置換は行わない。
 JSON には goal、入力文字列、モデルの自由文を保存しないが、PNG にはその時点の全画面内容が含まれる。
 診断ファイルは自動削除しない。調査終了後は診断を無効化し、不要な記録を削除する。
@@ -302,6 +308,7 @@ SafetyPolicy、Sleeper、RobotDriver、ローカル Clipboard を使用する。
 19. 複数画面 adapter（未定義 API → 画面ごとの取得・座標変換・入力前の構成検証）。
 20. 複数画面 Vision（1画像のみ・識別子を拒否する failure → 全画像入力と displayId の検証）。
 21. 診断保存と実行ループ（未定義 API → 元画像・座標印・入力後記録、失敗時の非再試行）。
+22. 正規化座標（小数を拒否する failure → schema・prompt・parser を割合へ変更、端点・範囲外・画像解像度差・診断 JSON を検証）。
 
 各 Green 後に summary / progress の共通化、adapter 分離、resource 化などを整理。
 追加の全 action / 実アプリ結合テストで回帰範囲を確認した。
@@ -367,6 +374,12 @@ target/computer-use-response-fix/rei-0.0.1-SNAPSHOT.jar。
 target/computer-use-multidisplay/rei-0.0.1-SNAPSHOT.jar。
 Computer Use の 28 クラスの JAR 内 SHA-256 が検証済み class と一致することを確認した。
 混在 DPI と負座標は Fake で検証済み。実機の複数画面でのモデル認識・クリック位置は未検証。
+
+正規化座標への変更後は Maven verify で 1,559 件成功
+（failure / error / skipped は 0）。試行用 JAR は
+target/computer-use-normalized/rei-0.0.1-SNAPSHOT.jar。
+変更した Target、parser、diagnostics、workflow、vision と prompt / schema の
+JAR 内 SHA-256 の一致を確認した。実モデルでの位置認識改善は未検証。
 
 ## Manual Windows smoke test（CI では実行しない）
 
