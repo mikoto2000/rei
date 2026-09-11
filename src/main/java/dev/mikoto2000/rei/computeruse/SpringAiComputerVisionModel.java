@@ -55,6 +55,8 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
           .media(media).build()), requestOptions);
       var response = model.call(prompt);
       checkCancelled();
+      if (dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response))
+        throw new InvalidComputerDecision("Model reached output token limit (finish_reason=length); check computer-use model output/reasoning budget");
       try {
         if (response == null || response.getResults().size() != 1 || response.hasToolCalls())
           throw new InvalidComputerDecision("Expected one non-tool decision");

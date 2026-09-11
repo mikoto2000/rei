@@ -12,6 +12,16 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.ResponseFormat;
 
 class SpringAiComputerVisionModelTest {
+  @Test void outputLimitStopsWithoutRepeatingTheSameExpensiveRequest() {
+    var model = mock(ChatModel.class);
+    when(model.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(new Generation(
+        new AssistantMessage(""), org.springframework.ai.chat.metadata.ChatGenerationMetadata.builder()
+            .finishReason("length").build()))));
+    var vision = new SpringAiComputerVisionModel(model, OpenAiChatOptions::builder, () -> false, 1);
+    var error = assertThrows(IllegalArgumentException.class, () -> vision.decide(observation()));
+    assertTrue(error.getMessage().contains("output token limit"));
+    verify(model).call(any(Prompt.class));
+  }
   @Test void repairReceivesSafeValidationReasonAndExplicitSchema() throws Exception {
     var model = mock(ChatModel.class);
     when(model.call(any(Prompt.class))).thenReturn(response("{}"),

@@ -6,6 +6,20 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class ActionValidationTest {
+  @Test void acceptsBoundedExplanationWithoutChangingTheAction() {
+    String response = json("PRESS_KEY", "key", "\"TAB\"").replace("\"reason\":null", "\"reason\":\"Focus the next field\"");
+    assertEquals(new ComputerAction.PressKey("TAB", ComputerAction.Risk.LOW),
+        new ActionParser().parse(response, ComputerUseServiceTest.screen()));
+    assertThrows(IllegalArgumentException.class, () -> new ActionParser().parse(
+        response.replace("Focus the next field", "x".repeat(301)), ComputerUseServiceTest.screen()));
+  }
+  @Test void distinguishesMissingAndOversizedOutput() {
+    var parser = new ActionParser();
+    assertTrue(assertThrows(IllegalArgumentException.class, () -> parser.parse(null, ComputerUseServiceTest.screen()))
+        .getMessage().contains("No response text"));
+    assertTrue(assertThrows(IllegalArgumentException.class, () -> parser.parse("x".repeat(30001), ComputerUseServiceTest.screen()))
+        .getMessage().contains("30001"));
+  }
   @Test void diagnosticsNeverIncludeModelSuppliedValues() {
     for (String invalid : java.util.List.of("secret-content",
         json("DONE", "reason", "\"Visible\"").replace("\"LOW\"", "\"secret-content\""),

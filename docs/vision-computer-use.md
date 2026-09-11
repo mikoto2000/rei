@@ -57,6 +57,12 @@ JSON schema は response_format と専用 system message の双方に含める�
 診断に返答本文、入力文字列、JSON parser の生の例外メッセージは含めない。
 受信成功後の MODEL_ERROR はモデルの不調とは限らず、返答形式や action の検証失敗も含む。
 既定の repairs=1 では、1 回の観測で最大 2 回の推論要求になる。
+reason は全 action で任意の説明として許可する（非 null なら非空文字列・最大300文字）。
+操作 action の説明は実行内容に反映せず、DONE / FAILED / UNCERTAIN では従来どおり必須。
+他 action の入力フィールド混入は引き続き拒否する。
+返答テキストなし、30,000文字超過、finish_reason=length を区別して表示する。
+出力上限到達は同一要求で repair せず停止する。過去の Invalid response size だけでは
+null の返答とサイズ超過のどちらだったかは分からない。
 
 Observation は goal、現在の PNG、直近 action summary、step / maxSteps を持つ。
 履歴はデフォルト直近 5 件。入力文字列の全文や過去画像は履歴に追加しない。
@@ -69,6 +75,8 @@ Observation は goal、現在の PNG、直近 action summary、step / maxSteps �
 有効な通常 chat と標準 ChatClient に computer-use/orchestration.md を追加する。
 通常エージェントは URL / ファイルを開く、アプリを探して起動するなどの準備に既存の
 runCommand / ファイル / API ツールを使い、画面の確認と操作を computerUse に渡す。
+runCommand は `{"request":{"command":"...","executionMode":"auto","timeoutSeconds":30}}`
+という入れ子の引数を必要とする。この形を Tool 説明と連携プロンプトに明示する。
 アプリの事前登録は不要。たとえば Windows の Start-Process 'https://x.com/' で開き、
 起動結果を確認してから、残りの目的と準備済みの内容を computerUse の goal に含める。
 computerUse は新しい画像から現在の状態を確認する。起動コマンドの成功を完了とみなさない。
@@ -252,6 +260,8 @@ SafetyPolicy、Sleeper、RobotDriver、ローカル Clipboard を使用する。
 14. 返答検証の診断（Tool 結果・終了イベントから理由が失われる failure → 安全な検証理由の伝達）。
 15. repair prompt（schema と具体的な修正理由がない failure → 専用 prompt への明示）。
 16. 通常 chat の使い分け指示（送信 Prompt にない failure → 有効時の指示追加、Shell との共存と他 feature への非追加を検証）。
+17. 操作への説明付与（reason を拒否する failure → 型・長さを検証して許可）。
+18. 返答なし・サイズ超過・出力上限（理由を識別できない failure → 診断分離、出力上限時の再試行停止）。
 
 各 Green 後に summary / progress の共通化、adapter 分離、resource 化などを整理。
 追加の全 action / 実アプリ結合テストで回帰範囲を確認した。
@@ -305,6 +315,12 @@ Shell と画面操作の使い分け追加後も Maven verify で 1,542 件成�
 target/computer-use-hybrid/rei-0.0.1-SNAPSHOT.jar。
 変更した 3 クラスと orchestration.md の JAR 内 SHA-256 の一致を確認した。
 実モデルによるツールの選択順序と GUI 操作は未検証。
+
+操作 reason 対応・出力診断・runCommand 引数指示の修正後は Maven verify で
+1,545 件成功（failure / error / skipped は 0）。実行可能 JAR は
+target/computer-use-response-fix/rei-0.0.1-SNAPSHOT.jar。
+変更した 3 クラスと 2 プロンプトの JAR 内 SHA-256 一致を確認した。
+実推論サーバーと GUI での成功は未検証。
 
 ## Manual Windows smoke test（CI では実行しない）
 
