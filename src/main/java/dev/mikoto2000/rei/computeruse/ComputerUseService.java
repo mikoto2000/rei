@@ -57,7 +57,7 @@ public final class ComputerUseService {
         recordDiagnostics(step, () -> diagnostics.observed(diagnosticRun,diagnosticStep,screen));
         checkCancelled();
         failure = MODEL_ERROR;
-        ComputerAction action = model.decide(new ComputerObservation(goal, screen, history, step, maxSteps));
+        ComputerAction action = model.decide(new ComputerObservation(goal, screen, history, step, maxSteps, diagnosticRun));
         checkCancelled();
         ActionValidator.validate(action, screen);
         var decision = progress(step, "decided", action);

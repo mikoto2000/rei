@@ -195,6 +195,14 @@ AWT の座標仕様は [Java 25 Robot API](https://docs.oracle.com/en/java/javas
 
 ## 画像・座標の診断記録
 
+クリックは二段階で位置を推定する。全画面で選んだ大まかな位置は直接実行せず、
+その周辺（選択画像の幅・高さの各50%、画像端では範囲を内側へ移動）を切り出す。
+切り出し画像には0.1刻みの座標目盛りを付け、同じ対象を再推定する。
+二段階目の正規化座標を切り出し元の画像へ戻してから入力する。
+再推定が不確実・別操作・完了宣言なら粗い座標にフォールバックしない。
+最終 confidence は両段階の低い方、risk は厳しい方を使う。
+通常の非クリック操作は一段階。各推論には既存の bounded repair が適用される。
+
 既定は無効。以下を外部 application.yaml の rei.computer-use に追加するか、
 JVM 引数 -Drei.computer-use.diagnostics.enabled=true を指定する。
 
@@ -215,6 +223,8 @@ Windows の通常設定では C:/Users/mikoto/AppData/Local/Rei/computer-use-dia
 - display-1.png など: モデルへ渡す元画像。画像の順序は添付順と一致。
 - displays.json: 画像ファイルと displayId、論理画面範囲、表示倍率、画像サイズの対応。
 - target.png: 選択画像に指定座標の赤い印を描いた診断画像。元画像・推論画像は変更しない。
+- refinement.png: 二段階目へ渡した目盛り付き切り出し画像。
+- refinement.json: 選択画面と元画像内での切り出し範囲。未実行・推論失敗の場合も残る。
 - decided.json: 選ばれた action とクリック座標の変換結果。安全判定などで未実行の場合も残る。
 - dispatched.json: 入力呼び出しが正常に戻った後の記録。robotX/Y は Robot に渡す座標であり、
   OS が実際にクリックを受理した証明ではない。Wait / Uncertain はこのファイルを作らない。
@@ -309,6 +319,7 @@ SafetyPolicy、Sleeper、RobotDriver、ローカル Clipboard を使用する。
 20. 複数画面 Vision（1画像のみ・識別子を拒否する failure → 全画像入力と displayId の検証）。
 21. 診断保存と実行ループ（未定義 API → 元画像・座標印・入力後記録、失敗時の非再試行）。
 22. 正規化座標（小数を拒否する failure → schema・prompt・parser を割合へ変更、端点・範囲外・画像解像度差・診断 JSON を検証）。
+23. 二段階位置推定（粗い座標を返す failure → 選択画面の切り出しと再推定、座標復元・risk維持・cancel・不確実時の非実行を検証）。
 
 各 Green 後に summary / progress の共通化、adapter 分離、resource 化などを整理。
 追加の全 action / 実アプリ結合テストで回帰範囲を確認した。
@@ -380,6 +391,21 @@ Computer Use の 28 クラスの JAR 内 SHA-256 が検証済み class と一致
 target/computer-use-normalized/rei-0.0.1-SNAPSHOT.jar。
 変更した Target、parser、diagnostics、workflow、vision と prompt / schema の
 JAR 内 SHA-256 の一致を確認した。実モデルでの位置認識改善は未検証。
+
+二段階位置推定・目盛り付き切り出しの追加後は Maven verify で 1,563 件成功
+（failure / error / skipped は 0）。起動用 JAR は
+target/computer-use-zoom/rei-0.0.1-SNAPSHOT.jar。変更した 4 クラスの JAR 内 SHA-256 を確認済み。
+利用者が承認した保存済みの2画面を deepseek-v4-flash-vision-exp へ送るリプレイを実施した。
+目盛りなしでは (2822,518) と入力欄より下を指定し、目盛り付きの試行では (2668,367)
+（normalized 約0.695,0.17）と入力欄付近を指定した。いずれも実入力は行っていない。
+少数の静止画像試行であり、成功率や実際のフォーカス・投稿成功を保証する検証ではない。
+記録は target/replay-refinement と target/replay-refinement-grid（Git 対象外）。
+
+手動検証用 ComputerVisionReplay は test source の main クラスで、Robot を生成せず
+保存済み displays.json / PNG を読み取って推論する。引数は baseUrl、model、保存ステップの
+ディレクトリ、出力ディレクトリ、goal の順。test runtime classpath で起動する。
+API key は REI_OPENAI_API_KEY（未設定時 dummy-key）、出力上限4096、修復回数0を使用。
+検証用 HTTP 接続は HTTP/1.1、読み取り上限4分。通常アプリの接続設定は変更しない。
 
 ## Manual Windows smoke test（CI では実行しない）
 
