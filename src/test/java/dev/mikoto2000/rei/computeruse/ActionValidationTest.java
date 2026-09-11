@@ -6,6 +6,17 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class ActionValidationTest {
+  @Test void diagnosticsNeverIncludeModelSuppliedValues() {
+    for (String invalid : java.util.List.of("secret-content",
+        json("DONE", "reason", "\"Visible\"").replace("\"LOW\"", "\"secret-content\""),
+        json("PRESS_KEY", "key", "\"secret-content\""),
+        json("DONE", "text", "\"secret-content\""))) {
+      var error = assertThrows(InvalidComputerDecision.class,
+          () -> new ActionParser().parse(invalid, ComputerUseServiceTest.screen()));
+      assertFalse(error.getMessage().contains("secret-content"));
+      assertNull(error.getCause());
+    }
+  }
   static String json(String action, String field, String value) {
     var fields = new java.util.LinkedHashMap<String,String>();
     for (String name : new String[]{"target", "confidence", "text", "key", "amount", "millis", "reason"}) fields.put(name, "null");

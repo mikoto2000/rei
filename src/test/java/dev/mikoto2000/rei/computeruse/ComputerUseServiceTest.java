@@ -7,6 +7,16 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 
 class ComputerUseServiceTest {
+  @Test void validationFailureReachesResultAndFinishedEventWithoutResponseContent() {
+    var progress = new ArrayList<ComputerProgress>();
+    var service = new ComputerUseService(ComputerUseServiceTest::screen,
+        o -> new ActionParser().parse("{}", o.screenshot()), (a,s) -> fail(), a -> fail(),
+        SafetyPolicy.lowRiskOnly(), () -> false, progress::add, 20, 5);
+    var result = service.run("goal");
+    assertEquals(ComputerUseResult.Status.MODEL_ERROR, result.status());
+    assertTrue(result.reason().contains("missing fields"));
+    assertTrue(progress.getLast().reason().contains(result.reason()));
+  }
   @Test void cancellationFromActionStartedEventStillPreventsDispatch() {
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
     var input = new ArrayList<ComputerAction>();

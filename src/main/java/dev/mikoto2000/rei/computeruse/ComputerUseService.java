@@ -75,14 +75,16 @@ public final class ComputerUseService {
       } catch (java.util.concurrent.CancellationException error) {
         return finish(CANCELLED, step, "Cancelled");
       } catch (Exception error) {
-        return finish(isCancelled() ? CANCELLED : failure, step, error.getClass().getSimpleName());
+        return finish(isCancelled() ? CANCELLED : failure, step,
+            error instanceof InvalidComputerDecision ? error.getMessage() : error.getClass().getSimpleName());
       }
     }
     return finish(MAX_STEPS, maxSteps, "Observation limit reached");
   }
 
   private ComputerUseResult finish(ComputerUseResult.Status status, int step, String reason) {
-    emit(new ComputerProgress(step, "finished", null, null, null, null, null, status.name()));
+    emit(new ComputerProgress(step, "finished", null, null, null, null, null,
+        status.name() + (status == MODEL_ERROR ? ": " + reason : "")));
     return new ComputerUseResult(status, step, reason);
   }
 
