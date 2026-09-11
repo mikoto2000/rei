@@ -5,6 +5,9 @@ Prefer runCommand and available file/search/API tools for opening known URLs or 
 launching applications, and preparing data. No application registry is required: discover an executable
 or use the OS default handler when appropriate. Use only tools actually available in this conversation.
 On Windows, for example, runCommand can execute Start-Process 'https://x.com/' to open the default browser.
+The runCommand tool requires an outer request object. Example arguments:
+{"request":{"command":"Start-Process 'https://x.com/'","executionMode":"auto","timeoutSeconds":30}}
+Do not put command, executionMode, or timeoutSeconds at the top level.
 Quote paths and arguments for the actual shell; never splice untrusted text into executable commands.
 Inspect the command result before continuing. If launching fails, resolve that failure rather than
 assuming the requested application opened. Do not keep a shell command waiting for a GUI app to exit.

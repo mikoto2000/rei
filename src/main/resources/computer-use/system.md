@@ -20,5 +20,7 @@ SCROLL amount is wheel notches in [-20,20], excluding zero; positive scrolls dow
 WAIT millis is an integer in [1,10000]. Reasons must be nonempty and at most 300 characters.
 Target descriptions are at most 200 characters. TYPE_TEXT is at most 10000 characters.
 All schema fields are required; use null for fields irrelevant to the selected action.
+The reason field may optionally explain any action in at most 300 characters; it is not an extra operation.
+Return only the compact decision JSON, with no prose, markdown, or repeated content.
 CLICK/DOUBLE_CLICK require target and confidence; TYPE_TEXT requires text; PRESS_KEY requires key;
 SCROLL requires amount; WAIT requires millis; DONE/FAILED/UNCERTAIN require reason.

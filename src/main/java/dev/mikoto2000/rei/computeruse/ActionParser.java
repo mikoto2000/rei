@@ -15,7 +15,8 @@ public final class ActionParser {
 
   public ComputerAction parse(String json, CapturedScreen screen) {
     try {
-      if (json == null || json.length() > 30000) throw new InvalidComputerDecision("Invalid response size");
+      if (json == null || json.isBlank()) throw new InvalidComputerDecision("No response text");
+      if (json.length() > 30000) throw new InvalidComputerDecision("Response text exceeds 30000 characters: " + json.length());
       JsonNode node = mapper.readTree(json);
       fields(node, FIELDS);
       String type = string(node, "action");
@@ -31,8 +32,10 @@ public final class ActionParser {
         case "DONE", "FAILED", "UNCERTAIN" -> Set.of("reason");
         default -> throw new InvalidComputerDecision("Unknown action");
       };
+      // An explanation is metadata, not an additional input operation.
+      if (!node.get("reason").isNull()) ActionValidator.text(string(node, "reason"), 300);
       for (String field : FIELDS) {
-        if (!field.equals("action") && !field.equals("risk") && !used.contains(field) && !node.get(field).isNull())
+        if (!field.equals("action") && !field.equals("risk") && !field.equals("reason") && !used.contains(field) && !node.get(field).isNull())
           throw new InvalidComputerDecision("Field must be null for this action: " + field);
       }
       ComputerAction action = switch (type) {

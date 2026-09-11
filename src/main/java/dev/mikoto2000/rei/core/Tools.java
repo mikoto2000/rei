@@ -266,6 +266,8 @@ public class Tools {
 
   @Tool(name = "runCommand", description = """
   Run a shell command. Use this as the default and primary tool for shell command execution.
+  Arguments require an outer request object: {"request":{"command":"...","executionMode":"auto","timeoutSeconds":30}}.
+  Do not place command or executionMode at the top level.
   In auto mode, short-lived commands return normally while long-running commands continue as managed background processes.
   Use executionMode=auto for normal commands.
   Use executionMode=foreground when you explicitly need to wait for completion.
