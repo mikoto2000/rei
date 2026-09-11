@@ -81,7 +81,8 @@ public final class ComputerUseService {
           if (target != null) {
             var display = screen.display(target.displayId()); var point = display.desktopPoint(target);
             emit(new ComputerProgress(step,"input_coordinates",null,null,null,null,null,
-                "displayId=" + display.geometry().id() + " image=(" + target.x() + "," + target.y()
+                "displayId=" + display.geometry().id() + " normalized=(" + target.normalizedX() + "," + target.normalizedY()
+                    + ") image=(" + target.x() + "," + target.y()
                     + ") robot=(" + point.x + "," + point.y + ")"));
           }
         }
@@ -92,7 +93,7 @@ public final class ComputerUseService {
         stabilizer.awaitAfter(action);
         checkCancelled();
         var summary = progress(step, "history", action);
-        history.add(summary.action() + (summary.target() == null ? "" : " " + summary.target() + " (" + summary.x() + "," + summary.y() + ")")
+        history.add(summary.action() + (summary.target() == null ? "" : " " + summary.target() + " executed image pixels=(" + summary.x() + "," + summary.y() + ")")
             + (summary.reason() == null ? "" : " " + summary.reason()) + "; dispatch only, goal not verified");
         if (history.size() > historyLimit) history.removeFirst();
       } catch (InterruptedException error) {

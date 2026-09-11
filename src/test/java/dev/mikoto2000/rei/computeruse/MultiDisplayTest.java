@@ -50,7 +50,7 @@ class MultiDisplayTest {
     assertThrows(IllegalStateException.class, () -> new RobotScreenCapture(driver).captureScreen());
   }
   @Test void parserUsesSelectedImageBoundsAndRejectsUnknownDisplay() {
-    String json = ActionValidationTest.json("CLICK", "target", "{\"displayId\":\"left\",\"description\":\"editor\",\"centerX\":1200,\"centerY\":800}")
+    String json = ActionValidationTest.json("CLICK", "target", "{\"displayId\":\"left\",\"description\":\"editor\",\"centerX\":0.75,\"centerY\":0.5}")
         .replace("\"confidence\":null", "\"confidence\":0.9");
     var click = (ComputerAction.Click)new ActionParser().parse(json,desktop());
     assertEquals("left",click.target().displayId());

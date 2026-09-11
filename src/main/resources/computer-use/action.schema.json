@@ -35,10 +35,16 @@
               "type": "string"
             },
             "centerX": {
-              "type": "integer"
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Horizontal fraction of the selected display image: 0=left, 1=right. Not pixels."
             },
             "centerY": {
-              "type": "integer"
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Vertical fraction of the selected display image: 0=top, 1=bottom. Not pixels."
             }
           },
           "required": [

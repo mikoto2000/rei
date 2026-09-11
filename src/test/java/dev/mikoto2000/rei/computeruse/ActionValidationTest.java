@@ -47,11 +47,11 @@ class ActionValidationTest {
   @Test void decodesAllSupportedActionsAndRetainsTargetMetadata() {
     var parser = new ActionParser();
     for (String type : new String[]{"CLICK", "DOUBLE_CLICK"}) {
-      String click = json(type,"target","{\"description\":\"Save\",\"centerX\":12,\"centerY\":34}")
+      String click = json(type,"target","{\"description\":\"Save\",\"centerX\":0.25,\"centerY\":0.5}")
           .replace("\"confidence\":null","\"confidence\":0.94");
       var action = parser.parse(click,ComputerUseServiceTest.screen());
       var metadata = ComputerUseService.progress(1,"decided",action);
-      assertEquals("Save",metadata.target()); assertEquals(12,metadata.x()); assertEquals(34,metadata.y());
+      assertEquals("Save",metadata.target()); assertEquals(80,metadata.x()); assertEquals(120,metadata.y());
       assertEquals(.94,metadata.confidence());
     }
     assertInstanceOf(ComputerAction.PressKey.class,parser.parse(json("PRESS_KEY","key","\"TAB\""),ComputerUseServiceTest.screen()));
