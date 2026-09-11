@@ -136,7 +136,10 @@ public class AiConfiguration {
     if (subAgentTools != null) builder.defaultToolCallbacks(new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools));
     if (computerUseTools != null) {
       var computer = computerUseTools.getIfAvailable();
-      if (computer != null) builder.defaultToolCallbacks(computer.callback());
+      if (computer != null) {
+        builder.defaultToolCallbacks(computer.callback());
+        builder.defaultSystem(systemPromptService.systemPrompt() + "\n\n" + computer.orchestrationPrompt());
+      }
     }
     return builder.build();
   }
