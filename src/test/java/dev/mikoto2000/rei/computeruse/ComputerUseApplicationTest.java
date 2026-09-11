@@ -29,6 +29,36 @@ class ComputerUseApplicationTest {
   @MockitoBean ComputerInput input;
   @MockitoBean UiStabilizer stabilizer;
   @Autowired ComputerUseTools tools;
+  @Autowired dev.mikoto2000.rei.llm.LlmChatClientProvider clients;
+  @Autowired org.springframework.ai.chat.memory.ChatMemory history;
+
+  @Test void actualChatRequestAdvertisesComputerUseExactlyOnceAndOtherFeaturesDoNot() {
+    var captured = new java.util.concurrent.atomic.AtomicReference<org.springframework.ai.chat.prompt.Prompt>();
+    when(chatModel.stream(any(org.springframework.ai.chat.prompt.Prompt.class))).thenAnswer(invocation -> {
+      captured.set(invocation.getArgument(0));
+      return reactor.core.publisher.Flux.just(new org.springframework.ai.chat.model.ChatResponse(java.util.List.of(
+          new org.springframework.ai.chat.model.Generation(new org.springframework.ai.chat.messages.AssistantMessage("Observed tool definitions")))));
+    });
+    for (String feature : java.util.List.of(dev.mikoto2000.rei.llm.LlmFeature.CHAT,
+        dev.mikoto2000.rei.llm.LlmFeature.SEARCH, dev.mikoto2000.rei.llm.LlmFeature.MEMORY)) {
+      String conversation = "computer-tool-advertisement-" + java.util.UUID.randomUUID();
+      try {
+        clients.chatClient(feature).prompt(new org.springframework.ai.chat.prompt.Prompt(
+            new org.springframework.ai.chat.messages.UserMessage("List available tools"),
+            org.springframework.ai.openai.OpenAiChatOptions.builder().model("test-model").build()))
+            .advisors(a -> a.param(org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID, conversation))
+            .stream().chatResponse().collectList().block();
+        var options = (org.springframework.ai.model.tool.ToolCallingChatOptions) captured.get().getOptions();
+        var names = options.getToolCallbacks().stream().map(c -> c.getToolDefinition().name()).toList();
+        assertEquals(feature.equals(dev.mikoto2000.rei.llm.LlmFeature.CHAT) ? 1 : 0,
+            names.stream().filter("computerUse"::equals).count(), feature + " request must advertise the correct tools");
+        assertFalse(names.contains("captureScreen"));
+        assertFalse(names.contains("click"));
+        assertFalse(names.contains("typeText"));
+      } finally { history.clear(conversation); }
+    }
+    verifyNoInteractions(capture, vision, input, stabilizer);
+  }
 
   @Test void applicationWiresWorkflowWithoutTouchingDesktopOrNetwork() throws Exception {
     when(capture.captureScreen()).thenReturn(ComputerUseServiceTest.screen());

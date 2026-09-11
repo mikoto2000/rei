@@ -10,7 +10,9 @@ UI Automation / Accessibility / Robot / desktop の語とファイル名で検�
 既存の構造と採用方針:
 
 - Tool taxonomy: 明示的な分類 enum はなく、`*Tools` の `@Tool` を
-  `AiConfiguration` が ChatClient に登録。検索には workflow と説明する既存 Tool がある。
+  `AiConfiguration` と feature 別の `LlmChatClientProvider` が ChatClient に登録。
+  通常チャットは後者を使用するため、Computer Use は両経路へ登録する。
+  feature 別では CHAT のみに公開する。検索には workflow と説明する既存 Tool がある。
   同じ方式で `computerUse(goal)` を Preferred workflow として一つだけ公開する。
 - Tool 実行: Agent の通常 Tool loop → callback → service。
   外側の tool.started / tool.completed / tool.failed は既存 `ToolEventCallbackDecorator` を利用。
@@ -208,7 +210,7 @@ SafetyPolicy、Sleeper、RobotDriver、ローカル Clipboard を使用する。
 | SpringAiComputerVisionModelTest | image/goal/history、schema、Tool 禁止、bounded repair、cancel |
 | ComputerUseIntegrationTest | workflow callback、run cancel、排他、fallback safety、イベント、Shell |
 | ComputerUseConfigurationTest | opt-in、遅延 Robot 初期化、設定 validation |
-| ComputerUseApplicationTest | Spring アプリ全体の結線（OS / model は mock） |
+| ComputerUseApplicationTest | Spring の結線と実際の chat リクエストへの単一 Tool 登録、検索・記憶処理での非公開（OS / model は mock） |
 | AiConfigurationTest（追加検証） | 既存 Tools と共存する単一 computerUse 登録 |
 
 実施した Red → Green の単位:
@@ -222,6 +224,7 @@ SafetyPolicy、Sleeper、RobotDriver、ローカル Clipboard を使用する。
 8. 設定と Tool 登録（未定義設定・登録 API → opt-in wiring）。
 9. clipboard の native 遅延取得と競合（2 件の failure → snapshot と token 照合）。
 10. action_started / action_completed イベント中の cancel（入力や wait が続く failure → 境界の再チェック）。
+11. 通常 chat の送信 Prompt にある Tool 一覧（computerUse が 0 件の failure → feature 別 client への登録）。
 
 各 Green 後に summary / progress の共通化、adapter 分離、resource 化などを整理。
 追加の全 action / 実アプリ結合テストで回帰範囲を確認した。
@@ -244,11 +247,18 @@ $env:LOGGING_FILE_NAME = Join-Path $PWD 'target/test-data/rei.log'
 
 ## 最終検証結果
 
-検証記録（2026-09-12）: 既存 baseline は 1,496 件成功。最終の Maven verify は
+初回実装の検証記録（2026-09-12）: 既存 baseline は 1,496 件成功。Maven verify は
 新規 40 件を含む 1,536 件が成功、failure / error / skipped はすべて 0。
 パッケージングと git diff --check も成功。専用 formatter / lint / static analysis の
 Maven 設定はない。全 suite で見つかった新規アプリテストの ProjectService 状態漏れは
 テスト終了時の復元で修正し、既存の履歴検索テストも維持した。
+
+通常 chat の Tool 登録修正後は 1,537 件成功（failure / error / skipped は 0）。
+実際の client から、明示的な runtime options を渡した stream リクエストを検査し、
+computerUse が CHAT にだけ 1 件含まれることを確認した。
+標準 JAR の repackage は Windows のリネーム拒否により完了しなかったため、
+同じ検証済み classes を使って target/computer-use-fixed/rei-0.0.1-SNAPSHOT.jar へ
+別途 package した。実行可能 JAR 内の修正クラスと検証済み class の SHA-256 も一致確認済み。
 
 ## Manual Windows smoke test（CI では実行しない）
 
