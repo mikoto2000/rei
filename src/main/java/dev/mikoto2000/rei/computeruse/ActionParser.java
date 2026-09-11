@@ -15,11 +15,13 @@ public final class ActionParser {
 
   public ComputerAction parse(String json, CapturedScreen screen) {
     try {
-      if (json == null || json.length() > 30000) throw new IllegalArgumentException("Invalid response size");
+      if (json == null || json.length() > 30000) throw new InvalidComputerDecision("Invalid response size");
       JsonNode node = mapper.readTree(json);
       fields(node, FIELDS);
       String type = string(node, "action");
-      Risk risk = Risk.valueOf(string(node, "risk"));
+      Risk risk;
+      try { risk = Risk.valueOf(string(node, "risk")); }
+      catch (IllegalArgumentException invalid) { throw new InvalidComputerDecision("Unknown or missing risk"); }
       Set<String> used = switch (type) {
         case "CLICK", "DOUBLE_CLICK" -> Set.of("target", "confidence");
         case "TYPE_TEXT" -> Set.of("text");
@@ -27,11 +29,11 @@ public final class ActionParser {
         case "SCROLL" -> Set.of("amount");
         case "WAIT" -> Set.of("millis");
         case "DONE", "FAILED", "UNCERTAIN" -> Set.of("reason");
-        default -> throw new IllegalArgumentException("Unknown action");
+        default -> throw new InvalidComputerDecision("Unknown action");
       };
       for (String field : FIELDS) {
         if (!field.equals("action") && !field.equals("risk") && !used.contains(field) && !node.get(field).isNull())
-          throw new IllegalArgumentException("Unexpected field for action");
+          throw new InvalidComputerDecision("Field must be null for this action: " + field);
       }
       ComputerAction action = switch (type) {
         case "CLICK" -> new Click(target(node), number(node, "confidence"), risk);
@@ -43,34 +45,36 @@ public final class ActionParser {
         case "DONE" -> new Done(string(node, "reason"));
         case "FAILED" -> new Failed(string(node, "reason"));
         case "UNCERTAIN" -> new Uncertain(string(node, "reason"));
-        default -> throw new IllegalArgumentException("Unknown action");
+        default -> throw new InvalidComputerDecision("Unknown action");
       };
       ActionValidator.validate(action, screen);
       return action;
-    } catch (Exception error) {
-      throw new IllegalArgumentException("Invalid ComputerAction response", error);
+    } catch (InvalidComputerDecision error) {
+      throw error;
+    } catch (com.fasterxml.jackson.core.JsonProcessingException error) {
+      throw new InvalidComputerDecision("Malformed JSON, duplicate field, or trailing content");
     }
   }
 
   private static void fields(JsonNode node, Set<String> expected) {
-    if (node == null || !node.isObject()) throw new IllegalArgumentException("Expected object");
+    if (node == null || !node.isObject()) throw new InvalidComputerDecision("Expected object");
     var actual = new HashSet<String>();
     node.fieldNames().forEachRemaining(actual::add);
-    if (!actual.equals(expected)) throw new IllegalArgumentException("Unexpected or missing fields");
+    if (!actual.equals(expected)) throw new InvalidComputerDecision("Unexpected or missing fields");
   }
   private static String string(JsonNode node, String name) {
     JsonNode value = node.get(name);
-    if (value == null || !value.isTextual()) throw new IllegalArgumentException("Expected string");
+    if (value == null || !value.isTextual()) throw new InvalidComputerDecision("Expected string: " + name);
     return value.textValue();
   }
   private static int integer(JsonNode node, String name) {
     JsonNode value = node.get(name);
-    if (value == null || !value.isIntegralNumber() || !value.canConvertToInt()) throw new IllegalArgumentException("Expected integer");
+    if (value == null || !value.isIntegralNumber() || !value.canConvertToInt()) throw new InvalidComputerDecision("Expected integer: " + name);
     return value.intValue();
   }
   private static double number(JsonNode node, String name) {
     JsonNode value = node.get(name);
-    if (value == null || !value.isNumber()) throw new IllegalArgumentException("Expected number");
+    if (value == null || !value.isNumber()) throw new InvalidComputerDecision("Expected number: " + name);
     return value.doubleValue();
   }
   private static Target target(JsonNode node) {

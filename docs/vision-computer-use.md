@@ -51,6 +51,13 @@ HTTP JSON の tools / tool_choice は省略する。空の tools 配列を拒否
 provider の default / fallback に raw tools / callbacks / tool names が
 ある場合は拒否し、モデルが tool call を返しても dispatch せず不正出力として扱う。
 
+JSON schema は response_format と専用 system message の双方に含める。
+返答検証に失敗した場合、bounded repair にローカルの検証理由を渡す。
+修正後も不正なら Tool 結果と Shell の finished MODEL_ERROR にその理由を表示する。
+診断に返答本文、入力文字列、JSON parser の生の例外メッセージは含めない。
+受信成功後の MODEL_ERROR はモデルの不調とは限らず、返答形式や action の検証失敗も含む。
+既定の repairs=1 では、1 回の観測で最大 2 回の推論要求になる。
+
 Observation は goal、現在の PNG、直近 action summary、step / maxSteps を持つ。
 履歴はデフォルト直近 5 件。入力文字列の全文や過去画像は履歴に追加しない。
 画像は推論リクエストだけに含め、イベントやディスクへ保存しない。
@@ -230,6 +237,8 @@ SafetyPolicy、Sleeper、RobotDriver、ローカル Clipboard を使用する。
 11. 通常 chat の送信 Prompt にある Tool 一覧（computerUse が 0 件の failure → feature 別 client への登録）。
 12. 実 SDK の HTTP JSON（tools: [] が送信される failure → tools / tool_choice の省略）。
 13. モデルの raw default tools（拒否されない failure → SDK merge 前の拒否）。
+14. 返答検証の診断（Tool 結果・終了イベントから理由が失われる failure → 安全な検証理由の伝達）。
+15. repair prompt（schema と具体的な修正理由がない failure → 専用 prompt への明示）。
 
 各 Green 後に summary / progress の共通化、adapter 分離、resource 化などを整理。
 追加の全 action / 実アプリ結合テストで回帰範囲を確認した。
@@ -271,6 +280,12 @@ Vision HTTP JSON 修正後は Maven verify で 1,539 件成功（failure / error
 target/computer-use-http-fix/rei-0.0.1-SNAPSHOT.jar に出力し、修正した 2 クラスの
 SHA-256 が検証済み class と一致することも確認した。実 SDK の送信 JSON は
 in-memory HTTP transport で検証しており、実推論サーバーでの動作は未検証。
+
+返答検証の診断・repair prompt 修正後は Maven verify で 1,542 件成功
+（failure / error / skipped は 0）。実行可能 JAR は
+target/computer-use-diagnostics/rei-0.0.1-SNAPSHOT.jar。
+変更した 5 クラスの JAR 内 SHA-256 と検証済み class の一致を確認した。
+実モデルでの再現と GUI smoke は未実施であり、利用者の過去の不正返答の原因は未特定。
 
 ## Manual Windows smoke test（CI では実行しない）
 

@@ -12,6 +12,16 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.ResponseFormat;
 
 class SpringAiComputerVisionModelTest {
+  @Test void repairReceivesSafeValidationReasonAndExplicitSchema() throws Exception {
+    var model = mock(ChatModel.class);
+    when(model.call(any(Prompt.class))).thenReturn(response("{}"),
+        response(ActionValidationTest.json("DONE", "reason", "\"Visible\"")));
+    new SpringAiComputerVisionModel(model, OpenAiChatOptions::builder, () -> false, 1).decide(observation());
+    var prompts = ArgumentCaptor.forClass(Prompt.class);
+    verify(model, times(2)).call(prompts.capture());
+    assertTrue(prompts.getAllValues().getFirst().getInstructions().getFirst().getText().contains("\"centerX\""));
+    assertTrue(prompts.getAllValues().getLast().getInstructions().getLast().getText().contains("missing fields"));
+  }
   static ChatResponse response(String text) { return new ChatResponse(List.of(new Generation(new AssistantMessage(text)))); }
   static ComputerObservation observation() {
     return new ComputerObservation("Enter abc", ComputerUseServiceTest.screen(), List.of("Clicked editor"), 2, 20);

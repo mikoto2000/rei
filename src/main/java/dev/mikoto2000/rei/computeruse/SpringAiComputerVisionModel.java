@@ -43,21 +43,24 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
     String context = "Goal:\n" + observation.goal() + "\nRecent dispatch history:\n"
         + String.join("\n", observation.recentHistory()) + "\nStep: " + observation.step() + "/" + observation.maxSteps()
         + "\nScreenshot: " + screen.image().getWidth() + "x" + screen.image().getHeight() + " pixels";
+    String validationReason = "";
     for (int attempt = 0; attempt <= repairs; attempt++) {
       checkCancelled();
       // No-tools inference must omit the wire fields: compatible APIs can reject tools: [].
       var requestOptions = options.get().responseFormat(format).toolChoice(null)
           .tools(null).toolCallbacks(List.of()).toolNames(Set.of()).internalToolExecutionEnabled(false).build();
-      var prompt = new Prompt(List.of(new SystemMessage(system), UserMessage.builder().text(context
-          + (attempt == 0 ? "" : "\nPrevious response was invalid. Correct required fields, types, bounds, and schema; return exactly one decision."))
+      var prompt = new Prompt(List.of(new SystemMessage(system + "\nJSON schema:\n" + schema), UserMessage.builder().text(context
+          + (attempt == 0 ? "" : "\nPrevious response was invalid: " + validationReason
+              + ". Correct this validation error; return exactly one decision matching the schema."))
           .media(media).build()), requestOptions);
       var response = model.call(prompt);
       checkCancelled();
       try {
         if (response == null || response.getResults().size() != 1 || response.hasToolCalls())
-          throw new IllegalArgumentException("Expected one non-tool decision");
+          throw new InvalidComputerDecision("Expected one non-tool decision");
         return parser.parse(response.getResult().getOutput().getText(), screen);
-      } catch (IllegalArgumentException invalid) {
+      } catch (InvalidComputerDecision invalid) {
+        validationReason = invalid.getMessage();
         if (attempt == repairs) throw invalid;
       }
     }
