@@ -32,7 +32,8 @@ class SpringAiComputerVisionModelTest {
     assertEquals(ResponseFormat.Type.JSON_SCHEMA,options.getResponseFormat().getType());
     assertEquals(Boolean.TRUE,options.getResponseFormat().getJsonSchema().getStrict());
     assertEquals(Boolean.FALSE,options.getInternalToolExecutionEnabled());
-    assertEquals("none",options.getToolChoice());
+    assertNull(options.getToolChoice());
+    assertNull(options.getTools());
     assertTrue(options.getToolCallbacks().isEmpty());
     assertTrue(options.getToolNames().isEmpty());
   }
@@ -58,6 +59,13 @@ class SpringAiComputerVisionModelTest {
   @Test void refusesAmbientToolsBeforeInference() {
     var model = mock(ChatModel.class);
     when(model.getDefaultOptions()).thenReturn(OpenAiChatOptions.builder().toolNames("shell").build());
+    assertThrows(IllegalArgumentException.class, () -> new SpringAiComputerVisionModel(model, OpenAiChatOptions::builder, () -> false, 1));
+    verify(model,never()).call(any(Prompt.class));
+  }
+  @Test void refusesRawDefaultToolsThatWouldOtherwiseBeMergedIntoNoToolsRequest() {
+    var model = mock(ChatModel.class);
+    when(model.getDefaultOptions()).thenReturn(OpenAiChatOptions.builder().tools(List.of(
+        mock(org.springframework.ai.openai.api.OpenAiApi.FunctionTool.class))).build());
     assertThrows(IllegalArgumentException.class, () -> new SpringAiComputerVisionModel(model, OpenAiChatOptions::builder, () -> false, 1));
     verify(model,never()).call(any(Prompt.class));
   }

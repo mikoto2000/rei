@@ -45,8 +45,9 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
         + "\nScreenshot: " + screen.image().getWidth() + "x" + screen.image().getHeight() + " pixels";
     for (int attempt = 0; attempt <= repairs; attempt++) {
       checkCancelled();
-      var requestOptions = options.get().responseFormat(format).toolChoice("none")
-          .tools(List.of()).toolCallbacks(List.of()).toolNames(Set.of()).internalToolExecutionEnabled(false).build();
+      // No-tools inference must omit the wire fields: compatible APIs can reject tools: [].
+      var requestOptions = options.get().responseFormat(format).toolChoice(null)
+          .tools(null).toolCallbacks(List.of()).toolNames(Set.of()).internalToolExecutionEnabled(false).build();
       var prompt = new Prompt(List.of(new SystemMessage(system), UserMessage.builder().text(context
           + (attempt == 0 ? "" : "\nPrevious response was invalid. Correct required fields, types, bounds, and schema; return exactly one decision."))
           .media(media).build()), requestOptions);
