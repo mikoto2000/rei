@@ -32,7 +32,6 @@ public final class ActionValidator {
     if (target == null) throw new InvalidComputerDecision("Missing target");
     text(target.description(), 200);
     if (!Double.isFinite(confidence) || confidence < 0 || confidence > 1) throw new InvalidComputerDecision("Invalid confidence");
-    if (target.x() < 0 || target.y() < 0 || target.x() >= screen.image().getWidth() || target.y() >= screen.image().getHeight())
-      throw new InvalidComputerDecision("Target outside screenshot");
+    screen.display(target.displayId()).desktopPoint(target);
   }
 }

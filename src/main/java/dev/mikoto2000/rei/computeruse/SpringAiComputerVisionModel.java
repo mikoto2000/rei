@@ -34,15 +34,23 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
 
   public ComputerAction decide(ComputerObservation observation) throws Exception {
     var screen = observation.screenshot();
-    var bytes = new ByteArrayOutputStream();
-    if (!ImageIO.write(screen.image(), "png", bytes)) throw new IllegalStateException("PNG encoder unavailable");
-    var media = new Media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(bytes.toByteArray()));
+    var media = new ArrayList<Media>();
+    var displayInfo = new StringBuilder();
+    int imageIndex = 0;
+    for (var display : screen.displays()) {
+      var bytes = new ByteArrayOutputStream();
+      if (!ImageIO.write(display.image(), "png", bytes)) throw new IllegalStateException("PNG encoder unavailable");
+      media.add(new Media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(bytes.toByteArray())));
+      displayInfo.append("\nImage ").append(++imageIndex).append(": displayId=").append(display.geometry().id())
+          .append("; ").append(display.image().getWidth()).append("x").append(display.image().getHeight())
+          .append(" pixels; primary=").append(display.geometry().primary());
+    }
     var format = new ResponseFormat();
     format.setType(ResponseFormat.Type.JSON_SCHEMA);
     format.setJsonSchema(ResponseFormat.JsonSchema.builder().name("computer_action").strict(true).schema(schema).build());
     String context = "Goal:\n" + observation.goal() + "\nRecent dispatch history:\n"
         + String.join("\n", observation.recentHistory()) + "\nStep: " + observation.step() + "/" + observation.maxSteps()
-        + "\nScreenshot: " + screen.image().getWidth() + "x" + screen.image().getHeight() + " pixels";
+        + "\nScreenshots in attachment order (coordinates are local to each image):" + displayInfo;
     String validationReason = "";
     for (int attempt = 0; attempt <= repairs; attempt++) {
       checkCancelled();

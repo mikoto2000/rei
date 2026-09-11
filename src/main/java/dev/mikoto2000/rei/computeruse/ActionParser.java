@@ -39,8 +39,8 @@ public final class ActionParser {
           throw new InvalidComputerDecision("Field must be null for this action: " + field);
       }
       ComputerAction action = switch (type) {
-        case "CLICK" -> new Click(target(node), number(node, "confidence"), risk);
-        case "DOUBLE_CLICK" -> new DoubleClick(target(node), number(node, "confidence"), risk);
+        case "CLICK" -> new Click(target(node, screen), number(node, "confidence"), risk);
+        case "DOUBLE_CLICK" -> new DoubleClick(target(node, screen), number(node, "confidence"), risk);
         case "TYPE_TEXT" -> new TypeText(string(node, "text"), risk);
         case "PRESS_KEY" -> new PressKey(string(node, "key"), risk);
         case "SCROLL" -> new Scroll(integer(node, "amount"), risk);
@@ -80,9 +80,10 @@ public final class ActionParser {
     if (value == null || !value.isNumber()) throw new InvalidComputerDecision("Expected number: " + name);
     return value.doubleValue();
   }
-  private static Target target(JsonNode node) {
+  private static Target target(JsonNode node, CapturedScreen screen) {
     JsonNode value = node.get("target");
-    fields(value, Set.of("centerX", "centerY", "description"));
-    return new Target(integer(value, "centerX"), integer(value, "centerY"), string(value, "description"));
+    boolean legacy = screen.displays().size() == 1 && value != null && !value.has("displayId");
+    fields(value, legacy ? Set.of("centerX", "centerY", "description") : Set.of("displayId", "centerX", "centerY", "description"));
+    return new Target(legacy ? null : string(value,"displayId"), integer(value, "centerX"), integer(value, "centerY"), string(value, "description"));
   }
 }
