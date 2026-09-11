@@ -70,6 +70,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   private String thinkingId;
   private boolean thinkingLineOpen;
   private Instant lastThrottledTopicSummaryAt;
+  private final java.util.LinkedHashMap<String, String> subAgentNames = new java.util.LinkedHashMap<>();
 
   public ShellAgentEventRenderer(ShellEventOutput output) {
     this(output, TopicNotificationOptions.summary());
@@ -84,16 +85,52 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   @Override
   public synchronized void onEvent(AgentEvent event) {
-    if (event.sessionId() != null && event.sessionId().startsWith("subagent:")
-        && !(event.payload() instanceof dev.mikoto2000.rei.event.SubAgentLifecyclePayload)) return;
     if (event.payload() instanceof dev.mikoto2000.rei.event.SubAgentLifecyclePayload child) {
+      rememberSubAgent(child);
       closeAssistantLine();
       closeThinkingLine();
       output.println("[subagent] " + child.agentId() + " " + child.status().toLowerCase(java.util.Locale.ROOT)
-          + " (" + formatSeconds(child.duration()) + " s)");
+          + " (" + formatSeconds(child.duration()) + " s)" + " [" + child.subAgentRunId() + "]");
       output.flush();
       return;
     }
+    if (isSubAgentEvent(event)) {
+      // Child answer/thinking streams must not enter the parent's streamed message state.
+      switch (event.type()) {
+        case MESSAGE_STARTED, MESSAGE_DELTA, MESSAGE_COMPLETED,
+            THINKING_STARTED, THINKING_DELTA, THINKING_COMPLETED -> { return; }
+        default -> { }
+      }
+      closeAssistantLine();
+      closeThinkingLine();
+      String prefix = subAgentPrefix(event);
+      new ShellAgentEventRenderer(new ShellEventOutput() {
+        public void print(String text) { output.print(prefix + text); }
+        public void println(String text) { output.println(prefix + text); }
+        public void flush() { output.flush(); }
+      }, topicNotificationOptions).renderEvent(event);
+      return;
+    }
+    renderEvent(event);
+  }
+
+  private boolean isSubAgentEvent(AgentEvent event) {
+    return event.sessionId() != null && event.sessionId().startsWith("subagent:");
+  }
+
+  private void rememberSubAgent(dev.mikoto2000.rei.event.SubAgentLifecyclePayload child) {
+    subAgentNames.put(child.subAgentRunId(), child.agentId());
+    // Retain recent names for late events and replay without growing for the shell's lifetime.
+    if (subAgentNames.size() > 128) subAgentNames.pollFirstEntry();
+  }
+
+  private String subAgentPrefix(AgentEvent event) {
+    String runId = event.runId() == null ? event.sessionId().substring("subagent:".length()) : event.runId();
+    String name = subAgentNames.get(runId);
+    return "[subagent:" + (name == null ? "" : name + "/") + runId + "] ";
+  }
+
+  private void renderEvent(AgentEvent event) {
     if (isTopicEvent(event) && topicNotificationOptions.verbosity() != TopicNotificationVerbosity.VERBOSE) {
       renderTopicSummary(event);
       output.flush();
@@ -485,8 +522,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   /** Compact restore mode; audit records remain unchanged and can also be fed to onEvent for full replay. */
   public synchronized void onRecentEvent(AgentEvent event) {
-    if (event.sessionId() != null && event.sessionId().startsWith("subagent:")
-        && !(event.payload() instanceof dev.mikoto2000.rei.event.SubAgentLifecyclePayload)) return;
+    if (event.payload() instanceof dev.mikoto2000.rei.event.SubAgentLifecyclePayload child) rememberSubAgent(child);
     String detail = switch (event.payload()) {
       case dev.mikoto2000.rei.event.SubAgentLifecyclePayload child -> child.agentId() + " " + child.status();
       case ToolCompletedPayload tool -> tool.toolName();
@@ -501,7 +537,8 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     if (detail.length() > 100) detail = detail.substring(0, 100) + "…";
     String time = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
         .withZone(java.time.ZoneId.systemDefault()).format(event.timestamp());
-    output.println("  " + time + " " + event.type().value() + (detail.isBlank() ? "" : " " + detail));
+    output.println("  " + time + " " + (isSubAgentEvent(event) ? subAgentPrefix(event) : "")
+        + event.type().value() + (detail.isBlank() ? "" : " " + detail));
   }
 
   public synchronized void finish() {

@@ -12,7 +12,7 @@
 | Tool 呼出し | Spring AI `MethodToolCallbackProvider`, `ToolCallingManager`。`StagnationChatModel` の明示ループで使用中。dispatch 境界を `ToolLoopSupport` に共通化 |
 | Tool taxonomy | 説明文の preferred/workflow/primitive が中心で、権限を表す分類型はない。監査済み組み込み Tool の名前による中央 allowlist を採用 |
 | Agent Event / Bus | sealed `AgentEventPayload`, `AgentEventFactory`, `InMemoryAgentEventBus`。既存 envelope と publisher に追加 |
-| UI | `AgentUiProjection` / `AgentUiState` は親の可視状態。子の一時 conversation のイベントを混ぜず、Shell は独立した lifecycle 通知だけ表示 |
+| UI | `AgentUiProjection` / `AgentUiState` は親の可視状態。子の一時 conversation のイベントを混ぜず、Shell は lifecycle と子の LLM・Tool 等のイベントを実行 ID で区別して表示 |
 | Working Set | 実際に読書きしたファイルを記録する project scope の永続状態。参照 Tool にも更新副作用があるので、子では一時 Tools / WorkingSet / cache を生成 |
 | cancel | `CommandCancellationService` が Run ID ごとに subscription と実行スレッドを管理。親の subscription を上書きしない子 cancel 登録を追加 |
 | background | `ConversationInputRouter`, `BackgroundCommands`, `ExecutionScope` は Shell の summarize/image 実行管理。子は Agent Run の子処理であり、別種の永続 background job にしない |

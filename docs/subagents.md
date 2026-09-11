@@ -110,7 +110,10 @@ timeout は最終出力までの全ループに適用し、Reactor subscription 
 `subagent.started` / `subagent.completed` / `subagent.failed` を既存 Agent Event Bus へ発行します。
 payload に親・子 Run ID、agent ID、最大 120 文字の redact 済みタスク要約、状態、時間、失敗理由を保持します。
 Envelope の runId は子、correlationId は親です。Tool イベントは既存の `tool.*` を子の所属で発行します。
-Shell は開始・終了を簡潔に表示し、子の内部 Tool／token stream を通常表示しません。
+Shell は開始・終了に加え、子の LLM リクエスト・応答・失敗、Tool 呼び出し・完了・失敗などのイベントを表示します。
+内部イベントには `[subagent:エージェント名/実行ID]` を付け、同じ定義の複数実行も区別します。
+開始イベントがない場合は実行 ID のみを表示します。履歴の簡易表示でも子のイベントを確認できます。
+子の回答・思考の token stream は親の回答に混ぜず、親の UI 状態も変更しません。
 
 永続化するのは既存の監査イベントで、子専用の会話履歴は保存しません。
 複数 Run の ID と状態は独立していますが、自動並列 orchestration はありません。
