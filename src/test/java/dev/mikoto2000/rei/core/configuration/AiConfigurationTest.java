@@ -93,6 +93,18 @@ class AiConfigurationTest {
     List<?> toolCallbackProviders = getDefaultToolCallbackProviders(chatClient);
     assertEquals(1, toolCallbackProviders.size());
     assertSame(mcpToolCallbackProvider, toolCallbackProviders.getFirst());
+
+    var computerTools = new dev.mikoto2000.rei.computeruse.ComputerUseTools(
+        Mockito.mock(dev.mikoto2000.rei.computeruse.ComputerUseService.class),
+        new dev.mikoto2000.rei.core.service.CommandCancellationService(),
+        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), event -> {});
+    configuration.setComputerUseTools(mockProviderReturning(computerTools));
+    Object request = getDefaultChatClientRequest(configuration.chatClient());
+    Field callbacksField = request.getClass().getDeclaredField("toolCallbacks");
+    callbacksField.setAccessible(true);
+    var callbacks = (List<?>) callbacksField.get(request);
+    assertEquals(1, callbacks.stream().map(org.springframework.ai.tool.ToolCallback.class::cast)
+        .filter(callback -> callback.getToolDefinition().name().equals("computerUse")).count());
   }
 
   @Test

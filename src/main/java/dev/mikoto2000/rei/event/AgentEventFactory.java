@@ -33,6 +33,12 @@ public class AgentEventFactory {
 
   // ---- Agent Run ----
 
+  public AgentEvent computerUseProgress(dev.mikoto2000.rei.computeruse.ComputerProgress progress) {
+    return newEvent(AgentEventType.COMPUTER_USE_PROGRESS, null, null,
+        new ComputerUseProgressPayload(progress.step(), progress.phase(), progress.action(), progress.target(),
+            progress.x(), progress.y(), progress.confidence(), progress.reason()));
+  }
+
   public AgentEvent subAgentLifecycle(AgentEventType type, String parentRunId, String subAgentRunId,
       String agentId, String task, String status, long duration, String failureReason) {
     if (type != AgentEventType.SUBAGENT_STARTED && type != AgentEventType.SUBAGENT_COMPLETED

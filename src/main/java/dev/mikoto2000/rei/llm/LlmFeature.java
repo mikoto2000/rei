@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.llm;
 
 public final class LlmFeature {
+  public static final String COMPUTER_USE = "computer-use";
 
   public static final String CHAT = "chat";
   public static final String SEARCH = "search";
