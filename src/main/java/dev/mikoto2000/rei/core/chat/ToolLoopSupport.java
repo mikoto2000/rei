@@ -8,6 +8,10 @@ import org.springframework.ai.model.tool.*;
 public final class ToolLoopSupport {
   /** Spring AI merges empty runtime tool lists with model defaults. Refuse that ambient authority. */
   public static void requireNoDefaultTools(org.springframework.ai.chat.model.ChatModel model) {
+    if (model.getDefaultOptions() instanceof org.springframework.ai.openai.OpenAiChatOptions options
+        && !org.springframework.util.CollectionUtils.isEmpty(options.getTools())) {
+      throw new IllegalArgumentException("Model must not carry raw default tools");
+    }
     if (model.getDefaultOptions() instanceof ToolCallingChatOptions options
         && (!org.springframework.util.CollectionUtils.isEmpty(options.getToolCallbacks())
             || !org.springframework.util.CollectionUtils.isEmpty(options.getToolNames()))) {

@@ -45,8 +45,10 @@ screenshot が一次情報。1 回の観測に対して最大 1 action のみ di
 DONE を返したときだけ成功。UIA 要素の有無による verification は存在しない。
 
 内部モデルは `SpringAiComputerVisionModel`。ChatClient、通常 prompt、memory、
-advisors、ToolCallingManager を使用しない。tool choice は none、内部 Tool 実行は false、
-callback / tool names / tools は空。provider の default / fallback に ambient tools が
+advisors、ToolCallingManager を使用しない。内部 Tool 実行は false、callback / tool names は空。
+HTTP JSON の tools / tool_choice は省略する。空の tools 配列を拒否する互換 API があるため
+（[vLLM の validation](https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/openai/chat_completion/protocol.py)）。
+provider の default / fallback に raw tools / callbacks / tool names が
 ある場合は拒否し、モデルが tool call を返しても dispatch せず不正出力として扱う。
 
 Observation は goal、現在の PNG、直近 action summary、step / maxSteps を持つ。
@@ -208,6 +210,7 @@ SafetyPolicy、Sleeper、RobotDriver、ローカル Clipboard を使用する。
 | RobotAdaptersTest | 座標変換、primary 制約、入力順序、全 input action、release、stabilizer |
 | ClipboardPasteTest | Unicode、復元、native 遅延取得、競合、失敗 |
 | SpringAiComputerVisionModelTest | image/goal/history、schema、Tool 禁止、bounded repair、cancel |
+| ComputerVisionWireTest | 実 SDK の JSON シリアライズ、tools / tool_choice の省略、画像と strict schema の維持（HTTP transport は mock） |
 | ComputerUseIntegrationTest | workflow callback、run cancel、排他、fallback safety、イベント、Shell |
 | ComputerUseConfigurationTest | opt-in、遅延 Robot 初期化、設定 validation |
 | ComputerUseApplicationTest | Spring の結線と実際の chat リクエストへの単一 Tool 登録、検索・記憶処理での非公開（OS / model は mock） |
@@ -225,6 +228,8 @@ SafetyPolicy、Sleeper、RobotDriver、ローカル Clipboard を使用する。
 9. clipboard の native 遅延取得と競合（2 件の failure → snapshot と token 照合）。
 10. action_started / action_completed イベント中の cancel（入力や wait が続く failure → 境界の再チェック）。
 11. 通常 chat の送信 Prompt にある Tool 一覧（computerUse が 0 件の failure → feature 別 client への登録）。
+12. 実 SDK の HTTP JSON（tools: [] が送信される failure → tools / tool_choice の省略）。
+13. モデルの raw default tools（拒否されない failure → SDK merge 前の拒否）。
 
 各 Green 後に summary / progress の共通化、adapter 分離、resource 化などを整理。
 追加の全 action / 実アプリ結合テストで回帰範囲を確認した。
@@ -259,6 +264,13 @@ computerUse が CHAT にだけ 1 件含まれることを確認した。
 標準 JAR の repackage は Windows のリネーム拒否により完了しなかったため、
 同じ検証済み classes を使って target/computer-use-fixed/rei-0.0.1-SNAPSHOT.jar へ
 別途 package した。実行可能 JAR 内の修正クラスと検証済み class の SHA-256 も一致確認済み。
+
+Vision HTTP JSON 修正後は Maven verify で 1,539 件成功（failure / error / skipped は 0）。
+初回は既存 ToolsTest の stdout 到着後の stderr 検査が 1 件失敗したが、コード変更なしの
+単独再実行と全 suite 再実行で成功した。実行可能 JAR は
+target/computer-use-http-fix/rei-0.0.1-SNAPSHOT.jar に出力し、修正した 2 クラスの
+SHA-256 が検証済み class と一致することも確認した。実 SDK の送信 JSON は
+in-memory HTTP transport で検証しており、実推論サーバーでの動作は未検証。
 
 ## Manual Windows smoke test（CI では実行しない）
 
