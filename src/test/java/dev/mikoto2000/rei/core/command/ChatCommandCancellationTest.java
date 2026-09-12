@@ -68,7 +68,7 @@ class ChatCommandCancellationTest {
     }
 
     assertTrue(output.text().contains("partial "));
-    assertTrue(output.text().contains("[agent] failed: chat run cancelled"));
+    assertTrue(output.text().contains("[agent] cancelled"));
   }
 
   private static final class RecordingOutput implements ShellEventOutput {

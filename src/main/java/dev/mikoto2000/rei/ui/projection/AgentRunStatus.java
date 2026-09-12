@@ -4,5 +4,6 @@ public enum AgentRunStatus {
   IDLE,
   RUNNING,
   COMPLETED,
-  FAILED
+  FAILED,
+  CANCELLED
 }

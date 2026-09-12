@@ -21,6 +21,8 @@ public class RunExecutionContext {
   private long progressVersion;
   private long completionTokens;
   private boolean closed;
+  private boolean cancelled;
+  private boolean completed;
   private boolean iterationOpen;
   private dev.mikoto2000.rei.core.chat.AgentRunContext runContext;
   public void setRunContext(dev.mikoto2000.rei.core.chat.AgentRunContext context) { this.runContext = context; }
@@ -34,7 +36,8 @@ public class RunExecutionContext {
     this.interventionApplied = applied;
   }
 
-  public List<org.springframework.ai.chat.messages.Message> applyInterventions() {
+  public synchronized List<org.springframework.ai.chat.messages.Message> applyInterventions() {
+    if (cancelled) return List.of();
     if (interventions == null) return List.of();
     return interventions.drainEntries().stream().map(entry -> {
       interventionApplied.accept(entry.text());
@@ -66,6 +69,19 @@ public class RunExecutionContext {
     if (recovering) emit(AgentEventType.STAGNATION_RECOVERED, evidence, "progress_resumed");
   }
   public synchronized void close() { closed = true; pending.clear(); }
+  public synchronized void cancel() {
+    if (completed) return;
+    cancelled = true;
+    close();
+    int discarded = interventions == null ? 0 : interventions.discardAndFinish();
+    if (discarded > 0) org.slf4j.LoggerFactory.getLogger(RunExecutionContext.class)
+        .info("Cancelled run {}: discarded {} pending guidance", runId, discarded);
+  }
+  public synchronized boolean isCancelled() { return cancelled; }
+  public synchronized void completeRun() {
+    checkActive();
+    completed = true;
+  }
   public synchronized void checkActive() {
     if (closed || Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
   }

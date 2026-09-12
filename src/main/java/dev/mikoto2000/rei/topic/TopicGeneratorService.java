@@ -69,8 +69,10 @@ public class TopicGeneratorService {
     List<TopicCandidate> candidates = new ArrayList<>();
     for (TopicCandidateGenerator generator : generators) {
       try {
+        dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
         candidates.addAll(generator.generate(context));
       } catch (Exception e) {
+        dev.mikoto2000.rei.core.chat.RunCancellation.propagate(e);
         if (!ignoreFailures) throw e;
         log.warn("Topic candidate refresh failed: {}", generator.getClass().getSimpleName());
       }

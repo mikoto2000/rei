@@ -20,6 +20,38 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
 
 class FallbackChatModelTest {
+  @Test void ordinaryTransportErrorAfterRunCancellationDoesNotStartFallback() {
+    var primary = Mockito.mock(ChatModel.class);
+    var fallback = Mockito.mock(ChatModel.class);
+    var context = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext("run",
+        new OutputLimitRunBudget(1, 3), new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(java.nio.file.Path.of(".")),
+        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), event -> {});
+    var prompt = new Prompt("request", org.springframework.ai.model.tool.ToolCallingChatOptions.builder()
+        .toolContext(java.util.Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, context)).build());
+    when(primary.stream(prompt)).thenAnswer(invocation -> {
+      context.cancel();
+      return Flux.error(new RuntimeException("connection closed"));
+    });
+    var model = new FallbackChatModel("chat", primary, fallback, null);
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> model.stream(prompt).blockLast())
+        .isInstanceOf(java.util.concurrent.CancellationException.class);
+    Mockito.verifyNoInteractions(fallback);
+  }
+
+  @Test
+  void cancellationDoesNotStartFallback() {
+    var primary = Mockito.mock(ChatModel.class);
+    var fallback = Mockito.mock(ChatModel.class);
+    var prompt = new Prompt("request");
+    when(primary.call(prompt)).thenThrow(new java.util.concurrent.CancellationException());
+    when(primary.stream(prompt)).thenReturn(Flux.error(new java.util.concurrent.CancellationException()));
+    var model = new FallbackChatModel("chat", primary, fallback, null);
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> model.call(prompt))
+        .isInstanceOf(java.util.concurrent.CancellationException.class);
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> model.stream(prompt).blockLast())
+        .isInstanceOf(java.util.concurrent.CancellationException.class);
+    Mockito.verifyNoInteractions(fallback);
+  }
 
   @Test
   void callFallsBackToDefaultModelWhenPrimaryFails() {

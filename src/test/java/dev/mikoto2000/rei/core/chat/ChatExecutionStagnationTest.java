@@ -19,6 +19,24 @@ import dev.mikoto2000.rei.llm.*;
 import reactor.core.publisher.Flux;
 
 class ChatExecutionStagnationTest {
+  @Test void cancellationAtOutputLimitDoesNotStartPlanner() {
+    ChatModel model = new ChatModel() {
+      public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
+      public Flux<ChatResponse> stream(Prompt p) {
+        var options = (org.springframework.ai.model.tool.ToolCallingChatOptions) p.getOptions();
+        ((dev.mikoto2000.rei.core.stagnation.RunExecutionContext) options.getToolContext()
+            .get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)).cancel();
+        return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("partial"),
+            org.springframework.ai.chat.metadata.ChatGenerationMetadata.builder().finishReason("length").build()))));
+      }
+    };
+    var holder = mock(ModelHolderService.class); when(holder.get()).thenReturn("test");
+    var planner = mock(OutputLimitReplanner.class);
+    var service = new ChatExecutionService(new FixedLlmChatClientProvider(ChatClient.builder(model).build()), holder,
+        new FixedLlmModelProvider(), new LlmProperties(), new CommandCancellationService(), Optional.empty(), Optional.of(planner));
+    assertThat(service.execute("work").status()).isEqualTo(ChatExecutionResult.Status.CANCELLED);
+    verifyNoInteractions(planner);
+  }
   @Test
   void recoveredOutputLimitIsNotReportedAsTerminalFailure() {
     AtomicInteger calls = new AtomicInteger();

@@ -15,8 +15,13 @@ public record ChatExecutionResult(Status status, String text, boolean memoryCons
     return status == Status.SUCCESS;
   }
 
+  public static ChatExecutionResult cancelled() {
+    return new ChatExecutionResult(Status.CANCELLED, "", false, "chat run cancelled");
+  }
+
   public enum Status {
     SUCCESS,
-    FAILED
+    FAILED,
+    CANCELLED
   }
 }

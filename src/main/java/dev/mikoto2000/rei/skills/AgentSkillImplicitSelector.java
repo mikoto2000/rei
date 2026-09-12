@@ -48,6 +48,7 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
       String content = modelProvider.chatModel(LlmFeature.AGENT_SKILLS).call(buildSelectionPrompt(prompt, candidates));
       return resolveSelectedSkills(parseJsonStringArray(content), candidates);
     } catch (Exception e) {
+      dev.mikoto2000.rei.core.chat.RunCancellation.propagate(e);
       log.debug("Agent Skill implicit selection failed", e);
       return List.of();
     }

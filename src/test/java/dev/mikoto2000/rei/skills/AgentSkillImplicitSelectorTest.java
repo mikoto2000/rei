@@ -15,6 +15,18 @@ import org.springframework.ai.chat.model.ChatModel;
 class AgentSkillImplicitSelectorTest {
 
   @Test
+  void wrappedInterruptionTerminatesSelectionAndRestoresInterrupt() {
+    var model = Mockito.mock(ChatModel.class);
+    when(model.call(anyString())).thenThrow(new RuntimeException(new InterruptedException("cancelled")));
+    var selector = new AgentSkillImplicitSelector(model, new InMemoryAgentSkillRepository(List.of(skill("a"))));
+    try {
+      org.assertj.core.api.Assertions.assertThatThrownBy(() -> selector.select("request", Set.of(), List.of(skill("a"))))
+          .isInstanceOf(java.util.concurrent.CancellationException.class);
+      assertThat(Thread.currentThread().isInterrupted()).isTrue();
+    } finally { Thread.interrupted(); }
+  }
+
+  @Test
   void selectsSkillsFromLlmJsonArray() {
     AgentSkill skill = skill("skill-a");
     AgentSkillImplicitSelector selector = selector("[\"skill-a\"]", skill);

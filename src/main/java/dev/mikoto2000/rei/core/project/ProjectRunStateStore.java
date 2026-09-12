@@ -54,7 +54,8 @@ public class ProjectRunStateStore implements AgentEventListener {
     String status = switch (event.type()) {
       case AGENT_RUN_STARTED -> "RUNNING";
       case AGENT_RUN_COMPLETED -> "COMPLETED";
-      case AGENT_RUN_FAILED -> "FAILED";
+      case AGENT_RUN_FAILED -> event.payload() instanceof AgentRunFailedPayload failed
+          && failed.error() != null && "cancelled".equals(failed.error().code()) ? "CANCELLED" : "FAILED";
       default -> null;
     };
     if (status == null) return;

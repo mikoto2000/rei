@@ -16,6 +16,13 @@ import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 
 class DefaultAgentUiProjectionTest {
 
+  @Test void projectsCancellationAsATerminalStateDistinctFromFailure() {
+    var projection = new DefaultAgentUiProjection();
+    projection.apply(sequence(events.runStarted("run", "request", null), 1));
+    projection.apply(sequence(events.runFailed("run", new ErrorInformation("Cancelled", "chat run cancelled", "cancelled")), 2));
+    assertEquals("CANCELLED", projection.currentState().run().status().name());
+  }
+
   private final AgentEventFactory events = new AgentEventFactory(
       Clock.fixed(Instant.parse("2026-08-23T00:00:00Z"), ZoneOffset.UTC));
 

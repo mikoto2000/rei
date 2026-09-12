@@ -72,6 +72,7 @@ public class AgentSkillAdvisor implements BaseAdvisor {
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     Prompt prompt = request.prompt();
+    dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
     UserMessage userMessage = prompt.getUserMessage();
     if (userMessage == null) {
       return request;
@@ -89,6 +90,7 @@ public class AgentSkillAdvisor implements BaseAdvisor {
     AgentSkillSelection selection;
     try {
       selection = selectionService.select(userMessage.getText());
+      dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
       java.util.List<String> selectedNames = skillNames(selection.selectedSkills());
       publishCandidateEvaluation(selection, allSkills.size(),
           selectedNames.isEmpty() ? null : selectedNames.getFirst(), runId, routingId);

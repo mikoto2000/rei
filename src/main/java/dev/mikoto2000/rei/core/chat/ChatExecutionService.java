@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
+import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.command.InlineFileAttachmentResolver;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
@@ -86,6 +87,10 @@ public class ChatExecutionService {
   private ProjectService projectService;
   private ActionPlan actionPlan;
   private ChatMemory chatMemory;
+  private ConversationTurnStore turns = ConversationTurnStore.inMemory();
+
+  @Autowired
+  void setConversationTurnStore(ConversationTurnStore turns) { this.turns = turns; }
 
   @Autowired
   void setChatMemory(ChatMemory chatMemory) { this.chatMemory = chatMemory; }
@@ -189,8 +194,12 @@ public class ChatExecutionService {
       if (chatMemory != null) chatMemory.add(context.conversationId(), java.util.List.of(new UserMessage(text)));
       appendConversationLog(context.conversationId(), "user", text);
     });
+    Disposable cancellationHook = cancellationService.onCancel(runId, execution::cancel);
+    ConversationTurnStore.Status turnStatus = ConversationTurnStore.Status.FAILED;
 
     try {
+      turns.start(context, promptText);
+      execution.checkActive();
       activityTracker.ifPresent(tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));
       appendConversationLog(context.conversationId(), "user", promptText);
       if (!budget.tryConsumeLlmCall()) {
@@ -201,6 +210,7 @@ public class ChatExecutionService {
       activityTracker.ifPresent(tracker -> tracker.recordAgentStarted(java.time.Instant.now(clock)));
       ChatRunResult result = executePrompt(promptText, true, startedAtNanos, budget, execution, runId, skillRoutingContext,
           runCompletionTokens, usageAvailable, lastGenerationMetrics);
+      execution.checkActive();
       if (result.status() == ChatRunStatus.OUTPUT_LIMIT) {
         result = handleOutputLimit(promptText, promptText, "", result.text(), budget, execution, startedAtNanos, runId,
             skillRoutingContext,
@@ -214,29 +224,47 @@ public class ChatExecutionService {
             skillRoutingContext, runCompletionTokens, usageAvailable, lastGenerationMetrics);
       }
       if (result.status() == ChatRunStatus.SUCCESS) {
+        execution.checkActive();
         appendConversationLog(context.conversationId(), "assistant", result.text());
+        boolean consolidationSuggested = shouldSuggestConsolidation();
+        execution.checkActive();
+        maybeRefreshTopicCandidates();
+        execution.completeRun();
+        turnStatus = ConversationTurnStore.Status.COMPLETED;
         GenerationMetrics metrics = lastGenerationMetrics.get();
         eventPublisher.publish(eventFactory.runCompleted(runId, elapsedMillis(startedAtNanos),
             usageAvailable.get() ? runCompletionTokens.get() : null,
             metrics == null ? null : metrics.timeToFirstTokenMillis(),
             metrics == null ? null : metrics.outputTokensPerSecond(),
             metrics == null ? null : metrics.endToEndTokensPerSecond()));
-        boolean consolidationSuggested = shouldSuggestConsolidation();
         if (consolidationSuggested) {
           eventPublisher.publish(eventFactory.memoryConsolidationSuggested());
         }
-        maybeRefreshTopicCandidates();
         return ChatExecutionResult.success(result.text(), consolidationSuggested);
       } else {
+        if (result.status() == ChatRunStatus.CANCELLED) execution.cancel();
         eventPublisher.publish(eventFactory.runFailed(runId, terminalError(result.status())));
+        if (result.status() == ChatRunStatus.CANCELLED) return ChatExecutionResult.cancelled();
         return ChatExecutionResult.failed(terminalError(result.status()).message());
       }
+    } catch (RuntimeException error) {
+      if (!RunCancellation.isCancellation(error) && !execution.isCancelled()) throw error;
+      execution.cancel();
+      eventPublisher.publish(eventFactory.runFailed(runId, terminalError(ChatRunStatus.CANCELLED)));
+      return ChatExecutionResult.cancelled();
     } finally {
+      // Preserve interruption for the caller, but allow terminal metadata to be written during cleanup.
+      boolean interrupted = Thread.interrupted();
       try {
-        // Accepted input remains part of history even when cancellation or a hard budget stops the run.
-        while (!interventions.finishIfEmpty()) execution.applyInterventions();
+        // Preserve accepted input on ordinary failures, but never apply a cancelled run's mailbox.
+        if (execution.isCancelled()) interventions.discardAndFinish();
+        else while (!interventions.finishIfEmpty()) execution.applyInterventions();
       } finally {
-        execution.close();
+        try {
+          cancellationHook.dispose();
+          execution.close();
+          turns.finish(context, execution.isCancelled() ? ConversationTurnStore.Status.CANCELLED : turnStatus);
+        } finally { if (interrupted) Thread.currentThread().interrupt(); }
       }
     }
   }
@@ -264,6 +292,7 @@ public class ChatExecutionService {
       SkillRoutingRunContext skillRoutingContext,
       AtomicLong runCompletionTokens, AtomicBoolean usageAvailable,
       AtomicReference<GenerationMetrics> lastGenerationMetrics) {
+    execution.checkActive();
     if (outputLimitReplanner.isEmpty()) {
       return ChatRunResult.outputLimit(partialOutput);
     }
@@ -296,6 +325,7 @@ public class ChatExecutionService {
           llmProperties.getOutputLimit().getMaxReplansPerGoal(),
           budget.remainingLlmCalls()));
     } catch (Exception e) {
+      RunCancellation.propagate(e);
       log.warn("Output limit replan failed", e);
       return ChatRunResult.outputLimit(partialOutput);
     }
@@ -337,6 +367,7 @@ public class ChatExecutionService {
       OutputLimitRunBudget budget, RunExecutionContext execution, String runId, SkillRoutingRunContext skillRoutingContext,
       AtomicLong runCompletionTokens, AtomicBoolean usageAvailable,
       AtomicReference<GenerationMetrics> lastGenerationMetrics) {
+    execution.checkActive();
     InlineFileAttachmentResolver.ResolvedPrompt resolvedPrompt = resolveAttachments
         ? inlineFileAttachmentResolver.resolve(promptText)
         : new InlineFileAttachmentResolver.ResolvedPrompt(promptText, java.util.List.of(), java.util.List.of());
@@ -354,6 +385,7 @@ public class ChatExecutionService {
               .build(),
           options))
       .advisors(advisor -> advisor
+          .advisors(new ConversationLifecycleAdvisor(turns, execution.runContext().conversationId()))
           .param(AgentRunContext.class.getName(), execution.runContext())
           .param(ChatMemory.CONVERSATION_ID, execution.runContext().conversationId())
           .param(AgentSkillAdvisor.ROUTING_CONTEXT_KEY, skillRoutingContext));
@@ -451,7 +483,7 @@ public class ChatExecutionService {
       return ChatRunResult.success(responseBuilder.toString());
     } catch (InterruptedException e) {
       completeThinking(thinkingEventStarted, thinkingEventCompleted, thinkingId, thinkingBuilder);
-      if (cancellationService.consumeCancellationRequested()) {
+      if (cancellationService.isCancellationRequested()) {
         return ChatRunResult.cancelled();
       }
       Thread.currentThread().interrupt();
@@ -465,6 +497,7 @@ public class ChatExecutionService {
   }
 
   private ChatRunResult failureResult(Throwable error) {
+    if (RunCancellation.isCancellation(error)) return ChatRunResult.cancelled();
     for (Throwable cause = error; cause != null; cause = cause.getCause()) {
       if (cause instanceof ExecutionStoppedException stopped) {
         return new ChatRunResult(ChatRunStatus.valueOf(stopped.reason().name()), "");
@@ -505,7 +538,8 @@ public class ChatExecutionService {
         if (service.shouldSuggestConsolidationNow()) {
           suggested.set(true);
         }
-      } catch (Exception ignored) {
+      } catch (Exception error) {
+        RunCancellation.propagate(error);
       }
     });
     return suggested.get();
@@ -516,6 +550,7 @@ public class ChatExecutionService {
       try {
         orchestrator.onChatCompleted();
       } catch (Exception e) {
+        RunCancellation.propagate(e);
         log.warn("Topic candidate refresh failed", e);
       }
     });
