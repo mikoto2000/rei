@@ -29,9 +29,12 @@ class FallbackChatModel implements ChatModel {
 
   @Override
   public ChatResponse call(Prompt prompt) {
+    dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
     try {
       return primary.call(prompt);
     } catch (RuntimeException e) {
+      dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
+      dev.mikoto2000.rei.core.chat.RunCancellation.propagate(e);
       logFeatureFailure("call", e);
       return fallback.call(fallbackPrompt(prompt));
     }
@@ -39,8 +42,13 @@ class FallbackChatModel implements ChatModel {
 
   @Override
   public Flux<ChatResponse> stream(Prompt prompt) {
-    return Flux.defer(() -> primary.stream(prompt))
+    return Flux.defer(() -> {
+      dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
+      return primary.stream(prompt);
+    })
         .onErrorResume(error -> {
+          dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
+          dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
           logFeatureFailure("stream", error);
           return fallback.stream(fallbackPrompt(prompt));
         });

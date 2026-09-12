@@ -11,6 +11,14 @@ import static org.assertj.core.api.Assertions.*;
 
 class ProjectRunStateStoreTest {
   @TempDir Path temp;
+  @Test void cancellationIsNotRestoredAsFailure() {
+    var project = new ProjectContext(UUID.randomUUID().toString(), "a", temp);
+    var run = new AgentRunContext("run", project, "chat:main");
+    var store = new ProjectRunStateStore(temp);
+    store.onEvent(new AgentEventFactory(Clock.systemUTC()).runFailed("run",
+        new ErrorInformation("Cancelled", "chat run cancelled", "cancelled")).withOwnership(run));
+    assertThat(store.read(project.id()).orElseThrow().status()).isEqualTo("CANCELLED");
+  }
   @Test void concurrentResultsKeepLatestCompletionPerProjectAcrossRestart() throws Exception {
     var store = new ProjectRunStateStore(temp);
     var a = UUID.randomUUID().toString();

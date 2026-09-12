@@ -35,4 +35,11 @@ public final class UserInterventionQueue {
     finished = true;
     return true;
   }
+
+  public synchronized int discardAndFinish() {
+    int count = pending.size();
+    pending.clear();
+    finished = true;
+    return count;
+  }
 }

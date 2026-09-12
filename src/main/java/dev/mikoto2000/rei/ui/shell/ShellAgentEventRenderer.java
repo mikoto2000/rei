@@ -201,7 +201,8 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         closeAssistantLine();
         closeThinkingLine();
         AgentRunFailedPayload payload = (AgentRunFailedPayload) event.payload();
-        output.println("[agent] failed: " + errorMessage(payload.error()));
+        output.println(payload.error() != null && "cancelled".equals(payload.error().code())
+            ? "[agent] cancelled" : "[agent] failed: " + errorMessage(payload.error()));
       }
       case LLM_REQUEST_STARTED -> {
         closeAssistantLine();

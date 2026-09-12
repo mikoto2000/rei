@@ -81,7 +81,9 @@ public final class DefaultAgentUiProjection implements AgentUiProjection {
   }
 
   private void applyRunFailed(AgentEvent event, AgentRunFailedPayload payload) {
-    run = new AgentRunView(payload.runId(), AgentRunStatus.FAILED, run.startedAt(), event.timestamp(), null,
+    var status = payload.error() != null && "cancelled".equals(payload.error().code())
+        ? AgentRunStatus.CANCELLED : AgentRunStatus.FAILED;
+    run = new AgentRunView(payload.runId(), status, run.startedAt(), event.timestamp(), null,
         ErrorView.from(payload.error()));
   }
 
