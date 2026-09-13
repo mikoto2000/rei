@@ -62,7 +62,40 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
         .media(new Media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(bytes.toByteArray()))).build();
     var requestOptions = options.get().maxTokens(128).responseFormat(null).toolChoice(null).tools(null)
         .toolCallbacks(List.of()).toolNames(Set.of()).internalToolExecutionEnabled(false).build();
-    var response = grounding.call(new Prompt(List.of(user), requestOptions));
+    saveDiagnostics(observation, directory -> {
+      java.nio.file.Files.write(directory.resolve("showui-input.png"), bytes.toByteArray());
+      var details = new java.util.LinkedHashMap<String,Object>();
+      details.put("displayId", original.geometry().id());
+      details.put("sourceWidth", original.image().getWidth());
+      details.put("sourceHeight", original.image().getHeight());
+      details.put("sentWidth", image.getWidth());
+      details.put("sentHeight", image.getHeight());
+      details.put("targetDescription", target.description());
+      details.put("prompt", user.getText());
+      details.put("model", requestOptions.getModel());
+      details.put("maxTokens", requestOptions.getMaxTokens());
+      new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(directory.resolve("showui-request.json").toFile(), details);
+    });
+    checkCancelled();
+    org.springframework.ai.chat.model.ChatResponse response;
+    try {
+      response = grounding.call(new Prompt(List.of(user), requestOptions));
+    } catch (RuntimeException error) {
+      saveDiagnostics(observation, directory -> {
+        var stack = new java.io.StringWriter();
+        error.printStackTrace(new java.io.PrintWriter(stack));
+        java.nio.file.Files.writeString(directory.resolve("showui-error.txt"), stack.toString());
+      });
+      throw error;
+    }
+    saveDiagnostics(observation, directory -> {
+      // Preserve model text before validation, including malformed coordinates or truncated output.
+      var details = new java.util.LinkedHashMap<String,Object>();
+      details.put("response", response == null ? null : response.toString());
+      details.put("texts", response == null ? null : response.getResults().stream()
+          .map(g -> g.getOutput().getText()).toList());
+      new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(directory.resolve("showui-response.json").toFile(), details);
+    });
     log.info("ShowUI grounding response: step={}, display={}, response={}", observation.step(), target.displayId(), response);
     checkCancelled();
     if (response == null || response.getResults().size() != 1 || response.hasToolCalls()
@@ -94,6 +127,21 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
       return point;
     } catch (Exception error) {
       throw new InvalidComputerDecision("ShowUI must return exactly two normalized numbers: [x, y]");
+    }
+  }
+
+  @FunctionalInterface private interface DiagnosticWrite {
+    void write(java.nio.file.Path directory) throws Exception;
+  }
+
+  private static void saveDiagnostics(ComputerObservation observation, DiagnosticWrite write) {
+    if (observation.diagnosticRun() == null) return;
+    try {
+      var directory = java.nio.file.Files.createDirectories(observation.diagnosticRun()
+          .resolve("step-%03d".formatted(observation.step())));
+      write.write(directory);
+    } catch (Exception error) {
+      log.warn("Could not save ShowUI diagnostics: step={}", observation.step(), error);
     }
   }
 

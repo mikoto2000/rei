@@ -27,3 +27,16 @@ Grounding failures stop the Computer Use workflow as MODEL_ERROR. Neither the pl
 `grounding: generic` (default) preserves the previous schema-based model and crop refinement workflow. Changing configuration requires restarting Rei. Server-side image preprocessing can affect token counts; the bounded image does not guarantee that every model server fits a 4096-token context.
 
 Reference: https://huggingface.co/showlab/ShowUI-2B
+
+## 診断ファイル
+
+`rei.computer-use.diagnostics.enabled: true` の場合、既存の診断実行ディレクトリの `step-NNN` に次を保存します。
+
+| ファイル | 内容 |
+| --- | --- |
+| `showui-input.png` | ShowUI に送った縮小画像と同じ PNG バイト列 |
+| `showui-request.json` | 対象画面 ID、元画像・送信画像サイズ、対象説明、実際のプロンプト、モデル、出力上限 |
+| `showui-response.json` | モデルが返したテキスト（`texts`）と Spring AI のレスポンス表現。座標の検証前に保存 |
+| `showui-error.txt` | 通信呼び出しが例外になった場合のスタックトレース |
+
+`showui-response.json` は HTTP 応答全体の生バイト列ではありません。`texts` はパース・補正前のモデル出力をそのまま保持します。診断無効時は保存せず、保存失敗は操作の再試行や推論の中断を引き起こしません。対象説明や応答には画面由来の内容が含まれます。

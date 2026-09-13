@@ -13,6 +13,43 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
 class ShowUiComputerVisionModelTest {
+  @org.junit.jupiter.api.io.TempDir java.nio.file.Path diagnostics;
+
+  private ComputerObservation withDiagnostics(java.nio.file.Path path) {
+    var o = observation();
+    return new ComputerObservation(o.goal(),o.screenshot(),o.recentHistory(),o.step(),o.maxSteps(),path);
+  }
+
+  @Test void diagnosticsPreserveSentBytesAndInvalidResponse() throws Exception {
+    var grounding = mock(ChatModel.class);
+    when(grounding.call(any(Prompt.class))).thenReturn(SpringAiComputerVisionModelTest.response("oops\n[2,3]"));
+    var model = new ShowUiComputerVisionModel(o -> click(),grounding,OpenAiChatOptions::builder,()->false);
+    assertThrows(InvalidComputerDecision.class,()->model.decide(withDiagnostics(diagnostics)));
+    var prompt = ArgumentCaptor.forClass(Prompt.class);
+    verify(grounding).call(prompt.capture());
+    var user = (UserMessage)prompt.getValue().getInstructions().getFirst();
+    var step = diagnostics.resolve("step-001");
+    assertArrayEquals(user.getMedia().getFirst().getDataAsByteArray(),java.nio.file.Files.readAllBytes(step.resolve("showui-input.png")));
+    var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    var request = mapper.readTree(step.resolve("showui-request.json").toFile());
+    assertEquals(user.getText(),request.get("prompt").asText());
+    assertEquals("Post button",request.get("targetDescription").asText());
+    assertEquals("left",request.get("displayId").asText());
+    assertEquals(3840,request.get("sourceWidth").asInt());
+    assertEquals("oops\n[2,3]",mapper.readTree(step.resolve("showui-response.json").toFile()).get("texts").get(0).asText());
+  }
+
+  @Test void recordsTransportExceptionAndDiagnosticFailureDoesNotPreventInference() throws Exception {
+    var grounding = mock(ChatModel.class);
+    when(grounding.call(any(Prompt.class))).thenThrow(new IllegalStateException("test transport failure"));
+    var model = new ShowUiComputerVisionModel(o -> click(),grounding,OpenAiChatOptions::builder,()->false);
+    assertThrows(IllegalStateException.class,()->model.decide(withDiagnostics(diagnostics)));
+    assertTrue(java.nio.file.Files.readString(diagnostics.resolve("step-001/showui-error.txt")).contains("test transport failure"));
+    var blocked = diagnostics.resolve("file");
+    java.nio.file.Files.writeString(blocked,"not a directory");
+    doReturn(SpringAiComputerVisionModelTest.response("[0.5,0.5]")).when(grounding).call(any(Prompt.class));
+    assertInstanceOf(ComputerAction.Click.class,model.decide(withDiagnostics(blocked)));
+  }
   private ComputerObservation observation() {
     var virtual = new Rectangle(-3840,0,7680,2160);
     return new ComputerObservation("private goal", new CapturedScreen(List.of(
