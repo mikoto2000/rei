@@ -23,7 +23,7 @@ class GroundingRefinementTest {
     when(model.call(any(Prompt.class))).thenReturn(SpringAiComputerVisionModelTest.response(point(p,true)),
         SpringAiComputerVisionModelTest.response(point(p,false)));
     var screen = ComputerUseServiceTest.screen();
-    var vision = new ShowUiComputerVisionModel(this::click,model,OpenAiChatOptions::builder,()->false,p);
+    var vision = TestGroundingModels.create(this::click,model,OpenAiChatOptions::builder,()->false,p);
     var result = (ComputerAction.DoubleClick)vision.decide(new ComputerObservation("goal",screen,List.of(),1,20,diagnostics));
     var source = screen.displays().getFirst().image();
     assertEquals(source.getWidth()-source.getWidth()/2+(source.getWidth()/2)/2,result.target().x());
@@ -40,7 +40,7 @@ class GroundingRefinementTest {
     var model = mock(ChatModel.class);
     when(model.call(any(Prompt.class))).thenReturn(SpringAiComputerVisionModelTest.response(point(p,false)),
         SpringAiComputerVisionModelTest.response("invalid"));
-    var vision = new ShowUiComputerVisionModel(this::click,model,OpenAiChatOptions::builder,()->false,p);
+    var vision = TestGroundingModels.create(this::click,model,OpenAiChatOptions::builder,()->false,p);
     var service = new ComputerUseService(ComputerUseServiceTest::screen,vision,(a,s)->fail("must not dispatch"),a->{},
         SafetyPolicy.lowRiskOnly(),()->false,e->{},2,2);
     assertEquals(ComputerUseResult.Status.MODEL_ERROR,service.run("goal").status());
@@ -51,7 +51,7 @@ class GroundingRefinementTest {
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
     var model = mock(ChatModel.class);
     when(model.call(any(Prompt.class))).thenAnswer(call -> { cancelled.set(true); return SpringAiComputerVisionModelTest.response(point(p,false)); });
-    var vision = new ShowUiComputerVisionModel(this::click,model,OpenAiChatOptions::builder,cancelled::get,p);
+    var vision = TestGroundingModels.create(this::click,model,OpenAiChatOptions::builder,cancelled::get,p);
     assertThrows(java.util.concurrent.CancellationException.class,()->vision.decide(new ComputerObservation("goal",ComputerUseServiceTest.screen(),List.of(),1,20)));
     verify(model).call(any(Prompt.class));
   }

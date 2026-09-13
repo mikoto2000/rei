@@ -23,7 +23,7 @@ class ShowUiComputerVisionModelTest {
   @Test void diagnosticsPreserveSentBytesAndInvalidResponse() throws Exception {
     var grounding = mock(ChatModel.class);
     when(grounding.call(any(Prompt.class))).thenReturn(SpringAiComputerVisionModelTest.response("oops\n[2,3]"));
-    var model = new ShowUiComputerVisionModel(o -> click(),grounding,OpenAiChatOptions::builder,()->false);
+    var model = TestGroundingModels.create(o -> click(),grounding,OpenAiChatOptions::builder,()->false);
     assertThrows(InvalidComputerDecision.class,()->model.decide(withDiagnostics(diagnostics)));
     var prompt = ArgumentCaptor.forClass(Prompt.class);
     verify(grounding).call(prompt.capture());
@@ -42,7 +42,7 @@ class ShowUiComputerVisionModelTest {
   @Test void recordsTransportExceptionAndDiagnosticFailureDoesNotPreventInference() throws Exception {
     var grounding = mock(ChatModel.class);
     when(grounding.call(any(Prompt.class))).thenThrow(new IllegalStateException("test transport failure"));
-    var model = new ShowUiComputerVisionModel(o -> click(),grounding,OpenAiChatOptions::builder,()->false);
+    var model = TestGroundingModels.create(o -> click(),grounding,OpenAiChatOptions::builder,()->false);
     assertThrows(IllegalStateException.class,()->model.decide(withDiagnostics(diagnostics)));
     assertTrue(java.nio.file.Files.readString(diagnostics.resolve("step-001/showui-error.txt")).contains("test transport failure"));
     var blocked = diagnostics.resolve("file");
@@ -63,7 +63,7 @@ class ShowUiComputerVisionModelTest {
     var grounding = mock(ChatModel.class);
     when(grounding.call(any(Prompt.class))).thenReturn(SpringAiComputerVisionModelTest.response("[0.75,0.25]"),
         SpringAiComputerVisionModelTest.response("[0.5,0.5]"));
-    var model = new ShowUiComputerVisionModel(o -> {
+    var model = TestGroundingModels.create(o -> {
       assertTrue(o.screenshot().displays().stream().allMatch(d -> (long)d.image().getWidth()*d.image().getHeight() <= ShowUiComputerVisionModel.MAX_PIXELS));
       return click();
     },grounding,OpenAiChatOptions::builder,()->false);
@@ -90,7 +90,7 @@ class ShowUiComputerVisionModelTest {
   @Test void invalidGroundingFailsTaskWithoutExecutingPlannerCoordinates() {
     var grounding = mock(ChatModel.class);
     when(grounding.call(any(Prompt.class))).thenReturn(SpringAiComputerVisionModelTest.response("[1.1,0.2]"));
-    var model = new ShowUiComputerVisionModel(o -> click(),grounding,OpenAiChatOptions::builder,()->false);
+    var model = TestGroundingModels.create(o -> click(),grounding,OpenAiChatOptions::builder,()->false);
     var service = new ComputerUseService(() -> observation().screenshot(),model,(a,s)->fail("must not click"),a->{},
         SafetyPolicy.lowRiskOnly(),()->false,p->{},2,2);
     assertEquals(ComputerUseResult.Status.MODEL_ERROR,service.run("goal").status());
@@ -98,7 +98,7 @@ class ShowUiComputerVisionModelTest {
   }
   @Test void nonClickDoesNotCallGrounding() throws Exception {
     var grounding = mock(ChatModel.class);
-    var model = new ShowUiComputerVisionModel(o -> new ComputerAction.Done("visible"),grounding,OpenAiChatOptions::builder,()->false);
+    var model = TestGroundingModels.create(o -> new ComputerAction.Done("visible"),grounding,OpenAiChatOptions::builder,()->false);
     assertInstanceOf(ComputerAction.Done.class,model.decide(observation()));
     verify(grounding,never()).call(any(Prompt.class));
   }
@@ -106,14 +106,14 @@ class ShowUiComputerVisionModelTest {
     var grounding = mock(ChatModel.class);
     var error = new IllegalStateException("server unavailable");
     when(grounding.call(any(Prompt.class))).thenThrow(error);
-    var model = new ShowUiComputerVisionModel(o -> click(),grounding,OpenAiChatOptions::builder,()->false);
+    var model = TestGroundingModels.create(o -> click(),grounding,OpenAiChatOptions::builder,()->false);
     assertSame(error,assertThrows(IllegalStateException.class,()->model.decide(observation())));
     verify(grounding).call(any(Prompt.class));
   }
   @Test void cancellationAfterPlanningPreventsGrounding() {
     var grounding = mock(ChatModel.class);
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
-    var model = new ShowUiComputerVisionModel(o -> { cancelled.set(true); return click(); },grounding,
+    var model = TestGroundingModels.create(o -> { cancelled.set(true); return click(); },grounding,
         OpenAiChatOptions::builder,cancelled::get);
     assertThrows(java.util.concurrent.CancellationException.class,()->model.decide(observation()));
     verify(grounding,never()).call(any(Prompt.class));

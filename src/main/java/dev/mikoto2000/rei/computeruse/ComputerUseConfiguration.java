@@ -38,7 +38,10 @@ public class ComputerUseConfiguration {
           cancellation::isCancellationRequested, properties.repairs());
       return new ShowUiComputerVisionModel(planner::decideOverview, provider.computerUseChatModel(),
           () -> new org.springframework.ai.openai.OpenAiChatOptions.Builder(provider.chatOptions(LlmFeature.COMPUTER_USE, current.get())),
-          cancellation::isCancellationRequested, "uitars".equals(grounding) ? GroundingProtocol.UITARS : GroundingProtocol.SHOWUI);
+          cancellation::isCancellationRequested, "uitars".equals(grounding) ? GroundingProtocol.UITARS : GroundingProtocol.SHOWUI,
+          new PlannerGroundingVerifier(provider.chatModel(LlmFeature.COMPUTER_USE_PLANNER),
+              () -> new org.springframework.ai.openai.OpenAiChatOptions.Builder(provider.chatOptions(LlmFeature.COMPUTER_USE_PLANNER, current.get())),
+              cancellation::isCancellationRequested));
     }
     if (!"generic".equals(grounding)) throw new IllegalArgumentException("Unknown computer-use grounding: " + grounding);
     return new SpringAiComputerVisionModel(provider.computerUseChatModel(),

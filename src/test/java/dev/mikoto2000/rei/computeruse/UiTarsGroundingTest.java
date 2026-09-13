@@ -27,7 +27,7 @@ class UiTarsGroundingTest {
     var grounding = mock(ChatModel.class);
     when(grounding.call(any(Prompt.class))).thenReturn(SpringAiComputerVisionModelTest.response("(500,500)"),
         SpringAiComputerVisionModelTest.response("(281,659)"));
-    var model = new ShowUiComputerVisionModel(o -> new ComputerAction.Click(
+    var model = TestGroundingModels.create(o -> new ComputerAction.Click(
         new ComputerAction.Target(display.geometry().id(),1,1,"Post button"),.9,ComputerAction.Risk.LOW),
         grounding,OpenAiChatOptions::builder,()->false,GroundingProtocol.UITARS);
     var action = (ComputerAction.Click)model.decide(new ComputerObservation("goal",screen,List.of(),1,20,diagnostics));

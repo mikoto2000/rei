@@ -27,6 +27,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
   private final Supplier<OpenAiChatOptions.Builder> options;
   private final BooleanSupplier cancelled;
   private final GroundingProtocol protocol;
+  private final GroundingVerifier verifier;
 
   public ShowUiComputerVisionModel(ComputerVisionModel planner, ChatModel grounding,
       Supplier<OpenAiChatOptions.Builder> options, BooleanSupplier cancelled) {
@@ -35,12 +36,21 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
 
   ShowUiComputerVisionModel(ComputerVisionModel planner, ChatModel grounding,
       Supplier<OpenAiChatOptions.Builder> options, BooleanSupplier cancelled, GroundingProtocol protocol) {
+    this(planner, grounding, options, cancelled, protocol, (o,i,t,p) -> {
+      throw new InvalidComputerDecision("Grounding verifier is required before clicking");
+    });
+  }
+
+  ShowUiComputerVisionModel(ComputerVisionModel planner, ChatModel grounding,
+      Supplier<OpenAiChatOptions.Builder> options, BooleanSupplier cancelled, GroundingProtocol protocol,
+      GroundingVerifier verifier) {
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(grounding);
     this.planner = planner;
     this.grounding = grounding;
     this.options = options;
     this.cancelled = cancelled;
     this.protocol = protocol;
+    this.verifier = java.util.Objects.requireNonNull(verifier);
   }
 
   @Override public ComputerAction decide(ComputerObservation observation) throws Exception {
@@ -66,9 +76,15 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
     int width = Math.max(1, source.getWidth()/2), height = Math.max(1, source.getHeight()/2);
     int left = Math.max(0, Math.min(source.getWidth()-width, (int)(coarse[0]*source.getWidth())-width/2));
     int top = Math.max(0, Math.min(source.getHeight()-height, (int)(coarse[1]*source.getHeight())-height/2));
-    var fine = locate(observation, original, target, source.getSubimage(left,top,width,height), "-refinement", left, top);
+    var crop = source.getSubimage(left,top,width,height);
+    verifier.verify(observation, resize(crop), target.description(), null);
+    checkCancelled();
+    var fine = locate(observation, original, target, crop, "-refinement", left, top);
     checkCancelled();
     double x = (left + fine[0]*width)/source.getWidth(), y = (top + fine[1]*height)/source.getHeight();
+    // Verify against the whole selected display, preserving context lost in the crop.
+    verifier.verify(observation, resize(source), target.description(), new double[]{x,y});
+    checkCancelled();
     var mapped = new ComputerAction.Target(original.geometry().id(),
         left + Math.min(width-1, (int)(fine[0]*width)),
         top + Math.min(height-1, (int)(fine[1]*height)), target.description(), x, y);
