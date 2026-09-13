@@ -32,6 +32,67 @@ class ReiApplicationCommandOutputTest {
   static class SubagentRoot { }
 
   @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = { "UTF-8", "windows-31j" })
+  void feedUsageKeepsTerminalWriterWhenConsoleStreamsAreRouted(String encoding) {
+    CommandLine root = new CommandLine(CommandLine.Model.CommandSpec.create().name("rei"));
+    root.addSubcommand("feed", new dev.mikoto2000.rei.feed.command.FeedCommand());
+    var output = configureOutput(root, encoding);
+    var writer = root.getErr();
+    try (var console = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession()) {
+      assertEquals(2, root.execute("feed"));
+      org.assertj.core.api.Assertions.assertThat(output.toString(Charset.forName(encoding)))
+          .contains("RSS/Atom フィードを操作します", "フィードを追加します");
+      org.assertj.core.api.Assertions.assertThat(root.getErr()).isSameAs(writer);
+    }
+  }
+
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = { "UTF-8", "windows-31j" })
+  void feedUsageUsesActualTerminalWithConsoleEncoding(String encoding) throws Exception {
+    var charset = Charset.forName(encoding);
+    var output = new ByteArrayOutputStream();
+    try (var console = new java.io.PrintStream(output, true, charset);
+        var terminal = ReiApplication.terminalBuilder(console).system(false).dumb(true)
+            .type(Terminal.TYPE_DUMB)
+            .streams(new java.io.ByteArrayInputStream(new byte[0]), output).build()) {
+      CommandLine root = new CommandLine(CommandLine.Model.CommandSpec.create().name("rei"));
+      root.addSubcommand("feed", new dev.mikoto2000.rei.feed.command.FeedCommand());
+      ReiApplication.configureCommandOutput(root, terminal);
+
+      assertEquals(2, root.execute("feed"));
+      terminal.flush();
+
+      assertEquals(charset, terminal.encoding());
+      org.assertj.core.api.Assertions.assertThat(output.toString(charset))
+          .contains("RSS/Atom フィードを操作します", "フィードを追加します");
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({ "UTF-8, false", "UTF-8, true", "windows-31j, false", "windows-31j, true" })
+  void feedUsageUsesTerminalEncodingAfterCompleterInitialization(String encoding, boolean afterCompletion) {
+    CommandLine root = new CommandLine(CommandLine.Model.CommandSpec.create().name("rei"));
+    root.addSubcommand("feed", new dev.mikoto2000.rei.feed.command.FeedCommand());
+    var output = configureOutput(root, encoding);
+    var completer = ReiLineReaderFactory.completer(root);
+    if (afterCompletion) {
+      var parser = new DefaultParser();
+      for (String input : java.util.List.of("/feed ", "/feed item ")) {
+        completer.complete(mock(LineReader.class),
+            parser.parse(input, input.length(), Parser.ParseContext.COMPLETE), new ArrayList<>());
+      }
+    }
+    assertEquals(2, root.execute("feed"));
+    org.assertj.core.api.Assertions.assertThat(output.toString(Charset.forName(encoding)))
+        .contains("Missing required subcommand", "RSS/Atom フィードを操作します", "フィードを追加します",
+            "登録済みフィードを一覧します");
+    output.reset();
+    assertEquals(2, root.execute("feed", "item"));
+    org.assertj.core.api.Assertions.assertThat(output.toString(Charset.forName(encoding)))
+        .contains("個別記事を操作します");
+  }
+
+  @ParameterizedTest
   @CsvSource({ "UTF-8, false", "UTF-8, true", "windows-31j, false", "windows-31j, true" })
   void subagentUsesTerminalEncodingAfterCompletion(String encoding, boolean afterCompletion) throws Exception {
     java.nio.file.Files.writeString(subagentDirectory.resolve("reviewer.yaml"), """

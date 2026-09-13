@@ -146,9 +146,7 @@ public class ReiApplication {
   void run(String[] args) throws IOException {
     var cmd = new picocli.CommandLine(rootCommand, factory);
     rootCommand.configureCommands(cmd);
-    var terminal = TerminalBuilder.builder()
-      .system(true)
-      .build();
+    var terminal = terminalBuilder(System.out).build();
     configureCommandOutput(cmd, terminal);
 
     ReiLineReaderFactory.Session inputSession = ReiLineReaderFactory.create(terminal, cmd);
@@ -234,7 +232,25 @@ public class ReiApplication {
     }
   }
 
+  static TerminalBuilder terminalBuilder(PrintStream output) {
+    var builder = TerminalBuilder.builder().system(true);
+    // JLine defaults to UTF-8, including its dumb-terminal fallback. On Windows
+    // the console may still use CP932; use the JVM's actual stdout encoding.
+    // Preserve explicit JLine encoding/codepage overrides.
+    if (System.getProperty(TerminalBuilder.PROP_ENCODING) == null
+        && System.getProperty(TerminalBuilder.PROP_CODEPAGE) == null) {
+      builder.encoding(output.charset());
+    }
+    return builder;
+  }
+
   static void configureCommandOutput(CommandLine cmd, Terminal terminal) {
+    // RunLast extends picocli's legacy AbstractHandler, which captures System.out/err.
+    // After AgentConsoleSession replaces those streams, execute() would treat the
+    // captured streams as overrides and replace our terminal writers. Delegate via
+    // IExecutionStrategy so the shell keeps its explicitly configured writers.
+    var executionStrategy = cmd.getExecutionStrategy();
+    cmd.setExecutionStrategy(executionStrategy::execute);
     // Use JLine's encoding for command output as well as prompts and events.
     PrintWriter writer = new PrintWriter(terminal.writer(), true);
     cmd.setOut(writer);
