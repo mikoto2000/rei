@@ -1,21 +1,30 @@
 package dev.mikoto2000.rei.feed.command;
 
-import java.util.List;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.concurrent.Callable;
 
 import org.springframework.stereotype.Component;
 
+import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.feed.Feed;
 import dev.mikoto2000.rei.feed.FeedBriefingItem;
+import dev.mikoto2000.rei.feed.FeedOpmlImportResult;
+import dev.mikoto2000.rei.feed.FeedOpmlImportService;
 import dev.mikoto2000.rei.feed.FeedService;
 import dev.mikoto2000.rei.feed.FeedSummaryService;
 import dev.mikoto2000.rei.feed.FeedUpdateResult;
 import dev.mikoto2000.rei.feed.FeedUpdateService;
+import dev.mikoto2000.rei.feed.OpmlImportException;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
+import picocli.CommandLine.Spec;
 
 @Component
 @Command(
@@ -23,6 +32,7 @@ import picocli.CommandLine.Parameters;
     description = "RSS/Atom フィードを操作します",
     subcommands = {
       FeedCommand.AddCommand.class,
+      FeedCommand.ImportOpmlCommand.class,
       FeedCommand.ListCommand.class,
       FeedCommand.EditCommand.class,
       FeedCommand.DeleteCommand.class,
@@ -31,6 +41,75 @@ import picocli.CommandLine.Parameters;
       FeedCommand.ItemCommand.class
     })
 public class FeedCommand {
+
+  @Component
+  @Command(name = "import-opml", description = "OPML ファイルからフィードを一括登録します")
+  public static class ImportOpmlCommand implements Callable<Integer> {
+    private static final int MAX_DETAILS = 20;
+    private final FeedOpmlImportService importService;
+
+    /** Used by picocli for command discovery and help without the Spring context. */
+    public ImportOpmlCommand() {
+      this(null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ImportOpmlCommand(FeedOpmlImportService importService) {
+      this.importService = importService;
+    }
+
+    @Spec
+    CommandSpec spec;
+
+    @Parameters(index = "0", paramLabel = "PATH", description = "OPML ファイルのパス")
+    String path;
+
+    @Override
+    public Integer call() {
+      try {
+        if (importService == null) throw new OpmlImportException("feed import service is unavailable");
+        FeedOpmlImportResult result = importService.importFile(resolvePath());
+        var out = spec.commandLine().getOut();
+        out.println("OPML import completed.");
+        out.println();
+        out.println("Imported: " + result.imported().size());
+        out.println("Skipped: " + result.skipped().size());
+        out.println("Failed: " + result.failed().size());
+        printDetails("Skipped", result.skipped());
+        printDetails("Failed", result.failed());
+        return 0;
+      } catch (OpmlImportException e) {
+        spec.commandLine().getErr().println("Failed to import OPML: " + singleLine(e.getMessage()));
+        return 1;
+      } catch (InvalidPathException e) {
+        spec.commandLine().getErr().println("Failed to import OPML: invalid file path");
+        return 1;
+      }
+    }
+
+    private Path resolvePath() {
+      if (path.equals("~")) return Path.of(System.getProperty("user.home"));
+      if (path.startsWith("~/") || path.startsWith("~\\")) {
+        return Path.of(System.getProperty("user.home")).resolve(path.substring(2));
+      }
+      Path input = Path.of(path);
+      return (input.isAbsolute() ? input : ProjectService.currentProjectOrStartupDirectory().resolve(input)).normalize();
+    }
+
+    private void printDetails(String label, List<FeedOpmlImportResult.Entry> entries) {
+      if (entries.isEmpty()) return;
+      var out = spec.commandLine().getOut();
+      out.println();
+      out.println(label + ":");
+      entries.stream().limit(MAX_DETAILS).forEach(entry -> out.println(
+          "- " + singleLine(entry.subscription().xmlUrl()) + " (" + entry.reason() + ")"));
+      if (entries.size() > MAX_DETAILS) out.println("... and " + (entries.size() - MAX_DETAILS) + " more");
+    }
+
+    private String singleLine(String value) {
+      return value.replaceAll("[\\p{Cntrl}\\p{Zl}\\p{Zp}]", " ");
+    }
+  }
 
   @Component
   @RequiredArgsConstructor
