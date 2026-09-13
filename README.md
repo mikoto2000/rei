@@ -1,920 +1,179 @@
 # Rei
 
-Windows の screenshot / Vision を一次情報にして Java Robot で操作する
-`computerUse(goal)` workflow を追加しました（標準は無効、マルチディスプレイ対応）。
-設定、Structured Output、安全制御、手動 smoke test は
-[Vision-first Computer Use](docs/vision-computer-use.md) を参照してください。
-ShowUI を位置特定専用に使う設定は、下記の「Computer Use」と [ShowUI grounding](docs/computer-use-showui.md) を参照してください。
+Rei は、ターミナルで使う AI 秘書シェルです。OpenAI 互換 API を使った対話を中心に、調査、文書検索、予定・タスク管理などを一つの CLI で行えます。
 
-保存先は Windows では `%LOCALAPPDATA%\Rei`、Linux では `$XDG_DATA_HOME/rei`（未設定時 `~/.local/share/rei`）、macOS では `~/Library/Application Support/Rei` です。`REI_DATA_DIR` で上書きできます。以下の `<rei-data-dir>` はこの保存先を表します。旧 `.rei` の扱いとプロジェクト別保存形式は [移行・設計メモ](docs/agent-run-project-state.md) を参照してください。
+アプリは手元の PC で動作し、AI の処理には設定した API サーバーを利用します。ローカルのモデルサーバーにも接続できます。
 
-Agent 実行中も追加入力できます。同じプロジェクトへの通常入力は実行中の Run に順番に渡され、LLM／Tool の境界で適用されます。`/cancel` は選択中プロジェクトの Run をキャンセルします。`/project cd` は未登録プロジェクトも登録して会話・Working Set の scope を切り替えます。
+## できること
 
-異なるプロジェクトでは AgentRun を同時に実行できます。プロンプトの `[rei] [2 running]` は選択中のプロジェクト名とプロセス全体の実行件数です。`/runs` で全プロジェクトの実行状態・経過時間・最初の依頼を確認でき、別プロジェクトの終了も通知されます。実行状態は再起動時には復元しません。設計と検証内容は [ActiveRun 実装報告](docs/implementation-report-active-runs.md) を参照してください。
+- AI との対話、画像を添付した質問、画像生成
+- Web 検索、URL の要約、登録した文書を参照した回答
+- プロジェクトごとの会話管理、履歴の検索、複数プロジェクトでの同時実行
+- Google Calendar の予定操作、Google Tasks のタスク管理
+- RSS/Atom の購読、日次ブリーフィング、リマインド
+- MCP による外部ツール連携、SubAgent への作業の委譲、Windows の画面操作
 
-`/summarize <URL>` と `/image "プロンプト"` もバックグラウンドで動きます。既存の `/image generate ...` と各オプションも利用できます。実行中も chat やプロジェクト切り替えができ、`/runs` とプロンプト上の件数には `AGENT`・`SUMMARIZE`・`IMAGE` をすべて含めます。開始・終了通知には所属プロジェクトを表示します。
+## はじめに
 
-引数なしの `/summarize` は、選択中プロジェクトの最後に成功した要約を再表示します。要約中なら現在の処理も表示します。結果は `<rei-data-dir>/projects/<ProjectId>/state/latest-summarize.json` に保存され、再起動後も参照できます。プロジェクトを切り替えても、結果と会話履歴は開始元に保存されます。`/image` 単体は使い方の表示、`/cancel` は選択中プロジェクトの AgentRun のキャンセルです。設計・検証の詳細は [バックグラウンドコマンド実装報告](docs/implementation-report-background-commands.md) を参照してください。
+### 1. 必要なものを用意する
 
-`/history` は `/history show` と同じで、選択中プロジェクトの `chat:main` を直近50メッセージ表示します。Agent実行中にも利用でき、追加指示としては扱いません。
+- JDK 25 以上（`java -version` で確認できます）
+- このリポジトリのソース一式
+- 利用する OpenAI 互換 API の接続先、モデル名、必要に応じた API キー
 
-```text
-/history
-/history list --project "MaCa Editor"
-/history list --limit 50 --offset 50
-/history show chat:test --project "MaCa Editor" --last 100
-/history show --all
-/history search Working Set 候補削減
-/history search --current "Working Set"
-/history search --all --limit 20 "OAuth OBO"
-/history --help
+以下はソースから起動する手順です。リポジトリのルートで実行してください。Maven は同梱の Maven Wrapper を使用できます。初回は依存ファイルのダウンロードにネットワーク接続が必要です。
+
+### 2. AI の接続先を設定する
+
+次の例は、同じ PC の `http://localhost:11434` で公開されている `qwen3.5:9b` に接続します。URL・モデル名・キーを実際の接続先に置き換えてください。キーが不要なローカルサーバーでは `dummy-key` を指定できます。
+
+Windows（PowerShell）:
+
+```powershell
+$env:REI_OPENAI_BASE_URL = 'http://localhost:11434'
+$env:REI_OPENAI_API_KEY = 'dummy-key'
+$env:REI_OPENAI_CHAT_MODEL = 'qwen3.5:9b'
+$env:REI_EMBEDDING_ENABLED = 'false'
 ```
 
-`--project` は登録名またはProjectIdです。同名の場合はProjectIdを指定してください。検索は既定で現在プロジェクトを優先し、不十分なら他プロジェクトも検索します。既存の検索予算（現在最大8件、他プロジェクト合計最大3件）も適用されます。本文は秘匿処理後、1メッセージ最大2,000コードポイントで短縮します。詳細は [履歴コマンド実装報告](docs/implementation-report-history-shell.md) を参照してください。
-
-Rei は、ローカルで動かす AI 秘書シェルです。OpenAI 互換 API を使った対話を中心に、Google Calendar、タスク管理、RSS 管理、日次ブリーフィング、リマインド、文書埋め込み、Web 検索、MCP ツール連携を 1 つの CLI にまとめています。
-
-日々の確認や調査をターミナル上で完結させたいときに向いています。ローカルファイルや埋め込み済み文書を参照しながら対話でき、必要に応じて外部 API や MCP サーバーのツールも利用できます。
-
-ユーザー設定は、組み込みの `application.yaml` に加えて、グローバル Rei Data Directory 配下の `<rei-data-dir>/application.yaml` から上書きできます。
-
-## 主な機能
-
-- OpenAI 互換 API を使った対話
-- `model` / `models` による chat モデルの確認・切り替え
-- LLM 利用機能ごとの接続先サーバー・モデル切り替え
-- `/image generate` による画像生成とローカル保存
-- Google Calendar の認可、予定一覧、予定追加
-- タスクの追加、一覧、完了、削除
-- RSS/Atom フィードの登録、更新、新着記事の一覧と要約
-- その日の予定・未完了タスク・関連文書・新着記事をまとめる日次ブリーフィング
-- 指定日時または予定の何分前かでのリマインド
-- 文書をベクトルストアへ埋め込んだうえでの RAG
-- Web 検索ツール
-- YAML 定義の SubAgent への委譲（独立コンテキスト・Tool allowlist・実行制限）。[使い方](docs/subagents.md)
-  - 上位ページの本文取得、クエリ展開、重複 URL 除外、一次情報優先の再ランキングを含む
-- JSON 設定で登録した MCP サーバーのツール利用
-
-## セットアップ
-
-動作要件:
-
-- JDK 25 以上
-- Maven Wrapper を使う場合は `./mvnw`、ローカル Maven を使う場合は `mvn`
-
-### 外部設定ファイル
-
-Rei は起動時に、組み込みの `application.yaml` に加えて、グローバル Rei Data Directory 配下の `<rei-data-dir>/application.yaml` を自動で読み込みます。ファイルが存在しない場合は無視されます。
-
-設定の優先順位:
-
-1. 環境変数
-2. `<rei-data-dir>/application.yaml`
-3. 組み込み `application.yaml`
-
-外部設定ファイルのパス確認:
-
-```text
-/config path
-```
-
-テンプレート作成:
-
-```text
-/config init
-/config init --force
-```
-
-`/config init` は `<rei-data-dir>/application.yaml` と同じディレクトリに `<rei-data-dir>/additional-system-prompt.md` も作成します。
-この Markdown ファイルに書いた内容は、既定の system prompt の末尾へ追記されます。空の場合は何も追加されません。
-
-例:
-
-```yaml
-spring:
-  ai:
-    openai:
-      base-url: http://127.0.0.1:11434
-      chat:
-        options:
-          model: qwen3.5:122b
-      image:
-        options:
-          model: gpt-image-1
-
-rei:
-  llm:
-    max-output-tokens: 8192
-    output-limit:
-      max-replans-per-goal: 2
-      max-subgoals-per-replan: 8
-      max-llm-calls-per-run: 30
-  image:
-    output-directory: ${rei.data-dir}/images
-    size: 1024x1024
-    response-format: auto
-    timeout-seconds: 300
-  web-search:
-    enabled: true
-  interest:
-    enabled: true
-    notification-enabled: true
-    notification-cron: "0 0 12 * * *"
-  feed:
-    briefing-max-items: 3
-```
-
-### OpenAI Compatible API
-
-必須:
+Linux / macOS（Bash）:
 
 ```bash
-export REI_OPENAI_BASE_URL=https://api.openai.com
-export REI_OPENAI_API_KEY=your-api-key
-export REI_OPENAI_CHAT_MODEL=gpt-5.4
-export REI_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-export REI_OPENAI_IMAGE_MODEL=gpt-image-1
+export REI_OPENAI_BASE_URL=http://localhost:11434
+export REI_OPENAI_API_KEY=dummy-key
+export REI_OPENAI_CHAT_MODEL=qwen3.5:9b
+export REI_EMBEDDING_ENABLED=false
 ```
 
-`REI_OPENAI_BASE_URL` には OpenAI 互換 API のベース URL を設定してください。
-サーバーによっては `https://host/v1` まで含める構成が必要です。
+この例では、まず対話を始められるよう文書の埋め込みを無効にしています。文書検索を使うときは `REI_OPENAI_EMBEDDING_MODEL` を設定し、`REI_EMBEDDING_ENABLED=true` にして再起動してください。画像生成には画像生成 API に対応する接続先とモデルが必要です。
 
-環境変数:
+これらの環境変数は、設定したターミナルから起動する Rei に適用されます。毎回入力したくない場合は、起動後に[設定ファイル](#設定とデータの保存先)を作成してください。
 
-| 変数 | 要否 | デフォルト | 説明 |
-| --- | --- | --- | --- |
-| `REI_OPENAI_BASE_URL` | 必須 | `http://localhost:11434` | OpenAI 互換 API のベース URL |
-| `REI_OPENAI_API_KEY` | 必須 | `dummy-key` | API キー |
-| `REI_OPENAI_CHAT_MODEL` | 必須 | `qwen3.5:9b` | chat 用モデル名 |
-| `REI_OPENAI_EMBEDDING_MODEL` | 必須 | `qwen3-embedding:8b` | embedding 用モデル名 |
-| `REI_OPENAI_IMAGE_MODEL` | 画像生成時必須 | `gpt-image-1` | 既定接続先で使う画像生成モデル名 |
-| `REI_IMAGE_RESPONSE_FORMAT` | 任意 | `auto` | 画像生成 API に `response_format` を送るかを制御。`auto`, `b64_json`, `none` |
-| `REI_IMAGE_TIMEOUT_SECONDS` | 任意 | `300` | 画像生成 API の読み取りタイムアウト秒数 |
+### 3. 起動して話しかける
 
-### 機能別 LLM 設定
+Windows（PowerShell）:
 
-LLM を利用する機能ごとに、既定の `spring.ai.openai` とは別の OpenAI 互換 API サーバーとモデルを指定できます。
-`base-url` を空にした機能は、従来どおり既定の LLM 設定を使います。
-機能別に指定した LLM サーバーへの `call` / `stream` が失敗した場合は、`spring.ai.openai` の既定 LLM へフォールバックします。
-ただし、`computer-use` と `computer-use-planner` はフォールバックせず、解析に失敗した場合は Computer Use タスクを `MODEL_ERROR` で終了します。
-機能別 `model` を指定している場合、フォールバック時はそのモデル名を既定 LLM へ引き継がず、既定 LLM 側のデフォルトモデルを使います。
-
-```yaml
-rei:
-  llm:
-    max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}
-    output-limit:
-      max-replans-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL:2}
-      max-subgoals-per-replan: ${REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN:8}
-      max-llm-calls-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN:30}
-    features:
-      chat:
-        base-url: ${REI_LLM_CHAT_BASE_URL:}
-        api-key: ${REI_LLM_CHAT_API_KEY:}
-        model: ${REI_LLM_CHAT_MODEL:}
-      search:
-        base-url: ${REI_LLM_SEARCH_BASE_URL:}
-        api-key: ${REI_LLM_SEARCH_API_KEY:}
-        model: ${REI_LLM_SEARCH_MODEL:}
-      bluesky-reply:
-        base-url: ${REI_LLM_BLUESKY_REPLY_BASE_URL:}
-        api-key: ${REI_LLM_BLUESKY_REPLY_API_KEY:}
-        model: ${REI_LLM_BLUESKY_REPLY_MODEL:}
-      image-prompt:
-        base-url: ${REI_LLM_IMAGE_PROMPT_BASE_URL:}
-        api-key: ${REI_LLM_IMAGE_PROMPT_API_KEY:}
-        model: ${REI_LLM_IMAGE_PROMPT_MODEL:}
-      image-generation:
-        base-url: ${REI_LLM_IMAGE_GENERATION_BASE_URL:}
-        api-key: ${REI_LLM_IMAGE_GENERATION_API_KEY:}
-        model: ${REI_LLM_IMAGE_GENERATION_MODEL:}
-      output-limit-planner:
-        base-url: ${REI_LLM_OUTPUT_LIMIT_PLANNER_BASE_URL:}
-        api-key: ${REI_LLM_OUTPUT_LIMIT_PLANNER_API_KEY:}
-        model: ${REI_LLM_OUTPUT_LIMIT_PLANNER_MODEL:}
+```powershell
+.\mvnw.cmd spring-boot:run
 ```
 
-`max-output-tokens` は 1 回の LLM 呼び出しで生成させる最大トークン数です。
-チャットモデルを使う機能では `rei.llm.features.<機能キー>.max-output-tokens` で共通値を上書きできます。ShowUI の位置特定は128トークン固定です。
-LLM 応答の `finish_reason` が `length` の場合は正常完了扱いせず、`output-limit-planner` の LLM に元のゴールをサブゴールへ再計画させます。
-再計画後は各サブゴールを通常チャットと同じ実行経路で順次処理し、最後にサブゴール結果を統合して元の要求への最終回答を作ります。
-`output-limit` の各値は、再計画ループを防ぐための決定論的な上限です。
-
-対応している機能キー:
-
-| 機能キー | 対象 |
-| --- | --- |
-| `chat` | 通常チャット |
-| `computer-use` | Computer Use の画像解析。ShowUI モードではクリック位置の特定 |
-| `computer-use-planner` | ShowUI モードでの操作・対象画面の判断 |
-| `search` | `/search` の回答生成 |
-| `memory` | `/memory consolidate`、`/memory summarize` |
-| `bluesky-reply` | Bluesky リプライ文生成 |
-| `feed-summary` | RSS/Atom フィード要約 |
-| `briefing` | 日次ブリーフィング生成 |
-| `interest-discovery` | `/interest discover` の候補抽出 |
-| `agent-skills` | Agent Skills の暗黙選択 |
-| `output-limit-planner` | 出力上限到達時のサブゴール再計画 |
-| `image-prompt` | 画像生成プロンプト生成 |
-| `image-generation` | 画像生成 API |
-
-主な環境変数:
-
-| 変数 | 説明 |
-| --- | --- |
-| `REI_LLM_CHAT_BASE_URL` / `REI_LLM_CHAT_API_KEY` / `REI_LLM_CHAT_MODEL` | 通常チャット用 |
-| `REI_LLM_SEARCH_BASE_URL` / `REI_LLM_SEARCH_API_KEY` / `REI_LLM_SEARCH_MODEL` | 検索回答生成用 |
-| `REI_LLM_MEMORY_BASE_URL` / `REI_LLM_MEMORY_API_KEY` / `REI_LLM_MEMORY_MODEL` | メモリ統合用 |
-| `REI_LLM_BLUESKY_REPLY_BASE_URL` / `REI_LLM_BLUESKY_REPLY_API_KEY` / `REI_LLM_BLUESKY_REPLY_MODEL` | Bluesky リプライ用 |
-| `REI_LLM_FEED_SUMMARY_BASE_URL` / `REI_LLM_FEED_SUMMARY_API_KEY` / `REI_LLM_FEED_SUMMARY_MODEL` | フィード要約用 |
-| `REI_LLM_BRIEFING_BASE_URL` / `REI_LLM_BRIEFING_API_KEY` / `REI_LLM_BRIEFING_MODEL` | ブリーフィング用 |
-| `REI_LLM_INTEREST_DISCOVERY_BASE_URL` / `REI_LLM_INTEREST_DISCOVERY_API_KEY` / `REI_LLM_INTEREST_DISCOVERY_MODEL` | 興味候補抽出用 |
-| `REI_LLM_AGENT_SKILLS_BASE_URL` / `REI_LLM_AGENT_SKILLS_API_KEY` / `REI_LLM_AGENT_SKILLS_MODEL` | Agent Skills 選択用 |
-| `REI_LLM_OUTPUT_LIMIT_PLANNER_BASE_URL` / `REI_LLM_OUTPUT_LIMIT_PLANNER_API_KEY` / `REI_LLM_OUTPUT_LIMIT_PLANNER_MODEL` | 出力上限到達時の再計画用 |
-| `REI_LLM_IMAGE_PROMPT_BASE_URL` / `REI_LLM_IMAGE_PROMPT_API_KEY` / `REI_LLM_IMAGE_PROMPT_MODEL` | 画像生成プロンプト生成用 |
-| `REI_LLM_IMAGE_GENERATION_BASE_URL` / `REI_LLM_IMAGE_GENERATION_API_KEY` / `REI_LLM_IMAGE_GENERATION_MODEL` | 画像生成 API 用 |
-
-出力上限・再計画の環境変数:
-
-| 変数 | デフォルト | 説明 |
-| --- | --- | --- |
-| `REI_LLM_MAX_OUTPUT_TOKENS` | `8192` | 1 回の LLM 呼び出しの最大出力トークン数 |
-| `REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL` | `2` | 1 回の要求内で許可する再計画回数 |
-| `REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN` | `8` | Planner が返せる最大サブゴール数 |
-| `REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN` | `30` | 1 回の要求内で許可する LLM 呼び出し回数 |
-
-### Computer Use
-
-起動時に `java -jar target/rei-0.0.1-SNAPSHOT.jar --fullauto` と指定すると、Computer Use の `CONFIRM_REQUIRED`（投稿・送信・削除・購入など）も実行できます。省略時は `LOW` のみ、`PROHIBITED` は常に拒否します。位置特定・検証・重複入力防止は維持します。起動時に有効状態を表示します。`--fullauto=false` で無効化でき、YAMLや環境変数では有効化しません。
-
-`computerUse(goal)` はスクリーンショットを確認しながら画面操作を行います。URL を開くなどの準備は Shell 等で行い、クリックや入力、その結果の確認を Computer Use が担当します。
-
-Windows では `%LOCALAPPDATA%\Rei\application.yaml` の既存設定に以下を統合し、Rei を再起動してください。`REI_DATA_DIR` を指定している場合は、そのディレクトリの設定ファイルを使用します。
-
-```yaml
-rei:
-  computer-use:
-    enabled: true
-    grounding: showui
-  llm:
-    features:
-      computer-use:
-        base-url: http://gx10-6acc.local:8888
-        api-key: ${REI_COMPUTER_USE_API_KEY:dummy-key}
-        model: showlab/ShowUI-2B
-      # 操作判断の接続先を分ける場合に指定します。
-      # 未指定なら spring.ai.openai の接続先・モデルを使用します。
-      # computer-use-planner:
-      #   base-url: http://gx10-707e.local:8888
-      #   api-key: dummy-key
-      #   model: deepseek-v4-flash-vision-exp
-```
-
-`grounding` は、画面上の対象を座標に結び付ける処理の方式です。
-
-| 値 | 動作 |
-| --- | --- |
-| `generic`（既定） | `computer-use` のモデルで操作判断と切り出し画像によるクリック位置補正を行う従来方式 |
-| `showui` | 画像対応の判断モデルが操作・対象画面を選び、ShowUI がクリック位置を特定する方式 |
-| `uitars` | 判断モデルと位置特定を分離し、UI-TARS の `(x,y)`（0〜1000）を割合座標へ変換する方式 |
-
-UI-TARS-2B-SFT を使う場合は `grounding: uitars` に変更し、`rei.llm.features.computer-use.model` にサーバーで公開したモデル名を指定します。接続先・判断モデルの設定は ShowUI モードと共通です。モデル名の変更だけでは出力形式が切り替わらないため、`grounding` も必ず変更してください。
-
-UI-TARS モードは公式の位置特定専用プロンプトで1点を要求します。`(281,659)` は `[0.281,0.659]` として扱い、送信画像のピクセル座標とは解釈しません。出力上限は128トークン、画像縮小と失敗時の停止は ShowUI モードと同じです。診断有効時は `uitars-input.png`、`uitars-request.json`、`uitars-response.json`、通信例外時には `uitars-error.txt` を保存します。
-
-ShowUI モードでは、判断モデルに画像対応モデルが必要です。ShowUI には選択した画面1枚と短い対象説明を渡し、`[x, y]` の割合座標を返してもらいます。Rei が元の画像座標とディスプレイ配置に変換して操作します。クリック以外の操作と完了確認は判断モデルが担当します。
-
-`showui` / `uitars` はともに2段階で位置を特定します。最初に選択画面全体から位置を推定し、その位置の周辺を元画像から縦横1/2の大きさで切り出して、同じ対象を再推定します。実際にクリックするのは2回目の座標を元画面へ変換した位置だけです。2回目が失敗した場合は1回目の座標を使わず停止します。各クリックの位置特定にモデル呼び出しが2回必要です。
-
-診断には従来の `showui-*` / `uitars-*` に加え、`showui-refinement-*` / `uitars-refinement-*` として切り出し画像・要求・応答・通信例外を保存します。再推定の request JSON には元画像上の切り出し範囲も記録します。
-
-両モードでは `computer-use-planner` の判断モデルで検証します。再推定前に切り出し画像内で対象を識別できることを確認します。再推定後は、目標・履歴を渡さずに赤い目印の中心にある要素の種別とラベルを説明させます。その後、画像を渡さない別の要求で、観察結果と目標の種別・同一性を照合します。「ボタン」と「入力欄」のように種別が不一致なら、承認されてもコード側で拒否します。拒否・曖昧な応答・解析エラーでは `MODEL_ERROR` で停止します。成功時は判断1回・位置特定2回・切り出し検証1回・目標を伏せた要素識別1回・照合1回の計6回のモデル呼び出しです。モデルによる誤認を完全に防ぐ保証はありません。
-
-検証の診断ファイルは `crop-verification-*`、`point-description-*`、`point-verification-*` です。要求・応答・通信例外に加え、前2段階は画像も保存します。目印付き全画面画像は `point-description-input.png`、元画像から切り出した候補点周辺の拡大画像は `point-description-detail.png`、切り出し範囲は `point-description-geometry.json`、目標との照合は `point-verification-response.txt` で確認できます。赤い目印は検証用コピーだけに描画し、実際のデスクトップや位置特定用画像は変更しません。
-
-送信画像は縦横比を保って1枚あたり約105万画素以下に縮小します。ShowUI に履歴や独自の操作 JSON スキーマは送らず、出力上限は128トークンに固定します。ただし、サーバー側の画像処理によって入力トークン数は変わるため、4096トークンのコンテキストに必ず収まる保証はありません。
-
-専用接続先での通信失敗や不正な ShowUI 座標応答は、別モデルや判断モデルの推測座標に切り替えず、Computer Use タスクを失敗させます。解析レスポンスと例外をログに記録するため、ログには画面由来の内容が含まれることがあります。
-
-詳しい構成は [ShowUI grounding](docs/computer-use-showui.md) を参照してください。
-
-### Google Calendar
-
-Google Calendar と Google Tasks は OAuth 認証情報・トークン・更新処理を共有します。
-認可後は、Rei の起動中に保存済みのアクセストークンの期限を5分ごとに確認し、
-残り5分以内（期限切れを含む）ならリフレッシュします。更新結果は既存のトークン保存先に保存されます。
-期限が不明な場合も更新を試みます。未認可・リフレッシュトークン未取得・両連携が無効の場合はスキップし、
-バックグラウンドでブラウザ認証は開始しません。通信エラー等の更新失敗はログに記録し、次回確認時に再試行します。
-認可が失効した場合は `/schedule auth`（Calendar 有効時）または `/task auth` で再認可してください。
-手動更新の `/schedule refresh-token` も引き続き使用できます。
-
-| 環境変数 | デフォルト | 用途 |
-| --- | --- | --- |
-| `REI_GOOGLE_TOKEN_REFRESH_ENABLED` | `true` | 自動更新の有効・無効 |
-| `REI_GOOGLE_TOKEN_REFRESH_CHECK_INTERVAL` | `5m` | 期限の確認間隔 |
-| `REI_GOOGLE_TOKEN_REFRESH_ADVANCE` | `5m` | 有効期限の何分前から更新するか |
-
-Rei の停止中は更新されません。
-
-Google Calendar 連携を使う場合は、Google Cloud で Desktop app の OAuth クライアントを作成し、資格情報 JSON を `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` に配置してください。
-
-手順の概要:
-
-1. Google Cloud Console で対象プロジェクトを作成または選択する
-2. Google Calendar API を有効にする
-3. OAuth 同意画面を設定する
-4. `Credentials` から `OAuth client ID` を作成し、`Desktop app` を選ぶ
-5. ダウンロードした JSON を `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` に配置する
+Linux / macOS:
 
 ```bash
-export REI_GOOGLE_CALENDAR_ENABLED=true
-export REI_GOOGLE_CALENDAR_CREDENTIALS_PATH=$REI_DATA_DIR/google-calendar-credentials.json
-export REI_GOOGLE_CALENDAR_TIME_ZONE=Asia/Tokyo  # タイムゾーン
+./mvnw spring-boot:run
 ```
 
-Google Calendar の資格情報と OAuth token は、デフォルトではグローバル Rei Data Directory 配下の `<rei-data-dir>` に保存されます。必要に応じて `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` と `REI_GOOGLE_CALENDAR_TOKENS_DIR` で上書きできます。
-
-主な環境変数:
-
-| 変数 | 要否 | デフォルト | 説明 |
-| --- | --- | --- | --- |
-| `REI_GOOGLE_CALENDAR_ENABLED` | 任意 | `false` | Google Calendar 連携を有効化 |
-| `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH` | 利用時必須 | `${rei.data-dir}/google-calendar-credentials.json` | OAuth クライアント資格情報 JSON |
-| `REI_GOOGLE_CALENDAR_TOKENS_DIR` | 任意 | `${rei.data-dir}/google-calendar-tokens` | OAuth token 保存先 |
-| `REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID` | 任意 | `primary` | 既定カレンダー ID |
-| `REI_GOOGLE_CALENDAR_TIME_ZONE` | 任意 | 空 | オフセットなし日時の解釈に使うタイムゾーン |
-
-### Web Search
-
-Web 検索は `providers` 配列で設定します。既定では DuckDuckGo のみ有効です。
-
-DuckDuckGo だけ使う場合:
-
-```bash
-export REI_WEB_SEARCH_ENABLED=true
-export REI_WEB_SEARCH_DUCKDUCKGO_BASE_URL=https://html.duckduckgo.com/html/
-```
-
-Brave も使う場合は `application.yaml` か profile 用 YAML で provider を追加してください。
-
-```yaml
-rei:
-  web-search:
-    enabled: true
-    providers:
-      - name: duckduckgo
-        base-url: ${REI_WEB_SEARCH_DUCKDUCKGO_BASE_URL:https://html.duckduckgo.com/html/}
-      - name: brave
-        base-url: ${REI_WEB_SEARCH_BRAVE_BASE_URL:https://api.search.brave.com/res/v1/web/search}
-        api-key: ${REI_WEB_SEARCH_BRAVE_API_KEY:}
-```
-
-主な環境変数:
-
-| 変数 | 要否 | デフォルト | 説明 |
-| --- | --- | --- | --- |
-| `REI_WEB_SEARCH_ENABLED` | 任意 | `false` | Web 検索を有効化 |
-| `REI_WEB_SEARCH_TIMEOUT_SECONDS` | 任意 | `10` | HTTP タイムアウト秒数 |
-| `REI_WEB_SEARCH_MAX_RESULTS` | 任意 | `5` | 取得する最大件数 |
-| `REI_WEB_SEARCH_DUCKDUCKGO_BASE_URL` | 任意 | `https://html.duckduckgo.com/html/` | DuckDuckGo 検索 URL |
-| `REI_WEB_SEARCH_BRAVE_BASE_URL` | Brave 利用時任意 | `https://api.search.brave.com/res/v1/web/search` | Brave Search API URL |
-| `REI_WEB_SEARCH_BRAVE_API_KEY` | Brave 利用時必須 | 空 | Brave Search API キー |
-
-### RSS Feed
-
-RSS/Atom フィードは `<rei-data-dir>/application.yaml` または環境変数で設定できます。保存するのは本文ではなく、タイトル、URL、公開日時、取得日時などの最小メタデータだけです。
-
-```yaml
-rei:
-  feed:
-    briefing-max-items: 3
-    cron: "0 0 4 * * *"
-```
-
-主な環境変数:
-
-| 変数 | 要否 | デフォルト | 説明 |
-| --- | --- | --- | --- |
-| `REI_FEED_BRIEFING_MAX_ITEMS` | 任意 | `3` | `/briefing today` と `feed summary` で各フィードから扱う最大記事数 |
-| `REI_FEED_CRON` | 任意 | `0 0 4 * * *` | 定期更新ジョブ `FeedUpdateJob` の cron。既定では毎日 4:00 |
-
-### Interest Notifications
-
-過去の会話履歴から興味がありそうな話題を抽出し、Web 検索した有益情報を定期表示する場合は `InterestNotificationJob` を使います。通知は標準出力へ直接流し、通知文自体は会話メモリに保存されません。
-
-`rei.interest.cron` は興味更新の定期抽出ジョブ、`rei.interest.notification-cron` は通知ジョブです。周期は独立して設定できます。
-
-```yaml
-rei:
-  interest:
-    enabled: true
-    cron: "0 0 7 * * *"
-    notification-enabled: true
-    notification-cron: "0 0 12 * * *"
-```
-
-主な環境変数:
-
-| 変数 | 要否 | デフォルト | 説明 |
-| --- | --- | --- | --- |
-| `REI_INTEREST_ENABLED` | 任意 | `false` | 興味更新の定期抽出ジョブを有効化 |
-| `REI_INTEREST_CRON` | 任意 | `0 0 7 * * *` | `InterestDiscoveryJob` の cron |
-| `REI_INTEREST_NOTIFICATION_ENABLED` | 任意 | `false` | 興味更新通知ジョブを有効化 |
-| `REI_INTEREST_NOTIFICATION_CRON` | 任意 | `0 0 12 * * *` | `InterestNotificationJob` の cron |
-
-### MCP
-
-MCP サーバーを有効にする場合は、JSON 設定ファイルを用意してください。
-
-```bash
-export REI_MCP_ENABLED=true
-export REI_MCP_STDIO_SERVERS_CONFIG=file:$REI_DATA_DIR/mcp-servers.json
-```
-
-`REI_MCP_STDIO_SERVERS_CONFIG` には `file:` 付きの URI を指定します。`<rei-data-dir>/mcp-servers.json` は Claude Desktop 互換形式です。
-
-```json
-{
-  "mcpServers": {
-    "filesystem": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "/workspaces/rei"
-      ]
-    }
-  }
-}
-```
-
-登録した MCP ツールは起動時に読み込まれ、通常の AI ツールと同様にチャット中に自動利用されます。設定変更の反映には再起動が必要です。
-
-主な環境変数:
-
-| 変数 | 要否 | デフォルト | 説明 |
-| --- | --- | --- | --- |
-| `REI_MCP_ENABLED` | 任意 | `false` | MCP client を有効化 |
-| `REI_MCP_STDIO_SERVERS_CONFIG` | 利用時必須 | `file:.rei/mcp-servers.json` | MCP サーバー定義ファイル |
-
-## 使い方
-
-### 起動
-
-```bash
-./mvnw spring-boot:run  # JDK 25+ が必要
-# または
-mvn spring-boot:run
-```
-
-アプリが生成する履歴ファイルと SQLite のローカルデータは、グローバルな `<rei-data-dir>` に保存されます。Windows の既定は `%LOCALAPPDATA%\Rei` です。
-
-プロジェクトに所属する会話の追記専用ログは `<rei-data-dir>/projects/<ProjectId>/conversations/yyyy-MM-dd.jsonl` に保存されます。同じ `chat:main` でも ProjectId が異なれば別会話です。短期会話メモリの件数上限とは独立して保持します。
-
-会話履歴検索Toolの標準は `CURRENT_PROJECT_PREFERRED` です。実行元の履歴を優先し、関連度・件数が不十分な場合だけ他プロジェクトも検索します。`CURRENT_PROJECT_ONLY` は実行元限定、`ALL_PROJECTS` は全登録プロジェクトを関連度順で検索します。会話種別を指定する `scope`（chat / tool 等）とは別の `retrievalScope` 引数です。
-
-ユーザーが別プロジェクトを指定した場合は、`referencedProject` に登録名を渡すと、そのプロジェクトを実行元より優先できます。曖昧な名前・存在しない名前は解決しません。結果には出典の ProjectId・Project名と境界情報が含まれ、他プロジェクトのパスやbuild commandを現在の環境に自動適用しません。
-
-検索結果は実行元最大8件、他プロジェクト合計最大3件、本文各500文字です。他プロジェクトの詳細取得も最大3件・本文各500文字に制限します。Run中に `/project cd` しても、検索の実行元はそのRunのProjectIdのままです。検索状況は `[history.search]` 通知で確認できます。保存データを統合したり、検索結果をGlobal Memoryへ昇格したりする処理はありません。
-
-### 対話
+Rei の入力プロンプトが表示されたら、文章をそのまま入力します。
 
 ```text
 こんにちは
-今日の予定を教えて
-明日の朝に確認したいタスクを追加して
+今日取り組むことを一緒に整理して
 ```
 
-### 画像の入力
+操作コマンドは `/` で始めます。`/help` でヘルプを表示し、`/exit` で終了できます。
 
-Rei の通常のチャット入力に、バッククォートで囲んだ `@file:パス` を含めると、画像ファイルを添付できます。
+## 基本操作
+
+以下はすべて Rei の入力プロンプトに入力するコマンドです。
+
+| やりたいこと | 入力例 |
+| --- | --- |
+| 現在のモデルを確認する | `/model` |
+| 利用できるモデルを確認する | `/models` |
+| モデルを変更する | `/model <モデル名>` |
+| 調べる | `/search 調べたいこと` |
+| Web ページを要約する | `/summarize https://example.com/article` |
+| 最後の要約を再表示する | `/summarize` |
+| 画像を生成する | `/image "夕暮れの港の水彩画"` |
+| 会話履歴を表示する | `/history` |
+| 会話履歴を検索する | `/history search 検索したい言葉` |
+| 実行中の処理を確認する | `/runs` |
+| 選択中プロジェクトの AI の実行を中止する | `/cancel` |
+
+`/search` は Web と登録済み文書を検索して回答します。文書の埋め込みが無効な場合は Web 検索だけを使います。`/models` は接続先がモデル一覧の取得に対応している場合に利用できます。
+
+### 作業中の追加入力とプロジェクト切り替え
+
+AI の実行中も入力できます。同じプロジェクトへの追加入力は順番に受け付けられ、処理の区切りで反映されます。
+
+作業フォルダーを切り替えるには、次のように入力します。パスに空白がある場合は引用符で囲んでください。
 
 ```text
-この画像を説明して `@file:F:\project\rei\sample.png`
+/project cd "C:\work\my-project"
+/project list
 ```
 
-クリップボードにコピーした画像を添付する場合は、バッククォートで囲んだ `@clipboard` を使います。
+`/project cd` は未登録のフォルダーも登録し、そのプロジェクトの会話に切り替えます。Linux / macOS では `/home/your-name/work/my-project` などのパスを指定します。別のプロジェクトに切り替えると、先の処理を続けたまま新しい依頼を開始できます。
+
+プロンプトの `[rei] [2 running]` は選択中のプロジェクト名と、全プロジェクトの実行件数を表します。URL 要約と画像生成もバックグラウンドで動き、件数に含まれます。`/runs` で進行状況を確認でき、終了時には通知が出ます。
+
+`/cancel` が中止するのは選択中プロジェクトの AI の実行です。URL 要約や画像生成は対象外です。実行中の処理はアプリを再起動しても再開されません。
+
+### 会話履歴を検索する
+
+`/history` は選択中のプロジェクトの直近50メッセージを表示します。検索は現在のプロジェクトを優先し、結果が不十分なら他のプロジェクトも検索します。現在のプロジェクトだけに絞るには `/history search --current "検索語"` を使ってください。
+
+## 機能別ガイド
+
+必要な機能の設定を済ませてから利用してください。日付・ファイルパス・ID は手元の値に置き換えます。
+
+| 機能 | 操作・設定 |
+| --- | --- |
+| 画像の添付 | [ファイル・クリップボードから入力](docs/usage.md#画像の入力)（画像対応モデルが必要） |
+| 画像生成 | [生成・保存先の指定](docs/usage.md#画像生成) |
+| Google Calendar | [認証設定](docs/configuration.md#google-calendar-と-google-tasks) → [予定の一覧・追加](docs/usage.md#google-calendar) |
+| Google Tasks | [認証設定](docs/configuration.md#google-calendar-と-google-tasks) → [タスクの追加・完了・削除](docs/usage.md#タスク管理) |
+| RSS/Atom | [購読・OPML 取り込み・記事要約](docs/usage.md#rss-feed) |
+| 日次ブリーフィング | [予定・タスク・新着記事の確認](docs/usage.md#日次ブリーフィング) |
+| リマインド | [日時指定・一覧・削除](docs/usage.md#リマインド) |
+| 文書検索 | [文書の登録・検索・削除](docs/usage.md#文書の埋め込み) |
+| 記憶・会話履歴 | [記憶の管理](docs/usage.md#記憶管理)・[履歴の表示と検索](docs/usage.md#会話履歴) |
+| Web 検索 | [検索の使い方](docs/usage.md#検索)・[検索サービスの設定](docs/configuration.md#web-検索) |
+| URL 要約 | [要約の実行・再表示](docs/usage.md#url-の要約) |
+| 通知 | [興味に応じた情報の定期通知](docs/configuration.md#興味に応じた通知) |
+| Bluesky | [投稿・自動返信の設定](docs/configuration.md#bluesky-投稿自動返信) |
+| MCP | [外部ツールの接続設定](docs/configuration.md#mcp) |
+| SubAgent | [作業を委譲する設定と使い方](docs/subagents.md) |
+| Windows の画面操作 | [Computer Use の有効化と設定](docs/computer-use.md) |
+
+## 設定とデータの保存先
+
+設定や会話履歴などは、作業フォルダーとは別の共通ディレクトリに保存されます。
+
+| OS | 既定の保存先 |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\Rei` |
+| Linux | `$XDG_DATA_HOME/rei`（未設定時は `~/.local/share/rei`） |
+| macOS | `~/Library/Application Support/Rei` |
+
+環境変数 `REI_DATA_DIR` で保存先を変更できます。各ガイドの `<rei-data-dir>` はこのディレクトリを指します。
+
+設定ファイルのパス確認とテンプレート作成:
 
 ```text
-この画像を説明して `@clipboard`
+/config path
+/config init
 ```
 
-どちらも前後のバッククォート（`` ` ``）が必要です。上記の例は Rei の対話プロンプトに直接入力してください。
+作成された `application.yaml` を編集し、Rei を再起動すると反映されます。設定は環境変数、外部設定ファイル、組み込み設定の順に優先されます。同時に作成される `additional-system-prompt.md` には、AI に常に伝えておきたい指示を記述できます。
 
-### CLI の例
+詳しくは[設定ガイド](docs/configuration.md)を参照してください。
 
-```text
-$ ./mvnw spring-boot:run
-...
-rei> こんにちは
-=== answer ===
-こんにちは。今日は何を進めますか？
-rei> /model
-gpt-oss:120b
-```
+## 困ったときは
 
-### コマンド一覧
+| 症状 | 確認すること |
+| --- | --- |
+| 起動できない | `java -version` が 25 以上か、リポジトリのルートで実行しているかを確認してください。 |
+| AI に接続できない、`401 Unauthorized` | 接続先が稼働しているか、`REI_OPENAI_BASE_URL` と `REI_OPENAI_API_KEY` が正しいかを確認してください。 |
+| モデルが見つからない | 接続先が提供するモデル名を `REI_OPENAI_CHAT_MODEL` に指定してください。 |
+| Google の資格情報ファイルが見つからない | `REI_GOOGLE_CREDENTIALS_PATH` と JSON ファイルの配置先を確認してください。 |
+| Google の認可が失効した | `/schedule auth` または `/task auth` で再認可してください。 |
+| Web 検索が使えない | `REI_WEB_SEARCH_ENABLED` と検索サービスの設定を確認してください。Brave には API キーが必要です。Web 検索に失敗すると、`/search` は登録済み文書だけで回答を試みます。 |
+| MCP ツールが見つからない | `REI_MCP_ENABLED` と `REI_MCP_STDIO_SERVERS_CONFIG` を確認し、設定変更後に再起動してください。 |
+| 絵文字で表示が乱れる | 起動時に `--notmux` を指定すると改善する場合があります。Maven Wrapper では `./mvnw spring-boot:run "-Dspring-boot.run.arguments=--notmux"`（Windows では `./mvnw.cmd`）を使用します。 |
 
-| コマンド | 主なサブコマンド | 説明 |
-| --- | --- | --- |
-| `chat` | なし | 通常の対話 |
-| `model` | なし | 現在の chat モデルの確認・変更 |
-| `models` | なし | OpenAI 互換 API が返すモデル一覧を表示 |
-| `config` | `path`, `init` | 外部設定ファイルの確認とテンプレート作成 |
-| `search` | なし | Web 検索とベクトル検索をまとめて回答 |
-| `image` | `generate` | プロンプトから画像を生成して保存 |
-| `schedule` | `auth`, `list`, `add` | Google Calendar 認可と予定操作 |
-| `task` | `add`, `list`, `done`, `delete` | タスク管理 |
-| `feed` | `add`, `list`, `edit`, `delete`, `update`, `summary`, `item list`, `item summarize` | RSS/Atom フィード管理 |
-| `briefing` | `today` | 日次ブリーフィング表示 |
-| `reminder` | `add`, `list`, `delete` | リマインド管理 |
-| `embed` | `add`, `search`, `list`, `delete` | 文書埋め込みと検索 |
-| `memory` | `list`, `search`, `forget`, `export`, `summarize`, `consolidate` | 記憶の一覧・検索・削除・エクスポート・会話履歴からの記憶化 |
+## 開発・ライセンス
 
-### モデル
+開発やテストの手順は [DEVELOP.md](DEVELOP.md)、仕様・設計は [.kiro](.kiro/README.md) を参照してください。
 
-現在モデルの確認・変更:
-
-```text
-/model
-/model gpt-4.1-mini
-```
-
-指定可能なモデル一覧の確認:
-
-```text
-/models
-```
-
-`models` は接続先の OpenAI 互換 API が `/v1/models` を実装している前提です。
-
-### 画像生成
-
-プロンプトから画像を生成してローカルファイルへ保存します。
-
-```text
-/image generate 猫がキーボードを叩いているイラスト
-/image generate --size 1024x1024 --output ./out/cat.png 猫がキーボードを叩いているイラスト
-/image generate --model gpt-image-1 夕暮れの港の水彩画
-/image generate --raw "A watercolor painting of a harbor at dusk"
-```
-
-`--output` を省略した場合は `rei.image.output-directory` 配下に `image-<yyyyMMdd-HHmmss>.png` として保存します。
-`--size` を省略した場合は `rei.image.size` を使用します。
-既定では入力文を `rei.llm.features.image-prompt` のチャット LLM で画像生成向けプロンプトへ変換してから画像生成 API に渡します。
-`--raw` を指定すると、入力文を変換せずそのまま画像生成 API に渡します。
-
-```yaml
-rei:
-  image:
-    output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:${rei.data-dir}/images}
-    size: ${REI_IMAGE_SIZE:1024x1024}
-    response-format: ${REI_IMAGE_RESPONSE_FORMAT:auto}
-    timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
-    prompt-enhancement:
-      enabled: ${REI_IMAGE_PROMPT_ENHANCEMENT_ENABLED:true}
-```
-
-プロンプト生成だけ別サーバーを使う場合は `rei.llm.features.image-prompt` を設定します。
-画像生成 API だけ別サーバーを使う場合は `rei.llm.features.image-generation` を設定します。
-未設定の場合は `spring.ai.openai` の既定接続先を使い、機能別接続先が失敗した場合は既定接続先へフォールバックします。
-`response-format` は `auto` の場合、`gpt-image-*` モデルや既定 OpenAI 経路では `response_format` を送らず、ローカル OpenAI 互換サーバーで必要な場合は `b64_json` を指定します。
-`timeout-seconds` は画像生成 API の読み取りタイムアウトです。OpenAI 公式や重いローカルモデルで時間がかかる場合は大きくしてください。
-`prompt-enhancement.enabled` を `false` にすると、既定でも入力文をそのまま画像生成 API に渡します。
-
-### Google Calendar
-
-初回認可:
-
-```text
-/schedule auth
-```
-
-予定一覧:
-
-```text
-/schedule list --date 2026-03-23
-/schedule list --from 2026-03-23T00:00:00+09:00 --to 2026-03-23T23:59:59+09:00
-```
-
-予定追加:
-
-```text
-/schedule add --start 2026-03-23T09:00:00+09:00 --end 2026-03-23T10:00:00+09:00 定例会議
-/schedule add --start 2026-03-23T09:00:00 --end 2026-03-23T10:00:00 --location 会議室A 設計レビュー
-```
-
-オフセットなし日時は `REI_GOOGLE_CALENDAR_TIME_ZONE` を基準に解釈されます。
-
-### タスク管理
-
-追加:
-
-```text
-/task add --due 2026-04-03 --priority 2 --tag sales,document 提案書作成
-```
-
-一覧:
-
-```text
-/task list
-/task list --priority 2
-/task list --tag sales
-/task list --due-before 2026-04-03
-```
-
-完了・削除:
-
-```text
-/task done 1
-/task delete 1
-```
-
-### RSS Feed
-
-フィード登録:
-
-```text
-/feed add --name Publickey https://www.publickey1.jp/atom.xml
-```
-
-OPML からの一括登録:
-
-```text
-/feed import-opml ~/Downloads/subscriptions.opml
-/feed import-opml "C:\Users\mikoto\Downloads\subscriptions.opml"
-```
-
-OPML 内の入れ子の `outline` を走査し、`xmlUrl` のある購読を登録します。表示名は `title`、`text`、URL の順で採用します。同じ URL はスキップし、無効な URL や登録失敗があっても残りを処理します。結果は `Imported` / `Skipped` / `Failed` の件数と、重複・失敗の詳細（各20件まで）を表示します。
-
-相対パスは現在の project を基準に解決し、`~/` はホームディレクトリへ展開します。ファイルは最大10 MiB、XML の深さは128要素までです。DOCTYPE・外部 Entity・外部 DTD・XInclude は無効です。カテゴリ階層と `htmlUrl` は解析のみで永続化しません。登録中に記事取得は行わず、既存の定期更新または `/feed update` で取得します。コマンドの終了コードは処理完了（部分失敗を含む）が0、ファイル単位のエラーが1、引数不足が2です。
-
-登録済みフィード一覧:
-
-```text
-/feed list
-```
-
-フィード更新:
-
-```text
-/feed update
-/feed update 1
-```
-
-記事 ID 一覧の確認:
-
-```text
-/feed item list
-/feed item list --from 2026-04-21T00:00:00Z --to 2026-04-22T09:00:00Z
-```
-
-記事要約とブリーフィング要約:
-
-```text
-/feed item summarize 42
-/feed summary
-```
-
-`/feed summary` は結果を画面に表示し、既存の音声通知設定を使って読み上げます。
-
-### 日次ブリーフィング
-
-```text
-/briefing today
-```
-
-その日の予定、未完了タスク、関連文書、新着 RSS 記事、注意点、次アクションをまとめて表示します。RSS セクションには、昨日 00:00 から現在までに公開された記事を公開日時の降順で表示し、0 件なら `昨日 00:00 以降の新着記事はありませんでした` と表示します。
-
-### リマインド
-
-指定日時で追加:
-
-```text
-/reminder add --at 2026-03-27T09:00:00+09:00 顧客に返信する
-```
-
-基準日時の何分前かで追加:
-
-```text
-/reminder add --target 2026-03-27T14:00:00+09:00 --minutes-before 15 今日の 14:00 からの会議
-```
-
-一覧・削除:
-
-```text
-/reminder list
-/reminder delete 1
-```
-
-通知は現状、標準出力へ出ます。
-
-### 文書の埋め込み
-
-embedding は既定で有効です。環境変数 `REI_EMBEDDING_ENABLED=false`、または外部設定の `rei.embedding.enabled: false` で無効化できます（再起動後に反映）。無効時は `/embed` がヘルプ・補完から消え、実行できなくなります。`/search` と `searchKnowledge` は Web 検索のみを行い、ブリーフィングの関連文書検索もベクトルDBへアクセスしません。保存済みの文書・ベクトルは削除されず、再度有効化すると利用できます。
-
-追加:
-
-```text
-/embed ./docs/spec.md ./docs/meeting-note.pdf
-/embed add ./docs/spec.md ./docs/meeting-note.pdf
-/embed add "./docs/*"
-/embed add "./docs/**/*.md"
-```
-
-`embed add` は非同期です。コマンド実行後にプロンプトがすぐ返り、読み込み完了または失敗は標準出力に通知されます。`*`, `?`, `[]` を含む引数は Java 側で glob 展開します。シェルで展開したくない場合は `"./docs/*"` のようにクォートしてください。一致するファイルが 0 件ならエラーになります。
-
-検索:
-
-```text
-/embed search spring ai
-/embed search --top-k 5 --source /absolute/path/to/spec.md spring ai
-```
-
-一覧・削除:
-
-```text
-/embed list
-/embed delete --doc-id <docId>
-/embed delete --source /absolute/path/to/spec.md
-```
-
-読み込んだ文書はベクトルストアに保存され、対話時の RAG に使われます。
-
-現状のベクトルストアは、起動したカレントディレクトリ配下の `<rei-data-dir>/vectorstore.db` に保存されます。アプリ本体の履歴やタスクなどで使う `<rei-data-dir>/memory.db` とは別ファイルです。
-
-検索には `sqlite-vec` を使います。埋め込みは `vec0` 仮想テーブルに保持し、KNN 検索に lexical prefilter と軽い rerank を組み合わせています。`source` / `docId` の絞り込みも検索時に適用されます。
-
-登録時は `docId` / `source` / `chunkIndex` を必須 metadata として扱い、欠損している文書はエラーにします。検索時に embedding 次元が一致しない場合もエラーにします。`replaceBySource` は source 単位の delete + insert を 1 トランザクションで実行し、途中失敗時はロールバックされます。文書一覧や削除も `document_chunks_vec` の集約で処理します。
-
-`similarityThresholdAll()` を使っても score が 0 以下の結果は返しません。現在の実装では「関連性がない候補を除外する」挙動を優先しています。SQLite ファイル破損時は破損として、ロック発生時はロックとして明示的に失敗させます。存在しない `docId` / `source` の削除は 0 件または `false` を返します。
-
-### 記憶管理
-
-`/memory` は、会話履歴から抽出した記憶の確認・検索・削除・エクスポートを行うコマンドです。
-
-保存済みの記憶を一覧表示:
-
-```text
-/memory list
-```
-
-記憶を検索:
-
-```text
-/memory search "Google Task"
-/memory search --limit 5 "Bluesky"
-```
-
-不要な記憶を論理削除:
-
-```text
-/memory forget <memory-id>
-```
-
-記憶を Markdown と JSONL でエクスポート:
-
-```text
-/memory export
-/memory export --dir .rei/memory-export
-```
-
-会話履歴から記憶候補を抽出:
-
-```text
-/memory consolidate
-/memory consolidate --approve
-```
-
-`/memory consolidate` は、`--approve` を付けない場合は候補を表示するだけで保存しません。保存する場合は `--approve` または `--save` を付けて実行します。
-
-会話履歴から要約を作成:
-
-```text
-/memory summarize
-/memory summarize --approve
-```
-
-`/memory summarize` も `--approve` を付けない場合は要約を表示するだけです。保存する場合は `--approve` または `--save` を付けて実行します。
-
-### 検索
-
-```text
-/search spring ai latest
-/search --source /absolute/path/to/spec.md spring ai tools
-```
-
-`/search` はベクトル検索結果と Web 検索結果をまとめて回答します。Web 側は検索結果の snippet をそのまま使うのではなく、上位ページの本文を取得したうえで、クエリ展開、重複 URL 除外、一次情報優先の再ランキングを行います。
-
-Web 検索が無効、API キー未設定、不正 API キーなどで失敗した場合は、Web 検索をスキップしてベクトルストアの内容だけで回答します。その場合は出力に `[web search skipped] ...` が表示されます。
-
-## AI ツール
-
-チャット中の AI は、内部的に次のツール群を利用できます。
-
-- ファイル操作、日付取得、外部コマンド実行
-- Google Calendar の予定一覧・予定作成
-- タスク作成・更新・完了・削除
-- 日次ブリーフィング生成
-- リマインド作成・一覧
-- Web 検索
-- MCP サーバー経由のツール
-
-## テスト
-
-```bash
-./mvnw test -q  # -q は簡易出力
-```
-
-主にユニットテストと Spring コンポーネントの結合テストを含みます。
-
-## よくあるエラー
-
-- `REI_GOOGLE_CALENDAR_CREDENTIALS_PATH ... not found`
-  - 資格情報 JSON の配置先とパスを確認してください。
-- `No ToolCallback found for tool name: ...`
-  - モデルが存在しない tool 名を生成しているか、MCP 設定が読み込まれていません。`REI_MCP_ENABLED` と `REI_MCP_STDIO_SERVERS_CONFIG` を確認してください。
-- `401 Unauthorized`
-  - `REI_OPENAI_API_KEY` と `REI_OPENAI_BASE_URL` の組み合わせを確認してください。
-- Web 検索結果が空
-  - `REI_WEB_SEARCH_ENABLED=true` と `rei.web-search.providers` の設定を確認してください。Brave を使う場合は `api-key` も必要です。
-- `Web search is disabled. Set REI_WEB_SEARCH_ENABLED=true to enable it.`
-  - Web 検索を使う場合は `REI_WEB_SEARCH_ENABLED=true` を設定してください。設定しなくても `/search` はベクトルストアのみで続行します。
-- `Web search API key is not configured for provider brave.`
-  - Brave provider を使う場合は `rei.web-search.providers[].api-key` を設定してください。未設定でも `/search` はベクトルストアのみで続行します。
-- 絵文字でバッファが乱れる
-  - `--notmux` オプションを付けて起動してみてください。改善する場合があります。
-
-## License
-
-このソフトウェアは MIT ライセンスの下で提供されます。
-詳細については [LICENSE](./LICENSE) ファイルを参照してください。
-
-## Author
-
-mikoto2000 <mikoto2000@gmail.com>
-
-## Bluesky Posting
-
-Bluesky 投稿機能と、対象ユーザーへの確率リプライ機能を利用できます。
-
-```bash
-export REI_BLUESKY_ENABLED=true
-export REI_BLUESKY_HANDLE=your-handle.bsky.social
-export REI_BLUESKY_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
-export REI_BLUESKY_MAX_POST_LENGTH=300
-export REI_BLUESKY_TIMEOUT_SECONDS=30
-```
-
-`application.yaml`（または `<rei-data-dir>/application.yaml`）に `rei.bluesky.reply` を定義すると、対象ユーザーの投稿を定期チェックし、条件を満たした投稿に自動返信します。
-
-```yaml
-rei:
-  bluesky:
-    timeout-seconds: 30
-    reply:
-      enabled: true
-      dry-run: false
-      check-interval-seconds: 300
-      fetch-limit: 30
-      exclude-replies: true
-      exclude-reposts: true
-      max-post-age-minutes: 120
-      generation-timeout-seconds: 1200
-      users:
-        - handle: "alice.bsky.social"
-          probability: 0.25
-          max-replies-per-day: 3
-```
-
-補足:
-
-- `dry-run: true` の場合、投稿 API は呼ばずログ出力のみ行います。
-- 除外条件（repost/reply/古い投稿/既返信）と確率判定、日次上限判定を通過した投稿のみ返信します。
-- `timeout-seconds` は Bluesky API への各 HTTP リクエストのタイムアウトです。
-- `generation-timeout-seconds` は自動返信文を LLM で生成するときのタイムアウトです。
-- 自動返信と手動の AI 返信では、LLM 本文に `</think>` が含まれる場合、最後の閉じタグより後だけを返信に使います（開始タグが欠ける場合にも対応）。未完了の think タグが残る場合や返信本文が空になる場合は、生成失敗として投稿しません。タグのない思考文は、この処理では判別できません。
-- 前回の自動返信チェックが実行中の場合、次の定期実行はスキップして WARN ログへ理由を出力します。
-- 自動返信と手動返信は、送信前に対象投稿の URI を SQLite に記録して重複送信を防ぎます。同じ DB を使う複数プロセス間でも有効で、URL 指定と URI 指定も同じ対象として扱います。既に返信した投稿への手動返信もスキップします。
-- 送信中の通信例外などで成否が不明になった対象は、再起動後も再送を抑止します。送信直前の終了で未送信となる場合もあるため、再試行が必要なときは Bluesky 上の投稿状況を確認してください。API が明示的に失敗を返した場合は送信予約を解除します。
-
-## メモリ統合機能の更新内容
-
-### 変更点
-
-- `/memory consolidate` と `/memory summarize` で LLM 呼び出しに失敗した場合、異常終了せず `[error] ...` を表示します。
-- `/memory consolidate` の競合判定にタイムアウト制御を追加しました。
-- 競合判定がタイムアウトした候補は保存せず、以下の警告を表示します。
-  - `[warn] 競合判定がタイムアウトしたためスキップしました`
-- メモリ関連の DB 例外は `IllegalStateException` に変換し、ユーザー向けメッセージとして扱います。
-
-### 関連設定
-
-- `REI_MEMORY_CONFLICT_TIMEOUT_SECONDS`
-  - デフォルト値: `60`
-  - `/memory consolidate` の競合判定タイムアウト秒数として使用されます。
-
-### 補足
-
-- タイムアウトした候補は保存されません。
-- `extractCandidates` / `summarize` で LLM エラーが発生した場合、`MemoryService.save()` は実行されません。
+[MIT ライセンス](LICENSE)で提供しています。作者: mikoto2000 <mikoto2000@gmail.com>

@@ -2,6 +2,8 @@
 
 Rei の開発者向けドキュメントです。利用手順は [README.md](./README.md) を参照してください。
 
+内部仕様・変更記録は [.kiro の実装補足](.kiro/docs/readme-implementation-notes.md)を参照してください。
+
 ## 開発環境
 
 - JDK 25 以上
