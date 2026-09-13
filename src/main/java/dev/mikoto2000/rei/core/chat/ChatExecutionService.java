@@ -13,6 +13,7 @@ import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
@@ -448,7 +449,7 @@ public class ChatExecutionService {
               latch.countDown();
             });
     } catch (RuntimeException e) {
-      log.warn("Chat response stream failed to start", e);
+      logChatFailure("Chat response stream failed to start", e);
       return failureResult(e);
     }
     cancellationService.register(disposable);
@@ -465,7 +466,7 @@ public class ChatExecutionService {
       Throwable error = errorRef.get();
       if (error != null) {
         ChatRunResult failure = failureResult(error);
-        if (failure.status() == ChatRunStatus.FAILED) log.warn("Chat response failed", error);
+        if (failure.status() == ChatRunStatus.FAILED) logChatFailure("Chat response failed", error);
         else log.info("Chat execution stopped: runId={}, reason={}", runId, failure.status());
         return failure;
       }
@@ -490,6 +491,17 @@ public class ChatExecutionService {
       log.warn("Chat response wait interrupted", e);
       return ChatRunResult.failed();
     }
+  }
+
+  private void logChatFailure(String message, Throwable error) {
+    for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+      if (cause instanceof WebClientResponseException response) {
+        log.warn("{}: HTTP {}, responseBody={}", message, response.getStatusCode(),
+            response.getResponseBodyAsString(), error);
+        return;
+      }
+    }
+    log.warn(message, error);
   }
 
   private long elapsedMillis(long startedAtNanos) {
