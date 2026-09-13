@@ -1,5 +1,11 @@
 # Rei
 
+Windows の screenshot / Vision を一次情報にして Java Robot で操作する
+`computerUse(goal)` workflow を追加しました（標準は無効、マルチディスプレイ対応）。
+設定、Structured Output、安全制御、手動 smoke test は
+[Vision-first Computer Use](docs/vision-computer-use.md) を参照してください。
+ShowUI を位置特定専用に使う設定は、下記の「Computer Use」と [ShowUI grounding](docs/computer-use-showui.md) を参照してください。
+
 保存先は Windows では `%LOCALAPPDATA%\Rei`、Linux では `$XDG_DATA_HOME/rei`（未設定時 `~/.local/share/rei`）、macOS では `~/Library/Application Support/Rei` です。`REI_DATA_DIR` で上書きできます。以下の `<rei-data-dir>` はこの保存先を表します。旧 `.rei` の扱いとプロジェクト別保存形式は [移行・設計メモ](docs/agent-run-project-state.md) を参照してください。
 
 Agent 実行中も追加入力できます。同じプロジェクトへの通常入力は実行中の Run に順番に渡され、LLM／Tool の境界で適用されます。`/cancel` は選択中プロジェクトの Run をキャンセルします。`/project cd` は未登録プロジェクトも登録して会話・Working Set の scope を切り替えます。
@@ -150,6 +156,7 @@ export REI_OPENAI_IMAGE_MODEL=gpt-image-1
 LLM を利用する機能ごとに、既定の `spring.ai.openai` とは別の OpenAI 互換 API サーバーとモデルを指定できます。
 `base-url` を空にした機能は、従来どおり既定の LLM 設定を使います。
 機能別に指定した LLM サーバーへの `call` / `stream` が失敗した場合は、`spring.ai.openai` の既定 LLM へフォールバックします。
+ただし、`computer-use` と `computer-use-planner` はフォールバックせず、解析に失敗した場合は Computer Use タスクを `MODEL_ERROR` で終了します。
 機能別 `model` を指定している場合、フォールバック時はそのモデル名を既定 LLM へ引き継がず、既定 LLM 側のデフォルトモデルを使います。
 
 ```yaml
@@ -188,6 +195,7 @@ rei:
 ```
 
 `max-output-tokens` は 1 回の LLM 呼び出しで生成させる最大トークン数です。
+チャットモデルを使う機能では `rei.llm.features.<機能キー>.max-output-tokens` で共通値を上書きできます。ShowUI の位置特定は128トークン固定です。
 LLM 応答の `finish_reason` が `length` の場合は正常完了扱いせず、`output-limit-planner` の LLM に元のゴールをサブゴールへ再計画させます。
 再計画後は各サブゴールを通常チャットと同じ実行経路で順次処理し、最後にサブゴール結果を統合して元の要求への最終回答を作ります。
 `output-limit` の各値は、再計画ループを防ぐための決定論的な上限です。
@@ -197,6 +205,8 @@ LLM 応答の `finish_reason` が `length` の場合は正常完了扱いせず�
 | 機能キー | 対象 |
 | --- | --- |
 | `chat` | 通常チャット |
+| `computer-use` | Computer Use の画像解析。ShowUI モードではクリック位置の特定 |
+| `computer-use-planner` | ShowUI モードでの操作・対象画面の判断 |
 | `search` | `/search` の回答生成 |
 | `memory` | `/memory consolidate`、`/memory summarize` |
 | `bluesky-reply` | Bluesky リプライ文生成 |
@@ -232,6 +242,61 @@ LLM 応答の `finish_reason` が `length` の場合は正常完了扱いせず�
 | `REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL` | `2` | 1 回の要求内で許可する再計画回数 |
 | `REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN` | `8` | Planner が返せる最大サブゴール数 |
 | `REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN` | `30` | 1 回の要求内で許可する LLM 呼び出し回数 |
+
+### Computer Use
+
+起動時に `java -jar target/rei-0.0.1-SNAPSHOT.jar --fullauto` と指定すると、Computer Use の `CONFIRM_REQUIRED`（投稿・送信・削除・購入など）も実行できます。省略時は `LOW` のみ、`PROHIBITED` は常に拒否します。位置特定・検証・重複入力防止は維持します。起動時に有効状態を表示します。`--fullauto=false` で無効化でき、YAMLや環境変数では有効化しません。
+
+`computerUse(goal)` はスクリーンショットを確認しながら画面操作を行います。URL を開くなどの準備は Shell 等で行い、クリックや入力、その結果の確認を Computer Use が担当します。
+
+Windows では `%LOCALAPPDATA%\Rei\application.yaml` の既存設定に以下を統合し、Rei を再起動してください。`REI_DATA_DIR` を指定している場合は、そのディレクトリの設定ファイルを使用します。
+
+```yaml
+rei:
+  computer-use:
+    enabled: true
+    grounding: showui
+  llm:
+    features:
+      computer-use:
+        base-url: http://gx10-6acc.local:8888
+        api-key: ${REI_COMPUTER_USE_API_KEY:dummy-key}
+        model: showlab/ShowUI-2B
+      # 操作判断の接続先を分ける場合に指定します。
+      # 未指定なら spring.ai.openai の接続先・モデルを使用します。
+      # computer-use-planner:
+      #   base-url: http://gx10-707e.local:8888
+      #   api-key: dummy-key
+      #   model: deepseek-v4-flash-vision-exp
+```
+
+`grounding` は、画面上の対象を座標に結び付ける処理の方式です。
+
+| 値 | 動作 |
+| --- | --- |
+| `generic`（既定） | `computer-use` のモデルで操作判断と切り出し画像によるクリック位置補正を行う従来方式 |
+| `showui` | 画像対応の判断モデルが操作・対象画面を選び、ShowUI がクリック位置を特定する方式 |
+| `uitars` | 判断モデルと位置特定を分離し、UI-TARS の `(x,y)`（0〜1000）を割合座標へ変換する方式 |
+
+UI-TARS-2B-SFT を使う場合は `grounding: uitars` に変更し、`rei.llm.features.computer-use.model` にサーバーで公開したモデル名を指定します。接続先・判断モデルの設定は ShowUI モードと共通です。モデル名の変更だけでは出力形式が切り替わらないため、`grounding` も必ず変更してください。
+
+UI-TARS モードは公式の位置特定専用プロンプトで1点を要求します。`(281,659)` は `[0.281,0.659]` として扱い、送信画像のピクセル座標とは解釈しません。出力上限は128トークン、画像縮小と失敗時の停止は ShowUI モードと同じです。診断有効時は `uitars-input.png`、`uitars-request.json`、`uitars-response.json`、通信例外時には `uitars-error.txt` を保存します。
+
+ShowUI モードでは、判断モデルに画像対応モデルが必要です。ShowUI には選択した画面1枚と短い対象説明を渡し、`[x, y]` の割合座標を返してもらいます。Rei が元の画像座標とディスプレイ配置に変換して操作します。クリック以外の操作と完了確認は判断モデルが担当します。
+
+`showui` / `uitars` はともに2段階で位置を特定します。最初に選択画面全体から位置を推定し、その位置の周辺を元画像から縦横1/2の大きさで切り出して、同じ対象を再推定します。実際にクリックするのは2回目の座標を元画面へ変換した位置だけです。2回目が失敗した場合は1回目の座標を使わず停止します。各クリックの位置特定にモデル呼び出しが2回必要です。
+
+診断には従来の `showui-*` / `uitars-*` に加え、`showui-refinement-*` / `uitars-refinement-*` として切り出し画像・要求・応答・通信例外を保存します。再推定の request JSON には元画像上の切り出し範囲も記録します。
+
+両モードでは `computer-use-planner` の判断モデルで検証します。再推定前に切り出し画像内で対象を識別できることを確認します。再推定後は、目標・履歴を渡さずに赤い目印の中心にある要素の種別とラベルを説明させます。その後、画像を渡さない別の要求で、観察結果と目標の種別・同一性を照合します。「ボタン」と「入力欄」のように種別が不一致なら、承認されてもコード側で拒否します。拒否・曖昧な応答・解析エラーでは `MODEL_ERROR` で停止します。成功時は判断1回・位置特定2回・切り出し検証1回・目標を伏せた要素識別1回・照合1回の計6回のモデル呼び出しです。モデルによる誤認を完全に防ぐ保証はありません。
+
+検証の診断ファイルは `crop-verification-*`、`point-description-*`、`point-verification-*` です。要求・応答・通信例外に加え、前2段階は画像も保存します。目印付き全画面画像は `point-description-input.png`、元画像から切り出した候補点周辺の拡大画像は `point-description-detail.png`、切り出し範囲は `point-description-geometry.json`、目標との照合は `point-verification-response.txt` で確認できます。赤い目印は検証用コピーだけに描画し、実際のデスクトップや位置特定用画像は変更しません。
+
+送信画像は縦横比を保って1枚あたり約105万画素以下に縮小します。ShowUI に履歴や独自の操作 JSON スキーマは送らず、出力上限は128トークンに固定します。ただし、サーバー側の画像処理によって入力トークン数は変わるため、4096トークンのコンテキストに必ず収まる保証はありません。
+
+専用接続先での通信失敗や不正な ShowUI 座標応答は、別モデルや判断モデルの推測座標に切り替えず、Computer Use タスクを失敗させます。解析レスポンスと例外をログに記録するため、ログには画面由来の内容が含まれることがあります。
+
+詳しい構成は [ShowUI grounding](docs/computer-use-showui.md) を参照してください。
 
 ### Google Calendar
 

@@ -1,0 +1,67 @@
+package dev.mikoto2000.rei.computeruse;
+
+import org.springframework.context.annotation.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import dev.mikoto2000.rei.core.service.*;
+import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.llm.*;
+
+@Configuration(proxyBeanMethods = false)
+@EnableConfigurationProperties(ComputerUseProperties.class)
+@ConditionalOnProperty(name = "rei.computer-use.enabled", havingValue = "true")
+public class ComputerUseConfiguration {
+  @Bean org.springframework.boot.restclient.RestClientCustomizer showUiRequestOrderCustomizer() {
+    return builder -> builder.requestInterceptor(new ShowUiRequestInterceptor());
+  }
+  @Bean RobotDriver computerRobotDriver() { return new AwtRobotDriver(); }
+  @Bean ComputerDiagnostics computerDiagnostics(
+      @org.springframework.beans.factory.annotation.Value("${rei.computer-use.diagnostics.enabled:false}") boolean enabled,
+      @org.springframework.beans.factory.annotation.Value("${rei.computer-use.diagnostics.directory:}") String directory) {
+    return new ComputerDiagnostics(!enabled ? null : directory.isBlank()
+        ? dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve("computer-use-diagnostics")
+        : java.nio.file.Path.of(directory));
+  }
+  @Bean Sleeper computerSleeper() { return Thread::sleep; }
+  @Bean ScreenCapture computerScreenCapture(RobotDriver driver) { return new RobotScreenCapture(driver); }
+  @Bean ComputerInput computerInput(RobotDriver driver, Sleeper sleeper, ComputerUseProperties properties) {
+    return new RobotComputerInput(driver, new ClipboardPaste(
+        () -> java.awt.Toolkit.getDefaultToolkit().getSystemClipboard(), sleeper, properties.clipboardMillis()), sleeper);
+  }
+  @Bean UiStabilizer computerUiStabilizer(Sleeper sleeper, ComputerUseProperties properties) {
+    return new FixedUiStabilizer(sleeper, properties.stabilizationMillis());
+  }
+  @Bean SafetyPolicy computerSafetyPolicy(FullAutoOptions options) {
+    return options.enabled() ? SafetyPolicy.fullAuto() : SafetyPolicy.lowRiskOnly();
+  }
+  @Bean ComputerVisionModel computerVisionModel(LlmModelProvider provider, ModelHolderService current,
+      CommandCancellationService cancellation, ComputerUseProperties properties,
+      @org.springframework.beans.factory.annotation.Value("${rei.computer-use.grounding:generic}") String grounding) {
+    if ("showui".equals(grounding) || "uitars".equals(grounding)) {
+      var planner = new SpringAiComputerVisionModel(provider.chatModel(LlmFeature.COMPUTER_USE_PLANNER),
+          () -> new org.springframework.ai.openai.OpenAiChatOptions.Builder(provider.chatOptions(LlmFeature.COMPUTER_USE_PLANNER, current.get())),
+          cancellation::isCancellationRequested, properties.repairs());
+      return new ShowUiComputerVisionModel(planner::decideOverview, provider.computerUseChatModel(),
+          () -> new org.springframework.ai.openai.OpenAiChatOptions.Builder(provider.chatOptions(LlmFeature.COMPUTER_USE, current.get())),
+          cancellation::isCancellationRequested, "uitars".equals(grounding) ? GroundingProtocol.UITARS : GroundingProtocol.SHOWUI,
+          new PlannerGroundingVerifier(provider.chatModel(LlmFeature.COMPUTER_USE_PLANNER),
+              () -> new org.springframework.ai.openai.OpenAiChatOptions.Builder(provider.chatOptions(LlmFeature.COMPUTER_USE_PLANNER, current.get())),
+              cancellation::isCancellationRequested));
+    }
+    if (!"generic".equals(grounding)) throw new IllegalArgumentException("Unknown computer-use grounding: " + grounding);
+    return new SpringAiComputerVisionModel(provider.computerUseChatModel(),
+        () -> new org.springframework.ai.openai.OpenAiChatOptions.Builder(provider.chatOptions(LlmFeature.COMPUTER_USE, current.get())),
+        cancellation::isCancellationRequested, properties.repairs());
+  }
+  @Bean ComputerUseService computerUseService(ScreenCapture capture, ComputerVisionModel model, ComputerInput input,
+      UiStabilizer stabilizer, SafetyPolicy safety, CommandCancellationService cancellation,
+      AgentEventFactory factory, AgentEventPublisher publisher, ComputerUseProperties properties, ComputerDiagnostics diagnostics) {
+    return new ComputerUseService(capture, model, input, stabilizer, safety, cancellation::isCancellationRequested,
+        progress -> publisher.publish(factory.computerUseProgress(progress)), properties.maxSteps(), properties.historyLimit(), diagnostics,
+        new WindowsFocusProbe(cancellation::isCancellationRequested));
+  }
+  @Bean ComputerUseTools computerUseTools(ComputerUseService service, CommandCancellationService cancellation,
+      AgentEventFactory factory, AgentEventPublisher publisher) {
+    return new ComputerUseTools(service, cancellation, factory, publisher);
+  }
+}

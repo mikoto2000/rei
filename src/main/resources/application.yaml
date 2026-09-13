@@ -56,6 +56,9 @@ rei:
       max-subgoals-per-replan: ${REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN:8}
       max-llm-calls-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN:30}
     features:
+      # Override the shared output budget for a smaller vision model:
+      # computer-use:
+      #   max-output-tokens: 512
       chat:
         base-url: ${REI_LLM_CHAT_BASE_URL:}
         api-key: ${REI_LLM_CHAT_API_KEY:}
