@@ -30,7 +30,17 @@ public class ComputerUseConfiguration {
   }
   @Bean SafetyPolicy computerSafetyPolicy() { return SafetyPolicy.lowRiskOnly(); }
   @Bean ComputerVisionModel computerVisionModel(LlmModelProvider provider, ModelHolderService current,
-      CommandCancellationService cancellation, ComputerUseProperties properties) {
+      CommandCancellationService cancellation, ComputerUseProperties properties,
+      @org.springframework.beans.factory.annotation.Value("${rei.computer-use.grounding:generic}") String grounding) {
+    if ("showui".equals(grounding)) {
+      var planner = new SpringAiComputerVisionModel(provider.chatModel(LlmFeature.COMPUTER_USE_PLANNER),
+          () -> new org.springframework.ai.openai.OpenAiChatOptions.Builder(provider.chatOptions(LlmFeature.COMPUTER_USE_PLANNER, current.get())),
+          cancellation::isCancellationRequested, properties.repairs());
+      return new ShowUiComputerVisionModel(planner::decideOverview, provider.computerUseChatModel(),
+          () -> new org.springframework.ai.openai.OpenAiChatOptions.Builder(provider.chatOptions(LlmFeature.COMPUTER_USE, current.get())),
+          cancellation::isCancellationRequested);
+    }
+    if (!"generic".equals(grounding)) throw new IllegalArgumentException("Unknown computer-use grounding: " + grounding);
     return new SpringAiComputerVisionModel(provider.computerUseChatModel(),
         () -> new org.springframework.ai.openai.OpenAiChatOptions.Builder(provider.chatOptions(LlmFeature.COMPUTER_USE, current.get())),
         cancellation::isCancellationRequested, properties.repairs());

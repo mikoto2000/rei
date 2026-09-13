@@ -10,6 +10,12 @@ import dev.mikoto2000.rei.event.*;
 import dev.mikoto2000.rei.llm.*;
 
 class ComputerUseConfigurationTest {
+  @Test void selectsShowUiOnlyWhenConfigured() {
+    runner.withPropertyValues("rei.computer-use.enabled=true", "rei.computer-use.grounding=showui")
+        .run(context -> assertThat(context.getBean(ComputerVisionModel.class)).isInstanceOf(ShowUiComputerVisionModel.class));
+    runner.withPropertyValues("rei.computer-use.enabled=true", "rei.computer-use.grounding=typo")
+        .run(context -> assertThat(context).hasFailed());
+  }
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path diagnosticsDirectory;
   @Test void diagnosticsAreOptInAndUseConfiguredDirectory() {
     runner.withPropertyValues("rei.computer-use.enabled=true").run(context ->

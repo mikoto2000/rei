@@ -67,6 +67,11 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
     ActionValidator.validate(result,observation.screenshot());
     return result;
   }
+  ComputerAction decideOverview(ComputerObservation observation) throws Exception {
+    return decideOnce(observation, "Choose the next action and the display containing its target. "
+        + "For clicks, describe the target precisely in short English text. A separate grounding model will locate it; "
+        + "your coordinates are only a proposal and will never be clicked directly.");
+  }
   private static ComputerAction.Target target(ComputerAction action) {
     return action instanceof ComputerAction.Click a ? a.target() : action instanceof ComputerAction.DoubleClick a ? a.target() : null;
   }
