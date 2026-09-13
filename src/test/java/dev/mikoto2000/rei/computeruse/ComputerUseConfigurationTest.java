@@ -28,6 +28,7 @@ class ComputerUseConfigurationTest {
   }
   private final ApplicationContextRunner runner = new ApplicationContextRunner()
       .withUserConfiguration(ComputerUseConfiguration.class)
+      .withBean(FullAutoOptions.class, () -> new FullAutoOptions(new org.springframework.boot.DefaultApplicationArguments()))
       .withBean(LlmModelProvider.class, () -> new LlmModelProvider(mock(ChatModel.class),new LlmProperties()))
       .withBean(ModelHolderService.class, () -> new ModelHolderService("vision"))
       .withBean(CommandCancellationService.class)
