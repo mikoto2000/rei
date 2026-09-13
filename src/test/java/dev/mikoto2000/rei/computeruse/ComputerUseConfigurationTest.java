@@ -11,6 +11,8 @@ import dev.mikoto2000.rei.llm.*;
 
 class ComputerUseConfigurationTest {
   @Test void selectsShowUiOnlyWhenConfigured() {
+    runner.withPropertyValues("rei.computer-use.enabled=true", "rei.computer-use.grounding=uitars")
+        .run(context -> assertThat(context).hasNotFailed().hasSingleBean(ComputerVisionModel.class));
     runner.withPropertyValues("rei.computer-use.enabled=true", "rei.computer-use.grounding=showui")
         .run(context -> assertThat(context.getBean(ComputerVisionModel.class)).isInstanceOf(ShowUiComputerVisionModel.class));
     runner.withPropertyValues("rei.computer-use.enabled=true", "rei.computer-use.grounding=typo")

@@ -18,7 +18,7 @@ import org.springframework.util.MimeTypeUtils;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/** ShowUI only grounds a planner-selected target; it never decides task completion or risk. */
+/** Shared grounding workflow; model-specific wire formats are selected explicitly. */
 public final class ShowUiComputerVisionModel implements ComputerVisionModel {
   static final int MAX_PIXELS = 1344 * 28 * 28;
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ShowUiComputerVisionModel.class);
@@ -26,14 +26,21 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
   private final ChatModel grounding;
   private final Supplier<OpenAiChatOptions.Builder> options;
   private final BooleanSupplier cancelled;
+  private final GroundingProtocol protocol;
 
   public ShowUiComputerVisionModel(ComputerVisionModel planner, ChatModel grounding,
       Supplier<OpenAiChatOptions.Builder> options, BooleanSupplier cancelled) {
+    this(planner, grounding, options, cancelled, GroundingProtocol.SHOWUI);
+  }
+
+  ShowUiComputerVisionModel(ComputerVisionModel planner, ChatModel grounding,
+      Supplier<OpenAiChatOptions.Builder> options, BooleanSupplier cancelled, GroundingProtocol protocol) {
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(grounding);
     this.planner = planner;
     this.grounding = grounding;
     this.options = options;
     this.cancelled = cancelled;
+    this.protocol = protocol;
   }
 
   @Override public ComputerAction decide(ComputerObservation observation) throws Exception {
@@ -56,16 +63,16 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
     var image = resize(original.image());
     var bytes = new ByteArrayOutputStream();
     if (!ImageIO.write(image, "png", bytes)) throw new IllegalStateException("PNG encoder unavailable");
-    var user = UserMessage.builder().text("Locate the UI element described below in this screenshot. "
-        + "Return only [x, y], a clickable point with coordinates normalized from 0 to 1 relative to the whole image. "
-        + "Target description: " + target.description())
+    var user = UserMessage.builder().text(protocol.prompt(target.description()))
         .media(new Media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(bytes.toByteArray()))).build();
     var requestOptions = options.get().maxTokens(128).responseFormat(null).toolChoice(null).tools(null)
         .toolCallbacks(List.of()).toolNames(Set.of()).internalToolExecutionEnabled(false).build();
+    if (protocol == GroundingProtocol.UITARS) requestOptions.setFrequencyPenalty(1.0);
     saveDiagnostics(observation, directory -> {
-      java.nio.file.Files.write(directory.resolve("showui-input.png"), bytes.toByteArray());
+      java.nio.file.Files.write(directory.resolve(protocol.id + "-input.png"), bytes.toByteArray());
       var details = new java.util.LinkedHashMap<String,Object>();
       details.put("displayId", original.geometry().id());
+      details.put("grounding", protocol.id);
       details.put("sourceWidth", original.image().getWidth());
       details.put("sourceHeight", original.image().getHeight());
       details.put("sentWidth", image.getWidth());
@@ -74,7 +81,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
       details.put("prompt", user.getText());
       details.put("model", requestOptions.getModel());
       details.put("maxTokens", requestOptions.getMaxTokens());
-      new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(directory.resolve("showui-request.json").toFile(), details);
+      new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(directory.resolve(protocol.id + "-request.json").toFile(), details);
     });
     checkCancelled();
     org.springframework.ai.chat.model.ChatResponse response;
@@ -84,7 +91,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
       saveDiagnostics(observation, directory -> {
         var stack = new java.io.StringWriter();
         error.printStackTrace(new java.io.PrintWriter(stack));
-        java.nio.file.Files.writeString(directory.resolve("showui-error.txt"), stack.toString());
+        java.nio.file.Files.writeString(directory.resolve(protocol.id + "-error.txt"), stack.toString());
       });
       throw error;
     }
@@ -94,14 +101,14 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
       details.put("response", response == null ? null : response.toString());
       details.put("texts", response == null ? null : response.getResults().stream()
           .map(g -> g.getOutput().getText()).toList());
-      new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(directory.resolve("showui-response.json").toFile(), details);
+      new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(directory.resolve(protocol.id + "-response.json").toFile(), details);
     });
-    log.info("ShowUI grounding response: step={}, display={}, response={}", observation.step(), target.displayId(), response);
+    log.info("{} grounding response: step={}, display={}, response={}", protocol.id, observation.step(), target.displayId(), response);
     checkCancelled();
     if (response == null || response.getResults().size() != 1 || response.hasToolCalls()
         || dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response))
-      throw new InvalidComputerDecision("Invalid or truncated ShowUI response");
-    var point = parse(response.getResult().getOutput().getText());
+      throw new InvalidComputerDecision("Invalid or truncated " + protocol.id + " response");
+    var point = protocol.parse(response.getResult().getOutput().getText());
     var mapped = new ComputerAction.Target(original.geometry().id(),
         Math.min(original.image().getWidth()-1, (int)(point[0]*original.image().getWidth())),
         Math.min(original.image().getHeight()-1, (int)(point[1]*original.image().getHeight())),
@@ -141,7 +148,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
           .resolve("step-%03d".formatted(observation.step())));
       write.write(directory);
     } catch (Exception error) {
-      log.warn("Could not save ShowUI diagnostics: step={}", observation.step(), error);
+      log.warn("Could not save grounding diagnostics: step={}", observation.step(), error);
     }
   }
 

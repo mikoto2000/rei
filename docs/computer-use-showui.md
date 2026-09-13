@@ -1,5 +1,30 @@
 # ShowUI grounding
 
+## UI-TARS-2B-SFT を使う場合
+
+`rei.computer-use.grounding: uitars` を指定し、`rei.llm.features.computer-use` に UI-TARS の接続先と公開モデル名を設定してください。判断モデルは引き続き `computer-use-planner`（未指定時は通常の画像対応モデル）を使います。
+
+```yaml
+rei:
+  computer-use:
+    enabled: true
+    grounding: uitars
+  llm:
+    features:
+      computer-use:
+        base-url: http://gx10-6acc.local:8888
+        api-key: ${REI_COMPUTER_USE_API_KEY:dummy-key}
+        model: ui-tars  # サーバーの served-model-name に合わせる
+```
+
+UI-TARS の公式位置特定プロンプトで `(x,y)` を要求し、0〜1000の各値を1000で割って割合座標に変換します。例: `(281,659)` → `[0.281,0.659]`。座標尺度の自動推測は行いません。複数点、範囲外、説明付き応答、アクション式は受け付けず MODEL_ERROR とします。モデルが返すコードを実行することはありません。
+
+画像縮小・対象画面の選択・出力上限128・フォールバック禁止は ShowUI と共通です。診断ファイルの接頭辞は `showui-` ではなく `uitars-` になります。位置精度は実サーバーでの確認が必要です。
+
+公式仕様: https://github.com/bytedance/UI-TARS/blob/main/README_v1.md （single step grounding / Coordinate Mapping）
+
+## ShowUI の設定
+
 ShowUI mode separates visual action planning from click localization. Enable it in the external application.yaml:
 
 ```yaml
