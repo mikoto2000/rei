@@ -19,6 +19,7 @@ import dev.mikoto2000.rei.feed.FeedSummaryService;
 import dev.mikoto2000.rei.feed.FeedUpdateResult;
 import dev.mikoto2000.rei.feed.FeedUpdateService;
 import dev.mikoto2000.rei.feed.OpmlImportException;
+import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -243,10 +244,14 @@ public class FeedCommand {
   public static class SummaryCommand implements Runnable {
 
     private final FeedSummaryService feedSummaryService;
+    private final ChatResponseNarrator chatResponseNarrator;
 
     @Override
     public void run() {
-      System.out.println(feedSummaryService.summarizeBriefing());
+      chatResponseNarrator.reset();
+      String summary = feedSummaryService.summarizeBriefing();
+      System.out.println(summary);
+      chatResponseNarrator.narrateIfCompleted(summary);
     }
   }
 

@@ -329,7 +329,8 @@ class FeedCommandTest {
           return cls.cast(new FeedCommand.UpdateCommand(updateService));
         }
         if (cls == FeedCommand.SummaryCommand.class) {
-          return cls.cast(new FeedCommand.SummaryCommand(summaryService));
+          return cls.cast(new FeedCommand.SummaryCommand(summaryService,
+              org.mockito.Mockito.mock(dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator.class)));
         }
         if (cls == FeedCommand.ItemCommand.SummarizeCommand.class) {
           return cls.cast(new FeedCommand.ItemCommand.SummarizeCommand(summaryService));

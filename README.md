@@ -676,6 +676,8 @@ OPML 内の入れ子の `outline` を走査し、`xmlUrl` のある購読を登�
 /feed summary
 ```
 
+`/feed summary` は結果を画面に表示し、既存の音声通知設定を使って読み上げます。
+
 ### 日次ブリーフィング
 
 ```text
