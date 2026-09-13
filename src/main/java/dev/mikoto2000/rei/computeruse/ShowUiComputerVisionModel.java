@@ -60,7 +60,30 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
     if (action.risk() != ComputerAction.Risk.LOW) return action;
     if (confidence < .8) return new ComputerAction.Uncertain("Planner did not identify a confident target");
     var original = observation.screenshot().display(target.displayId());
-    var image = resize(original.image());
+    var source = original.image();
+    var coarse = locate(observation, original, target, source, "", 0, 0);
+    checkCancelled();
+    int width = Math.max(1, source.getWidth()/2), height = Math.max(1, source.getHeight()/2);
+    int left = Math.max(0, Math.min(source.getWidth()-width, (int)(coarse[0]*source.getWidth())-width/2));
+    int top = Math.max(0, Math.min(source.getHeight()-height, (int)(coarse[1]*source.getHeight())-height/2));
+    var fine = locate(observation, original, target, source.getSubimage(left,top,width,height), "-refinement", left, top);
+    checkCancelled();
+    double x = (left + fine[0]*width)/source.getWidth(), y = (top + fine[1]*height)/source.getHeight();
+    var mapped = new ComputerAction.Target(original.geometry().id(),
+        left + Math.min(width-1, (int)(fine[0]*width)),
+        top + Math.min(height-1, (int)(fine[1]*height)), target.description(), x, y);
+    ComputerAction result = action instanceof ComputerAction.Click
+        ? new ComputerAction.Click(mapped, confidence, action.risk())
+        : new ComputerAction.DoubleClick(mapped, confidence, action.risk());
+    ActionValidator.validate(result, observation.screenshot());
+    return result;
+  }
+
+  private double[] locate(ComputerObservation observation, DisplayCapture original, ComputerAction.Target target,
+      BufferedImage region, String stage, int left, int top) throws Exception {
+    checkCancelled();
+    var prefix = protocol.id + stage;
+    var image = resize(region);
     var bytes = new ByteArrayOutputStream();
     if (!ImageIO.write(image, "png", bytes)) throw new IllegalStateException("PNG encoder unavailable");
     var user = UserMessage.builder().text(protocol.prompt(target.description()))
@@ -69,10 +92,15 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
         .toolCallbacks(List.of()).toolNames(Set.of()).internalToolExecutionEnabled(false).build();
     if (protocol == GroundingProtocol.UITARS) requestOptions.setFrequencyPenalty(1.0);
     saveDiagnostics(observation, directory -> {
-      java.nio.file.Files.write(directory.resolve(protocol.id + "-input.png"), bytes.toByteArray());
+      java.nio.file.Files.write(directory.resolve(prefix + "-input.png"), bytes.toByteArray());
       var details = new java.util.LinkedHashMap<String,Object>();
       details.put("displayId", original.geometry().id());
       details.put("grounding", protocol.id);
+      details.put("stage", stage.isEmpty() ? "overview" : "refinement");
+      details.put("cropLeft", left);
+      details.put("cropTop", top);
+      details.put("cropWidth", region.getWidth());
+      details.put("cropHeight", region.getHeight());
       details.put("sourceWidth", original.image().getWidth());
       details.put("sourceHeight", original.image().getHeight());
       details.put("sentWidth", image.getWidth());
@@ -81,7 +109,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
       details.put("prompt", user.getText());
       details.put("model", requestOptions.getModel());
       details.put("maxTokens", requestOptions.getMaxTokens());
-      new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(directory.resolve(protocol.id + "-request.json").toFile(), details);
+      new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(directory.resolve(prefix + "-request.json").toFile(), details);
     });
     checkCancelled();
     org.springframework.ai.chat.model.ChatResponse response;
@@ -91,7 +119,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
       saveDiagnostics(observation, directory -> {
         var stack = new java.io.StringWriter();
         error.printStackTrace(new java.io.PrintWriter(stack));
-        java.nio.file.Files.writeString(directory.resolve(protocol.id + "-error.txt"), stack.toString());
+        java.nio.file.Files.writeString(directory.resolve(prefix + "-error.txt"), stack.toString());
       });
       throw error;
     }
@@ -101,23 +129,14 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
       details.put("response", response == null ? null : response.toString());
       details.put("texts", response == null ? null : response.getResults().stream()
           .map(g -> g.getOutput().getText()).toList());
-      new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(directory.resolve(protocol.id + "-response.json").toFile(), details);
+      new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(directory.resolve(prefix + "-response.json").toFile(), details);
     });
-    log.info("{} grounding response: step={}, display={}, response={}", protocol.id, observation.step(), target.displayId(), response);
+    log.info("{} grounding response: step={}, display={}, response={}", prefix, observation.step(), target.displayId(), response);
     checkCancelled();
     if (response == null || response.getResults().size() != 1 || response.hasToolCalls()
         || dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response))
       throw new InvalidComputerDecision("Invalid or truncated " + protocol.id + " response");
-    var point = protocol.parse(response.getResult().getOutput().getText());
-    var mapped = new ComputerAction.Target(original.geometry().id(),
-        Math.min(original.image().getWidth()-1, (int)(point[0]*original.image().getWidth())),
-        Math.min(original.image().getHeight()-1, (int)(point[1]*original.image().getHeight())),
-        target.description(), point[0], point[1]);
-    ComputerAction result = action instanceof ComputerAction.Click
-        ? new ComputerAction.Click(mapped, confidence, action.risk())
-        : new ComputerAction.DoubleClick(mapped, confidence, action.risk());
-    ActionValidator.validate(result, observation.screenshot());
-    return result;
+    return protocol.parse(response.getResult().getOutput().getText());
   }
 
   static double[] parse(String text) {

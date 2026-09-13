@@ -1,5 +1,13 @@
 # ShowUI grounding
 
+## 2段階の位置特定（ShowUI / UI-TARS 共通）
+
+選択画面全体で粗い位置を推定した後、その周辺を元画像の縦横それぞれ1/2の大きさで切り出し、同じ対象説明で再推定します。切り出し範囲は画面端で画面内に収めます。2回目も画像サイズ上限を適用し、返却座標を切り出し画像から元画像の座標へ変換します。各クリック／ダブルクリックでは判断モデル1回と位置特定モデル2回が必要です。
+
+2回目の失敗・不正な応答・キャンセルではクリックしません。1回目や判断モデルの座標へのフォールバックはありません。ただし、1回目が大きく外れて対象が切り出し範囲に入らない場合や、モデルが別の対象の有効な座標を返した場合に精度を保証するものではありません。
+
+診断の2回目のファイル名は `<mode>-refinement-input.png`、`<mode>-refinement-request.json`、`<mode>-refinement-response.json`、通信例外時は `<mode>-refinement-error.txt` です。`<mode>` は `showui` または `uitars`。request JSON の `cropLeft` / `cropTop` / `cropWidth` / `cropHeight` は元画像上の範囲、`sentWidth` / `sentHeight` は実際に送った画像サイズです。
+
 ## UI-TARS-2B-SFT を使う場合
 
 `rei.computer-use.grounding: uitars` を指定し、`rei.llm.features.computer-use` に UI-TARS の接続先と公開モデル名を設定してください。判断モデルは引き続き `computer-use-planner`（未指定時は通常の画像対応モデル）を使います。

@@ -25,22 +25,25 @@ class UiTarsGroundingTest {
     var screen = ComputerUseServiceTest.screen();
     var display = screen.displays().getFirst();
     var grounding = mock(ChatModel.class);
-    when(grounding.call(any(Prompt.class))).thenReturn(SpringAiComputerVisionModelTest.response("(281,659)"));
+    when(grounding.call(any(Prompt.class))).thenReturn(SpringAiComputerVisionModelTest.response("(500,500)"),
+        SpringAiComputerVisionModelTest.response("(281,659)"));
     var model = new ShowUiComputerVisionModel(o -> new ComputerAction.Click(
         new ComputerAction.Target(display.geometry().id(),1,1,"Post button"),.9,ComputerAction.Risk.LOW),
         grounding,OpenAiChatOptions::builder,()->false,GroundingProtocol.UITARS);
     var action = (ComputerAction.Click)model.decide(new ComputerObservation("goal",screen,List.of(),1,20,diagnostics));
-    assertEquals((int)(.281*display.image().getWidth()),action.target().x());
-    assertEquals((int)(.659*display.image().getHeight()),action.target().y());
-    assertEquals(.281,action.target().normalizedX());
+    int width = display.image().getWidth(), height = display.image().getHeight();
+    int left = width/2-width/2/2, top = height/2-height/2/2;
+    assertEquals(left+(int)(.281*(width/2)),action.target().x());
+    assertEquals(top+(int)(.659*(height/2)),action.target().y());
+    assertEquals((left+.281*(width/2))/width,action.target().normalizedX());
     var request = org.mockito.ArgumentCaptor.forClass(Prompt.class);
-    verify(grounding).call(request.capture());
+    verify(grounding,times(2)).call(request.capture());
     assertTrue(request.getValue().getInstructions().getFirst().getText().startsWith("Output only the coordinate"));
     var options = (OpenAiChatOptions)request.getValue().getOptions();
     assertEquals(1.0,options.getFrequencyPenalty());
     assertNull(options.getResponseFormat());
     assertTrue(java.nio.file.Files.exists(diagnostics.resolve("step-001/uitars-input.png")));
-    assertTrue(java.nio.file.Files.readString(diagnostics.resolve("step-001/uitars-response.json")).contains("(281,659)"));
+    assertTrue(java.nio.file.Files.readString(diagnostics.resolve("step-001/uitars-refinement-response.json")).contains("(281,659)"));
     assertFalse(java.nio.file.Files.exists(diagnostics.resolve("step-001/showui-input.png")));
   }
 }

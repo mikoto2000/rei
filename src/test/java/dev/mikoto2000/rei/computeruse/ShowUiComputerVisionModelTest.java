@@ -61,7 +61,8 @@ class ShowUiComputerVisionModelTest {
   }
   @Test void sendsOnlySelectedBoundedImageAndMapsNormalizedPointToOriginalDisplay() throws Exception {
     var grounding = mock(ChatModel.class);
-    when(grounding.call(any(Prompt.class))).thenReturn(SpringAiComputerVisionModelTest.response("[0.75,0.25]"));
+    when(grounding.call(any(Prompt.class))).thenReturn(SpringAiComputerVisionModelTest.response("[0.75,0.25]"),
+        SpringAiComputerVisionModelTest.response("[0.5,0.5]"));
     var model = new ShowUiComputerVisionModel(o -> {
       assertTrue(o.screenshot().displays().stream().allMatch(d -> (long)d.image().getWidth()*d.image().getHeight() <= ShowUiComputerVisionModel.MAX_PIXELS));
       return click();
@@ -72,7 +73,7 @@ class ShowUiComputerVisionModelTest {
     assertEquals(540,action.target().y());
     assertEquals(-960,observation.screenshot().display("left").desktopPoint(action.target()).x);
     var captured = ArgumentCaptor.forClass(Prompt.class);
-    verify(grounding).call(captured.capture());
+    verify(grounding,times(2)).call(captured.capture());
     var prompt = captured.getValue();
     assertEquals(1,prompt.getInstructions().size());
     var user = (UserMessage)prompt.getInstructions().getFirst();
