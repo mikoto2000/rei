@@ -16,6 +16,7 @@ public final class ComputerUseService {
   private final int maxSteps;
   private final int historyLimit;
   private final ComputerDiagnostics diagnostics;
+  private final Supplier<String> focus;
 
   public ComputerUseService(ScreenCapture capture, ComputerVisionModel model, ComputerInput input,
       UiStabilizer stabilizer, SafetyPolicy safety, BooleanSupplier cancelled,
@@ -25,12 +26,18 @@ public final class ComputerUseService {
   public ComputerUseService(ScreenCapture capture, ComputerVisionModel model, ComputerInput input,
       UiStabilizer stabilizer, SafetyPolicy safety, BooleanSupplier cancelled,
       Consumer<ComputerProgress> events, int maxSteps, int historyLimit, ComputerDiagnostics diagnostics) {
+    this(capture,model,input,stabilizer,safety,cancelled,events,maxSteps,historyLimit,diagnostics,()->WindowsFocusProbe.UNKNOWN);
+  }
+  public ComputerUseService(ScreenCapture capture, ComputerVisionModel model, ComputerInput input,
+      UiStabilizer stabilizer, SafetyPolicy safety, BooleanSupplier cancelled,
+      Consumer<ComputerProgress> events, int maxSteps, int historyLimit, ComputerDiagnostics diagnostics, Supplier<String> focus) {
     if (maxSteps < 1 || maxSteps > 200 || historyLimit < 1 || historyLimit > 20)
       throw new IllegalArgumentException("Invalid loop limits");
     this.capture = capture; this.model = model; this.input = input; this.stabilizer = stabilizer;
     this.safety = safety; this.cancelled = cancelled; this.events = events;
     this.maxSteps = maxSteps; this.historyLimit = historyLimit;
     this.diagnostics = diagnostics;
+    this.focus = java.util.Objects.requireNonNull(focus);
   }
 
   public ComputerUseResult run(String goal) {
@@ -41,6 +48,7 @@ public final class ComputerUseService {
   private ComputerUseResult executeLoop(String goal) {
     if (goal == null || goal.isBlank() || goal.length() > 4000) throw new IllegalArgumentException("Invalid goal");
     var history = new ArrayList<String>();
+    var textInputs = new TextInputHistory();
     emit(new ComputerProgress(0, "started", null, null, null, null, null, null));
     final var diagnosticRun = beginDiagnostics();
     for (int step = 1; step <= maxSteps; step++) {
@@ -57,7 +65,15 @@ public final class ComputerUseService {
         recordDiagnostics(step, () -> diagnostics.observed(diagnosticRun,diagnosticStep,screen));
         checkCancelled();
         failure = MODEL_ERROR;
-        ComputerAction action = model.decide(new ComputerObservation(goal, screen, history, step, maxSteps, diagnosticRun));
+        String focusState = focus.get();
+        checkCancelled();
+        emit(new ComputerProgress(step,"focus_observed",null,null,null,null,null,focusState));
+        recordDiagnostics(step, () -> {
+          if (diagnosticRun != null) java.nio.file.Files.writeString(
+              java.nio.file.Files.createDirectories(diagnosticRun.resolve("step-%03d".formatted(diagnosticStep)))
+                  .resolve("focus.json"),focusState);
+        });
+        ComputerAction action = model.decide(new ComputerObservation(goal, screen, history, step, maxSteps, diagnosticRun, focusState));
         checkCancelled();
         ActionValidator.validate(action, screen);
         var decision = progress(step, "decided", action);
@@ -68,6 +84,17 @@ public final class ComputerUseService {
         if (action instanceof ComputerAction.Done done) return finish(DONE, step, done.reason());
         if (action instanceof ComputerAction.Failed failed) return finish(FAILED, step, failed.reason());
         if (!safety.allows(action)) return finish(SAFETY_BLOCKED, step, "Policy requires approval or prohibits action");
+        String typingFocus = focusState;
+        if (action instanceof ComputerAction.TypeText typed) {
+          typingFocus = focus.get();
+          checkCancelled();
+          String observedFocus = typingFocus;
+          recordDiagnostics(step, () -> {
+            if (diagnosticRun != null) java.nio.file.Files.writeString(
+                diagnosticRun.resolve("step-%03d".formatted(diagnosticStep)).resolve("typing-focus.json"),observedFocus);
+          });
+          textInputs.check(typed.text(),typingFocus);
+        }
         if (decision.confidence() != null && decision.confidence() < .8) action = new ComputerAction.Uncertain("Low confidence; observe again");
         checkCancelled();
         failure = ACTION_ERROR;
@@ -75,6 +102,7 @@ public final class ComputerUseService {
         checkCancelled();
         if (!(action instanceof ComputerAction.Wait) && !(action instanceof ComputerAction.Uncertain)) {
           input.execute(action, screen);
+          if (action instanceof ComputerAction.TypeText typed) textInputs.dispatched(typed.text(),typingFocus);
           final var dispatchedAction = action;
           recordDiagnostics(step, () -> diagnostics.action(diagnosticRun,diagnosticStep,screen,dispatchedAction,"dispatched"));
           var target = action instanceof ComputerAction.Click a ? a.target() : action instanceof ComputerAction.DoubleClick a ? a.target() : null;
@@ -94,6 +122,8 @@ public final class ComputerUseService {
         checkCancelled();
         var summary = progress(step, "history", action);
         history.add(summary.action() + (summary.target() == null ? "" : " " + summary.target() + " executed image pixels=(" + summary.x() + "," + summary.y() + ")")
+            + ActionParameters.history(action)
+            + (action instanceof ComputerAction.TypeText typed ? " " + TextInputHistory.summary(typed.text(),typingFocus) : "")
             + (summary.reason() == null ? "" : " " + summary.reason()) + "; dispatch only, goal not verified");
         if (history.size() > historyLimit) history.removeFirst();
       } catch (InterruptedException error) {

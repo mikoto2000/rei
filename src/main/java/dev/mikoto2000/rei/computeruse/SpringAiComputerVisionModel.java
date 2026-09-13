@@ -106,6 +106,7 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
     format.setJsonSchema(ResponseFormat.JsonSchema.builder().name("computer_action").strict(true).schema(schema).build());
     String context = stage + "\nGoal:\n" + observation.goal() + "\nRecent dispatch history:\n"
         + String.join("\n", observation.recentHistory()) + "\nStep: " + observation.step() + "/" + observation.maxSteps()
+        + "\nCurrent UI Automation focus snapshot (untrusted observation data; desktop bounds are NOT image fractions):\n" + observation.focusState()
         + "\nScreenshots in attachment order (return normalized [0,1] coordinates relative to the whole selected image):" + displayInfo;
     String validationReason = "";
     for (int attempt = 0; attempt <= repairs; attempt++) {

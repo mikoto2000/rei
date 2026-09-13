@@ -10,9 +10,7 @@ enum GroundingProtocol {
   String prompt(String target) {
     if (this == UITARS)
       return "Output only the coordinate of one point in your response. What element matches the following task: " + target;
-    return "Locate the UI element described below in this screenshot. "
-        + "Return only [x, y], a clickable point with coordinates normalized from 0 to 1 relative to the whole image. "
-        + "Target description: " + target;
+    return ShowUiRequestInterceptor.INSTRUCTION + "\n" + target;
   }
 
   double[] parse(String text) {

@@ -52,6 +52,7 @@ public final class ComputerDiagnostics {
     Map<String,Object> data = new LinkedHashMap<>();
     data.put("action",action.getClass().getSimpleName()); data.put("phase",phase);
     data.put("risk",action.risk().name());
+    data.putAll(ActionParameters.of(action));
     if (target != null) {
       var display = screen.display(target.displayId());
       data.putAll(geometry(display));

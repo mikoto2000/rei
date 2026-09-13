@@ -11,6 +11,9 @@ import dev.mikoto2000.rei.llm.*;
 @EnableConfigurationProperties(ComputerUseProperties.class)
 @ConditionalOnProperty(name = "rei.computer-use.enabled", havingValue = "true")
 public class ComputerUseConfiguration {
+  @Bean org.springframework.boot.restclient.RestClientCustomizer showUiRequestOrderCustomizer() {
+    return builder -> builder.requestInterceptor(new ShowUiRequestInterceptor());
+  }
   @Bean RobotDriver computerRobotDriver() { return new AwtRobotDriver(); }
   @Bean ComputerDiagnostics computerDiagnostics(
       @org.springframework.beans.factory.annotation.Value("${rei.computer-use.diagnostics.enabled:false}") boolean enabled,
@@ -28,7 +31,9 @@ public class ComputerUseConfiguration {
   @Bean UiStabilizer computerUiStabilizer(Sleeper sleeper, ComputerUseProperties properties) {
     return new FixedUiStabilizer(sleeper, properties.stabilizationMillis());
   }
-  @Bean SafetyPolicy computerSafetyPolicy() { return SafetyPolicy.lowRiskOnly(); }
+  @Bean SafetyPolicy computerSafetyPolicy(FullAutoOptions options) {
+    return options.enabled() ? SafetyPolicy.fullAuto() : SafetyPolicy.lowRiskOnly();
+  }
   @Bean ComputerVisionModel computerVisionModel(LlmModelProvider provider, ModelHolderService current,
       CommandCancellationService cancellation, ComputerUseProperties properties,
       @org.springframework.beans.factory.annotation.Value("${rei.computer-use.grounding:generic}") String grounding) {
@@ -52,7 +57,8 @@ public class ComputerUseConfiguration {
       UiStabilizer stabilizer, SafetyPolicy safety, CommandCancellationService cancellation,
       AgentEventFactory factory, AgentEventPublisher publisher, ComputerUseProperties properties, ComputerDiagnostics diagnostics) {
     return new ComputerUseService(capture, model, input, stabilizer, safety, cancellation::isCancellationRequested,
-        progress -> publisher.publish(factory.computerUseProgress(progress)), properties.maxSteps(), properties.historyLimit(), diagnostics);
+        progress -> publisher.publish(factory.computerUseProgress(progress)), properties.maxSteps(), properties.historyLimit(), diagnostics,
+        new WindowsFocusProbe(cancellation::isCancellationRequested));
   }
   @Bean ComputerUseTools computerUseTools(ComputerUseService service, CommandCancellationService cancellation,
       AgentEventFactory factory, AgentEventPublisher publisher) {

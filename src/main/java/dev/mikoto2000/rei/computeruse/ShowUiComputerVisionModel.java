@@ -59,7 +59,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
     var overview = new CapturedScreen(observation.screenshot().displays().stream()
         .map(d -> new DisplayCapture(d.geometry(), resize(d.image()))).toList());
     var action = planner.decide(new ComputerObservation(observation.goal(), overview,
-        observation.recentHistory(), observation.step(), observation.maxSteps()));
+        observation.recentHistory(), observation.step(), observation.maxSteps(), observation.diagnosticRun(), observation.focusState()));
     checkCancelled();
     ActionValidator.validate(action, overview);
     var target = action instanceof ComputerAction.Click a ? a.target()
@@ -67,7 +67,9 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
     if (target == null) return action;
     double confidence = action instanceof ComputerAction.Click a ? a.confidence()
         : ((ComputerAction.DoubleClick) action).confidence();
-    if (action.risk() != ComputerAction.Risk.LOW) return action;
+    // Confirmation is an execution policy, not a reason to return ungrounded coordinates.
+    // Preserve the risk through localization; the service still decides whether execution is allowed.
+    if (action.risk() == ComputerAction.Risk.PROHIBITED) return action;
     if (confidence < .8) return new ComputerAction.Uncertain("Planner did not identify a confident target");
     var original = observation.screenshot().display(target.displayId());
     var source = original.image();
@@ -83,7 +85,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
     checkCancelled();
     double x = (left + fine[0]*width)/source.getWidth(), y = (top + fine[1]*height)/source.getHeight();
     // Verify against the whole selected display, preserving context lost in the crop.
-    verifier.verify(observation, resize(source), target.description(), new double[]{x,y});
+    verifier.verifyPoint(observation, original, target.description(), new double[]{x,y});
     checkCancelled();
     var mapped = new ComputerAction.Target(original.geometry().id(),
         left + Math.min(width-1, (int)(fine[0]*width)),
@@ -123,6 +125,8 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
       details.put("sentHeight", image.getHeight());
       details.put("targetDescription", target.description());
       details.put("prompt", user.getText());
+      if (protocol == GroundingProtocol.SHOWUI)
+        details.put("contentOrder", List.of("instruction", "image", "targetDescription"));
       details.put("model", requestOptions.getModel());
       details.put("maxTokens", requestOptions.getMaxTokens());
       new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(directory.resolve(prefix + "-request.json").toFile(), details);

@@ -98,6 +98,7 @@ public class LlmModelProvider {
         .apiKey(server.getApiKey() == null || server.getApiKey().isBlank() ? "dummy-key" : server.getApiKey())
         // These builders bypass Boot customizers, so use the OS resolver explicitly for .local hosts.
         .restClientBuilder(org.springframework.web.client.RestClient.builder()
+            .requestInterceptor(new dev.mikoto2000.rei.computeruse.ShowUiRequestInterceptor())
             .requestFactory(new org.springframework.http.client.ReactorClientHttpRequestFactory(
                 featureHttpClient())))
         .webClientBuilder(org.springframework.web.reactive.function.client.WebClient.builder()

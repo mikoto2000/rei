@@ -1,7 +1,11 @@
 package dev.mikoto2000.rei.computeruse;
 import java.util.List;
 public record ComputerObservation(String goal, CapturedScreen screenshot,
-    List<String> recentHistory, int step, int maxSteps, java.nio.file.Path diagnosticRun) {
+    List<String> recentHistory, int step, int maxSteps, java.nio.file.Path diagnosticRun, String focusState) {
+  public ComputerObservation(String goal, CapturedScreen screenshot, List<String> recentHistory, int step, int maxSteps,
+      java.nio.file.Path diagnosticRun) {
+    this(goal,screenshot,recentHistory,step,maxSteps,diagnosticRun,"{\"status\":\"unknown\"}");
+  }
   public ComputerObservation(String goal, CapturedScreen screenshot, List<String> recentHistory, int step, int maxSteps) {
     this(goal,screenshot,recentHistory,step,maxSteps,null);
   }
