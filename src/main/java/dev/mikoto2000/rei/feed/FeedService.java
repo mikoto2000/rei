@@ -21,7 +21,7 @@ public class FeedService {
 
   public Feed add(String url, String displayName) {
     if (existsByUrl(url)) {
-      throw new IllegalArgumentException("同じフィード URL は登録できません");
+      throw new DuplicateFeedException();
     }
 
     OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);

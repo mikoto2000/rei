@@ -21,6 +21,7 @@ class FeedCommandHelpEncodingTest {
     assertThat(writer.toString())
         .contains("RSS/Atom フィードを操作します")
         .contains("フィードを追加します")
+        .contains("OPML ファイルからフィードを一括登録します")
         .contains("登録済みフィードを一覧します");
   }
 }

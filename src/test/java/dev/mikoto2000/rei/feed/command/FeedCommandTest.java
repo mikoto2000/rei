@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -19,6 +22,9 @@ import dev.mikoto2000.rei.feed.FeedFetcher;
 import dev.mikoto2000.rei.feed.FeedHttpResponse;
 import dev.mikoto2000.rei.feed.FeedProperties;
 import dev.mikoto2000.rei.feed.FeedService;
+import dev.mikoto2000.rei.feed.FeedOpmlImportService;
+import dev.mikoto2000.rei.feed.OpmlParser;
+import dev.mikoto2000.rei.core.command.UserInputParser;
 import dev.mikoto2000.rei.feed.FeedSummaryService;
 import dev.mikoto2000.rei.feed.FeedUpdateResult;
 import dev.mikoto2000.rei.feed.FeedUpdateService;
@@ -29,6 +35,105 @@ class FeedCommandTest {
 
   @TempDir
   Path tempDir;
+
+  @Test
+  void importOpmlThroughSlashParserWithQuotedPathAndPartialResults() throws Exception {
+    FeedService service = newService();
+    service.add("https://example.com/existing", "Existing");
+    Path path = Files.writeString(tempDir.resolve("購読 feeds.opml"), """
+        <opml><body><outline text="日本語" xmlUrl="https://example.com/new"/>
+        <outline xmlUrl="https://example.com/existing"/><outline xmlUrl="not a url"/>
+        </body></opml>
+        """);
+    CommandLine root = new CommandLine(CommandLine.Model.CommandSpec.create()).addSubcommand("feed", newCommand(service));
+    StringWriter out = new StringWriter();
+    root.setOut(new PrintWriter(out));
+    var input = new UserInputParser().parse("/feed import-opml \"" + path + "\"");
+    assertEquals(0, root.execute(input.arguments()));
+    assertEquals(2, service.list().size());
+    assertTrue(out.toString().contains("OPML import completed."));
+    assertTrue(out.toString().contains("Imported: 1"));
+    assertTrue(out.toString().contains("Skipped: 1"));
+    assertTrue(out.toString().contains("Failed: 1"));
+    assertTrue(out.toString().contains("https://example.com/existing (already registered)"));
+    assertTrue(out.toString().contains("not a url (invalid feed URL)"));
+  }
+
+  @Test
+  void importOpmlReportsSuccessfulImport() throws Exception {
+    Path path = Files.writeString(tempDir.resolve("feeds.opml"), "<opml><body><outline xmlUrl='https://example.com'/></body></opml>");
+    CommandLine command = newCommand(newService());
+    StringWriter out = new StringWriter();
+    command.setOut(new PrintWriter(out));
+    assertEquals(0, command.execute("import-opml", path.toString()));
+    assertTrue(out.toString().contains("Imported: 1"));
+    assertTrue(out.toString().contains("Skipped: 0"));
+    assertTrue(out.toString().contains("Failed: 0"));
+  }
+
+  @Test
+  void importOpmlRequiresPath() {
+    CommandLine command = newCommand(newService());
+    StringWriter err = new StringWriter();
+    command.setErr(new PrintWriter(err));
+    assertEquals(2, command.execute("import-opml"));
+    assertTrue(err.toString().contains("PATH"));
+  }
+
+  @Test
+  void importOpmlReportsFileAndXmlErrorsWithoutStackTrace() throws Exception {
+    Path broken = Files.writeString(tempDir.resolve("broken.opml"), "<opml>");
+    Path other = Files.writeString(tempDir.resolve("other.xml"), "<foo/>");
+    for (Path path : List.of(tempDir.resolve("missing.opml"), broken, other, tempDir)) {
+      CommandLine command = newCommand(newService());
+      StringWriter err = new StringWriter();
+      command.setErr(new PrintWriter(err));
+      assertEquals(1, command.execute("import-opml", path.toString()));
+      assertTrue(err.toString().startsWith("Failed to import OPML: "));
+      assertEquals(1, err.toString().lines().count());
+    }
+  }
+
+  @Test
+  void importOpmlExpandsHomeAndPreservesWindowsPaths() {
+    var importer = org.mockito.Mockito.mock(FeedOpmlImportService.class);
+    org.mockito.Mockito.when(importer.importFile(org.mockito.ArgumentMatchers.any())).thenReturn(
+        new dev.mikoto2000.rei.feed.FeedOpmlImportResult(List.of(), List.of(), List.of()));
+    CommandLine command = new CommandLine(new FeedCommand.ImportOpmlCommand(importer));
+    command.setOut(new PrintWriter(new StringWriter()));
+    assertEquals(0, command.execute("~/Downloads/feeds.opml"));
+    org.mockito.Mockito.verify(importer).importFile(Path.of(System.getProperty("user.home"), "Downloads", "feeds.opml"));
+    String path = "C:\\Users\\mikoto\\Downloads\\my feeds.opml";
+    String[] args = new UserInputParser().split("\"" + path + "\"");
+    assertEquals(path, args[0]);
+    assertEquals(0, command.execute(args));
+    Path input = Path.of(path);
+    org.mockito.Mockito.verify(importer).importFile((input.isAbsolute() ? input
+        : dev.mikoto2000.rei.core.project.ProjectService.currentProjectOrStartupDirectory().resolve(input)).normalize());
+  }
+
+  @Test
+  void importOpmlLimitsDetailsAndNeutralizesTerminalControls() throws Exception {
+    Path path = Files.writeString(tempDir.resolve("many.opml"), "<opml><body>"
+        + "<outline xmlUrl='invalid&#10;url'/>".repeat(22) + "</body></opml>");
+    CommandLine command = newCommand(newService());
+    StringWriter out = new StringWriter();
+    command.setOut(new PrintWriter(out));
+    assertEquals(0, command.execute("import-opml", path.toString()));
+    assertTrue(out.toString().contains("Failed: 22"));
+    assertTrue(out.toString().contains("... and 2 more"));
+    assertEquals(20, out.toString().lines().filter(line -> line.equals("- invalid url (invalid feed URL)")).count());
+  }
+
+  @Test
+  void importOpmlReportsInvalidPathWithoutStackTrace() {
+    CommandLine command = newCommand(newService());
+    StringWriter err = new StringWriter();
+    command.setErr(new PrintWriter(err));
+    assertEquals(1, command.execute("import-opml", "bad\u0000path"));
+    assertTrue(err.toString().contains("invalid file path"));
+    assertEquals(1, err.toString().lines().count());
+  }
 
   @Test
   void addCommandCreatesFeed() {
@@ -205,6 +310,9 @@ class FeedCommandTest {
     return new CommandLine(new FeedCommand(), new CommandLine.IFactory() {
       @Override
       public <K> K create(Class<K> cls) throws Exception {
+        if (cls == FeedCommand.ImportOpmlCommand.class) {
+          return cls.cast(new FeedCommand.ImportOpmlCommand(new FeedOpmlImportService(new OpmlParser(), service)));
+        }
         if (cls == FeedCommand.AddCommand.class) {
           return cls.cast(new FeedCommand.AddCommand(service));
         }

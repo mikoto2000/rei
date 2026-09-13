@@ -573,6 +573,17 @@ rei:
 /feed add --name Publickey https://www.publickey1.jp/atom.xml
 ```
 
+OPML からの一括登録:
+
+```text
+/feed import-opml ~/Downloads/subscriptions.opml
+/feed import-opml "C:\Users\mikoto\Downloads\subscriptions.opml"
+```
+
+OPML 内の入れ子の `outline` を走査し、`xmlUrl` のある購読を登録します。表示名は `title`、`text`、URL の順で採用します。同じ URL はスキップし、無効な URL や登録失敗があっても残りを処理します。結果は `Imported` / `Skipped` / `Failed` の件数と、重複・失敗の詳細（各20件まで）を表示します。
+
+相対パスは現在の project を基準に解決し、`~/` はホームディレクトリへ展開します。ファイルは最大10 MiB、XML の深さは128要素までです。DOCTYPE・外部 Entity・外部 DTD・XInclude は無効です。カテゴリ階層と `htmlUrl` は解析のみで永続化しません。登録中に記事取得は行わず、既存の定期更新または `/feed update` で取得します。コマンドの終了コードは処理完了（部分失敗を含む）が0、ファイル単位のエラーが1、引数不足が2です。
+
 登録済みフィード一覧:
 
 ```text
