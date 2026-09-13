@@ -46,6 +46,18 @@ public class LlmProperties {
   }
 
   public static class Server {
+    private Integer maxOutputTokens;
+
+    public Integer getMaxOutputTokens() {
+      return maxOutputTokens;
+    }
+
+    public void setMaxOutputTokens(Integer maxOutputTokens) {
+      if (maxOutputTokens != null && maxOutputTokens <= 0)
+        throw new IllegalArgumentException("max-output-tokens must be positive");
+      this.maxOutputTokens = maxOutputTokens;
+    }
+
     private String baseUrl;
     private String apiKey;
     private String model;

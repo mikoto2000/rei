@@ -9,6 +9,42 @@ import org.springframework.ai.chat.model.ChatModel;
 class LlmModelProviderTest {
 
   @Test
+  void computerUseOutputBudgetDoesNotChangeChatBudget() {
+    LlmProperties properties = new LlmProperties();
+    properties.setMaxOutputTokens(16384);
+    LlmProperties.Server server = new LlmProperties.Server();
+    server.setMaxOutputTokens(512);
+    properties.getFeatures().put(LlmFeature.COMPUTER_USE, server);
+    var provider = new LlmModelProvider(Mockito.mock(ChatModel.class), properties);
+    assertThat(provider.chatOptions(LlmFeature.COMPUTER_USE, "vision").getMaxTokens()).isEqualTo(512);
+    assertThat(provider.chatOptions(LlmFeature.CHAT, "chat").getMaxTokens()).isEqualTo(16384);
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> server.setMaxOutputTokens(0))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void computerUseCustomServerDoesNotWrapModelWithFallback() {
+    ChatModel defaultModel = Mockito.mock(ChatModel.class);
+    LlmProperties properties = new LlmProperties();
+    LlmProperties.Server server = new LlmProperties.Server();
+    server.setBaseUrl("http://vision.example.test");
+    server.setModel("vision-model");
+    properties.getFeatures().put(LlmFeature.COMPUTER_USE, server);
+
+    var model = new LlmModelProvider(defaultModel, properties).computerUseChatModel();
+
+    assertThat(model).isInstanceOf(org.springframework.ai.openai.OpenAiChatModel.class);
+    assertThat(model).isNotSameAs(defaultModel);
+    Mockito.verify(defaultModel, Mockito.never()).call(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class));
+  }
+
+  @Test
+  void featureConnectionsUseOsNameResolutionForLocalHosts() {
+    assertThat(LlmModelProvider.featureHttpClient().configuration().resolver())
+        .isSameAs(io.netty.resolver.DefaultAddressResolverGroup.INSTANCE);
+  }
+
+  @Test
   void returnsDefaultChatModelWhenFeatureServerIsNotConfigured() {
     ChatModel defaultModel = Mockito.mock(ChatModel.class);
     LlmModelProvider provider = new LlmModelProvider(defaultModel, new LlmProperties());

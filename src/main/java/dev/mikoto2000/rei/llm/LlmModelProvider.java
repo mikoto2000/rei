@@ -55,10 +55,12 @@ public class LlmModelProvider {
     if (LlmFeature.COMPUTER_USE.equals(feature))
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(defaultChatModel);
     LlmProperties.Server server = properties.feature(feature);
-    ChatModel model = server == null || !server.hasCustomServer()
-        ? defaultChatModel
-        : new FallbackChatModel(feature, createOpenAiCompatibleChatModel(server), defaultChatModel,
-            server.getModel());
+    ChatModel model = defaultChatModel;
+    if (server != null && server.hasCustomServer()) {
+      ChatModel primary = createOpenAiCompatibleChatModel(server);
+      model = LlmFeature.COMPUTER_USE.equals(feature) ? primary
+          : new FallbackChatModel(feature, primary, defaultChatModel, server.getModel());
+    }
     return eventFactory == null || eventPublisher == null
         ? model
         : new AgentEventChatModel(feature, model, eventFactory, eventPublisher);
@@ -94,6 +96,13 @@ public class LlmModelProvider {
     OpenAiApi api = OpenAiApi.builder()
         .baseUrl(server.getBaseUrl())
         .apiKey(server.getApiKey() == null || server.getApiKey().isBlank() ? "dummy-key" : server.getApiKey())
+        // These builders bypass Boot customizers, so use the OS resolver explicitly for .local hosts.
+        .restClientBuilder(org.springframework.web.client.RestClient.builder()
+            .requestFactory(new org.springframework.http.client.ReactorClientHttpRequestFactory(
+                featureHttpClient())))
+        .webClientBuilder(org.springframework.web.reactive.function.client.WebClient.builder()
+            .clientConnector(new org.springframework.http.client.reactive.ReactorClientHttpConnector(
+                featureHttpClient())))
         .build();
     OpenAiChatOptions.Builder options = chatOptionsBuilder(server, server.getModel());
     return OpenAiChatModel.builder()
@@ -107,6 +116,11 @@ public class LlmModelProvider {
         .build();
   }
 
+  static reactor.netty.http.client.HttpClient featureHttpClient() {
+    return reactor.netty.http.client.HttpClient.create()
+        .resolver(io.netty.resolver.DefaultAddressResolverGroup.INSTANCE);
+  }
+
   private OpenAiChatOptions.Builder chatOptionsBuilder(String feature, String defaultModel) {
     LlmProperties.Server server = properties.feature(feature);
     return chatOptionsBuilder(server, model(feature, defaultModel));
@@ -114,7 +128,8 @@ public class LlmModelProvider {
 
   private OpenAiChatOptions.Builder chatOptionsBuilder(LlmProperties.Server server, String model) {
     OpenAiChatOptions.Builder options = OpenAiChatOptions.builder()
-        .maxTokens(properties.getMaxOutputTokens());
+        .maxTokens(server != null && server.getMaxOutputTokens() != null
+            ? server.getMaxOutputTokens() : properties.getMaxOutputTokens());
     if (model != null && !model.isBlank()) {
       options.model(model);
     }

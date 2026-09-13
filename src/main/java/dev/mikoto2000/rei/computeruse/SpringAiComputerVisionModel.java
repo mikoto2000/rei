@@ -17,6 +17,7 @@ import dev.mikoto2000.rei.core.chat.ToolLoopSupport;
 
 /** Provider adapter only. No ChatClient, advisors, memory, or tool-calling loop is used. */
 public final class SpringAiComputerVisionModel implements ComputerVisionModel {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SpringAiComputerVisionModel.class);
   private final ChatModel model;
   private final Supplier<OpenAiChatOptions.Builder> options;
   private final BooleanSupplier cancelled;
@@ -111,7 +112,21 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
           + (attempt == 0 ? "" : "\nPrevious response was invalid: " + validationReason
               + ". Correct this validation error; return exactly one decision matching the schema."))
           .media(media).build()), requestOptions);
-      var response = model.call(prompt);
+      org.springframework.ai.chat.model.ChatResponse response;
+      try {
+        response = model.call(prompt);
+      } catch (RuntimeException error) {
+        checkCancelled();
+        log.error("Computer Use inference failed: step={}, attempt={}", observation.step(), attempt, error);
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+          if (cause instanceof org.springframework.web.client.RestClientResponseException http)
+            log.error("Computer Use HTTP response: status={}, body={}", http.getStatusCode(), http.getResponseBodyAsString());
+          if (cause instanceof org.springframework.web.reactive.function.client.WebClientResponseException http)
+            log.error("Computer Use HTTP response: status={}, body={}", http.getStatusCode(), http.getResponseBodyAsString());
+        }
+        throw error;
+      }
+      log.info("Computer Use inference response: step={}, attempt={}, response={}", observation.step(), attempt, response);
       checkCancelled();
       if (dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response))
         throw new InvalidComputerDecision("Model reached output token limit (finish_reason=length); check computer-use model output/reasoning budget");
@@ -120,6 +135,7 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
           throw new InvalidComputerDecision("Expected one non-tool decision");
         return parser.parse(response.getResult().getOutput().getText(), screen);
       } catch (InvalidComputerDecision invalid) {
+        log.error("Computer Use invalid decision: step={}, attempt={}", observation.step(), attempt, invalid);
         validationReason = invalid.getMessage();
         if (attempt == repairs) throw invalid;
       }
