@@ -39,6 +39,13 @@ import dev.mikoto2000.rei.websearch.WebSearchTools;
 
 @Component
 public class LlmChatClientProvider {
+  private dev.mikoto2000.rei.externalagent.ExternalAgentTools externalAgentTools;
+  private dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService externalDelegation;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setExternalAgentTools(dev.mikoto2000.rei.externalagent.ExternalAgentTools tools,
+      dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService service) {
+    this.externalAgentTools = tools; this.externalDelegation = service;
+  }
 
   private final LlmModelProvider modelProvider;
   private final CoreProperties coreProperties;
@@ -120,6 +127,8 @@ public class LlmChatClientProvider {
 
   private ChatClient createChatClient(String feature) {
     List<Advisor> advisors = new ArrayList<>();
+    if (LlmFeature.CHAT.equals(feature) && externalDelegation != null)
+      advisors.add(new dev.mikoto2000.rei.externalagent.ExternalAgentReviewAdvisor(externalDelegation, chatMemory));
     advisors.add(PromptChatMemoryAdvisor.builder(chatMemory)
         .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
         .build());
@@ -175,6 +184,7 @@ public class LlmChatClientProvider {
     if (toolCallbackProvider != null) {
       builder.defaultToolCallbacks(toolCallbackProvider);
     }
+    if (LlmFeature.CHAT.equals(feature) && externalAgentTools != null) builder.defaultTools(externalAgentTools);
     if (LlmFeature.CHAT.equals(feature) && subAgentTools != null && subAgentTools.getIfAvailable() != null) {
       builder.defaultToolCallbacks(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
           subAgentTools.getObject().callback(), eventFactory, eventPublisher));

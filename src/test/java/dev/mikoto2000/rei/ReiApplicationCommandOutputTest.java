@@ -63,8 +63,10 @@ class ReiApplicationCommandOutputTest {
       terminal.flush();
 
       assertEquals(charset, terminal.encoding());
-      org.assertj.core.api.Assertions.assertThat(output.toString(charset))
-          .contains("RSS/Atom フィードを操作します", "フィードを追加します");
+      // Native PTY providers drain output on a pump thread; flush does not join that thread.
+      org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(2)).untilAsserted(() ->
+          org.assertj.core.api.Assertions.assertThat(output.toString(charset))
+              .contains("RSS/Atom フィードを操作します", "フィードを追加します"));
     }
   }
 

@@ -85,6 +85,14 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   @Override
   public synchronized void onEvent(AgentEvent event) {
+    if (event.payload() instanceof dev.mikoto2000.rei.event.ExternalAgentLifecyclePayload delegation) {
+      closeAssistantLine();
+      closeThinkingLine();
+      output.println("[delegation] " + delegation.agent() + " "
+          + event.type().value().substring("delegation.".length()) + ": " + delegation.summary());
+      output.flush();
+      return;
+    }
     if (event.payload() instanceof dev.mikoto2000.rei.event.SubAgentLifecyclePayload child) {
       rememberSubAgent(child);
       closeAssistantLine();

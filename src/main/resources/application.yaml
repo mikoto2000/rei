@@ -43,6 +43,13 @@ spring:
     restart:
       enabled: false
 rei:
+  external-agents:
+    codex:
+      enabled: true
+      command: codex
+      total-timeout: 20m
+      inactivity-timeout: 5m
+      max-output-bytes: 4194304
   data-dir: ${REI_DATA_DIR:${LOCALAPPDATA:${user.home}/.local/share}/Rei}
   embedding:
     enabled: ${REI_EMBEDDING_ENABLED:true}

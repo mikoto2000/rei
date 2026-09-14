@@ -1,5 +1,8 @@
 # Rei
 
+Codex による read-only 外部レビューは `/agent codex review [target]` または明示的な自然言語依頼で利用できます。
+必要な CLI capability、設定、安全境界は [External Agent Delegation](docs/external-agent-delegation.md) を参照してください。
+
 Rei は、ターミナルで使う AI 秘書シェルです。OpenAI 互換 API を使った対話を中心に、調査、文書検索、予定・タスク管理などを一つの CLI で行えます。
 
 アプリは手元の PC で動作し、AI の処理には設定した API サーバーを利用します。ローカルのモデルサーバーにも接続できます。

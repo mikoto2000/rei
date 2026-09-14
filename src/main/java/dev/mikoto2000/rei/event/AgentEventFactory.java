@@ -33,6 +33,13 @@ public class AgentEventFactory {
 
   // ---- Agent Run ----
 
+  public AgentEvent delegation(AgentEventType type, String runId, ExternalAgentLifecyclePayload payload) {
+    if (type != AgentEventType.DELEGATION_STARTED && type != AgentEventType.DELEGATION_COMPLETED
+        && type != AgentEventType.DELEGATION_FAILED && type != AgentEventType.DELEGATION_CANCELLED)
+      throw new IllegalArgumentException("Not an external delegation event");
+    return newEvent(type, runId, payload.delegationId(), payload);
+  }
+
   public AgentEvent computerUseProgress(dev.mikoto2000.rei.computeruse.ComputerProgress progress) {
     return newEvent(AgentEventType.COMPUTER_USE_PROGRESS, null, null,
         new ComputerUseProgressPayload(progress.step(), progress.phase(), progress.action(), progress.target(),

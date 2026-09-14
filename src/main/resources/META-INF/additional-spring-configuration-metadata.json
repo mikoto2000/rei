@@ -1,5 +1,10 @@
 {
   "properties": [
+    {"name":"rei.external-agents.codex.enabled","type":"java.lang.Boolean","defaultValue":true,"description":"Enable explicitly requested Codex reviews."},
+    {"name":"rei.external-agents.codex.command","type":"java.lang.String","defaultValue":"codex","description":"Codex native executable path or name; never a shell command string."},
+    {"name":"rei.external-agents.codex.total-timeout","type":"java.time.Duration","defaultValue":"20m","description":"Total external review execution deadline."},
+    {"name":"rei.external-agents.codex.inactivity-timeout","type":"java.time.Duration","defaultValue":"5m","description":"Maximum interval without stdout or stderr activity."},
+    {"name":"rei.external-agents.codex.max-output-bytes","type":"java.lang.Integer","defaultValue":4194304,"description":"Shared stdout and stderr capture byte limit."},
     {
       "name": "rei.google.calendar.enabled",
       "type": "java.lang.Boolean",

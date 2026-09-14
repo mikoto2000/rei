@@ -57,6 +57,13 @@ import lombok.RequiredArgsConstructor;
 @EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, BlueskyProperties.class, AgentSkillsProperties.class, LlmProperties.class, ImageProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
+  private dev.mikoto2000.rei.externalagent.ExternalAgentTools externalAgentTools;
+  private dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService externalDelegation;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setExternalAgentTools(dev.mikoto2000.rei.externalagent.ExternalAgentTools tools,
+      dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService service) {
+    this.externalAgentTools = tools; this.externalDelegation = service;
+  }
   private ObjectProvider<dev.mikoto2000.rei.computeruse.ComputerUseTools> computerUseTools;
   @org.springframework.beans.factory.annotation.Autowired
   void setComputerUseTools(ObjectProvider<dev.mikoto2000.rei.computeruse.ComputerUseTools> tools) { this.computerUseTools = tools; }
@@ -112,6 +119,7 @@ public class AiConfiguration {
     advisors.add(checkpointAdvisor);
     advisors.add(actionPlanAdvisor);
     advisors.add(stagnationAdvisor);
+    if (externalDelegation != null) advisors.add(new dev.mikoto2000.rei.externalagent.ExternalAgentReviewAdvisor(externalDelegation, chatMemory));
     AgentSkillAdvisor skillAdvisor = agentSkillAdvisor.getIfAvailable();
     if (skillAdvisor != null) {
       advisors.add(skillAdvisor);
@@ -133,6 +141,7 @@ public class AiConfiguration {
     }
 
     // Lazy callback avoids a bean cycle through the model provider during ChatClient construction.
+    if (externalAgentTools != null) builder.defaultTools(externalAgentTools);
     if (subAgentTools != null) builder.defaultToolCallbacks(new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools));
     if (computerUseTools != null) {
       var computer = computerUseTools.getIfAvailable();
