@@ -24,7 +24,7 @@ import reactor.core.publisher.Flux;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class ProjectRunSwitchIntegrationTest {
+class ProjectRunSwitchIntegrationTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   @Test void toolRunAndInterventionFinishInAAfterShellSwitchesToB() throws Exception {
     String prior = System.getProperty("rei.data-dir");
@@ -32,7 +32,7 @@ class ProjectRunSwitchIntegrationTest {
     var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
       Path a = Files.createDirectory(temp.resolve("a")); Path b = Files.createDirectory(temp.resolve("b"));
-      var projects = new ProjectService(a, new ProjectRegistry(data.resolve("projects.json")));
+      var projects = connect(new ProjectService(a, new ProjectRegistry(data.resolve("projects.json"))));
       var run = new AgentRunContext("run-a", projects.currentContext(), "chat:main");
       var bus = new InMemoryAgentEventBus();
       var events = new AgentEventFactory(Clock.systemUTC());

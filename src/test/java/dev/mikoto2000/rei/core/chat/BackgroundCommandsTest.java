@@ -14,7 +14,7 @@ import dev.mikoto2000.rei.event.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class BackgroundCommandsTest {
+class BackgroundCommandsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   ProjectContext a,b;
   ProjectService projects;
@@ -28,7 +28,7 @@ class BackgroundCommandsTest {
   @BeforeEach void setup() throws Exception {
     var registry=new ProjectRegistry(temp.resolve("projects.json"));
     a=registry.resolve(Files.createDirectory(temp.resolve("A"))); b=registry.resolve(Files.createDirectory(temp.resolve("B")));
-    projects=new ProjectService(a.root(),registry); states=new ProjectRunStateStore(temp);
+    projects=connect(new ProjectService(a.root(),registry)); states=new ProjectRunStateStore(temp);
     tasks=new ArrayList<>(); events=new ArrayList<>(); router=new ConversationInputRouter(tasks::add,(c,p,q)->{});
     summaries=mock(WebPageSummarizerService.class); images=mock(ImageGenerationService.class);
     commands=new BackgroundCommands(router,projects,states,summaries,images,new AgentEventFactory(Clock.systemUTC()),events::add,Clock.systemUTC());

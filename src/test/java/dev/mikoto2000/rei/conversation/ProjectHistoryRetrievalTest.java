@@ -11,7 +11,7 @@ import dev.mikoto2000.rei.core.chat.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class ProjectHistoryRetrievalTest {
+class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   String prior;
   ProjectRegistry registry;
@@ -27,7 +27,7 @@ class ProjectHistoryRetrievalTest {
     a = registry.resolve(Files.createDirectory(temp.resolve("Alpha")));
     b = registry.resolve(Files.createDirectory(temp.resolve("MaCa Editor")));
     c = registry.resolve(Files.createDirectory(temp.resolve("Other")));
-    projects = new ProjectService(a.root(), registry);
+    projects = connect(new ProjectService(a.root(), registry));
     logs = spy(new ConversationLogStore());
     var ds = new SQLiteDataSource(); ds.setUrl("jdbc:sqlite:" + temp.resolve("db"));
     service = new ConversationHistorySearchService(ds, logs);

@@ -7,12 +7,12 @@ import static org.assertj.core.api.Assertions.*;
 import dev.mikoto2000.rei.core.chat.*;
 import dev.mikoto2000.rei.core.working.WorkingSet;
 
-class ProjectBeanScopeTest {
+class ProjectBeanScopeTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   @Test void workingSetIsScopedAndPersistsIndependentlyOfEvents() throws Exception {
     Path a = Files.createDirectory(temp.resolve("a"));
     Path b = Files.createDirectory(temp.resolve("b"));
-    var service = new ProjectService(a, new ProjectRegistry(temp.resolve("projects.json")));
+    var service = connect(new ProjectService(a, new ProjectRegistry(temp.resolve("projects.json"))));
     var scope = new ProjectBeanScope();
     var first = (WorkingSet) scope.get("workingSet", WorkingSet::new);
     first.enablePersistence(temp.resolve("state/files.json"));

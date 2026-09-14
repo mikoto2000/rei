@@ -10,7 +10,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class ProjectServiceTest {
+class ProjectServiceTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
 
   @TempDir
   Path tempDir;
@@ -67,6 +67,6 @@ class ProjectServiceTest {
   }
 
   private ProjectService newService() {
-    return new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects"));
+    return connect(new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects")));
   }
 }

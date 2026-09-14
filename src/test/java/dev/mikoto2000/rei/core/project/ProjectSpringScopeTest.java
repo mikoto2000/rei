@@ -9,7 +9,7 @@ import dev.mikoto2000.rei.core.working.*;
 import dev.mikoto2000.rei.event.*;
 import static org.assertj.core.api.Assertions.*;
 
-class ProjectSpringScopeTest {
+class ProjectSpringScopeTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   @Test void injectedWorkingSetProxySwitchesTargets() throws Exception {
     String prior = System.getProperty("rei.data-dir");
@@ -17,7 +17,7 @@ class ProjectSpringScopeTest {
     try (var beans = new AnnotationConfigApplicationContext()) {
       var a = Files.createDirectory(temp.resolve("a"));
       var b = Files.createDirectory(temp.resolve("b"));
-      var projects = new ProjectService(a, new ProjectRegistry(temp.resolve("data/projects.json")));
+      var projects = connect(new ProjectService(a, new ProjectRegistry(temp.resolve("data/projects.json"))));
       beans.registerBean(Clock.class, Clock::systemUTC);
       beans.registerBean(AgentEventFactory.class, () -> new AgentEventFactory(Clock.systemUTC()));
       beans.registerBean(AgentEventBus.class, InMemoryAgentEventBus::new);

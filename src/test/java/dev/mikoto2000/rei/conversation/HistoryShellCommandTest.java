@@ -14,7 +14,7 @@ import picocli.CommandLine;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class HistoryShellCommandTest {
+class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   String prior;
   ProjectRegistry registry;
@@ -30,7 +30,7 @@ class HistoryShellCommandTest {
     registry = new ProjectRegistry(temp.resolve("data/projects.json"));
     a = registry.resolve(Files.createDirectory(temp.resolve("Alpha")));
     b = registry.resolve(Files.createDirectory(temp.resolve("MaCa Editor")));
-    projects = new ProjectService(a.root(), registry);
+    projects = connect(new ProjectService(a.root(), registry));
     logs = spy(new ConversationLogStore());
     var ds = new SQLiteDataSource(); ds.setUrl("jdbc:sqlite:" + temp.resolve("unused.db"));
     search = spy(new ConversationHistorySearchService(ds, logs));

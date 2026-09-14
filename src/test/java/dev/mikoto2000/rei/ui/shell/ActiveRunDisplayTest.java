@@ -9,13 +9,13 @@ import dev.mikoto2000.rei.core.chat.*;
 import dev.mikoto2000.rei.core.project.*;
 import static org.assertj.core.api.Assertions.*;
 
-class ActiveRunDisplayTest {
+class ActiveRunDisplayTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   @Test void includesEveryExecutionTypeInRowsAndPrompt() throws Exception {
     var registry=new ProjectRegistry(temp.resolve("projects.json"));
     var a=registry.resolve(Files.createDirectory(temp.resolve("A")));
     var b=registry.resolve(Files.createDirectory(temp.resolve("B")));
-    var projects=new ProjectService(a.root(),registry);
+    var projects=connect(new ProjectService(a.root(),registry));
     var tasks=new ArrayList<Runnable>();
     var router=new ConversationInputRouter(tasks::add,(c,p,q)->{});
     var display=new ActiveRunDisplay(router,projects,Clock.systemUTC());
@@ -31,7 +31,7 @@ class ActiveRunDisplayTest {
     var registry = new ProjectRegistry(temp.resolve("projects.json"));
     var a = registry.resolve(Files.createDirectory(temp.resolve("Alpha")));
     var b = registry.resolve(Files.createDirectory(temp.resolve("Beta")));
-    var projects = new ProjectService(a.root(), registry);
+    var projects = connect(new ProjectService(a.root(), registry));
     var tasks = new ArrayList<Runnable>();
     var router = new ConversationInputRouter(tasks::add, (c,p,q) -> {});
     var display = new ActiveRunDisplay(router, projects, Clock.fixed(java.time.Instant.EPOCH, java.time.ZoneOffset.UTC));
@@ -60,7 +60,7 @@ class ActiveRunDisplayTest {
     var registry = new ProjectRegistry(temp.resolve("projects.json"));
     var a = registry.resolve(Files.createDirectories(temp.resolve("one/rei")));
     var b = registry.resolve(Files.createDirectories(temp.resolve("two/rei")));
-    var projects = new ProjectService(a.root(), registry);
+    var projects = connect(new ProjectService(a.root(), registry));
     var router = new ConversationInputRouter(new ArrayList<Runnable>()::add, (c,p,q) -> {});
     var display = new ActiveRunDisplay(router, projects, Clock.systemUTC());
     var events = new dev.mikoto2000.rei.event.ProjectAgentEventStore(temp);

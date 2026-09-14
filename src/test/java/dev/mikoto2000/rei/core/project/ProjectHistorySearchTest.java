@@ -8,13 +8,13 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import dev.mikoto2000.rei.conversation.*;
 import static org.assertj.core.api.Assertions.*;
 
-class ProjectHistorySearchTest {
+class ProjectHistorySearchTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   @Test void scopedSearchDoesNotFallBackToUnownedGlobalHistory() throws Exception {
     String prior = System.getProperty("rei.data-dir");
     System.setProperty("rei.data-dir", temp.resolve("data").toString());
     try {
-      var projects = new ProjectService(temp, new ProjectRegistry(temp.resolve("data/projects.json")));
+      var projects = connect(new ProjectService(temp, new ProjectRegistry(temp.resolve("data/projects.json"))));
       var ds = new SQLiteDataSource(); ds.setUrl("jdbc:sqlite:" + temp.resolve("history.db"));
       var jdbc = new JdbcTemplate(ds);
       jdbc.execute("CREATE TABLE SPRING_AI_CHAT_MEMORY(conversation_id TEXT, content TEXT, type TEXT, timestamp BIGINT)");

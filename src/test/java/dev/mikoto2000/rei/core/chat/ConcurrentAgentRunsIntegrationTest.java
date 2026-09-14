@@ -17,7 +17,7 @@ import dev.mikoto2000.rei.event.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class ConcurrentAgentRunsIntegrationTest {
+class ConcurrentAgentRunsIntegrationTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   @Test void timeoutAndProviderFailureLeaveNoActiveRun() {
     for (var error : List.of(new TimeoutException("timeout"), new IllegalStateException("provider failed"))) {
@@ -38,7 +38,7 @@ class ConcurrentAgentRunsIntegrationTest {
     }
   }
   @Test void realExecutionCancelsBWhileAContinuesThenRemovesBoth() throws Exception {
-    var projects = new ProjectService(Files.createDirectory(temp.resolve("a")), new ProjectRegistry(temp.resolve("registry.json")));
+    var projects = connect(new ProjectService(Files.createDirectory(temp.resolve("a")), new ProjectRegistry(temp.resolve("registry.json"))));
     var a = projects.currentContext();
     projects.cd(Files.createDirectory(temp.resolve("b")).toString()); var b = projects.currentContext();
     var streams = new ConcurrentHashMap<String, FluxSink<ChatResponse>>();

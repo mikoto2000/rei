@@ -12,9 +12,9 @@ import dev.mikoto2000.rei.event.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class ProjectShellActivityTest {
+class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @Test void backgroundNotificationsRemainVisibleAfterProjectSwitch() throws Exception {
-    var projects=new ProjectService(Files.createDirectory(temp.resolve("A")),new ProjectRegistry(temp.resolve("registry.json")));
+    var projects=connect(new ProjectService(Files.createDirectory(temp.resolve("A")),new ProjectRegistry(temp.resolve("registry.json"))));
     var a=projects.currentContext();
     var router=new ConversationInputRouter(new java.util.ArrayList<Runnable>()::add,(c,p,q)->{});
     var activity=new ProjectShellActivity(projects,new ProjectAgentEventStore(temp),new ProjectRunStateStore(temp),new WorkingSet(),mock(ChatMemory.class));
@@ -32,7 +32,7 @@ class ProjectShellActivityTest {
     verify(out,times(2)).println("結果");
   }
   @Test void projectSwitchShowsCountAndHiddenRunCompletionIsVisible() throws Exception {
-    var projects = new ProjectService(Files.createDirectory(temp.resolve("a")), new ProjectRegistry(temp.resolve("registry.json")));
+    var projects = connect(new ProjectService(Files.createDirectory(temp.resolve("a")), new ProjectRegistry(temp.resolve("registry.json"))));
     var a = projects.currentContext();
     var tasks = new java.util.ArrayList<Runnable>();
     var runs = new ConversationInputRouter(tasks::add, (c,p,q) -> {});
@@ -49,7 +49,7 @@ class ProjectShellActivityTest {
   @TempDir Path temp;
   @Test void switchRestoresOnlyRecentOwnedActivityAndFiltersLiveEvents() throws Exception {
     Path a = Files.createDirectory(temp.resolve("a")); Path b = Files.createDirectory(temp.resolve("b"));
-    var projects = new ProjectService(a, new ProjectRegistry(temp.resolve("projects.json")));
+    var projects = connect(new ProjectService(a, new ProjectRegistry(temp.resolve("projects.json"))));
     var runA = new AgentRunContext("run-a", projects.currentContext(), "chat:main");
     projects.cd(b.toString());
     var runB = new AgentRunContext("run-b", projects.currentContext(), "chat:main");

@@ -46,7 +46,7 @@ import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.event.WorkingSetSearchCompletedPayload;
 
-class ToolsTest {
+class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
 
   @TempDir
   Path tempDir;
@@ -1529,7 +1529,7 @@ class ToolsTest {
   void readTextFileUsesCurrentProjectForRelativePath() throws Exception {
     Path project = Files.createDirectories(tempDir.resolve("project-a"));
     Files.writeString(project.resolve("note.txt"), "project note");
-    ProjectService projectService = new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects"));
+    ProjectService projectService = connect(new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects")));
     projectService.add(project.toString());
     projectService.cd(project.toString());
 
@@ -1628,7 +1628,7 @@ class ToolsTest {
   @Test
   void createDirectoriesUsesCurrentProjectForRelativePath() throws Exception {
     Path project = Files.createDirectories(tempDir.resolve("project-a"));
-    ProjectService projectService = new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects"));
+    ProjectService projectService = connect(new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects")));
     projectService.add(project.toString());
     projectService.cd(project.toString());
     Tools tools = new Tools(projectService);

@@ -5,12 +5,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.*;
 
-class ProjectSwitchTest {
+class ProjectSwitchTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   @Test void switchRestoresIdentityAndCapturedRunRemainsOwnedByA() throws Exception {
     Path a = Files.createDirectory(temp.resolve("a"));
     Path b = Files.createDirectory(temp.resolve("b"));
-    var service = new ProjectService(a, new ProjectRegistry(temp.resolve("data/projects.json")));
+    var service = connect(new ProjectService(a, new ProjectRegistry(temp.resolve("data/projects.json"))));
     var first = service.currentContext();
     var run = new dev.mikoto2000.rei.core.chat.AgentRunContext("run", first, "chat:main");
     service.cd(b.toString());

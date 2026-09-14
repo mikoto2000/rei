@@ -81,6 +81,8 @@ public class ReiApplication {
   private dev.mikoto2000.rei.core.chat.ConversationInputRouter activeRuns;
   @Autowired(required = false)
   private dev.mikoto2000.rei.ui.shell.ActiveRunDisplay activeRunDisplay;
+  @Autowired
+  private ProjectService projects;
 
   private static final String COMMAND_COMPLETION_MESSAGE = "コマンド実行が完了しました";
   private static final String MULTILINE_CONTINUATION = "\\";
@@ -144,10 +146,18 @@ public class ReiApplication {
   }
 
   void run(String[] args) throws IOException {
+    var client = projects.newClient();
+    try (var scope = client.open()) {
+      runShell(args, client);
+    }
+  }
+
+  private void runShell(String[] args, dev.mikoto2000.rei.core.project.ProjectClient client) throws IOException {
     var cmd = new picocli.CommandLine(rootCommand, factory);
     rootCommand.configureCommands(cmd);
     var terminal = terminalBuilder(System.out).build();
     configureCommandOutput(cmd, terminal);
+    dev.mikoto2000.rei.ui.shell.ShellProjectCommands.configure(cmd, projects, client, projectShellActivity);
 
     ReiLineReaderFactory.Session inputSession = ReiLineReaderFactory.create(terminal, cmd);
     LineReader reader = inputSession.reader();
@@ -171,7 +181,9 @@ public class ReiApplication {
     ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
     UserInputService inputService = new UserInputService(new UserInputParser());
     try (var consoleSession = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession();
-        var runPrompt = new dev.mikoto2000.rei.ui.shell.ActiveRunPrompt(reader, activeRuns, this::buildPrompt)) {
+        var runPrompt = new dev.mikoto2000.rei.ui.shell.ActiveRunPrompt(reader, activeRuns, () -> {
+          try (var scope = client.open()) { return buildPrompt(); }
+        })) {
       shellLoop: while (true) {
         try {
           String line = runPrompt.readLine();

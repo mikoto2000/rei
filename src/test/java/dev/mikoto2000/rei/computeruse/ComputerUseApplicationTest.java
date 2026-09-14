@@ -13,13 +13,6 @@ import dev.mikoto2000.rei.vectordocument.VectorDocumentRepository;
 
 @SpringBootTest(properties = {"spring.ai.openai.api-key=test-key", "rei.computer-use.enabled=true"})
 class ComputerUseApplicationTest {
-  // ProjectService installs a legacy global adapter on context startup. Do not leak it to unit tests.
-  private static final Object PREVIOUS_PROJECT_SERVICE = org.springframework.test.util.ReflectionTestUtils.getField(
-      dev.mikoto2000.rei.core.project.ProjectService.class, "currentService");
-  @org.junit.jupiter.api.AfterAll static void restoreProjectAdapter() {
-    org.springframework.test.util.ReflectionTestUtils.setField(
-        dev.mikoto2000.rei.core.project.ProjectService.class, "currentService", PREVIOUS_PROJECT_SERVICE);
-  }
   @MockitoBean ChatModel chatModel;
   @MockitoBean EmbeddingModel embeddingModel;
   @MockitoBean VectorStore vectorStore;

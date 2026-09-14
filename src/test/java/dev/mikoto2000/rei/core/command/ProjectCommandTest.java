@@ -14,7 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import picocli.CommandLine;
 
-class ProjectCommandTest {
+class ProjectCommandTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
 
   @TempDir
   Path tempDir;
@@ -22,7 +22,7 @@ class ProjectCommandTest {
   @Test
   void projectCommandAddsListsChangesAndRemovesProject() throws Exception {
     Path project = Files.createDirectories(tempDir.resolve("project-a"));
-    ProjectService service = new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects"));
+    ProjectService service = connect(new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects")));
     CommandLine commandLine = newCommand(service);
 
     assertEquals(0, commandLine.execute("add", project.toString()));
@@ -35,7 +35,7 @@ class ProjectCommandTest {
   @Test
   void listMarksCurrentProject() throws Exception {
     Path project = Files.createDirectories(tempDir.resolve("project-a"));
-    ProjectService service = new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects"));
+    ProjectService service = connect(new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects")));
     service.add(project.toString());
     service.cd(project.toString());
 

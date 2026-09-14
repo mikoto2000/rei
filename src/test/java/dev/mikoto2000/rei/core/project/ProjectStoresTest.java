@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.*;
 import dev.mikoto2000.rei.core.chat.*;
 import dev.mikoto2000.rei.conversation.*;
 
-class ProjectStoresTest {
+class ProjectStoresTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   @Test void logsAndSearchStayWithOwnerAfterSwitchAndReload() throws Exception {
     String previous = System.getProperty("rei.data-dir");
@@ -16,7 +16,7 @@ class ProjectStoresTest {
     try {
       Path a = Files.createDirectory(temp.resolve("a"));
       Path b = Files.createDirectory(temp.resolve("b"));
-      var service = new ProjectService(a, new ProjectRegistry(temp.resolve("data/projects.json")));
+      var service = connect(new ProjectService(a, new ProjectRegistry(temp.resolve("data/projects.json"))));
       var owner = service.currentContext();
       var run = new AgentRunContext("run", owner, "chat:main");
       var activity = new dev.mikoto2000.rei.event.ProfileEventLogStore();

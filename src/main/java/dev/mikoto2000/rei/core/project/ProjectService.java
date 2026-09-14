@@ -2,17 +2,14 @@ package dev.mikoto2000.rei.core.project;
 
 import java.nio.file.*;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Service;
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 
 @Service
 public class ProjectService {
-  private static volatile ProjectService currentService;
   private final Path startupDirectory;
   private final ProjectRegistry registry;
-  private final AtomicReference<Path> currentProject;
   private final boolean scoped;
 
   public ProjectService() { this(ReiPaths.startupDirectory(), new ProjectRegistry(ReiPaths.projectsFilePath())); }
@@ -22,12 +19,21 @@ public class ProjectService {
   private ProjectService(Path startup, ProjectRegistry registry, boolean scoped) {
     this.startupDirectory = startup.toAbsolutePath().normalize();
     this.registry = registry;
-    this.currentProject = new AtomicReference<>(this.startupDirectory);
     this.scoped = scoped;
-    currentService = this;
   }
   public Path startupDirectory() { return startupDirectory; }
-  public Path currentProject() { return currentProject.get(); }
+  public ProjectClient newClient() { return new ProjectClient(this, startupDirectory); }
+  private ProjectClient client() {
+    var client = ProjectClientScope.current();
+    if (client == null || client.service != this)
+      throw new IllegalStateException("A project client scope is required");
+    return client;
+  }
+  /** Client selection for interactive controls; execution ownership is contextForOperation(). */
+  public Path currentProject() {
+    var client = ProjectClientScope.current();
+    return client == null ? startupDirectory : client().selection.get();
+  }
   public ProjectContext currentContext() { return registry.resolve(currentProject()); }
   public List<ProjectContext> registeredProjects() { return registry.list(); }
   public List<Path> list() {
@@ -38,16 +44,19 @@ public class ProjectService {
   }
   public Path add(String directory) { return registry.resolve(resolveDirectory(directory)).root(); }
   public Path cd(String directory) {
+    var client = client();
     var context = registry.resolve(resolveDirectory(directory));
-    currentProject.set(context.root());
+    client.selection.set(context.root());
     return context.root();
   }
   public Path remove(String directory) {
+    var client = client();
     Path path = resolveDirectory(directory);
     registry.remove(path);
-    if (currentProject.get().equals(path)) currentProject.set(startupDirectory);
+    client.selection.updateAndGet(current -> current.equals(path) ? startupDirectory : current);
     return path;
   }
+  /** Running work keeps its captured ownership even when the client changes its selection. */
   public static ProjectContext contextForOperation() {
     var execution=dev.mikoto2000.rei.core.execution.ExecutionScope.current();
     if(execution!=null) return new ProjectContext(execution.projectId(),execution.projectRoot().getFileName().toString(),execution.projectRoot());
@@ -55,15 +64,18 @@ public class ProjectService {
     if (run != null && run.projectId() != null) return new ProjectContext(run.projectId(),
         run.projectRoot().getFileName().toString(), run.projectRoot());
     if (run != null) return null;
-    ProjectService service = currentService;
+    var client = ProjectClientScope.current();
+    ProjectService service = client == null ? null : client.service;
     return service != null && service.scoped && Files.isDirectory(service.currentProject()) ? service.currentContext() : null;
   }
   public static List<String> registeredProjectPathStrings() {
-    var service = currentService;
+    var client = ProjectClientScope.current();
+    var service = client == null ? null : client.service;
     return service == null ? List.of(ReiPaths.startupDirectory().toString()) : service.list().stream().map(Path::toString).toList();
   }
   public static Path currentProjectOrStartupDirectory() {
-    var service = currentService;
+    var client = ProjectClientScope.current();
+    var service = client == null ? null : client.service;
     return service == null ? ReiPaths.startupDirectory() : service.currentProject();
   }
   static List<String> loadProjectPathStrings(Path startup, Path file) {
