@@ -45,6 +45,13 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("${rei.data-dir}/skills"));
     assertTrue(content.contains("max-selected: 3"));
     assertTrue(content.contains("REI_OPENAI_BASE_URL"));
+    assertTrue(content.contains("base-url: ${REI_OPENAI_EMBEDDING_BASE_URL:}"));
+    assertTrue(content.contains("api-key: ${REI_OPENAI_EMBEDDING_API_KEY:}"));
+    assertTrue(content.contains("embeddings-path: ${REI_OPENAI_EMBEDDING_PATH:/v1/embeddings}"));
+    assertTrue(content.contains("base-url: ${REI_RERANK_BASE_URL:}"));
+    assertTrue(content.contains("api-key: ${REI_RERANK_API_KEY:}"));
+    assertTrue(content.contains("model: ${REI_RERANK_MODEL:}"));
+    assertTrue(content.contains("path: ${REI_RERANK_PATH:/v1/rerank}"));
     assertTrue(content.contains("llm:"));
     assertTrue(content.contains("REI_LLM_MAX_OUTPUT_TOKENS"));
     assertTrue(content.contains("max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}"));

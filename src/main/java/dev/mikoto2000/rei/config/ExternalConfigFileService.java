@@ -71,6 +71,9 @@ public class ExternalConfigFileService {
                 options:
                   model: ${REI_OPENAI_CHAT_MODEL:qwen3.5:122b}
               embedding:
+                base-url: ${REI_OPENAI_EMBEDDING_BASE_URL:}
+                api-key: ${REI_OPENAI_EMBEDDING_API_KEY:}
+                embeddings-path: ${REI_OPENAI_EMBEDDING_PATH:/v1/embeddings}
                 options:
                   model: ${REI_OPENAI_EMBEDDING_MODEL:qwen3-embedding:8b}
               image:
@@ -84,6 +87,11 @@ public class ExternalConfigFileService {
         rei:
           embedding:
             enabled: ${REI_EMBEDDING_ENABLED:true}
+          rerank:
+            base-url: ${REI_RERANK_BASE_URL:}
+            api-key: ${REI_RERANK_API_KEY:}
+            model: ${REI_RERANK_MODEL:}
+            path: ${REI_RERANK_PATH:/v1/rerank}
           llm:
             max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}
             output-limit:

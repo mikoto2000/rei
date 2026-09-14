@@ -29,6 +29,12 @@ public class VectorDocumentService {
   private final VectorDocumentRepository vectorDocumentRepository;
   private final Clock clock;
   private final VectorDocumentProperties properties;
+  private RerankService rerankService;
+
+  @Autowired
+  void setRerankService(RerankService rerankService) {
+    this.rerankService = rerankService;
+  }
 
   @Autowired
   public VectorDocumentService(
@@ -93,7 +99,7 @@ public class VectorDocumentService {
       builder.filterExpression(new FilterExpressionBuilder().eq("source", normalizeSource(source)).build());
     }
 
-    return vectorStore.similaritySearch(builder.build()).stream()
+    List<AggregatedSearchResult> candidates = vectorStore.similaritySearch(builder.build()).stream()
         .collect(java.util.stream.Collectors.groupingBy(
             document -> asString(document.getMetadata().get("docId")),
             LinkedHashMap::new,
@@ -101,6 +107,11 @@ public class VectorDocumentService {
         .values().stream()
         .map(documents -> aggregateResult(query, documents))
         .sorted(Comparator.comparing(AggregatedSearchResult::score).reversed().thenComparing(AggregatedSearchResult::docId))
+        .toList();
+    if (rerankService != null) {
+      candidates = rerankService.rerank(query, candidates, AggregatedSearchResult::mergedText);
+    }
+    return candidates.stream()
         .limit(requestedTopK)
         .map(this::toSearchResult)
         .toList();

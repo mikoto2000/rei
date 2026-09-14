@@ -1,6 +1,27 @@
 {
   "properties": [
     {
+      "name": "rei.rerank.base-url",
+      "type": "java.lang.String",
+      "description": "Rerank API base URL. Empty disables external reranking."
+    },
+    {
+      "name": "rei.rerank.api-key",
+      "type": "java.lang.String",
+      "description": "Independent bearer API key for reranking."
+    },
+    {
+      "name": "rei.rerank.model",
+      "type": "java.lang.String",
+      "description": "Rerank model name. Required when the rerank base URL is set."
+    },
+    {
+      "name": "rei.rerank.path",
+      "type": "java.lang.String",
+      "defaultValue": "/v1/rerank",
+      "description": "Rerank API request path appended to the base URL."
+    },
+    {
       "name": "rei.google.calendar.enabled",
       "type": "java.lang.Boolean",
       "description": "Enable Google Calendar integration."

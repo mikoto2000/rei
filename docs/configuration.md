@@ -96,6 +96,43 @@ export REI_OPENAI_IMAGE_MODEL=gpt-image-1
 | `REI_IMAGE_RESPONSE_FORMAT` | 任意 | `auto` | 画像生成 API に `response_format` を送るかを制御。`auto`, `b64_json`, `none` |
 | `REI_IMAGE_TIMEOUT_SECONDS` | 任意 | `300` | 画像生成 API の読み取りタイムアウト秒数 |
 
+## embedding・rerank の接続先
+
+embedding はチャットとは別の接続先・API キーを指定できます。URL とキーが空の場合は、
+それぞれ `spring.ai.openai.base-url` と `spring.ai.openai.api-key` を引き継ぎます。
+
+```yaml
+spring:
+  ai:
+    openai:
+      embedding:
+        base-url: ${REI_OPENAI_EMBEDDING_BASE_URL:}
+        api-key: ${REI_OPENAI_EMBEDDING_API_KEY:}
+        embeddings-path: ${REI_OPENAI_EMBEDDING_PATH:/v1/embeddings}
+        options:
+          model: ${REI_OPENAI_EMBEDDING_MODEL:qwen3-embedding:8b}
+
+rei:
+  rerank:
+    base-url: ${REI_RERANK_BASE_URL:}
+    api-key: ${REI_RERANK_API_KEY:}
+    model: ${REI_RERANK_MODEL:}
+    path: ${REI_RERANK_PATH:/v1/rerank}
+```
+
+例えば embedding を `http://localhost:8001`、rerank を `http://localhost:8002` に分けるには、
+`REI_OPENAI_EMBEDDING_BASE_URL` と `REI_RERANK_BASE_URL` にそれぞれの URL を設定します。
+各パスには API のパスを指定します。ベース URL に `/v1` を含める場合はパスを `/embeddings`、`/rerank` に変更してください。
+
+rerank は `base-url` を指定すると有効になり、`model` の指定が必須です。
+API キーは独立しており、空の場合は Authorization ヘッダーを送りません。
+API には `model`、`query`、文字列配列の `documents` を POST します。
+レスポンスは全候補の `index`（0 始まり）と `relevance_score` を持つ `results` 配列を想定します。
+文書検索では、候補チャンクを文書単位で集約し、その本文を rerank に送ってから上位件数を選びます。
+表示する `score` は従来の検索スコアを維持し、順位だけを変更します。
+未設定時や API エラー・不正な応答時には従来の順位を使います。接続タイムアウトは 10 秒、読み取りタイムアウトは 30 秒です。
+Web 検索の順位には適用しません。
+
 ## 機能別 LLM 設定
 
 LLM を利用する機能ごとに、既定の `spring.ai.openai` とは別の OpenAI 互換 API サーバーとモデルを指定できます。
