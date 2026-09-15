@@ -35,4 +35,5 @@ public final class RunRegistry {
     expired.forEach(runs::remove);
     return expired;
   }
+  public synchronized Set<String> runIds() { return Set.copyOf(runs.keySet()); }
 }

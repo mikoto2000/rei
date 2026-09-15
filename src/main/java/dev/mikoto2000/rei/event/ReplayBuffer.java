@@ -39,7 +39,10 @@ public final class ReplayBuffer {
   }
   public void purgeRun(String runId) { runs.remove(runId); }
   public void purgeExpired() {
-    runs.values().removeIf(history -> history.completedAt != null
-        && !clock.instant().isBefore(history.completedAt.plus(Duration.ofMinutes(30))));
+    purgeExpired(Set.of());
+  }
+  public void purgeExpired(Set<String> protectedRuns) {
+    runs.entrySet().removeIf(entry -> !protectedRuns.contains(entry.getKey()) && entry.getValue().completedAt != null
+        && !clock.instant().isBefore(entry.getValue().completedAt.plus(Duration.ofMinutes(30))));
   }
 }

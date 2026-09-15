@@ -30,14 +30,20 @@ public final class SseBridge implements AutoCloseable {
     this.bus = bus; this.runs = runs; this.apiKey = apiKey; this.writers = writers; this.heartbeats = heartbeats;
   }
   public Connection connect(String runId, Sink sink) {
+    return connect(runId, null, sink);
+  }
+  public Connection connect(String runId, Long lastEventId, Sink sink) {
     Connection connection;
     synchronized (bus) {
-      runs.get(runId);
+      var run = runs.get(runId);
       connection = new Connection(runId, sink);
+      var replay = bus.subscribe(runId, lastEventId == null ? 0 : lastEventId,
+          event -> connection.offer(new Frame(event)));
+      connection.subscription = replay.subscription();
+      connection.replay = replay.replay();
+      connection.alreadyComplete = run.status().isTerminal() && replay.terminalSequence() != null
+          && lastEventId != null && lastEventId >= replay.terminalSequence();
       connections.add(connection);
-      connection.subscription = bus.subscribe(event -> {
-        if (runId.equals(event.runId())) connection.offer(new Frame(event));
-      });
     }
     connection.start();
     return connection;
@@ -50,8 +56,11 @@ public final class SseBridge implements AutoCloseable {
     private volatile AgentEventBus.Subscription subscription;
     private volatile Future<?> writer;
     private volatile Future<?> heartbeat;
+    private java.util.List<AgentEvent> replay = java.util.List.of();
+    private boolean alreadyComplete;
     private Connection(String runId, Sink sink) { this.runId = runId; this.sink = sink; }
     private void start() {
+      if (alreadyComplete) { finish(null); return; }
       writer = writers.submit(this::write);
       heartbeat = heartbeats.scheduleAtFixedRate(() -> offer(new Frame(null)), 20, 20, TimeUnit.SECONDS);
       if (closed.get()) cleanup();
@@ -61,18 +70,24 @@ public final class SseBridge implements AutoCloseable {
     }
     private void write() {
       try {
+        // Replay has its own bounded snapshot; do not dump 10,000 retained events into a 1,000-item live queue.
+        for (var event : replay) { if (closed.get() || writeEvent(event)) return; }
+        replay = java.util.List.of();
         while (!closed.get()) {
           var frame = queue.take();
           if (frame.event() == null) { sink.heartbeat(); continue; }
-          var event = frame.event();
-          boolean cancelled = runs.get(runId).status() == RunStatus.CANCELLED;
-          var dto = WebApiEventDto.from(event, cancelled, apiKey);
-          sink.event(dto);
-          if (Set.of("agent.run.completed", "agent.run.failed", "agent.run.cancelled").contains(dto.type())) {
-            finish(null); return;
-          }
+          if (writeEvent(frame.event())) return;
         }
       } catch (Exception error) { finish(error); }
+    }
+    private boolean writeEvent(AgentEvent event) throws Exception {
+      boolean cancelled = runs.get(runId).status() == RunStatus.CANCELLED;
+      var dto = WebApiEventDto.from(event, cancelled, apiKey);
+      sink.event(dto);
+      if (Set.of("agent.run.completed", "agent.run.failed", "agent.run.cancelled").contains(dto.type())) {
+        finish(null); return true;
+      }
+      return false;
     }
     private void finish(Throwable error) {
       if (!closed.compareAndSet(false, true)) return;

@@ -24,6 +24,7 @@ public interface AgentEventBus {
       long latestSequence, Long terminalSequence) {}
   default void purgeRun(String runId) {}
   default void purgeExpired() {}
+  default void purgeExpired(java.util.Set<String> protectedRuns) {}
 
   /**
    * イベントを発行する。

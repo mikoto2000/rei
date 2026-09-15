@@ -19,10 +19,20 @@ public class RunService {
     if (bus != null) bus.subscribe(this::onEvent);
   }
   private Object monitor() { return bus == null ? registry : bus; }
-  public RunSnapshot get(String runId) { synchronized (monitor()) { return registry.get(runId); } }
+  public RunSnapshot get(String runId) { synchronized (monitor()) { purgeExpired(); return registry.get(runId); } }
+  public void purgeExpired() {
+    synchronized (monitor()) {
+      var expired = registry.purgeExpired();
+      if (bus != null) {
+        expired.forEach(bus::purgeRun);
+        bus.purgeExpired(registry.runIds());
+      }
+    }
+  }
   public record CancellationResult(boolean accepted, RunSnapshot run) {}
   public CancellationResult cancel(String runId) {
     synchronized (monitor()) {
+      purgeExpired();
       var current = registry.get(runId);
       if (!registry.transition(runId, RunStatus.CANCELLED, null)) return new CancellationResult(false, current);
       if (current.status() == RunStatus.QUEUED && cancelQueued.test(runId)) {

@@ -38,6 +38,7 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
   }
   @Override public synchronized void purgeRun(String runId) { replay.purgeRun(runId); }
   @Override public synchronized void purgeExpired() { replay.purgeExpired(); }
+  @Override public synchronized void purgeExpired(java.util.Set<String> protectedRuns) { replay.purgeExpired(protectedRuns); }
 
   @Override
   public Subscription subscribe(AgentEventListener listener) {
