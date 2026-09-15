@@ -34,7 +34,8 @@ public class ExternalAgentDelegationService {
       Path root;
       Path selected;
       try { root = owner.projectRoot().toRealPath(); selected = ExternalAgentRequest.resolveTarget(root, target); }
-      catch (java.io.IOException | IllegalArgumentException error) { return ExternalAgentResult.rejected("Target must exist inside the current project"); }
+      catch (java.io.IOException error) { return ExternalAgentResult.rejected("Current project is unavailable"); }
+      catch (IllegalArgumentException error) { return ExternalAgentResult.rejected(error.getMessage()); }
       if (!run.claimExternalDelegation()) return ExternalAgentResult.rejected("Only one external delegation is allowed per run");
       String id = UUID.randomUUID().toString();
       String context = context(root, decisions);

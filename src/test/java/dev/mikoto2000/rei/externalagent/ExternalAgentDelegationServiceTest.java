@@ -46,6 +46,21 @@ class ExternalAgentDelegationServiceTest {
     noProject.setRunContext(new AgentRunContext("run", "conversation", root));
     assertEquals(ExternalAgentResult.Status.REJECTED, service.review(noProject, "review", null, "").status());
   }
+  @Test void acceptsAbsoluteTargetAfterMissingTargetWithoutConsumingBudget() throws Exception {
+    Path file = Files.writeString(root.resolve("design.md"), "design").toRealPath();
+    List<ExternalAgentRequest> requests = new ArrayList<>();
+    var service = new ExternalAgentDelegationService((request, cancelled) -> {
+      requests.add(request);
+      return new ExternalAgentResult(ExternalAgentResult.Status.SUCCESS, "ok", List.of(), List.of(), 1, 0, "");
+    }, new CommandCancellationService(), new AgentEventFactory(Clock.systemUTC()), e -> {}, Optional.empty());
+    var run = run("Codex にレビューさせて");
+    var rejected = service.review(run, "review", root.resolve("missing.md").toString(), "");
+    assertEquals(ExternalAgentResult.Status.REJECTED, rejected.status());
+    assertEquals("Current project or target does not exist", rejected.summary());
+    assertTrue(requests.isEmpty());
+    assertTrue(service.review(run, "review", file.toString(), "").success());
+    assertEquals(file, requests.getFirst().target());
+  }
   @Test void failureIsAResultAndRunRemainsActive() {
     List<AgentEvent> events = new ArrayList<>();
     var service = new ExternalAgentDelegationService((r, c) -> { throw new IllegalStateException("credential should not leak"); },

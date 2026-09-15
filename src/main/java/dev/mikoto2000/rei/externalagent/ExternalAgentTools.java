@@ -10,7 +10,8 @@ public class ExternalAgentTools {
   private final ExternalAgentDelegationService service;
   public ExternalAgentTools(ExternalAgentDelegationService service) { this.service = service; }
   @Tool(description = "Workflow: Request a read-only Codex review ONLY when the current user explicitly requests Codex. Once per run. Supply a concise review task and relevant design decisions, never full history or source files. Independently evaluate findings before answering; do not automatically fix anything. External failure does not prevent your own evaluation.")
-  public ExternalAgentResult requestCodexReview(String task, @ToolParam(required = false) String target,
+  public ExternalAgentResult requestCodexReview(String task,
+      @ToolParam(required = false, description = "Existing file or directory inside the current project. Accepts absolute paths or paths relative to the project root. Omit to review the whole project.") String target,
       @ToolParam(required = false) String context, ToolContext toolContext) {
     var run = toolContext == null ? null : (RunExecutionContext) toolContext.getContext().get(RunExecutionContext.KEY);
     return service.review(run, task, target, context);

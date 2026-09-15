@@ -26,9 +26,47 @@ class ExternalAgentPolicyTest {
     assertThrows(IllegalArgumentException.class, () -> ExternalAgentRequest.resolveTarget(root, "../outside"));
     Path outside = Files.createTempDirectory("rei-external-outside");
     try {
-      Files.createSymbolicLink(root.resolve("escape"), outside);
+      createSymbolicLink(root.resolve("escape"), outside);
       assertThrows(IllegalArgumentException.class, () -> ExternalAgentRequest.resolveTarget(root, "escape"));
+      assertThrows(IllegalArgumentException.class,
+          () -> ExternalAgentRequest.resolveTarget(root, root.resolve("escape").toAbsolutePath().toString()));
     } finally { Files.deleteIfExists(outside); }
+  }
+  @Test void acceptsAbsoluteFilesDirectoriesAndProjectRoot() throws Exception {
+    Path directory = Files.createDirectories(root.resolve("docs with spaces"));
+    Path file = Files.writeString(directory.resolve("design.md"), "design");
+    for (Path target : new Path[]{file, directory, root}) {
+      assertEquals(target.toRealPath(), ExternalAgentRequest.resolveTarget(root, target.toAbsolutePath().toString()));
+      assertEquals(target.toRealPath(), ExternalAgentRequest.resolveTarget(root, target.toAbsolutePath().toString().replace('\\', '/')));
+    }
+  }
+  @Test void rejectsExistingAbsoluteTargetsOutsideProject() throws Exception {
+    Path project = Files.createDirectory(root.resolve("project"));
+    Path sibling = Files.createDirectory(root.resolve("project-other"));
+    assertThrows(IllegalArgumentException.class,
+        () -> ExternalAgentRequest.resolveTarget(project, sibling.toAbsolutePath().toString()));
+    assertThrows(IllegalArgumentException.class,
+        () -> ExternalAgentRequest.resolveTarget(project, "../project-other"));
+  }
+  @Test void acceptsAbsoluteTargetThroughProjectAlias() throws Exception {
+    Path project = Files.createDirectory(root.resolve("project"));
+    Path file = Files.writeString(project.resolve("design.md"), "design");
+    Path alias = createSymbolicLink(root.resolve("alias"), project);
+    assertEquals(file.toRealPath(), ExternalAgentRequest.resolveTarget(alias, alias.resolve("design.md").toAbsolutePath().toString()));
+  }
+  @Test void distinguishesMissingAndInvalidTargets() {
+    assertEquals("Current project or target does not exist", assertThrows(IllegalArgumentException.class,
+        () -> ExternalAgentRequest.resolveTarget(root, root.resolve("missing.md").toAbsolutePath().toString())).getMessage());
+    assertTrue(assertThrows(IllegalArgumentException.class,
+        () -> ExternalAgentRequest.resolveTarget(root, "\u0000")).getMessage().contains("invalid"));
+  }
+  private static Path createSymbolicLink(Path link, Path target) throws java.io.IOException {
+    try {
+      return Files.createSymbolicLink(link, target);
+    } catch (FileSystemException | UnsupportedOperationException error) {
+      org.junit.jupiter.api.Assumptions.abort("Symbolic links are unavailable: " + error.getMessage());
+      throw error;
+    }
   }
   @Test void acceptsExplicitJapaneseReviewRequestsWithDifferentParticlesAndWordOrder() {
     for (String text : new String[]{"Codex で design.md をレビューしてください", "Codex を使ってレビューして",
