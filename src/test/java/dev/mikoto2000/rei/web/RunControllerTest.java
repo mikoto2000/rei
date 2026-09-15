@@ -8,6 +8,21 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 class RunControllerTest {
+  @Test void cancellationReturnsCurrentStateAndIsIdempotent() throws Exception {
+    var registry = new RunRegistry(Clock.systemUTC());
+    registry.register(RunRegistryTest.context("run"));
+    var bus = new dev.mikoto2000.rei.event.InMemoryAgentEventBus();
+    var service = new RunService(registry, bus, new dev.mikoto2000.rei.event.AgentEventFactory(Clock.systemUTC()),
+        new dev.mikoto2000.rei.core.service.CommandCancellationService(), id -> true);
+    var mvc = MockMvcBuilders.standaloneSetup(new RunController(service))
+        .setControllerAdvice(new ApiExceptionHandler()).build();
+    mvc.perform(post("/api/v1/runs/run/cancel")).andExpect(status().isAccepted())
+        .andExpect(jsonPath("$.status").value("CANCELLED"));
+    mvc.perform(post("/api/v1/runs/run/cancel")).andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("CANCELLED"));
+    mvc.perform(post("/api/v1/runs/unknown/cancel")).andExpect(status().isNotFound());
+    mvc.perform(post("/api/v1/cancel")).andExpect(status().isNotFound());
+  }
   @Test void exposesStableMetadataAndUnknownRunIs404() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
     registry.register(RunRegistryTest.context("run"));
