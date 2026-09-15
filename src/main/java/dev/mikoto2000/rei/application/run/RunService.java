@@ -5,18 +5,19 @@ import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.event.*;
 import java.util.function.Predicate;
 
-public class RunService {
+public class RunService implements AutoCloseable {
   private final RunRegistry registry;
   private final AgentEventBus bus;
   private final AgentEventFactory events;
   private final CommandCancellationService cancellation;
   private final Predicate<String> cancelQueued;
+  private final AgentEventBus.Subscription subscription;
   public RunService(RunRegistry registry) { this(registry, null, null, null, null); }
   public RunService(RunRegistry registry, AgentEventBus bus, AgentEventFactory events,
       CommandCancellationService cancellation, Predicate<String> cancelQueued) {
     this.registry = registry; this.bus = bus; this.events = events;
     this.cancellation = cancellation; this.cancelQueued = cancelQueued;
-    if (bus != null) bus.subscribe(this::onEvent);
+    subscription = bus == null ? null : bus.subscribe(this::onEvent);
   }
   private Object monitor() { return bus == null ? registry : bus; }
   public RunSnapshot get(String runId) { synchronized (monitor()) { purgeExpired(); return registry.get(runId); } }
@@ -80,4 +81,5 @@ public class RunService {
           ? new RunFailure("ExecutionFailure", "Agent run failed") : null);
     } catch (RunNotFoundException ignored) { /* CLI and auxiliary runs need no Web registry entry. */ }
   }
+  @Override public void close() { if (subscription != null) subscription.unsubscribe(); }
 }
