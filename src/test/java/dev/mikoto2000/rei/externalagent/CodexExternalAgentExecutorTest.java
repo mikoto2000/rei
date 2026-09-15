@@ -5,6 +5,21 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CodexExternalAgentExecutorTest {
+  @Test void nonzeroExitExtractsJsonErrorWithoutForwardingRawEvents() {
+    var result = new CodexExternalAgentExecutor(new CodexProperties(), new ExternalAgentProcessRunner()).parse(
+        new ExternalAgentProcessRunner.Output(ExternalAgentResult.Status.FAILED,
+            "{\"type\":\"turn.failed\",\"error\":{\"message\":\"Model unavailable token=do-not-display\"}}", "", 1, 1, false));
+    assertTrue(result.summary().contains("Model unavailable"));
+    assertFalse(result.summary().contains("do-not-display"));
+    assertFalse(result.summary().contains("turn.failed"));
+  }
+  @Test void nonzeroExitIncludesBoundedRedactedDiagnostic() {
+    var result = new CodexExternalAgentExecutor(new CodexProperties(), new ExternalAgentProcessRunner()).parse(
+        new ExternalAgentProcessRunner.Output(ExternalAgentResult.Status.FAILED, "", "Error loading config.toml: invalid permission profile token=do-not-display " + "x".repeat(4000), 1, 1, false));
+    assertTrue(result.summary().contains("invalid permission profile"));
+    assertFalse(result.summary().contains("do-not-display"));
+    assertTrue(result.summary().length() < 1200);
+  }
   @Test void windowsUsesNativeExecutableAndPreservesExplicitConfiguration() {
     assertEquals("codex.exe", CodexExternalAgentExecutor.resolveCommand("codex", "Windows 11", List.of()));
     assertEquals("codex", CodexExternalAgentExecutor.resolveCommand("codex", "Linux", List.of()));
@@ -113,5 +128,8 @@ class CodexExternalAgentExecutorTest {
     assertTrue(command.stream().anyMatch(s -> s.contains("network={enabled=false}")));
     assertFalse(command.stream().anyMatch(s -> s.contains("danger-full-access") || s.contains("workspace-write") || s.equals("resume")));
     assertFalse(command.contains("untrusted task"));
+    assertTrue(command.stream().anyMatch(s -> s.startsWith("projects={") && s.contains("trust_level=\"untrusted\"")));
+    assertFalse(command.stream().anyMatch(s -> s.startsWith("projects.")));
+    assertEquals(System.getProperty("os.name", "").startsWith("Windows"), command.contains("windows.sandbox=\"elevated\""));
   }
 }

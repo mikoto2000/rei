@@ -26,7 +26,7 @@ public class ExternalAgentProcessRunner {
     ExecutorService readers = Executors.newFixedThreadPool(3, Thread.ofPlatform().daemon().name("external-agent-io-", 0).factory());
     try {
       if (cancelled.getAsBoolean()) return new Output(Status.CANCELLED, "", "", null, 0, false);
-      process = new ProcessBuilder(command).directory(root.toFile()).start();
+      process = new ProcessBuilder(nativeArguments(command)).directory(root.toFile()).start();
       Process running = process;
       Future<?> stdout = readers.submit(() -> drain(running.getInputStream(), capture, false, activity));
       Future<?> stderr = readers.submit(() -> drain(running.getErrorStream(), capture, true, activity));
@@ -69,6 +69,27 @@ public class ExternalAgentProcessRunner {
     }
     return new Output(status, capture.text(false), capture.text(true), exit,
         Duration.ofNanos(System.nanoTime() - start).toMillis(), capture.truncated);
+  }
+  private static List<String> nativeArguments(List<String> command) {
+    // JDK Windows legacy mode preserves shell-style quotes verbatim in the command line;
+    // the native argv parser then consumes them. Encode literal quotes for the native parser.
+    // Safe mode already performs this encoding. Never apply Windows encoding on Unix.
+    if (!System.getProperty("os.name", "").startsWith("Windows")
+        || "false".equalsIgnoreCase(System.getProperty("jdk.lang.Process.allowAmbiguousCommands"))) return command;
+    List<String> encoded = new ArrayList<>(command);
+    for (int i = 1; i < encoded.size(); i++) {
+      String argument = encoded.get(i);
+      if (!argument.contains("\"")) continue;
+      StringBuilder quoted = new StringBuilder("\"");
+      int backslashes = 0;
+      for (char ch : argument.toCharArray()) {
+        if (ch == '\\') { backslashes++; continue; }
+        quoted.append("\\".repeat(ch == '"' ? backslashes * 2 + 1 : backslashes)).append(ch);
+        backslashes = 0;
+      }
+      encoded.set(i, quoted.append("\\".repeat(backslashes * 2)).append('"').toString());
+    }
+    return encoded;
   }
   private static void drain(InputStream stream, Capture capture, boolean stderr, AtomicLong activity) {
     try (stream) {

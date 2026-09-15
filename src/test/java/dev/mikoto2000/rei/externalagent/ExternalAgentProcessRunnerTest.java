@@ -25,6 +25,17 @@ class ExternalAgentProcessRunnerTest {
     assertTrue(output.stdout().contains("hello"));
     assertTrue(output.stderr().contains("diagnostic"));
   }
+  @Test void preservesLiteralQuotesSpacesAndBackslashesInNativeArguments() {
+    List<String> arguments = List.of("permissions.rei_review={filesystem={\":minimal\"=\"read\"}}",
+        "projects.\"C:/project with spaces\".trust_level=\"untrusted\"", "quote=\"x\\\"y\"", "\"trailing\\");
+    List<String> invocation = new ArrayList<>(command("args"));
+    invocation.addAll(arguments);
+    var output = new ExternalAgentProcessRunner().run(invocation, root, "", Duration.ofSeconds(10),
+        Duration.ofSeconds(5), 4096, () -> false);
+    assertEquals(ExternalAgentResult.Status.SUCCESS, output.status());
+    assertEquals(arguments.stream().map(s -> Base64.getEncoder().encodeToString(s.getBytes(java.nio.charset.StandardCharsets.UTF_8))).toList(),
+        output.stdout().lines().toList());
+  }
   @Test void drainsLargeStreamsWithoutGrowingMemory() {
     var output = run("large", Duration.ofSeconds(15), Duration.ofSeconds(5), 4096, new AtomicBoolean());
     assertEquals(0, output.exitCode());
@@ -74,6 +85,7 @@ class ExternalAgentProcessRunnerTest {
   public static class Fixture {
     public static void main(String[] args) throws Exception {
       switch (args[0]) {
+        case "args" -> { for (int i = 1; i < args.length; i++) System.out.println(Base64.getEncoder().encodeToString(args[i].getBytes(java.nio.charset.StandardCharsets.UTF_8))); }
         case "activity" -> { for (int i = 0; i < 8; i++) { System.out.println("tick"); Thread.sleep(250); } }
         case "exit" -> { System.out.println(new String(System.in.readAllBytes())); System.err.println("diagnostic"); System.exit(7); }
         case "large" -> {

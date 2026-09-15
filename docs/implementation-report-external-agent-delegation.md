@@ -142,3 +142,28 @@ Codex 指定のない再依頼、過去の依頼への言及、否定、引用�
 
 修正後の全テスト: 2026-09-15 11:03 JST、**1,706件、失敗0、エラー0、スキップ0、BUILD SUCCESS**。
 前述と同じ JDK 25 コンテナ環境で実行しました。実 Codex のモデル呼び出しは行っていません。
+
+## Windows CLI の実レビュー経路の修正
+
+終了コード1を実 CLI で再現し、次の問題を順に修正しました。
+
+1. JDK 25 の Windows ProcessBuilder の legacy mode では、引数内の TOML 引用符が native argv parser に消費され、
+   permission profile が文字列として誤解釈されていました。runner で literal quote と直前・末尾の backslash を
+   Windows native argv 向けに符号化します。JDK の strict mode と Unix には二重適用しません。
+2. `--strict-config` が `projects."path".trust_level` の override を拒否するため、`projects={"path"={...}}` の
+   テーブルとして渡します。
+3. `--ignore-user-config` により Windows sandbox の選択も失われるため、Windows では `windows.sandbox="elevated"`
+   を明示します。この環境には既に elevated sandbox の設定・初期化があり、それを使用しました。
+4. 非ゼロ終了の stderr / JSON error を捨てず、最大800文字の診断として機密情報を伏せて rei に返します。
+
+実 CLI 検証: Windows JDK 25、npm 同梱 Codex 0.154.0。最終アダプターの `execute` を使用して、
+機密情報のない `README.md` を sandbox 内の `Get-Content` で読み、構造化レビューを受け取りました。
+結果は **SUCCESS、exit code 0、findings 0、warnings 0**。CLI の起動確認だけではなくモデル接続とファイル読み取りを含みます。
+既存プロジェクトの design.md のレビューや修正は、この検証では実行していません。
+CLI 自体は再帰的な deny-read glob の OS 依存に関する警告も出力しています。上記 warnings 0 はレビュー JSON の値です。
+
+Windows のネイティブ引数の回帰テストは JDK の legacy / strict 両モードで成功しました。
+設定形式、stderr / JSON error の診断・redaction・上限も自動テストに追加しています。
+
+最終ソースの全テスト: 2026-09-15 11:35 JST、**1,709件、失敗0、エラー0、スキップ0、BUILD SUCCESS**。
+前述と同じ JDK 25 コンテナ環境で実行しました。実 CLI の検証は別途 Windows 上で行っています。

@@ -39,6 +39,9 @@ Codex ネイティブ実行ファイルを検索します。`.cmd` / `.ps1` shim
 端末で `codex` が動いても、Java が npm の shim を直接起動できるとは限りません。
 また、rei 起動後に変更した PATH は実行中の rei に反映されないため、再起動が必要です。
 起動失敗時は設定キーと、機密情報をマスクした OS のエラーを返します。
+Windows では `windows.sandbox="elevated"` を起動時に明示します。Codex 側でこの sandbox の初期設定が必要です。
+ユーザー設定を読み込まないため、必要な sandbox の選択もアダプター側で指定しています。
+詳細は [Windows sandbox の公式資料](https://learn.chatgpt.com/docs/windows/windows-sandbox) を参照してください。
 毎回独立した ephemeral session とし、resume は使いません。同じ rei run の外部委譲は最大1回です。
 global concurrency の追加設定は Phase 1 では提供しません。
 
@@ -96,6 +99,7 @@ JSON parse 失敗は `SUCCESS_WITH_WARNINGS` とし、bounded raw output は ada
 
 外部実行の unavailable / authentication / nonzero exit / timeout は結果値として rei に返します。
 rei run 自体は継続し、Codex の結果がない理由と rei 自身の評価を回答できます。ユーザーの cancel は run を終了します。
+nonzero exit では stderr または JSON の error / turn.failed から短い診断を返し、機密情報をマスクします。
 
 イベントは `delegation.started`, `delegation.completed`, `delegation.failed`, `delegation.cancelled`。
 各 invocation は delegationId を持ち、runId / projectId と関連付けます。terminal event は一つだけです。

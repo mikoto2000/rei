@@ -80,16 +80,36 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
   }
   List<String> command(ExternalAgentRequest request, Path schema) {
     String project = request.projectRoot().toString().replace('\\', '/').replace("\"", "\\\"");
-    return List.of(executable(), "--ask-for-approval", "never", "exec", "--ignore-user-config", "--ignore-rules",
+    List<String> command = new ArrayList<>(List.of(executable(), "--ask-for-approval", "never", "exec", "--ignore-user-config", "--ignore-rules",
         "--strict-config", "--ephemeral", "--json", "--color", "never", "--skip-git-repo-check",
         "--cd", request.projectRoot().toString(), "--output-schema", schema.toString(),
-        "-c", "projects.\"" + project + "\".trust_level=\"untrusted\"",
+        "-c", "projects={\"" + project + "\"={trust_level=\"untrusted\"}}",
         "-c", "default_permissions=\"rei_review\"",
         "-c", "permissions.rei_review={filesystem={\":minimal\"=\"read\",\":workspace_roots\"={\".\"=\"read\",\"**/.env\"=\"deny\",\"**/.env.*\"=\"deny\",\"**/*.pem\"=\"deny\",\"**/*.key\"=\"deny\",\"**/credentials.*\"=\"deny\",\"**/secrets.*\"=\"deny\"}},network={enabled=false}}",
         "-c", "web_search=\"disabled\"", "-c", "features.apps=false", "-c", "features.multi_agent=false",
         "-c", "features.hooks=false", "-c", "features.memories=false", "-c", "features.goals=false",
         "-c", "shell_environment_policy.inherit=\"core\"", "-c", "history.persistence=\"none\"",
-        "-c", "mcp_servers={}", "-c", "plugins={}", "-c", "notify=[]", "-c", "project_doc_max_bytes=0", "-");
+        "-c", "mcp_servers={}", "-c", "plugins={}", "-c", "notify=[]", "-c", "project_doc_max_bytes=0", "-"));
+    if (System.getProperty("os.name", "").startsWith("Windows")) {
+      command.add(command.size() - 1, "-c");
+      command.add(command.size() - 1, "windows.sandbox=\"elevated\"");
+    }
+    return List.copyOf(command);
+  }
+  private String failureDiagnostic(ExternalAgentProcessRunner.Output output) {
+    String diagnostic = output.stderr();
+    for (String line : output.stdout().split("\\R")) {
+      try {
+        JsonNode event = mapper.readTree(line);
+        String message = switch (event.path("type").asText()) {
+          case "error" -> event.path("message").asText();
+          case "turn.failed" -> event.path("error").path("message").asText();
+          default -> "";
+        };
+        if (!message.isBlank()) diagnostic = message;
+      } catch (Exception ignored) { }
+    }
+    return ExternalAgentDelegationService.bounded(dev.mikoto2000.rei.event.CredentialRedactor.redact(diagnostic), 800);
   }
   ExternalAgentResult parse(ExternalAgentProcessRunner.Output output) {
     List<String> warnings = new ArrayList<>();
@@ -103,7 +123,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
         case INACTIVITY_TIMEOUT -> "Codex review inactivity timeout";
         case CANCELLED -> "Codex review cancelled";
         default -> (output.stderr() + output.stdout()).toLowerCase(Locale.ROOT).matches("(?s).*(unauthorized|authentication|not logged in|401).*" )
-            ? "Codex CLI authentication failed" : "Codex CLI exited unsuccessfully";
+            ? "Codex CLI authentication failed" : "Codex CLI exited unsuccessfully. Diagnostic: " + failureDiagnostic(output);
       };
       return new ExternalAgentResult(output.status(), reason, List.of(), warnings, output.duration(), output.exitCode(), output.stdout());
     }
