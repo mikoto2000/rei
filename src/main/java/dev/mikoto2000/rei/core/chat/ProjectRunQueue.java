@@ -8,9 +8,10 @@ public final class ProjectRunQueue {
   private static final class Job {
     final String projectId, runId;
     final Runnable work;
+    final Runnable scheduled;
     boolean running;
-    Job(String projectId, String runId, Runnable work) {
-      this.projectId = projectId; this.runId = runId; this.work = work;
+    Job(String projectId, String runId, Runnable work, Runnable scheduled) {
+      this.projectId = projectId; this.runId = runId; this.work = work; this.scheduled = scheduled;
     }
   }
   private final Map<String, ArrayDeque<Job>> projects = new HashMap<>();
@@ -18,7 +19,10 @@ public final class ProjectRunQueue {
   public ProjectRunQueue(Executor executor) { this.executor = executor; }
 
   public boolean enqueue(String projectId, String runId, Runnable work) {
-    var job = new Job(projectId, runId, work);
+    return enqueue(projectId, runId, work, () -> {});
+  }
+  public boolean enqueue(String projectId, String runId, Runnable work, Runnable scheduled) {
+    var job = new Job(projectId, runId, work, scheduled);
     boolean first;
     synchronized (this) {
       var queue = projects.computeIfAbsent(projectId, ignored -> new ArrayDeque<>());
@@ -49,6 +53,7 @@ public final class ProjectRunQueue {
   }
   private void dispatch(Job job) {
     try {
+      job.scheduled.run();
       executor.execute(() -> {
         synchronized (this) {
           var queue = projects.get(job.projectId);
