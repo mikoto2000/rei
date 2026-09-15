@@ -191,6 +191,7 @@ public class ChatExecutionService {
         new ProgressEvaluator(context.projectRoot(),
             actionPlan), eventFactory, eventPublisher);
     execution.setRunContext(context);
+    execution.setUserRequest(promptText);
     execution.setInterventions(interventions, text -> {
       if (chatMemory != null) chatMemory.add(context.conversationId(), java.util.List.of(new UserMessage(text)));
       appendConversationLog(context.conversationId(), "user", text);

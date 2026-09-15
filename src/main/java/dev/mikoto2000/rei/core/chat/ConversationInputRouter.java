@@ -104,6 +104,24 @@ public final class ConversationInputRouter {
     return disposition.get();
   }
 
+  /** Explicit commands retain their own run and authorization even while a chat is active. */
+  public Disposition submitNewRun(Path root, String conversation, String prompt) {
+    Path location = root.toAbsolutePath().normalize();
+    String projectId = dev.mikoto2000.rei.core.project.ProjectStorage.projectId(conversation);
+    String key = projectId == null ? location.toString() : projectId;
+    var created = slot(location, conversation, projectId, prompt);
+    var launch = new java.util.concurrent.atomic.AtomicBoolean();
+    active.compute(key, (ignored, existing) -> {
+      if (existing == null) { launch.set(true); return created; }
+      Slot tail = existing;
+      while (tail.next != null) tail = tail.next;
+      tail.next = created;
+      return existing;
+    });
+    if (launch.get()) { changed(); dispatch(key, created); }
+    return launch.get() ? Disposition.STARTED : Disposition.QUEUED;
+  }
+
   private Slot slot(Path root, String conversation, String projectId, String prompt) {
     var context = new AgentRunContext(UUID.randomUUID().toString(), conversation, root, projectId);
     return new Slot(context, prompt, new UserInterventionQueue(entry -> received.accept(context, entry)));

@@ -24,6 +24,20 @@ public class RunExecutionContext {
   private boolean cancelled;
   private boolean completed;
   private boolean iterationOpen;
+  private String userRequest = "";
+  private boolean externalDelegationUsed;
+  private dev.mikoto2000.rei.externalagent.ExternalAgentResult externalReviewResult;
+  public synchronized dev.mikoto2000.rei.externalagent.ExternalAgentResult externalReviewResult() { return externalReviewResult; }
+  public synchronized void setExternalReviewResult(dev.mikoto2000.rei.externalagent.ExternalAgentResult result) { externalReviewResult = result; }
+  public synchronized void setUserRequest(String request) { userRequest = request; }
+  public synchronized String userRequest() { return userRequest; }
+  public synchronized boolean externalDelegationUsed() { return externalDelegationUsed; }
+  public synchronized boolean claimExternalDelegation() {
+    checkActive();
+    if (externalDelegationUsed) return false;
+    externalDelegationUsed = true;
+    return true;
+  }
   private dev.mikoto2000.rei.core.chat.AgentRunContext runContext;
   public void setRunContext(dev.mikoto2000.rei.core.chat.AgentRunContext context) { this.runContext = context; }
   public dev.mikoto2000.rei.core.chat.AgentRunContext runContext() { return runContext; }
@@ -40,6 +54,7 @@ public class RunExecutionContext {
     if (cancelled) return List.of();
     if (interventions == null) return List.of();
     return interventions.drainEntries().stream().map(entry -> {
+      userRequest = entry.text();
       interventionApplied.accept(entry.text());
       publisher.publish(factory.intervention(runId, entry.id(), entry.text(), true).withOwnership(runContext));
       return (org.springframework.ai.chat.messages.Message) new org.springframework.ai.chat.messages.UserMessage(entry.text());

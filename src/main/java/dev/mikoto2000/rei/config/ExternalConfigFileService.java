@@ -85,6 +85,13 @@ public class ExternalConfigFileService {
               image: openai
 
         rei:
+          external-agents:
+            codex:
+              enabled: true
+              command: codex
+              total-timeout: 20m
+              inactivity-timeout: 5m
+              max-output-bytes: 4194304
           embedding:
             enabled: ${REI_EMBEDDING_ENABLED:true}
           rerank:

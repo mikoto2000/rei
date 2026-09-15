@@ -105,6 +105,8 @@ public class StagnationChatModel implements ChatModel {
         try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext())) {
         context.checkActive();
         String name = getToolDefinition().name();
+        if (context.externalDelegationUsed())
+          return "External review is complete or already attempted. Evaluate the supplied result independently and answer; no further tool execution or automatic fixes are allowed in this review run.";
         var before = context.evaluator().beforeTool(name, input);
         try {
           String result = toolContext == null ? delegateTool.call(input) : delegateTool.call(input, toolContext);
