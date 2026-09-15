@@ -5,6 +5,33 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CodexExternalAgentExecutorTest {
+  @Test void windowsUsesNativeExecutableAndPreservesExplicitConfiguration() {
+    assertEquals("codex.exe", CodexExternalAgentExecutor.resolveCommand("codex", "Windows 11", List.of()));
+    assertEquals("codex", CodexExternalAgentExecutor.resolveCommand("codex", "Linux", List.of()));
+    assertEquals("codex", CodexExternalAgentExecutor.resolveCommand("codex", "Darwin", List.of()));
+    assertEquals("C:\\Tools\\codex.exe", CodexExternalAgentExecutor.resolveCommand("C:\\Tools\\codex.exe", "Windows 11", List.of()));
+  }
+  @Test void resolvesNpmNativeBinaryWithoutInvokingShellAndPrefersPathExecutable() throws Exception {
+    var npm = java.nio.file.Files.createDirectories(root.resolve("npm with spaces"));
+    boolean arm = System.getProperty("os.arch", "").equals("aarch64");
+    var binary = npm.resolve("node_modules/@openai/codex/node_modules/@openai/codex-win32-" + (arm ? "arm64" : "x64")
+        + "/vendor/" + (arm ? "aarch64" : "x86_64") + "-pc-windows-msvc/bin/codex.exe");
+    java.nio.file.Files.createDirectories(binary.getParent());
+    java.nio.file.Files.createFile(binary);
+    java.nio.file.Files.createFile(npm.resolve("codex.cmd"));
+    assertEquals(binary.toString(), CodexExternalAgentExecutor.resolveCommand("codex", "Windows 11", List.of(npm)));
+    var nativeDirectory = java.nio.file.Files.createDirectories(root.resolve("native"));
+    var nativeBinary = java.nio.file.Files.createFile(nativeDirectory.resolve("codex.exe"));
+    assertEquals(nativeBinary.toString(), CodexExternalAgentExecutor.resolveCommand("codex", "Windows 11", List.of(npm, nativeDirectory)));
+  }
+  @Test void startupFailureExplainsConfigurationAndOsError() {
+    var result = new CodexExternalAgentExecutor(new CodexProperties(), new ExternalAgentProcessRunner()).parse(
+        new ExternalAgentProcessRunner.Output(ExternalAgentResult.Status.UNAVAILABLE, "", "CreateProcess error=2 token=do-not-display", null, 1, false));
+    assertTrue(result.summary().contains("rei.external-agents.codex.command"));
+    assertTrue(result.summary().contains("codex.exe"));
+    assertTrue(result.summary().contains("CreateProcess error=2"));
+    assertFalse(result.summary().contains("do-not-display"));
+  }
   @Test void authenticationFailureInJsonStdoutIsReportedWithoutLeakingText() {
     var result = new CodexExternalAgentExecutor(new CodexProperties(), new ExternalAgentProcessRunner()).parse(
         new ExternalAgentProcessRunner.Output(ExternalAgentResult.Status.FAILED, "{\"error\":\"401 unauthorized\"}", "", 1, 1, false));
@@ -17,13 +44,15 @@ class CodexExternalAgentExecutorTest {
       @Override public Output run(List<String> command, java.nio.file.Path cwd, String input, java.time.Duration total,
           java.time.Duration idle, int limit, java.util.function.BooleanSupplier cancelled) {
         calls.incrementAndGet();
-        assertEquals(List.of("codex", "exec", "--help"), command);
+        assertEquals(List.of("test-codex", "exec", "--help"), command);
         return new Output(ExternalAgentResult.Status.SUCCESS, "old CLI --sandbox", "", 0, 1, false);
       }
     };
     var request = new ExternalAgentRequest(ExternalAgentRequest.Agent.CODEX, ExternalAgentRequest.Action.REVIEW,
         "review", root, null, "", "run", "id");
-    assertEquals(ExternalAgentResult.Status.UNAVAILABLE, new CodexExternalAgentExecutor(new CodexProperties(), runner).execute(request, () -> false).status());
+    var properties = new CodexProperties();
+    properties.setCommand("test-codex");
+    assertEquals(ExternalAgentResult.Status.UNAVAILABLE, new CodexExternalAgentExecutor(properties, runner).execute(request, () -> false).status());
     assertEquals(1, calls.get());
   }
   @Test void capableCliUsesStdinSchemaAndCanonicalCwdAndRemovesTemporarySchema() {

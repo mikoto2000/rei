@@ -22,7 +22,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
         || properties.getInactivityTimeout() == null || properties.getInactivityTimeout().isNegative() || properties.getInactivityTimeout().isZero()
         || properties.getMaxOutputBytes() < 1) return ExternalAgentResult.rejected("Invalid Codex execution limits");
     long start = System.nanoTime();
-    var capability = runner.run(List.of(properties.getCommand(), "exec", "--help"), request.projectRoot(), "",
+    var capability = runner.run(List.of(executable(), "exec", "--help"), request.projectRoot(), "",
         min(properties.getTotalTimeout(), Duration.ofSeconds(10)), min(properties.getInactivityTimeout(), Duration.ofSeconds(10)),
         65536, cancelled);
     if (capability.status() != Status.SUCCESS) return parse(capability);
@@ -48,9 +48,39 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
       if (schema != null) try { Files.deleteIfExists(schema); } catch (java.io.IOException ignored) { }
     }
   }
+  private String executable() {
+    List<Path> directories = new ArrayList<>();
+    for (String entry : Objects.toString(System.getenv("PATH"), "").split(java.io.File.pathSeparator)) {
+      try {
+        Path path = Path.of(entry.replace("\"", ""));
+        if (path.isAbsolute()) directories.add(path);
+      } catch (InvalidPathException ignored) { }
+    }
+    return resolveCommand(properties.getCommand(), System.getProperty("os.name", ""), directories);
+  }
+  /** Windows CreateProcess cannot execute npm shell shims. Resolve only native binaries. */
+  static String resolveCommand(String configured, String osName, List<Path> directories) {
+    if (!"codex".equals(configured) || !osName.startsWith("Windows")) return configured;
+    for (Path directory : directories) {
+      Path binary = directory.resolve("codex.exe");
+      if (Files.isRegularFile(binary)) return binary.toString();
+    }
+    String arch = System.getProperty("os.arch", "").equals("aarch64") ? "arm64" : "x64";
+    String triple = arch.equals("arm64") ? "aarch64-pc-windows-msvc" : "x86_64-pc-windows-msvc";
+    for (Path directory : directories) {
+      for (String packagePath : List.of("node_modules/@openai/codex/node_modules/@openai/codex-win32-" + arch,
+          "node_modules/@openai/codex-win32-" + arch, "node_modules/@openai/codex")) {
+        for (String bin : List.of("bin", "codex")) {
+          Path binary = directory.resolve(packagePath + "/vendor/" + triple + "/" + bin + "/codex.exe");
+          if (Files.isRegularFile(binary)) return binary.toString();
+        }
+      }
+    }
+    return "codex.exe";
+  }
   List<String> command(ExternalAgentRequest request, Path schema) {
     String project = request.projectRoot().toString().replace('\\', '/').replace("\"", "\\\"");
-    return List.of(properties.getCommand(), "--ask-for-approval", "never", "exec", "--ignore-user-config", "--ignore-rules",
+    return List.of(executable(), "--ask-for-approval", "never", "exec", "--ignore-user-config", "--ignore-rules",
         "--strict-config", "--ephemeral", "--json", "--color", "never", "--skip-git-repo-check",
         "--cd", request.projectRoot().toString(), "--output-schema", schema.toString(),
         "-c", "projects.\"" + project + "\".trust_level=\"untrusted\"",
@@ -66,7 +96,9 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     if (output.truncated()) warnings.add("Process output was truncated at the configured byte limit");
     if (output.status() != Status.SUCCESS) {
       String reason = switch (output.status()) {
-        case UNAVAILABLE -> "Codex CLI is not available or could not be started";
+        case UNAVAILABLE -> "Codex CLI could not be started. Check rei.external-agents.codex.command and the PATH inherited by rei; "
+            + "on Windows, configure the absolute path to native codex.exe (not codex.cmd or codex.ps1). OS error: "
+            + ExternalAgentDelegationService.bounded(dev.mikoto2000.rei.event.CredentialRedactor.redact(output.stderr()), 800);
         case TOTAL_TIMEOUT -> "Codex review total timeout";
         case INACTIVITY_TIMEOUT -> "Codex review inactivity timeout";
         case CANCELLED -> "Codex review cancelled";

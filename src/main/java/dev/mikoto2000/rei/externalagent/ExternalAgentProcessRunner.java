@@ -51,6 +51,8 @@ public class ExternalAgentProcessRunner {
       interrupted = true; status = Status.CANCELLED;
     } catch (IOException error) {
       status = Status.UNAVAILABLE;
+      byte[] diagnostic = dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()).getBytes(StandardCharsets.UTF_8);
+      capture.add(diagnostic, diagnostic.length, true);
     } catch (ExecutionException | TimeoutException error) {
       if (status == Status.SUCCESS) status = Status.FAILED;
     } finally {

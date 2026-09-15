@@ -56,6 +56,7 @@ class ExternalAgentProcessRunnerTest {
         "", Duration.ofSeconds(1), Duration.ofSeconds(1), 1024, () -> false);
     assertEquals(ExternalAgentResult.Status.UNAVAILABLE, result.status());
     assertNull(result.exitCode());
+    assertTrue(result.stderr().contains("missing-command"));
   }
   @Test void normalExitAndPeriodicActivity() {
     var result = run("activity", Duration.ofSeconds(8), Duration.ofSeconds(2), 4096, new AtomicBoolean());

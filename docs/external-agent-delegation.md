@@ -31,7 +31,12 @@ rei:
 ```
 
 `command` は一つの実行ファイル名またはパスです。引数付き shell string ではありません。
-Windows で npm の `.cmd` / `.ps1` shim しか PATH にない場合は Codex のネイティブ `.exe` を指定してください。
+Windows で既定の `command: codex` を使う場合、PATH 上の `codex.exe`、次に PATH の npm ディレクトリ内の
+Codex ネイティブ実行ファイルを検索します。`.cmd` / `.ps1` shim を shell 経由で実行することはありません。
+明示した実行ファイルパスはそのまま使用します。見つからない場合は `codex.exe` の絶対パスを設定してください。
+端末で `codex` が動いても、Java が npm の shim を直接起動できるとは限りません。
+また、rei 起動後に変更した PATH は実行中の rei に反映されないため、再起動が必要です。
+起動失敗時は設定キーと、機密情報をマスクした OS のエラーを返します。
 毎回独立した ephemeral session とし、resume は使いません。同じ rei run の外部委譲は最大1回です。
 global concurrency の追加設定は Phase 1 では提供しません。
 
@@ -40,7 +45,8 @@ global concurrency の追加設定は Phase 1 では提供しません。
 実行時に `codex exec --help` で必要な capability を確認します。単なる旧式の `--sandbox read-only` だけでは
 プロジェクト外の読み取りを制限できないため、現在の permission profile と isolated configuration を必要とします。
 `--ignore-user-config`, `--ignore-rules`, `--strict-config`, `--ephemeral`, `--json`, `--output-schema`
-を持たない CLI は起動拒否します。ローカルで調査した 0.106.0 はこの条件を満たしません。
+を持たない CLI は起動拒否します。初回調査時の 0.106.0 はこの条件を満たしません。
+Windows 起動修正時に確認した npm 同梱 0.154.0 はこれらのオプションを備えています。
 profile 設定に未対応の CLI も strict config で失敗し、制約を緩める再実行はしません。
 
 - approval: `never`

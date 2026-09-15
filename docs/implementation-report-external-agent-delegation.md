@@ -105,3 +105,25 @@ Total time: 04:00 min
 
 Codex による implementation / fix / commit / push、他の External Agent、registry、並列外部実行、resume、
 自動委譲と自動再レビューは未実装です。
+
+## Windows 起動失敗への追加修正
+
+`UNAVAILABLE` が返り、OS の起動エラーが失われる問題を修正しました。
+Windows の PATH を npm の shim と OS のディレクトリだけにして JDK 25 の `ProcessBuilder` で検証すると、
+`codex` と `codex.exe` は `CreateProcess error=2` で失敗し、npm 内のネイティブ実行ファイルの絶対パスでは成功しました。
+報告された rei プロセスの実際の PATH は取得していないため、この再現条件と一致していたかは未確認です。
+
+既定の `command: codex` は Windows で PATH 上の native executable を探し、見つからなければ
+npm の Windows platform package 内を探します。明示設定したパスは変更しません。
+shell shim は実行せず、既存の read-only 制約は維持しています。
+起動例外は既存 credential redaction と出力上限を通し、設定キーとともに rei へ返します。
+
+回帰テストを先に追加して未実装による Red を確認し、探索処理と診断を実装しました。
+Windows / Linux / Darwin の分岐、明示パス、空白を含む npm パス、PATH 上の exe の優先、
+起動失敗の診断と機密情報のマスクを確認します。
+Windows の実 runner から npm 同梱 Codex 0.154.0 の `exec --help` が終了コード0で完了することも確認しました。
+モデルを呼ぶ実レビューは今回も実行していません。
+
+修正後の全テスト: 2026-09-15 10:18 JST、**1,704件、失敗0、エラー0、スキップ0、BUILD SUCCESS**。
+前述と同じ JDK 25 / Maven / Mockito javaagent のコンテナ環境で、テストを除外せず実行しました。
+Windows JDK 25 では、自動探索した npm 内の native executable で `exec --help` の成功も確認しています。
