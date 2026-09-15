@@ -21,7 +21,7 @@ class SessionWorkingSetTest {
     try (var application = new AnnotationConfigApplicationContext()) {
       application.registerBean(Clock.class, Clock::systemUTC);
       application.registerBean(AgentEventFactory.class, () -> new AgentEventFactory(Clock.systemUTC()));
-      application.registerBean(AgentEventBus.class, InMemoryAgentEventBus::new);
+      application.registerBean(AgentEventBus.class, () -> new InMemoryAgentEventBus());
       application.register(ProjectScopeConfiguration.class, WorkingSetConfiguration.class);
       application.refresh();
       var working = application.getBean(WorkingSet.class);

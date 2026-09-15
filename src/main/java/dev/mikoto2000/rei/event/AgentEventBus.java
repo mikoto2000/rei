@@ -16,6 +16,15 @@ public interface AgentEventBus {
    */
   Subscription subscribe(AgentEventListener listener);
 
+  /** Atomically snapshots replay and registers a live listener beyond the snapshot boundary. */
+  default ReplaySubscription subscribe(String runId, long fromSequence, AgentEventListener listener) {
+    throw new UnsupportedOperationException("Replay is not supported by this event bus");
+  }
+  record ReplaySubscription(java.util.List<AgentEvent> replay, Subscription subscription,
+      long latestSequence, Long terminalSequence) {}
+  default void purgeRun(String runId) {}
+  default void purgeExpired() {}
+
   /**
    * イベントを発行する。
    *

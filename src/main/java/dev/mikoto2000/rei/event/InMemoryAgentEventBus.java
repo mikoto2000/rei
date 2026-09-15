@@ -23,6 +23,21 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
   private final AtomicLong sequence = new AtomicLong(0L);
   private final java.util.ArrayDeque<AgentEvent> pending = new java.util.ArrayDeque<>();
   private boolean dispatching;
+  private final ReplayBuffer replay;
+
+  public InMemoryAgentEventBus() { this(new ReplayBuffer(10_000, java.time.Clock.systemUTC())); }
+  private InMemoryAgentEventBus(ReplayBuffer replay) { this.replay = replay; }
+  public static InMemoryAgentEventBus withReplayBuffer(ReplayBuffer replay) { return new InMemoryAgentEventBus(replay); }
+
+  @Override public synchronized ReplaySubscription subscribe(String runId, long fromSequence, AgentEventListener listener) {
+    var snapshot = replay.snapshot(runId, fromSequence);
+    var subscription = subscribe(event -> {
+      if (runId.equals(event.runId()) && event.sequence() > snapshot.latestSequence()) listener.onEvent(event);
+    });
+    return new ReplaySubscription(snapshot.events(), subscription, snapshot.latestSequence(), snapshot.terminalSequence());
+  }
+  @Override public synchronized void purgeRun(String runId) { replay.purgeRun(runId); }
+  @Override public synchronized void purgeExpired() { replay.purgeExpired(); }
 
   @Override
   public Subscription subscribe(AgentEventListener listener) {
@@ -55,6 +70,7 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
     try {
       while (!pending.isEmpty()) {
         AgentEvent sequenced = pending.removeFirst();
+        replay.append(sequenced);
         for (AgentEventListener listener : listeners) {
           try {
             listener.onEvent(sequenced);
