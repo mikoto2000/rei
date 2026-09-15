@@ -11,9 +11,10 @@ public class SseController {
   private final SseBridge bridge;
   public SseController(SseBridge bridge) { this.bridge = bridge; }
   @GetMapping(value = "/api/v1/runs/{runId}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  public SseEmitter events(@PathVariable String runId) {
+  public SseEmitter events(@PathVariable String runId,
+      @RequestHeader(value = "Last-Event-ID", required = false) Long lastEventId) {
     var emitter = new SseEmitter(0L);
-    var connection = bridge.connect(runId, new SseBridge.Sink() {
+    var connection = bridge.connect(runId, lastEventId, new SseBridge.Sink() {
       public void event(WebApiEventDto event) throws Exception {
         emitter.send(SseEmitter.event().name(event.type()).id(Long.toString(event.sequence())).data(event, MediaType.APPLICATION_JSON));
       }

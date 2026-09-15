@@ -10,6 +10,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.assertj.core.api.Assertions.*;
 
 class SseControllerTest {
+  @Test void lastEventIdResumesAndReplayGapIsRejectedBeforeStreaming() throws Exception {
+    var registry = new RunRegistry(Clock.systemUTC());
+    registry.register(RunRegistryTest.context("run"));
+    var bus = InMemoryAgentEventBus.withReplayBuffer(new ReplayBuffer(2, Clock.systemUTC()));
+    var events = new AgentEventFactory(Clock.systemUTC());
+    bus.publish(events.runStarted("run", "one", null));
+    bus.publish(events.runStarted("run", "two", null));
+    bus.publish(events.runCompleted("run", 1));
+    try (var bridge = new SseBridge(bus, new RunService(registry), "")) {
+      var mvc = MockMvcBuilders.standaloneSetup(new SseController(bridge)).setControllerAdvice(new ApiExceptionHandler()).build();
+      mvc.perform(get("/api/v1/runs/run/events").header("Last-Event-ID", "0"))
+          .andExpect(status().isConflict()).andExpect(request().asyncNotStarted());
+      mvc.perform(get("/api/v1/runs/run/events").header("Last-Event-ID", "invalid"))
+          .andExpect(status().isBadRequest()).andExpect(request().asyncNotStarted());
+      var result = mvc.perform(get("/api/v1/runs/run/events").header("Last-Event-ID", "2"))
+          .andExpect(request().asyncStarted()).andReturn();
+      result.getAsyncResult(5000);
+      mvc.perform(asyncDispatch(result)).andExpect(status().isOk());
+      assertThat(result.getResponse().getContentAsString()).contains("id:3").doesNotContain("id:2");
+    }
+  }
   @Test void streamsSseFramesAndUnknownRunIs404BeforeStartingStream() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
     registry.register(RunRegistryTest.context("run"));
