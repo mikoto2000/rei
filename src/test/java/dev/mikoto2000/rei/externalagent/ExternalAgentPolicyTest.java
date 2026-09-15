@@ -30,4 +30,17 @@ class ExternalAgentPolicyTest {
       assertThrows(IllegalArgumentException.class, () -> ExternalAgentRequest.resolveTarget(root, "escape"));
     } finally { Files.deleteIfExists(outside); }
   }
+  @Test void acceptsExplicitJapaneseReviewRequestsWithDifferentParticlesAndWordOrder() {
+    for (String text : new String[]{"Codex で design.md をレビューしてください", "Codex を使ってレビューして",
+        "design.md のレビューを Codex に依頼してください", "Codex にレビューをお願いします",
+        "更新した design.md を Codex にレビューしてもらって、指摘を修正してください"})
+      assertTrue(ExternalAgentAuthorization.explicitRequest(text), text);
+  }
+  @Test void acceptsExplicitDelegationFollowUpWithoutRepeatingTheWordReview() {
+    assertTrue(ExternalAgentAuthorization.explicitRequest("もう一回 Codex に依頼を出して、指摘を修正してください"));
+    assertTrue(ExternalAgentAuthorization.explicitRequest("もう一度 Codex に依頼して"));
+    for (String text : new String[]{"もう一回依頼を出して", "Codex に依頼を出した", "Codex に依頼を出さないで",
+        "Codex に依頼しないで", "Codex に依頼を出してという文章を説明して", "「Codex に依頼を出して」を翻訳して"})
+      assertFalse(ExternalAgentAuthorization.explicitRequest(text), text);
+  }
 }

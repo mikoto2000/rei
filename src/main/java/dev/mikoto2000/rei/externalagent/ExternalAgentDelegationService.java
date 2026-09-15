@@ -25,7 +25,8 @@ public class ExternalAgentDelegationService {
   }
   public ExternalAgentResult review(RunExecutionContext run, String task, String target, String decisions) {
     if (run == null || !ExternalAgentAuthorization.explicitRequest(run.userRequest()))
-      return ExternalAgentResult.rejected("Codex requires an explicit user review request in this run");
+      return ExternalAgentResult.rejected("Codex requires an explicit user request in this run. Do not retry with different tool arguments. "
+          + "Ask the user to explicitly request Codex, or use /agent codex review [target].");
     var owner = run.runContext();
     if (owner == null || owner.projectId() == null || !Files.isDirectory(owner.projectRoot()))
       return ExternalAgentResult.rejected("No current project is available");

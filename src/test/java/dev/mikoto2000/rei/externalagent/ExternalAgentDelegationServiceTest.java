@@ -28,7 +28,7 @@ class ExternalAgentDelegationServiceTest {
       requests.add(request);
       return new ExternalAgentResult(ExternalAgentResult.Status.SUCCESS, "No issues", List.of(), List.of(), 12, 0, "raw");
     }, new CommandCancellationService(), new AgentEventFactory(Clock.systemUTC()), events::add, Optional.empty());
-    var run = run("Codex にこの設計をレビューさせて");
+    var run = run("もう一回 Codex に依頼を出して、指摘を修正してください");
     assertTrue(service.review(run, "design", null, "decision").success());
     assertEquals(ExternalAgentResult.Status.REJECTED, service.review(run, "again", null, "").status());
     assertEquals(1, requests.size());
