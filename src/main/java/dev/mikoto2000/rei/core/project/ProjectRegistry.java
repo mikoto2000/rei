@@ -26,6 +26,10 @@ public final class ProjectRegistry {
     return entry.context();
   }
   public synchronized List<ProjectContext> list() { return read().stream().map(Entry::context).toList(); }
+  /** Web callers may resolve registered identities only; never interpret input as a path. */
+  public synchronized Optional<ProjectContext> resolveById(String id) {
+    return read().stream().filter(entry -> entry.id().equals(id)).findFirst().map(Entry::context);
+  }
   public synchronized void relocate(String id, Path path) {
     Path canonical = canonical(path);
     var entries = read();
