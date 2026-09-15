@@ -177,7 +177,7 @@ Web API の DTO が返す `sessionId` / `turnId` は、既存コードの ID 概
 
 - **`sessionId` は既存の `conversationId` に対応する**（論理会話の ID。Spring AI ChatMemory / `ConversationTurnStore` / `ConversationLogStore` のキー）。
   - Web API では session ごとに一意な conversationId を採番する。既存の `chat:main` 固定ではなく、`ConversationIds.chat(sessionId)` のように session 単位で生成する。
-  - `sessionId` の存在判定（新規 / 継続 / `409` / `404`）は、この conversationId をキーに `ConversationTurnStore` 等で行う。
+  - `sessionId` の存在判定（新規 / 継続 / `409` / `404`）は、この conversationId をキーに **`SessionRegistry`** で行う。`ConversationTurnStore` はターン一覧しか持たず、未登録 ID の `read()` は空一覧を返すため、存在判定には使えない。`SessionRegistry` は submit 受理時に sessionId → projectId を登録し、ターンの有無と独立して存在・所属 project を判定する。
 - **`turnId` は既存の `runId` に対応する**（1 run = 1 turn）。
   - 既存コードに独立した `turnId` は存在しない（`ConversationTurnStore.Turn` は `runId` をターン識別子として使う）。
   - したがって `ChatResponse` / `RunResponse` の `turnId` は `runId` と**同一値**とする。
@@ -353,7 +353,7 @@ Web API 化すると複数クライアント・複数 run の並行実行が普�
 
 #### 受け入れ基準
 
-1. THE サーバー SHALL `POST /api/v1/chat` を提供し、`ConversationInputRouter.submit()` で非同期実行を開始して `202 Accepted` と `runId` / `sessionId` / `turnId` を返す
+1. THE サーバー SHALL `POST /api/v1/chat` を提供し、`ConversationInputRouter.submit()` で非同期実行を開始して `202 Accepted` と `runId` / `sessionId` / `turnId` を返す（`ChatSubmitService` が採番した `runId` を含む `AgentRunContext` をそのまま渡し、内部で再採番しない）
 2. THE サーバー SHALL `POST /api/v1/chat` の `202 Accepted` レスポンスに `Location: /api/v1/runs/{runId}` ヘッダを返す（REST API として扱いやすくするため）
 3. THE サーバー SHALL `GET /api/v1/runs/{runId}` を提供する
 4. THE サーバー SHALL `GET /api/v1/runs/{runId}/events` で SSE 接続を提供する
@@ -379,6 +379,7 @@ Web API 化すると複数クライアント・複数 run の並行実行が普�
 9. WHEN ReplayBuffer から当該 run のクライアントが受信すべき履歴が失われているとき（replay gap）、THE サーバー SHALL `409 Conflict` で SSE 接続を拒否する
 10. THE ReplayBuffer SHALL runId ごとにイベントを保持する。ただし各イベントに付与される sequence はプロセス全体で単調増加する global sequence とする（run ごとに振り直さない）
 11. THE サーバー SHALL replay gap を「ReplayBuffer から当該 run の必要な履歴が失われている場合」と定義する（単純な `Last-Event-ID < oldestSequence` ではなく、run 単位の metadata で判定する）
+12. WHEN `Last-Event-ID` が terminal event の sequence と同値、または未来の sequence の場合（replay 対象が空）、THE サーバー SHALL イベントを再送せず即 `complete()` する（イベントが来ないのに接続が残らない）
 
 ---
 
@@ -431,7 +432,7 @@ Web API 化すると複数クライアント・複数 run の並行実行が普�
 2. THE `AgentRunContext` SHALL run ごとに独立する
 3. THE run SHALL projectId / sessionId / turnId / cancellation state を他 run と共有しない
 4. THE サーバー SHALL 異なる projectId の run を並行実行できる
-5. THE サーバー SHALL 同一 projectId の run を FIFO で直列実行する（`ConversationInputRouter.submit()` は projectId 単位に直列化する）
+5. THE サーバー SHALL 同一 projectId の run を FIFO で直列実行する（`ProjectRunQueue` が projectId 単位に直列化する。`ConversationInputRouter.submit()` は内部で runId を再採番せず、`ChatSubmitService` が採番した `AgentRunContext` をそのまま受け取る）
 
 ---
 
@@ -474,6 +475,9 @@ Web API 化すると複数クライアント・複数 run の並行実行が普�
 5. WHEN `POST /api/v1/runs/{runId}/cancel` を受けたとき、THE サーバー SHALL 冪等に現在状態を返す（unknown run → `404` / running → `202` / already terminal → `200`）
 6. WHEN `POST /api/v1/runs/{runId}/cancel` を `QUEUED` 状態の run に対して受けたとき、THE サーバー SHALL キューから除去して `CANCELLED` とし、`202` を返す
 7. THE サーバー SHALL `COMPLETED` / `FAILED` / `CANCELLED` を terminal 状態として扱う
+8. WHEN `POST /api/v1/runs/{runId}/cancel` を `RUNNING` 状態の run に対して受けたとき、THE サーバー SHALL Registry の状態確定に加えて実際の実行中の runner を停止する（runId ごとの停止ハンドルを呼ぶ）
+9. WHEN dequeue 後〜実行開始前に cancel されたとき、THE サーバー SHALL runner を開始せず `CANCELLED` として確定する（開始前キャンセル要求を保持する）
+10. THE サーバー SHALL 同一 project の次の run を、実際の runner 終了まで開始しない（`CANCELLED` で SSE が閉じた後も実行が継続しない）
 
 ---
 
@@ -506,6 +510,8 @@ Web API 化すると複数クライアント・複数 run の並行実行が普�
 8. THE サーバー SHALL `sessionId` を既存の `conversationId` に対応させ、session ごとに一意な conversationId を採番する（既存の `chat:main` 固定ではなく session 単位で生成する）
 9. THE サーバー SHALL `turnId` を既存の `runId` に対応させ、`ChatResponse` / `RunResponse` の `turnId` を `runId` と同一値とする（既存コードに独立した `turnId` は存在しない）
 10. THE サーバー SHALL ID 採番の責務を `ChatSubmitService`（application service）が担い、新規 session の `sessionId`（conversationId）と `runId` / `turnId` を採番して `RunRegistry` と `ConversationTurnStore` に渡す
+11. THE サーバー SHALL session の存在判定をターンの有無と独立に行う（`SessionRegistry` 等で sessionId → projectId を submit 受理時に登録し、QUEUED のままの session も存在判定できる）
+12. THE サーバー SHALL 採番した `runId` を含む `AgentRunContext` を `ProjectRunQueue` と runner にそのまま渡し、内部で再採番しない（レスポンス / `RunRegistry` / `ConversationTurnStore` / `AgentEvent` の runId を一致させる）
 
 ---
 

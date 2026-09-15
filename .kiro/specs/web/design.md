@@ -57,11 +57,12 @@ GET  /actuator/health
 | `ChatController` | `POST /api/v1/chat` |
 | `RunController` | `GET /api/v1/runs/{runId}` / `POST /api/v1/runs/{runId}/cancel` |
 | `SseController` | `GET /api/v1/runs/{runId}/events`（SSE） |
-| `ChatSubmitService` | `POST /api/v1/chat` の application service。session / project 整合性を検証し、`RunRegistry.register(QUEUED)` と `ProjectRunQueue.enqueue(run)` を呼ぶ。新規 session の `sessionId`（conversationId）と `runId` / `turnId` を採番する |
+| `ChatSubmitService` | `POST /api/v1/chat` の application service。session / project 整合性を検証し、`RunRegistry.register(QUEUED)` と `ProjectRunQueue.enqueue(run)` を呼ぶ。新規 session の `sessionId`（conversationId）と `runId` / `turnId` を採番する。**採番した `runId` を含む `AgentRunContext` を `ProjectRunQueue` と runner にそのまま渡し、内部で再採番しない**（`ConversationInputRouter.submit()` の runId 再採番は行わない）。`SessionRegistry` に sessionId → projectId を登録する |
 | `RunService` | run の状態取得・cancel の application service |
+| `SessionRegistry` | `sessionId`（conversationId）→ `projectId` の対応を submit 受理時に登録する in-memory レジストリ。ターンの有無と独立して session の存在・所属 project を判定する |
 | `RunRegistry` | run の状態（`RunStatus`）と metadata を保持する in-memory レジストリ。state transition は atomic に行い、terminal 状態から他状態への遷移を許可しない |
 | `RunStatus` | `QUEUED` / `RUNNING` / `COMPLETED` / `FAILED` / `CANCELLED` の5状態 enum |
-| `ProjectRunQueue` | projectId 単位の FIFO 直列キュー。`enqueue(run)` / `cancelQueued(runId)` を提供し、QUEUED の run を runId 指定で除去できる |
+| `ProjectRunQueue` | projectId 単位の FIFO 直列キュー。`enqueue(run)` / `cancelQueued(runId)` を提供し、QUEUED の run を runId 指定で除去できる。**AGENT run の FIFO に限定**する。`submitBackground`（`ExecutionType.AGENT` 以外）と `executeAuxiliary` は既存のまま `ConversationInputRouter` が管理し、`ProjectRunQueue` には入れない |
 | `ReplayBuffer` | runId ごとにイベントを保持し、`subscribe(fromSequence)` で replay する bounded buffer |
 | `SseBridge` | `AgentEventBus` と `SseEmitter` の間を bounded queue + executor で橋渡しする |
 | `WebApiEventDto` | `AgentEvent` を Web API 用に変換した DTO |
@@ -74,8 +75,10 @@ GET  /actuator/health
 | --- | --- |
 | `AgentEventBus` | `lastSequence()` を `subscribe(fromSequence)` に拡張し、sequence ベースで replay 可能にする |
 | `AgentEventType` | `AGENT_RUN_CANCELLED("agent.run.cancelled")` を新規追加 |
+| `AgentEventFactory` | **`runCancelled(String runId, ErrorInformation error)`** を新設する。`agent.run.cancelled` を発行するためのファクトリメソッドが現状存在しないため、`RunService.cancel()` が発行できるようにする |
 | `ProjectRegistry` | `resolveById(String id)` を追加し、登録済み projectId から作業ディレクトリを解決する |
-| `ConversationInputRouter` | FIFO 直列化の責務を `ProjectRunQueue` へ移す。Router は active run の表示と `ProjectRunQueue` への委譲に留め、runId ベースの除去は `ProjectRunQueue.cancelQueued(runId)` に任せる |
+| `ConversationInputRouter` | FIFO 直列化の責務を `ProjectRunQueue` へ移す。Router は active run の表示と `ProjectRunQueue` への委譲に留め、runId ベースの除去は `ProjectRunQueue.cancelQueued(runId)` に任せる。**`submit()` が内部で `UUID.randomUUID()` により runId を再採番する既存挙動は廃止し、`ChatSubmitService` が採番した `AgentRunContext` をそのまま受け取る**（レスポンス / Registry / ConversationTurnStore / AgentEvent の runId を一致させる） |
+| `CommandCancellationService` | **`cancelRun(String runId)`** を追加し、runId 指定で実行中の runner を停止する（`cancel(state)` を runId で引く）。既存 `onCancel(runId, child)` は子コールバック登録のままで停止ハンドルにしない。**runId ごとの「キャンセル要求済み」フラグを `begin()` とは独立に保持**し、`begin()` 前に `cancelRun(runId)` が呼ばれても要求が消えないようにする。**pending cancellation のデータ構造（例: `Map<String, Boolean> pendingCancellations`）を新設**し、`cancelRun(runId)` は `runs` に無い runId に対して「キャンセル要求済み」を記録する。`begin()` はこの pending フラグを確認して消費し、立っている場合は runner を開始せず `CANCELLED` として確定する |
 
 ---
 
@@ -270,6 +273,18 @@ runId → { status, sessionId, turnId, projectId, startedAt, completedAt, failur
   - `RUNNING → CANCELLED`: `agent.run.cancelled` を発行する。
 - **既存 `ChatExecutionService` はキャンセル時に `agent.run.failed` を発行する**（`agent.run.cancelled` は発行しない）。この既存イベントは、Registry が `CANCELLED` に確定済みの run に対しては **SSE では `agent.run.cancelled` として扱う**。
 - **契約: Registry の terminal 状態が source of truth**。SSE は Registry の状態に基づいて terminal を判定し、`agent.run.cancelled` で complete する。既存 runner の `agent.run.failed` が `CANCELLED` 状態の run に来ても、`agent.run.cancelled` として扱う（`CANCELLED → COMPLETED` 等の遷移は atomic transition により禁止）。
+- **ReplayBuffer の replay 時も同じ変換契約を適用する**。`RunService.cancel()` が発行する `agent.run.cancelled` を正とし、既存 runner の `agent.run.failed` が `CANCELLED` 状態の run に来た場合は、**ライブ購読時と同様に replay 時も `agent.run.cancelled` として変換する**（または `agent.run.failed` を replay 対象から除外する）。再接続時に `agent.run.failed` がそのまま流れて `agent.run.cancelled` と矛盾するのを防ぐ。
+
+**RUNNING cancel の実行停止（実際の runner 停止）**
+
+`RunService.cancel()` が `RUNNING → CANCELLED` に遷移させるだけでは、実行中の runner は止まらない。**Registry の状態確定と実際の実行停止を連動させる**契約を定める。
+
+- `RunService.cancel()` は、Registry の atomic transition に成功した後、**`CommandCancellationService.cancelRun(runId)`** を呼び、実行中の runner を停止する。
+  - **既存 `CommandCancellationService.onCancel(runId, child)` は「子コールバックの登録」メソッドであり、停止要求を発行しない**。対象 State が未登録なら何もせず、`begin()` は新しい State に置き換える。そのため停止ハンドルとしては使わず、**runId 指定で停止を要求する `cancelRun(runId)` を新設**する。
+  - `cancelRun(runId)` は `cancel(state)` と同様に、`cancellationRequested` を立て、登録済み children を実行し、`disposable` を dispose し、実行 thread を interrupt する。
+- **実行停止の順序**: `RunRegistry` の `RUNNING → CANCELLED` 確定 → 停止要求（`CommandCancellationService.cancelRun(runId)`）→ `agent.run.cancelled` 発行。
+- **開始前キャンセル要求の保持**: 既存 `CommandCancellationService.begin()` は `cancellationRequested` を `false` にリセットするため、dequeue 後〜`begin()` 前に cancel された場合に要求が消える。**runId ごとの「キャンセル要求済み」フラグを `begin()` とは独立に保持**し、`begin()` 前に `cancelRun(runId)` が呼ばれても要求が消えないようにする。**dequeue 時にキャンセル要求が既に立っている場合は、runner を開始せず `CANCELLED` として確定する**（`begin()` が新しい未キャンセル状態を作らない）。
+- **同一 project の次の run は、実際の runner 終了（`finally` 完了）まで開始しない**。`ProjectRunQueue` は runner の終了を待ってから次の run を dequeue する（`CANCELLED` で SSE が閉じた後も実行が継続するのを防ぐ）。
 
 **異常終了の回収（terminal event 未発行の run）**
 
@@ -283,6 +298,15 @@ runId → { status, sessionId, turnId, projectId, startedAt, completedAt, failur
   - run が terminal になった時点から **30 分保持**し、その後 purge する。
   - `RunRegistry` の purge と `ReplayBuffer` の purge を同時に行う。
 - これにより、SSE 接続も `GET /runs/{runId}` も**同時に `404`** になる。
+
+**session の存在判定と所属 project（SessionRegistry）**
+
+`ConversationTurnStore` だけでは session の存在と所属 project を判定できない（未登録 ID の `read()` は空一覧を返し、`Turn` に projectId がなく、ターン作成は実行開始時なので QUEUED のままの session は判定できない）。
+
+- **`SessionRegistry`** を新設し、`sessionId`（conversationId）→ `projectId` の対応を **submit 受理時に登録**する。
+- **session の存在判定はターンの有無と独立**に行う。`POST /api/v1/chat` の `sessionId` 存在判定（新規 / 継続 / `409` / `404`）は `SessionRegistry` で行う。
+- **所属 project の不一致（`409`）** も `SessionRegistry` の sessionId → projectId 対応で判定する。
+- **session の寿命**: `SessionRegistry` は run の purge とは独立に、session の最終アクセスから一定時間（例: 30 分）保持する。run が purge されても session は残り、継続可能。QUEUED のままキャンセルされた session も `SessionRegistry` に登録済みなので存在判定できる。
 
 ---
 
@@ -341,6 +365,23 @@ SseEmitter
   - その境界を跨いだ後にライブ listener を登録する。
   - **境界以降に発行されたイベントは、replay の後に順序通りに配送する**（replay とライブ配信の重複・順序逆転を防ぐ）。
 - これにより、replay 中に terminal event が発行されても、その接続は確実に terminal event を受信して complete できる。
+
+**空 replay の終了条件（terminal event 受信済みの再接続）**
+
+`Last-Event-ID` が terminal event の sequence と**同値**、または**未来**の sequence の場合、replay 対象は空になる。イベント受信だけを終了条件にすると、今後イベントが来ない完了済み run の接続が残る。
+
+- **同期した購読開始処理**で、対象 run の terminal 状態と replay 対象を確認する。
+- **terminal event が既に受信済みの場合（replay 対象が空）は、イベントを再送せず即 `complete()` する**。
+- これにより、完了済み run への再接続で「イベントが来ないのに接続が残る」状態を防ぐ。
+- 同値・未来の `Last-Event-ID` をテスト観点に含める。
+
+**terminal 状態と空 replay の競合（状態確定とイベント格納の隙間）**
+
+`CANCELLED` 確定と `agent.run.cancelled` 発行は別段階のため、その間に SSE が接続すると、Registry は terminal でも terminal event はまだ ReplayBuffer にない。例えば QUEUED → RUNNING 直後の cancel では、初回接続でも replay が空になり、空 replay の終了条件で**状態イベントを一度も送らず接続を閉じ得る**。購読開始だけを同期しても、状態確定からイベント発行までの隙間は解消されない。
+
+- **終了判定に `terminalSequence` と ReplayBuffer への格納完了を含める**。購読開始処理で、対象 run の terminal 状態と、terminal event が ReplayBuffer に格納済みかを確認する。
+- **状態確定と terminal event 格納を、購読開始と同じ同期境界で公開する**（状態確定 → terminal event 格納 → 購読開始の順序を保証する）。
+- 格納前はライブ購読を維持し、**`terminalSequence` 以下を受信済みと確認できた場合だけ空 replay を即終了させる**。terminal event が未格納の場合は、ライブ購読で terminal event を受信してから complete する（状態イベントを一度も送らず閉じない）。
 
 ### heartbeat
 
@@ -461,7 +502,7 @@ Web 起動
 1. **Web 起動** — `WebApplication` bootstrapping、`ApiKeyProperties`、`WebApplicationType` 判定。
 2. **Security** — `ApiKeyAuthenticationFilter`、`SecurityConfig`、`/actuator/health` permitAll、STATELESS + CSRF disable。
 3. **RunRegistry** — `RunStatus` enum、run の状態遷移（atomic / terminal immutable）、`GET /runs/{runId}`。
-4. **Chat submit** — `ChatController` / `ChatSubmitService`、session / project 整合性。
+4. **Chat submit** — `ChatController` / `ChatSubmitService`、session / project 整合性、`SessionRegistry` への sessionId → projectId 登録、**採番した `runId` を含む `AgentRunContext` を `ProjectRunQueue` / runner にそのまま渡す（内部で再採番しない）**。
 5. **Project FIFO** — `ProjectRunQueue`（`enqueue` / `cancelQueued`）、projectId 単位直列化。
 6. **Cancel** — `POST /runs/{runId}/cancel`、QUEUED / RUNNING の cancel。
 7. **SSE** — `SseController`、`SseBridge`、bounded queue + executor。
@@ -488,6 +529,8 @@ Web 起動
 - session の projectId 不一致 → `409`。
 - 未知の sessionId → `404`。
 - 未知の projectId → `404`。
+- **session 存在判定は `SessionRegistry` で行う**（ターンの有無と独立。QUEUED のままの session も判定できる）。
+- **採番した `runId` がレスポンス / `RunRegistry` / `ConversationTurnStore` / `AgentEvent` で一致する**（`ConversationInputRouter` が内部で再採番しない）。
 
 ### RunRegistry / 状態
 
@@ -497,12 +540,14 @@ Web 起動
 - `QUEUED` / `RUNNING` / `COMPLETED` / `FAILED` / `CANCELLED` の遷移。
 - **state transition が atomic** で、terminal 状態から他状態へ遷移しない（cancel と terminal event の競合で `CANCELLED → COMPLETED` にならない）。
 - **retention** — terminal から 30 分で `RunRegistry` / `ReplayBuffer` が同時に purge され、SSE も `GET /runs/{runId}` も同時に `404` になる。
+- **session 存在判定** — `SessionRegistry` が sessionId → projectId を保持し、ターン未作成（QUEUED のまま）の session も存在判定できる。run が purge されても session は残る。
 
 ### Project FIFO
 
 - 異なる projectId の run は並行実行。
 - 同一 projectId の run は FIFO 直列。
 - `ProjectRunQueue.cancelQueued(runId)` で QUEUED の run をキューから除去できる。
+- **`ProjectRunQueue` は AGENT run の FIFO に限定**し、`submitBackground` / `executeAuxiliary` は `ConversationInputRouter` が管理する（`ProjectRunQueue` に入れない）。
 
 ### SSE / Replay
 
@@ -515,6 +560,9 @@ Web 起動
 - **heartbeat は `id` を持たず、global sequence を消費せず、ReplayBuffer に保存されない**。
 - `onCompletion` / `onTimeout` / `onError` で unsubscribe。
 - **replay とライブ購読の競合** — replay 境界の確定とライブ listener 登録を一貫した同期境界で扱い、replay 中に terminal event が発行されても確実に受信して complete する。replay とライブ配信の重複・順序逆転がない。
+- **空 replay の終了条件** — `Last-Event-ID` が terminal event の sequence と同値 / 未来の場合、replay 対象が空でも即 `complete()` する（イベントが来ないのに接続が残らない）。
+- **terminal 状態と空 replay の競合** — `CANCELLED` 確定と `agent.run.cancelled` 格納の間に SSE 接続しても、状態イベントを一度も送らず閉じない。terminal event が ReplayBuffer に未格納の場合はライブ購読で受信してから complete する。`terminalSequence` 以下を受信済みと確認できた場合だけ空 replay を即終了する。
+- **replay 時の変換契約** — `CANCELLED` 状態の run への再接続で、ReplayBuffer の replay 時に既存 runner の `agent.run.failed` が `agent.run.cancelled` として変換される（または除外される）。`agent.run.failed` がそのまま流れて `agent.run.cancelled` と矛盾しない。
 
 ### Cancel
 
@@ -525,3 +573,7 @@ Web 起動
 - **cancel 成功時のみ `agent.run.cancelled` を発行**する（atomic transition 成功時）。
 - **既存 runner の `agent.run.failed` が `CANCELLED` 状態の run に来ても `agent.run.cancelled` として扱う**（Registry の terminal 状態が source of truth）。
 - **異常終了の回収** — `ProjectRunQueue` の executor 境界で terminal event 未発行の run を `FAILED` として確定し、`agent.run.failed` を発行する（`RUNNING` のまま残らない）。
+- **RUNNING cancel の実行停止** — `RUNNING → CANCELLED` 確定後に `CommandCancellationService.cancelRun(runId)` で実際の runner を停止する。dequeue 後〜`begin()` 前に cancel された場合、runner を開始せず `CANCELLED` として確定する。同一 project の次の run は runner 終了まで開始しない。
+- **`cancelRun(runId)` による停止** — `onCancel(runId, child)` は子コールバック登録のままで停止ハンドルにしない。`cancelRun(runId)` が `cancellationRequested` を立て、children 実行 / disposable dispose / thread interrupt を行う。
+- **開始前 cancel の競合** — `begin()` 前に `cancelRun(runId)` が呼ばれても、runId ごとのキャンセル要求フラグが `begin()` のリセットで消えない。dequeue 直後に cancel する競合テストで、runner が開始されず `CANCELLED` になることを確認する。
+- **`agent.run.cancelled` の発行経路** — `AgentEventFactory.runCancelled(runId, error)` が存在し、`RunService.cancel()` が atomic transition 成功時にそれを呼んで `agent.run.cancelled` を発行する。
