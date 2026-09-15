@@ -5,6 +5,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 
 @RestController
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class RunController {
   private final RunService runs;

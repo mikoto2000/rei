@@ -11,6 +11,7 @@ import org.springframework.context.annotation.*;
 import org.springframework.scheduling.annotation.*;
 
 @Configuration(proxyBeanMethods = false)
+@ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @EnableScheduling
 public class WebApiConfiguration {

@@ -13,7 +13,7 @@ public final class WebApplication {
     application.setWebApplicationType(key.isEmpty() ? WebApplicationType.NONE : WebApplicationType.SERVLET);
     application.addInitializers(context -> {
       context.getEnvironment().getPropertySources().addFirst(
-          new MapPropertySource("reiApiKeyEnvironment", Map.of("rei.api-key", key)));
+          new MapPropertySource("reiApiKeyEnvironment", Map.of("rei.api-key", key, "rei.web.enabled", !key.isEmpty())));
       context.getBeanFactory().registerSingleton("apiKeyProperties", new ApiKeyProperties(key));
     });
   }

@@ -23,7 +23,7 @@ class SecurityConfigTest {
   }
 
   @Test void bearerAuthenticationIsStatelessAndAllowsPostAndAsyncDispatch() {
-    new WebApplicationContextRunner().withUserConfiguration(Config.class).run(context -> {
+    new WebApplicationContextRunner().withPropertyValues("rei.web.enabled=true").withUserConfiguration(Config.class).run(context -> {
       MockMvc mvc = MockMvcBuilders.webAppContextSetup(context)
           .addFilters(context.getBean("springSecurityFilterChain", jakarta.servlet.Filter.class)).build();
       mvc.perform(get("/actuator/health")).andExpect(status().isOk());
