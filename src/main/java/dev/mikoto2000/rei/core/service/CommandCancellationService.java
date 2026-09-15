@@ -19,6 +19,7 @@ public class CommandCancellationService {
     State(String projectId) { this.projectId = projectId; }
   }
   private final java.util.concurrent.ConcurrentMap<String, State> runs = new java.util.concurrent.ConcurrentHashMap<>();
+  private final java.util.Set<String> pendingCancellations = new java.util.HashSet<>();
   private final State legacy = new State(null);
   private State state() {
     if(dev.mikoto2000.rei.core.execution.ExecutionScope.current()!=null) return null;
@@ -29,11 +30,25 @@ public class CommandCancellationService {
   public void begin(Thread executionThread) {
     var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     var state = run == null ? legacy : new State(run.projectId());
-    state.cancellationRequested.set(false);
-    state.disposableRef.set(null);
-    state.executionThreadRef.set(executionThread);
-    if (run != null) runs.put(run.runId(), state);
+    synchronized (this) {
+      state.cancellationRequested.set(run != null && pendingCancellations.remove(run.runId()));
+      state.disposableRef.set(null);
+      state.executionThreadRef.set(executionThread);
+      if (run != null) runs.put(run.runId(), state);
+    }
+    if (state.cancellationRequested.get()) cancel(state);
   }
+
+  /** A stop request may precede runner registration; begin must not reset it. */
+  public boolean cancelRun(String runId) {
+    State state;
+    synchronized (this) {
+      state = runs.get(runId);
+      if (state == null) return pendingCancellations.add(runId);
+    }
+    return cancel(state);
+  }
+  public synchronized void forgetPendingCancellation(String runId) { pendingCancellations.remove(runId); }
 
   public void register(Disposable disposable) {
     if (disposable == null) {
@@ -97,6 +112,7 @@ public class CommandCancellationService {
   public void clear() {
     var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     if (run != null) {
+      forgetPendingCancellation(run.runId());
       var removed = runs.remove(run.runId());
       if (removed != null) {
         removed.children.forEach(Runnable::run);

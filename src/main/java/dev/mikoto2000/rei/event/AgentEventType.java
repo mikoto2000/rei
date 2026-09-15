@@ -28,6 +28,7 @@ public enum AgentEventType {
   STAGNATION_RECOVERED("stagnation.recovered"),
   STAGNATION_STOPPED("stagnation.stopped"),
   AGENT_RUN_STARTED("agent.run.started"),
+  AGENT_RUN_CANCELLED("agent.run.cancelled"),
   AGENT_RUN_COMPLETED("agent.run.completed"),
   AGENT_RUN_FAILED("agent.run.failed"),
   LLM_REQUEST_STARTED("llm.request.started"),

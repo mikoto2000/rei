@@ -95,6 +95,11 @@ public class AgentEventFactory {
         new AgentRunFailedPayload(runId, error));
   }
 
+  public AgentEvent runCancelled(String runId, ErrorInformation error) {
+    return newEvent(AgentEventType.AGENT_RUN_CANCELLED, runId, null,
+        new AgentRunFailedPayload(runId, error));
+  }
+
   // ---- LLM ----
 
   public AgentEvent llmRequestStarted(String runId, String requestId, String feature) {
