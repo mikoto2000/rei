@@ -7,6 +7,9 @@ import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 public class ProjectScopeConfiguration {
   @Bean
   public static BeanFactoryPostProcessor projectScopeRegistrar() {
-    return factory -> factory.registerScope("reiProject", new ProjectBeanScope());
+    return factory -> {
+      factory.registerScope("reiProject", new ProjectBeanScope());
+      factory.registerScope("reiConversation", new ProjectBeanScope(dev.mikoto2000.rei.llm.ConversationIds::currentChat));
+    };
   }
 }
