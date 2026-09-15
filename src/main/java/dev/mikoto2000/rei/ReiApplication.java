@@ -130,6 +130,7 @@ public class ReiApplication {
     System.setProperty("rei.data-dir", dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().toString());
     SpringApplication application = new SpringApplication(ReiApplication.class);
     application.setDefaultProperties(ExternalConfigSupport.defaultProperties());
+    dev.mikoto2000.rei.web.WebApplication.configure(application, System.getenv("REI_API_KEY"));
     ConfigurableApplicationContext context = application.run(args);
     int exitCode;
     try {
