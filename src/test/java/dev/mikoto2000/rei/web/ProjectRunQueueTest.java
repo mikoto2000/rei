@@ -7,6 +7,26 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class ProjectRunQueueTest {
+  @Test void cancellationDuringDispatchDiscardsLateScheduledView() throws Exception {
+    var scheduling = new CountDownLatch(1);
+    var release = new CountDownLatch(1);
+    var visible = new java.util.concurrent.atomic.AtomicBoolean();
+    var queue = new ProjectRunQueue(Runnable::run);
+    try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      var future = executor.submit(() -> queue.enqueue("project", "run", () -> fail("Cancelled work started"),
+          () -> {
+            scheduling.countDown();
+            try { release.await(); } catch (InterruptedException error) { throw new RuntimeException(error); }
+            visible.set(true);
+          }, () -> visible.set(false), error -> { throw error; }));
+      try {
+        assertThat(scheduling.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(queue.cancelQueued("run")).isTrue();
+      } finally { release.countDown(); }
+      future.get(5, TimeUnit.SECONDS);
+      assertThat(visible).isFalse();
+    }
+  }
   @Test void serializesSameProjectAndRemovesQueuedRunById() {
     List<Runnable> tasks = new ArrayList<>();
     List<String> executed = new ArrayList<>();

@@ -9,6 +9,27 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class RunLifecycleTest {
+  @Test void rejectedQueuedSuccessorIsFailedInsteadOfRemainingQueuedForever() {
+    var registry = new RunRegistry(Clock.systemUTC());
+    var bus = new InMemoryAgentEventBus();
+    var factory = new AgentEventFactory(Clock.systemUTC());
+    List<Runnable> tasks = new ArrayList<>();
+    var submissions = new java.util.concurrent.atomic.AtomicInteger();
+    var router = new dev.mikoto2000.rei.core.chat.ConversationInputRouter(work -> {
+      if (submissions.incrementAndGet() > 1) throw new java.util.concurrent.RejectedExecutionException("executor closing");
+      tasks.add(work);
+    }, (context, prompt, input) -> bus.publish(factory.runCompleted(context.runId(), 1)));
+    try (var service = new RunService(registry, bus, factory, new CommandCancellationService(), router::cancelQueued)) {
+      for (String id : List.of("one", "two")) {
+        var context = RunRegistryTest.context(id); registry.register(context);
+        router.submit(context, id, work -> service.execute(context, work));
+      }
+      assertThatThrownBy(() -> tasks.removeFirst().run()).isInstanceOf(java.util.concurrent.RejectedExecutionException.class);
+      assertThat(service.get("one").status()).isEqualTo(RunStatus.COMPLETED);
+      assertThat(service.get("two").status()).isEqualTo(RunStatus.FAILED);
+      assertThat(router.activeRuns()).isEmpty();
+    }
+  }
   @Test void executionUpdatesRegistryAndRecoversMissingTerminalEvents() {
     var registry = new RunRegistry(Clock.systemUTC());
     var bus = new InMemoryAgentEventBus();

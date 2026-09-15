@@ -8,6 +8,54 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class SseReplayTest {
+  @Test void disconnectThenResumeDeliversOnlyUnacknowledgedEventsAndNormalizesCancelledReplay() throws Exception {
+    var registry = new RunRegistry(Clock.systemUTC());
+    registry.register(RunRegistryTest.context("run"));
+    registry.transition("run", RunStatus.RUNNING, null);
+    var bus = new InMemoryAgentEventBus();
+    var events = new AgentEventFactory(Clock.systemUTC());
+    var received = new java.util.concurrent.CountDownLatch(1);
+    try (var bridge = new SseBridge(bus, new RunService(registry), "")) {
+      var first = new SseBridgeTest.Sink() {
+        public void event(WebApiEventDto event) { this.events.add(event); received.countDown(); }
+      };
+      var connection = bridge.connect("run", first);
+      bus.publish(events.runStarted("run", "test", null));
+      assertThat(received.await(5, TimeUnit.SECONDS)).isTrue();
+      connection.close();
+      registry.transition("run", RunStatus.CANCELLED, null);
+      bus.publish(events.runFailed("run", new ErrorInformation("cancelled", "cancelled", null)));
+      var resumed = new SseBridgeTest.Sink();
+      bridge.connect("run", 1L, resumed);
+      assertThat(resumed.ended.await(5, TimeUnit.SECONDS)).isTrue();
+      assertThat(resumed.events).extracting(WebApiEventDto::sequence).containsExactly(2L);
+      assertThat(resumed.events).extracting(WebApiEventDto::type).containsExactly("agent.run.cancelled");
+    }
+  }
+
+  @Test void completionDuringReplayFollowsSnapshotWithoutLossOrDuplication() throws Exception {
+    var registry = new RunRegistry(Clock.systemUTC()); registry.register(RunRegistryTest.context("run"));
+    var bus = new InMemoryAgentEventBus(); var factory = new AgentEventFactory(Clock.systemUTC());
+    bus.publish(factory.runStarted("run", "first", null));
+    var entered = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var sink = new SseBridgeTest.Sink() {
+      public void event(WebApiEventDto event) throws Exception {
+        events.add(event);
+        if (event.sequence() == 1) { entered.countDown(); release.await(); }
+      }
+    };
+    try (var bridge = new SseBridge(bus, new RunService(registry), "")) {
+      bridge.connect("run", sink);
+      try {
+        assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+        bus.publish(factory.runStarted("other", "other", null));
+        bus.publish(factory.runCompleted("run", 1));
+      } finally { release.countDown(); }
+      assertThat(sink.ended.await(5, TimeUnit.SECONDS)).isTrue();
+      assertThat(sink.events).extracting(WebApiEventDto::sequence).containsExactly(1L, 3L);
+    }
+  }
   @Test void initialConnectionReplaysMoreThanClientQueueCapacityAndThenCompletes() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
     registry.register(RunRegistryTest.context("run"));

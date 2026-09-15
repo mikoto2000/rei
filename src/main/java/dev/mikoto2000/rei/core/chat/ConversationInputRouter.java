@@ -105,7 +105,12 @@ public final class ConversationInputRouter {
       boolean first = projectQueue.enqueue(key, context.runId(), () -> {
         try { lifecycle.accept(() -> runner.execute(context, slot.prompt(), slot.queue())); }
         finally { agentSlots.remove(context.runId()); forget(slot); }
-      }, () -> { active.put(context.runId(), ActiveRun.of(context, slot.prompt())); changed(); });
+      }, () -> { active.put(context.runId(), ActiveRun.of(context, slot.prompt())); changed(); },
+          () -> { agentSlots.remove(context.runId()); forget(slot); },
+          error -> {
+            try { lifecycle.accept(() -> { throw error; }); }
+            finally { agentSlots.remove(context.runId()); forget(slot); }
+          });
       return first ? Disposition.STARTED : Disposition.QUEUED;
     } catch (RuntimeException error) { agentSlots.remove(context.runId()); forget(slot); throw error; }
   }
