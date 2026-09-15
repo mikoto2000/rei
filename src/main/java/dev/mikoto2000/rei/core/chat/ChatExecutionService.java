@@ -179,6 +179,7 @@ public class ChatExecutionService {
   private ChatExecutionResult executeInScope(AgentRunContext context, String promptText, UserInterventionQueue interventions) {
     long startedAtNanos = System.nanoTime();
     cancellationService.begin(Thread.currentThread());
+    if (cancellationService.isCancellationRequested()) return ChatExecutionResult.cancelled();
     String runId = context.runId();
     SkillRoutingRunContext skillRoutingContext = new SkillRoutingRunContext(runId);
     AtomicLong runCompletionTokens = new AtomicLong();
