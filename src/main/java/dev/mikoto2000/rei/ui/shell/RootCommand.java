@@ -36,6 +36,8 @@ subcommands = {
   dev.mikoto2000.rei.externalagent.ExternalAgentCommand.class,
   dev.mikoto2000.rei.subagent.SubAgentCommand.class,
   ChatCommand.class,
+  NewConversationCommand.class,
+  ResumeConversationCommand.class,
   CancelCommand.class,
   RunsCommand.class,
   HistoryCommand.class,

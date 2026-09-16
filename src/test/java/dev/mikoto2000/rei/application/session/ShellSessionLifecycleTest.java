@@ -27,6 +27,7 @@ class ShellSessionLifecycleTest {
       var first = shell.submit("😀".repeat(81));
       assertThat(first.requestSource()).isEqualTo(AgentRunContext.RequestSource.SHELL);
       assertThat(first.conversationId()).doesNotEndWith("chat:main");
+      assertThat(dev.mikoto2000.rei.llm.ConversationIds.currentChat()).isEqualTo(first.conversationId());
       assertThat(repository.findById(first.conversationId())).contains(new SessionMetadata(first.conversationId(), first.projectId(), "😀".repeat(80), now, now));
       var later = new ShellConversationService(projects, new SessionLifecycle(repository, Clock.fixed(now.plusSeconds(5), ZoneOffset.UTC)), (c,p)->accepted.add(c));
       var next = later.submit("second");

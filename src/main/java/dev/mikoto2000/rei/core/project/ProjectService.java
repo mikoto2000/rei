@@ -26,6 +26,11 @@ public class ProjectService {
   public ProjectClient currentClient() { return client(); }
   public String currentSessionId() { synchronized (client()) { return client().sessionId; } }
   public void selectSession(String sessionId) { synchronized (client()) { client().sessionId = sessionId; } }
+  public static String selectedShellSession() {
+    var client = ProjectClientScope.current();
+    if (client == null) return null;
+    synchronized (client) { return client.sessionId; }
+  }
   private ProjectClient client() {
     var client = ProjectClientScope.current();
     if (client == null || client.service != this)

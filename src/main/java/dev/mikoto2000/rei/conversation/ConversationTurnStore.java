@@ -22,6 +22,13 @@ public class ConversationTurnStore implements ConversationHistory {
   public synchronized void start(AgentRunContext context, String request) {
     start(context, request, java.time.Instant.now());
   }
+  /** Execution starts are serialized by the project queue. Preserve that order even on clock ties/rollback. */
+  public synchronized void startOrdered(AgentRunContext context, String request, java.time.Instant observedAt) {
+    var last = read(context.conversationId()).stream().map(Turn::createdAt).filter(Objects::nonNull)
+        .max(Comparator.naturalOrder());
+    var createdAt = last.isPresent() && !observedAt.isAfter(last.get()) ? last.get().plusNanos(1) : observedAt;
+    start(context, request, createdAt);
+  }
   public synchronized void start(AgentRunContext context, String request, java.time.Instant createdAt) {
     var turns = new ArrayList<>(read(context.conversationId()));
     turns.add(new Turn(context.runId(), request, Status.RUNNING, null, createdAt));
