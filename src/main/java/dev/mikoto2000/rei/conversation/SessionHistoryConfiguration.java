@@ -8,6 +8,13 @@ import org.springframework.beans.factory.annotation.Value;
 /** Shared by the interactive Shell and the Web application. */
 @Configuration(proxyBeanMethods = false)
 public class SessionHistoryConfiguration {
+  @Bean dev.mikoto2000.rei.application.session.SessionQueryService sessionQueryService(SessionRepository repository,
+      ConversationTurnStore turns) {
+    return new dev.mikoto2000.rei.application.session.SessionQueryService(repository, turns);
+  }
+  @Bean ConversationTurnStore conversationTurnStore(@Value("${rei.data-dir}") String directory) {
+    return new ConversationTurnStore(Path.of(directory));
+  }
   @Bean SessionRepository sessionRepository(@Value("${rei.data-dir}") String directory) {
     return new FileSessionRepository(Path.of(directory).resolve("sessions.json"));
   }

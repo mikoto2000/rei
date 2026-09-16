@@ -61,6 +61,10 @@ class WebSessionExecutionTest {
       while (!tasks.isEmpty()) tasks.removeFirst().run();
       assertThat(projectService.currentProject()).isEqualTo(second.root());
       assertThat(executed).containsExactly(a, b, continuation);
+      assertThat(turns.read(a.conversationId())).allSatisfy(turn -> {
+        assertThat(turn.assistantMessage()).isEqualTo("answer");
+        assertThat(turn.createdAt()).isNotNull();
+      });
       assertThat(executed).allMatch(context -> context.projectRoot().equals(first.root()));
       assertThat(turns.read(a.conversationId())).extracting(ConversationTurnStore.Turn::runId)
           .containsExactly(a.runId(), continuation.runId());
