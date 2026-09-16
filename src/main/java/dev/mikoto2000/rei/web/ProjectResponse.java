@@ -1,4 +1,4 @@
 package dev.mikoto2000.rei.web;
 
-/** Public project identity; filesystem paths are not part of this API. */
-public record ProjectResponse(String id, String name) {}
+/** Registered project identity and path, so clients can distinguish duplicate names. */
+public record ProjectResponse(String id, String name, String path) {}

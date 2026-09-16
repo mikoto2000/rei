@@ -84,7 +84,7 @@ Web API は ShellCommand をそのまま expose せず、**Web API endpoint → 
 | `/sh` | — | 非公開 | シェル実行。外部公開は危険 |
 | `/config` | `init --force` | 非公開 | 設定ファイルを上書き生成。API キー破壊の恐れ |
 | `/project` | `add` / `remove` | 非公開 | 作業ディレクトリの登録・削除。任意パス操作 |
-| `/project` | `list` | 公開（Phase 1） | `GET /api/v1/projects`。登録済み UUID と名前のみ返す |
+| `/project` | `list` | 公開（Phase 1） | `GET /api/v1/projects`。登録済み UUID・名前・パスを返す |
 | `/project` | `cd` | **非公開（Web API から削除）** | Web ではチャット送信ごとに `projectId` を指定するため不要 |
 | `/subagent` | `init` / `validate` | 非公開 | ファイル書き込み・任意パス読み込み |
 | `/embed` | `add` / `delete` | 非公開 | パスベースのため任意パス読み込みの危険が残る |
@@ -422,7 +422,7 @@ Web API 化すると複数クライアント・複数 run の並行実行が普�
 4. THE Web API SHALL 登録済み projectId から作業ディレクトリを解決する
 5. THE Web API SHALL `/project cd` を公開しない（Web API から削除する）
 6. THE `ProjectRegistry` SHALL 登録済み projectId から作業ディレクトリを解決するメソッド（`resolveById` 等）を提供する
-7. THE Web API SHALL 認証付き `GET /api/v1/projects` で登録済みプロジェクトを `200 OK` の JSON 配列として返す。各要素は `id`（登録済み UUID）と `name` のみを持ち、ファイルシステムパスを含めない
+7. THE Web API SHALL 認証付き `GET /api/v1/projects` で登録済みプロジェクトを `200 OK` の JSON 配列として返す。各要素は `id`（登録済み UUID）、`name`、`path`（サーバー上の登録済みプロジェクトルートの絶対パス文字列）を持つ。同名プロジェクトを許容し、クライアントは `path` で区別できる。チャット送信には引き続き `id` を使う
 8. WHEN プロジェクトが未登録のとき、THE 一覧 API SHALL `200 OK` と `[]` を返し、レジストリファイルを作成しない
 9. THE 一覧 API SHALL 登録順で最新の登録内容を返し、プロジェクトの登録・削除・カレントプロジェクト変更を行わない。取得した `id` は `POST /api/v1/chat` の `projectId` に指定できる
 10. WHEN API キーがない、または不正なとき、THE 一覧 API SHALL `401 Unauthorized` を返す

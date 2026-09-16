@@ -379,10 +379,15 @@ Web 起動
 - [x] 10.1 認証付き `GET /api/v1/projects` を追加する
   - Red: `ProjectControllerTest` を先行追加し、未実装クラスによるコンパイル失敗を確認した。
   - Green: `ProjectQueryService` / `ProjectController` / `ProjectResponse` と Web 有効時の Bean を追加した。
-  - 認証なし・不正キーは401、正常時は200。空一覧、UUIDと名前のみの公開、登録順、登録内容の更新反映、取得によるファイル非変更を検証した。
+  - 認証なし・不正キーは401、正常時は200。空一覧、UUID・名前・パスの公開、登録順、登録内容の更新反映、取得によるファイル非変更を検証した。
   - `WebApiIntegrationTest` で実 HTTP による一覧取得と、返却 ID を使ったチャット受付202を確認した。
   - _Requirements: 8.7–8.10, 11.5; Design: GET /api/v1/projects_
 - [x] 10.2 要件・設計・利用例を更新し、Web API の回帰テストを実行する
   - Phase 1 の公開対象を6エンドポイントに更新し、チャットの ID 例を UUID に修正した。
   - `./mvnw.cmd '-Dtest=dev.mikoto2000.rei.web.*Test' test`: **41件、失敗0、エラー0、スキップ0、BUILD SUCCESS**。
   - ログ: `target/project-api-regression.log`（Git 管理外）。上記1,763件の全体テスト記録は初回実装時の結果。
+- [x] 10.3 同名プロジェクトを区別するため、一覧に `path` を追加する
+  - Red: 別ディレクトリの同名プロジェクト2件を登録し、パス未返却によるテスト失敗を確認した。
+  - Green: application service と公開 DTO にサーバー上の登録済み絶対パス文字列を追加した。
+  - 要件8.7、設計のレスポンス例と PowerShell の表示例を更新した。
+  - Web API 回帰テスト41件すべて成功（失敗0、エラー0、スキップ0）。ログ: `target/project-path-regression.log`。

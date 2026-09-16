@@ -13,6 +13,7 @@ public class ProjectController {
   public ProjectController(ProjectQueryService projects) { this.projects = projects; }
   @GetMapping("/api/v1/projects")
   public List<ProjectResponse> list() {
-    return projects.list().stream().map(project -> new ProjectResponse(project.id(), project.name())).toList();
+    return projects.list().stream()
+        .map(project -> new ProjectResponse(project.id(), project.name(), project.path())).toList();
   }
 }

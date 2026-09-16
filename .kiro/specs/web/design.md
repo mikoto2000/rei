@@ -56,8 +56,8 @@ GET  /actuator/health
 | `ApiKeyAuthenticationFilter` | `Authorization: Bearer <token>` を検証する `OncePerRequestFilter` |
 | `SecurityConfig` | Spring Security filter chain を構成。`/actuator/health` のみ `permitAll` |
 | `ChatController` | `POST /api/v1/chat` |
-| `ProjectController` / `ProjectResponse` | `GET /api/v1/projects`。公開 DTO の `id` / `name` のみを返す |
-| `ProjectQueryService` | `ProjectRegistry.list()` から登録済みプロジェクトの UUID と名前を取得する。レジストリとカレントプロジェクトを変更しない |
+| `ProjectController` / `ProjectResponse` | `GET /api/v1/projects`。公開 DTO の `id` / `name` / `path` を返す |
+| `ProjectQueryService` | `ProjectRegistry.list()` から登録済みプロジェクトの UUID・名前・ルートパス文字列を取得する。レジストリとカレントプロジェクトを変更しない |
 | `RunController` | `GET /api/v1/runs/{runId}` / `POST /api/v1/runs/{runId}/cancel` |
 | `SseController` | `GET /api/v1/runs/{runId}/events`（SSE） |
 | `ChatSubmitService` | `POST /api/v1/chat` の application service。session / project 整合性を検証し、`RunRegistry.register(QUEUED)` と `ProjectRunQueue.enqueue(run)` を呼ぶ。新規 session の `sessionId`（conversationId）と `runId` / `turnId` を採番する。**採番した `runId` を含む `AgentRunContext` を `ProjectRunQueue` と runner にそのまま渡し、内部で再採番しない**（`ConversationInputRouter.submit()` の runId 再採番は行わない）。`SessionRegistry` に sessionId → projectId を登録する |
@@ -91,13 +91,14 @@ GET  /actuator/health
 
 `Authorization: Bearer <token>` 必須。未指定・不正なキーは `401 Unauthorized`。
 `ProjectController` → `ProjectQueryService` → チャット受付と共通の `ProjectRegistry` の順に呼び出す。
-リクエストごとに登録内容を読み、登録順で返す。パスを含む内部型は公開せず、`ProjectResponse` に変換する。
+リクエストごとに登録内容を読み、登録順で返す。内部型を `ProjectResponse` に変換し、`path` は `ProjectContext.root().toString()` でサーバー OS の形式の絶対パス文字列として返す。同名プロジェクトをまとめず、パスによって区別できるようにする。
 
 **Response `200 OK`**
 
 ```json
 [
-  { "id": "550e8400-e29b-41d4-a716-446655440000", "name": "rei" }
+  { "id": "550e8400-e29b-41d4-a716-446655440000", "name": "rei", "path": "F:\\project\\rei" },
+  { "id": "550e8400-e29b-41d4-a716-446655440001", "name": "rei", "path": "F:\\work\\rei" }
 ]
 ```
 
@@ -108,7 +109,7 @@ GET  /actuator/health
 
 ```powershell
 $projects = Invoke-RestMethod "$baseUrl/api/v1/projects" -Headers $headers
-$projects | Format-Table id, name
+$projects | Format-Table id, name, path
 # 表示された一覧から対象を選ぶ。以下は最初のプロジェクトを利用する例。
 if (@($projects).Count -eq 0) { throw '先に Rei の Shell で /project add を実行してください' }
 $body = @{ projectId = $projects[0].id; message = '構成を説明してください' } | ConvertTo-Json
