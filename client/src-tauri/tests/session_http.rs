@@ -53,6 +53,10 @@ async fn detail_and_turn_pages_escape_ids_and_validate_identity() {
         .route("/api/v1/sessions/{id}", get(|Path(id): Path<String>| async move { Json(session(&id)) }))
         .route("/api/v1/sessions/{id}/turns", get(|Path(id): Path<String>, Query(q): Query<HashMap<String,String>>| async move {
             assert_eq!(q["limit"], "1");
+            if let Some(cursor) = q.get("cursor") {
+                assert_eq!(cursor, "next");
+                return Json(json!({"sessionId":id,"items":[],"nextCursor":null}));
+            }
             Json(json!({"sessionId":id,"items":[{"turnId":"run","runId":"run","userMessage":"q","assistantMessage":null,"createdAt":"2026-09-16T08:00:00Z"}],"nextCursor":"next"}))
         }))).await;
     assert_eq!(api.get_session(id).await.unwrap().session_id, id);
@@ -63,9 +67,24 @@ async fn detail_and_turn_pages_escape_ids_and_validate_identity() {
     assert_eq!(page.items[0].run_id, "run");
     assert_eq!(page.items[0].assistant_message, None);
     assert_eq!(page.next_cursor.as_deref(), Some("next"));
+    let last = api
+        .list_session_turns(id, HistoryQuery::new(Some(1), page.next_cursor).unwrap())
+        .await
+        .unwrap();
+    assert!(last.items.is_empty());
+    assert!(last.next_cursor.is_none());
 }
 #[tokio::test]
 async fn status_and_malformed_responses_are_safe_application_errors() {
+    let unauthorized = serve(Router::new().route(
+        "/api/v1/sessions/{id}",
+        get(|| async { StatusCode::UNAUTHORIZED }),
+    ))
+    .await;
+    assert_eq!(
+        unauthorized.get_session("s").await.unwrap_err(),
+        AppError::AuthenticationFailed
+    );
     for (status, expected) in [
         (401, AppError::AuthenticationFailed),
         (400, AppError::InvalidCursor),
