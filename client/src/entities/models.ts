@@ -19,6 +19,28 @@ export interface Project {
   name: string;
   path: string;
 }
+export interface SessionSummary {
+  sessionId: string;
+  projectId: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface ConversationTurn {
+  turnId: string;
+  runId: string;
+  userMessage: string;
+  assistantMessage: string | null;
+  createdAt: string;
+}
+export interface SessionPage {
+  items: SessionSummary[];
+  nextCursor: string | null;
+}
+export interface TurnPage {
+  items: ConversationTurn[];
+  nextCursor: string | null;
+}
 export interface Conversation {
   localId: string;
   serverProfileId: string;
@@ -82,6 +104,10 @@ export const canSubmit = (
   !pending &&
   !activeRuns(runs).some((r) => r.conversationId === conversation);
 const errors: Record<string, string> = {
+  InvalidCursor: "ページ情報が無効です。一覧を更新してください。",
+  InvalidLimit: "取得件数は1〜100件で指定してください。",
+  UnexpectedServerError:
+    "サーバーでエラーが発生しました。時間をおいて再試行してください。",
   ProjectNotFound:
     "プロジェクトがサーバーに存在しません。プロジェクト一覧を再取得してください。",
   NotificationDenied:

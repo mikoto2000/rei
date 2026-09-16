@@ -13,6 +13,13 @@ import {
 } from "./entities/models";
 import { Chat } from "./features/chat/Chat";
 import { Settings } from "./features/settings/Settings";
+import { SessionList } from "./features/history/SessionList";
+import {
+  useSessionList,
+  useSessionSelection,
+  useTurnHistory,
+  useTerminalHistoryRefresh,
+} from "./features/history/useHistory";
 const initial: Snapshot = {
   servers: [],
   selectedServer: null,
@@ -46,6 +53,12 @@ export function App({
   const [projects, setProjects] = useState<Record<string, Project[]>>({});
   const [project, setProject] = useState("");
   const [loadingProjects, setLoadingProjects] = useState(false);
+  const history = useSessionList(call, data.selectedServer, data.unlocked);
+  const opening = useSessionSelection(call);
+  const navigate = (destination: Page) => {
+    opening.selection.clear();
+    setPage(destination);
+  };
   const accept = useCallback(
     (snapshot: Snapshot) =>
       setData((current) => ({
@@ -137,6 +150,7 @@ export function App({
     }
   };
   const openConversation = (conversation: Conversation, runId?: string) => {
+    opening.selection.clear();
     setSelected(conversation.localId);
     setSelectedRun(runId);
     setPage("chat");
@@ -144,10 +158,55 @@ export function App({
       call("conversation_select", { conversationId: conversation.localId }),
     );
   };
+  const openSession = async (sessionId: string) => {
+    if (!data.selectedServer) return;
+    setSelected(null);
+    setSelectedRun(undefined);
+    setPage("chat");
+    const conversation = await opening.selection.open(
+      data.selectedServer,
+      sessionId,
+    );
+    if (!conversation) return;
+    setData((d) => ({
+      ...d,
+      conversations: [
+        ...d.conversations.filter((c) => c.localId !== conversation.localId),
+        conversation,
+      ],
+    }));
+    setSelected(conversation.localId);
+  };
   const projectName = (server: string, id: string) =>
     projects[server]?.find((p) => p.id === id)?.name ?? id;
   const selectedConversation = data.conversations.find(
     (c) => c.localId === selected,
+  );
+  const turns = useTurnHistory(
+    call,
+    page === "chat" ? selectedConversation : undefined,
+  );
+  const refreshMetadata = useCallback(async () => {
+    if (selectedConversation?.sessionId) {
+      await call("session_open", {
+        serverId: selectedConversation.serverProfileId,
+        sessionId: selectedConversation.sessionId,
+      });
+    }
+    await reload();
+  }, [
+    call,
+    selectedConversation?.serverProfileId,
+    selectedConversation?.sessionId,
+    reload,
+  ]);
+  useTerminalHistoryRefresh(
+    data.runs,
+    data.selectedServer,
+    page === "chat" ? selectedConversation : undefined,
+    history.pager,
+    turns.pager,
+    refreshMetadata,
   );
   const active = activeRuns(data.runs);
   const runAction = (
@@ -166,6 +225,8 @@ export function App({
       const run = await call("chat_submit", { conversationId: id, message });
       setData((d) => ({ ...d, runs: mergeRun(d.runs, run) }));
       await reload();
+      void history.pager.refresh();
+      void turns.pager.refresh();
       return true;
     } catch (e) {
       setChatErrors((errors) => ({
@@ -186,7 +247,7 @@ export function App({
           href="#"
           onClick={(e) => {
             e.preventDefault();
-            setPage("conversations");
+            navigate("conversations");
           }}
         >
           <span className="brand-mark">r.</span>
@@ -199,7 +260,7 @@ export function App({
           aria-label="新しい会話"
           onClick={() => {
             setError(null);
-            setPage("new");
+            navigate("new");
           }}
         >
           ＋ 新しい会話
@@ -209,35 +270,40 @@ export function App({
             className={
               page === "conversations" || page === "chat" ? "selected" : ""
             }
-            onClick={() => setPage("conversations")}
+            onClick={() => navigate("conversations")}
           >
-            ▤ Conversations <span>{data.conversations.length}</span>
+            ▤ Conversations <span>{history.state.items.length}</span>
           </button>
           <button
             className={page === "runs" ? "selected" : ""}
-            onClick={() => setPage("runs")}
+            onClick={() => navigate("runs")}
           >
             ◉ Active Runs <span>{active.length}</span>
           </button>
           <button
             className={page === "settings" ? "selected" : ""}
-            onClick={() => setPage("settings")}
+            onClick={() => navigate("settings")}
           >
             ⚙ Settings
           </button>
         </nav>
         <div className="sidebar-recent">
           <p className="eyebrow">RECENT CONVERSATIONS</p>
-          {data.conversations.slice(0, 7).map((c) => (
+          {history.state.items.slice(0, 7).map((c) => (
             <button
-              key={c.localId}
-              onClick={() => openConversation(c)}
+              key={c.sessionId}
+              onClick={() => void openSession(c.sessionId)}
               className={
-                selected === c.localId && page === "chat" ? "selected" : ""
+                selectedConversation?.sessionId === c.sessionId &&
+                page === "chat"
+                  ? "selected"
+                  : ""
               }
             >
               {c.title}
-              <small>{projectName(c.serverProfileId, c.projectId)}</small>
+              <small>
+                {projectName(data.selectedServer ?? "", c.projectId)}
+              </small>
             </button>
           ))}
         </div>
@@ -248,11 +314,14 @@ export function App({
               aria-label="選択中のサーバー"
               value={data.selectedServer ?? ""}
               disabled={pending}
-              onChange={(e) =>
+              onChange={(e) => {
+                opening.selection.clear();
+                setSelected(null);
+                setPage("conversations");
                 void perform(() =>
                   call("server_select", { serverId: e.target.value }),
-                )
-              }
+                );
+              }}
             >
               <option value="" disabled>
                 サーバーを選択
@@ -437,69 +506,18 @@ export function App({
               </section>
             )}
             {page === "conversations" && (
-              <section className="page">
-                <header className="page-heading">
-                  <div>
-                    <p className="eyebrow">YOUR WORKSPACE</p>
-                    <h1>Conversations</h1>
-                    <p className="muted">れいと進める、プロジェクトの続き。</p>
-                  </div>
-                  <span className="pill">
-                    {data.conversations.length} conversations
-                  </span>
-                  <button className="primary" onClick={() => setPage("new")}>
-                    会話を追加
-                  </button>
-                </header>
-                {!data.conversations.length ? (
-                  <div className="empty">
-                    <div className="rei-mark">r.</div>
-                    <h2>会話を始めましょう</h2>
-                    <p>プロジェクトを選んで、れいに作業を依頼します。</p>
-                    <button className="primary" onClick={() => setPage("new")}>
-                      プロジェクトを選ぶ
-                    </button>
-                  </div>
-                ) : (
-                  <div className="conversation-grid">
-                    {data.conversations.map((c) => (
-                      <article className="conversation-card" key={c.localId}>
-                        <button onClick={() => openConversation(c)}>
-                          <span className="eyebrow">
-                            {projectName(c.serverProfileId, c.projectId)}{" "}
-                            {c.sessionId ? "🔒" : ""}
-                          </span>
-                          <h2>{c.title}</h2>
-                          <p>
-                            {
-                              data.servers.find(
-                                (s) => s.id === c.serverProfileId,
-                              )?.name
-                            }
-                          </p>
-                          <small>
-                            {new Date(c.lastAccessedAt).toLocaleString()}
-                          </small>
-                        </button>
-                        <button
-                          className="quiet delete"
-                          disabled={pending}
-                          aria-label={`${c.title} を削除`}
-                          onClick={() =>
-                            void perform(() =>
-                              call("conversation_delete", {
-                                conversationId: c.localId,
-                              }),
-                            )
-                          }
-                        >
-                          削除
-                        </button>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </section>
+              <SessionList
+                state={history.state}
+                projects={projects[data.selectedServer ?? ""] ?? []}
+                projectId={history.projectId}
+                onProject={history.setProject}
+                onMore={() => void history.pager.more()}
+                onRefresh={() => void history.pager.refresh()}
+                onRetry={() => void history.pager.retry()}
+                onOpen={(id) => void openSession(id)}
+                onNew={() => navigate("new")}
+                enabled={!!data.selectedServer && data.unlocked}
+              />
             )}
             {page === "runs" && (
               <section className="page">
@@ -551,33 +569,66 @@ export function App({
               </section>
             )}
             {page === "chat" && selectedConversation && (
-              <Chat
-                key={selectedConversation.localId}
-                conversation={selectedConversation}
-                projectName={projectName(
-                  selectedConversation.serverProfileId,
-                  selectedConversation.projectId,
+              <>
+                <button
+                  className="history-back"
+                  onClick={() => navigate("conversations")}
+                >
+                  会話一覧へ戻る
+                </button>
+                <Chat
+                  key={selectedConversation.localId}
+                  conversation={selectedConversation}
+                  projectName={projectName(
+                    selectedConversation.serverProfileId,
+                    selectedConversation.projectId,
+                  )}
+                  runs={data.runs.filter(
+                    (r) => r.conversationId === selectedConversation.localId,
+                  )}
+                  pending={sending.includes(selectedConversation.localId)}
+                  error={chatErrors[selectedConversation.localId] ?? null}
+                  selectedRun={selectedRun}
+                  history={turns.state}
+                  onMoreHistory={() => void turns.pager.more()}
+                  onRetryHistory={() => void turns.pager.retry()}
+                  onRefreshHistory={() => {
+                    void turns.pager.refresh();
+                    void refreshMetadata().catch(() => {});
+                  }}
+                  onSend={send}
+                  onStop={(r) => runAction("run_cancel", r)}
+                  onRefresh={(r) => runAction("run_get", r)}
+                  onSubscribe={(r) => runAction("run_subscribe", r)}
+                  onContinue={() =>
+                    void perform(async () => {
+                      const c = await call("conversation_continue_new", {
+                        conversationId: selectedConversation.localId,
+                      });
+                      setSelected(c.localId);
+                      setSelectedRun(undefined);
+                    })
+                  }
+                />
+              </>
+            )}
+            {page === "chat" && !selectedConversation && (
+              <section className="page">
+                <button onClick={() => navigate("conversations")}>
+                  会話一覧へ戻る
+                </button>
+                {opening.state.loading && (
+                  <p role="status">会話を開いています…</p>
                 )}
-                runs={data.runs.filter(
-                  (r) => r.conversationId === selectedConversation.localId,
+                {opening.state.error && (
+                  <div className="notice" role="alert">
+                    {errorText(opening.state.error)}
+                  </div>
                 )}
-                pending={sending.includes(selectedConversation.localId)}
-                error={chatErrors[selectedConversation.localId] ?? null}
-                selectedRun={selectedRun}
-                onSend={send}
-                onStop={(r) => runAction("run_cancel", r)}
-                onRefresh={(r) => runAction("run_get", r)}
-                onSubscribe={(r) => runAction("run_subscribe", r)}
-                onContinue={() =>
-                  void perform(async () => {
-                    const c = await call("conversation_continue_new", {
-                      conversationId: selectedConversation.localId,
-                    });
-                    setSelected(c.localId);
-                    setSelectedRun(undefined);
-                  })
-                }
-              />
+                <button onClick={() => navigate("new")}>
+                  新しい会話を開始
+                </button>
+              </section>
             )}
           </>
         )}

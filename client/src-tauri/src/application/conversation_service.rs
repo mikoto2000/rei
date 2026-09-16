@@ -115,7 +115,6 @@ impl ConversationService {
                 return Err(AppError::SessionProjectConflict);
             }
             c.session_id = Some(session.into());
-            c.last_accessed_at = now();
             Ok(())
         })
     }
@@ -126,7 +125,9 @@ impl ConversationService {
                 .iter_mut()
                 .find(|c| c.local_id == id)
                 .ok_or(AppError::NotFound)?;
-            c.last_accessed_at = now();
+            if c.session_id.is_none() {
+                c.last_accessed_at = now();
+            }
             Ok(())
         })
     }
@@ -141,7 +142,6 @@ impl ConversationService {
                 return Err(AppError::SessionProjectConflict);
             }
             c.session_id = Some(session.into());
-            c.last_accessed_at = now();
             Ok(())
         })
     }

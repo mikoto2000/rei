@@ -14,6 +14,24 @@ fn service() -> (tempfile::TempDir, ConversationService) {
     (dir, ConversationService::new(repo).unwrap())
 }
 #[test]
+fn local_selection_and_submission_preserve_authoritative_timestamps() {
+    let (_, service) = service();
+    let session = SessionSummary::from_wire(
+        "s",
+        "p",
+        "Server title".into(),
+        "2026-09-16T08:00:00Z",
+        "2026-09-16T09:00:00Z",
+    )
+    .unwrap();
+    let c = service.open_session("server", &session).unwrap();
+    service.touch(&c.local_id).unwrap();
+    service.record_turn(&c.local_id, "s", "new prompt").unwrap();
+    let after = service.get(&c.local_id).unwrap();
+    assert_eq!(after.last_accessed_at, c.last_accessed_at);
+    assert_eq!(after.title, c.title);
+}
+#[test]
 fn runtime_project_lock_does_not_persist_server_metadata() {
     let (dir, service) = service();
     let c = service.create("server", "p", "hello").unwrap();
