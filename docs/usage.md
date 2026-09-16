@@ -297,7 +297,7 @@ Web 検索が無効、API キー未設定、不正 API キーなどで失敗し�
 
 ## 会話履歴
 
-`/history` は `/history show` と同じで、選択中のプロジェクトの会話を直近50メッセージ表示します。AI の実行中にも利用できます。
+`/history` は永続 Session 一覧、`/history show <sessionId>` は詳細と Turn を表示します。どちらも `--limit`（1〜100、既定50）と `--cursor` に対応します。従来の選択中プロジェクトの直近50メッセージは `/history show` で表示します。AI の実行中にも利用できます。[Session API・移行に関する仕様](session-history.md)も参照してください。
 
 ```text
 /history
