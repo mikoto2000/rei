@@ -1,4 +1,4 @@
-# Rei Client — Phase 1 / 2
+# Rei Client — Session History
 
 Tauri 2 + React + TypeScript + Rust の Run / Conversation クライアントです。既存の Java サーバーは変更しません。Windows を主な検証対象とし、共通コアとレスポンシブ UI を Android / iOS と共有します。
 
@@ -46,17 +46,17 @@ Windows の制限付き環境で Cargo の incremental cache rename が拒否さ
 3. Test Connection で `Server reachable`（health）と `Authentication OK`（projects）を別々に確認します。
 4. 新しい会話で server / project を選択して送信します。サーバー側 path は表示専用であり、API には project ID だけを送ります。
 5. 最初の送信で session が関連付き、project は固定されます。会話を再選択すると同じ session で続けます。
-6. 404 session expiry は自動再送しません。「新しい会話として続ける」は別のローカル会話を作り、古い session の metadata を保持します。
+6. Conversations はサーバーの Session 一覧です。project filter・追加読込み・更新に対応します。選択時に詳細と過去 Turn を取得し、同じ session で再開します。404 は自動再送せず、明示的に新しい会話へ進めます。409 は詳細を再取得してエラーを表示し、POST を再試行しません。
 7. Active Runs から会話・Run を選択できます。Stop は必ず選択した server ID / run ID を指定します。
 
 サーバーは LAN / VPN 上で利用し、HTTPS を推奨します。インターネットへの直接公開を前提としていません。Windows ではローカル開発向け HTTP も可能ですが、API Key を平文で送るため、信頼できるネットワークでのみ使用してください。認証付きリダイレクトは追従しません。
 
-server URL の変更は、その server に会話が残っていない場合だけ可能です。server 削除前には関連会話の metadata を削除してください。実行中の会話削除・server 更新は拒否します。
+server URL の変更・削除は、この起動中に関連する会話が開かれていると拒否します。接続先の取り違えを防ぐ既存の制約です。必要な場合は Run の終了を確認し、アプリを再起動して設定を変更してください。サーバーの Session を削除する機能はありません。
 
 ## セキュリティと保存
 
 - **Secret**: Rust `EncryptedVault`。Argon2id による鍵導出、ランダム salt、更新ごとのランダム nonce、XChaCha20-Poly1305 による認証付き暗号化。秘密値と導出鍵は zeroize します。パスフレーズを忘れると Vault を復旧できません。
-- **Persistent app data**: app data directory の `app.json`。ServerProfile / credentialRef、selected server、Conversation metadata、通知設定だけを JSON repository に保存します。書込みは一時ファイルから atomic replace。API Key や会話本文は含みません。
+- **Persistent app data**: app data directory の `app.json`。ServerProfile / credentialRef、selected server、通知設定だけを JSON repository に保存します。書込みは一時ファイルから atomic replace。API Key や会話本文は含みません。
 - **Runtime**: RunManager、stream task、sequence cursor、Projection、再接続状態。アプリ終了時に失われます。サーバーの Run 自体はアプリ終了で cancel しません。
 
 Stronghold を第一候補として試しましたが、依存する libsodium のダウンロードホストをこの環境から解決できず、RustCrypto による portable encrypted vault adapter を採用しました。秘密ストレージは `CredentialStore` / `CredentialFactory` で交換可能です。独自暗号アルゴリズムは実装していませんが、この Vault の外部セキュリティ監査は未実施です。
@@ -69,7 +69,7 @@ Stronghold を第一候補として試しましたが、依存する libsodium �
 React feature components
   → src/tauri/commands.ts (typed boundary)
   → native.rs (Tauri command / DTO)
-  → Application / ConversationService / RunManager
+  → Application / SessionHistoryService / ConversationService / RunManager
   → ReiClient / CredentialStore / Repository / NotificationPort
   ← HTTP-SSE / EncryptedVault / JsonRepository / native notification adapters
 
@@ -136,9 +136,17 @@ Android の cleartext 制約を WebView 任せにせず、native HTTP adapter �
 ## 範囲と制約
 
 - Phase 1: server / credential / health-auth test / projects / chat / Run tracking / SSE / terminal / reconnect / replay / gap recovery / cancel / multiple runs。
-- Phase 2: local Conversation list / persistence / project lock / resume / explicit expiry recovery / Tool Activity / Working Set / connection state / Active Runs / notification port / Desktop-Mobile responsive UI。
-- ローカルに保存するのは会話 metadata のみ。再起動前の transcript、active Run の自動復元、サーバー履歴同期はありません。
+- Session History: server Session list / project filter / opaque cursor pagination / detail / persisted Turns / authoritative resume。既存の project lock / RunManager / SSE / Tool Activity / Working Set / responsive UI と統合。
+- 会話 metadata / transcript は永続化しません。再起動後は Session API から再取得します。active Run の自動復元とオフライン履歴は未対応。旧 app.json の conversations は読込み時に無視し、次の設定保存時に除去します。既存ファイルを起動時に強制書換えはしません。
 - 実 Rei Server の API Key を使った live 接続、OS ごとの実通知、Android / iOS 実機は未検証。mock HTTP/SSE の結合テストと browser UI テストは別に実施しています。
-- Phase 3 以降の history / search / summarize / image / briefing / feed / reminder / memory / interest / profile / skill UI は実装しません。
+- Phase 3 以降の search / summarize / image / briefing / feed / reminder / memory / interest / profile / skill UI は実装しません。
 
 テストの Red → Green 記録は [TDD.md](TDD.md)、今回の検証結果は [VALIDATION.md](VALIDATION.md) を参照してください。
+
+## Session History の契約
+
+`session_list` / `session_get` / `session_turns` は専用 UI DTO を返し、`session_open` は詳細を検証して一時的な会話ハンドルを返します。HTTP DTO は adapter 内部、domain は日時を DateTime として保持し、UI は ISO 8601 文字列を受け取ります。履歴は React → command → application service → ReiClient のみで取得します。
+
+limit は既定50、1〜100。cursor は解釈せず URL encode して送信します。一覧はサーバー順、Turn は createdAt 昇順を保持して下へ追加します。重複は sessionId / runId で排除し、警告は件数だけです。server / project / session 切替は generation を進め、古い応答を捨てます。refresh は cursor をリセットし、失敗時は既存表示を未同期と明示して保持します。
+
+既存会話の送信前に Session 詳細を再取得し、その projectId / sessionId で POST します。新規会話は sessionId を送らず、サーバーの採番結果を使います。受理後と terminal 時に一覧・履歴を更新し、delta ごとの再取得はしません。保存済み Turn とライブ Run は runId で統合し、terminal の保存済み回答を優先しながら Tool Activity を残します。

@@ -40,3 +40,14 @@ No production API key or live server is used by tests.
 - Additional regressions cover cross-run/mismatched sequence rejection, heartbeat with ID, oversize/invalid UTF-8, failed notification with denied permission, gap polling while still RUNNING, and terminal status during an outage.
 
 The platform check matrix and environment blockers are recorded in VALIDATION.md.
+
+## Session History（2026-09-17）
+
+1. Rust の Session model / HTTP / service / DTO テストを先に追加し、未実装 symbol の compile failure を確認。domain・HTTP DTO・application service・command を実装し50件成功。既存の永続化テストは新しい非永続化契約に変更。
+2. HistoryPager の5テストと SessionSelection の3テストを先に追加し、module 不在の Red を確認。paging / generation / explicit retry / selection isolation を実装して Green。
+3. App.history の5テストを追加し、既存画面で5件失敗を確認。remote list / project filter / more / detail / locked resume / 404 recovery を接続し Green。
+4. 保存済み Turn と runtime Run の重なりに対して timeline テストを追加し、module 不在の Red を確認。サーバー順を保つ merge を実装して Green。
+5. terminal refresh の回帰テストを追加して、delta では取得せず terminal ごとに1度だけ一覧・履歴・metadata を更新することを確認。
+6. 最終レビューでローカル touch がサーバー更新日時を上書きする問題を修正し、回帰テストを追加。これは修正後に追加したテストであり Red-first としては扱わない。
+
+最終結果: Rust51件、frontend27件、browser6件成功。型・lint・format・native check/clippy・desktop build 成功。Android は NDK compiler 不在、iOS は Windows 環境のため未検証。詳細は VALIDATION.md。
