@@ -1,7 +1,15 @@
+use crate::application::RunView;
 use crate::domain::*;
 use async_trait::async_trait;
 use futures_util::Stream;
 use std::pin::Pin;
+
+pub trait RunObserver: Send + Sync {
+    fn changed(&self, run: RunView);
+}
+pub trait NotificationPort: Send + Sync {
+    fn notify(&self, run: &RunView) -> Result<()>;
+}
 
 pub type ByteStream = Pin<Box<dyn Stream<Item = Result<Vec<u8>>> + Send>>;
 #[async_trait]

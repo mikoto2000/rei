@@ -22,6 +22,24 @@ pub enum AppError {
 }
 pub type Result<T> = std::result::Result<T, AppError>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum StreamState {
+    Connecting,
+    Connected,
+    Reconnecting,
+    Closed,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ConnectionState {
+    Disconnected,
+    Connecting,
+    Connected,
+    AuthFailed,
+    ServerUnreachable,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub id: String,
