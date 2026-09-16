@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.*;
 class WebApiIntegrationTest {
   @Configuration(proxyBeanMethods = false)
   @Import({WebApiConfiguration.class, SecurityConfig.class, ChatController.class, RunController.class,
-      SseController.class, ProjectController.class, ApiExceptionHandler.class})
+      SseController.class, ProjectController.class, SessionController.class, ApiExceptionHandler.class})
   @ImportAutoConfiguration({
       org.springframework.boot.tomcat.autoconfigure.servlet.TomcatServletWebServerAutoConfiguration.class,
       org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration.class,
@@ -37,12 +37,57 @@ class WebApiIntegrationTest {
     @Bean AgentEventBus bus() { return new InMemoryAgentEventBus(); }
     @Bean CommandCancellationService cancellation() { return new CommandCancellationService(); }
     @Bean(destroyMethod = "shutdownNow") ExecutorService executor() { return Executors.newVirtualThreadPerTaskExecutor(); }
-    @Bean ConversationInputRouter router(ExecutorService executor, AgentEventBus bus, AgentEventFactory events) {
+    @Bean ConversationInputRouter router(ExecutorService executor, AgentEventBus bus, AgentEventFactory events,
+        dev.mikoto2000.rei.conversation.ConversationTurnStore turns, Clock clock) {
       return new ConversationInputRouter(executor, (context, prompt, input) -> {
+        turns.start(context, prompt, clock.instant());
         bus.publish(events.runStarted(context.runId(), "test", null).withOwnership(context));
         bus.publish(events.messageDelta("message", "hello").withOwnership(context));
+        turns.finish(context, dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.COMPLETED, "hello");
         bus.publish(events.runCompleted(context.runId(), 1).withOwnership(context));
       });
+    }
+  }
+  @Test void realHttpHistorySurvivesRestartAndListedIdContinuesTheSameSession() throws Exception {
+    String sessionId = null, projectId = null, originalRun = null;
+    var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    for (int restart = 0; restart < 2; restart++) {
+      var application = new SpringApplication(Config.class);
+      WebApplication.configure(application, "integration-key");
+      try (var context = application.run("--rei.web.port=0", "--rei.data-dir=" + directory,
+          "--logging.config=classpath:web-test-logback.xml"); var client = HttpClient.newHttpClient()) {
+        int port = Integer.parseInt(context.getEnvironment().getProperty("local.server.port"));
+        if (restart == 0) {
+          projectId = context.getBean(ProjectRegistry.class).resolve(directory).id();
+          var response = send(client, port, "/api/v1/chat", "{\"message\":\"first title\",\"projectId\":\"" + projectId + "\"}", true);
+          assertThat(response.statusCode()).isEqualTo(202);
+          var accepted = json.readTree(response.body());
+          sessionId = accepted.path("sessionId").asText(); originalRun = accepted.path("runId").asText();
+          assertThat(send(client, port, "/api/v1/runs/" + originalRun + "/events", null, true).body()).contains("agent.run.completed");
+        } else {
+          var listed = send(client, port, "/api/v1/sessions", null, true);
+          assertThat(listed.statusCode()).isEqualTo(200);
+          assertThat(json.readTree(listed.body()).path("items").get(0).path("sessionId").asText()).isEqualTo(sessionId);
+          assertThat(send(client, port, "/api/v1/sessions/" + sessionId, null, true).statusCode()).isEqualTo(200);
+          var history = send(client, port, "/api/v1/sessions/" + sessionId + "/turns", null, true);
+          assertThat(history.statusCode()).isEqualTo(200);
+          var turn = json.readTree(history.body()).path("items").get(0);
+          assertThat(turn.path("turnId").asText()).isEqualTo(originalRun);
+          assertThat(turn.path("assistantMessage").asText()).isEqualTo("hello");
+          var continued = send(client, port, "/api/v1/chat", "{\"message\":\"next\",\"projectId\":\"" + projectId
+              + "\",\"sessionId\":\"" + sessionId + "\"}", true);
+          assertThat(continued.statusCode()).isEqualTo(202);
+          var accepted = json.readTree(continued.body());
+          assertThat(accepted.path("sessionId").asText()).isEqualTo(sessionId);
+          assertThat(accepted.path("runId").asText()).isNotEqualTo(originalRun);
+          assertThat(send(client, port, "/api/v1/runs/" + accepted.path("runId").asText() + "/events", null, true).body())
+              .contains("agent.run.completed");
+          assertThat(json.readTree(send(client, port, "/api/v1/sessions/" + sessionId, null, true).body()).path("title").asText())
+              .isEqualTo("first title");
+          assertThat(json.readTree(send(client, port, "/api/v1/sessions/" + sessionId + "/turns", null, true).body()).path("items").size())
+              .isEqualTo(2);
+        }
+      }
     }
   }
   @TempDir Path directory;

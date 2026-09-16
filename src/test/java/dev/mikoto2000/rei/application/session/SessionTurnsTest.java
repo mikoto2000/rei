@@ -59,4 +59,21 @@ class SessionTurnsTest {
     assertThat(legacy.read("one").getFirst().createdAt()).isNull();
     assertThat(new SessionQueryService(repo, legacy).listTurns("one", 50, null).items()).isEmpty();
   }
+
+  @Test void defaultMaximumAndAppendBetweenPagesKeepExistingTurns() {
+    var repo = new FileSessionRepository(temp.resolve("sessions.json"));
+    repo.accept(new SessionMetadata("one", "p", "title", now, now), () -> {});
+    var turns = ConversationTurnStore.inMemory();
+    for (int i = 0; i < 100; i++) turns.start(new AgentRunContext(String.format("%03d", i), "one", temp), "q", now);
+    var query = new SessionQueryService(repo, turns);
+    var first = query.listTurns("one", null, null);
+    assertThat(first.items()).hasSize(50);
+    assertThat(query.listTurns("one", 100, null).items()).hasSize(100);
+    turns.start(new AgentRunContext("new", "one", temp), "new question", now.plusSeconds(1));
+    var second = query.listTurns("one", 100, first.nextCursor());
+    assertThat(second.items()).hasSize(51);
+    assertThat(second.items().getFirst().runId()).isEqualTo("050");
+    assertThat(second.items().getLast().runId()).isEqualTo("new");
+    assertThat(second.nextCursor()).isNull();
+  }
 }

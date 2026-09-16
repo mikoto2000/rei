@@ -51,4 +51,25 @@ class SessionRepositoryTest {
         .isInstanceOf(IllegalStateException.class);
     assertThat(store.findById("one")).isEmpty();
   }
+
+  @Test void concurrentAdmissionNeverLosesRowsOrRegressesUpdatedAt() throws Exception {
+    var file = temp.resolve("sessions.json");
+    var store = new FileSessionRepository(file);
+    var first = metadata("one"); store.accept(first, () -> {});
+    try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+      var jobs = new java.util.ArrayList<java.util.concurrent.Future<?>>();
+      for (int i = 1; i <= 30; i++) {
+        int index = i;
+        jobs.add(executor.submit(() -> {
+          store.accept(first.touched(now.plusSeconds(index)), () -> {});
+          store.accept(metadata("new-" + index), () -> {});
+          assertThat(store.findPage(null, null, 100)).isNotEmpty();
+        }));
+      }
+      for (var job : jobs) job.get(10, java.util.concurrent.TimeUnit.SECONDS);
+    }
+    var restored = new FileSessionRepository(file);
+    assertThat(restored.findById("one")).contains(first.touched(now.plusSeconds(30)));
+    assertThat(restored.findPage(null, null, 100)).hasSize(31);
+  }
 }
