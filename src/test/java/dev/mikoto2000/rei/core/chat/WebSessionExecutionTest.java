@@ -52,7 +52,7 @@ class WebSessionExecutionTest {
     var registry = new RunRegistry(Clock.systemUTC());
     try (var runs = new RunService(registry, bus, factory, cancellation, router::cancelQueued);
         var scope = projectService.newClient().open()) {
-      var submit = new ChatSubmitService(projects, new SessionRegistry(Clock.systemUTC()), registry,
+      var submit = new ChatSubmitService(projects, new SessionRegistry(Clock.systemUTC()), registry, new dev.mikoto2000.rei.conversation.FileSessionRepository(directory.resolve("sessions.json")), Clock.systemUTC(),
           (context, prompt) -> router.submit(context, prompt, work -> runs.execute(context, work)));
       var a = submit.submit("alpha-marker", first.id(), null);
       var b = submit.submit("beta-marker", first.id(), null);

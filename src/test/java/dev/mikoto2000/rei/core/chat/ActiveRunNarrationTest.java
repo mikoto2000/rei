@@ -25,7 +25,8 @@ class ActiveRunNarrationTest {
     var project = projects.resolve(directory);
     var submit = new dev.mikoto2000.rei.application.run.ChatSubmitService(projects,
         new dev.mikoto2000.rei.application.run.SessionRegistry(clock),
-        new dev.mikoto2000.rei.application.run.RunRegistry(clock), router::submit);
+        new dev.mikoto2000.rei.application.run.RunRegistry(clock),
+        new dev.mikoto2000.rei.conversation.FileSessionRepository(directory.resolve("sessions.json")), clock, router::submit);
 
     submit.submit("work", project.id(), null);
     tasks.removeFirst().run();

@@ -11,6 +11,7 @@ import org.springframework.context.annotation.*;
 import org.springframework.scheduling.annotation.*;
 
 @Configuration(proxyBeanMethods = false)
+@Import(dev.mikoto2000.rei.conversation.SessionHistoryConfiguration.class)
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @EnableScheduling
@@ -29,8 +30,9 @@ public class WebApiConfiguration {
     return new RunService(registry, bus, events, cancellation, router::cancelQueued);
   }
   @Bean ChatSubmitService webChatSubmitService(ProjectRegistry projects, SessionRegistry sessions,
-      RunRegistry registry, RunService runs, ConversationInputRouter router) {
-    return new ChatSubmitService(projects, sessions, registry,
+      RunRegistry registry, RunService runs, ConversationInputRouter router,
+      dev.mikoto2000.rei.application.session.SessionRepository repository, Clock clock) {
+    return new ChatSubmitService(projects, sessions, registry, repository, clock,
         (context, prompt) -> router.submit(context, prompt, work -> runs.execute(context, work)));
   }
   @Bean SseBridge sseBridge(AgentEventBus bus, RunService runs, ApiKeyProperties key) {
