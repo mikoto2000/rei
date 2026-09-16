@@ -23,7 +23,8 @@ public final class ChatSubmitService {
       sessionId = project.conversationId(ConversationIds.chat(UUID.randomUUID().toString()));
       sessions.register(sessionId, project.id());
     } else sessions.requireProject(sessionId, project.id());
-    var context = new AgentRunContext(UUID.randomUUID().toString(), sessionId, project.root(), project.id());
+    var context = new AgentRunContext(UUID.randomUUID().toString(), sessionId, project.root(), project.id(),
+        AgentRunContext.RequestSource.WEB);
     runs.register(context);
     dispatch.accept(context, message);
     return context;

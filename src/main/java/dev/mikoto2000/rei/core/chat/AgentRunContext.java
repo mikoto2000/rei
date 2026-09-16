@@ -4,7 +4,13 @@ import java.nio.file.Path;
 import java.util.Objects;
 
 /** Identity and location are captured before dispatch, never resolved at completion. */
-public record AgentRunContext(String runId, String conversationId, Path projectRoot, String projectId) {
+public record AgentRunContext(String runId, String conversationId, Path projectRoot, String projectId,
+    RequestSource requestSource) {
+  public enum RequestSource { SHELL, WEB }
+
+  public AgentRunContext(String runId, String conversationId, Path projectRoot, String projectId) {
+    this(runId, conversationId, projectRoot, projectId, RequestSource.SHELL);
+  }
   public AgentRunContext(String runId, String conversationId, Path projectRoot) {
     this(runId, conversationId, projectRoot, null);
   }
@@ -14,6 +20,7 @@ public record AgentRunContext(String runId, String conversationId, Path projectR
   public AgentRunContext {
     Objects.requireNonNull(runId);
     Objects.requireNonNull(conversationId);
+    Objects.requireNonNull(requestSource);
     projectRoot = Objects.requireNonNull(projectRoot).toAbsolutePath().normalize();
   }
 }

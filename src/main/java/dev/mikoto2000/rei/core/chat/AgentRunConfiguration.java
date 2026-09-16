@@ -18,7 +18,7 @@ public class AgentRunConfiguration {
     return new ConversationInputRouter(agentRunExecutor, (context, prompt, queue) -> {
       try {
         var result = execution.execute(context, prompt, queue);
-        if (result.success()) {
+        if (result.success() && context.requestSource() == AgentRunContext.RequestSource.SHELL) {
           // Audio can block for minutes; it is not an active AgentRun and must not hold its mailbox open.
           try {
             agentRunExecutor.execute(() -> {
