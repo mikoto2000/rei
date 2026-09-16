@@ -1,5 +1,7 @@
 # Rei
 
+Web API 向けの Tauri 2 クライアント（Phase 1 / 2）は [client/README.md](client/README.md) を参照してください。Windows での開発・ビルド、Conversation / Run UI、SSE 再接続、モバイルの検証状況を記載しています。
+
 Codex による read-only 外部レビューは `/agent codex review [target]` または明示的な自然言語依頼で利用できます。
 必要な CLI capability、設定、安全境界は [External Agent Delegation](docs/external-agent-delegation.md) を参照してください。
 
