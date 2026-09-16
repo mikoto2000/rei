@@ -96,7 +96,9 @@ class ExternalAgentProcessRunnerTest {
         case "child" -> {
           Process child = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
               "-cp", System.getProperty("java.class.path"), Fixture.class.getName(), "sleep").start();
-          Files.writeString(Path.of("child.pid"), Long.toString(child.pid()));
+          // Publish only complete content; observing file creation alone otherwise races the write.
+          Files.writeString(Path.of("child.pid.tmp"), Long.toString(child.pid()));
+          Files.move(Path.of("child.pid.tmp"), Path.of("child.pid"), StandardCopyOption.ATOMIC_MOVE);
           Thread.sleep(60000);
         }
         default -> Thread.sleep(60000);
