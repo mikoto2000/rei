@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.*;
 class WebApiIntegrationTest {
   @Configuration(proxyBeanMethods = false)
   @Import({WebApiConfiguration.class, SecurityConfig.class, ChatController.class, RunController.class,
-      SseController.class, ApiExceptionHandler.class})
+      SseController.class, ProjectController.class, ApiExceptionHandler.class})
   @ImportAutoConfiguration({
       org.springframework.boot.tomcat.autoconfigure.servlet.TomcatServletWebServerAutoConfiguration.class,
       org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration.class,
@@ -62,7 +62,13 @@ class WebApiIntegrationTest {
         for (String path : new String[] {"/actuator/env", "/actuator/configprops", "/actuator/beans",
             "/api/v1/history", "/api/v1/sh", "/api/v1/project/cd"})
           assertThat(send(client, port, path, null, true).statusCode()).isEqualTo(404);
-        var accepted = send(client, port, "/api/v1/chat", "{\"message\":\"hello\",\"projectId\":\"" + project.id() + "\"}", true);
+        assertThat(send(client, port, "/api/v1/projects", null, false).statusCode()).isEqualTo(401);
+        var listed = send(client, port, "/api/v1/projects", null, true);
+        assertThat(listed.statusCode()).isEqualTo(200);
+        var projects = new com.fasterxml.jackson.databind.ObjectMapper().readTree(listed.body());
+        String projectId = projects.get(0).get("id").asText();
+        assertThat(projectId).isEqualTo(project.id());
+        var accepted = send(client, port, "/api/v1/chat", "{\"message\":\"hello\",\"projectId\":\"" + projectId + "\"}", true);
         assertThat(accepted.statusCode()).isEqualTo(202);
         var json = new com.fasterxml.jackson.databind.ObjectMapper().readTree(accepted.body());
         String location = accepted.headers().firstValue("Location").orElseThrow();
