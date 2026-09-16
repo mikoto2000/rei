@@ -66,6 +66,33 @@ const call = (async (
   args: Record<string, unknown> | undefined,
 ) => {
   if (name === "app_snapshot") return structuredClone(data);
+  if (name === "session_list")
+    return {
+      items: [
+        {
+          sessionId: "session",
+          projectId: "p",
+          title: conversation.title,
+          createdAt: "2026-09-16T00:00:00Z",
+          updatedAt: "2026-09-16T01:00:00Z",
+        },
+      ],
+      nextCursor: null,
+    };
+  if (name === "session_open") return conversation;
+  if (name === "session_turns")
+    return {
+      items: [
+        {
+          turnId: args?.cursor ? "older2" : "older1",
+          runId: args?.cursor ? "older2" : "older1",
+          userMessage: args?.cursor ? "次の保存済み質問" : "保存済みの質問",
+          assistantMessage: "保存済みの回答",
+          createdAt: "2026-09-16T00:00:00Z",
+        },
+      ],
+      nextCursor: args?.cursor ? null : "opaque-next",
+    };
   if (name === "projects_list")
     return [{ id: "p", name: "rei", path: "F:\\project\\rei" }];
   if (name === "run_cancel") {

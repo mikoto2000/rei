@@ -17,7 +17,7 @@ class ChatControllerTest {
     var projects = new ProjectRegistry(directory.resolve("projects.json"));
     var project = projects.resolve(directory);
     var clock = Clock.systemUTC();
-    var service = new ChatSubmitService(projects, new SessionRegistry(clock), new RunRegistry(clock), (c, p) -> {});
+    var service = new ChatSubmitService(projects, new SessionRegistry(clock), new RunRegistry(clock), new dev.mikoto2000.rei.conversation.FileSessionRepository(directory.resolve("sessions.json")), clock, (c, p) -> {});
     var mvc = MockMvcBuilders.standaloneSetup(new ChatController(service))
         .setControllerAdvice(new ApiExceptionHandler()).build();
     var result = mvc.perform(post("/api/v1/chat").contentType("application/json")

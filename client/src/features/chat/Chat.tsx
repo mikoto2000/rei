@@ -1,3 +1,4 @@
+import { timeline } from "../history/timeline";
 import { useState } from "react";
 import {
   activeRuns,
@@ -5,7 +6,9 @@ import {
   errorText,
   type Conversation,
   type Run,
+  type ConversationTurn,
 } from "../../entities/models";
+import type { HistoryState } from "../history/pagination";
 interface Props {
   conversation: Conversation;
   projectName: string;
@@ -18,6 +21,10 @@ interface Props {
   onRefresh: (run: Run) => void;
   onSubscribe: (run: Run) => void;
   selectedRun?: string;
+  history?: HistoryState<ConversationTurn>;
+  onMoreHistory?: () => void;
+  onRetryHistory?: () => void;
+  onRefreshHistory?: () => void;
 }
 export function Chat({
   conversation,
@@ -31,6 +38,10 @@ export function Chat({
   onRefresh,
   onSubscribe,
   selectedRun,
+  history,
+  onMoreHistory,
+  onRetryHistory,
+  onRefreshHistory,
 }: Props) {
   const [message, setMessage] = useState("");
   return (
@@ -39,6 +50,18 @@ export function Chat({
         <div>
           <p className="eyebrow">CONVERSATION</p>
           <h1>{conversation.title}</h1>
+          {conversation.sessionId && (
+            <>
+              <small>
+                Updated:{" "}
+                {new Date(conversation.lastAccessedAt).toLocaleString()}
+              </small>
+              <details className="session-identity">
+                <summary>Session ID</summary>
+                <code>{conversation.sessionId}</code>
+              </details>
+            </>
+          )}
         </div>
         <span className="pill">
           {projectName}
@@ -46,97 +69,153 @@ export function Chat({
         </span>
       </header>
       <div className="transcript">
-        {!runs.length && (
-          <div className="empty">
-            <div className="rei-mark">r.</div>
-            <h2>れいと、次の一歩へ。</h2>
-            <p>コードの調査や作業を依頼してください。</p>
-            <small>
-              以前の会話本文は保存されません。session は継続できます。
-            </small>
+        {conversation.sessionId && onRefreshHistory && (
+          <button
+            onClick={onRefreshHistory}
+            disabled={history?.loadingInitial || history?.refreshing}
+          >
+            履歴を更新
+          </button>
+        )}
+        {history?.loadingInitial && (
+          <p role="status">メッセージを読み込んでいます…</p>
+        )}
+        {history?.error && (
+          <div role="alert" className="notice">
+            {errorText(history.error)}{" "}
+            {history.stale && "最後に取得した履歴です（未同期）。"}
+            <button onClick={onRetryHistory}>履歴を再試行</button>
           </div>
         )}
-        {runs.map((run) => (
-          <article
-            key={run.runId}
-            id={`run-${run.runId}`}
-            className={`turn ${selectedRun === run.runId ? "highlight" : ""}`}
-          >
-            <div className="message user">
-              <span className="message-label">YOU</span>
-              <p>{run.prompt}</p>
+        {!runs.length &&
+          !history?.items.length &&
+          !history?.loadingInitial &&
+          !history?.error && (
+            <div className="empty">
+              <div className="rei-mark">r.</div>
+              <h2>れいと、次の一歩へ。</h2>
+              <p>コードの調査や作業を依頼してください。</p>
+              <small>
+                {conversation.sessionId
+                  ? "この会話にはまだメッセージがありません。"
+                  : "最初の送信で新しい会話を作成します。"}
+              </small>
             </div>
-            <div className="message assistant">
-              <div className="message-heading">
-                <span className="message-label">REI</span>
-                <span className={`status ${run.status.toLowerCase()}`}>
-                  {run.status}
-                </span>
-                <span className="muted">{run.streamState}</span>
+          )}
+        {timeline(history?.items ?? [], runs).map(({ turn, run }) =>
+          run ? (
+            <article
+              key={run.runId}
+              id={`run-${run.runId}`}
+              className={`turn ${selectedRun === run.runId ? "highlight" : ""}`}
+            >
+              <div className="message user">
+                <span className="message-label">YOU</span>
+                <p>{run.prompt}</p>
               </div>
-              {run.incomplete && (
-                <p className="notice">
-                  イベント履歴の一部を取得できませんでした。表示内容は不完全です。
-                </p>
-              )}
-              <div className="answer">
-                {run.assistantText ||
-                  (!activeRuns([run]).length
-                    ? "回答テキストはありません。"
-                    : "れいが作業しています…")}
-              </div>
-              {!!run.tools.length && (
-                <details className="activity" open>
-                  <summary>Tool activity · {run.tools.length}</summary>
-                  {run.tools.map((tool) => (
-                    <div className="tool" key={tool.id}>
-                      <span>
-                        {tool.status === "COMPLETED"
-                          ? "✓"
-                          : tool.status === "FAILED"
-                            ? "!"
-                            : "↻"}
-                      </span>
-                      <div>
-                        <strong>{tool.name}</strong>
-                        <p>{tool.summary}</p>
-                      </div>
-                      <small>{tool.status}</small>
-                    </div>
-                  ))}
-                </details>
-              )}
-              {!!run.workingSet.length && (
-                <details className="activity">
-                  <summary>Working set · {run.workingSet.length}</summary>
-                  {run.workingSet.map((item) => (
-                    <p key={item.id} className="file-path">
-                      {item.path || item.identifier} <small>{item.kind}</small>
-                    </p>
-                  ))}
-                </details>
-              )}
-              {run.failure && <p className="notice">Run が失敗しました。</p>}
-              {run.error && <p className="muted">{errorText(run.error)}</p>}
-              <div className="run-actions">
-                <small>Run {run.runId.slice(0, 8)}</small>
-                <button className="quiet" onClick={() => onRefresh(run)}>
-                  状態を更新
-                </button>
-                {activeRuns([run]).length > 0 && (
-                  <>
-                    <button className="danger" onClick={() => onStop(run)}>
-                      Stop
-                    </button>
-                    {run.streamState === "CLOSED" && (
-                      <button onClick={() => onSubscribe(run)}>再接続</button>
-                    )}
-                  </>
+              <div className="message assistant">
+                <div className="message-heading">
+                  <span className="message-label">REI</span>
+                  <span className={`status ${run.status.toLowerCase()}`}>
+                    {run.status}
+                  </span>
+                  <span className="muted">{run.streamState}</span>
+                </div>
+                {run.incomplete && (
+                  <p className="notice">
+                    イベント履歴の一部を取得できませんでした。表示内容は不完全です。
+                  </p>
                 )}
+                <div className="answer">
+                  {(turn?.assistantMessage != null && !activeRuns([run]).length
+                    ? turn.assistantMessage
+                    : run.assistantText) ||
+                    (!activeRuns([run]).length
+                      ? "回答テキストはありません。"
+                      : "れいが作業しています…")}
+                </div>
+                {!!run.tools.length && (
+                  <details className="activity" open>
+                    <summary>Tool activity · {run.tools.length}</summary>
+                    {run.tools.map((tool) => (
+                      <div className="tool" key={tool.id}>
+                        <span>
+                          {tool.status === "COMPLETED"
+                            ? "✓"
+                            : tool.status === "FAILED"
+                              ? "!"
+                              : "↻"}
+                        </span>
+                        <div>
+                          <strong>{tool.name}</strong>
+                          <p>{tool.summary}</p>
+                        </div>
+                        <small>{tool.status}</small>
+                      </div>
+                    ))}
+                  </details>
+                )}
+                {!!run.workingSet.length && (
+                  <details className="activity">
+                    <summary>Working set · {run.workingSet.length}</summary>
+                    {run.workingSet.map((item) => (
+                      <p key={item.id} className="file-path">
+                        {item.path || item.identifier}{" "}
+                        <small>{item.kind}</small>
+                      </p>
+                    ))}
+                  </details>
+                )}
+                {run.failure && <p className="notice">Run が失敗しました。</p>}
+                {run.error && <p className="muted">{errorText(run.error)}</p>}
+                <div className="run-actions">
+                  <small>Run {run.runId.slice(0, 8)}</small>
+                  <button className="quiet" onClick={() => onRefresh(run)}>
+                    状態を更新
+                  </button>
+                  {activeRuns([run]).length > 0 && (
+                    <>
+                      <button className="danger" onClick={() => onStop(run)}>
+                        Stop
+                      </button>
+                      {run.streamState === "CLOSED" && (
+                        <button onClick={() => onSubscribe(run)}>再接続</button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          </article>
-        ))}
+            </article>
+          ) : turn ? (
+            <article className="turn" key={turn.runId}>
+              <time className="muted" dateTime={turn.createdAt}>
+                {new Date(turn.createdAt).toLocaleString()}
+              </time>
+              <div className="message user">
+                <span className="message-label">YOU</span>
+                <p>{turn.userMessage}</p>
+              </div>
+              <div className="message assistant">
+                <span className="message-label">REI</span>
+                <div className="answer">
+                  {turn.assistantMessage ?? "応答はまだ記録されていません。"}
+                </div>
+              </div>
+            </article>
+          ) : null,
+        )}
+        {history?.nextCursor && (
+          <button
+            className="load-more"
+            onClick={onMoreHistory}
+            disabled={history.loadingMore || history.refreshing}
+          >
+            {history.loadingMore ? "読み込み中…" : "次のメッセージを読み込む"}
+          </button>
+        )}
+        {history?.error === "SessionNotFound" && (
+          <button onClick={onContinue}>新しい会話として続ける</button>
+        )}
       </div>
       <div className="composer-area">
         {error && (
@@ -173,7 +252,9 @@ export function Chat({
             <button
               className="primary"
               disabled={
-                !canSubmit(conversation.localId, message, runs, pending)
+                !canSubmit(conversation.localId, message, runs, pending) ||
+                error === "SessionNotFound" ||
+                history?.error === "SessionNotFound"
               }
             >
               {pending ? "送信中…" : "Send ↗"}

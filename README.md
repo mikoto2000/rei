@@ -116,7 +116,9 @@ AI の実行中も入力できます。同じプロジェクトへの追加入�
 
 ### 会話履歴を検索する
 
-`/history` は選択中のプロジェクトの直近50メッセージを表示します。検索は現在のプロジェクトを優先し、結果が不十分なら他のプロジェクトも検索します。現在のプロジェクトだけに絞るには `/history search --current "検索語"` を使ってください。
+`/history` は永続 Session 一覧を更新日時順に表示し、`/history show <sessionId>` で詳細と会話を確認できます。再起動後も利用でき、一覧・Turn とも cursor pagination に対応します。従来の選択中プロジェクトの直近50メッセージは `/history show` で表示します。検索は現在のプロジェクトを優先し、結果が不十分なら他のプロジェクトも検索します。現在のプロジェクトだけに絞るには `/history search --current "検索語"` を使ってください。
+
+Web では認証付き `GET /api/v1/sessions`、`GET /api/v1/sessions/{sessionId}`、`GET /api/v1/sessions/{sessionId}/turns` を利用できます。[仕様・Shell 操作・既存データの扱い](docs/session-history.md)を参照してください。
 
 ## 機能別ガイド
 

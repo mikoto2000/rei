@@ -1,3 +1,4 @@
+use crate::dto::*;
 use crate::{application::*, domain::*, ports::*};
 use serde::Serialize;
 use std::sync::{
@@ -167,6 +168,48 @@ async fn projects_list(app: App<'_>, server_id: String) -> Result<Vec<ProjectDto
         .collect())
 }
 #[tauri::command]
+async fn session_list(
+    app: App<'_>,
+    server_id: String,
+    project_id: Option<String>,
+    limit: Option<i32>,
+    cursor: Option<String>,
+) -> Result<SessionPageDto> {
+    Ok(app
+        .session_list(&server_id, project_id.as_deref(), limit, cursor)
+        .await?
+        .into())
+}
+#[tauri::command]
+async fn session_get(
+    app: App<'_>,
+    server_id: String,
+    session_id: String,
+) -> Result<SessionSummaryDto> {
+    Ok(app.session_get(&server_id, &session_id).await?.into())
+}
+#[tauri::command]
+async fn session_turns(
+    app: App<'_>,
+    server_id: String,
+    session_id: String,
+    limit: Option<i32>,
+    cursor: Option<String>,
+) -> Result<TurnPageDto> {
+    Ok(app
+        .session_turns(&server_id, &session_id, limit, cursor)
+        .await?
+        .into())
+}
+#[tauri::command]
+async fn session_open(
+    app: App<'_>,
+    server_id: String,
+    session_id: String,
+) -> Result<ConversationDto> {
+    Ok(app.resume_session(&server_id, &session_id).await?.into())
+}
+#[tauri::command]
 fn conversation_list(app: App<'_>) -> Vec<ConversationDto> {
     app.conversations
         .list()
@@ -277,6 +320,10 @@ pub fn run() {
             credential_set,
             credential_delete,
             projects_list,
+            session_list,
+            session_get,
+            session_turns,
+            session_open,
             conversation_list,
             conversation_create,
             conversation_continue_new,

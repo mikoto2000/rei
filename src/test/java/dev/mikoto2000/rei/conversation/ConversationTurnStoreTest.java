@@ -8,6 +8,20 @@ import static org.assertj.core.api.Assertions.*;
 
 class ConversationTurnStoreTest {
   @TempDir Path temp;
+  @Test void responseAndOriginalTimestampSurviveRestartAndTerminalUpdates() {
+    var store = new ConversationTurnStore(temp);
+    var context = new AgentRunContext("run", "chat:one", temp);
+    var created = java.time.Instant.parse("2026-09-16T08:00:00Z");
+    store.start(context, "question", created);
+    store.finish(context, ConversationTurnStore.Status.COMPLETED, "answer");
+    var restored = new ConversationTurnStore(temp);
+    var turn = restored.read(context.conversationId()).getFirst();
+    assertThat(turn.createdAt()).isEqualTo(created);
+    assertThat(turn.assistantMessage()).isEqualTo("answer");
+    assertThat(turn.runId()).isEqualTo("run");
+    restored.finish(context, ConversationTurnStore.Status.FAILED, "incorrect");
+    assertThat(restored.read(context.conversationId())).containsExactly(turn);
+  }
   @Test void cancellationSurvivesRestartAndUnrelatedCompletedTurnsWithoutCrossConversationLeak() {
     var store = new ConversationTurnStore(temp);
     var a = new AgentRunContext("a", "chat:main", temp);

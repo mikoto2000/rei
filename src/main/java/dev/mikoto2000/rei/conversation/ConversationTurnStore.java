@@ -5,15 +5,14 @@ import java.util.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.datasource.ReiDataDirectory;
-import org.springframework.stereotype.Component;
+import dev.mikoto2000.rei.application.session.*;
 
 /** Conversation lifecycle metadata, independent of the bounded chat memory window. */
-@Component
-public class ConversationTurnStore {
+public class ConversationTurnStore implements ConversationHistory {
   public enum Status { RUNNING, COMPLETED, FAILED, CANCELLED }
-  public record Turn(String runId, String request, Status status) {}
+  public record Turn(String runId, String request, Status status, String assistantMessage, java.time.Instant createdAt) {}
   private final Path base;
-  private final ObjectMapper mapper = new ObjectMapper();
+  private final ObjectMapper mapper = new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
   private final Map<String, List<Turn>> conversations = new HashMap<>();
 
   public ConversationTurnStore() { this(ReiDataDirectory.current()); }
@@ -21,18 +20,24 @@ public class ConversationTurnStore {
   public static ConversationTurnStore inMemory() { return new ConversationTurnStore(null); }
 
   public synchronized void start(AgentRunContext context, String request) {
+    start(context, request, java.time.Instant.now());
+  }
+  public synchronized void start(AgentRunContext context, String request, java.time.Instant createdAt) {
     var turns = new ArrayList<>(read(context.conversationId()));
-    turns.add(new Turn(context.runId(), request, Status.RUNNING));
+    turns.add(new Turn(context.runId(), request, Status.RUNNING, null, createdAt));
     save(context.conversationId(), turns);
   }
 
   public synchronized void finish(AgentRunContext context, Status status) {
+    finish(context, status, null);
+  }
+  public synchronized void finish(AgentRunContext context, Status status, String assistantMessage) {
     if (status == Status.RUNNING) throw new IllegalArgumentException("Expected a terminal turn status");
     if (read(context.conversationId()).stream().noneMatch(t ->
         t.runId().equals(context.runId()) && t.status() == Status.RUNNING)) return;
     var turns = read(context.conversationId()).stream().map(turn ->
         turn.runId().equals(context.runId()) && turn.status() == Status.RUNNING
-            ? new Turn(turn.runId(), turn.request(), status) : turn).toList();
+            ? new Turn(turn.runId(), turn.request(), status, assistantMessage, turn.createdAt()) : turn).toList();
     save(context.conversationId(), turns);
   }
 
@@ -42,6 +47,16 @@ public class ConversationTurnStore {
       try { return List.of(mapper.readValue(Files.readString(file(id)), Turn[].class)); }
       catch (java.io.IOException error) { throw new IllegalStateException("Cannot read conversation turns", error); }
     });
+  }
+
+  @Override public synchronized List<SessionTurn> findTurns(String sessionId, CursorKey after, int fetchLimit) {
+    if (fetchLimit < 1 || fetchLimit > 101) throw new IllegalArgumentException("Invalid fetch limit");
+    // Legacy lifecycle-only records have no timestamp; do not invent one or misassociate log messages.
+    return read(sessionId).stream().filter(turn -> turn.createdAt() != null)
+        .filter(turn -> after == null || turn.createdAt().isAfter(after.time())
+            || turn.createdAt().equals(after.time()) && turn.runId().compareTo(after.id()) > 0)
+        .sorted(Comparator.comparing(Turn::createdAt).thenComparing(Turn::runId)).limit(fetchLimit)
+        .map(turn -> new SessionTurn(turn.runId(), turn.request(), turn.assistantMessage(), turn.createdAt())).toList();
   }
 
   public synchronized String cancelledContext(String conversationId) {

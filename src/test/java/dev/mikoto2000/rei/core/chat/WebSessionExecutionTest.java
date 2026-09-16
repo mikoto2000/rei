@@ -52,7 +52,7 @@ class WebSessionExecutionTest {
     var registry = new RunRegistry(Clock.systemUTC());
     try (var runs = new RunService(registry, bus, factory, cancellation, router::cancelQueued);
         var scope = projectService.newClient().open()) {
-      var submit = new ChatSubmitService(projects, new SessionRegistry(Clock.systemUTC()), registry,
+      var submit = new ChatSubmitService(projects, new SessionRegistry(Clock.systemUTC()), registry, new dev.mikoto2000.rei.conversation.FileSessionRepository(directory.resolve("sessions.json")), Clock.systemUTC(),
           (context, prompt) -> router.submit(context, prompt, work -> runs.execute(context, work)));
       var a = submit.submit("alpha-marker", first.id(), null);
       var b = submit.submit("beta-marker", first.id(), null);
@@ -61,6 +61,10 @@ class WebSessionExecutionTest {
       while (!tasks.isEmpty()) tasks.removeFirst().run();
       assertThat(projectService.currentProject()).isEqualTo(second.root());
       assertThat(executed).containsExactly(a, b, continuation);
+      assertThat(turns.read(a.conversationId())).allSatisfy(turn -> {
+        assertThat(turn.assistantMessage()).isEqualTo("answer");
+        assertThat(turn.createdAt()).isNotNull();
+      });
       assertThat(executed).allMatch(context -> context.projectRoot().equals(first.root()));
       assertThat(turns.read(a.conversationId())).extracting(ConversationTurnStore.Turn::runId)
           .containsExactly(a.runId(), continuation.runId());

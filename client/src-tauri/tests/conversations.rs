@@ -14,7 +14,25 @@ fn service() -> (tempfile::TempDir, ConversationService) {
     (dir, ConversationService::new(repo).unwrap())
 }
 #[test]
-fn create_attach_resume_lock_and_list_survive_restart() {
+fn local_selection_and_submission_preserve_authoritative_timestamps() {
+    let (_, service) = service();
+    let session = SessionSummary::from_wire(
+        "s",
+        "p",
+        "Server title".into(),
+        "2026-09-16T08:00:00Z",
+        "2026-09-16T09:00:00Z",
+    )
+    .unwrap();
+    let c = service.open_session("server", &session).unwrap();
+    service.touch(&c.local_id).unwrap();
+    service.record_turn(&c.local_id, "s", "new prompt").unwrap();
+    let after = service.get(&c.local_id).unwrap();
+    assert_eq!(after.last_accessed_at, c.last_accessed_at);
+    assert_eq!(after.title, c.title);
+}
+#[test]
+fn runtime_project_lock_does_not_persist_server_metadata() {
     let (dir, service) = service();
     let c = service.create("server", "p", "hello").unwrap();
     assert!(c.session_id.is_none());
@@ -26,8 +44,9 @@ fn create_attach_resume_lock_and_list_survive_restart() {
     let restored =
         ConversationService::new(Arc::new(JsonRepository::new(dir.path().join("app.json"))))
             .unwrap();
-    assert_eq!(restored.list()[0].session_id.as_deref(), Some("s"));
-    assert_eq!(restored.list()[0].project_id, "p");
+    assert!(restored.list().is_empty());
+    let json = std::fs::read_to_string(dir.path().join("app.json")).unwrap();
+    assert!(!json.contains("conversations") && !json.contains("sessionId"));
 }
 #[test]
 fn explicit_continue_creates_new_metadata_and_preserves_old_session() {

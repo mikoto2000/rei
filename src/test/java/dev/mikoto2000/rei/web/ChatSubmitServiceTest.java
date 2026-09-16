@@ -20,7 +20,7 @@ class ChatSubmitServiceTest {
     var runs = new RunRegistry(clock);
     var sessions = new SessionRegistry(clock);
     List<AgentRunContext> submitted = new ArrayList<>();
-    var service = new ChatSubmitService(projects, sessions, runs, (context, prompt) -> submitted.add(context));
+    var service = new ChatSubmitService(projects, sessions, runs, new dev.mikoto2000.rei.conversation.FileSessionRepository(directory.resolve("sessions.json")), clock, (context, prompt) -> submitted.add(context));
     var created = service.submit("hello", first.id(), null);
     assertThat(submitted).containsExactly(created);
     assertThat(runs.get(created.runId()).status()).isEqualTo(RunStatus.QUEUED);

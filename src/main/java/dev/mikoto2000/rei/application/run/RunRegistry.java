@@ -10,6 +10,8 @@ public final class RunRegistry {
   private final Clock clock;
   private final Map<String, RunSnapshot> runs = new LinkedHashMap<>();
   public RunRegistry(Clock clock) { this.clock = clock; }
+  /** Roll back a synchronous submission failure before returning acceptance to the caller. */
+  public synchronized void forget(String runId) { runs.remove(runId); }
 
   public synchronized void register(AgentRunContext context) {
     if (runs.putIfAbsent(context.runId(), new RunSnapshot(context, RunStatus.QUEUED, null, null, null)) != null)

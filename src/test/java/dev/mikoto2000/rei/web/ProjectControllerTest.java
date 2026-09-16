@@ -56,7 +56,7 @@ class ProjectControllerTest {
       assertThat(json.get(1).get("name").asText()).isEqualTo("rei");
       assertThat(Files.readString(file)).isEqualTo(before);
       var clock = Clock.systemUTC();
-      var chat = new ChatSubmitService(projects, new SessionRegistry(clock), new RunRegistry(clock), (c, p) -> {});
+      var chat = new ChatSubmitService(projects, new SessionRegistry(clock), new RunRegistry(clock), new dev.mikoto2000.rei.conversation.FileSessionRepository(directory.resolve("sessions.json")), clock, (c, p) -> {});
       assertThat(chat.submit("hello", json.get(0).get("id").asText(), null).projectId()).isEqualTo(first.id());
       projects.remove(second.root());
       mvc.perform(get("/api/v1/projects").header("Authorization", "Bearer test-secret"))

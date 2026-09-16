@@ -14,6 +14,9 @@ CLI と Web API は同じ application service を呼び、ShellCommand をその
 Phase 1 では Web API 基盤と Run API の確立を目的とし、**以下のみを実装対象とする**。
 
 ```text
+GET  /api/v1/sessions
+GET  /api/v1/sessions/{sessionId}
+GET  /api/v1/sessions/{sessionId}/turns
 GET  /api/v1/projects
 POST /api/v1/chat
 GET  /api/v1/runs/{runId}
@@ -22,7 +25,7 @@ POST /api/v1/runs/{runId}/cancel
 GET  /actuator/health
 ```
 
-`/history` `/search` `/briefing` `/feed` `/reminder` `/interest` `/memory` `/skill` `/image` `/summarize` `/profile` は**後続 Phase で追加する**。
+`/search` `/briefing` `/feed` `/reminder` `/interest` `/memory` `/skill` `/image` `/summarize` `/profile` は**後続 Phase で追加する**。
 公開可否の方針は本要件に従うが、**Phase 1 の実装対象外**とする。
 
 Phase 1 で固める Web API の土台は以下の通り。
@@ -62,6 +65,9 @@ Phase 1 で固める Web API の土台は以下の通り。
 `AgentEvent` 自体が chat 専用ではなく汎用化されているため、将来 `/image` `/summarize` `/briefing` も async run 化する際に共通化できる。
 
 ```text
+GET  /api/v1/sessions
+GET  /api/v1/sessions/{sessionId}
+GET  /api/v1/sessions/{sessionId}/turns
 GET  /api/v1/projects
 POST /api/v1/chat              → runId / sessionId / turnId を返す
 GET  /api/v1/runs/{runId}
@@ -95,7 +101,7 @@ Web API は ShellCommand をそのまま expose せず、**Web API endpoint → 
 | `/chat` | — | 公開 | 非同期実行。SSE でレスポンス |
 | `/cancel` | — | 公開 | `POST /api/v1/runs/{runId}/cancel` |
 | `/runs` | — | 公開 | `GET /api/v1/runs/{runId}` |
-| `/history` | — | 公開 | |
+| `/history` | 一覧・詳細・Turn参照 | 公開（Phase 1 拡張） | `GET /api/v1/sessions`、`/{sessionId}`、`/{sessionId}/turns`。削除・改名は非公開 |
 | `/models` | — | 非公開 | |
 | `/model` | — | 非公開 | 設定変更を伴うので要確認 |
 | `/search` | — | 公開 | |
@@ -180,7 +186,7 @@ Web API の DTO が返す `sessionId` / `turnId` は、既存コードの ID 概
 
 - **`sessionId` は既存の `conversationId` に対応する**（論理会話の ID。Spring AI ChatMemory / `ConversationTurnStore` / `ConversationLogStore` のキー）。
   - Web API では session ごとに一意な conversationId を採番する。既存の `chat:main` 固定ではなく、`ConversationIds.chat(sessionId)` のように session 単位で生成する。
-  - `sessionId` の存在判定（新規 / 継続 / `409` / `404`）は、この conversationId をキーに **`SessionRegistry`** で行う。`ConversationTurnStore` はターン一覧しか持たず、未登録 ID の `read()` は空一覧を返すため、存在判定には使えない。`SessionRegistry` は submit 受理時に sessionId → projectId を登録し、ターンの有無と独立して存在・所属 project を判定する。
+  - `sessionId` の存在判定（新規 / 継続 / `409` / `404`）は、この conversationId をキーに永続 **`SessionRepository`** で行う。`ConversationTurnStore` の空一覧は存在判定に使わない。Session metadata は submit 受理時に保存し、ターンの有無と独立して存在・所属 project を判定する。`SessionRegistry` は runtime cache とし、期限切れ・再起動で永続 Session を失効させない。
 - **`turnId` は既存の `runId` に対応する**（1 run = 1 turn）。
   - 既存コードに独立した `turnId` は存在しない（`ConversationTurnStore.Turn` は `runId` をターン識別子として使う）。
   - したがって `ChatResponse` / `RunResponse` の `turnId` は `runId` と**同一値**とする。
@@ -464,8 +470,8 @@ Web API 化すると複数クライアント・複数 run の並行実行が普�
 2. THE Web API SHALL Web API endpoint → application service の構造を明示的に作る
 3. THE Web API SHALL サブコマンドを持つコマンド（`/memory` `/profile` `/interest` `/feed` `/reminder` など）の `read` / `write` / `delete` を個別に判断する
 4. THE Web API SHALL deny by default とする
-5. THE Web API SHALL Phase 1 では `GET /api/v1/projects` / `POST /api/v1/chat` / `GET /api/v1/runs/{runId}` / `GET /api/v1/runs/{runId}/events` / `POST /api/v1/runs/{runId}/cancel` / `GET /actuator/health` のみを実装対象とする
-6. THE Web API SHALL `/history` `/search` `/briefing` `/feed` `/reminder` `/interest` `/memory` `/skill` `/image` `/summarize` `/profile` を後続 Phase で追加する（Phase 1 の実装対象外）
+5. THE Web API SHALL Phase 1 では `GET /api/v1/sessions` / `GET /api/v1/sessions/{sessionId}` / `GET /api/v1/sessions/{sessionId}/turns` / `GET /api/v1/projects` / `POST /api/v1/chat` / `GET /api/v1/runs/{runId}` / `GET /api/v1/runs/{runId}/events` / `POST /api/v1/runs/{runId}/cancel` / `GET /actuator/health` のみを実装対象とする
+6. THE Web API SHALL `/search` `/briefing` `/feed` `/reminder` `/interest` `/memory` `/skill` `/image` `/summarize` `/profile` を後続 Phase で追加する（Phase 1 の実装対象外）
 
 ---
 
@@ -517,7 +523,7 @@ Web API 化すると複数クライアント・複数 run の並行実行が普�
 8. THE サーバー SHALL `sessionId` を既存の `conversationId` に対応させ、session ごとに一意な conversationId を採番する（既存の `chat:main` 固定ではなく session 単位で生成する）
 9. THE サーバー SHALL `turnId` を既存の `runId` に対応させ、`ChatResponse` / `RunResponse` の `turnId` を `runId` と同一値とする（既存コードに独立した `turnId` は存在しない）
 10. THE サーバー SHALL ID 採番の責務を `ChatSubmitService`（application service）が担い、新規 session の `sessionId`（conversationId）と `runId` / `turnId` を採番して `RunRegistry` と `ConversationTurnStore` に渡す
-11. THE サーバー SHALL session の存在判定をターンの有無と独立に行う（`SessionRegistry` 等で sessionId → projectId を submit 受理時に登録し、QUEUED のままの session も存在判定できる）
+11. THE サーバー SHALL session の存在判定をターンの有無と独立に行う（`SessionRepository` に metadata を submit 受理時に永続化し、QUEUED のまま・再起動後の session も存在判定できる）
 12. THE サーバー SHALL 採番した `runId` を含む `AgentRunContext` を `ProjectRunQueue` と runner にそのまま渡し、内部で再採番しない（レスポンス / `RunRegistry` / `ConversationTurnStore` / `AgentEvent` の runId を一致させる）
 
 ---
@@ -530,3 +536,17 @@ Web API 化すると複数クライアント・複数 run の並行実行が普�
 
 1. THE Web API SHALL 公開コマンド表をサブコマンド単位で定義する（`/feed` `/memory` `/profile` `/interest` `/reminder` `/skill` は `read` / `write` / `delete` を個別判断）
 2. THE Web API SHALL 表の「公開」表記をサブコマンド単位に修正し、Codex が「全部公開していい」と解釈しないようにする
+
+### 要件 16: Session History（Phase 1 拡張）
+
+1. THE サーバー SHALL Session metadata（sessionId、projectId、title、createdAt、updatedAt）を Chat 受理時、runner 開始前に永続化し、再起動後も参照・継続を可能にする。
+2. THE title SHALL 最初の user message の先頭80 Unicode code point とし、省略記号を付加しない。継続時は title・projectId・createdAt を変更しない。
+3. THE サーバー SHALL 受理のたび updatedAt を Clock により更新し、並行更新でも破損・後退させない。同期的な enqueue 失敗時は metadata と runtime 登録を復元する。
+4. THE Web API SHALL `GET /api/v1/sessions`（projectId filter、updatedAt DESC / sessionId ASC）、`GET /api/v1/sessions/{sessionId}`、`GET /api/v1/sessions/{sessionId}/turns`（createdAt ASC / runId ASC）を提供する。
+5. THE 一覧 API SHALL cursor pagination、既定50／最大100件、最終 nextCursor=null とし、不正 limit/cursor は400にする。未知 Session は404、未知 project filter は空一覧とする。
+6. THE Turns SHALL 永続 ConversationTurnStore を source とし、ReplayBuffer を使わない。専用 DTO に turnId=runId、userMessage、assistantMessage、createdAt を返す。
+7. THE Web API SHALL 全 Session endpoint に既存 Bearer 認証を適用し、未指定・不正キーは401にする。削除・改名 endpoint は追加しない。
+8. THE Shell SHALL `/history` で Session 一覧、`/history show <sessionId>` で詳細とページ単位の Turn を表示し、Web と同じ SessionQueryService を呼ぶ。旧 list/search と show の旧オプションを維持する。
+9. THE サーバー SHALL 不確実な旧 metadata／時刻／Turn 対応を捏造しない。旧データは既存ログ参照で利用し、backfill は行わない。
+
+レスポンス例、cursor の並行更新時の性質、旧コマンド互換性、保存方式の制約は [Session History 仕様](../../../docs/session-history.md) に定義する。

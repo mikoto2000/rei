@@ -1,5 +1,19 @@
 # 実装タスク: Web API 機能（Phase 1）
 
+## Phase 1 拡張: Session History（2026-09-17）
+
+- [x] Unicode code point 単位の80文字 title policy と境界テストを Red → Green で追加。
+- [x] SessionRepository port と atomic JSON adapter、再初期化・保存失敗・enqueue 失敗復元をテスト。
+- [x] ChatSubmitService に受理時 create/touch を接続し、project 固定・未知 ID・再起動後の継続を確認。
+- [x] 共通 SessionQueryService、安定順序、project filter、scope 付き cursor、limit 共通 policy を追加。
+- [x] 認証付き Session 一覧・詳細・Turns の専用 DTO と HTTP endpoint を追加。
+- [x] 既存 ConversationTurnStore に開始時刻と最終応答を保存し、時系列ページングと旧形式読込を確認。
+- [x] `/history` 一覧と `/history show <sessionId>` を共通 query に接続。旧 list/search/show オプションの回帰テストを実施。
+- [x] 実 HTTP 再起動テスト、同時更新、ページ途中の新規挿入、認証なし／不正キーのテストを実施。
+- [x] README・要件・設計・[利用仕様](../../../docs/session-history.md)を更新。旧データの backfill 非実施と保存／ページングの制約を明記。
+
+各機能の未実装クラス・メソッド、HTTP 404 による Red を確認してから実装し、成功状態ごとにコミットした。追加35件、全体1,803件（失敗0、エラー0、既存skip2）で成功。専用出力先で Spring Boot package も成功。コマンド・環境上の制約は [実装報告](../../../docs/session-history-implementation.md) を参照。
+
 ## 進め方
 
 このタスクは t_wada の TDD に則り、原則として次のサイクルで進める。
@@ -32,7 +46,7 @@ Web 起動
 - テスト実行: `./mvnw.cmd test "-Dtest=<テスト名>"` で対象テストのみ実行できる。
 - 既存の CLI 利用を壊さない（Shell UI と Web UI は application/core に並列にぶら下がる）。
 - カレントプロジェクトはグローバル状態から引きはがし、クライアントがチャット送信ごとに `projectId` を指定する。
-- Phase 1 の公開対象は `GET /api/v1/projects`、`POST /api/v1/chat`、`GET /api/v1/runs/{runId}`、`GET /api/v1/runs/{runId}/events`、`POST /api/v1/runs/{runId}/cancel`、`GET /actuator/health` のみ。後続 Phase のコマンドや非公開コマンドは追加しない。
+- Phase 1 の公開対象は `GET /api/v1/sessions`、`GET /api/v1/sessions/{sessionId}`、`GET /api/v1/sessions/{sessionId}/turns`、`GET /api/v1/projects`、`POST /api/v1/chat`、`GET /api/v1/runs/{runId}`、`GET /api/v1/runs/{runId}/events`、`POST /api/v1/runs/{runId}/cancel`、`GET /actuator/health` のみ。後続 Phase のコマンドや非公開コマンドは追加しない。
 - 以下の Phase 0〜9 は、この Phase 1 機能を実装する作業段階を表す。
 - 先行タスクでは後続コンポーネントのインターフェースとテストダブルを使う。4.3 の queue / runner 連携は 5.2〜5.4、3.3 の同時 purge は 8.7、6.4 の SSE 変換は 7.2 / 8.6 で実物を接続して検証する。
 - サービス層は状態・戻り値・例外、Controller 層は HTTP status / header / JSON を検証する。並行処理は latch 等、期限・heartbeat は制御可能な時計や scheduler を使い、実時間の長い待機に依存しない。
@@ -162,6 +176,7 @@ Web 起動
   - _Requirements: 4.1, 4.2, 8.2, 8.3, 13.1, 13.2, 14.4, 14.5, 14.6, 14.7_
 
 - [x] 4.5 `SessionRegistry` の寿命を実装する
+  - 以下は初期実装の記録。Session History 拡張後は Registry の失効を runtime cache に限定し、Chat の継続判定は永続 SessionRepository が行う。
   - Red: run の purge と session の失効が独立し、有効な session は run purge 後や QUEUED cancel 後にも継続できることを検証する。最終アクセスによる期限更新と、失効後の継続が `404` になることも確認する。
   - Green: 設計書の session 最終アクセス基準の保持ポリシーを実装する。保持時間（設計例は 30 分）とアクセス更新条件を明示する。
   - Refactor: sessionId は conversationId として一貫して扱い、`chat:main` 固定や二重の接頭辞付与を避ける。
@@ -367,7 +382,7 @@ Web 起動
 | project / session 分離 | `WebSessionExecutionTest` / `SessionWorkingSetTest`。実チャットサービス・会話履歴・Working Set・イベントの ID と CLI の project 切替からの独立性を確認 |
 | SSE・replay | `WebApiEventDtoTest` / `SseBridgeTest` / `SseControllerTest` / `ReplayBufferTest` / `SseReplayTest` / `WebBoundaryTest`。HTTP フレーム、replay gap、切断・再接続、終端競合、heartbeat、購読解除、同時 purge を確認 |
 
-- session は登録または有効な継続 submit から30分保持する。run の purge とは独立して管理する。
+- 初期実装は session を30分保持した。Session History 拡張後は30分保持を runtime cache のみに適用し、永続 Session は失効させない。
 - Working Set は会話単位の scope と永続ファイルに分離し、CLI の既存保存先は維持した。
 - 状態と metadata は monitor 内で一緒に更新し、immutable な snapshot として公開する。
 - `JAVA_HOME=C:\Java\jdk-25` で `./mvnw.cmd test` を実行し、**1,763件、失敗0、エラー0、スキップ2、BUILD SUCCESS** を確認した。

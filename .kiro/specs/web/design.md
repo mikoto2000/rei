@@ -1,11 +1,38 @@
 # 設計書: Web API 機能（Phase 1）
 
+## Session History 拡張
+
+Session History は Phase 1 の read-only 拡張として実装する。詳細な API／Shell 契約と保存方式は [Session History 仕様](../../../docs/session-history.md) を参照。
+
+```text
+SessionController ─┐
+                  ├─ SessionQueryService ─ SessionRepository ─ FileSessionRepository
+HistoryCommand ───┘                      └ ConversationHistory ─ ConversationTurnStore
+ChatSubmitService ─ SessionRepository.accept(metadata, enqueue)
+ChatExecutionService ─ ConversationTurnStore.start/finish
+```
+
+- metadata は `<rei-data-dir>/sessions.json` に保存する。Repository port はファイル形式に依存しない。
+- title は初回 message の先頭80 code point。createdAt と title と projectId を固定し、Clock を使って受理ごとに updatedAt を更新する。
+- `SessionRepository.accept` は作成／更新を永続化した後に enqueue callback を実行する。同期失敗では以前の metadata を復元する。callback は実行完了を待たず queue 登録までとする。
+- SessionRegistry は runtime cache。Chat の存在判定と project 不変条件は永続 Repository が担う。
+- `CursorCodec` は version、resource/filter scope、Instant 秒/nano、ID を URL-safe Base64 にする。scope 不一致・不正形式は400。Session は updatedAt DESC / sessionId ASC、Turn は createdAt ASC / runId ASC の strict keyset 比較を使う。
+- `Pagination` で既定50、最大100、lookahead 1件と nextCursor を共通化する。未知 project filter は空一覧。
+- Turn の開始時刻と最終応答は既存 Turn ファイルを拡張して保存する。ChatMemory はモデルの bounded context、ConversationLogStore は旧メッセージ参照、ReplayBuffer は再接続専用であり新 API の Turn source にはしない。
+- `SessionResponse` / `SessionListResponse` / `SessionTurnResponse` / `SessionTurnListResponse` が内部 model を HTTP から分離し、timestamp は ISO-8601 string とする。
+- 新しい Shell 一覧／Session 詳細は共通 query を呼び、旧 `/history list/search` と `/history show --last/--all` のログ参照を維持する。
+- backfill はしない。旧データでは runId と log message の対応や受理時刻を復元できない。欠落 timestamp の旧 Turn は cursor API から除外し、既存 lifecycle 読込は維持する。
+- adapter は単一プロセス writer、ファイル全体読込を前提とする。keyset は snapshot ではなく、ページ間に更新された Session は先頭の再読込で確認する。in-memory queue とディスクを跨ぐ crash transaction／再実行は提供しない。
+
 ## 概要
 
 本設計書は `.kiro/specs/web/requirements.md`（要件定義書）を実装可能な形に落とし込んだものである。
-Phase 1 では Web API 基盤と Run API の確立を目的とし、以下の6エンドポイントのみを実装対象とする。
+Phase 1 では Web API 基盤と Run API の確立を目的とし、Session History 拡張を含む以下の9エンドポイントのみを実装対象とする。
 
 ```text
+GET  /api/v1/sessions
+GET  /api/v1/sessions/{sessionId}
+GET  /api/v1/sessions/{sessionId}/turns
 GET  /api/v1/projects
 POST /api/v1/chat
 GET  /api/v1/runs/{runId}
@@ -14,7 +41,7 @@ POST /api/v1/runs/{runId}/cancel
 GET  /actuator/health
 ```
 
-`/history` `/search` `/briefing` `/feed` `/reminder` `/interest` `/memory` `/skill` `/image` `/summarize` `/profile` は後続 Phase で追加する。
+`/search` `/briefing` `/feed` `/reminder` `/interest` `/memory` `/skill` `/image` `/summarize` `/profile` は後続 Phase で追加する。
 
 ## 設計方針
 
@@ -62,7 +89,9 @@ GET  /actuator/health
 | `SseController` | `GET /api/v1/runs/{runId}/events`（SSE） |
 | `ChatSubmitService` | `POST /api/v1/chat` の application service。session / project 整合性を検証し、`RunRegistry.register(QUEUED)` と `ProjectRunQueue.enqueue(run)` を呼ぶ。新規 session の `sessionId`（conversationId）と `runId` / `turnId` を採番する。**採番した `runId` を含む `AgentRunContext` を `ProjectRunQueue` と runner にそのまま渡し、内部で再採番しない**（`ConversationInputRouter.submit()` の runId 再採番は行わない）。`SessionRegistry` に sessionId → projectId を登録する |
 | `RunService` | run の状態取得・cancel の application service |
-| `SessionRegistry` | `sessionId`（conversationId）→ `projectId` の対応を submit 受理時に登録する in-memory レジストリ。ターンの有無と独立して session の存在・所属 project を判定する |
+| `SessionRegistry` | 受理済み Session の runtime cache。30分で purge するが永続 Session の寿命には影響しない |
+| `SessionRepository` | metadata の永続 source of truth。受理時の create/touch と read/page、同期的な enqueue 失敗の復元を担当 |
+| `SessionQueryService` | Web / Shell 共通の詳細・一覧・Turn cursor pagination。永続 port のみ参照 |
 | `RunRegistry` | run の状態（`RunStatus`）と metadata を保持する in-memory レジストリ。state transition は atomic に行い、terminal 状態から他状態への遷移を許可しない |
 | `RunStatus` | `QUEUED` / `RUNNING` / `COMPLETED` / `FAILED` / `CANCELLED` の5状態 enum |
 | `ProjectRunQueue` | projectId 単位の FIFO 直列キュー。`enqueue(run)` / `cancelQueued(runId)` を提供し、QUEUED の run を runId 指定で除去できる。**AGENT run の FIFO に限定**する。`submitBackground`（`ExecutionType.AGENT` 以外）と `executeAuxiliary` は既存のまま `ConversationInputRouter` が管理し、`ProjectRunQueue` には入れない |
@@ -332,14 +361,14 @@ runId → { status, sessionId, turnId, projectId, startedAt, completedAt, failur
   - `RunRegistry` の purge と `ReplayBuffer` の purge を同時に行う。
 - これにより、SSE 接続も `GET /runs/{runId}` も**同時に `404`** になる。
 
-**session の存在判定と所属 project（SessionRegistry）**
+**session の存在判定と所属 project（SessionRepository）**
 
 `ConversationTurnStore` だけでは session の存在と所属 project を判定できない（未登録 ID の `read()` は空一覧を返し、`Turn` に projectId がなく、ターン作成は実行開始時なので QUEUED のままの session は判定できない）。
 
-- **`SessionRegistry`** を新設し、`sessionId`（conversationId）→ `projectId` の対応を **submit 受理時に登録**する。
-- **session の存在判定はターンの有無と独立**に行う。`POST /api/v1/chat` の `sessionId` 存在判定（新規 / 継続 / `409` / `404`）は `SessionRegistry` で行う。
-- **所属 project の不一致（`409`）** も `SessionRegistry` の sessionId → projectId 対応で判定する。
-- **session の寿命**: `SessionRegistry` は run の purge とは独立に、session の最終アクセスから一定時間（例: 30 分）保持する。run が purge されても session は残り、継続可能。QUEUED のままキャンセルされた session も `SessionRegistry` に登録済みなので存在判定できる。
+- **`SessionRepository`** に metadata を submit 受理時、runtime 登録と enqueue より前に永続化する。
+- **session の存在判定はターンの有無と独立**に行う。新規 / 継続 / `409` / `404` は Repository の metadata で判定する。
+- **所属 project の不一致（`409`）** は永続 projectId で判定し、作成後に変更しない。
+- **session の寿命**: 永続 metadata は期限切れにしない。`SessionRegistry` の30分 purge は runtime cache のみ。QUEUED cancel 後、run purge 後、再起動後も同じ Session を参照・継続できる。
 
 ---
 
@@ -562,7 +591,7 @@ Web 起動
 - session の projectId 不一致 → `409`。
 - 未知の sessionId → `404`。
 - 未知の projectId → `404`。
-- **session 存在判定は `SessionRegistry` で行う**（ターンの有無と独立。QUEUED のままの session も判定できる）。
+- **session 存在判定は永続 `SessionRepository` で行う**（ターンの有無と独立。QUEUED のままの session も判定できる）。
 - **採番した `runId` がレスポンス / `RunRegistry` / `ConversationTurnStore` / `AgentEvent` で一致する**（`ConversationInputRouter` が内部で再採番しない）。
 
 ### RunRegistry / 状態
@@ -573,7 +602,7 @@ Web 起動
 - `QUEUED` / `RUNNING` / `COMPLETED` / `FAILED` / `CANCELLED` の遷移。
 - **state transition が atomic** で、terminal 状態から他状態へ遷移しない（cancel と terminal event の競合で `CANCELLED → COMPLETED` にならない）。
 - **retention** — terminal から 30 分で `RunRegistry` / `ReplayBuffer` が同時に purge され、SSE も `GET /runs/{runId}` も同時に `404` になる。
-- **session 存在判定** — `SessionRegistry` が sessionId → projectId を保持し、ターン未作成（QUEUED のまま）の session も存在判定できる。run が purge されても session は残る。
+- **session 存在判定** — `SessionRepository` が metadata を保持し、ターン未作成（QUEUED のまま）、run purge 後、再起動後も存在判定できる。
 
 ### Project FIFO
 

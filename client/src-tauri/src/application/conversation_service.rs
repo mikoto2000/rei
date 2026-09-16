@@ -33,7 +33,7 @@ impl ConversationService {
             store: Arc::new(AppStore::new(repository)?),
         })
     }
-    pub fn create(&self, server: &str, project: &str, title: &str) -> Result<Conversation> {
+    pub fn create(&self, server: &str, project: &str, _title: &str) -> Result<Conversation> {
         if project.is_empty() {
             return Err(AppError::InvalidInput);
         }
@@ -47,11 +47,7 @@ impl ConversationService {
                 server_profile_id: server.into(),
                 project_id: project.into(),
                 session_id: None,
-                title: if title.trim().is_empty() {
-                    "新しい会話".into()
-                } else {
-                    title.chars().take(80).collect()
-                },
+                title: "新しい会話".into(),
                 created_at: now,
                 last_accessed_at: now,
             };
@@ -66,6 +62,36 @@ impl ConversationService {
             .into_iter()
             .find(|c| c.local_id == id)
             .ok_or(AppError::NotFound)
+    }
+    pub fn open_session(&self, server: &str, session: &SessionSummary) -> Result<Conversation> {
+        self.store.transact(|data| {
+            if !data.servers.iter().any(|profile| profile.id == server) {
+                return Err(AppError::NotFound);
+            }
+            let existing = data.conversations.iter_mut().find(|c| {
+                c.server_profile_id == server
+                    && c.session_id.as_deref() == Some(&session.session_id)
+            });
+            let c = if let Some(c) = existing {
+                c
+            } else {
+                data.conversations.push(Conversation {
+                    local_id: uuid::Uuid::new_v4().to_string(),
+                    server_profile_id: server.into(),
+                    project_id: session.project_id.clone(),
+                    session_id: Some(session.session_id.clone()),
+                    title: String::new(),
+                    created_at: 0,
+                    last_accessed_at: 0,
+                });
+                data.conversations.last_mut().unwrap()
+            };
+            c.project_id = session.project_id.clone();
+            c.title = session.title.clone();
+            c.created_at = session.created_at.timestamp_millis().max(0) as u64;
+            c.last_accessed_at = session.updated_at.timestamp_millis().max(0) as u64;
+            Ok(c.clone())
+        })
     }
     pub fn list(&self) -> Vec<Conversation> {
         let mut list = self.store.snapshot().conversations;
@@ -89,7 +115,6 @@ impl ConversationService {
                 return Err(AppError::SessionProjectConflict);
             }
             c.session_id = Some(session.into());
-            c.last_accessed_at = now();
             Ok(())
         })
     }
@@ -100,11 +125,13 @@ impl ConversationService {
                 .iter_mut()
                 .find(|c| c.local_id == id)
                 .ok_or(AppError::NotFound)?;
-            c.last_accessed_at = now();
+            if c.session_id.is_none() {
+                c.last_accessed_at = now();
+            }
             Ok(())
         })
     }
-    pub fn record_turn(&self, id: &str, session: &str, prompt: &str) -> Result<()> {
+    pub fn record_turn(&self, id: &str, session: &str, _prompt: &str) -> Result<()> {
         self.store.transact(|data| {
             let c = data
                 .conversations
@@ -114,11 +141,7 @@ impl ConversationService {
             if c.session_id.as_deref().is_some_and(|s| s != session) {
                 return Err(AppError::SessionProjectConflict);
             }
-            if c.session_id.is_none() && c.title == "新しい会話" {
-                c.title = prompt.trim().chars().take(80).collect();
-            }
             c.session_id = Some(session.into());
-            c.last_accessed_at = now();
             Ok(())
         })
     }

@@ -6,6 +6,9 @@ import type {
   Conversation,
   Run,
   Connection,
+  SessionSummary,
+  SessionPage,
+  TurnPage,
 } from "../entities/models";
 type RunArgs = { serverId: string; runId: string };
 interface Commands {
@@ -19,6 +22,26 @@ interface Commands {
   credential_set: [{ serverId: string; credential: string }, void];
   credential_delete: [{ serverId: string }, void];
   projects_list: [{ serverId: string }, Project[]];
+  session_list: [
+    {
+      serverId: string;
+      projectId?: string | null;
+      limit?: number;
+      cursor?: string | null;
+    },
+    SessionPage,
+  ];
+  session_get: [{ serverId: string; sessionId: string }, SessionSummary];
+  session_turns: [
+    {
+      serverId: string;
+      sessionId: string;
+      limit?: number;
+      cursor?: string | null;
+    },
+    TurnPage,
+  ];
+  session_open: [{ serverId: string; sessionId: string }, Conversation];
   conversation_list: [undefined, Conversation[]];
   conversation_create: [
     { serverId: string; projectId: string; title: string },

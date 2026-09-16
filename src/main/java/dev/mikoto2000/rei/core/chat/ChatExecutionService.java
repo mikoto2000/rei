@@ -199,9 +199,10 @@ public class ChatExecutionService {
     });
     Disposable cancellationHook = cancellationService.onCancel(runId, execution::cancel);
     ConversationTurnStore.Status turnStatus = ConversationTurnStore.Status.FAILED;
+    String assistantMessage = null;
 
     try {
-      turns.start(context, promptText);
+      turns.start(context, promptText, clock.instant());
       execution.checkActive();
       activityTracker.ifPresent(tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));
       appendConversationLog(context.conversationId(), "user", promptText);
@@ -229,6 +230,7 @@ public class ChatExecutionService {
       if (result.status() == ChatRunStatus.SUCCESS) {
         execution.checkActive();
         appendConversationLog(context.conversationId(), "assistant", result.text());
+        assistantMessage = result.text();
         boolean consolidationSuggested = shouldSuggestConsolidation();
         execution.checkActive();
         maybeRefreshTopicCandidates();
@@ -266,7 +268,7 @@ public class ChatExecutionService {
         try {
           cancellationHook.dispose();
           execution.close();
-          turns.finish(context, execution.isCancelled() ? ConversationTurnStore.Status.CANCELLED : turnStatus);
+          turns.finish(context, execution.isCancelled() ? ConversationTurnStore.Status.CANCELLED : turnStatus, assistantMessage);
         } finally { if (interrupted) Thread.currentThread().interrupt(); }
       }
     }

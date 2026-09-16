@@ -44,7 +44,8 @@ fn server_crud_and_credential_dto() {
 }
 #[tokio::test]
 async fn submit_registers_subscribes_resumes_and_expiry_does_not_fork() {
-    let router=Router::new().route("/api/v1/chat",post(|Json(body):Json<Value>| async move {
+    let router=Router::new().route("/api/v1/sessions/s",get(|| async { Json(json!({"sessionId":"s","projectId":"p","title":"first","createdAt":"2026-09-16T08:00:00Z","updatedAt":"2026-09-16T08:00:00Z"})) }))
+    .route("/api/v1/chat",post(|Json(body):Json<Value>| async move {
         if body["message"]=="expired" {return (StatusCode::NOT_FOUND,Json(json!({})));}
         if body["message"]=="second" {assert_eq!(body["sessionId"],"s");}
         (StatusCode::ACCEPTED,Json(json!({"runId":if body["message"]=="second" {"r2"} else {"r"},"sessionId":"s","turnId":"t"})))

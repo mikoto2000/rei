@@ -4,6 +4,8 @@ use futures_util::StreamExt;
 use reqwest::{Client, Method, Response};
 use serde::de::DeserializeOwned;
 use std::time::Duration;
+mod history;
+use history::*;
 
 /// Enforce mobile transport policy in Rust too: native HTTP can bypass WebView/OS rules.
 pub fn validate_transport(base_url: &str, mobile: bool) -> Result<()> {
@@ -84,6 +86,47 @@ impl HttpReiClient {
 }
 #[async_trait]
 impl ReiClient for HttpReiClient {
+    async fn list_sessions(
+        &self,
+        project: Option<&str>,
+        query: HistoryQuery,
+    ) -> Result<Page<SessionSummary>> {
+        let request = self.history_request("/api/v1/sessions", &query)?;
+        let request = if let Some(project) = project {
+            request.query(&[("projectId", project)])
+        } else {
+            request
+        };
+        let response: SessionPageResponse = Self::json(request, Operation::Sessions)
+            .await
+            .map_err(|error| history_error(error, &query))?;
+        response.into_domain(query.limit)
+    }
+    async fn get_session(&self, session: &str) -> Result<SessionSummary> {
+        let response: SessionResponse = Self::json(
+            self.request(Method::GET, &session_path(session, "")?, true)?,
+            Operation::Session,
+        )
+        .await?;
+        let model = response.into_domain()?;
+        if model.session_id != session {
+            return Err(AppError::InvalidResponse);
+        }
+        Ok(model)
+    }
+    async fn list_session_turns(
+        &self,
+        session: &str,
+        query: HistoryQuery,
+    ) -> Result<Page<ConversationTurn>> {
+        let response: TurnPageResponse = Self::json(
+            self.history_request(&session_path(session, "/turns")?, &query)?,
+            Operation::Session,
+        )
+        .await
+        .map_err(|error| history_error(error, &query))?;
+        response.into_domain(session, query.limit)
+    }
     async fn health(&self) -> Result<()> {
         Self::checked(
             self.request(Method::GET, "/actuator/health", false)?
