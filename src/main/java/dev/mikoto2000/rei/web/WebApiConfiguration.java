@@ -20,6 +20,9 @@ public class WebApiConfiguration {
     return new ProjectRegistry(java.nio.file.Path.of(directory).resolve("projects.json"));
   }
   @Bean RunRegistry webRunRegistry(Clock clock) { return new RunRegistry(clock); }
+  @Bean dev.mikoto2000.rei.application.project.ProjectQueryService webProjectQueryService(ProjectRegistry projects) {
+    return new dev.mikoto2000.rei.application.project.ProjectQueryService(projects);
+  }
   @Bean SessionRegistry webSessionRegistry(Clock clock) { return new SessionRegistry(clock); }
   @Bean RunService webRunService(RunRegistry registry, AgentEventBus bus, AgentEventFactory events,
       CommandCancellationService cancellation, ConversationInputRouter router) {
