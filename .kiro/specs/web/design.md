@@ -3,9 +3,10 @@
 ## 概要
 
 本設計書は `.kiro/specs/web/requirements.md`（要件定義書）を実装可能な形に落とし込んだものである。
-Phase 1 では Web API 基盤と Run API の確立を目的とし、以下の5エンドポイントのみを実装対象とする。
+Phase 1 では Web API 基盤と Run API の確立を目的とし、以下の6エンドポイントのみを実装対象とする。
 
 ```text
+GET  /api/v1/projects
 POST /api/v1/chat
 GET  /api/v1/runs/{runId}
 GET  /api/v1/runs/{runId}/events   (SSE)
@@ -20,7 +21,7 @@ GET  /actuator/health
 - **Shell UI と Web UI は application/core に並列にぶら下がる**。CLI と Web API は同じ application service を呼び、ShellCommand をそのまま HTTP 化しない。
 - **Run API 中心**。`/chat` を中心に置かず、`/runs/{runId}` を中心にした共通 Run API を採用する。
 - **deny by default**。Web API endpoint → application service を明示的に作り、ShellCommand を expose しない。
-- **カレントプロジェクトはグローバル状態から引きはがす**。クライアントが毎回リクエストに `projectId` を指定する。
+- **カレントプロジェクトはグローバル状態から引きはがす**。クライアントがチャット送信ごとに `projectId` を指定する。
 - **Web API DTO を分離**する。内部型（`AgentEvent` 等）を直接 expose しない。
 
 ## アーキテクチャ
@@ -55,6 +56,8 @@ GET  /actuator/health
 | `ApiKeyAuthenticationFilter` | `Authorization: Bearer <token>` を検証する `OncePerRequestFilter` |
 | `SecurityConfig` | Spring Security filter chain を構成。`/actuator/health` のみ `permitAll` |
 | `ChatController` | `POST /api/v1/chat` |
+| `ProjectController` / `ProjectResponse` | `GET /api/v1/projects`。公開 DTO の `id` / `name` のみを返す |
+| `ProjectQueryService` | `ProjectRegistry.list()` から登録済みプロジェクトの UUID と名前を取得する。レジストリとカレントプロジェクトを変更しない |
 | `RunController` | `GET /api/v1/runs/{runId}` / `POST /api/v1/runs/{runId}/cancel` |
 | `SseController` | `GET /api/v1/runs/{runId}/events`（SSE） |
 | `ChatSubmitService` | `POST /api/v1/chat` の application service。session / project 整合性を検証し、`RunRegistry.register(QUEUED)` と `ProjectRunQueue.enqueue(run)` を呼ぶ。新規 session の `sessionId`（conversationId）と `runId` / `turnId` を採番する。**採番した `runId` を含む `AgentRunContext` を `ProjectRunQueue` と runner にそのまま渡し、内部で再採番しない**（`ConversationInputRouter.submit()` の runId 再採番は行わない）。`SessionRegistry` に sessionId → projectId を登録する |
@@ -84,6 +87,35 @@ GET  /actuator/health
 
 ## エンドポイント仕様
 
+### `GET /api/v1/projects`
+
+`Authorization: Bearer <token>` 必須。未指定・不正なキーは `401 Unauthorized`。
+`ProjectController` → `ProjectQueryService` → チャット受付と共通の `ProjectRegistry` の順に呼び出す。
+リクエストごとに登録内容を読み、登録順で返す。パスを含む内部型は公開せず、`ProjectResponse` に変換する。
+
+**Response `200 OK`**
+
+```json
+[
+  { "id": "550e8400-e29b-41d4-a716-446655440000", "name": "rei" }
+]
+```
+
+未登録なら `[]`。取得によるレジストリファイルの作成・変更はない。
+返却された `id` をチャットの `projectId` に使う。プロジェクト名や任意パスは ID として受け付けない。
+
+**PowerShell の利用例**（`$baseUrl` と `$headers` は起動先・API キーに合わせて設定済みとする）
+
+```powershell
+$projects = Invoke-RestMethod "$baseUrl/api/v1/projects" -Headers $headers
+$projects | Format-Table id, name
+# 表示された一覧から対象を選ぶ。以下は最初のプロジェクトを利用する例。
+if (@($projects).Count -eq 0) { throw '先に Rei の Shell で /project add を実行してください' }
+$body = @{ projectId = $projects[0].id; message = '構成を説明してください' } | ConvertTo-Json
+$run = Invoke-RestMethod -Method Post -Uri "$baseUrl/api/v1/chat" -Headers $headers `
+    -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($body))
+```
+
 ### `POST /api/v1/chat`
 
 チャットを非同期実行し、run を作成する。
@@ -93,7 +125,7 @@ GET  /actuator/health
 ```json
 {
   "message": "このコードを調べて",
-  "projectId": "rei",
+  "projectId": "550e8400-e29b-41d4-a716-446655440000",
   "sessionId": "optional"
 }
 ```
@@ -150,7 +182,7 @@ run の状態と metadata を取得する。
   "status": "RUNNING",
   "sessionId": "uuid",
   "turnId": "uuid",
-  "projectId": "rei",
+  "projectId": "550e8400-e29b-41d4-a716-446655440000",
   "startedAt": "2026-09-15T08:00:00Z",
   "completedAt": null,
   "failure": null
@@ -443,7 +475,7 @@ REI_API_KEY
 ### `ChatRequest`
 
 ```json
-{ "message": "...", "projectId": "rei", "sessionId": "optional" }
+{ "message": "...", "projectId": "550e8400-e29b-41d4-a716-446655440000", "sessionId": "optional" }
 ```
 
 ### `ChatResponse`
@@ -463,7 +495,7 @@ REI_API_KEY
   "status": "RUNNING",
   "sessionId": "uuid",
   "turnId": "uuid",
-  "projectId": "rei",
+  "projectId": "550e8400-e29b-41d4-a716-446655440000",
   "startedAt": "...",
   "completedAt": null,
   "failure": null

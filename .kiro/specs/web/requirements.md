@@ -14,6 +14,7 @@ CLI と Web API は同じ application service を呼び、ShellCommand をその
 Phase 1 では Web API 基盤と Run API の確立を目的とし、**以下のみを実装対象とする**。
 
 ```text
+GET  /api/v1/projects
 POST /api/v1/chat
 GET  /api/v1/runs/{runId}
 GET  /api/v1/runs/{runId}/events
@@ -61,6 +62,7 @@ Phase 1 で固める Web API の土台は以下の通り。
 `AgentEvent` 自体が chat 専用ではなく汎用化されているため、将来 `/image` `/summarize` `/briefing` も async run 化する際に共通化できる。
 
 ```text
+GET  /api/v1/projects
 POST /api/v1/chat              → runId / sessionId / turnId を返す
 GET  /api/v1/runs/{runId}
 GET  /api/v1/runs/{runId}/events   (SSE)
@@ -82,7 +84,8 @@ Web API は ShellCommand をそのまま expose せず、**Web API endpoint → 
 | `/sh` | — | 非公開 | シェル実行。外部公開は危険 |
 | `/config` | `init --force` | 非公開 | 設定ファイルを上書き生成。API キー破壊の恐れ |
 | `/project` | `add` / `remove` | 非公開 | 作業ディレクトリの登録・削除。任意パス操作 |
-| `/project` | `cd` | **非公開（Web API から削除）** | Web では全リクエストで `projectId` を指定するため不要 |
+| `/project` | `list` | 公開（Phase 1） | `GET /api/v1/projects`。登録済み UUID と名前のみ返す |
+| `/project` | `cd` | **非公開（Web API から削除）** | Web ではチャット送信ごとに `projectId` を指定するため不要 |
 | `/subagent` | `init` / `validate` | 非公開 | ファイル書き込み・任意パス読み込み |
 | `/embed` | `add` / `delete` | 非公開 | パスベースのため任意パス読み込みの危険が残る |
 | `/task` | `auth` | 非公開 | OAuth 認可。外部アカウント操作 |
@@ -108,7 +111,7 @@ Web API は ShellCommand をそのまま expose せず、**Web API endpoint → 
 
 ### カレントプロジェクトの扱い
 
-カレントプロジェクトはグローバル状態から引きはがし、**クライアントが毎回リクエストに指定する**方式とする。
+カレントプロジェクトはグローバル状態から引きはがし、**クライアントがチャット送信ごとに指定する**方式とする。
 
 - `/project cd` は **Web API から削除**する。Web には「現在のプロジェクト」という状態がなく、`/project cd` を呼んでも後続リクエストに引き継ぐ状態が存在しないため。
 - `projectId` は **リクエストボディ**で指定する。
@@ -116,7 +119,7 @@ Web API は ShellCommand をそのまま expose せず、**Web API endpoint → 
 ```json
 {
   "message": "このコードを調べて",
-  "projectId": "rei",
+  "projectId": "550e8400-e29b-41d4-a716-446655440000",
   "sessionId": "optional"
 }
 ```
@@ -414,11 +417,15 @@ Web API 化すると複数クライアント・複数 run の並行実行が普�
 #### 受け入れ基準
 
 1. THE Web API SHALL カレントプロジェクトをグローバル状態（`ProjectService.currentService` の `AtomicReference<Path> currentProject`）に依存しない
-2. THE Web API SHALL `projectId` をリクエストボディで受け取る
+2. THE チャット送信 API SHALL `projectId` をリクエストボディで受け取る
 3. THE Web API SHALL クライアントから任意のファイルシステムパスを受け付けない
 4. THE Web API SHALL 登録済み projectId から作業ディレクトリを解決する
 5. THE Web API SHALL `/project cd` を公開しない（Web API から削除する）
 6. THE `ProjectRegistry` SHALL 登録済み projectId から作業ディレクトリを解決するメソッド（`resolveById` 等）を提供する
+7. THE Web API SHALL 認証付き `GET /api/v1/projects` で登録済みプロジェクトを `200 OK` の JSON 配列として返す。各要素は `id`（登録済み UUID）と `name` のみを持ち、ファイルシステムパスを含めない
+8. WHEN プロジェクトが未登録のとき、THE 一覧 API SHALL `200 OK` と `[]` を返し、レジストリファイルを作成しない
+9. THE 一覧 API SHALL 登録順で最新の登録内容を返し、プロジェクトの登録・削除・カレントプロジェクト変更を行わない。取得した `id` は `POST /api/v1/chat` の `projectId` に指定できる
+10. WHEN API キーがない、または不正なとき、THE 一覧 API SHALL `401 Unauthorized` を返す
 
 ---
 
@@ -457,7 +464,7 @@ Web API 化すると複数クライアント・複数 run の並行実行が普�
 2. THE Web API SHALL Web API endpoint → application service の構造を明示的に作る
 3. THE Web API SHALL サブコマンドを持つコマンド（`/memory` `/profile` `/interest` `/feed` `/reminder` など）の `read` / `write` / `delete` を個別に判断する
 4. THE Web API SHALL deny by default とする
-5. THE Web API SHALL Phase 1 では `POST /api/v1/chat` / `GET /api/v1/runs/{runId}` / `GET /api/v1/runs/{runId}/events` / `POST /api/v1/runs/{runId}/cancel` / `GET /actuator/health` のみを実装対象とする
+5. THE Web API SHALL Phase 1 では `GET /api/v1/projects` / `POST /api/v1/chat` / `GET /api/v1/runs/{runId}` / `GET /api/v1/runs/{runId}/events` / `POST /api/v1/runs/{runId}/cancel` / `GET /actuator/health` のみを実装対象とする
 6. THE Web API SHALL `/history` `/search` `/briefing` `/feed` `/reminder` `/interest` `/memory` `/skill` `/image` `/summarize` `/profile` を後続 Phase で追加する（Phase 1 の実装対象外）
 
 ---

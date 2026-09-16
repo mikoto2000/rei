@@ -31,8 +31,8 @@ Web 起動
 - ビルド: `JAVA_HOME=C:\Java\jdk-25` を設定して `mvnw.cmd` を使う（`mvn` は PATH にない）。
 - テスト実行: `./mvnw.cmd test "-Dtest=<テスト名>"` で対象テストのみ実行できる。
 - 既存の CLI 利用を壊さない（Shell UI と Web UI は application/core に並列にぶら下がる）。
-- カレントプロジェクトはグローバル状態から引きはがし、クライアントが毎回 `projectId` を指定する。
-- Phase 1 の公開対象は `POST /api/v1/chat`、`GET /api/v1/runs/{runId}`、`GET /api/v1/runs/{runId}/events`、`POST /api/v1/runs/{runId}/cancel`、`GET /actuator/health` のみ。後続 Phase のコマンドや非公開コマンドは追加しない。
+- カレントプロジェクトはグローバル状態から引きはがし、クライアントがチャット送信ごとに `projectId` を指定する。
+- Phase 1 の公開対象は `GET /api/v1/projects`、`POST /api/v1/chat`、`GET /api/v1/runs/{runId}`、`GET /api/v1/runs/{runId}/events`、`POST /api/v1/runs/{runId}/cancel`、`GET /actuator/health` のみ。後続 Phase のコマンドや非公開コマンドは追加しない。
 - 以下の Phase 0〜9 は、この Phase 1 機能を実装する作業段階を表す。
 - 先行タスクでは後続コンポーネントのインターフェースとテストダブルを使う。4.3 の queue / runner 連携は 5.2〜5.4、3.3 の同時 purge は 8.7、6.4 の SSE 変換は 7.2 / 8.6 で実物を接続して検証する。
 - サービス層は状態・戻り値・例外、Controller 層は HTTP status / header / JSON を検証する。並行処理は latch 等、期限・heartbeat は制御可能な時計や scheduler を使い、実時間の長い待機に依存しない。
@@ -352,7 +352,7 @@ Web 起動
 - **コミット**: コミットする場合は、関連するテストと実装を同じコミットに含め、Green / Refactor の区切りを使う。
 - **Web API DTO の分離**: 内部型（`AgentEvent` 等）を直接 expose しない。
 - **API キー**: ログ / 例外 / イベントに出力しない。constant-time comparison で比較する。
-- **カレントプロジェクト**: グローバル状態に依存しない。クライアントが毎回 `projectId` を指定する。
+- **カレントプロジェクト**: グローバル状態に依存しない。クライアントがチャット送信ごとに `projectId` を指定する。
 - **runId の一貫性**: `ChatSubmitService` が採番した `runId` を内部で再採番しない。レスポンス / `RunRegistry` / `ConversationTurnStore` / `AgentEvent` で一致させる。
 
 ## 実装結果・検証（2026-09-15）
@@ -373,3 +373,16 @@ Web 起動
 - `JAVA_HOME=C:\Java\jdk-25` で `./mvnw.cmd test` を実行し、**1,763件、失敗0、エラー0、スキップ2、BUILD SUCCESS** を確認した。
 - スキップ2件は既存の `ExternalAgentPolicyTest` のシンボリックリンク検証で、Windows のリンク作成権限がないため。Web 機能の追加テストにスキップはない。
 - 最終実行ログ: `target/web-full-test.log`（ビルド生成物として Git 管理外）。
+
+## 追加対応: プロジェクト一覧 API（2026-09-16）
+
+- [x] 10.1 認証付き `GET /api/v1/projects` を追加する
+  - Red: `ProjectControllerTest` を先行追加し、未実装クラスによるコンパイル失敗を確認した。
+  - Green: `ProjectQueryService` / `ProjectController` / `ProjectResponse` と Web 有効時の Bean を追加した。
+  - 認証なし・不正キーは401、正常時は200。空一覧、UUIDと名前のみの公開、登録順、登録内容の更新反映、取得によるファイル非変更を検証した。
+  - `WebApiIntegrationTest` で実 HTTP による一覧取得と、返却 ID を使ったチャット受付202を確認した。
+  - _Requirements: 8.7–8.10, 11.5; Design: GET /api/v1/projects_
+- [x] 10.2 要件・設計・利用例を更新し、Web API の回帰テストを実行する
+  - Phase 1 の公開対象を6エンドポイントに更新し、チャットの ID 例を UUID に修正した。
+  - `./mvnw.cmd '-Dtest=dev.mikoto2000.rei.web.*Test' test`: **41件、失敗0、エラー0、スキップ0、BUILD SUCCESS**。
+  - ログ: `target/project-api-regression.log`（Git 管理外）。上記1,763件の全体テスト記録は初回実装時の結果。
