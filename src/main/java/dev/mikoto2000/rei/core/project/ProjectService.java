@@ -23,6 +23,9 @@ public class ProjectService {
   }
   public Path startupDirectory() { return startupDirectory; }
   public ProjectClient newClient() { return new ProjectClient(this, startupDirectory); }
+  public ProjectClient currentClient() { return client(); }
+  public String currentSessionId() { synchronized (client()) { return client().sessionId; } }
+  public void selectSession(String sessionId) { synchronized (client()) { client().sessionId = sessionId; } }
   private ProjectClient client() {
     var client = ProjectClientScope.current();
     if (client == null || client.service != this)
@@ -46,14 +49,19 @@ public class ProjectService {
   public Path cd(String directory) {
     var client = client();
     var context = registry.resolve(resolveDirectory(directory));
-    client.selection.set(context.root());
+    synchronized (client) {
+      if (!client.selection.get().equals(context.root())) client.sessionId = null;
+      client.selection.set(context.root());
+    }
     return context.root();
   }
   public Path remove(String directory) {
     var client = client();
     Path path = resolveDirectory(directory);
     registry.remove(path);
-    client.selection.updateAndGet(current -> current.equals(path) ? startupDirectory : current);
+    synchronized (client) {
+      if (client.selection.get().equals(path)) { client.selection.set(startupDirectory); client.sessionId = null; }
+    }
     return path;
   }
   /** Running work keeps its captured ownership even when the client changes its selection. */

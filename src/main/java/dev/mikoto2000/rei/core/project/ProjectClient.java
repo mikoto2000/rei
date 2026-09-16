@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class ProjectClient {
   final ProjectService service;
   final AtomicReference<Path> selection;
+  String sessionId;
 
   ProjectClient(ProjectService service, Path startup) {
     this.service = service;
