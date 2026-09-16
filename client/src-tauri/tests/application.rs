@@ -3,7 +3,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use rei_client::{application::*, domain::*, ports::*};
+use rei_client_lib::{application::*, domain::*, ports::*};
 use serde_json::{json, Value};
 use std::sync::Arc;
 struct Sink;
@@ -61,9 +61,10 @@ async fn submit_registers_subscribes_resumes_and_expiry_does_not_fork() {
     app.unlock(Secret::new("a long passphrase".into())).unwrap();
     let id = app.save_server(None, "Home", &url).unwrap();
     app.set_credential(&id, Secret::new("key".into())).unwrap();
-    let c = app.conversations.create(&id, "p", "hello").unwrap();
+    let c = app.conversations.create(&id, "p", "").unwrap();
     let first = app.submit(&c.local_id, "first").await.unwrap();
     assert_eq!(first.run_id, "r");
+    assert_eq!(app.conversations.get(&c.local_id).unwrap().title, "first");
     tokio::time::timeout(std::time::Duration::from_secs(3), async {
         while !app.runs.get(&id, "r").unwrap().status.terminal() {
             tokio::task::yield_now().await;

@@ -1,4 +1,4 @@
-use rei_client::{domain::*, infrastructure::*, ports::*};
+use rei_client_lib::{domain::*, infrastructure::*, ports::*};
 
 #[test]
 fn settings_roundtrip_and_selection() {

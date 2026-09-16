@@ -1,9 +1,8 @@
 use super::*;
-use crate::{api::HttpReiClient, domain::*, infrastructure::*, ports::*};
+use crate::{domain::*, ports::*};
 use serde::Serialize;
 use std::{
     collections::HashSet,
-    path::PathBuf,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -30,26 +29,28 @@ pub struct Application {
     pub conversations: ConversationService,
     pub runs: Arc<RunManager>,
     vault: Mutex<Option<Box<dyn CredentialStore>>>,
-    directory: PathBuf,
+    credentials: Arc<dyn CredentialFactory>,
+    clients: Arc<dyn ClientFactory>,
     submitting: Mutex<HashSet<String>>,
 }
 impl Application {
-    pub fn open(
-        directory: PathBuf,
+    pub fn new(
+        repository: Arc<dyn Repository>,
+        credentials: Arc<dyn CredentialFactory>,
+        clients: Arc<dyn ClientFactory>,
         observer: Arc<dyn RunObserver>,
         notifications: Arc<dyn NotificationPort>,
     ) -> Result<Self> {
         Ok(Self {
-            conversations: ConversationService::new(Arc::new(JsonRepository::new(
-                directory.join("app.json"),
-            )))?,
+            conversations: ConversationService::new(repository)?,
             runs: Arc::new(RunManager::new(
                 observer,
                 notifications,
                 Duration::from_secs(1),
             )),
             vault: Mutex::new(None),
-            directory,
+            credentials,
+            clients,
             submitting: Mutex::new(HashSet::new()),
         })
     }
@@ -58,10 +59,7 @@ impl Application {
         if vault.is_some() {
             return Ok(());
         }
-        *vault = Some(Box::new(EncryptedVault::open(
-            self.directory.join("credentials.vault"),
-            password,
-        )?));
+        *vault = Some(self.credentials.unlock(password)?);
         Ok(())
     }
     pub fn unlocked(&self) -> bool {
@@ -188,7 +186,7 @@ impl Application {
         } else {
             None
         };
-        Ok(Arc::new(HttpReiClient::new(&profile.base_url, credential)?))
+        self.clients.create(&profile, credential)
     }
     pub async fn test_server(&self, id: &str) -> Result<ConnectionView> {
         let reachable = self.api(id, false)?.health().await;
@@ -236,6 +234,12 @@ impl Application {
             ids: &self.submitting,
             id: id.into(),
         };
+        // Repair a previously accepted session whose metadata write failed before
+        // permitting another POST. Never silently create a replacement session.
+        if let Some(run) = self.runs.all().iter().find(|r| r.conversation_id == id) {
+            self.conversations
+                .record_turn(id, &run.session_id, &run.prompt)?;
+        }
         let c = self.conversations.get(id)?;
         let api = self.api(&c.server_profile_id, true)?;
         let receipt = api
@@ -255,7 +259,7 @@ impl Application {
             message,
         ))?;
         // An accepted run must remain trackable even if metadata persistence fails.
-        let persisted = self.conversations.attach_session(id, &session);
+        let persisted = self.conversations.record_turn(id, &session, message);
         self.runs.subscribe(&c.server_profile_id, &run_id, api)?;
         persisted?;
         self.runs.get(&c.server_profile_id, &run_id)

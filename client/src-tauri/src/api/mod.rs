@@ -5,6 +5,15 @@ use reqwest::{Client, Method, Response};
 use serde::de::DeserializeOwned;
 use std::time::Duration;
 
+/// Enforce mobile transport policy in Rust too: native HTTP can bypass WebView/OS rules.
+pub fn validate_transport(base_url: &str, mobile: bool) -> Result<()> {
+    let profile = ServerProfile::new("transport", base_url)?;
+    if mobile && !profile.base_url.starts_with("https://") {
+        return Err(AppError::InvalidInput);
+    }
+    Ok(())
+}
+
 pub struct HttpReiClient {
     client: Client,
     base_url: String,
@@ -12,6 +21,10 @@ pub struct HttpReiClient {
 }
 impl HttpReiClient {
     pub fn new(base_url: &str, credential: Option<Secret>) -> Result<Self> {
+        validate_transport(
+            base_url,
+            cfg!(any(target_os = "android", target_os = "ios")),
+        )?;
         let profile = ServerProfile::new("validation", base_url)?;
         let client = Client::builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -103,7 +116,14 @@ impl ReiClient for HttpReiClient {
                 .timeout(Duration::from_secs(30)),
             Operation::Chat,
         )
-        .await?;
+        .await
+        .map_err(|error| {
+            if session.is_none() && error == AppError::SessionNotFound {
+                AppError::ProjectNotFound
+            } else {
+                error
+            }
+        })?;
         if response.status() != reqwest::StatusCode::ACCEPTED {
             return Err(AppError::InvalidResponse);
         }

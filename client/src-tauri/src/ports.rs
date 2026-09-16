@@ -3,6 +3,18 @@ use crate::domain::*;
 use async_trait::async_trait;
 use futures_util::Stream;
 use std::pin::Pin;
+use std::sync::Arc;
+
+pub trait ClientFactory: Send + Sync {
+    fn create(
+        &self,
+        profile: &ServerProfile,
+        credential: Option<Secret>,
+    ) -> Result<Arc<dyn ReiClient>>;
+}
+pub trait CredentialFactory: Send + Sync {
+    fn unlock(&self, password: Secret) -> Result<Box<dyn CredentialStore>>;
+}
 
 pub trait RunObserver: Send + Sync {
     fn changed(&self, run: RunView);

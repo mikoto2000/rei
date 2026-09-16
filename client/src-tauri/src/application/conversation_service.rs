@@ -104,6 +104,24 @@ impl ConversationService {
             Ok(())
         })
     }
+    pub fn record_turn(&self, id: &str, session: &str, prompt: &str) -> Result<()> {
+        self.store.transact(|data| {
+            let c = data
+                .conversations
+                .iter_mut()
+                .find(|c| c.local_id == id)
+                .ok_or(AppError::NotFound)?;
+            if c.session_id.as_deref().is_some_and(|s| s != session) {
+                return Err(AppError::SessionProjectConflict);
+            }
+            if c.session_id.is_none() && c.title == "新しい会話" {
+                c.title = prompt.trim().chars().take(80).collect();
+            }
+            c.session_id = Some(session.into());
+            c.last_accessed_at = now();
+            Ok(())
+        })
+    }
     pub fn change_project(&self, id: &str, project: &str) -> Result<()> {
         if project.is_empty() {
             return Err(AppError::InvalidInput);

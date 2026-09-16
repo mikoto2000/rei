@@ -13,6 +13,7 @@ use tokio::task::JoinHandle;
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunView {
+    pub revision: u64,
     pub server_id: String,
     pub conversation_id: String,
     pub project_id: String,
@@ -33,6 +34,7 @@ pub struct RunView {
 impl From<&Projection> for RunView {
     fn from(p: &Projection) -> Self {
         Self {
+            revision: p.revision,
             server_id: p.server_id.clone(),
             conversation_id: p.conversation_id.clone(),
             project_id: p.project_id.clone(),
@@ -76,12 +78,13 @@ impl RunManager {
             retry_unit,
         }
     }
-    pub fn register(&self, p: Projection) -> Result<()> {
+    pub fn register(&self, mut p: Projection) -> Result<()> {
         let key = (p.server_id.clone(), p.run_id.clone());
         let mut runs = self.runs.lock().unwrap();
         if runs.contains_key(&key) {
             return Err(AppError::Busy);
         }
+        p.registered_order = runs.len();
         let view = RunView::from(&p);
         runs.insert(key, p);
         drop(runs);
@@ -97,12 +100,10 @@ impl RunManager {
             .ok_or(AppError::RunNotFound)
     }
     pub fn all(&self) -> Vec<RunView> {
-        self.runs
-            .lock()
-            .unwrap()
-            .values()
-            .map(RunView::from)
-            .collect()
+        let runs = self.runs.lock().unwrap();
+        let mut ordered = runs.values().collect::<Vec<_>>();
+        ordered.sort_by_key(|p| p.registered_order);
+        ordered.into_iter().map(RunView::from).collect()
     }
     pub fn active(&self) -> Vec<RunView> {
         self.all()
@@ -114,6 +115,7 @@ impl RunManager {
         let mut runs = self.runs.lock().unwrap();
         let p = runs.get_mut(key).ok_or(AppError::RunNotFound)?;
         f(p)?;
+        p.revision += 1;
         let view = RunView::from(&*p);
         drop(runs);
         if view.status.terminal() && self.notified.lock().unwrap().insert(key.clone()) {
@@ -130,7 +132,12 @@ impl RunManager {
     ) -> Result<RunView> {
         self.get(server, run)?;
         let snapshot = api.run(run).await?;
-        self.update(&(server.into(), run.into()), |p| p.recover(snapshot))?;
+        self.update(&(server.into(), run.into()), |p| {
+            if snapshot.status.terminal() && !p.status.terminal() {
+                p.incomplete = true;
+            }
+            p.recover(snapshot)
+        })?;
         self.get(server, run)
     }
     pub async fn cancel(&self, server: &str, run: &str, api: Arc<dyn ReiClient>) -> Result<()> {

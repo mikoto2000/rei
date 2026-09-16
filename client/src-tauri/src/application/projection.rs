@@ -22,6 +22,8 @@ pub struct WorkingSetItem {
 }
 #[derive(Clone)]
 pub struct Projection {
+    pub(super) registered_order: usize,
+    pub revision: u64,
     pub server_id: String,
     pub conversation_id: String,
     pub project_id: String,
@@ -58,6 +60,8 @@ impl Projection {
         prompt: &str,
     ) -> Self {
         Self {
+            registered_order: 0,
+            revision: 0,
             server_id: server.into(),
             conversation_id: conversation.into(),
             project_id: project.into(),
@@ -188,6 +192,7 @@ impl Projection {
         self.last_sequence = Some(sequence);
         if self.status.terminal() {
             self.stream_state = StreamState::Closed;
+            self.error = None;
         }
         Ok(true)
     }
@@ -206,6 +211,7 @@ impl Projection {
         }
         if self.status.terminal() {
             self.stream_state = StreamState::Closed;
+            self.error = None;
         }
         Ok(())
     }

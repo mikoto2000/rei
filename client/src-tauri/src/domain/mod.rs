@@ -125,7 +125,7 @@ pub struct ServerProfile {
 }
 impl ServerProfile {
     pub fn new(name: &str, base_url: &str) -> Result<Self> {
-        let url = reqwest::Url::parse(base_url).map_err(|_| AppError::InvalidInput)?;
+        let url = url::Url::parse(base_url).map_err(|_| AppError::InvalidInput)?;
         if name.trim().is_empty()
             || !matches!(url.scheme(), "http" | "https")
             || url.host_str().is_none()

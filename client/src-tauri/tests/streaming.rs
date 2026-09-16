@@ -1,16 +1,119 @@
+use async_trait::async_trait;
 use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
-use rei_client::{api::HttpReiClient, application::*, domain::*, ports::*};
+use rei_client_lib::{api::HttpReiClient, application::*, domain::*, ports::*};
 use serde_json::json;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc, Mutex,
 };
 use std::time::Duration;
+
+struct UnavailableStream {
+    error: AppError,
+    polls: AtomicUsize,
+    final_status: RunStatus,
+}
+#[async_trait]
+impl ReiClient for UnavailableStream {
+    async fn health(&self) -> Result<()> {
+        Ok(())
+    }
+    async fn projects(&self) -> Result<Vec<Project>> {
+        Ok(vec![])
+    }
+    async fn chat(&self, _: &str, _: Option<&str>, _: &str) -> Result<ChatReceipt> {
+        Err(AppError::InvalidInput)
+    }
+    async fn run(&self, _: &str) -> Result<RunSnapshot> {
+        let n = self.polls.fetch_add(1, Ordering::SeqCst);
+        Ok(RunSnapshot {
+            run_id: "r".into(),
+            session_id: "s".into(),
+            project_id: "p".into(),
+            turn_id: "t".into(),
+            status: if n == 0 {
+                RunStatus::Running
+            } else {
+                self.final_status
+            },
+            failure: None,
+        })
+    }
+    async fn cancel(&self, _: &str) -> Result<RunSnapshot> {
+        Err(AppError::RunNotFound)
+    }
+    async fn events(&self, _: &str, _: Option<u64>) -> Result<ByteStream> {
+        Err(self.error)
+    }
+}
+
+#[tokio::test]
+async fn replay_gap_polls_nonterminal_until_failed_and_notifies_once() {
+    let (manager, observer, _, _) = fixture(false).await;
+    let api = Arc::new(UnavailableStream {
+        error: AppError::ReplayGap,
+        polls: AtomicUsize::new(0),
+        final_status: RunStatus::Failed,
+    });
+    manager.subscribe("server", "r", api.clone()).unwrap();
+    let p = completed(&manager).await;
+    assert!(p.incomplete);
+    assert_eq!(p.status, RunStatus::Failed);
+    assert!(api.polls.load(Ordering::SeqCst) >= 2);
+    assert_eq!(*observer.notices.lock().unwrap(), vec![RunStatus::Failed]);
+}
+#[tokio::test]
+async fn detects_terminal_during_reconnect_outage() {
+    let (manager, _, _, _) = fixture(false).await;
+    manager
+        .subscribe(
+            "server",
+            "r",
+            Arc::new(UnavailableStream {
+                error: AppError::ServerUnreachable,
+                polls: AtomicUsize::new(0),
+                final_status: RunStatus::Completed,
+            }),
+        )
+        .unwrap();
+    let p = completed(&manager).await;
+    assert!(p.incomplete);
+    assert_eq!(p.stream_state, StreamState::Closed);
+    assert_eq!(p.error, None);
+}
+#[tokio::test]
+async fn authentication_failure_closes_stream_without_reconnect_loop() {
+    let (manager, _, _, _) = fixture(false).await;
+    manager
+        .subscribe(
+            "server",
+            "r",
+            Arc::new(UnavailableStream {
+                error: AppError::AuthenticationFailed,
+                polls: AtomicUsize::new(0),
+                final_status: RunStatus::Completed,
+            }),
+        )
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let p = manager.get("server", "r").unwrap();
+            if p.stream_state == StreamState::Closed {
+                assert_eq!(p.error, Some(AppError::AuthenticationFailed));
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(manager.active().len(), 1);
+}
 
 #[derive(Default)]
 struct Observer {
@@ -159,5 +262,70 @@ async fn multiple_servers_can_have_the_same_run_id() {
     assert_eq!(
         manager.get("server", "r").unwrap().stream_state,
         StreamState::Closed
+    );
+}
+
+#[tokio::test]
+async fn run_list_preserves_submission_order() {
+    let (manager, _, _, _) = fixture(false).await;
+    for i in 0..20 {
+        manager
+            .register(Projection::new(
+                "server",
+                "conversation",
+                "p",
+                ChatReceipt {
+                    run_id: format!("run-{i}"),
+                    session_id: "s".into(),
+                    turn_id: "t".into(),
+                },
+                &i.to_string(),
+            ))
+            .unwrap();
+    }
+    let ids = manager
+        .all()
+        .into_iter()
+        .map(|r| r.run_id)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        ids,
+        std::iter::once("r".to_owned())
+            .chain((0..20).map(|i| format!("run-{i}")))
+            .collect::<Vec<_>>()
+    );
+}
+
+#[tokio::test]
+async fn status_refresh_reports_missing_terminal_event_as_incomplete() {
+    let (manager, _, _, api) = fixture(false).await;
+    let view = manager.refresh("server", "r", api).await.unwrap();
+    assert_eq!(view.status, RunStatus::Completed);
+    assert!(view.incomplete);
+}
+
+#[tokio::test]
+async fn running_run_can_be_cancelled_by_its_explicit_id() {
+    let (manager, _, _, api) = fixture(false).await;
+    manager
+        .refresh(
+            "server",
+            "r",
+            Arc::new(UnavailableStream {
+                error: AppError::StreamDisconnected,
+                polls: AtomicUsize::new(0),
+                final_status: RunStatus::Completed,
+            }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        manager.get("server", "r").unwrap().status,
+        RunStatus::Running
+    );
+    manager.cancel("server", "r", api).await.unwrap();
+    assert_eq!(
+        manager.get("server", "r").unwrap().status,
+        RunStatus::Cancelled
     );
 }

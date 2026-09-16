@@ -1,4 +1,4 @@
-use rei_client::domain::*;
+use rei_client_lib::domain::*;
 
 #[test]
 fn profile_rejects_credentials_in_url() {
@@ -45,4 +45,19 @@ fn http_errors_are_operation_specific() {
     );
     assert_eq!(http_error(404, Operation::Run), AppError::RunNotFound);
     assert_eq!(http_error(409, Operation::Stream), AppError::ReplayGap);
+}
+
+#[test]
+fn run_status_wire_contract_includes_all_five_states() {
+    for (name, status, terminal) in [
+        ("QUEUED", RunStatus::Queued, false),
+        ("RUNNING", RunStatus::Running, false),
+        ("COMPLETED", RunStatus::Completed, true),
+        ("FAILED", RunStatus::Failed, true),
+        ("CANCELLED", RunStatus::Cancelled, true),
+    ] {
+        let decoded: RunStatus = serde_json::from_str(&format!("\"{name}\"")).unwrap();
+        assert_eq!(decoded, status);
+        assert_eq!(decoded.terminal(), terminal);
+    }
 }

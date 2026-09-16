@@ -3182,6 +3182,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tempfile",
  "tokio",
+ "url",
  "uuid",
  "zeroize",
 ]

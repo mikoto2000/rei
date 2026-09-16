@@ -1,4 +1,4 @@
-use rei_client::{
+use rei_client_lib::{
     application::{backoff, Projection, SseParser},
     domain::*,
 };
@@ -169,4 +169,48 @@ fn retry_is_bounded() {
         (0..8).map(backoff).collect::<Vec<_>>(),
         vec![1, 2, 4, 8, 15, 30, 30, 30]
     );
+}
+
+#[test]
+fn mismatched_id_and_cross_run_frames_do_not_advance_sequence() {
+    let mut p = projection();
+    for data in [
+        json!({"type":"message.delta","sequence":2,"runId":"r","version":1,"payload":{"messageId":"m","delta":"bad"}}),
+        json!({"type":"message.delta","sequence":1,"runId":"other","version":1,"payload":{"messageId":"m","delta":"bad"}}),
+    ] {
+        let bytes = format!("event: message.delta\nid: 1\ndata: {data}\n\n");
+        assert!(p
+            .apply(
+                SseParser::default()
+                    .push(bytes.as_bytes())
+                    .unwrap()
+                    .remove(0)
+            )
+            .is_err());
+        assert!(p.last_sequence.is_none());
+        assert!(p.assistant_text().is_empty());
+    }
+}
+#[test]
+fn heartbeat_with_id_still_cannot_change_cursor() {
+    let mut p = projection();
+    apply(
+        &mut p,
+        "message.delta",
+        7,
+        json!({"messageId":"m","delta":"ok"}),
+    );
+    let frame = SseParser::default()
+        .push(b"event: heartbeat\nid: 999\ndata: {}\n\n")
+        .unwrap()
+        .remove(0);
+    p.apply(frame).unwrap();
+    assert_eq!(p.last_sequence, Some(7));
+}
+#[test]
+fn parser_bounds_unterminated_frames_and_rejects_invalid_utf8() {
+    assert!(SseParser::default()
+        .push(&vec![b'x'; 2 * 1024 * 1024 + 1])
+        .is_err());
+    assert!(SseParser::default().push(&[0xff, b'\n']).is_err());
 }

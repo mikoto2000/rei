@@ -1,4 +1,4 @@
-use rei_client::{
+use rei_client_lib::{
     application::ConversationService, domain::*, infrastructure::JsonRepository, ports::Repository,
 };
 use std::sync::Arc;
