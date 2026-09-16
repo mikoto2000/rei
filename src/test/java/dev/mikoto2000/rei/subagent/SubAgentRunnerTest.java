@@ -49,6 +49,18 @@ class SubAgentRunnerTest {
         toolFactory, cancellation, new AgentEventFactory(Clock.systemUTC()), events::add, Clock.systemUTC());
   }
   ChatResponse answer(String text) { return new ChatResponse(List.of(new Generation(new AssistantMessage(text)))); }
+  @Test void childPreservesWebRequestSource() throws Exception {
+    var runner = runner(p -> {
+      var options = (ToolCallingChatOptions) p.getOptions();
+      var owner = (AgentRunContext) options.getToolContext().get(AgentRunContext.class.getName());
+      assertThat(owner.requestSource()).isEqualTo(AgentRunContext.RequestSource.WEB);
+      return Flux.just(answer("review"));
+    }, "2s");
+    var parent = new AgentRunContext("web", "session", directory, "project", AgentRunContext.RequestSource.WEB);
+    try (var scope = AgentRunScope.open(parent)) {
+      assertThat(runner.run("reviewer", "task", null).status()).isEqualTo(SubAgentResult.Status.COMPLETED);
+    }
+  }
   ChatResponse tool(String name) {
     return new ChatResponse(List.of(new Generation(AssistantMessage.builder().content("").toolCalls(List.of(
         new AssistantMessage.ToolCall("call-1", "function", name, "{}"))).build())));

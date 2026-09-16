@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.sound;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
 import lombok.RequiredArgsConstructor;
 
@@ -27,6 +29,11 @@ public class SoundNotificationTools {
           音声通知が無効または失敗した場合は、標準出力に通知します。
           """)
   public String notify(String message) {
+    var context = AgentRunScope.current();
+    if (context != null
+        && context.requestSource() != AgentRunContext.RequestSource.SHELL) {
+      return "音声通知は Shell 経由のリクエストでのみ利用できます。";
+    }
     try {
       soundNotificationService.notify(message);
       return "通知しました: " + message;

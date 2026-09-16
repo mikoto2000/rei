@@ -49,7 +49,8 @@ public final class SubAgentRunner {
     var parent = AgentRunScope.current();
     String parentId = parent == null ? null : parent.runId();
     var owner = new AgentRunContext(runId, "subagent:" + runId,
-        parent == null ? Path.of(".") : parent.projectRoot(), parent == null ? null : parent.projectId());
+        parent == null ? Path.of(".") : parent.projectRoot(), parent == null ? null : parent.projectId(),
+        parent == null ? AgentRunContext.RequestSource.SHELL : parent.requestSource());
     AtomicBoolean stopped = new AtomicBoolean();
     var subscriptions = Disposables.composite();
     CompletableFuture<SubAgentResult> completion = new CompletableFuture<>();
