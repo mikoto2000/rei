@@ -81,9 +81,22 @@ pub struct RunSnapshot {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppData {
+    pub conversations: Vec<Conversation>,
     pub servers: Vec<ServerProfile>,
     pub selected_server: Option<String>,
     pub notifications: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Conversation {
+    pub local_id: String,
+    pub server_profile_id: String,
+    pub project_id: String,
+    pub session_id: Option<String>,
+    pub title: String,
+    pub created_at: u64,
+    pub last_accessed_at: u64,
 }
 
 #[derive(Clone)]
