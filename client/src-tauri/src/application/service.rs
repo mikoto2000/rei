@@ -34,6 +34,37 @@ pub struct Application {
     submitting: Mutex<HashSet<String>>,
 }
 impl Application {
+    pub async fn session_list(
+        &self,
+        server: &str,
+        project: Option<&str>,
+        limit: Option<i32>,
+        cursor: Option<String>,
+    ) -> Result<Page<SessionSummary>> {
+        SessionHistoryService::new(self.api(server, true)?)
+            .list_sessions(project, limit, cursor)
+            .await
+    }
+    pub async fn session_get(&self, server: &str, id: &str) -> Result<SessionSummary> {
+        SessionHistoryService::new(self.api(server, true)?)
+            .get_session(id)
+            .await
+    }
+    pub async fn session_turns(
+        &self,
+        server: &str,
+        id: &str,
+        limit: Option<i32>,
+        cursor: Option<String>,
+    ) -> Result<Page<ConversationTurn>> {
+        SessionHistoryService::new(self.api(server, true)?)
+            .list_turns(id, limit, cursor)
+            .await
+    }
+    pub async fn resume_session(&self, server: &str, id: &str) -> Result<Conversation> {
+        let session = self.session_get(server, id).await?;
+        self.conversations.open_session(server, &session)
+    }
     pub fn new(
         repository: Arc<dyn Repository>,
         credentials: Arc<dyn CredentialFactory>,
@@ -242,10 +273,42 @@ impl Application {
         }
         let c = self.conversations.get(id)?;
         let api = self.api(&c.server_profile_id, true)?;
-        let receipt = api
-            .chat(&c.project_id, c.session_id.as_deref(), message)
-            .await?;
+        let target = match &c.session_id {
+            Some(session) => {
+                let summary = SessionHistoryService::new(api.clone())
+                    .get_session(session)
+                    .await?;
+                self.conversations
+                    .open_session(&c.server_profile_id, &summary)?;
+                ConversationTarget::Existing(summary)
+            }
+            None => ConversationTarget::New {
+                project_id: c.project_id.clone(),
+            },
+        };
+        let receipt = match api
+            .chat(target.project_id(), target.session_id(), message)
+            .await
+        {
+            Err(AppError::SessionProjectConflict) => {
+                if let Some(session) = target.session_id() {
+                    if let Ok(summary) = api.get_session(session).await {
+                        let _ = self
+                            .conversations
+                            .open_session(&c.server_profile_id, &summary);
+                    }
+                }
+                return Err(AppError::SessionProjectConflict);
+            }
+            result => result?,
+        };
         if receipt.run_id.is_empty() || receipt.session_id.is_empty() || receipt.turn_id.is_empty()
+        {
+            return Err(AppError::InvalidResponse);
+        }
+        if target
+            .session_id()
+            .is_some_and(|id| id != receipt.session_id)
         {
             return Err(AppError::InvalidResponse);
         }
@@ -254,7 +317,7 @@ impl Application {
         self.runs.register(Projection::new(
             &c.server_profile_id,
             id,
-            &c.project_id,
+            target.project_id(),
             receipt,
             message,
         ))?;
@@ -262,6 +325,12 @@ impl Application {
         let persisted = self.conversations.record_turn(id, &session, message);
         self.runs.subscribe(&c.server_profile_id, &run_id, api)?;
         persisted?;
+        // Refresh once after acceptance; failure must not make an accepted POST look retryable.
+        if let Ok(summary) = self.session_get(&c.server_profile_id, &session).await {
+            let _ = self
+                .conversations
+                .open_session(&c.server_profile_id, &summary);
+        }
         self.runs.get(&c.server_profile_id, &run_id)
     }
     pub fn delete_conversation(&self, id: &str) -> Result<()> {

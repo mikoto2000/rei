@@ -26,6 +26,23 @@ pub trait NotificationPort: Send + Sync {
 pub type ByteStream = Pin<Box<dyn Stream<Item = Result<Vec<u8>>> + Send>>;
 #[async_trait]
 pub trait ReiClient: Send + Sync {
+    async fn list_sessions(
+        &self,
+        _project: Option<&str>,
+        _query: HistoryQuery,
+    ) -> Result<Page<SessionSummary>> {
+        Err(AppError::InvalidResponse)
+    }
+    async fn get_session(&self, _session: &str) -> Result<SessionSummary> {
+        Err(AppError::InvalidResponse)
+    }
+    async fn list_session_turns(
+        &self,
+        _session: &str,
+        _query: HistoryQuery,
+    ) -> Result<Page<ConversationTurn>> {
+        Err(AppError::InvalidResponse)
+    }
     async fn health(&self) -> Result<()>;
     async fn projects(&self) -> Result<Vec<Project>>;
     async fn chat(

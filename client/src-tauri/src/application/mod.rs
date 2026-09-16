@@ -2,11 +2,13 @@ mod conversation_service;
 mod projection;
 mod run_manager;
 mod service;
+mod session_history;
 mod sse;
 pub use conversation_service::*;
 pub use projection::*;
 pub use run_manager::*;
 pub use service::*;
+pub use session_history::*;
 pub use sse::*;
 
 pub fn backoff(attempt: usize) -> u64 {

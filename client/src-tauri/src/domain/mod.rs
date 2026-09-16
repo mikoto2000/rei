@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
+mod history;
+pub use history::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AppError {
@@ -15,6 +17,9 @@ pub enum AppError {
     Cancelled,
     InvalidInput,
     InvalidResponse,
+    InvalidCursor,
+    InvalidLimit,
+    UnexpectedServerError,
     Storage,
     VaultLocked,
     Busy,
@@ -81,6 +86,8 @@ pub struct RunSnapshot {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppData {
+    // Runtime navigation handles only. Ignore legacy local metadata when loading app.json.
+    #[serde(skip)]
     pub conversations: Vec<Conversation>,
     pub servers: Vec<ServerProfile>,
     pub selected_server: Option<String>,
@@ -153,16 +160,20 @@ pub enum Operation {
     Chat,
     Run,
     Stream,
+    Sessions,
+    Session,
 }
 pub fn http_error(status: u16, op: Operation) -> AppError {
     match (status, op) {
         (401 | 403, _) => AppError::AuthenticationFailed,
         (404, Operation::Chat) => AppError::SessionNotFound,
+        (404, Operation::Session) => AppError::SessionNotFound,
         (404, Operation::Projects) => AppError::ProjectNotFound,
         (404, Operation::Run | Operation::Stream) => AppError::RunNotFound,
         (409, Operation::Chat) => AppError::SessionProjectConflict,
         (409, Operation::Stream) => AppError::ReplayGap,
         (400 | 422, _) => AppError::InvalidInput,
+        (_, Operation::Sessions | Operation::Session) => AppError::UnexpectedServerError,
         _ => AppError::ServerUnreachable,
     }
 }

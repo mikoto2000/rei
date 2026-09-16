@@ -14,7 +14,7 @@ fn service() -> (tempfile::TempDir, ConversationService) {
     (dir, ConversationService::new(repo).unwrap())
 }
 #[test]
-fn create_attach_resume_lock_and_list_survive_restart() {
+fn runtime_project_lock_does_not_persist_server_metadata() {
     let (dir, service) = service();
     let c = service.create("server", "p", "hello").unwrap();
     assert!(c.session_id.is_none());
@@ -26,8 +26,9 @@ fn create_attach_resume_lock_and_list_survive_restart() {
     let restored =
         ConversationService::new(Arc::new(JsonRepository::new(dir.path().join("app.json"))))
             .unwrap();
-    assert_eq!(restored.list()[0].session_id.as_deref(), Some("s"));
-    assert_eq!(restored.list()[0].project_id, "p");
+    assert!(restored.list().is_empty());
+    let json = std::fs::read_to_string(dir.path().join("app.json")).unwrap();
+    assert!(!json.contains("conversations") && !json.contains("sessionId"));
 }
 #[test]
 fn explicit_continue_creates_new_metadata_and_preserves_old_session() {
