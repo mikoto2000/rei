@@ -91,6 +91,8 @@ Rei の入力プロンプトが表示されたら、文章をそのまま入力�
 | 最後の要約を再表示する | `/summarize` |
 | 画像を生成する | `/image "夕暮れの港の水彩画"` |
 | 会話履歴を表示する | `/history` |
+| 新しい会話を開始する | `/new`（次の送信時に作成） |
+| 既知 Session を再開する | `/resume <sessionId>` |
 | 会話履歴を検索する | `/history search 検索したい言葉` |
 | 実行中の処理を確認する | `/runs` |
 | 選択中プロジェクトの AI の実行を中止する | `/cancel` |
@@ -184,3 +186,9 @@ Web では認証付き `GET /api/v1/sessions`、`GET /api/v1/sessions/{sessionId
 開発やテストの手順は [DEVELOP.md](DEVELOP.md)、仕様・設計は [.kiro](.kiro/README.md) を参照してください。
 
 [MIT ライセンス](LICENSE)で提供しています。作者: mikoto2000 <mikoto2000@gmail.com>
+
+### Shell / Native Client 共通の会話
+
+今回の機能導入後に Shell から受理した会話も Session History に登録され、同じ Rei の Web API に接続した Native Client から表示・再開できます。`/history` で ID を確認し、Shell では `/resume <sessionId>` で明示的に選択できます。project は作成時に固定され、別 project へ移動すると次の送信は新規 Session になります。再起動時も自動再開しません。
+
+**旧 Shell 履歴は migration / backfill せず、変更・削除しません。** 台帳にない旧履歴は Native Client の一覧・再開対象外です。受付・FIFO・保存の契約は [Session History 仕様](docs/session-history.md) を参照してください。
