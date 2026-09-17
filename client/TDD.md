@@ -4,6 +4,10 @@ Each slice starts with a failing behavior test, then implementation, then format
 
 ## Live AgentEvent activity (2026-09-17)
 
+Tool indentation follow-up: existing desktop/mobile browser assertions changed
+to require 16px indentation (Red: 0px), then ToolRow gained a dedicated class and
+1rem inline padding (Green: both viewports). Other event rows remain unindented.
+
 Plain text follow-up: Red (event-line absent / decorated block children present)
 → Green (single text-flow rows with tool status marks and activity prefixes).
 Browser checks verify 12px type, 18px line height, no left border/padding, output

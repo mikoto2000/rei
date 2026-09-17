@@ -828,3 +828,6 @@ main {
   overflow-wrap: anywhere;
   white-space: normal;
 }
+.tool-event-line {
+  padding-inline-start: 1rem;
+}

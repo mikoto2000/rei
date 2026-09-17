@@ -7,7 +7,7 @@ export function ToolRow({ tool }: { tool: ToolExecution }) {
     tool.status === "COMPLETED" ? "✓" : tool.status === "FAILED" ? "✗" : "→";
   return (
     <div
-      className="event-line"
+      className="event-line tool-event-line"
       aria-label={`${tool.name}: ${tool.status.toLowerCase()}`}
     >
       {mark} <span>{tool.name}</span>

@@ -15,7 +15,9 @@ test("text and events are visible inline in output order", async ({
   await expect(event).toHaveCSS("font-size", "12px");
   await expect(event).toHaveCSS("line-height", "18px");
   await expect(event).toHaveCSS("border-left-width", "0px");
-  await expect(event).toHaveCSS("padding-left", "0px");
+  await expect(event).toHaveCSS("padding-left", "16px");
+  await expect(rows.nth(4)).toHaveCSS("padding-left", "16px");
+  await expect(rows.nth(2)).toHaveCSS("padding-left", "0px");
   await expect(event.locator("strong, p")).toHaveCount(0);
   await expect(page.locator(".live-activity")).toHaveCount(0);
   expect(
