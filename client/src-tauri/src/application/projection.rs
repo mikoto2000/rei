@@ -1,4 +1,4 @@
-use super::SseFrame;
+use super::{Activity, SseFrame};
 use crate::domain::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -11,6 +11,24 @@ pub struct ToolExecution {
     pub name: String,
     pub status: String,
     pub summary: String,
+    pub started_at: Option<String>,
+    pub completed_at: Option<String>,
+    pub duration_ms: Option<u64>,
+    pub error: Option<ActivityError>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub struct ActivityError {
+    #[serde(rename = "type", default)]
+    pub kind: String,
+    pub message: String,
+}
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MessageProjection {
+    pub message_id: String,
+    pub role: String,
+    pub text: String,
+    pub completed: bool,
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,11 +57,17 @@ pub struct Projection {
     pub failure: Option<String>,
     pub tools: BTreeMap<String, ToolExecution>,
     pub working_set: BTreeMap<String, WorkingSetItem>,
-    messages: Vec<(String, String)>,
+    pub messages: Vec<MessageProjection>,
+    pub activities: Vec<Activity>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct WebEvent {
+    timestamp: Option<String>,
+    correlation_id: Option<String>,
+    session_id: Option<String>,
+    turn_id: Option<String>,
+    project_id: Option<String>,
     sequence: u64,
     run_id: String,
     #[serde(rename = "type")]
@@ -78,12 +102,14 @@ impl Projection {
             tools: BTreeMap::new(),
             working_set: BTreeMap::new(),
             messages: Vec::new(),
+            activities: Vec::new(),
         }
     }
     pub fn assistant_text(&self) -> String {
         self.messages
             .iter()
-            .map(|(_, v)| v.as_str())
+            .filter(|m| m.role == "assistant")
+            .map(|m| m.text.as_str())
             .collect::<Vec<_>>()
             .join("\n\n")
     }
@@ -103,6 +129,15 @@ impl Projection {
             || event.run_id != self.run_id
             || event.sequence != sequence
             || frame.event != event.kind
+            || event
+                .session_id
+                .as_ref()
+                .is_some_and(|id| id != &self.session_id)
+            || event.turn_id.as_ref().is_some_and(|id| id != &self.turn_id)
+            || event
+                .project_id
+                .as_ref()
+                .is_some_and(|id| id != &self.project_id)
         {
             return Err(AppError::InvalidResponse);
         }
@@ -123,29 +158,40 @@ impl Projection {
                 self.failure = Some("Run failed".into());
             }
             "agent.run.cancelled" => self.status = RunStatus::Cancelled,
-            "message.delta" | "message.completed" => {
+            "message.started" | "message.delta" | "message.completed" => {
                 let id = field("messageId")?;
-                let text = field(if event.kind == "message.delta" {
-                    "delta"
+                let text = if event.kind == "message.started" {
+                    String::new()
                 } else {
-                    "text"
-                })?;
-                if event.kind == "message.delta"
-                    || event.payload["role"].as_str() == Some("assistant")
-                {
-                    let index = self
-                        .messages
-                        .iter()
-                        .position(|(key, _)| key == &id)
-                        .unwrap_or_else(|| {
-                            self.messages.push((id, String::new()));
-                            self.messages.len() - 1
-                        });
-                    if event.kind == "message.delta" {
-                        self.messages[index].1.push_str(&text);
+                    field(if event.kind == "message.delta" {
+                        "delta"
                     } else {
-                        self.messages[index].1 = text;
+                        "text"
+                    })?
+                };
+                let role = event.payload["role"].as_str().unwrap_or("assistant");
+                let index = self
+                    .messages
+                    .iter()
+                    .position(|m| m.message_id == id)
+                    .unwrap_or_else(|| {
+                        self.messages.push(MessageProjection {
+                            message_id: id,
+                            role: role.into(),
+                            text: String::new(),
+                            completed: false,
+                        });
+                        self.messages.len() - 1
+                    });
+                let message = &mut self.messages[index];
+                if event.kind == "message.delta" {
+                    if !message.completed {
+                        message.text.push_str(&text);
                     }
+                } else if event.kind == "message.completed" {
+                    message.text = text;
+                    message.role = role.into();
+                    message.completed = true;
                 }
             }
             "tool.started" | "tool.completed" | "tool.failed" => {
@@ -156,23 +202,33 @@ impl Projection {
                     "tool.completed" => "COMPLETED",
                     _ => "FAILED",
                 };
-                let summary = event.payload[if status == "RUNNING" {
-                    "argumentsSummary"
-                } else {
-                    "resultSummary"
-                }]
-                .as_str()
-                .unwrap_or("")
-                .to_owned();
-                self.tools.insert(
-                    id.clone(),
-                    ToolExecution {
+                let tool = self
+                    .tools
+                    .entry(id.clone())
+                    .or_insert_with(|| ToolExecution {
                         id,
-                        name,
+                        name: name.clone(),
                         status: status.into(),
-                        summary,
-                    },
-                );
+                        summary: String::new(),
+                        started_at: None,
+                        completed_at: None,
+                        duration_ms: None,
+                        error: None,
+                    });
+                tool.name = name;
+                tool.status = status.into();
+                if let Some(summary) = event.payload["summary"].as_str() {
+                    tool.summary = summary.into();
+                }
+                if status == "RUNNING" {
+                    tool.started_at = event.timestamp.clone();
+                } else {
+                    tool.completed_at = event.timestamp.clone();
+                }
+                if let Some(duration) = event.payload["duration"].as_u64() {
+                    tool.duration_ms = Some(duration);
+                }
+                tool.error = serde_json::from_value(event.payload["error"].clone()).ok();
             }
             "working_set.item.added" => {
                 let id = field("itemId")?;
@@ -182,12 +238,31 @@ impl Projection {
                     identifier: field("identifier")?,
                     path: event.payload["path"].as_str().unwrap_or("").into(),
                 };
+                let mut activity = Activity::new(sequence.to_string(), "Working Set", "Added");
+                activity.summary = item.identifier.clone();
+                activity.completed_at = event.timestamp.clone();
+                self.activities.push(activity);
                 self.working_set.insert(id, item);
             }
             "working_set.item.removed" => {
-                self.working_set.remove(&field("itemId")?);
+                let id = field("itemId")?;
+                let mut activity = Activity::new(sequence.to_string(), "Working Set", "Removed");
+                activity.summary = self
+                    .working_set
+                    .remove(&id)
+                    .map(|i| i.identifier)
+                    .unwrap_or(id);
+                activity.completed_at = event.timestamp.clone();
+                self.activities.push(activity);
             }
-            _ => {}
+            _ => super::activity::reduce_activity(
+                &mut self.activities,
+                &event.kind,
+                sequence,
+                &event.timestamp,
+                event.correlation_id.as_deref(),
+                &event.payload,
+            )?,
         }
         self.last_sequence = Some(sequence);
         if self.status.terminal() {

@@ -18,6 +18,146 @@ struct UnavailableStream {
     polls: AtomicUsize,
     final_status: RunStatus,
 }
+
+fn live_frame(kind: &str, sequence: u64, payload: serde_json::Value) -> String {
+    let data = json!({"type":kind,"sequence":sequence,"version":1,"runId":"r","sessionId":"s",
+        "turnId":"t","projectId":"p","timestamp":"2026-09-17T01:00:00Z","payload":payload});
+    format!("event: {kind}\nid: {sequence}\ndata: {data}\n\n")
+}
+
+#[tokio::test]
+async fn submitted_chat_projects_live_activity_across_disconnect_and_replay() {
+    let connections = Arc::new(AtomicUsize::new(0));
+    let calls = connections.clone();
+    let app = Router::new()
+        .route(
+            "/api/v1/chat",
+            post(|Json(body): Json<serde_json::Value>| async move {
+                assert_eq!(body["projectId"], "p");
+                assert_eq!(body["message"], "hello");
+                (
+                    StatusCode::ACCEPTED,
+                    Json(json!({"runId":"r","sessionId":"s","turnId":"t"})),
+                )
+            }),
+        )
+        .route(
+            "/api/v1/runs/r/events",
+            get(move |headers: HeaderMap| {
+                let calls = calls.clone();
+                async move {
+                    let attempt = calls.fetch_add(1, Ordering::SeqCst);
+                    assert_eq!(headers["authorization"], "Bearer test-key");
+                    let frames = if attempt == 0 {
+                        assert!(!headers.contains_key("last-event-id"));
+                        vec![
+                            live_frame("agent.run.started", 1, json!({})),
+                            live_frame(
+                                "llm.request.started",
+                                3,
+                                json!({"requestId":"q","feature":"chat"}),
+                            ),
+                            live_frame(
+                                "tool.started",
+                                5,
+                                json!({"toolCallId":"call","toolName":"readFile"}),
+                            ),
+                        ]
+                    } else {
+                        assert_eq!(headers["last-event-id"], "5");
+                        vec![
+                            live_frame(
+                                "tool.started",
+                                5,
+                                json!({"toolCallId":"call","toolName":"readFile"}),
+                            ),
+                            live_frame(
+                                "tool.completed",
+                                7,
+                                json!({"toolCallId":"call","toolName":"readFile","duration":18}),
+                            ),
+                            live_frame(
+                                "message.started",
+                                8,
+                                json!({"messageId":"m","role":"assistant"}),
+                            ),
+                            live_frame("message.delta", 9, json!({"messageId":"m","delta":"hel"})),
+                            live_frame("message.delta", 9, json!({"messageId":"m","delta":"hel"})),
+                            "event: heartbeat\ndata: {}\n\n".into(),
+                            live_frame(
+                                "llm.response.first_token",
+                                10,
+                                json!({"requestId":"q","durationMs":70}),
+                            ),
+                            live_frame("message.delta", 11, json!({"messageId":"m","delta":"lo"})),
+                            live_frame(
+                                "llm.response.completed",
+                                12,
+                                json!({"requestId":"q","durationMs":110}),
+                            ),
+                            live_frame(
+                                "message.completed",
+                                13,
+                                json!({"messageId":"m","role":"assistant","text":"hello"}),
+                            ),
+                            live_frame("agent.run.completed", 15, json!({"duration":120})),
+                        ]
+                    };
+                    // A streaming HTTP body exercises parser chunk boundaries as well as reconnect.
+                    let chunks = futures_util::stream::iter(
+                        frames.into_iter().map(|s| Ok::<_, std::io::Error>(s)),
+                    );
+                    Response::builder()
+                        .header("content-type", "text/event-stream")
+                        .body(axum::body::Body::from_stream(chunks))
+                        .unwrap()
+                }
+            }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let api = Arc::new(
+        HttpReiClient::new(
+            &format!("http://{}", listener.local_addr().unwrap()),
+            Some(Secret::new("test-key".into())),
+        )
+        .unwrap(),
+    );
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let receipt = api.chat("p", None, "hello").await.unwrap();
+    let observer = Arc::new(Observer::default());
+    let manager = Arc::new(RunManager::new(
+        observer.clone(),
+        observer,
+        Duration::from_millis(1),
+    ));
+    manager
+        .register(Projection::new(
+            "server",
+            "conversation",
+            "p",
+            receipt,
+            "hello",
+        ))
+        .unwrap();
+    manager.subscribe("server", "r", api).unwrap();
+    let view = completed(&manager).await;
+    assert_eq!(view.assistant_text, "hello");
+    assert!(view.messages[0].completed);
+    assert_eq!(view.tools.len(), 1);
+    assert_eq!(view.tools[0].status, "COMPLETED");
+    assert_eq!(view.tools[0].duration_ms, Some(18));
+    assert!(view.tools[0].started_at.is_some());
+    assert_eq!(view.activities.len(), 1);
+    assert_eq!(view.activities[0].first_token_ms, Some(70));
+    assert_eq!(view.activities[0].duration_ms, Some(110));
+    assert_eq!(view.status, RunStatus::Completed);
+    assert_eq!(view.last_sequence.as_deref(), Some("15"));
+    assert!(!view.incomplete);
+    assert_eq!(connections.load(Ordering::SeqCst), 2);
+    server.abort();
+}
 #[async_trait]
 impl ReiClient for UnavailableStream {
     async fn health(&self) -> Result<()> {

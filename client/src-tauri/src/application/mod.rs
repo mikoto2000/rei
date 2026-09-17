@@ -1,4 +1,6 @@
+mod activity;
 mod conversation_service;
+pub use activity::*;
 mod projection;
 mod run_manager;
 mod service;

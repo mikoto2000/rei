@@ -1,4 +1,6 @@
-use super::{backoff, Projection, SseParser, ToolExecution, WorkingSetItem};
+use super::{
+    backoff, Activity, MessageProjection, Projection, SseParser, ToolExecution, WorkingSetItem,
+};
 use crate::{domain::*, ports::*};
 use futures_util::StreamExt;
 use serde::Serialize;
@@ -29,6 +31,8 @@ pub struct RunView {
     pub error: Option<AppError>,
     pub failure: Option<String>,
     pub tools: Vec<ToolExecution>,
+    pub messages: Vec<MessageProjection>,
+    pub activities: Vec<Activity>,
     pub working_set: Vec<WorkingSetItem>,
 }
 impl From<&Projection> for RunView {
@@ -50,6 +54,8 @@ impl From<&Projection> for RunView {
             error: p.error,
             failure: p.failure.clone(),
             tools: p.tools.values().cloned().collect(),
+            messages: p.messages.clone(),
+            activities: p.activities.clone(),
             working_set: p.working_set.values().cloned().collect(),
         }
     }
