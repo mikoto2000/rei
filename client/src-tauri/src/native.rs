@@ -290,6 +290,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
+            #[cfg(desktop)]
+            app.handle()
+                .plugin(tauri_plugin_window_state::Builder::default().build())?;
+
             let flag = Arc::new(AtomicBool::new(false));
             let handle = app.handle().clone();
             let application = Application::open(

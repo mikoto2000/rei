@@ -14,7 +14,7 @@ required-features = ["native"]
 
 [features]
 default = []
-native = ["dep:tauri", "dep:tauri-plugin-notification", "dep:tauri-build"]
+native = ["dep:tauri", "dep:tauri-plugin-notification", "dep:tauri-plugin-window-state", "dep:tauri-build"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -33,6 +33,9 @@ rand = "0.8"
 tempfile = "3"
 tauri = { version = "2", optional = true , features = [] }
 tauri-plugin-notification = { version = "2", optional = true }
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-window-state = { version = "2", optional = true }
 
 [build-dependencies]
 tauri-build = { version = "2", optional = true , features = [] }
