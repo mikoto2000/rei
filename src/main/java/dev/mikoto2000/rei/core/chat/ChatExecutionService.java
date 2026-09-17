@@ -202,7 +202,7 @@ public class ChatExecutionService {
     String assistantMessage = null;
 
     try {
-      turns.start(context, promptText, clock.instant());
+      turns.startOrdered(context, promptText, clock.instant());
       execution.checkActive();
       activityTracker.ifPresent(tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));
       appendConversationLog(context.conversationId(), "user", promptText);

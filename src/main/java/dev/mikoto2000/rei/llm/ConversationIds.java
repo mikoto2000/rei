@@ -29,6 +29,8 @@ public final class ConversationIds {
     if(execution!=null) return execution.conversationId();
     var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     if (run != null) return run.conversationId();
+    var selected = dev.mikoto2000.rei.core.project.ProjectService.selectedShellSession();
+    if (selected != null) return selected;
     var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
     return project == null ? chat() : project.conversationId(chat());
   }

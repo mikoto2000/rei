@@ -1,6 +1,6 @@
 # Session History API と Shell
 
-Session は `POST /api/v1/chat` の受理時に永続化されます。再起動後も一覧・詳細・Turn を参照でき、取得した `sessionId` をそのまま Chat に渡して会話を継続できます。`sessionId = conversationId`、`turnId = runId` を維持します。sessionId は UUID 単体とは限らず、現在は `project:<project UUID>:chat:<UUID>` です。クライアントは値を解析せず、そのまま使用してください。
+Session は Shell の新規入力または `POST /api/v1/chat` の受理時に永続化されます。再起動後も一覧・詳細・Turn を参照でき、取得した `sessionId` をそのまま Chat に渡して会話を継続できます。`sessionId = conversationId`、`turnId = runId` を維持します。sessionId は UUID 単体とは限らず、現在は `project:<project UUID>:chat:<UUID>` です。クライアントは値を解析せず、そのまま使用してください。
 
 ## HTTP
 
@@ -44,7 +44,7 @@ Turn 一覧:
 }
 ```
 
-Turn の createdAt は runner 開始時刻です。QUEUED の間はまだ Turn がありません。応答未記録の Turn は `assistantMessage: null` です。SSE の中間 delta、tool message、追加入力の全ログはこの Turn DTO には含めません。Session の削除・改名 API は追加していません。未知 Session の Chat は404、所属 project の不一致は409です。
+Turn の createdAt は runner 開始時刻です。同一会話内の同時刻・時計の巻き戻りでは直前の保存時刻 + 1ns とし、実行順を保ちます。QUEUED の間はまだ Turn がありません。応答未記録の Turn は `assistantMessage: null` です。SSE の中間 delta、tool message、追加入力の全ログはこの Turn DTO には含めません。Session の削除・改名 API は追加していません。未知 Session の Chat は404、所属 project の不一致は409です。
 
 ## Shell
 
@@ -79,7 +79,22 @@ Turn の createdAt は runner 開始時刻です。QUEUED の間はまだ Turn �
 - 共通 `SessionQueryService` は `SessionRepository` と `ConversationHistory` port を読みます。後者は既存 `ConversationTurnStore` が実装し、同じ永続 Turn に時刻と最終応答を追加しています。Web は専用 DTO、Shell は既存 formatter を使用します。
 - カーソルは version・resource/filter scope・時刻（秒＋nano）・ID の URL-safe Base64 です。storage path は含めません。暗号化・署名付き token ではありません。認証は既存 Bearer filter が担います。
 - 一覧は keyset pagination です。新しい Session が先頭に挿入されても既存ページが offset のようにずれません。ただし snapshot pagination ではなく、未取得 Session の updatedAt が途中で更新されカーソルより前へ移動した場合は今回の走査から外れます。先頭から再取得すると見つかります。
-- backfill は実施しません。旧 Turn ファイルは conversationId がファイル名に残らず、時刻・応答がありません。旧 JSONL は runId がなく、介入メッセージや tool 出力から Turn の対応と Chat 受理時刻を確実に再構成できません。旧データは変更せず、従来の show/list/search で参照できます。新 Session 一覧は導入後に ChatSubmitService が受理した Web Session が対象です。
+- backfill は実施しません。旧 Turn ファイルは conversationId がファイル名に残らず、時刻・応答がありません。旧 JSONL は runId がなく、介入メッセージや tool 出力から Turn の対応と Chat 受理時刻を確実に再構成できません。旧データは変更せず、従来の show/list/search で参照できます。新 Session 一覧は共通 SessionLifecycle が受理した Shell / Web Session が対象です。導入前の固定 `chat:main` を継続・登録することはなく、旧ログの走査や ID・title・時刻の推測も行いません。
 - 旧 Turn の欠落フィールドは null として読み込めます。日時のない旧レコードは新 Turn pagination から除外し、既存 lifecycle／cancelledContext の参照には残します。
 - ファイル adapter は単一アプリケーション writer を前提とします。複数プロセスから同じ data-dir に同時書込みする用途には対応していません。JSON 読込／ソートは全 metadata、Turn 保存・読込は会話全体を対象とし、返却のみページ単位です。大規模データには port の DB 実装への差替えが必要です。
 - queue は既存の in-memory queue です。プロセス停止時に未実行の仕事は再実行しません。保存直後のクラッシュでは空 Turn の Session が残ることがありますが、その ID で新しい Chat を受理できます。
+
+## Shell の Session lifecycle
+
+Shell は最初の送信時に `project:<project UUID>:chat:<UUID>` を新規作成します。作成前に台帳へ空 Session を追加しません。Shell 起動ごとに未選択で始まり、最後の Session を自動再開しません。
+
+- `/new`: 選択を解除し、次の入力で新 Session を作成。実行中の Run は中止しません。
+- `/resume <sessionId>`: 現在の project に属する既知 Session を選択。旧 `chat:main` や未知 ID は拒否します。別 project の場合は先に `/project cd` でその project を選びます。
+- `/project cd`: project が変わった場合は Session 選択を解除。元の Session の projectId は変更しません。同じ project の再選択では Session を保持します。
+- `/history` / `/history show <sessionId>`: Shell / Web 共通の台帳・Turn を参照します。
+
+`ChatCommand` と `/agent` は ShellConversationService に委譲し、Web ChatSubmitService と共通の SessionLifecycle を利用します。初回入力の先頭80 Unicode code points を既存 SessionTitle で採用し、継続時は title / createdAt / projectId を保って updatedAt のみ更新します。保存または touch が失敗すれば Run を enqueue せずエラーにします。同期 enqueue 失敗は metadata を元に戻し、Shell の選択も変えません。
+
+Shell の実行中追加入力は同一 Run への介入ではなく、同一 Session の次の Run として project FIFO に入ります。`1 Run = 1 Turn` です。SessionLifecycle は Repository の monitor 内で検証・保存・enqueue を行い、Shell / Web の競合でも受付順と queue 順を一致させます。実行は monitor 外で行います。実行開始時に共通 ChatExecutionService → ConversationTurnStore へ保存し、ConversationLogStore と ChatMemory も同じ conversationId を使います。ChatMemory は既存のメモリーウィンドウであり、今回再起動時のモデル文脈復元は追加していません。
+
+Native Client は同じ Rei プロセスの Web API に接続して一覧を更新すると、Shell の新しい Session を表示・再開できます。HTTP schema と Native Client の変更は不要です。Web で開始した Session も `/resume` で Shell から選択できます。同じ data-dir に Shell プロセスと Web 専用プロセスを並行して書き込む構成は引き続き対象外です。

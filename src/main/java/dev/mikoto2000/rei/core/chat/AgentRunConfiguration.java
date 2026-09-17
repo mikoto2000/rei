@@ -6,6 +6,12 @@ import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 
 @Configuration
 public class AgentRunConfiguration {
+  @Bean
+  public dev.mikoto2000.rei.application.session.ShellConversationService shellConversations(
+      dev.mikoto2000.rei.core.project.ProjectService projects,
+      dev.mikoto2000.rei.application.session.SessionLifecycle lifecycle, ConversationInputRouter router) {
+    return new dev.mikoto2000.rei.application.session.ShellConversationService(projects, lifecycle, router::submit);
+  }
   @Bean(destroyMethod = "shutdownNow")
   public ExecutorService agentRunExecutor() {
     return Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("rei-agent-", 0).factory());

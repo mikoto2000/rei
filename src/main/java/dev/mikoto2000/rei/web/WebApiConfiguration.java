@@ -31,8 +31,8 @@ public class WebApiConfiguration {
   }
   @Bean ChatSubmitService webChatSubmitService(ProjectRegistry projects, SessionRegistry sessions,
       RunRegistry registry, RunService runs, ConversationInputRouter router,
-      dev.mikoto2000.rei.application.session.SessionRepository repository, Clock clock) {
-    return new ChatSubmitService(projects, sessions, registry, repository, clock,
+      dev.mikoto2000.rei.application.session.SessionLifecycle lifecycle) {
+    return new ChatSubmitService(projects, sessions, registry, lifecycle,
         (context, prompt) -> router.submit(context, prompt, work -> runs.execute(context, work)));
   }
   @Bean SseBridge sseBridge(AgentEventBus bus, RunService runs, ApiKeyProperties key) {

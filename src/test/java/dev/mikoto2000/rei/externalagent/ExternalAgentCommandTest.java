@@ -8,24 +8,29 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ExternalAgentCommandTest {
+  @org.junit.jupiter.api.io.TempDir java.nio.file.Path temp;
   @Test void slashDuringActiveChatGetsItsOwnQueuedRun() {
     var tasks = new java.util.ArrayList<Runnable>();
     var requests = new java.util.ArrayList<String>();
     var router = new dev.mikoto2000.rei.core.chat.ConversationInputRouter(tasks::add,
         (owner, text, queue) -> requests.add(text), (owner, entry) -> {});
-    router.submit(dev.mikoto2000.rei.core.project.ProjectService.currentProjectOrStartupDirectory(),
-        dev.mikoto2000.rei.llm.ConversationIds.currentChat(), "active chat");
-    assertEquals(0, new CommandLine(new ExternalAgentCommand(router)).execute("codex", "review"));
+    var projects = new dev.mikoto2000.rei.core.project.ProjectService(temp,new dev.mikoto2000.rei.core.project.ProjectRegistry(temp.resolve("projects.json")));
+    var shell = new dev.mikoto2000.rei.application.session.ShellConversationService(projects,
+        new dev.mikoto2000.rei.application.session.SessionLifecycle(new dev.mikoto2000.rei.conversation.FileSessionRepository(temp.resolve("sessions.json")),java.time.Clock.systemUTC()),router::submit);
+    try(var scope=projects.newClient().open()) {
+    shell.submit("active chat");
+    assertEquals(0, new CommandLine(new ExternalAgentCommand(shell)).execute("codex", "review"));
     tasks.getFirst().run();
     assertEquals(2, tasks.size());
     tasks.getLast().run();
     assertEquals(java.util.List.of("active chat", "/agent codex review"), requests);
+    }
   }
   @Test void slashAdapterSubmitsCanonicalRequestAndRejectsUnsupportedValues() {
-    var router = mock(dev.mikoto2000.rei.core.chat.ConversationInputRouter.class);
+    var router = mock(dev.mikoto2000.rei.application.session.ShellConversationService.class);
     var command = new CommandLine(new ExternalAgentCommand(router));
     assertEquals(0, command.execute("codex", "review", "docs/design.md"));
-    verify(router).submitNewRun(any(), anyString(), eq("/agent codex review docs/design.md"));
+    verify(router).submit("/agent codex review docs/design.md");
     reset(router);
     for (String[] args : new String[][]{{}, {"codex"}, {"foo", "review"}, {"codex", "implement"}})
       assertNotEquals(0, command.execute(args));
