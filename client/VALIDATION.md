@@ -1,4 +1,40 @@
-# Session History validation
+# Live AgentEvent Activity validation
+
+2026-09-17、ブランチ `feature/native-live-agent-events`。Windows / JDK 25 / Rust 1.91.1 / Node 24.11.1。
+
+| 検証                                                           | 結果                                                                         |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Server 全体（unit / integration / property / Shell 回帰）      | 1,816件中1,814件成功、2件既存スキップ、failure/error 0                       |
+| Rust core / HTTP / SSE / application                           | 58件成功（全体57件の成功後、Projection回帰1件を追加して15件再検証）          |
+| Frontend Vitest                                                | 29件成功                                                                     |
+| Playwright Chrome Desktop / Mobile                             | 8件成功（1280×900 / 390×844）                                                |
+| TypeScript / ESLint / Prettier                                 | 成功                                                                         |
+| cargo fmt / clippy --all-targets --features native -D warnings | 成功                                                                         |
+| Tauri Windows assets 埋込み debug build                        | 成功。`../target/native-live-desktop/debug/rei-client.exe`                   |
+| Android aarch64 cross-check                                    | NDK の `clang.exe` / `aarch64-linux-android-clang` 未導入で ring build 停止  |
+| iOS / 実機 Mobile                                              | Windows 環境のため未検証                                                     |
+| 実サーバー / 外部 LLM を用いた手動操作                         | 未実施。結合テストはローカル mock HTTP/SSE、UI は command/event 境界 fixture |
+
+通常の desktop 出力先は既存の Rei Client が起動中でロックされていたため、`CARGO_TARGET_DIR=F:\project\rei\target\native-live-desktop` を設定してビルドしました。既存プロセスは終了していません。
+
+Server の実行:
+
+```powershell
+$env:JAVA_HOME='C:\Java\jdk-25'
+$env:REI_DATA_DIR='F:\project\rei\target\native-live-test-data'
+.\mvnw.cmd -o -q '-Dmaven.repo.local=F:\project\rei\.m2\repository' test
+```
+
+sqlite-vec の依存取得とテスト用のファイル操作が可能な権限で実行しました。初回は sandbox による依存取得・ログ保存先の制限でエラーになり、テスト保存先を分離して再実行しました。全体検証で発見した既存テストの不安定要因も修正しました。
+
+- ToolsTest: stdout と stderr の独立した読取を両方待つ。短いプロセスの auto 完了テストは PowerShell 起動を含むため待機上限を10秒にする。
+- MemoryServicePropertyTest:生成された `OR` 等を FTS 演算子と解釈させず、検索対象のリテラルトークンとして引用する。
+- 関連する production の Tool / Memory 実装は変更していません。
+- スキップ2件は既存 `ExternalAgentPolicyTest`。
+
+詳細な [イベント対応表・公開 schema・TDD記録](../docs/native-live-agent-events.md) を参照してください。過去イベントの永続化、SessionTurn の trace 拡張、ReplayBuffer retention の変更はありません。
+
+## Previous Session History validation
 
 検証環境: Windows / Rust 1.91.1 / Node 24.11.1、2026-09-17。
 実装ブランチ: `feature/session-history-client`。既存 Session History API ブランチから作成し、Java サーバーは変更していません。

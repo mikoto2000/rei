@@ -1,6 +1,12 @@
-# Rei Client — Session History
+# Rei Client — Live Activity / Session History
 
-Tauri 2 + React + TypeScript + Rust の Run / Conversation クライアントです。既存の Java サーバーは変更しません。Windows を主な検証対象とし、共通コアとレスポンシブ UI を Android / iOS と共有します。
+Tauri 2 + React + TypeScript + Rust の Run / Conversation クライアントです。Windows を主な検証対象とし、共通コアとレスポンシブ UI を Android / iOS と共有します。
+
+## ライブ Activity
+
+Run の SSE を Rust の Projection で処理し、Tool、LLM timing、Skill、Stagnation、Working Set の変化、Thinking の状態を折り畳み可能な Activity に表示します。Desktop / Mobile とも初期状態は折り畳みです。Shell と同じ semantic AgentEvent を使いますが、Shell の表示文字列は API にしません。Java の WebApiEventMapper が外部 DTO の項目選択と機密情報の除去を行います。
+
+Activity はメモリ内のライブ Run 状態だけです。アプリ再起動後や過去 Session の取得で復元するのは User / Assistant の Turn 履歴のみで、イベント履歴の永続化は行いません。ReplayBuffer は切断時の再接続用です。詳細は [設計・イベント対応表](../docs/native-live-agent-events.md) を参照してください。
 
 ## 開発
 

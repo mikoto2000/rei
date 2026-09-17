@@ -2,6 +2,14 @@
 
 Each slice starts with a failing behavior test, then implementation, then formatting/refactoring.
 
+## Live AgentEvent activity (2026-09-17)
+
+The current work and actual Red/Green observations are recorded in
+[the live event TDD ledger](../docs/native-live-agent-events.md#tdd-ledger).
+Slices cover public mapper/security, message/tool state, LLM/progress/Working Set,
+skill correlation/ownership, HTTP reconnect, presentation DTOs and collapsible UI.
+No live activity is added to Session Turn history or persistent settings.
+
 ## Phase 1A / 1B
 
 - `foundation`: Red (missing domain) → Green: 4 tests.
