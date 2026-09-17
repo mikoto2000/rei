@@ -126,12 +126,20 @@ final; replay-gap recovery still marks the view incomplete instead of inventing
 missing observations. Old envelopes without optional ownership/timestamp fields
 remain readable; correlation-required events require their real correlation ID.
 
-React only renders these DTOs. One `Activity · N` disclosure contains tools, LLM,
-skill, progress, thinking and Working Set change rows. It starts collapsed on
-desktop and mobile, preserves open state during updates and bounds its scroll
-height (28rem desktop / 18rem mobile). Current Working Set remains a separate
-disclosure. Terminal runtime rows keep their activity until application state is
-discarded; historical Turn-only rows have no activity disclosure.
+React only renders these DTOs. The `timeline` presentation list interleaves text
+segments and immutable Tool/Activity observations in accepted global sequence
+order. Text deltas coalesce only while adjacent to the same message. A tool's
+start and completion occupy their actual arrival positions; completing a tool
+does not rewrite its earlier start observation. Unknown events and heartbeat
+frames add no rows. Replayed duplicate sequence numbers add no rows.
+
+Message completion appends a missing suffix without repeating accumulated text.
+If the completed answer revises the streamed text, earlier fragments for that
+message are replaced by the authoritative answer at completion time. A stored
+final answer remains available after an incomplete replay. Historical Turn-only
+rows still show User / Assistant only. Older snapshots without the timeline DTO
+retain the previous grouped Activity fallback; newly received runs render inline
+on desktop and mobile. Current Working Set remains a separate disclosure.
 
 ## Integration coverage
 

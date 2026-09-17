@@ -1,5 +1,6 @@
 use super::{
-    backoff, Activity, MessageProjection, Projection, SseParser, ToolExecution, WorkingSetItem,
+    backoff, Activity, MessageProjection, Projection, SseParser, TimelineEntry, ToolExecution,
+    WorkingSetItem,
 };
 use crate::{domain::*, ports::*};
 use futures_util::StreamExt;
@@ -33,6 +34,7 @@ pub struct RunView {
     pub tools: Vec<ToolExecution>,
     pub messages: Vec<MessageProjection>,
     pub activities: Vec<Activity>,
+    pub timeline: Vec<TimelineEntry>,
     pub working_set: Vec<WorkingSetItem>,
 }
 impl From<&Projection> for RunView {
@@ -56,6 +58,7 @@ impl From<&Projection> for RunView {
             tools: p.tools.values().cloned().collect(),
             messages: p.messages.clone(),
             activities: p.activities.clone(),
+            timeline: p.timeline.clone(),
             working_set: p.working_set.values().cloned().collect(),
         }
     }

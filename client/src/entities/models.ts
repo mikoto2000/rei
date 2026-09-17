@@ -58,6 +58,7 @@ export interface Connection {
   error: string | null;
 }
 export interface Run {
+  timeline?: TimelineEntry[];
   serverId: string;
   conversationId: string;
   projectId: string;
@@ -83,6 +84,10 @@ export interface Run {
   workingSet: { id: string; kind: string; identifier: string; path: string }[];
   revision: number;
 }
+export type TimelineEntry =
+  | { kind: "text"; id: string; messageId: string; text: string }
+  | { kind: "tool"; id: string; tool: ToolExecution }
+  | { kind: "activity"; id: string; activity: Activity };
 export interface ActivityError {
   type: string;
   message: string;

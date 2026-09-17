@@ -1,5 +1,13 @@
 # Live AgentEvent Activity validation
 
+## 出力順のチャット表示（追加検証）
+
+`feature/native-interleaved-events` で本文とイベントを出力順に混在表示するよう変更しました。Rust 60件、Frontend 31件、Desktop／Mobile Chrome 10件が成功。型・lint・format・clippy と Windows Tauri assets 埋込みビルドも成功しています。サーバーの変更はなく、Java 全体テストはこの追加変更では再実行していません。
+
+開始／完了のイベントは届いた位置に残ります。連続した同一 Message の delta だけを結合し、完了本文の重複、再接続時の重複を防ぎます。過去 Session 履歴と永続化の方針は同じです。
+
+## 初回ライブ Activity 実装の検証
+
 2026-09-17、ブランチ `feature/native-live-agent-events`。Windows / JDK 25 / Rust 1.91.1 / Node 24.11.1。
 
 | 検証                                                           | 結果                                                                         |

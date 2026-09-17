@@ -1,4 +1,27 @@
 import { test, expect } from "@playwright/test";
+test("text and events are visible inline in output order", async ({
+  page,
+}, info) => {
+  await page.goto("/e2e/fixture.html?timeline=1");
+  await page.locator(".conversation-card button").click();
+  const rows = page.locator(".run-timeline > *");
+  await expect(rows).toHaveCount(5);
+  await expect(rows.nth(0)).toHaveText("ファイルを調べます。");
+  await expect(rows.nth(1)).toContainText("RUNNING");
+  await expect(rows.nth(2)).toContainText("First token: 70 ms");
+  await expect(rows.nth(3)).toHaveText("構造が分かりました。");
+  await expect(rows.nth(4)).toContainText("COMPLETED");
+  await expect(page.locator(".live-activity")).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: `test-results/${info.project.name}-interleaved.png`,
+    fullPage: true,
+  });
+});
 test("server history opens, pages forward and returns to list", async ({
   page,
 }, info) => {

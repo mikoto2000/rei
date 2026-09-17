@@ -143,6 +143,14 @@ async fn submitted_chat_projects_live_activity_across_disconnect_and_replay() {
     manager.subscribe("server", "r", api).unwrap();
     let view = completed(&manager).await;
     assert_eq!(view.assistant_text, "hello");
+    let timeline = serde_json::to_value(&view.timeline).unwrap();
+    let entries = timeline.as_array().unwrap();
+    let started = entries.iter().position(|entry| entry["id"] == "5").unwrap();
+    let completed = entries.iter().position(|entry| entry["id"] == "7").unwrap();
+    assert!(started < completed);
+    assert_eq!(entries[started]["tool"]["status"], "RUNNING");
+    assert_eq!(entries[completed]["tool"]["status"], "COMPLETED");
+    assert_eq!(entries.iter().filter(|entry| entry["id"] == "5").count(), 1);
     assert!(view.messages[0].completed);
     assert_eq!(view.tools.len(), 1);
     assert_eq!(view.tools[0].status, "COMPLETED");

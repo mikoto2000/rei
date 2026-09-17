@@ -5,6 +5,50 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum TimelineEntry {
+    Text {
+        id: String,
+        message_id: String,
+        text: String,
+    },
+    Tool {
+        id: String,
+        tool: ToolExecution,
+    },
+    Activity {
+        id: String,
+        activity: Activity,
+    },
+}
+
+fn append_text(timeline: &mut Vec<TimelineEntry>, sequence: u64, message_id: &str, text: &str) {
+    if text.is_empty() {
+        return;
+    }
+    if let Some(TimelineEntry::Text {
+        message_id: previous,
+        text: body,
+        ..
+    }) = timeline.last_mut()
+    {
+        if previous == message_id {
+            body.push_str(text);
+            return;
+        }
+    }
+    timeline.push(TimelineEntry::Text {
+        id: sequence.to_string(),
+        message_id: message_id.into(),
+        text: text.into(),
+    });
+}
+
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolExecution {
     pub id: String,
@@ -59,6 +103,7 @@ pub struct Projection {
     pub working_set: BTreeMap<String, WorkingSetItem>,
     pub messages: Vec<MessageProjection>,
     pub activities: Vec<Activity>,
+    pub timeline: Vec<TimelineEntry>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -103,6 +148,7 @@ impl Projection {
             working_set: BTreeMap::new(),
             messages: Vec::new(),
             activities: Vec::new(),
+            timeline: Vec::new(),
         }
     }
     pub fn assistant_text(&self) -> String {
@@ -187,8 +233,21 @@ impl Projection {
                 if event.kind == "message.delta" {
                     if !message.completed {
                         message.text.push_str(&text);
+                        if message.role == "assistant" {
+                            append_text(&mut self.timeline, sequence, &message.message_id, &text);
+                        }
                     }
                 } else if event.kind == "message.completed" {
+                    if role == "assistant" {
+                        if let Some(suffix) = text.strip_prefix(&message.text) {
+                            append_text(&mut self.timeline, sequence, &message.message_id, suffix);
+                        } else {
+                            self.timeline.retain(|entry| !matches!(entry, TimelineEntry::Text { message_id, .. } if message_id == &message.message_id));
+                            append_text(&mut self.timeline, sequence, &message.message_id, &text);
+                        }
+                    } else {
+                        self.timeline.retain(|entry| !matches!(entry, TimelineEntry::Text { message_id, .. } if message_id == &message.message_id));
+                    }
                     message.text = text;
                     message.role = role.into();
                     message.completed = true;
@@ -229,6 +288,10 @@ impl Projection {
                     tool.duration_ms = Some(duration);
                 }
                 tool.error = serde_json::from_value(event.payload["error"].clone()).ok();
+                self.timeline.push(TimelineEntry::Tool {
+                    id: sequence.to_string(),
+                    tool: tool.clone(),
+                });
             }
             "working_set.item.added" => {
                 let id = field("itemId")?;
@@ -241,6 +304,10 @@ impl Projection {
                 let mut activity = Activity::new(sequence.to_string(), "Working Set", "Added");
                 activity.summary = item.identifier.clone();
                 activity.completed_at = event.timestamp.clone();
+                self.timeline.push(TimelineEntry::Activity {
+                    id: sequence.to_string(),
+                    activity: activity.clone(),
+                });
                 self.activities.push(activity);
                 self.working_set.insert(id, item);
             }
@@ -253,16 +320,49 @@ impl Projection {
                     .map(|i| i.identifier)
                     .unwrap_or(id);
                 activity.completed_at = event.timestamp.clone();
+                self.timeline.push(TimelineEntry::Activity {
+                    id: sequence.to_string(),
+                    activity: activity.clone(),
+                });
                 self.activities.push(activity);
             }
-            _ => super::activity::reduce_activity(
-                &mut self.activities,
-                &event.kind,
-                sequence,
-                &event.timestamp,
-                event.correlation_id.as_deref(),
-                &event.payload,
-            )?,
+            _ => {
+                if let Some(activity) = super::activity::reduce_activity(
+                    &mut self.activities,
+                    &event.kind,
+                    sequence,
+                    &event.timestamp,
+                    event.correlation_id.as_deref(),
+                    &event.payload,
+                )? {
+                    self.timeline.push(TimelineEntry::Activity {
+                        id: sequence.to_string(),
+                        activity,
+                    });
+                }
+            }
+        }
+        if matches!(
+            event.kind.as_str(),
+            "agent.run.started"
+                | "agent.run.completed"
+                | "agent.run.failed"
+                | "agent.run.cancelled"
+        ) {
+            let mut activity = Activity::new(sequence.to_string(), "Run", "Run");
+            activity.status = match self.status {
+                RunStatus::Queued => "QUEUED",
+                RunStatus::Running => "RUNNING",
+                RunStatus::Completed => "COMPLETED",
+                RunStatus::Failed => "FAILED",
+                RunStatus::Cancelled => "CANCELLED",
+            }
+            .into();
+            activity.duration_ms = event.payload["duration"].as_u64();
+            self.timeline.push(TimelineEntry::Activity {
+                id: sequence.to_string(),
+                activity,
+            });
         }
         self.last_sequence = Some(sequence);
         if self.status.terminal() {

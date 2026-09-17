@@ -1,4 +1,4 @@
-import { RunActivity } from "./RunActivity";
+import { RunActivity, RunTimeline } from "./RunActivity";
 import { timeline } from "../history/timeline";
 import { useState } from "react";
 import {
@@ -127,15 +127,33 @@ export function Chat({
                     イベント履歴の一部を取得できませんでした。表示内容は不完全です。
                   </p>
                 )}
-                <div className="answer">
-                  {(turn?.assistantMessage != null && !activeRuns([run]).length
-                    ? turn.assistantMessage
-                    : run.assistantText) ||
-                    (!activeRuns([run]).length
-                      ? "回答テキストはありません。"
-                      : "れいが作業しています…")}
-                </div>
-                <RunActivity run={run} />
+                {run.timeline?.length ? (
+                  <>
+                    <RunTimeline run={run} />
+                    {run.incomplete &&
+                      !activeRuns([run]).length &&
+                      turn?.assistantMessage &&
+                      turn.assistantMessage !== run.assistantText && (
+                        <div className="answer">
+                          <small>保存済みの最終回答</small>
+                          <p>{turn.assistantMessage}</p>
+                        </div>
+                      )}
+                  </>
+                ) : (
+                  <>
+                    <div className="answer">
+                      {(turn?.assistantMessage != null &&
+                      !activeRuns([run]).length
+                        ? turn.assistantMessage
+                        : run.assistantText) ||
+                        (!activeRuns([run]).length
+                          ? "回答テキストはありません。"
+                          : "れいが作業しています…")}
+                    </div>
+                    <RunActivity run={run} />
+                  </>
+                )}
                 {!!run.workingSet.length && (
                   <details className="activity">
                     <summary>Working set · {run.workingSet.length}</summary>

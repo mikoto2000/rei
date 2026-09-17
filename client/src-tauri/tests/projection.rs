@@ -172,6 +172,98 @@ fn retry_is_bounded() {
 }
 
 #[test]
+fn timeline_interleaves_text_and_event_snapshots_without_replay_duplicates() {
+    let mut p = projection();
+    apply(
+        &mut p,
+        "message.delta",
+        1,
+        json!({"messageId":"m","delta":"before"}),
+    );
+    apply(
+        &mut p,
+        "tool.started",
+        2,
+        json!({"toolCallId":"c","toolName":"read"}),
+    );
+    apply(
+        &mut p,
+        "message.delta",
+        3,
+        json!({"messageId":"m","delta":" after"}),
+    );
+    apply(
+        &mut p,
+        "tool.completed",
+        4,
+        json!({"toolCallId":"c","toolName":"read","duration":18}),
+    );
+    apply(
+        &mut p,
+        "tool.completed",
+        4,
+        json!({"toolCallId":"c","toolName":"read","duration":18}),
+    );
+    apply(
+        &mut p,
+        "message.completed",
+        5,
+        json!({"messageId":"m","role":"assistant","text":"before after"}),
+    );
+    let entries = serde_json::to_value(&p.timeline).unwrap();
+    assert_eq!(entries.as_array().unwrap().len(), 4);
+    assert_eq!(entries[0]["text"], "before");
+    assert_eq!(entries[1]["tool"]["status"], "RUNNING");
+    assert_eq!(entries[2]["text"], " after");
+    assert_eq!(entries[3]["tool"]["status"], "COMPLETED");
+    assert_eq!(p.assistant_text(), "before after");
+}
+
+#[test]
+fn timeline_coalesces_adjacent_deltas_and_reconciles_final_text() {
+    let mut p = projection();
+    apply(
+        &mut p,
+        "message.delta",
+        1,
+        json!({"messageId":"m","delta":"れ"}),
+    );
+    apply(
+        &mut p,
+        "message.delta",
+        2,
+        json!({"messageId":"m","delta":"い"}),
+    );
+    apply(
+        &mut p,
+        "llm.response.first_token",
+        3,
+        json!({"requestId":"q","durationMs":12}),
+    );
+    apply(
+        &mut p,
+        "message.completed",
+        4,
+        json!({"messageId":"m","role":"assistant","text":"れいです"}),
+    );
+    let entries = serde_json::to_value(&p.timeline).unwrap();
+    assert_eq!(entries.as_array().unwrap().len(), 3);
+    assert_eq!(entries[0]["text"], "れい");
+    assert_eq!(entries[2]["text"], "です");
+    apply(
+        &mut p,
+        "message.completed",
+        5,
+        json!({"messageId":"m","role":"assistant","text":"訂正された回答"}),
+    );
+    let entries = serde_json::to_value(&p.timeline).unwrap();
+    assert_eq!(entries.as_array().unwrap().len(), 2);
+    assert_eq!(entries[1]["text"], "訂正された回答");
+    apply(&mut p, "agent.run.future", 6, json!({}));
+    assert_eq!(p.timeline.len(), 2);
+}
+
+#[test]
 fn message_started_and_tool_lifecycle_preserve_identity_and_metadata() {
     let mut p = projection();
     apply(

@@ -118,6 +118,19 @@ const data: Snapshot = {
   unlocked: true,
   notifications: false,
 };
+if (new URLSearchParams(location.search).has("timeline")) {
+  run.timeline = [
+    { kind: "text", id: "1", messageId: "m", text: "ファイルを調べます。" },
+    { kind: "tool", id: "2", tool: { ...run.tools[0], status: "RUNNING" } },
+    { kind: "activity", id: "3", activity: run.activities[0] },
+    { kind: "text", id: "4", messageId: "m", text: "構造が分かりました。" },
+    {
+      kind: "tool",
+      id: "5",
+      tool: { ...run.tools[0], status: "COMPLETED", durationMs: 18 },
+    },
+  ];
+}
 let onRun: (run: Run) => void = () => {};
 const call = (async (
   name: string,

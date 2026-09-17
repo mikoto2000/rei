@@ -49,7 +49,7 @@ pub(super) fn reduce_activity(
     timestamp: &Option<String>,
     correlation: Option<&str>,
     payload: &Value,
-) -> Result<()> {
+) -> Result<Option<Activity>> {
     let (category, label, key) = match kind {
         "llm.request.started"
         | "llm.request.failed"
@@ -75,7 +75,7 @@ pub(super) fn reduce_activity(
         "thinking.started" | "thinking.delta" | "thinking.completed" => {
             ("Thinking", "Thinking", Some("thinkingId"))
         }
-        _ => return Ok(()),
+        _ => return Ok(None),
     };
     let key = match key {
         Some("correlationId") => correlation.ok_or(AppError::InvalidResponse)?.to_owned(),
@@ -160,5 +160,9 @@ pub(super) fn reduce_activity(
             });
         }
     }
-    Ok(())
+    Ok(if kind == "thinking.delta" {
+        None
+    } else {
+        Some(activity.clone())
+    })
 }

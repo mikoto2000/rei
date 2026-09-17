@@ -827,3 +827,15 @@ main {
     max-height: 18rem;
   }
 }
+.run-timeline > .answer {
+  margin: 1rem 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.run-timeline > .activity-item,
+.run-timeline > .tool {
+  border-left: 2px solid var(--line);
+  padding-left: 0.8rem;
+  margin: 0.6rem 0;
+  font-size: 0.85rem;
+}

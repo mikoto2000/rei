@@ -4,6 +4,13 @@ Each slice starts with a failing behavior test, then implementation, then format
 
 ## Live AgentEvent activity (2026-09-17)
 
+Follow-up `feature/native-interleaved-events`: Red (missing timeline DTO) → Green
+(immutable event snapshots interleaved with adjacent text segments); Red (unknown
+run type adds a row) → Green (explicit lifecycle allowlist); Red (Chat DOM order
+missing) → Green (RunTimeline presentation); Red (replay gap hides stored final
+answer) → Green (explicit recovered final answer). Reconnect integration verifies
+the start snapshot remains RUNNING after the later completion snapshot arrives.
+
 The current work and actual Red/Green observations are recorded in
 [the live event TDD ledger](../docs/native-live-agent-events.md#tdd-ledger).
 Slices cover public mapper/security, message/tool state, LLM/progress/Working Set,
