@@ -1,47 +1,74 @@
 import type { Activity, Run, ToolExecution } from "../../entities/models";
 
+// Presentation formatting only: all lifecycle interpretation stays in Rust.
+const oneLine = (text: string) => text.replace(/\s+/g, " ").trim();
 export function ToolRow({ tool }: { tool: ToolExecution }) {
+  const mark =
+    tool.status === "COMPLETED" ? "✓" : tool.status === "FAILED" ? "✗" : "→";
   return (
-    <div className="tool">
-      <span aria-hidden="true">
-        {tool.status === "COMPLETED"
-          ? "✓"
-          : tool.status === "FAILED"
-            ? "!"
-            : "↻"}
-      </span>
-      <div>
-        <strong>{tool.name}</strong>
-        {tool.summary && <p>{tool.summary}</p>}
-        {tool.durationMs != null && <p>{tool.durationMs} ms</p>}
-        {tool.error && <p className="notice">{tool.error.message}</p>}
-      </div>
-      <small>{tool.status}</small>
+    <div
+      className="event-line"
+      aria-label={`${tool.name}: ${tool.status.toLowerCase()}`}
+    >
+      {mark} <span>{tool.name}</span>
+      {tool.summary && (
+        <>
+          {" "}
+          <span>{oneLine(tool.summary)}</span>
+        </>
+      )}
+      {tool.durationMs != null && (
+        <>
+          {" "}
+          <span>{tool.durationMs} ms</span>
+        </>
+      )}
+      {tool.error && (
+        <>
+          {" "}
+          <span>{oneLine(tool.error.message)}</span>
+        </>
+      )}
     </div>
   );
 }
 export function ActivityRow({ activity }: { activity: Activity }) {
   return (
-    <div className="activity-item">
-      <div className="activity-heading">
-        <strong>
-          {activity.category} · {activity.label}
-        </strong>
-        <small>{activity.status}</small>
-      </div>
-      {activity.summary && <p>{activity.summary}</p>}
-      <div className="activity-metrics">
-        {activity.firstTokenMs != null && (
+    <div className="event-line">
+      [{activity.category.toLowerCase()}] <span>{activity.label}</span>{" "}
+      <span>{activity.status.toLowerCase()}</span>
+      {activity.summary && (
+        <>
+          {" "}
+          <span>{oneLine(activity.summary)}</span>
+        </>
+      )}
+      {activity.firstTokenMs != null && (
+        <>
+          {" "}
           <span>First token: {activity.firstTokenMs} ms</span>
-        )}
-        {activity.durationMs != null && <span>{activity.durationMs} ms</span>}
-        {activity.metrics.map((metric) => (
-          <span key={metric.label}>
+        </>
+      )}
+      {activity.durationMs != null && (
+        <>
+          {" "}
+          <span>{activity.durationMs} ms</span>
+        </>
+      )}
+      {activity.metrics.map((metric) => (
+        <span key={metric.label}>
+          {" "}
+          <span>
             {metric.label}: {metric.value}
           </span>
-        ))}
-      </div>
-      {activity.error && <p className="notice">{activity.error.message}</p>}
+        </span>
+      ))}
+      {activity.error && (
+        <>
+          {" "}
+          <span>{oneLine(activity.error.message)}</span>
+        </>
+      )}
     </div>
   );
 }

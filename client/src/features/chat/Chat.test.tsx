@@ -37,9 +37,9 @@ it("interleaves text and event snapshots in native output order", () => {
   const rows = Array.from(container.querySelectorAll(".run-timeline > *"));
   expect(rows.map((row) => row.textContent)).toEqual([
     "before",
-    expect.stringContaining("RUNNING"),
+    expect.stringContaining("→ searchFiles"),
     " after",
-    expect.stringContaining("COMPLETED"),
+    expect.stringContaining("✓ searchFiles"),
   ]);
   expect(screen.queryByText("before after")).toBeNull();
   expect(container.querySelector(".live-activity")).toBeNull();

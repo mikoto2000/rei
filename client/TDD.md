@@ -4,6 +4,11 @@ Each slice starts with a failing behavior test, then implementation, then format
 
 ## Live AgentEvent activity (2026-09-17)
 
+Plain text follow-up: Red (event-line absent / decorated block children present)
+→ Green (single text-flow rows with tool status marks and activity prefixes).
+Browser checks verify 12px type, 18px line height, no left border/padding, output
+order and mobile wrapping. Only frontend presentation changed.
+
 Follow-up `feature/native-interleaved-events`: Red (missing timeline DTO) → Green
 (immutable event snapshots interleaved with adjacent text segments); Red (unknown
 run type adds a row) → Green (explicit lifecycle allowlist); Red (Chat DOM order

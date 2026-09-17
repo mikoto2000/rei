@@ -1,5 +1,9 @@
 # Live AgentEvent Activity validation
 
+## テキスト中心のイベント表示（追加検証）
+
+`feature/native-plain-event-text`: イベントの枠・太字・段組みを取り除き、12px 等幅フォントのテキスト行に変更。Frontend 32件、Desktop／Mobile 10件、型・lint・format、Windows assets 埋込みビルドが成功しました。Rust／Server の変更はありません。
+
 ## 出力順のチャット表示（追加検証）
 
 `feature/native-interleaved-events` で本文とイベントを出力順に混在表示するよう変更しました。Rust 60件、Frontend 31件、Desktop／Mobile Chrome 10件が成功。型・lint・format・clippy と Windows Tauri assets 埋込みビルドも成功しています。サーバーの変更はなく、Java 全体テストはこの追加変更では再実行していません。

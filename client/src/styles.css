@@ -805,23 +805,6 @@ main {
   max-height: 28rem;
   overflow-y: auto;
 }
-.activity-item {
-  padding: 0.75rem 0;
-  border-bottom: 1px solid var(--line);
-  overflow-wrap: anywhere;
-}
-.activity-heading {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.activity-metrics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem 1rem;
-  font-size: 0.85rem;
-}
 @media (max-width: 700px) {
   .activity-content {
     max-height: 18rem;
@@ -832,10 +815,16 @@ main {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.run-timeline > .activity-item,
-.run-timeline > .tool {
-  border-left: 2px solid var(--line);
-  padding-left: 0.8rem;
-  margin: 0.6rem 0;
-  font-size: 0.85rem;
+.event-line {
+  margin: 2px 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: Consolas, "SFMono-Regular", monospace;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  white-space: normal;
 }

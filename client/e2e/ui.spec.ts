@@ -7,10 +7,16 @@ test("text and events are visible inline in output order", async ({
   const rows = page.locator(".run-timeline > *");
   await expect(rows).toHaveCount(5);
   await expect(rows.nth(0)).toHaveText("ファイルを調べます。");
-  await expect(rows.nth(1)).toContainText("RUNNING");
+  await expect(rows.nth(1)).toContainText("→ readFile");
   await expect(rows.nth(2)).toContainText("First token: 70 ms");
   await expect(rows.nth(3)).toHaveText("構造が分かりました。");
-  await expect(rows.nth(4)).toContainText("COMPLETED");
+  await expect(rows.nth(4)).toContainText("✓ readFile");
+  const event = page.locator(".run-timeline .event-line").first();
+  await expect(event).toHaveCSS("font-size", "12px");
+  await expect(event).toHaveCSS("line-height", "18px");
+  await expect(event).toHaveCSS("border-left-width", "0px");
+  await expect(event).toHaveCSS("padding-left", "0px");
+  await expect(event.locator("strong, p")).toHaveCount(0);
   await expect(page.locator(".live-activity")).toHaveCount(0);
   expect(
     await page.evaluate(
@@ -20,6 +26,12 @@ test("text and events are visible inline in output order", async ({
   await page.screenshot({
     path: `test-results/${info.project.name}-interleaved.png`,
     fullPage: true,
+  });
+  await page
+    .locator(".run-timeline")
+    .evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await page.screenshot({
+    path: `test-results/${info.project.name}-plain-events.png`,
   });
 });
 test("server history opens, pages forward and returns to list", async ({
