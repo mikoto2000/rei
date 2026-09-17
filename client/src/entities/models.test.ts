@@ -20,6 +20,8 @@ const run = (
   error: null,
   failure: null,
   tools: [],
+  activities: [],
+  messages: [],
   workingSet: [],
   revision,
 });

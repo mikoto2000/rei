@@ -800,3 +800,30 @@ main {
     padding-bottom: 146px;
   }
 }
+/* Live activity remains compact on narrow screens and scrolls within the turn. */
+.activity-content {
+  max-height: 28rem;
+  overflow-y: auto;
+}
+.activity-item {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.activity-heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.activity-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  font-size: 0.85rem;
+}
+@media (max-width: 700px) {
+  .activity-content {
+    max-height: 18rem;
+  }
+}

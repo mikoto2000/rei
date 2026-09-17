@@ -38,10 +38,68 @@ const run: Run = {
     {
       id: "t",
       name: "readFile",
-      status: "COMPLETED",
+      status: "RUNNING",
       summary: "src/main/java/rei/web/SseController.java",
     },
   ],
+  activities: [
+    {
+      id: "llm:q",
+      category: "LLM",
+      label: "LLM request",
+      status: "RUNNING",
+      summary: "chat",
+      startedAt: "2026-09-17T01:00:00Z",
+      completedAt: null,
+      durationMs: null,
+      firstTokenMs: 70,
+      error: null,
+      metrics: [],
+    },
+    {
+      id: "progress:1",
+      category: "Progress",
+      label: "No progress",
+      status: "COMPLETED",
+      summary: "",
+      startedAt: null,
+      completedAt: null,
+      durationMs: null,
+      firstTokenMs: null,
+      error: null,
+      metrics: [
+        { label: "No progress", value: 1 },
+        { label: "Threshold", value: 4 },
+      ],
+    },
+    {
+      id: "skill:selection",
+      category: "Skill",
+      label: "Selection",
+      status: "COMPLETED",
+      summary: "coding",
+      startedAt: null,
+      completedAt: null,
+      durationMs: 18,
+      firstTokenMs: null,
+      error: null,
+      metrics: [],
+    },
+    {
+      id: "ws:removed",
+      category: "Working Set",
+      label: "Removed",
+      status: "COMPLETED",
+      summary: "Old.java",
+      startedAt: null,
+      completedAt: null,
+      durationMs: null,
+      firstTokenMs: null,
+      error: null,
+      metrics: [],
+    },
+  ],
+  messages: [],
   workingSet: [
     {
       id: "w",
@@ -104,6 +162,33 @@ const call = (async (
       revision: 2,
     };
     onRun(data.runs[0]);
+  }
+  if (name === "run_get") {
+    const failed = data.runs[0].status === "COMPLETED";
+    data.runs[0] = {
+      ...data.runs[0],
+      revision: data.runs[0].revision + 1,
+      status: failed ? "FAILED" : "COMPLETED",
+      streamState: "CLOSED",
+      assistantText: "確認が完了しました。",
+      tools: [
+        {
+          ...run.tools[0],
+          status: failed ? "FAILED" : "COMPLETED",
+          durationMs: 18,
+          error: failed
+            ? { type: "operation_failed", message: "Operation failed." }
+            : null,
+        },
+      ],
+      activities: run.activities.map((a) =>
+        a.category === "LLM"
+          ? { ...a, status: "COMPLETED", durationMs: 210 }
+          : a,
+      ),
+    };
+    onRun(data.runs[0]);
+    return data.runs[0];
   }
   if (name === "conversation_create") {
     const c = {

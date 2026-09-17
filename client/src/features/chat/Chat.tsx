@@ -1,3 +1,4 @@
+import { RunActivity } from "./RunActivity";
 import { timeline } from "../history/timeline";
 import { useState } from "react";
 import {
@@ -134,27 +135,7 @@ export function Chat({
                       ? "回答テキストはありません。"
                       : "れいが作業しています…")}
                 </div>
-                {!!run.tools.length && (
-                  <details className="activity" open>
-                    <summary>Tool activity · {run.tools.length}</summary>
-                    {run.tools.map((tool) => (
-                      <div className="tool" key={tool.id}>
-                        <span>
-                          {tool.status === "COMPLETED"
-                            ? "✓"
-                            : tool.status === "FAILED"
-                              ? "!"
-                              : "↻"}
-                        </span>
-                        <div>
-                          <strong>{tool.name}</strong>
-                          <p>{tool.summary}</p>
-                        </div>
-                        <small>{tool.status}</small>
-                      </div>
-                    ))}
-                  </details>
-                )}
+                <RunActivity run={run} />
                 {!!run.workingSet.length && (
                   <details className="activity">
                     <summary>Working set · {run.workingSet.length}</summary>

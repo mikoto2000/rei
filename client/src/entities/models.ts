@@ -72,9 +72,43 @@ export interface Run {
   incomplete: boolean;
   error: string | null;
   failure: string | null;
-  tools: { id: string; name: string; status: string; summary: string }[];
+  tools: ToolExecution[];
+  activities: Activity[];
+  messages: {
+    messageId: string;
+    role: string;
+    text: string;
+    completed: boolean;
+  }[];
   workingSet: { id: string; kind: string; identifier: string; path: string }[];
   revision: number;
+}
+export interface ActivityError {
+  type: string;
+  message: string;
+}
+export interface ToolExecution {
+  id: string;
+  name: string;
+  status: string;
+  summary: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  durationMs?: number | null;
+  error?: ActivityError | null;
+}
+export interface Activity {
+  id: string;
+  category: string;
+  label: string;
+  status: string;
+  summary: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  durationMs: number | null;
+  firstTokenMs: number | null;
+  error: ActivityError | null;
+  metrics: { label: string; value: number }[];
 }
 export interface Snapshot {
   servers: Server[];
