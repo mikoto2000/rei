@@ -287,13 +287,14 @@ fn notification_settings(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_notification::init())
-        .setup(|app| {
-            #[cfg(desktop)]
-            app.handle()
-                .plugin(tauri_plugin_window_state::Builder::default().build())?;
+    let builder = tauri::Builder::default().plugin(tauri_plugin_notification::init());
 
+    // Register before configured windows are created so initial restoration runs.
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
+
+    builder
+        .setup(|app| {
             let flag = Arc::new(AtomicBool::new(false));
             let handle = app.handle().clone();
             let application = Application::open(
