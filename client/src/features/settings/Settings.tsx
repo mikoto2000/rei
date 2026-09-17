@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Server, Connection } from "../../entities/models";
+import { errorText } from "../../entities/models";
 interface Props {
   servers: Server[];
   connections: Record<string, Connection>;
@@ -62,7 +63,7 @@ export function Settings(props: Props) {
       <div className="settings-grid">
         <section className="card">
           <h2>Rei Servers</h2>
-          <p>LAN / VPN 上のサーバーへ接続します。HTTPS を推奨します。</p>
+          <p>HTTP / HTTPS でサーバーへ接続できます。</p>
           {props.servers.map((s) => (
             <div className="server-card" key={s.id}>
               <div>
@@ -96,13 +97,26 @@ export function Settings(props: Props) {
                 <div className="connection-result">
                   <span>
                     Server reachable:{" "}
-                    {props.connections[s.id].reachable ? "Yes" : "No"}
+                    {props.connections[s.id].state === "CONNECTING"
+                      ? "確認中"
+                      : props.connections[s.id].reachable
+                        ? "Yes"
+                        : "未確認"}
                   </span>
                   <span>
                     Authentication OK:{" "}
-                    {props.connections[s.id].authenticated ? "Yes" : "No"}
+                    {props.connections[s.id].state === "CONNECTING"
+                      ? "確認中"
+                      : props.connections[s.id].authenticated
+                        ? "Yes"
+                        : "未確認 / 失敗"}
                   </span>
                   <small>{props.connections[s.id].state}</small>
+                  {props.connections[s.id].error && (
+                    <p role="alert">
+                      {errorText(props.connections[s.id].error)}
+                    </p>
+                  )}
                 </div>
               )}
             </div>

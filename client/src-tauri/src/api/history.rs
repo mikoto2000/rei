@@ -19,7 +19,7 @@ impl HttpReiClient {
     }
 }
 pub(super) fn history_error(error: AppError, query: &HistoryQuery) -> AppError {
-    if error == AppError::InvalidInput && query.cursor.is_some() {
+    if error == AppError::RequestRejected && query.cursor.is_some() {
         AppError::InvalidCursor
     } else {
         error

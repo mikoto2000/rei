@@ -59,7 +59,7 @@ Windows の制限付き環境で Cargo の incremental cache rename が拒否さ
 6. Conversations はサーバーの Session 一覧です。project filter・追加読込み・更新に対応します。選択時に詳細と過去 Turn を取得し、同じ session で再開します。404 は自動再送せず、明示的に新しい会話へ進めます。409 は詳細を再取得してエラーを表示し、POST を再試行しません。
 7. Active Runs から会話・Run を選択できます。Stop は必ず選択した server ID / run ID を指定します。
 
-サーバーは LAN / VPN 上で利用し、HTTPS を推奨します。インターネットへの直接公開を前提としていません。Windows ではローカル開発向け HTTP も可能ですが、API Key を平文で送るため、信頼できるネットワークでのみ使用してください。認証付きリダイレクトは追従しません。
+サーバーは LAN / VPN 上で利用し、HTTPS を推奨します。インターネットへの直接公開を前提としていません。Android と Windows では HTTP も利用できます。認証付きリダイレクトは追従しません。
 
 server URL の変更・削除は、この起動中に関連する会話が開かれていると拒否します。接続先の取り違えを防ぐ既存の制約です。必要な場合は Run の終了を確認し、アプリを再起動して設定を変更してください。サーバーの Session を削除する機能はありません。
 
@@ -137,9 +137,11 @@ npm run tauri -- android dev
 npm run tauri -- android build
 ```
 
-生成される `src-tauri/gen` はローカル platform project として扱います。Android / iOS の app icon assets と `mobile_entry_point` を備えています。iOS は macOS 上で `npm run tauri -- ios init` / `ios build` を実行します。
+生成済み Android プロジェクト `src-tauri/gen/android` は Git で管理します。既存のプロジェクトを利用する場合、`android init` は不要です。Android / iOS の app icon assets と `mobile_entry_point` を備えています。iOS は macOS 上で `npm run tauri -- ios init` / `ios build` を実行します。
 
-Android の cleartext 制約を WebView 任せにせず、native HTTP adapter も Android / iOS では **HTTPS 必須**にしています。manifest へ一律 `usesCleartextTraffic=true` を追加しません。自己署名証明書の検証無効化も行いません。LAN / VPN でも端末が信頼する証明書を用意してください。
+Android は全接続先への HTTP を許可します。`src-tauri/gen/android/app/src/main/res/xml/network_security_config.xml` の `base-config` で許可し、同じ `src/main` 配下の `AndroidManifest.xml` から参照します。これらの設定は Git で直接管理します。Rust HTTP adapter も HTTP / HTTPS を受け付けます。HTTPS の証明書検証は維持します。
+
+接続テストは HTTP 応答を受け取った場合、401・403・404・5xx でも到達済みと表示します。認証、権限、API の接続先、リダイレクト、リクエスト拒否、レート制限、サーバー内部エラー、タイムアウト、通信失敗を区別して表示します。通信開始前の設定エラーでも最終状態を返し、CONNECTING のまま残しません。生のエラーや API Key は表示しません。
 
 この環境では Android NDK / clang がなく、Android init と aarch64 cross-check が停止しました。Android APK と iOS 実機動作は未検証です。モバイル OS がアプリを suspend した間の常駐 SSE やバックグラウンド通知配信は保証しません。
 

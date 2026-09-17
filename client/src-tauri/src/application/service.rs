@@ -24,6 +24,25 @@ pub struct ConnectionView {
     pub authenticated: bool,
     pub error: Option<AppError>,
 }
+impl ConnectionView {
+    fn failed(server: &str, error: AppError, reachable: bool) -> Self {
+        Self {
+            server_id: server.into(),
+            state: match error {
+                AppError::AuthenticationFailed | AppError::VaultLocked => {
+                    ConnectionState::AuthFailed
+                }
+                AppError::ServerUnreachable | AppError::RequestTimeout => {
+                    ConnectionState::ServerUnreachable
+                }
+                _ => ConnectionState::ConnectionFailed,
+            },
+            reachable,
+            authenticated: false,
+            error: Some(error),
+        }
+    }
+}
 
 pub struct Application {
     pub conversations: ConversationService,
@@ -220,15 +239,23 @@ impl Application {
         self.clients.create(&profile, credential)
     }
     pub async fn test_server(&self, id: &str) -> Result<ConnectionView> {
-        let reachable = self.api(id, false)?.health().await;
+        let reachable = match self.api(id, false) {
+            Ok(api) => api.health().await,
+            Err(error) => return Ok(ConnectionView::failed(id, error, false)),
+        };
         if let Err(error) = reachable {
-            return Ok(ConnectionView {
-                server_id: id.into(),
-                state: ConnectionState::ServerUnreachable,
-                reachable: false,
-                authenticated: false,
-                error: Some(error),
-            });
+            let responded = matches!(
+                error,
+                AppError::AuthenticationFailed
+                    | AppError::PermissionDenied
+                    | AppError::HealthAuthenticationRequired
+                    | AppError::EndpointNotFound
+                    | AppError::HttpRedirect
+                    | AppError::RequestRejected
+                    | AppError::RateLimited
+                    | AppError::UnexpectedServerError
+            );
+            return Ok(ConnectionView::failed(id, error, responded));
         }
         let authenticated = match self.api(id, true) {
             Ok(api) => api.projects().await.map(|_| ()),
@@ -241,7 +268,7 @@ impl Application {
                 Err(AppError::AuthenticationFailed | AppError::VaultLocked) => {
                     ConnectionState::AuthFailed
                 }
-                Err(_) => ConnectionState::ServerUnreachable,
+                Err(_) => ConnectionState::ConnectionFailed,
             },
             reachable: true,
             authenticated: authenticated.is_ok(),

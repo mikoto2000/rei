@@ -18,6 +18,165 @@ impl NotificationPort for Sink {
 fn app(path: &std::path::Path) -> Application {
     Application::open(path.into(), Arc::new(Sink), Arc::new(Sink)).unwrap()
 }
+
+#[tokio::test]
+async fn connection_test_keeps_http_errors_separate_from_unreachable() {
+    for (health, projects, expected, state) in [
+        (
+            401,
+            200,
+            AppError::HealthAuthenticationRequired,
+            ConnectionState::ConnectionFailed,
+        ),
+        (
+            403,
+            200,
+            AppError::HealthAuthenticationRequired,
+            ConnectionState::ConnectionFailed,
+        ),
+        (
+            404,
+            200,
+            AppError::EndpointNotFound,
+            ConnectionState::ConnectionFailed,
+        ),
+        (
+            503,
+            200,
+            AppError::UnexpectedServerError,
+            ConnectionState::ConnectionFailed,
+        ),
+        (
+            302,
+            200,
+            AppError::HttpRedirect,
+            ConnectionState::ConnectionFailed,
+        ),
+        (
+            200,
+            401,
+            AppError::AuthenticationFailed,
+            ConnectionState::AuthFailed,
+        ),
+        (
+            200,
+            403,
+            AppError::PermissionDenied,
+            ConnectionState::ConnectionFailed,
+        ),
+        (
+            200,
+            404,
+            AppError::EndpointNotFound,
+            ConnectionState::ConnectionFailed,
+        ),
+        (
+            200,
+            429,
+            AppError::RateLimited,
+            ConnectionState::ConnectionFailed,
+        ),
+        (
+            200,
+            500,
+            AppError::UnexpectedServerError,
+            ConnectionState::ConnectionFailed,
+        ),
+        (
+            200,
+            400,
+            AppError::RequestRejected,
+            ConnectionState::ConnectionFailed,
+        ),
+        (
+            200,
+            200,
+            AppError::InvalidResponse,
+            ConnectionState::ConnectionFailed,
+        ),
+    ] {
+        let router = Router::new()
+            .route(
+                "/actuator/health",
+                get(move || async move { StatusCode::from_u16(health).unwrap() }),
+            )
+            .route(
+                "/api/v1/projects",
+                get(move || async move {
+                    (
+                        StatusCode::from_u16(projects).unwrap(),
+                        "private-response-must-not-leak",
+                    )
+                }),
+            );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let task = tokio::spawn(async move {
+            axum::serve(listener, router).await.unwrap();
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let app = app(dir.path());
+        app.unlock(Secret::new("a long passphrase".into())).unwrap();
+        let id = app.save_server(None, "Home", &url).unwrap();
+        app.set_credential(&id, Secret::new("test-key".into()))
+            .unwrap();
+        let result = app.test_server(&id).await.unwrap();
+        assert!(result.reachable, "health={health}, projects={projects}");
+        assert!(!result.authenticated);
+        assert_eq!(result.error, Some(expected));
+        assert_eq!(result.state, state);
+        assert!(!serde_json::to_string(&result)
+            .unwrap()
+            .contains("private-response"));
+        task.abort();
+    }
+}
+
+#[tokio::test]
+async fn connection_test_finishes_when_client_cannot_be_created() {
+    let dir = tempfile::tempdir().unwrap();
+    let app = app(dir.path());
+    let result = app.test_server("missing-profile").await.unwrap();
+    assert_eq!(result.state, ConnectionState::ConnectionFailed);
+    assert_eq!(result.error, Some(AppError::NotFound));
+    assert!(!result.reachable);
+}
+
+#[tokio::test]
+async fn connection_test_success_and_locked_vault_preserve_reachability() {
+    let router = Router::new()
+        .route("/actuator/health", get(|| async { StatusCode::OK }))
+        .route(
+            "/api/v1/projects",
+            get(|headers: axum::http::HeaderMap| async move {
+                assert_eq!(headers["authorization"], "Bearer test-key");
+                Json(json!([]))
+            }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move {
+        axum::serve(listener, router).await.unwrap();
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let app = app(dir.path());
+    let id = app.save_server(None, "Home", &url).unwrap();
+    let locked = app.test_server(&id).await.unwrap();
+    assert!(locked.reachable);
+    assert_eq!(locked.error, Some(AppError::VaultLocked));
+    app.unlock(Secret::new("a long passphrase".into())).unwrap();
+    assert_eq!(
+        app.test_server(&id).await.unwrap().error,
+        Some(AppError::AuthenticationFailed)
+    );
+    app.set_credential(&id, Secret::new("test-key".into()))
+        .unwrap();
+    let connected = app.test_server(&id).await.unwrap();
+    assert_eq!(connected.state, ConnectionState::Connected);
+    assert!(connected.reachable && connected.authenticated);
+    assert_eq!(connected.error, None);
+    task.abort();
+}
 #[test]
 fn server_crud_and_credential_dto() {
     let dir = tempfile::tempdir().unwrap();

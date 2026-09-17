@@ -286,6 +286,7 @@ impl RunManager {
                     Err(AppError::ReplayGap) => gap = true,
                     Err(
                         error @ (AppError::AuthenticationFailed
+                        | AppError::PermissionDenied
                         | AppError::RunNotFound
                         | AppError::InvalidResponse),
                     ) => {

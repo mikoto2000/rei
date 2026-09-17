@@ -7,6 +7,7 @@ export type ConnectionState =
   | "CONNECTING"
   | "CONNECTED"
   | "AUTH_FAILED"
+  | "CONNECTION_FAILED"
   | "SERVER_UNREACHABLE";
 export interface Server {
   id: string;
@@ -155,17 +156,35 @@ const errors: Record<string, string> = {
   SessionProjectConflict:
     "この会話は元のサーバー・プロジェクトに固定されています。新しい会話を作成してください。",
   AuthenticationFailed: "API Key を確認してください。",
+  HealthAuthenticationRequired:
+    "ヘルスチェックが認証・権限エラーになりました。接続先 URL と、サーバーの /actuator/health を認証なしで取得できる設定を確認してください。",
+  PermissionDenied:
+    "アクセスが拒否されました（HTTP 403）。API Key とサーバーのアクセス権限を確認してください。",
+  EndpointNotFound:
+    "API の接続先が見つかりません（HTTP 404）。URL とサーバーの API 設定を確認してください。",
+  HttpRedirect:
+    "サーバーからリダイレクトが返されました。転送先の正しい URL を設定してください。",
+  RequestRejected:
+    "サーバーがリクエストを受け付けませんでした。入力内容と API の互換性を確認してください。",
+  RateLimited:
+    "リクエストが多すぎます（HTTP 429）。時間をおいて再試行してください。",
+  RequestTimeout:
+    "通信がタイムアウトしました。接続先とネットワークを確認し、再試行してください。",
   VaultLocked:
     "Vault を解錠してください。パスフレーズが違う場合も解錠できません。",
   ServerUnreachable:
-    "サーバーに接続できません。URL とネットワークを確認してください。",
+    "サーバーとの通信に失敗しました。URL・ネットワーク・HTTPS の場合は証明書を確認してください。",
   ReplayGap: "イベント履歴が欠けています。Run の状態を回収しています。",
   StreamDisconnected: "ストリームが切断されました。再接続しています。",
   RunNotFound: "Run がサーバーに存在しません。",
   Storage: "保存に失敗しました。空き容量とアクセス権を確認してください。",
   Busy: "実行中の処理があります。終了後に操作してください。",
-  InvalidInput:
-    "入力内容を確認してください。Vault パスフレーズは12文字以上必要です。",
+  InvalidInput: "入力内容と必須項目を確認してください。",
+  InvalidServerUrl:
+    "接続先 URL が無効です。http:// または https:// で始まる URL を指定してください。認証情報・クエリ・フラグメントは指定できません。",
+  InvalidCredential:
+    "API Key の形式が無効です。空白のみの値や改行は使用できません。",
+  InvalidPassphrase: "Vault パスフレーズは12文字以上で入力してください。",
   InvalidResponse: "サーバーから想定外の応答がありました。",
   NotFound: "対象が見つかりません。",
 };

@@ -6,6 +6,13 @@ pub use history::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AppError {
     ServerUnreachable,
+    RequestTimeout,
+    PermissionDenied,
+    HealthAuthenticationRequired,
+    EndpointNotFound,
+    HttpRedirect,
+    RequestRejected,
+    RateLimited,
     AuthenticationFailed,
     ProjectNotFound,
     SessionNotFound,
@@ -16,6 +23,9 @@ pub enum AppError {
     RunFailed,
     Cancelled,
     InvalidInput,
+    InvalidServerUrl,
+    InvalidCredential,
+    InvalidPassphrase,
     InvalidResponse,
     InvalidCursor,
     InvalidLimit,
@@ -42,6 +52,7 @@ pub enum ConnectionState {
     Connecting,
     Connected,
     AuthFailed,
+    ConnectionFailed,
     ServerUnreachable,
 }
 
@@ -132,16 +143,18 @@ pub struct ServerProfile {
 }
 impl ServerProfile {
     pub fn new(name: &str, base_url: &str) -> Result<Self> {
-        let url = url::Url::parse(base_url).map_err(|_| AppError::InvalidInput)?;
-        if name.trim().is_empty()
-            || !matches!(url.scheme(), "http" | "https")
+        if name.trim().is_empty() {
+            return Err(AppError::InvalidInput);
+        }
+        let url = url::Url::parse(base_url).map_err(|_| AppError::InvalidServerUrl)?;
+        if !matches!(url.scheme(), "http" | "https")
             || url.host_str().is_none()
             || !url.username().is_empty()
             || url.password().is_some()
             || url.query().is_some()
             || url.fragment().is_some()
         {
-            return Err(AppError::InvalidInput);
+            return Err(AppError::InvalidServerUrl);
         }
         let id = uuid::Uuid::new_v4().to_string();
         Ok(Self {
@@ -165,15 +178,21 @@ pub enum Operation {
 }
 pub fn http_error(status: u16, op: Operation) -> AppError {
     match (status, op) {
-        (401 | 403, _) => AppError::AuthenticationFailed,
+        (401 | 403, Operation::Health) => AppError::HealthAuthenticationRequired,
+        (401, _) => AppError::AuthenticationFailed,
+        (403, _) => AppError::PermissionDenied,
         (404, Operation::Chat) => AppError::SessionNotFound,
         (404, Operation::Session) => AppError::SessionNotFound,
-        (404, Operation::Projects) => AppError::ProjectNotFound,
+        (404, Operation::Projects) => AppError::EndpointNotFound,
         (404, Operation::Run | Operation::Stream) => AppError::RunNotFound,
         (409, Operation::Chat) => AppError::SessionProjectConflict,
         (409, Operation::Stream) => AppError::ReplayGap,
-        (400 | 422, _) => AppError::InvalidInput,
+        (400 | 422, _) => AppError::RequestRejected,
+        (404, _) => AppError::EndpointNotFound,
+        (300..=399, _) => AppError::HttpRedirect,
+        (429, _) => AppError::RateLimited,
         (_, Operation::Sessions | Operation::Session) => AppError::UnexpectedServerError,
-        _ => AppError::ServerUnreachable,
+        (500..=599, _) => AppError::UnexpectedServerError,
+        _ => AppError::RequestRejected,
     }
 }

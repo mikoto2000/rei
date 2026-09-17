@@ -56,7 +56,7 @@ pub struct EncryptedVault {
 impl EncryptedVault {
     pub fn open(path: PathBuf, password: Secret) -> Result<Self> {
         if password.expose().len() < 12 {
-            return Err(AppError::InvalidInput);
+            return Err(AppError::InvalidPassphrase);
         }
         let bytes = match std::fs::read(&path) {
             Ok(bytes) => Some(bytes),
@@ -118,7 +118,7 @@ impl EncryptedVault {
 impl CredentialStore for EncryptedVault {
     fn set(&mut self, reference: &str, secret: Secret) -> Result<()> {
         if secret.expose().trim().is_empty() || secret.expose().contains(['\r', '\n']) {
-            return Err(AppError::InvalidInput);
+            return Err(AppError::InvalidCredential);
         }
         let previous = self.secrets.insert(reference.into(), secret);
         if let Err(error) = self.persist() {

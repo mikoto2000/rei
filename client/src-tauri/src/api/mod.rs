@@ -7,15 +7,6 @@ use std::time::Duration;
 mod history;
 use history::*;
 
-/// Enforce mobile transport policy in Rust too: native HTTP can bypass WebView/OS rules.
-pub fn validate_transport(base_url: &str, mobile: bool) -> Result<()> {
-    let profile = ServerProfile::new("transport", base_url)?;
-    if mobile && !profile.base_url.starts_with("https://") {
-        return Err(AppError::InvalidInput);
-    }
-    Ok(())
-}
-
 pub struct HttpReiClient {
     client: Client,
     base_url: String,
@@ -23,10 +14,6 @@ pub struct HttpReiClient {
 }
 impl HttpReiClient {
     pub fn new(base_url: &str, credential: Option<Secret>) -> Result<Self> {
-        validate_transport(
-            base_url,
-            cfg!(any(target_os = "android", target_os = "ios")),
-        )?;
         let profile = ServerProfile::new("validation", base_url)?;
         let client = Client::builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -58,10 +45,15 @@ impl HttpReiClient {
         Ok(request.bearer_auth(secret.expose()))
     }
     async fn checked(request: reqwest::RequestBuilder, op: Operation) -> Result<Response> {
-        let response = request
-            .send()
-            .await
-            .map_err(|_| AppError::ServerUnreachable)?;
+        let response = request.send().await.map_err(|error| {
+            if error.is_timeout() {
+                AppError::RequestTimeout
+            } else if error.is_builder() {
+                AppError::InvalidInput
+            } else {
+                AppError::ServerUnreachable
+            }
+        })?;
         if !response.status().is_success() {
             return Err(http_error(response.status().as_u16(), op));
         }
@@ -75,7 +67,13 @@ impl HttpReiClient {
             .await?
             .json()
             .await
-            .map_err(|_| AppError::InvalidResponse)
+            .map_err(|error| {
+                if error.is_timeout() {
+                    AppError::RequestTimeout
+                } else {
+                    AppError::InvalidResponse
+                }
+            })
     }
     fn run_path(run: &str, suffix: &str) -> Result<String> {
         if run.is_empty() || !run.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {

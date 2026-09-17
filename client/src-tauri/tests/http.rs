@@ -56,10 +56,16 @@ async fn empty_projects_is_success_and_redirects_are_not_followed() {
 }
 
 #[test]
-fn mobile_transport_requires_https() {
-    assert!(rei_client_lib::api::validate_transport("http://192.168.1.2:8080", true).is_err());
-    assert!(rei_client_lib::api::validate_transport("https://rei.example", true).is_ok());
-    assert!(rei_client_lib::api::validate_transport("http://127.0.0.1:8080", false).is_ok());
+fn transport_accepts_http_and_https_for_any_host() {
+    for url in [
+        "http://192.168.1.2:8080",
+        "http://mnmain-1.tail034fd.ts.net:18080",
+        "http://example.com",
+        "https://rei.example",
+    ] {
+        assert!(HttpReiClient::new(url, None).is_ok());
+    }
+    assert!(HttpReiClient::new("file:///tmp/file", None).is_err());
 }
 #[tokio::test]
 async fn reachable_and_authentication_are_independent() {
@@ -103,4 +109,27 @@ async fn chat_retains_ids_and_never_retries_expired_sessions() {
 async fn unreachable_is_a_safe_application_error() {
     let api = HttpReiClient::new("http://127.0.0.1:1", None).unwrap();
     assert_eq!(api.health().await.unwrap_err(), AppError::ServerUnreachable);
+}
+
+#[tokio::test]
+async fn health_timeout_is_distinct_from_http_failure() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move {
+        axum::serve(
+            listener,
+            Router::new().route(
+                "/actuator/health",
+                get(|| async {
+                    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                    StatusCode::OK
+                }),
+            ),
+        )
+        .await
+        .unwrap();
+    });
+    let api = HttpReiClient::new(&url, None).unwrap();
+    assert_eq!(api.health().await.unwrap_err(), AppError::RequestTimeout);
+    task.abort();
 }
