@@ -104,9 +104,8 @@ async fn submitted_chat_projects_live_activity_across_disconnect_and_replay() {
                         ]
                     };
                     // A streaming HTTP body exercises parser chunk boundaries as well as reconnect.
-                    let chunks = futures_util::stream::iter(
-                        frames.into_iter().map(|s| Ok::<_, std::io::Error>(s)),
-                    );
+                    let chunks =
+                        futures_util::stream::iter(frames.into_iter().map(Ok::<_, std::io::Error>));
                     Response::builder()
                         .header("content-type", "text/event-stream")
                         .body(axum::body::Body::from_stream(chunks))

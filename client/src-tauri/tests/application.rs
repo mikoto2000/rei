@@ -42,6 +42,53 @@ fn server_crud_and_credential_dto() {
     app.remove_server(&id).unwrap();
     assert!(app.servers().unwrap().is_empty());
 }
+
+#[test]
+fn live_activity_is_not_restored_when_application_reopens() {
+    let dir = tempfile::tempdir().unwrap();
+    let application = app(dir.path());
+    let server = application
+        .save_server(None, "Home", "https://rei.example")
+        .unwrap();
+    let mut projection = Projection::new(
+        &server,
+        "conversation",
+        "p",
+        ChatReceipt {
+            run_id: "r".into(),
+            session_id: "s".into(),
+            turn_id: "t".into(),
+        },
+        "hello",
+    );
+    let data = json!({"type":"llm.request.started","sequence":1,"version":1,"runId":"r",
+        "payload":{"requestId":"runtime-request","feature":"runtime-only-activity"}});
+    let bytes = format!("event: llm.request.started\nid: 1\ndata: {data}\n\n");
+    projection
+        .apply(
+            SseParser::default()
+                .push(bytes.as_bytes())
+                .unwrap()
+                .remove(0),
+        )
+        .unwrap();
+    application.runs.register(projection).unwrap();
+    assert_eq!(application.runs.all()[0].activities.len(), 1);
+    application.select_server(&server).unwrap();
+    drop(application);
+    let reopened = app(dir.path());
+    assert_eq!(reopened.servers().unwrap().len(), 1);
+    assert!(reopened.runs.all().is_empty());
+    for entry in std::fs::read_dir(dir.path()).unwrap() {
+        let entry = entry.unwrap();
+        if entry.path().is_file() {
+            assert!(
+                !String::from_utf8_lossy(&std::fs::read(entry.path()).unwrap())
+                    .contains("runtime-only-activity")
+            );
+        }
+    }
+}
 #[tokio::test]
 async fn submit_registers_subscribes_resumes_and_expiry_does_not_fork() {
     let router=Router::new().route("/api/v1/sessions/s",get(|| async { Json(json!({"sessionId":"s","projectId":"p","title":"first","createdAt":"2026-09-16T08:00:00Z","updatedAt":"2026-09-16T08:00:00Z"})) }))
