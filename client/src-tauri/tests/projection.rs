@@ -375,6 +375,86 @@ fn wrong_session_envelope_cannot_contaminate_current_run() {
 }
 
 #[test]
+fn failures_and_search_selection_aggregates_update_existing_activity() {
+    let mut p = projection();
+    apply(
+        &mut p,
+        "tool.started",
+        1,
+        json!({"toolCallId":"c","toolName":"write","summary":"safe"}),
+    );
+    apply(
+        &mut p,
+        "tool.failed",
+        2,
+        json!({"toolCallId":"c","toolName":"write","error":{"type":"operation_failed","message":"Operation failed."}}),
+    );
+    assert_eq!(p.tools.len(), 1);
+    assert_eq!(p.tools["c"].status, "FAILED");
+    assert_eq!(p.tools["c"].summary, "safe");
+    assert!(p.tools["c"].duration_ms.is_none());
+    apply(
+        &mut p,
+        "llm.request.started",
+        3,
+        json!({"requestId":"q","feature":"chat"}),
+    );
+    apply(
+        &mut p,
+        "llm.request.failed",
+        4,
+        json!({"requestId":"q","durationMs":19,"error":{"type":"operation_failed","message":"Operation failed."}}),
+    );
+    assert_eq!(p.activities.len(), 1);
+    assert_eq!(p.activities[0].status, "FAILED");
+    assert_eq!(p.activities[0].duration_ms, Some(19));
+    assert_eq!(
+        p.activities[0].error.as_ref().unwrap().kind,
+        "operation_failed"
+    );
+    apply(
+        &mut p,
+        "skill.selection.started",
+        5,
+        json!({"selectionId":"sel"}),
+    );
+    apply(
+        &mut p,
+        "skill.selection.completed",
+        6,
+        json!({"selectionId":"sel","explicitSkillNames":["coding"],"implicitSkillNames":["review"]}),
+    );
+    assert_eq!(p.activities[1].summary, "coding, review");
+    apply(
+        &mut p,
+        "working_set.search.started",
+        7,
+        json!({"searchId":"search","workingSetSizeBefore":1}),
+    );
+    apply(
+        &mut p,
+        "working_set.search.completed",
+        8,
+        json!({"searchId":"search","durationMs":9,"hitCount":5,"selectedCount":2,"workingSetSizeAfter":3}),
+    );
+    assert_eq!(p.activities[2].duration_ms, Some(9));
+    assert!(p.activities[2]
+        .metrics
+        .iter()
+        .any(|m| m.label == "Selected" && m.value == 2));
+    apply(
+        &mut p,
+        "working_set.context.injected",
+        9,
+        json!({"itemCount":3,"contextCharacters":900}),
+    );
+    assert!(p.activities[3]
+        .metrics
+        .iter()
+        .any(|m| m.label == "Context characters" && m.value == 900));
+}
+
+#[test]
 fn mismatched_id_and_cross_run_frames_do_not_advance_sequence() {
     let mut p = projection();
     for data in [

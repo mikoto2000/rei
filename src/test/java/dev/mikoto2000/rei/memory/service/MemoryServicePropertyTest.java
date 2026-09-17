@@ -48,7 +48,8 @@ class MemoryServicePropertyTest {
           MemoryStatus.CANDIDATE, 0.8d, null, null, null));
     }
 
-    var results = service.search(token, 10);
+    // AlphaChars can generate FTS operators such as OR; search for a literal token.
+    var results = service.search("\"" + token + "\"", 10);
     assertTrue(results.size() <= 10);
     assertTrue(results.stream().allMatch(m -> m.status() == MemoryStatus.ACTIVE));
   }
@@ -63,7 +64,7 @@ class MemoryServicePropertyTest {
 
     assertEquals(MemoryStatus.DELETED, service.findById(saved.id()).orElseThrow().status());
     assertTrue(service.listActive().stream().noneMatch(m -> m.id().equals(saved.id())));
-    assertTrue(service.search(token, 10).stream().noneMatch(m -> m.id().equals(saved.id())));
+    assertTrue(service.search("\"" + token + "\"", 10).stream().noneMatch(m -> m.id().equals(saved.id())));
   }
 
   // Feature: ai-memory-consolidation, Property 18: スコープ別デフォルト有効期限の設定

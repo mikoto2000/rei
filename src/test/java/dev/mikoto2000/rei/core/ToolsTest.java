@@ -1399,7 +1399,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
       assertTrue(legacy.processId().startsWith("proc-"));
       assertTrue(unified.processId().startsWith("proc-"));
-      BackgroundProcessSnapshot status = awaitToolStdout(tools, unified.processId(), tempDir.toString());
+      BackgroundProcessSnapshot status = awaitToolOutput(tools, unified.processId(), tempDir.toString(), "warning");
       assertTrue(status.found());
       assertTrue(status.stderr().stream().anyMatch(line -> line.contains("warning")));
       assertEquals(BackgroundProcessStatus.KILLED, tools.killShellProcess(unified.processId()).status());
@@ -1419,7 +1419,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
         : "printf '短時間\\n'";
     try {
       RunCommandResult result = tools.runCommand(
-          new RunCommandRequest(command, null, null), tempDir, Duration.ofSeconds(1));
+          // Exercise auto completion, not a one-second PowerShell startup benchmark.
+          new RunCommandRequest(command, null, null), tempDir, Duration.ofSeconds(10));
 
       assertEquals("completed", result.status());
       assertEquals("auto", result.executionMode());
@@ -1859,11 +1860,18 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
   private BackgroundProcessSnapshot awaitToolStdout(Tools tools, String processId, String expectedLine)
       throws Exception {
+    return awaitToolOutput(tools, processId, expectedLine, null);
+  }
+
+  private BackgroundProcessSnapshot awaitToolOutput(Tools tools, String processId, String expectedLine, String expectedError)
+      throws Exception {
     long deadline = System.currentTimeMillis() + 5000;
     BackgroundProcessSnapshot snapshot;
     do {
       snapshot = tools.getShellProcessStatus(processId, 100);
-      if (snapshot.stdout().contains(expectedLine)) {
+      // stdout and stderr have independent reader tasks; wait for both assertions' observations.
+      if (snapshot.stdout().contains(expectedLine)
+          && (expectedError == null || snapshot.stderr().stream().anyMatch(line -> line.contains(expectedError)))) {
         return snapshot;
       }
       Thread.sleep(50);
