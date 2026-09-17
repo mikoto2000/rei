@@ -45,6 +45,10 @@ export function Chat({
   onRefreshHistory,
 }: Props) {
   const [message, setMessage] = useState("");
+  const submitDisabled =
+    !canSubmit(conversation.localId, message, runs, pending) ||
+    error === "SessionNotFound" ||
+    history?.error === "SessionNotFound";
   return (
     <section className="chat-page">
       <header className="page-heading">
@@ -229,6 +233,7 @@ export function Chat({
           className="composer"
           onSubmit={async (e) => {
             e.preventDefault();
+            if (submitDisabled) return;
             if (await onSend(message)) setMessage("");
           }}
         >
@@ -239,6 +244,18 @@ export function Chat({
             id="message"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(e) => {
+              if (
+                e.key !== "Enter" ||
+                e.shiftKey ||
+                e.nativeEvent.isComposing ||
+                e.nativeEvent.keyCode === 229
+              )
+                return;
+              e.preventDefault();
+              if (!e.repeat && !submitDisabled)
+                e.currentTarget.form?.requestSubmit();
+            }}
             placeholder="れいに依頼する…"
             rows={3}
           />
@@ -248,14 +265,7 @@ export function Chat({
                 ? "同じセッションで続けます"
                 : "最初の送信でセッションを作成します"}
             </small>
-            <button
-              className="primary"
-              disabled={
-                !canSubmit(conversation.localId, message, runs, pending) ||
-                error === "SessionNotFound" ||
-                history?.error === "SessionNotFound"
-              }
-            >
+            <button className="primary" disabled={submitDisabled}>
               {pending ? "送信中…" : "Send ↗"}
             </button>
           </div>

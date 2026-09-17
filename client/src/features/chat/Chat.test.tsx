@@ -1,8 +1,73 @@
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { afterEach, it, expect, vi } from "vitest";
 import { Chat } from "./Chat";
+import userEvent from "@testing-library/user-event";
 import type { Conversation, Run } from "../../entities/models";
 afterEach(cleanup);
+
+it("sends with Enter, keeps Shift+Enter as a newline, and ignores IME confirmation", async () => {
+  const user = userEvent.setup();
+  const send = vi.fn().mockResolvedValue(true);
+  render(
+    <Chat
+      conversation={conversation}
+      projectName="rei"
+      runs={[]}
+      pending={false}
+      error={null}
+      onSend={send}
+      onStop={vi.fn()}
+      onContinue={vi.fn()}
+      onRefresh={vi.fn()}
+      onSubscribe={vi.fn()}
+    />,
+  );
+  const input = screen.getByRole<HTMLTextAreaElement>("textbox", {
+    name: "メッセージ",
+  });
+  await user.type(input, "first{Shift>}{Enter}{/Shift}second");
+  expect(input.value).toBe("first\nsecond");
+  fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+  fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+  fireEvent.keyDown(input, { key: "Enter", repeat: true });
+  expect(send).not.toHaveBeenCalled();
+  await user.keyboard("{Enter}");
+  expect(send).toHaveBeenCalledExactlyOnceWith("first\nsecond");
+  expect(input.value).toBe("");
+});
+
+it.each([
+  { message: "   ", pending: false, runs: [], error: null },
+  { message: "hello", pending: true, runs: [], error: null },
+  { message: "hello", pending: false, active: true, error: null },
+  { message: "hello", pending: false, runs: [], error: "SessionNotFound" },
+])(
+  "does not send with Enter when submission is unavailable: %j",
+  async (state) => {
+    const user = userEvent.setup();
+    const send = vi.fn().mockResolvedValue(true);
+    render(
+      <Chat
+        conversation={conversation}
+        projectName="rei"
+        runs={state.active ? [run] : []}
+        pending={state.pending}
+        error={state.error}
+        onSend={send}
+        onStop={vi.fn()}
+        onContinue={vi.fn()}
+        onRefresh={vi.fn()}
+        onSubscribe={vi.fn()}
+      />,
+    );
+    const input = screen.getByRole<HTMLTextAreaElement>("textbox", {
+      name: "メッセージ",
+    });
+    await user.type(input, `${state.message}{Enter}`);
+    expect(send).not.toHaveBeenCalled();
+    expect(input.value).toBe(state.message);
+  },
+);
 
 it("interleaves text and event snapshots in native output order", () => {
   const tool = { id: "c", name: "searchFiles", status: "RUNNING", summary: "" };
