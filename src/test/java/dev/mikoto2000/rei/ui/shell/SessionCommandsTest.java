@@ -11,25 +11,40 @@ import static org.assertj.core.api.Assertions.*;
 
 class SessionCommandsTest {
   @TempDir Path temp;
+  @Test void rootExposesSessionGroupWithoutTopLevelAliases() {
+    var root = new picocli.CommandLine(new RootCommand());
+    assertThat(root.getSubcommands()).containsKey("session").doesNotContainKeys("new", "resume");
+    var session = root.getSubcommands().get("session");
+    assertThat(session.getSubcommands()).containsOnlyKeys("new", "resume");
+    assertThat(root.execute("session", "--help")).isZero();
+    assertThat(root.execute("session")).isZero();
+    assertThatThrownBy(() -> root.parseArgs("new")).isInstanceOf(picocli.CommandLine.UnmatchedArgumentException.class);
+    assertThatThrownBy(() -> root.parseArgs("resume", "id")).isInstanceOf(picocli.CommandLine.UnmatchedArgumentException.class);
+  }
   @Test void explicitNewAndResumePreserveProjectAndRejectUnknownOrForeignSessions() throws Exception {
     var projects = new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json")));
     var repository = new FileSessionRepository(temp.resolve("sessions.json"));
     var shell = new ShellConversationService(projects, new SessionLifecycle(repository, Clock.systemUTC()), (c,p)->{});
-    var newCommand = new picocli.CommandLine(new NewConversationCommand(shell));
-    var resume = new picocli.CommandLine(new ResumeConversationCommand(shell));
+    var command = new picocli.CommandLine(new SessionCommand(), new picocli.CommandLine.IFactory() {
+      public <K> K create(Class<K> type) throws Exception {
+        if (type == NewConversationCommand.class) return type.cast(new NewConversationCommand(shell));
+        if (type == ResumeConversationCommand.class) return type.cast(new ResumeConversationCommand(shell));
+        return picocli.CommandLine.defaultFactory().create(type);
+      }
+    });
     try (var scope = projects.newClient().open()) {
       var first = shell.submit("first");
-      assertThat(newCommand.execute()).isZero();
+      assertThat(command.execute("new")).isZero();
       assertThat(shell.currentSessionId()).isNull();
       var second = shell.submit("second");
       assertThat(second.conversationId()).isNotEqualTo(first.conversationId());
-      assertThat(resume.execute(first.conversationId())).isZero();
+      assertThat(command.execute("resume", first.conversationId())).isZero();
       assertThat(shell.submit("third").conversationId()).isEqualTo(first.conversationId());
-      assertThat(resume.execute("unknown")).isEqualTo(2);
+      assertThat(command.execute("resume", "unknown")).isEqualTo(2);
       assertThat(shell.currentSessionId()).isEqualTo(first.conversationId());
       projects.cd(Files.createDirectory(temp.resolve("other")).toString());
       assertThat(shell.currentSessionId()).isNull();
-      assertThat(resume.execute(first.conversationId())).isEqualTo(2);
+      assertThat(command.execute("resume", first.conversationId())).isEqualTo(2);
       var other = shell.submit("other project");
       assertThat(other.projectId()).isNotEqualTo(first.projectId());
       assertThat(repository.findById(first.conversationId()).orElseThrow().projectId()).isEqualTo(first.projectId());

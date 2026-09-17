@@ -88,8 +88,8 @@ Turn の createdAt は runner 開始時刻です。同一会話内の同時刻�
 
 Shell は最初の送信時に `project:<project UUID>:chat:<UUID>` を新規作成します。作成前に台帳へ空 Session を追加しません。Shell 起動ごとに未選択で始まり、最後の Session を自動再開しません。
 
-- `/new`: 選択を解除し、次の入力で新 Session を作成。実行中の Run は中止しません。
-- `/resume <sessionId>`: 現在の project に属する既知 Session を選択。旧 `chat:main` や未知 ID は拒否します。別 project の場合は先に `/project cd` でその project を選びます。
+- `/session new`: 選択を解除し、次の入力で新 Session を作成。実行中の Run は中止しません。
+- `/session resume <sessionId>`: 現在の project に属する既知 Session を選択。旧 `chat:main` や未知 ID は拒否します。別 project の場合は先に `/project cd` でその project を選びます。
 - `/project cd`: project が変わった場合は Session 選択を解除。元の Session の projectId は変更しません。同じ project の再選択では Session を保持します。
 - `/history` / `/history show <sessionId>`: Shell / Web 共通の台帳・Turn を参照します。
 
@@ -97,4 +97,4 @@ Shell は最初の送信時に `project:<project UUID>:chat:<UUID>` を新規作
 
 Shell の実行中追加入力は同一 Run への介入ではなく、同一 Session の次の Run として project FIFO に入ります。`1 Run = 1 Turn` です。SessionLifecycle は Repository の monitor 内で検証・保存・enqueue を行い、Shell / Web の競合でも受付順と queue 順を一致させます。実行は monitor 外で行います。実行開始時に共通 ChatExecutionService → ConversationTurnStore へ保存し、ConversationLogStore と ChatMemory も同じ conversationId を使います。ChatMemory は既存のメモリーウィンドウであり、今回再起動時のモデル文脈復元は追加していません。
 
-Native Client は同じ Rei プロセスの Web API に接続して一覧を更新すると、Shell の新しい Session を表示・再開できます。HTTP schema と Native Client の変更は不要です。Web で開始した Session も `/resume` で Shell から選択できます。同じ data-dir に Shell プロセスと Web 専用プロセスを並行して書き込む構成は引き続き対象外です。
+Native Client は同じ Rei プロセスの Web API に接続して一覧を更新すると、Shell の新しい Session を表示・再開できます。HTTP schema と Native Client の変更は不要です。Web で開始した Session も `/session resume` で Shell から選択できます。同じ data-dir に Shell プロセスと Web 専用プロセスを並行して書き込む構成は引き続き対象外です。

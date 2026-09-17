@@ -16,7 +16,7 @@ SessionLifecycle が Session create / validate / touch / Run context 作成 / en
 
 SessionLifecycle は共有 Repository の monitor 内で検証、metadata 保存、enqueue を直列化する。保存成功前に実行を受け付けず、同期 enqueue 失敗は既存 Repository の rollback を利用する。Shell の current session も受付成功後だけ更新する。title は既存 SessionTitle の最初の入力80 Unicode code points。継続で title / project / createdAt は変更しない。
 
-最初の送信は `project:<project UUID>:chat:<UUID>` を作り、以降は同じ ID。`/new` は選択解除だけを行い、次の送信で作成する。`/resume <sessionId>` は既知 Session と現在 project の一致を検証する。project 変更・削除による選択先変更では current session を解除し、同一 project 再選択は保持する。Shell 再起動は未選択で始まり、自動で直前の Session に戻らない。
+最初の送信は `project:<project UUID>:chat:<UUID>` を作り、以降は同じ ID。`/session new` は選択解除だけを行い、次の送信で作成する。`/session resume <sessionId>` は既知 Session と現在 project の一致を検証する。project 変更・削除による選択先変更では current session を解除し、同一 project 再選択は保持する。Shell 再起動は未選択で始まり、自動で直前の Session に戻らない。
 
 Shell の各入力は1 Run / 1 Turn とし、実行中も次の Run として FIFO に入る。これは旧 intervention 動作からの明示的な変更。Shell/Web 共通の実行処理が Turn を保存する。実行開始時の時刻が直前 Turn と同じか古ければ +1ns に補正し、日時・runId の API sort が実行順を逆転しないようにする。既存レコードの時刻は変更しない。
 
@@ -72,3 +72,11 @@ Shell/Web の origin は既存 AgentRunContext.RequestSource を維持する。S
 - 最後に仕様・README・この検証記録をドキュメントコミットとして追加。
 
 最終ドキュメントコミット後に `git status --short` が空であることを確認する。
+
+## コマンド階層の整理（2026-09-18）
+
+会話操作を `/session new` と `/session resume <sessionId>` に集約した。`/session` 単体または `/session --help` は使い方を表示する。旧トップレベル `/new`・`/resume` の互換エイリアスは残さない。Session の受付・保存・project 固定の処理は変更していない。
+
+Root の登録先と旧名の拒否をテストで先に確認（Red）し、SessionCommand を追加して既存の new/resume をサブコマンドに登録した。既存の作成・再開・不明 ID・project 不一致のテストも SessionCommand 経由へ変更した。
+
+検証: 全1,817件、失敗0、エラー0、スキップ0、BUILD SUCCESS。初回は sandbox の通信制限で既存 sqlite-vec テストが失敗したため、依存取得を許可して全体を再実行した。git diff --check も成功。
