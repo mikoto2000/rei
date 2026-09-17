@@ -82,7 +82,7 @@ public final class SseBridge implements AutoCloseable {
     }
     private boolean writeEvent(AgentEvent event) throws Exception {
       boolean cancelled = runs.get(runId).status() == RunStatus.CANCELLED;
-      var dto = WebApiEventDto.from(event, cancelled, apiKey);
+      var dto = WebApiEventMapper.from(event, cancelled, apiKey);
       sink.event(dto);
       if (Set.of("agent.run.completed", "agent.run.failed", "agent.run.cancelled").contains(dto.type())) {
         finish(null); return true;
@@ -109,3 +109,4 @@ public final class SseBridge implements AutoCloseable {
     heartbeats.shutdownNow(); writers.shutdownNow();
   }
 }
+

@@ -800,3 +800,34 @@ main {
     padding-bottom: 146px;
   }
 }
+/* Live activity remains compact on narrow screens and scrolls within the turn. */
+.activity-content {
+  max-height: 28rem;
+  overflow-y: auto;
+}
+@media (max-width: 700px) {
+  .activity-content {
+    max-height: 18rem;
+  }
+}
+.run-timeline > .answer {
+  margin: 1rem 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.event-line {
+  margin: 2px 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: Consolas, "SFMono-Regular", monospace;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.tool-event-line {
+  padding-inline-start: 1rem;
+}

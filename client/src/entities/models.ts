@@ -58,6 +58,7 @@ export interface Connection {
   error: string | null;
 }
 export interface Run {
+  timeline?: TimelineEntry[];
   serverId: string;
   conversationId: string;
   projectId: string;
@@ -72,9 +73,47 @@ export interface Run {
   incomplete: boolean;
   error: string | null;
   failure: string | null;
-  tools: { id: string; name: string; status: string; summary: string }[];
+  tools: ToolExecution[];
+  activities: Activity[];
+  messages: {
+    messageId: string;
+    role: string;
+    text: string;
+    completed: boolean;
+  }[];
   workingSet: { id: string; kind: string; identifier: string; path: string }[];
   revision: number;
+}
+export type TimelineEntry =
+  | { kind: "text"; id: string; messageId: string; text: string }
+  | { kind: "tool"; id: string; tool: ToolExecution }
+  | { kind: "activity"; id: string; activity: Activity };
+export interface ActivityError {
+  type: string;
+  message: string;
+}
+export interface ToolExecution {
+  id: string;
+  name: string;
+  status: string;
+  summary: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  durationMs?: number | null;
+  error?: ActivityError | null;
+}
+export interface Activity {
+  id: string;
+  category: string;
+  label: string;
+  status: string;
+  summary: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  durationMs: number | null;
+  firstTokenMs: number | null;
+  error: ActivityError | null;
+  metrics: { label: string; value: number }[];
 }
 export interface Snapshot {
   servers: Server[];

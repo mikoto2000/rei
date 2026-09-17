@@ -2,6 +2,30 @@
 
 Each slice starts with a failing behavior test, then implementation, then formatting/refactoring.
 
+## Live AgentEvent activity (2026-09-17)
+
+Tool indentation follow-up: existing desktop/mobile browser assertions changed
+to require 16px indentation (Red: 0px), then ToolRow gained a dedicated class and
+1rem inline padding (Green: both viewports). Other event rows remain unindented.
+
+Plain text follow-up: Red (event-line absent / decorated block children present)
+→ Green (single text-flow rows with tool status marks and activity prefixes).
+Browser checks verify 12px type, 18px line height, no left border/padding, output
+order and mobile wrapping. Only frontend presentation changed.
+
+Follow-up `feature/native-interleaved-events`: Red (missing timeline DTO) → Green
+(immutable event snapshots interleaved with adjacent text segments); Red (unknown
+run type adds a row) → Green (explicit lifecycle allowlist); Red (Chat DOM order
+missing) → Green (RunTimeline presentation); Red (replay gap hides stored final
+answer) → Green (explicit recovered final answer). Reconnect integration verifies
+the start snapshot remains RUNNING after the later completion snapshot arrives.
+
+The current work and actual Red/Green observations are recorded in
+[the live event TDD ledger](../docs/native-live-agent-events.md#tdd-ledger).
+Slices cover public mapper/security, message/tool state, LLM/progress/Working Set,
+skill correlation/ownership, HTTP reconnect, presentation DTOs and collapsible UI.
+No live activity is added to Session Turn history or persistent settings.
+
 ## Phase 1A / 1B
 
 - `foundation`: Red (missing domain) → Green: 4 tests.

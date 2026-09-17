@@ -120,6 +120,8 @@ function fixture(overrides: Record<string, unknown> = {}) {
           error: null,
           failure: null,
           tools: [],
+          activities: [],
+          messages: [],
           workingSet: [],
           revision: 2,
         };

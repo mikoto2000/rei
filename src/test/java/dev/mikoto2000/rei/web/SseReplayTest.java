@@ -8,6 +8,39 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class SseReplayTest {
+  @Test void liveToolStartThenReconnectReplaysSemanticCompletionInGlobalOrder() throws Exception {
+    var registry = new RunRegistry(Clock.systemUTC());
+    var context = RunRegistryTest.context("run");
+    registry.register(context);
+    var bus = new InMemoryAgentEventBus();
+    var f = new AgentEventFactory(Clock.systemUTC());
+    var received = new java.util.concurrent.CountDownLatch(3);
+    try (var bridge = new SseBridge(bus, new RunService(registry), "secret-value")) {
+      var first = new SseBridgeTest.Sink() {
+        public void event(WebApiEventDto event) { events.add(event); received.countDown(); }
+      };
+      var connection = bridge.connect("run", first);
+      bus.publish(f.runStarted("run", "test", null));
+      bus.publish(f.llmRequestStarted("run", "request", "chat").withOwnership(context));
+      bus.publish(f.toolStarted("call", "read", "secret-value").withOwnership(context));
+      assertThat(received.await(5, TimeUnit.SECONDS)).isTrue();
+      connection.close();
+      bus.publish(f.runStarted("another-run", "test", null));
+      bus.publish(f.toolCompleted("call", "read", 18, "secret-value").withOwnership(context));
+      bus.publish(f.messageDelta("message", "answer").withOwnership(context));
+      var resumed = new SseBridgeTest.Sink();
+      bridge.connect("run", first.events.getLast().sequence(), resumed);
+      bus.publish(f.llmResponseCompleted("run", "request", 50).withOwnership(context));
+      bus.publish(f.messageCompleted("message", "assistant", "answer").withOwnership(context));
+      bus.publish(f.runCompleted("run", 55));
+      assertThat(resumed.ended.await(5, TimeUnit.SECONDS)).isTrue();
+      assertThat(resumed.events).extracting(WebApiEventDto::sequence).containsExactly(5L, 6L, 7L, 8L, 9L);
+      assertThat(resumed.events).extracting(WebApiEventDto::type).containsExactly("tool.completed", "message.delta",
+          "llm.response.completed", "message.completed", "agent.run.completed");
+      assertThat(resumed.events.getFirst().payload()).containsEntry("toolCallId", "call").containsEntry("duration", 18L);
+      assertThat(first.events.toString() + resumed.events).doesNotContain("secret-value");
+    }
+  }
   @Test void disconnectThenResumeDeliversOnlyUnacknowledgedEventsAndNormalizesCancelledReplay() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
     registry.register(RunRegistryTest.context("run"));
