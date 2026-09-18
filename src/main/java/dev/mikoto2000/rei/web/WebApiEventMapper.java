@@ -10,6 +10,8 @@ public final class WebApiEventMapper {
       .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
   private static Set<String> fields(AgentEventType type) {
     String names = switch (type) {
+      case CONTEXT_COMPRESSION_STARTED, CONTEXT_COMPRESSION_COMPLETED, CONTEXT_COMPRESSION_FAILED ->
+          "beforeEstimatedTokens afterEstimatedTokens compressedMessageCount summaryThroughSequence reason";
       case AGENT_RUN_STARTED -> "runId parentRunId";
       case AGENT_RUN_COMPLETED -> "runId duration completionTokens timeToFirstTokenMillis outputTokensPerSecond endToEndTokensPerSecond";
       case AGENT_RUN_FAILED, AGENT_RUN_CANCELLED -> "runId error";
@@ -48,7 +50,9 @@ public final class WebApiEventMapper {
     source.forEach((name, value) -> {
       if (fields(event.type()).contains(name) && name.equals("error") && value != null) {
         // Internal exception messages may contain arbitrary credentials, paths or stack traces.
-        payload.put(name, Map.of("type", "operation_failed", "message", "Operation failed."));
+        if (value instanceof Map<?, ?> error && "ContextHardLimit".equals(error.get("errorType")))
+          payload.put(name, Map.of("type", "context_hard_limit", "message", "CONTEXT_HARD_LIMIT: context remains too large after compression."));
+        else payload.put(name, Map.of("type", "operation_failed", "message", "Operation failed."));
       } else if (fields(event.type()).contains(name)) payload.put(name, clean(value, apiKey));
     });
     String type = cancelled && (event.type() == AgentEventType.AGENT_RUN_FAILED
@@ -78,5 +82,3 @@ public final class WebApiEventMapper {
     return value;
   }
 }
-
-

@@ -58,6 +58,20 @@ management:
       show-details: never
       show-components: never
 rei:
+  context-compression:
+    enabled: ${REI_CONTEXT_COMPRESSION_ENABLED:true}
+    model-context-limit: ${REI_CONTEXT_MODEL_LIMIT:128000}
+    completion-reserve: ${REI_CONTEXT_COMPLETION_RESERVE:8192}
+    tool-reserve: ${REI_CONTEXT_TOOL_RESERVE:4096}
+    safety-margin: ${REI_CONTEXT_SAFETY_MARGIN:4000}
+    threshold: ${REI_CONTEXT_COMPRESSION_THRESHOLD:70000}
+    hard-limit: ${REI_CONTEXT_HARD_LIMIT:85000}
+    recent-tokens: ${REI_CONTEXT_RECENT_TOKENS:12000}
+    summary-tokens: ${REI_CONTEXT_SUMMARY_TOKENS:3000}
+    minimum-compression-gain: ${REI_CONTEXT_MINIMUM_GAIN:0.1}
+    tool-result-threshold: ${REI_CONTEXT_TOOL_RESULT_THRESHOLD:8000}
+    tool-result-tokens: ${REI_CONTEXT_TOOL_RESULT_TOKENS:2000}
+    summary-timeout-seconds: ${REI_CONTEXT_SUMMARY_TIMEOUT_SECONDS:60}
   external-agents:
     codex:
       enabled: true

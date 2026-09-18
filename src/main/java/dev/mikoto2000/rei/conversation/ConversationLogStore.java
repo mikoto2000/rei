@@ -33,13 +33,14 @@ public class ConversationLogStore {
   private final Clock clock;
   private final ObjectMapper objectMapper;
   private final Object writeLock = new Object();
+  private final java.util.Map<String, Long> contextSequences = new java.util.HashMap<>();
 
   public ConversationLogStore() {
     this(null, Clock.systemDefaultZone(),
         new ObjectMapper().registerModule(new JavaTimeModule()));
   }
 
-  ConversationLogStore(Path directory, Clock clock, ObjectMapper objectMapper) {
+  public ConversationLogStore(Path directory, Clock clock, ObjectMapper objectMapper) {
     this.directory = directory;
     this.clock = clock;
     this.objectMapper = objectMapper;
@@ -50,15 +51,19 @@ public class ConversationLogStore {
       return;
     }
     OffsetDateTime timestamp = OffsetDateTime.now(clock);
-    ConversationLogEntry entry = new ConversationLogEntry(
-        conversationId.strip(), scopeOf(conversationId), normalizeSpeaker(speaker), timestamp, content);
     Path directory = directoryFor(conversationId);
     Path file = directory.resolve(FILE_DATE.format(timestamp) + ".jsonl");
     synchronized (writeLock) {
       try {
+        String id = conversationId.strip();
+        long nextSequence = contextSequences.computeIfAbsent(id, key -> readConversation(key).stream()
+            .mapToLong(ConversationLogEntry::sequence).max().orElse(0)) + 1;
+        ConversationLogEntry entry = new ConversationLogEntry(
+            id, scopeOf(id), normalizeSpeaker(speaker), timestamp, content, nextSequence);
         Files.createDirectories(directory);
         Files.writeString(file, objectMapper.writeValueAsString(entry) + System.lineSeparator(), StandardCharsets.UTF_8,
             StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        contextSequences.put(id, nextSequence);
       } catch (IOException e) {
         log.warn("Failed to append conversation log: {}", file, e);
       }
@@ -67,6 +72,22 @@ public class ConversationLogStore {
 
   public List<ConversationLogEntry> readAll() {
     return readDirectory(directoryFor(null));
+  }
+
+  /** Full append-order conversation source, including interventions and auxiliary command results. */
+  public List<ConversationLogEntry> readConversation(String conversationId) {
+    synchronized (writeLock) {
+      var entries = readDirectory(directoryFor(conversationId)).stream()
+          .filter(entry -> conversationId.equals(entry.conversationId())).toList();
+      var result = new ArrayList<ConversationLogEntry>();
+      long legacySequence = 0;
+      // Legacy records retain their established order and files. New appends always have explicit cursors.
+      for (var entry : entries) if (entry.sequence() == 0) result.add(new ConversationLogEntry(entry.conversationId(),
+          entry.scope(), entry.speaker(), entry.timestamp(), entry.content(), ++legacySequence));
+      entries.stream().filter(e -> e.sequence() > 0).forEach(result::add);
+      result.sort(Comparator.comparingLong(ConversationLogEntry::sequence));
+      return List.copyOf(result);
+    }
   }
 
   /** Read a project's authoritative log without changing the selected project or run scope. */

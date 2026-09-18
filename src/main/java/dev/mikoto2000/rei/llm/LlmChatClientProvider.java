@@ -39,6 +39,16 @@ import dev.mikoto2000.rei.websearch.WebSearchTools;
 
 @Component
 public class LlmChatClientProvider {
+  private dev.mikoto2000.rei.core.contextbudget.ContextAssembler contextAssembler;
+  private dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor contextHistory;
+  private dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawResultTools;
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setContextCompression(dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler,
+      dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor history,
+      dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawTools,
+      dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties properties) {
+    if (properties.isEnabled()) { contextAssembler = assembler; contextHistory = history; rawResultTools = rawTools; }
+  }
   private dev.mikoto2000.rei.externalagent.ExternalAgentTools externalAgentTools;
   private dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService externalDelegation;
   @org.springframework.beans.factory.annotation.Autowired
@@ -129,7 +139,8 @@ public class LlmChatClientProvider {
     List<Advisor> advisors = new ArrayList<>();
     if (LlmFeature.CHAT.equals(feature) && externalDelegation != null)
       advisors.add(new dev.mikoto2000.rei.externalagent.ExternalAgentReviewAdvisor(externalDelegation, chatMemory));
-    advisors.add(PromptChatMemoryAdvisor.builder(chatMemory)
+    if (LlmFeature.CHAT.equals(feature) && contextHistory != null) advisors.add(contextHistory);
+    else advisors.add(PromptChatMemoryAdvisor.builder(chatMemory)
         .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
         .build());
     RuntimeContextAdvisor runtimeContextAdvisorInstance = runtimeContextAdvisor.getIfAvailable();
@@ -151,12 +162,13 @@ public class LlmChatClientProvider {
       advisors.add(taskStateAdvisorInstance);
     }
     ChatClient.Builder builder = ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
-        modelProvider.chatModel(feature)))
+        modelProvider.chatModel(feature), LlmFeature.CHAT.equals(feature) ? contextAssembler : null))
         .defaultSystem(systemPromptService.systemPrompt())
         .defaultOptions(modelProvider.chatOptions(feature, null))
         .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors));
 
     List<Object> toolObjects = new ArrayList<>();
+    if (LlmFeature.CHAT.equals(feature) && rawResultTools != null) toolObjects.add(rawResultTools);
     addIfAvailable(toolObjects, tools);
     addIfAvailable(toolObjects, googleCalendarTools);
     addIfAvailable(toolObjects, taskTools);

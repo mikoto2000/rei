@@ -7,5 +7,10 @@ public record ConversationLogEntry(
     String scope,
     String speaker,
     OffsetDateTime timestamp,
-    String content) {
+    String content,
+    long sequence) {
+  public ConversationLogEntry(String conversationId, String scope, String speaker,
+      OffsetDateTime timestamp, String content) {
+    this(conversationId, scope, speaker, timestamp, content, 0);
+  }
 }

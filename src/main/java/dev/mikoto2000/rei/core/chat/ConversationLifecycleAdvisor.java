@@ -20,9 +20,10 @@ public final class ConversationLifecycleAdvisor implements BaseAdvisor {
     String context = turns.cancelledContext(conversationId);
     if (context.isEmpty()) return request;
     var messages = new ArrayList<Message>();
-    String system = request.prompt().getSystemMessage().getText();
+    var originalSystem = request.prompt().getSystemMessage();
+    String system = originalSystem.getText();
     messages.add(new SystemMessage(system + "\n\n" + context));
-    request.prompt().getInstructions().stream().filter(m -> !(m instanceof SystemMessage)).forEach(messages::add);
+    request.prompt().getInstructions().stream().filter(m -> m != originalSystem).forEach(messages::add);
     return request.mutate().prompt(new Prompt(messages, request.prompt().getOptions())).build();
   }
   @Override public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) { return response; }

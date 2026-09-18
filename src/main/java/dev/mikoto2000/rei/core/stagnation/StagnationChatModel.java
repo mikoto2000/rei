@@ -17,9 +17,13 @@ import reactor.core.scheduler.Schedulers;
 /** Explicit streaming LLM -> tool-result loop. Existing client advisors still own prompt/memory handling. */
 public class StagnationChatModel implements ChatModel {
   private final ChatModel delegate;
+  private final dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler;
   private final dev.mikoto2000.rei.core.chat.ToolLoopSupport tools = new dev.mikoto2000.rei.core.chat.ToolLoopSupport();
 
-  public StagnationChatModel(ChatModel delegate) { this.delegate = delegate; }
+  public StagnationChatModel(ChatModel delegate) { this(delegate, null); }
+  public StagnationChatModel(ChatModel delegate, dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler) {
+    this.delegate = delegate; this.assembler = assembler;
+  }
   @Override public ChatOptions getDefaultOptions() { return delegate.getDefaultOptions(); }
   @Override public ChatResponse call(Prompt prompt) {
     if (context(prompt) == null) return delegate.call(prompt);
@@ -39,7 +43,22 @@ public class StagnationChatModel implements ChatModel {
       if (!prepaid) context.consumeNextLlmCall();
       context.beginIteration();
       AtomicReference<ChatResponse> aggregate = new AtomicReference<>();
-      Flux<ChatResponse> response = new MessageAggregator().aggregate(Flux.defer(() -> delegate.stream(prompt)), aggregate::set);
+      Flux<ChatResponse> requests = assembler == null || context.runContext() == null ? Flux.defer(() -> delegate.stream(prompt))
+          : Mono.fromCallable(() -> {
+            try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext())) {
+              try {
+                return assembler.assemble(prompt, context.runContext().conversationId(), context.runContext().runId(), context::checkActive);
+              } catch (java.util.concurrent.CancellationException cancelled) {
+                // Disposal may interrupt the summary worker after the downstream subscriber has gone away.
+                if (context.isCancelled()) return null;
+                throw cancelled;
+              }
+            }
+          }).subscribeOn(Schedulers.boundedElastic()).flatMapMany(projected -> {
+            context.checkActive();
+            return delegate.stream(projected);
+          });
+      Flux<ChatResponse> response = new MessageAggregator().aggregate(requests, aggregate::set);
       return response.concatWith(Flux.defer(() -> {
         ChatResponse result = aggregate.get();
         if (result == null || result.getResult() == null) {
@@ -53,7 +72,13 @@ public class StagnationChatModel implements ChatModel {
         if (result.hasToolCalls() && !OutputLimitDetector.isOutputLimitReached(result)) {
           return Mono.fromCallable(() -> {
             context.checkActive();
-            try { return tools.execute(prompt, result); }
+            try {
+              var toolResult = tools.execute(prompt, result);
+              if (assembler != null && context.runContext() != null)
+                assembler.preserveToolResults(toolResult.conversationHistory(), context.runContext().conversationId(),
+                    context.runContext().runId());
+              return toolResult;
+            }
             finally { context.endIteration(); }
           }).subscribeOn(Schedulers.boundedElastic()).flatMapMany(toolResult -> {
             if (toolResult.returnDirect()) return Flux.just(new ChatResponse(ToolExecutionResult.buildGenerations(toolResult)));
@@ -89,6 +114,9 @@ public class StagnationChatModel implements ChatModel {
 
   private Prompt prepare(Prompt prompt, RunExecutionContext context) {
     ToolCallingChatOptions options = (ToolCallingChatOptions) prompt.getOptions().copy();
+    var toolContext = new HashMap<String, Object>(options.getToolContext());
+    toolContext.put("rei.contextSequenceOffset", context.nextContextSegment());
+    options.setToolContext(toolContext);
     options.setInternalToolExecutionEnabled(false);
     List<ToolCallback> callbacks = new ArrayList<>();
     for (ToolCallback callback : options.getToolCallbacks()) callbacks.add(observe(callback, context));

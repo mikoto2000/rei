@@ -50,9 +50,14 @@ public class WorkingSetAdvisor implements BaseAdvisor {
       return request;
     }
     String workingSetContext = workingSet.renderForPrompt();
-    if (workingSetContext.isBlank()) {
-      return request;
+    if (Boolean.TRUE.equals(request.context().get("rei.contextProjection"))) {
+      if (!workingSetContext.isBlank()) publishContextInjected(workingSetContext);
+      var messages = new ArrayList<Message>(request.prompt().getInstructions());
+      messages.add(org.springframework.ai.chat.messages.SystemMessage.builder().text(workingSetContext)
+          .metadata(java.util.Map.of("rei.workingSet", true)).build());
+      return request.mutate().prompt(new Prompt(messages, request.prompt().getOptions())).build();
     }
+    if (workingSetContext.isBlank()) return request;
     publishContextInjected(workingSetContext);
     UserMessage contextualMessage = userMessage.mutate()
         .text(workingSetContext + "\n\n" + userMessage.getText())
