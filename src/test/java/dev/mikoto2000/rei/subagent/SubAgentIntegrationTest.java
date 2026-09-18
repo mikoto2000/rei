@@ -52,7 +52,7 @@ class SubAgentIntegrationTest {
       Prompt prompt = invocation.getArgument(0); requests.add(prompt);
       var message = requests.size() == 1 ? AssistantMessage.builder().content("").toolCalls(List.of(
           new AssistantMessage.ToolCall("read", "function", "readMultiFile", "{\"files\":[{\"path\":\"note.txt\"}]}"))).build()
-          : new AssistantMessage("independent review");
+          : new AssistantMessage(SubAgentResultParserTest.VALID);
       return Flux.just(new ChatResponse(List.of(new Generation(message))));
     });
     try (var scope = AgentRunScope.open(new AgentRunContext("parent", main, directory))) {

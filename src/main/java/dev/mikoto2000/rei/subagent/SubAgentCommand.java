@@ -50,7 +50,8 @@ public class SubAgentCommand implements Callable<Integer> {
       parent.out("id: " + d.id() + "\nname: " + d.name() + "\ndescription: " + d.description()
           + "\nrequested tools: " + d.requestedTools() + "\neffective tools: " + parent.policy.effectiveTools(d.requestedTools())
           + "\nmodel: " + (d.model() == null ? "(current chat model)" : d.model()) + "\nmaxSteps: " + d.maxSteps()
-          + "\ntimeout: " + d.timeout() + "\nsource config file: " + d.source());
+          + "\ntimeout: " + d.timeout() + "\nresultSchema: " + (d.resultSchema() == null ? "(envelope only)" : "compiled")
+          + "\nsource config file: " + d.source());
     }); }
   }
   @Command(name = "reload") public static class ReloadCommand implements Callable<Integer> {
