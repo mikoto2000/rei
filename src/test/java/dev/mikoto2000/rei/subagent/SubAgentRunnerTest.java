@@ -25,6 +25,7 @@ class SubAgentRunnerTest {
   final List<AgentEvent> events = new CopyOnWriteArrayList<>();
   final CommandCancellationService cancellation = new CommandCancellationService();
   final AtomicInteger toolCalls = new AtomicInteger();
+  String schema;
   final SubAgentToolPolicy policy = new SubAgentToolPolicy(Set.of("readMultiFile", "runCommand", "delegateTask"));
   ToolCallback callback() {
     return new ToolCallback() {
@@ -37,7 +38,12 @@ class SubAgentRunnerTest {
   }
   SubAgentRunner runner(Function<Prompt, Flux<ChatResponse>> response, String timeout,
       java.util.function.Supplier<List<ToolCallback>> toolFactory) throws Exception {
-    Files.writeString(directory.resolve("reviewer.yaml"), SubAgentConfigurationTest.yaml("reviewer").replace("120s", timeout));
+    String yaml = SubAgentConfigurationTest.yaml("reviewer").replace("120s", timeout);
+    if (schema != null) {
+      Files.writeString(directory.resolve("result.schema.json"), schema);
+      yaml += "resultSchema: result.schema.json\n";
+    }
+    Files.writeString(directory.resolve("reviewer.yaml"), yaml);
     var registry = new SubAgentRegistry(directory, new SubAgentDefinitionLoader(policy, model -> true));
     registry.reload();
     ChatModel model = new ChatModel() {
@@ -49,12 +55,64 @@ class SubAgentRunnerTest {
         toolFactory, cancellation, new AgentEventFactory(Clock.systemUTC()), events::add, Clock.systemUTC());
   }
   ChatResponse answer(String text) { return new ChatResponse(List.of(new Generation(new AssistantMessage(text)))); }
+  @Test void invalidJsonAndInvalidEnvelopeFailWithoutRetryOrRawOutput() throws Exception {
+    for (String raw : List.of("private-secret", "```json\n{}\n```", "{}",
+        "{\"status\":\"DONE\",\"summary\":\"private-secret\",\"result\":{},\"warnings\":[]}")) {
+      AtomicInteger calls = new AtomicInteger();
+      var runner = runner(p -> { calls.incrementAndGet(); return Flux.just(answer(raw)); }, "2s");
+      var result = runner.run("reviewer", "task", null);
+      assertThat(result.status()).isEqualTo(SubAgentResult.Status.FAILED);
+      assertThat(result.output()).doesNotContain("private-secret");
+      assertThat(result.validationErrors()).isNotEmpty();
+      assertThat(result.structuredOutput()).isNull();
+      assertThat(calls).hasValue(1);
+      assertThat(events.getLast().type()).isEqualTo(AgentEventType.SUBAGENT_FAILED);
+    }
+  }
+  @Test void validEnvelopeIsReturnedThroughDelegationWithJsonInstructions() throws Exception {
+    var runner = runner(p -> {
+      assertThat(p.getInstructions().getFirst().getText()).contains("Return exactly one JSON object", "Do not output Markdown");
+      return Flux.just(answer(SubAgentResultParserTest.VALID));
+    }, "2s");
+    var result = new SubAgentTools(runner, null).delegateTask("reviewer", "task", null);
+    assertThat(result.status()).isEqualTo(SubAgentResult.Status.COMPLETED);
+    assertThat(result.output()).isEqualTo(SubAgentResultParserTest.VALID);
+    assertThat(result.structuredOutput().status()).isEqualTo(SubAgentOutput.Status.SUCCESS);
+    assertThat(result.structuredOutput().summary()).isEqualTo("done");
+    assertThat(result.validationErrors()).isEmpty();
+  }
+  @Test void specificSchemaIsInPromptAndRejectsInvalidResultBeforeCompletion() throws Exception {
+    schema = SubAgentResultValidatorTest.REVIEW_SCHEMA;
+    for (String severity : List.of("HIGH", "CRITICAL")) {
+      AtomicInteger calls = new AtomicInteger();
+      String raw = """
+          {"status":"PARTIAL","summary":"reviewed","result":{"findings":[
+          {"severity":"%s","message":"problem"}]},"warnings":["limited scope"]}
+          """.formatted(severity);
+      var runner = runner(p -> {
+        calls.incrementAndGet();
+        assertThat(p.getInstructions().getFirst().getText()).contains("findings", "HIGH", "additionalProperties");
+        return Flux.just(answer(raw));
+      }, "2s");
+      var result = runner.run("reviewer", "task", null);
+      assertThat(calls).hasValue(1);
+      if (severity.equals("HIGH")) {
+        assertThat(result.status()).isEqualTo(SubAgentResult.Status.COMPLETED);
+        assertThat(result.structuredOutput().status()).isEqualTo(SubAgentOutput.Status.PARTIAL);
+        assertThat(result.structuredOutput().warnings()).containsExactly("limited scope");
+      } else {
+        assertThat(result.status()).isEqualTo(SubAgentResult.Status.FAILED);
+        assertThat(result.validationErrors()).anyMatch(e -> e.path().equals("/result/findings/0/severity"));
+        assertThat(events.getLast().type()).isEqualTo(AgentEventType.SUBAGENT_FAILED);
+      }
+    }
+  }
   @Test void childPreservesWebRequestSource() throws Exception {
     var runner = runner(p -> {
       var options = (ToolCallingChatOptions) p.getOptions();
       var owner = (AgentRunContext) options.getToolContext().get(AgentRunContext.class.getName());
       assertThat(owner.requestSource()).isEqualTo(AgentRunContext.RequestSource.WEB);
-      return Flux.just(answer("review"));
+      return Flux.just(answer(SubAgentResultParserTest.VALID));
     }, "2s");
     var parent = new AgentRunContext("web", "session", directory, "project", AgentRunContext.RequestSource.WEB);
     try (var scope = AgentRunScope.open(parent)) {
@@ -67,17 +125,19 @@ class SubAgentRunnerTest {
   }
   @Test void reviewerHasIndependentHistoryAndRestrictedToolsAndCorrelatedEvents() throws Exception {
     List<Prompt> requests = new CopyOnWriteArrayList<>();
-    var runner = runner(p -> { requests.add(p); return Flux.just(requests.size() == 1 ? tool("readMultiFile") : answer("review")); }, "2s");
+    var runner = runner(p -> { requests.add(p); return Flux.just(requests.size() == 1 ? tool("readMultiFile") : answer(SubAgentResultParserTest.VALID)); }, "2s");
     var parent = new AgentRunContext("parent", "chat:main", directory);
     try (var scope = AgentRunScope.open(parent)) {
       var result = runner.run("reviewer", "review this", "explicit context");
       assertThat(result.status()).isEqualTo(SubAgentResult.Status.COMPLETED);
-      assertThat(result.output()).isEqualTo("review");
+      assertThat(result.output()).isEqualTo(SubAgentResultParserTest.VALID);
       assertThat(AgentRunScope.current()).isEqualTo(parent);
       assertThat(result.startedAt()).isBeforeOrEqualTo(result.completedAt());
     }
-    assertThat(requests.getFirst().getInstructions()).extracting(Message::getText)
-        .containsExactly("Review independently.\n", "review this\n\nContext:\nexplicit context");
+    assertThat(requests.getFirst().getInstructions()).hasSize(2);
+    assertThat(requests.getFirst().getInstructions().getFirst().getText()).startsWith("Review independently.\n")
+        .contains("Return exactly one JSON object");
+    assertThat(requests.getFirst().getInstructions().getLast().getText()).isEqualTo("review this\n\nContext:\nexplicit context");
     assertThat(requests.get(1).getInstructions()).anyMatch(m -> m instanceof ToolResponseMessage);
     var options = (ToolCallingChatOptions) requests.getFirst().getOptions();
     assertThat(options.getToolCallbacks()).extracting(c -> c.getToolDefinition().name()).containsExactly("readMultiFile");

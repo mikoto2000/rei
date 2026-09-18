@@ -6,7 +6,11 @@ import java.util.List;
 
 /** Provider-independent, immutable configuration for an ephemeral execution. */
 public record SubAgentDefinition(String id, String name, String description, String systemPrompt,
-    List<String> requestedTools, String model, int maxSteps, Duration timeout, Path source) {
+    List<String> requestedTools, String model, int maxSteps, Duration timeout, Path source, SubAgentResultSchema resultSchema) {
+  public SubAgentDefinition(String id, String name, String description, String systemPrompt,
+      List<String> requestedTools, String model, int maxSteps, Duration timeout, Path source) {
+    this(id, name, description, systemPrompt, requestedTools, model, maxSteps, timeout, source, null);
+  }
   public SubAgentDefinition {
     if (id == null || !id.matches("[a-z][a-z0-9-]{0,63}")) throw new IllegalArgumentException("id: expected [a-z][a-z0-9-]{0,63}");
     if (name == null || name.isBlank()) throw new IllegalArgumentException("name: required");

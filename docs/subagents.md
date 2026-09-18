@@ -55,6 +55,7 @@ timeout: 120s
 | model | 任意。未指定なら現在のチャットモデル設定 |
 | maxSteps | 必須の正整数。初回を含む論理 LLM 呼び出し回数の上限。provider 内部 retry/fallback は同一 step |
 | timeout | 必須の正の時間。`ms` / `s` / `m` / `h`、例 `120s` |
+| resultSchema | 任意。`result` の JSON Schema。未指定でも共通 envelope を検証 |
 
 モデル指定は既存チャット provider 内のモデル ID です。現在のモデル、chat feature の設定モデル、
 または管理設定 `rei.subagents.models` に列挙したモデル ID をローカルで解決します。
@@ -88,10 +89,10 @@ Tool 引数のファイルアクセス範囲やネットワークアクセス制
 ## 実行と履歴
 
 `delegateTask(agent, task, context?)` は以下の情報を返します。
-`agentId`, `subAgentRunId`, `status`, `output`, `startedAt`, `completedAt`。
+`agentId`, `subAgentRunId`, `status`, `output`, `startedAt`, `completedAt`, `structuredOutput`, `validationErrors`。
 状態は `COMPLETED`, `FAILED`, `UNKNOWN_AGENT`, `MAX_STEPS_EXCEEDED`, `TIMEOUT`, `CANCELLED` です。
 
-子の入力は YAML の systemPrompt と task、明示的 context のみです。
+子の入力は YAML の systemPrompt、共通／個別 Schema と JSON 出力指示、task、明示的 context です。
 親の ChatMemory、ConversationLog、Skill・Working Set・計画・要約 Advisor を使いません。
 子内部の Tool 結果は実行内のメッセージリストだけに保持し、main history へ追加しません。
 親が受け取るのは委譲結果です。Working Set は継承せず、ファイル Tool 用の一時 Working Set と
@@ -118,3 +119,63 @@ Shell は開始・終了に加え、子の LLM リクエスト・応答・失敗
 永続化するのは既存の監査イベントで、子専用の会話履歴は保存しません。
 複数 Run の ID と状態は独立していますが、自動並列 orchestration はありません。
 再帰委譲、Agent 間会話、動的生成、DAG planner、協調プロトコル、GUI、remote agents は Phase 2 以降です。
+
+## 出力の構造検証（Phase 1）
+
+すべての子の最終出力は次の JSON envelope にします。Markdown、code fence、前後の説明文は不可です。
+
+```json
+{"status":"SUCCESS","summary":"調査完了","result":{},"warnings":[]}
+```
+
+4 項目は必須で、未知の envelope 項目は拒否します。`status` は `SUCCESS` / `FAILURE` / `PARTIAL`、
+`summary` は長さ 1 以上の文字列、`result` は object、`warnings` は文字列配列です。
+Schema 未指定の場合は `result` 内の任意のプロパティを許可します。
+内容の正しさ、根拠、URL の実在性は検証しません。自動修復・再生成・reviewer による検証も行いません。
+
+Runner は最終出力を厳密に parse し、共通 envelope → 個別 `result` Schema の順でローカル検証します。
+検証済み JSON のみ `output` に保持し、型付き envelope を `structuredOutput` に格納します。
+構造が正しければ外側の実行状態は `COMPLETED` です。内側の `FAILURE` は子が報告するタスク失敗、
+`PARTIAL` は部分結果であり、外側の実行状態とは別です。
+parse／Schema 違反時は `FAILED`、`structuredOutput: null`、安全な固定メッセージと
+`validationErrors: [{"path":"/result/findings/0/severity","message":"Schema constraint violated: enum"}]`
+を返します。不正 raw output やライブラリ例外本文は含めません。path は JSON Pointer（root は空文字）です。
+既存 `subagent.failed` イベントを発行し、新規イベントは追加しません。
+検証失敗ログには agent ID とエラー件数のみを記録します。
+
+### 個別 Schema の指定
+
+```yaml
+resultSchema: schemas/reviewer-result.schema.json
+# または、アプリに同梱された Schema:
+# resultSchema: classpath:/subagents/schemas/reviewer-result.schema.json
+```
+
+相対パスは YAML の親ディレクトリが基準です。正規化後の実体がそのディレクトリ内にある通常ファイルのみ許可します。
+`..`、絶対パス、URL、外部への symbolic link、専用領域以外の classpath 参照は拒否します。
+パスには英数字、`_`、`-`、`.`、`/` を使用し、拡張子は `.json` にします。
+Schema は Draft 2020-12。`$schema` は省略可能です。`$defs` と同一文書内の `$ref` を利用できますが、
+別ファイル・URL・classpath への外部 `$ref` は取得せず、設定エラーにします。
+個別 Schema の `additionalProperties: false` は必要な object ごとに指定してください。
+
+Loader は Schema を読み、meta-schema 検証とコンパイルを行います。存在しないファイル、不正 JSON、
+不正 Schema、解決できない参照は定義エラーとなり、reload で現在の snapshot を置換しません。
+コンパイル済み Schema は定義とともに保持し、実行ごとのファイル読み直しや無制限のパス別キャッシュはありません。
+Schema の変更は `/subagent reload` で反映します。
+
+Parser は 1,048,576 UTF-16 code units、ネスト 100、数値トークン 1,000 文字を上限とし、重複キーや複数 JSON も拒否します。
+Schema ファイルは 256 KiB までです。返却するエラーは 100 件、path は 256 文字＋省略記号までに制限します。
+ライブラリの詳細メッセージは値を含み得るため、制約名だけを通知します。
+このサイズ制限は最終出力の parse 前に適用します。既存 LLM ストリーム集約自体のメモリ上限を追加するものではありません。
+
+### 既存定義の移行
+
+`resultSchema` 未指定の YAML と既存 Java コンストラクタは引き続き使用できます。
+Runner が共通 JSON 契約を system prompt の末尾へ追加するため、定義を登録し直す必要はありません。
+ただし自由文の最終出力は今後 `FAILED` になります。独自 prompt に「自由文／Markdown のみで返す」などの
+競合する指示がある場合は JSON envelope に移行してください。検証を迂回する opt-out は設けていません。
+同梱 reviewer / researcher は個別 Schema と整合する prompt へ更新済みです。
+
+既存の networknt `json-schema-validator:3.0.0`（Spring AI / MCP の推移依存）を再利用し、直接依存として明示しました。
+別の validator は追加していません。computer-use では OpenAI の `response_format` が使われていますが、
+SubAgent は provider 共通の Tool loop と fallback を使うため、それを強制せず prompt と必須ローカル検証で実装しています。

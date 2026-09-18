@@ -21,6 +21,9 @@ import reactor.core.scheduler.Schedulers;
 
 /** Per-invocation state only. The sole inherited values are explicit task/context, model and project location. */
 public final class SubAgentRunner {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SubAgentRunner.class);
+  private final SubAgentResultParser parser = new SubAgentResultParser();
+  private final SubAgentResultValidator validator = new SubAgentResultValidator();
   private final SubAgentRegistry registry;
   private final SubAgentToolPolicy policy;
   private final Function<String, ChatModel> models;
@@ -54,12 +57,14 @@ public final class SubAgentRunner {
     AtomicBoolean stopped = new AtomicBoolean();
     var subscriptions = Disposables.composite();
     CompletableFuture<SubAgentResult> completion = new CompletableFuture<>();
-    BiConsumer<SubAgentResult.Status, String> finish = (status, output) -> {
+    Consumer<SubAgentResult> complete = result -> {
       if (stopped.compareAndSet(false, true)) {
         subscriptions.dispose();
-        completion.complete(new SubAgentResult(agent, runId, status, output, started, clock.instant()));
+        completion.complete(result);
       }
     };
+    BiConsumer<SubAgentResult.Status, String> finish = (status, output) ->
+        complete.accept(new SubAgentResult(agent, runId, status, output, started, clock.instant()));
     Runnable cancel = () -> finish.accept(SubAgentResult.Status.CANCELLED, "SubAgent cancelled");
     Runnable check = () -> { if (stopped.get() || Thread.currentThread().isInterrupted()) throw new CancellationException(); };
     active.put(runId, cancel);
@@ -88,12 +93,27 @@ public final class SubAgentRunner {
           runOptions.setToolCallbacks(callbacks);
           runOptions.setToolContext(Map.of(AgentRunContext.class.getName(), owner));
           String input = context == null || context.isBlank() ? task : task + "\n\nContext:\n" + context;
-          var prompt = new Prompt(List.of(new SystemMessage(d.systemPrompt()), new UserMessage(input)), runOptions);
+          var prompt = new Prompt(List.of(new SystemMessage(d.systemPrompt() + SubAgentOutputPrompt.instructions(d)), new UserMessage(input)), runOptions);
           ChatModel model = models.apply(d.model());
           ToolLoopSupport.requireNoDefaultTools(model);
           subscriptions.add(new BoundedToolLoop().run(model, prompt, d.maxSteps(), owner, check)
+              .map(output -> {
+                check.run();
+                var json = parser.parse(output);
+                var validation = validator.validate(d, json);
+                if (!validation.valid()) throw new SubAgentValidationException(validation.errors());
+                check.run();
+                return new SubAgentResult(agent, runId, SubAgentResult.Status.COMPLETED, output, started,
+                    clock.instant(), SubAgentOutput.fromValidated(json), List.of());
+              })
               .subscribeOn(Schedulers.boundedElastic()).timeout(d.timeout())
-              .subscribe(output -> finish.accept(SubAgentResult.Status.COMPLETED, output), error -> {
+              .subscribe(complete, error -> {
+                if (error instanceof SubAgentValidationException invalid) {
+                  log.warn("SubAgent {} structural validation failed: {} errors", d.id(), invalid.errors().size());
+                  complete.accept(new SubAgentResult(agent, runId, SubAgentResult.Status.FAILED,
+                      "SubAgent structural validation failed", started, clock.instant(), null, invalid.errors()));
+                  return;
+                }
                 var status = error instanceof TimeoutException ? SubAgentResult.Status.TIMEOUT
                     : error instanceof BoundedToolLoop.MaxStepsExceeded ? SubAgentResult.Status.MAX_STEPS_EXCEEDED
                     : error instanceof CancellationException ? SubAgentResult.Status.CANCELLED : SubAgentResult.Status.FAILED;

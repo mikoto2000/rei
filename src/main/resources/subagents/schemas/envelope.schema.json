@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["status", "summary", "result", "warnings"],
+  "properties": {
+    "status": {"type": "string", "enum": ["SUCCESS", "FAILURE", "PARTIAL"]},
+    "summary": {"type": "string", "minLength": 1},
+    "result": {"type": "object"},
+    "warnings": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}

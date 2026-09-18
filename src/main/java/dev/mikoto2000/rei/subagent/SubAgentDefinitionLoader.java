@@ -10,7 +10,7 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 /** Safe scalar/map YAML only. Diagnostics never echo arbitrary YAML or prompts. */
 public final class SubAgentDefinitionLoader {
-  private static final Set<String> FIELDS = Set.of("id", "name", "description", "systemPrompt", "tools", "model", "maxSteps", "timeout");
+  private static final Set<String> FIELDS = Set.of("id", "name", "description", "systemPrompt", "tools", "model", "maxSteps", "timeout", "resultSchema");
   private final SubAgentToolPolicy policy;
   private final Predicate<String> modelResolver;
   public SubAgentDefinitionLoader(SubAgentToolPolicy policy, Predicate<String> modelResolver) {
@@ -65,7 +65,8 @@ public final class SubAgentDefinitionLoader {
         };
       } catch (Exception e) { throw new IllegalArgumentException("timeout: required positive duration (120s, 2m, 1h, 500ms)"); }
       return new SubAgentDefinition(text(values, "id"), text(values, "name"), text(values, "description"),
-          text(values, "systemPrompt"), tools, model, count, timeout, file);
+          text(values, "systemPrompt"), tools, model, count, timeout, file,
+          values.containsKey("resultSchema") ? SubAgentResultSchema.load(file, text(values, "resultSchema")) : null);
     } catch (IllegalArgumentException error) { throw invalid(file, error.getMessage()); }
   }
   private String text(Map<?, ?> values, String key) {

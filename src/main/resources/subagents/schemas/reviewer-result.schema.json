@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["findings", "unverified"],
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "message", "location"],
+        "properties": {
+          "severity": {"type": "string", "enum": ["HIGH", "MEDIUM", "LOW"]},
+          "message": {"type": "string"},
+          "location": {"type": "string"}
+        },
+        "additionalProperties": false
+      }
+    },
+    "unverified": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": false
+}
