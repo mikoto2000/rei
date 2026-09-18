@@ -33,6 +33,12 @@ public class AgentEventFactory {
 
   // ---- Agent Run ----
 
+  public AgentEvent contextCompression(AgentEventType type, ContextCompressionPayload payload) {
+    if (type != AgentEventType.CONTEXT_COMPRESSION_STARTED && type != AgentEventType.CONTEXT_COMPRESSION_COMPLETED
+        && type != AgentEventType.CONTEXT_COMPRESSION_FAILED) throw new IllegalArgumentException("Not a compression event");
+    return newEvent(type, null, null, payload);
+  }
+
   public AgentEvent delegation(AgentEventType type, String runId, ExternalAgentLifecyclePayload payload) {
     if (type != AgentEventType.DELEGATION_STARTED && type != AgentEventType.DELEGATION_COMPLETED
         && type != AgentEventType.DELEGATION_FAILED && type != AgentEventType.DELEGATION_CANCELLED)

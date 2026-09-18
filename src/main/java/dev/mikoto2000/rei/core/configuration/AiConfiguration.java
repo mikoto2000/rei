@@ -57,6 +57,16 @@ import lombok.RequiredArgsConstructor;
 @EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, BlueskyProperties.class, AgentSkillsProperties.class, LlmProperties.class, ImageProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
+  private dev.mikoto2000.rei.core.contextbudget.ContextAssembler contextAssembler;
+  private dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor contextHistory;
+  private dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawResultTools;
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setContextCompression(dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler,
+      dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor history,
+      dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawTools,
+      dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties properties) {
+    if (properties.isEnabled()) { contextAssembler = assembler; contextHistory = history; rawResultTools = rawTools; }
+  }
   private dev.mikoto2000.rei.externalagent.ExternalAgentTools externalAgentTools;
   private dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService externalDelegation;
   @org.springframework.beans.factory.annotation.Autowired
@@ -107,7 +117,8 @@ public class AiConfiguration {
   @Bean
   public ChatClient chatClient() {
     List<Advisor> advisors = new ArrayList<>();
-    advisors.add(PromptChatMemoryAdvisor.builder(chatMemory)
+    if (contextHistory != null) advisors.add(contextHistory);
+    else advisors.add(PromptChatMemoryAdvisor.builder(chatMemory)
         .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
         .build());
     advisors.add(runtimeContextAdvisor);
@@ -125,7 +136,7 @@ public class AiConfiguration {
       advisors.add(skillAdvisor);
     }
 
-    ChatClient.Builder builder = ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(chatModel))
+    ChatClient.Builder builder = ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(chatModel, contextAssembler))
         .defaultSystem(systemPromptService.systemPrompt())
         .defaultOptions(OpenAiChatOptions.builder()
             .maxTokens(llmProperties.getMaxOutputTokens())
@@ -135,6 +146,7 @@ public class AiConfiguration {
             soundNotificationTools, blueskyPostTools, urlContentFetchTools, textTools, clockTools, schedulerTools, taskStateTools,
             conversationHistoryTools);
 
+    if (rawResultTools != null) builder.defaultTools(rawResultTools);
     ToolEventCallbackProvider toolCallbackProvider = toolEventCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {
       builder.defaultToolCallbacks(toolCallbackProvider);

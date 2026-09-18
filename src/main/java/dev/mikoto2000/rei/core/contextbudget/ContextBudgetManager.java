@@ -45,6 +45,11 @@ public class ContextBudgetManager {
     return modelContextLimit - outputReserve - safetyMargin;
   }
 
+  public static long estimateMessages(java.util.List<org.springframework.ai.chat.messages.Message> messages,
+      TokenEstimator estimator) {
+    return messages.stream().mapToLong(estimator::message).sum();
+  }
+
   /** セクションのトークン概算を返す。 */
   public int estimateTokens(ContextSection section) {
     return Math.max(1, section.content().length() / CHARS_PER_TOKEN);
@@ -53,7 +58,7 @@ public class ContextBudgetManager {
   /** 優先順位に基づいてセクションを割り当てる。 */
   public AllocationResult allocate(List<ContextSection> sections) {
     List<ContextSection> sorted = new ArrayList<>(sections);
-    sorted.sort((a, b) -> Integer.compare(priority(b.name()), priority(a.name())));
+    sorted.sort((a, b) -> Integer.compare(priority(a.name()), priority(b.name())));
 
     List<String> included = new ArrayList<>();
     List<String> dropped = new ArrayList<>();

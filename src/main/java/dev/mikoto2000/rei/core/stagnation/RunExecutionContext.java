@@ -24,6 +24,8 @@ public class RunExecutionContext {
   private boolean cancelled;
   private boolean completed;
   private boolean iterationOpen;
+  private long contextSegment;
+  public synchronized long nextContextSegment() { return ++contextSegment * 1_000_000_000L; }
   private String userRequest = "";
   private boolean externalDelegationUsed;
   private dev.mikoto2000.rei.externalagent.ExternalAgentResult externalReviewResult;

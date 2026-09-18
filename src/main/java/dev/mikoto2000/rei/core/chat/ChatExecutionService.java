@@ -283,6 +283,9 @@ public class ChatExecutionService {
   private ErrorInformation terminalError(ChatRunStatus status) {
     return switch (status) {
       case OUTPUT_LIMIT -> new ErrorInformation("OutputLimit", "output token limit reached", "output_limit");
+      case CONTEXT_HARD_LIMIT -> new ErrorInformation("ContextHardLimit",
+          "CONTEXT_HARD_LIMIT: context remains too large after compression; reduce the current input or context settings",
+          "context_hard_limit");
       case STAGNATED -> new ErrorInformation("Stagnated", "STAGNATED: no meaningful progress after replanning", "stagnated");
       case LLM_CALL_BUDGET_EXCEEDED -> new ErrorInformation("LlmCallBudgetExceeded", "LLM call budget exceeded", "llm_call_budget_exceeded");
       case REPLAN_BUDGET_EXCEEDED -> new ErrorInformation("ReplanBudgetExceeded", "replan hard budget exceeded", "replan_budget_exceeded");
@@ -738,6 +741,7 @@ public class ChatExecutionService {
     LLM_CALL_BUDGET_EXCEEDED,
     REPLAN_BUDGET_EXCEEDED,
     OUTPUT_LIMIT,
+    CONTEXT_HARD_LIMIT,
     FAILED,
     CANCELLED
   }

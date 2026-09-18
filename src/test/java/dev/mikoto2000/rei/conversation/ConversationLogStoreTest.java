@@ -19,6 +19,29 @@ class ConversationLogStoreTest {
   @TempDir
   Path tempDir;
 
+  @Test void contextSequenceSurvivesRestartAndClockRollback() {
+    var mapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    var first = new ConversationLogStore(tempDir, Clock.fixed(Instant.parse("2026-09-18T00:00:00Z"), ZoneId.of("UTC")), mapper);
+    first.append("chat", "user", "first");
+    var second = new ConversationLogStore(tempDir, Clock.fixed(Instant.parse("2026-09-17T00:00:00Z"), ZoneId.of("UTC")), mapper);
+    second.append("chat", "user", "second");
+    assertThat(second.readConversation("chat")).extracting(ConversationLogEntry::content).containsExactly("first", "second");
+    assertThat(second.readConversation("chat")).extracting(ConversationLogEntry::sequence).containsExactly(1L, 2L);
+  }
+  @Test void legacyLogsGainReadCursorsWithoutRewritingTheirContents() throws Exception {
+    String raw = "{\"conversationId\":\"chat\",\"scope\":\"chat\",\"speaker\":\"user\","
+        + "\"timestamp\":\"2026-09-18T00:00:00Z\",\"content\":\"legacy requirement\"}\n";
+    Path original = tempDir.resolve("2026-09-18.jsonl");
+    Files.writeString(original, raw);
+    var store = new ConversationLogStore(tempDir, Clock.fixed(Instant.parse("2026-09-17T00:00:00Z"), ZoneId.of("UTC")),
+        new ObjectMapper().registerModule(new JavaTimeModule()));
+    store.append("chat", "user", "new requirement");
+    assertThat(store.readConversation("chat")).extracting(ConversationLogEntry::content)
+        .containsExactly("legacy requirement", "new requirement");
+    assertThat(store.readConversation("chat")).extracting(ConversationLogEntry::sequence).containsExactly(1L, 2L);
+    assertThat(Files.readString(original)).isEqualTo(raw);
+  }
+
   @Test
   void appendsJsonLinesToDailyFileAndReadsThemBack() throws Exception {
     Clock clock = Clock.fixed(Instant.parse("2026-08-29T03:00:00Z"), ZoneId.of("Asia/Tokyo"));
