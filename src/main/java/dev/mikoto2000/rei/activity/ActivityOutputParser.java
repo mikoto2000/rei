@@ -13,6 +13,15 @@ public final class ActivityOutputParser {
   private static final Schema VALIDATOR=SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12,
       b -> b.schemaRegistryConfig(SchemaRegistryConfig.builder().pathType(com.networknt.schema.path.PathType.JSON_POINTER).build())
           .schemaLoader(l -> l.fetchRemoteResources(false).block(iri -> true))).getSchema(MAPPER.readTree(SCHEMA));
+  /** Constrain provider generation to the actual display IDs in this capture. */
+  public static String schemaForMonitors(List<String> monitors) {
+    if (monitors.isEmpty()) throw new IllegalArgumentException("Missing monitors");
+    var schema=MAPPER.readTree(SCHEMA);
+    var monitor=(tools.jackson.databind.node.ObjectNode)schema.at("/properties/activities/items/properties/monitor");
+    var allowed=monitor.putArray("enum");
+    monitors.forEach(allowed::add);
+    return MAPPER.writeValueAsString(schema);
+  }
   public ActivityExtractor.Result parse(String text,List<String> monitors) {
     if (text==null || text.isBlank()) throw new InvalidOutput(List.of(new ResultError("/","empty_output")));
     if (text.length()>65536) throw new InvalidOutput(List.of(new ResultError("/","size")));

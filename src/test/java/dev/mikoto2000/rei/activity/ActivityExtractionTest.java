@@ -5,6 +5,19 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 
 class ActivityExtractionTest {
+  @Test void requestSchemaAllowsOnlyCapturedMonitorsAndDoesNotRetainPreviousIds() {
+    var mapper=new tools.jackson.databind.json.JsonMapper();
+    var ids=List.of("\\\\.\\DISPLAY1", "display-\"2\"");
+    var schema=mapper.readTree(ActivityOutputParser.schemaForMonitors(ids));
+    var allowed=schema.at("/properties/activities/items/properties/monitor/enum");
+    assertEquals(ids,java.util.stream.StreamSupport.stream(allowed.spliterator(),false).map(n -> n.asString()).toList());
+    var validator=com.networknt.schema.SchemaRegistry.withDefaultDialect(com.networknt.schema.SpecificationVersion.DRAFT_2020_12).getSchema(schema);
+    assertFalse(validator.validate(mapper.readTree(VALID)).isEmpty());
+    var validSchema=mapper.readTree(ActivityOutputParser.schemaForMonitors(List.of("m1","m2")));
+    assertTrue(com.networknt.schema.SchemaRegistry.withDefaultDialect(com.networknt.schema.SpecificationVersion.DRAFT_2020_12)
+        .getSchema(validSchema).validate(mapper.readTree(VALID)).isEmpty());
+    assertTrue(mapper.readTree(ActivityOutputParser.SCHEMA).at("/properties/activities/items/properties/monitor/enum").isMissingNode());
+  }
   @Test void diagnosticIdentifiesConfidenceConstraintWithoutOutputValues() {
     var error=assertThrows(ActivityOutputParser.InvalidOutput.class,()->new ActivityOutputParser().parse(VALID.replace("0.86","1.2"),List.of("m1","m2")));
     assertEquals("/confidence:maximum",error.diagnostic());

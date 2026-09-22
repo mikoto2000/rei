@@ -251,6 +251,9 @@ resume は `enabled=false` を上書きしない。
 | `required` / `type` / `maximum` 等 | 表示されたフィールドのSchema制約違反。値そのものはログに残さない |
 | `unknown_monitor` | 画像に渡したIDと応答中のmonitorが不一致 |
 
+抽出リクエストのJSON Schemaでは、`activities[].monitor` のenumを、その回に送信した画面IDに限定する。
+プロンプトにも画像順とIDの対応を明示する。応答側のID検証も維持し、Schema制約を無視した応答は保存しない。
+
 vLLMを使う場合は、利用バージョンとモデルに適したreasoning parserとJSON Schema出力の組合せを確認する。
 設定条件は [vLLM Structured Outputs](https://docs.vllm.ai/en/latest/features/structured_outputs/) を参照。
 元の理由なしWARNだけから、サーバー設定やトークン不足を断定することはできない。
