@@ -4,6 +4,8 @@ import java.util.Optional;
 
 /** Persistent source of truth, independent of runtime session retention. */
 public interface SessionRepository {
+  /** Already loaded metadata only. Implementations must not perform I/O for completion. */
+  default java.util.List<SessionMetadata> completionSnapshot() { return java.util.List.of(); }
   Optional<SessionMetadata> findById(String sessionId);
   /** At most fetchLimit rows, ordered by updatedAt DESC, sessionId ASC, strictly after the key. */
   java.util.List<SessionMetadata> findPage(String projectId, CursorKey after, int fetchLimit);

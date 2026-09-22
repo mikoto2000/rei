@@ -11,7 +11,13 @@ import dev.mikoto2000.rei.application.session.*;
 public final class FileSessionRepository implements SessionRepository {
   private final Path file;
   private final ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
-  public FileSessionRepository(Path file) { this.file = file.toAbsolutePath().normalize(); }
+  private volatile List<SessionMetadata> completionSnapshot = List.of();
+  public FileSessionRepository(Path file) {
+    this.file = file.toAbsolutePath().normalize();
+    // Warm the optional input aid at startup; normal repository reads still report corrupt data.
+    try { read(); } catch (RuntimeException ignored) { }
+  }
+  @Override public List<SessionMetadata> completionSnapshot() { return completionSnapshot; }
 
   @Override public synchronized Optional<SessionMetadata> findById(String id) {
     return read().stream().filter(row -> row.sessionId().equals(id)).findFirst();
@@ -45,8 +51,11 @@ public final class FileSessionRepository implements SessionRepository {
   }
 
   private List<SessionMetadata> read() {
-    if (!Files.exists(file)) return List.of();
-    try { return List.of(mapper.readValue(Files.readString(file), SessionMetadata[].class)); }
+    if (!Files.exists(file)) { completionSnapshot = List.of(); return completionSnapshot; }
+    try {
+      completionSnapshot = List.of(mapper.readValue(Files.readString(file), SessionMetadata[].class));
+      return completionSnapshot;
+    }
     catch (IOException error) { throw new IllegalStateException("Cannot read session metadata", error); }
   }
 
@@ -58,6 +67,7 @@ public final class FileSessionRepository implements SessionRepository {
       Files.writeString(temporary, mapper.writeValueAsString(rows));
       try { Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
       catch (AtomicMoveNotSupportedException error) { Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING); }
+      completionSnapshot = List.copyOf(rows);
     } catch (IOException error) { throw new IllegalStateException("Cannot persist session metadata", error); }
     finally {
       if (temporary != null) try { Files.deleteIfExists(temporary); }

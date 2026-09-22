@@ -1,116 +1,27 @@
 package dev.mikoto2000.rei.core.command;
 
-import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Locale;
+import java.util.Set;
+import dev.mikoto2000.rei.core.completion.*;
 
+/** Compatibility API; the Shell now uses command metadata and FilePathCompletionProvider. */
+@Deprecated
 public final class ProjectAddDirectoryCompletion {
-
-  private static final String PREFIX = "/project add";
-
-  private ProjectAddDirectoryCompletion() {
-  }
+  private ProjectAddDirectoryCompletion() { }
 
   public static List<String> complete(String rawLine, Path currentProject) {
-    if (rawLine == null || currentProject == null || !rawLine.startsWith(PREFIX)) {
-      return List.of();
-    }
-
-    String argument = rawLine.substring(PREFIX.length()).stripLeading();
-    Quote quote = Quote.from(argument);
-    String fragment = quote.stripOpening(argument);
-
-    CompletionTarget target;
-    try {
-      target = CompletionTarget.from(fragment, currentProject);
-    } catch (InvalidPathException e) {
-      return List.of();
-    }
-
-    if (target.base() == null || !Files.isDirectory(target.base())) {
-      return List.of();
-    }
-
-    String normalizedPrefix = target.childPrefix().toLowerCase(Locale.ROOT);
-    try (var stream = Files.list(target.base())) {
-      return stream
-          .filter(Files::isDirectory)
-          .filter(path -> path.getFileName().toString().toLowerCase(Locale.ROOT).startsWith(normalizedPrefix))
-          .map(Path::toString)
-          .sorted()
-          .map(quote::apply)
-          .toList();
-    } catch (Exception e) {
-      return List.of();
-    }
-  }
-
-  private static boolean endsWithSeparator(String value) {
-    return value.endsWith("/") || value.endsWith("\\");
-  }
-
-  private enum Quote {
-    NONE(""),
-    SINGLE("'"),
-    DOUBLE("\"");
-
-    private final String mark;
-
-    Quote(String mark) {
-      this.mark = mark;
-    }
-
-    static Quote from(String value) {
-      if (value.startsWith("\"")) {
-        return DOUBLE;
-      }
-      if (value.startsWith("'")) {
-        return SINGLE;
-      }
-      return NONE;
-    }
-
-    String stripOpening(String value) {
-      if (this == NONE || value.isEmpty()) {
-        return value;
-      }
-      return value.substring(1);
-    }
-
-    String apply(String value) {
-      if (this == NONE) {
-        return value;
-      }
-      return mark + value + mark;
-    }
-  }
-
-  private record CompletionTarget(Path base, String childPrefix) {
-    static CompletionTarget from(String fragment, Path currentProject) {
-      if (fragment.isBlank()) {
-        return new CompletionTarget(currentProject, "");
-      }
-
-      Path fragmentPath = Path.of(fragment);
-      if (endsWithSeparator(fragment)) {
-        return new CompletionTarget(resolve(fragmentPath, currentProject), "");
-      }
-
-      Path parent = fragmentPath.getParent();
-      String childPrefix = fragmentPath.getFileName() == null ? "" : fragmentPath.getFileName().toString();
-      if (parent == null) {
-        return new CompletionTarget(currentProject, childPrefix);
-      }
-      return new CompletionTarget(resolve(parent, currentProject), childPrefix);
-    }
-
-    private static Path resolve(Path path, Path currentProject) {
-      if (path.isAbsolute()) {
-        return path;
-      }
-      return currentProject.resolve(path).normalize();
-    }
+    if (rawLine == null || currentProject == null) return List.of();
+    String[] words = new UserInputParser().split(rawLine);
+    if (words.length < 2 || words.length > 3 || !words[0].equals("/project") || !words[1].equals("add")) return List.of();
+    String token = words.length == 3 ? words[2] : "";
+    String rawArgument = rawLine.substring(rawLine.indexOf("add") + 3).stripLeading();
+    String quote = rawArgument.startsWith("\"") ? "\"" : rawArgument.startsWith("'") ? "'" : "";
+    var context = new CompletionContext(rawLine, rawLine.length(), List.of(words), words.length - 1, 0,
+        token, List.of("project", "add"), Set.of("directory"), List.of(), currentProject);
+    return new FilePathCompletionProvider().complete(context).stream().map(candidate -> {
+      Path path = Path.of(candidate.value());
+      return quote + (path.isAbsolute() ? path : currentProject.resolve(path)).normalize() + quote;
+    }).toList();
   }
 }

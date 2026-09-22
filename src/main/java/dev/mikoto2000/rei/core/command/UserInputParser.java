@@ -31,28 +31,50 @@ public final class UserInputParser {
   }
 
   public String[] split(String line) {
-    List<String> words = new ArrayList<>();
+    // Preserve execution semantics: explicitly empty quoted arguments were historically omitted.
+    return tokenize(line).stream().map(Token::value).filter(value -> !value.isEmpty()).toArray(String[]::new);
+  }
+
+  /** Shared lexical rules, with raw spans for cursor-aware input adapters. */
+  public record Token(String value, int start, int end) { }
+
+  public List<Token> tokenize(String line) {
+    List<Token> words = new ArrayList<>();
     StringBuilder current = new StringBuilder();
-    boolean inSingleQuote = false;
-    boolean inDoubleQuote = false;
+    boolean single = false, doubled = false;
+    int start = -1;
     for (int i = 0; i < line.length(); i++) {
       char c = line.charAt(i);
-      if (c == '\'' && !inDoubleQuote) {
-        inSingleQuote = !inSingleQuote;
-      } else if (c == '"' && !inSingleQuote) {
-        inDoubleQuote = !inDoubleQuote;
-      } else if (Character.isWhitespace(c) && !inSingleQuote && !inDoubleQuote) {
-        if (!current.isEmpty()) {
-          words.add(current.toString());
+      if (Character.isWhitespace(c) && !single && !doubled) {
+        if (start >= 0) {
+          words.add(new Token(current.toString(), start, i));
           current.setLength(0);
+          start = -1;
         }
-      } else {
-        current.append(c);
+        continue;
       }
+      if (start < 0) start = i;
+      if (c == '\'' && !doubled) single = !single;
+      else if (c == '"' && !single) doubled = !doubled;
+      else current.append(c);
     }
-    if (!current.isEmpty()) {
-      words.add(current.toString());
+    if (start >= 0) words.add(new Token(current.toString(), start, line.length()));
+    return List.copyOf(words);
+  }
+
+  /** Encode one argument using the same literal-backslash grammar as split(). */
+  public static String quote(String value, boolean complete, char preferredQuote) {
+    boolean needsQuotes = preferredQuote != 0 || value.chars()
+        .anyMatch(c -> Character.isWhitespace(c) || c == '\'' || c == '"');
+    if (!needsQuotes) return value;
+    char quote = preferredQuote == 0 ? '"' : preferredQuote;
+    char other = quote == '"' ? '\'' : '"';
+    var result = new StringBuilder().append(quote);
+    for (char c : value.toCharArray()) {
+      if (c == quote) result.append(quote).append(other).append(c).append(other).append(quote);
+      else result.append(c);
     }
-    return words.toArray(String[]::new);
+    if (complete) result.append(quote);
+    return result.toString();
   }
 }

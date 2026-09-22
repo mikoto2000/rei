@@ -5,6 +5,10 @@ public final class UserInputService {
 
   public enum Kind { EMPTY, CHAT, EXIT, HELP, VERSION, PASTE, COMMAND }
 
+  private static final java.util.Map<String, Kind> BUILTINS = java.util.Map.of(
+      "exit", Kind.EXIT, "quit", Kind.EXIT, "help", Kind.HELP, "version", Kind.VERSION, "paste", Kind.PASTE);
+  public static java.util.Map<String, Kind> builtins() { return BUILTINS; }
+
   public record Input(Kind kind, String text, String[] arguments) {
     public Input {
       arguments = arguments.clone();
@@ -35,13 +39,7 @@ public final class UserInputService {
       return input(Kind.EMPTY, "", arguments);
     }
     if (arguments.length == 1) {
-      Kind special = switch (arguments[0]) {
-        case "exit", "quit" -> Kind.EXIT;
-        case "help" -> Kind.HELP;
-        case "version" -> Kind.VERSION;
-        case "paste" -> Kind.PASTE;
-        default -> Kind.COMMAND;
-      };
+      Kind special = BUILTINS.getOrDefault(arguments[0], Kind.COMMAND);
       return input(special, parsed.text(), arguments);
     }
     return input(Kind.COMMAND, parsed.text(), arguments);

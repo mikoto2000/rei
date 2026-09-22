@@ -28,7 +28,7 @@ public class ProjectCommand {
   public static class AddCommand implements Runnable {
     private final ProjectService projectService;
 
-    @Parameters(index = "0", paramLabel = "DIR")
+    @Parameters(index = "0", paramLabel = "DIR", completionCandidates = dev.mikoto2000.rei.core.completion.PathCompletionCandidates.Directory.class)
     String directory;
 
     @Override
@@ -76,7 +76,7 @@ public class ProjectCommand {
   public static class CdCommand implements Runnable {
     private final ProjectService projectService;
 
-    @Parameters(index = "0", paramLabel = "DIR", completionCandidates = RegisteredProjectCandidates.class)
+    @Parameters(index = "0", paramLabel = "DIR", completionCandidates = ProjectDirectoryCandidates.class)
     String directory;
 
     @Override
@@ -89,7 +89,20 @@ public class ProjectCommand {
   public static class RegisteredProjectCandidates implements Iterable<String> {
     @Override
     public Iterator<String> iterator() {
-      return ProjectService.registeredProjectPathStrings().iterator();
+      return ProjectService.completionProjectPathStrings().iterator();
+    }
+  }
+
+  public static class ProjectDirectoryCandidates extends RegisteredProjectCandidates
+      implements dev.mikoto2000.rei.core.completion.CompletionMetadata {
+    public java.util.Set<String> types(dev.mikoto2000.rei.core.completion.CompletionContext context) {
+      return java.util.Set.of("choices", "directory");
+    }
+    public java.util.List<dev.mikoto2000.rei.core.completion.CompletionCandidate> choices(
+        dev.mikoto2000.rei.core.completion.CompletionContext context) {
+      return ProjectService.completionProjectPathStrings().stream()
+          .map(path -> new dev.mikoto2000.rei.core.completion.CompletionCandidate(path, path,
+              "Registered project", "project", true)).toList();
     }
   }
 }

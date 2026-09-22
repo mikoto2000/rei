@@ -101,7 +101,7 @@ public class HistoryCommand implements Callable<Integer> {
   @Command(name="show",description="会話履歴（既定は直近50件）",mixinStandardHelpOptions=true)
   public static class ShowCommand implements Callable<Integer> {
     @ParentCommand HistoryCommand parent;
-    @Parameters(index="0",arity="0..1",paramLabel="CONVERSATION") String conversation;
+    @Parameters(index="0",arity="0..1",paramLabel="CONVERSATION",completionCandidates=SessionCompletionCandidates.class) String conversation;
     @Option(names="--project",paramLabel="PROJECT") String project;
     @ArgGroup(exclusive=true) Range range;
     @Option(names="--limit") Integer limit;

@@ -35,7 +35,7 @@ public class GenerateCommand implements Callable<Integer> {
   public void setBackgroundCommands(dev.mikoto2000.rei.core.execution.BackgroundCommands background) { this.background=background; }
   @picocli.CommandLine.Spec private picocli.CommandLine.Model.CommandSpec spec;
 
-  @Option(names = "--output", description = "保存先ファイルパス")
+  @Option(names = "--output", description = "保存先ファイルパス", completionCandidates = dev.mikoto2000.rei.core.completion.PathCompletionCandidates.Any.class)
   Path outputPath;
 
   @Option(names = "--model", description = "画像生成モデル名")

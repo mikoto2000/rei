@@ -1,93 +1,63 @@
 package dev.mikoto2000.rei.core.command;
 
 import java.io.IOException;
-import java.util.List;
-
-import org.jline.reader.Candidate;
 import org.jline.reader.Completer;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
-import org.jline.reader.ParsedLine;
 import org.jline.reader.Parser;
-import org.jline.reader.SyntaxError;
-import org.jline.reader.impl.DefaultParser;
 import org.jline.terminal.Terminal;
 
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import picocli.CommandLine;
-import picocli.shell.jline3.PicocliJLineCompleter;
+import dev.mikoto2000.rei.core.completion.*;
+import dev.mikoto2000.rei.ui.shell.JLineCompletionAdapter;
 
 /** Builds the canonical JLine input services for the Shell. */
 public final class ReiLineReaderFactory {
-  private static final List<String> BUILTINS = List.of("/exit", "/quit", "/help", "/version", "/paste");
-
   public record Session(LineReader reader, Completer completer) { }
 
   private ReiLineReaderFactory() { }
 
   public static Session create(Terminal terminal, CommandLine command) throws IOException {
+    return create(terminal, command, completionEngine());
+  }
+
+  public static Session create(Terminal terminal, CommandLine command, CompletionEngine engine) throws IOException {
     try {
       ReiPaths.ensureParentDirectoryExists(ReiPaths.historyFilePath());
     } catch (Exception exception) {
       throw new IOException("履歴ファイル用ディレクトリの作成に失敗しました: " + ReiPaths.historyFilePath(), exception);
     }
-    Completer completer = completer(command);
+    Completer completer = completer(command, engine);
     LineReader reader = LineReaderBuilder.builder()
         .terminal(terminal)
         .completer(completer)
+        .parser(parser())
         .variable(LineReader.HISTORY_FILE, ReiPaths.historyFilePath())
         .variable(LineReader.HISTORY_SIZE, 1000)
         .variable(LineReader.HISTORY_FILE_SIZE, 1000)
         .build();
     reader.setOpt(LineReader.Option.BRACKETED_PASTE);
+    if (java.io.File.separatorChar == '\\') reader.setOpt(LineReader.Option.CASE_INSENSITIVE);
     return new Session(reader, completer);
   }
 
-  public static Completer completer(CommandLine command) {
-    return new SlashCompleter(command, new PicocliJLineCompleter(command.getCommandSpec()),
-        command.getSubcommands().keySet().stream().sorted().toList());
+  public static Parser parser() {
+    return new dev.mikoto2000.rei.ui.shell.ShellCompletionParser(java.nio.file.Path.of(System.getProperty("user.home")));
   }
 
-  private static final class SlashCompleter implements Completer {
-    private final CommandLine command;
-    private final Completer delegate;
-    private final List<String> rootCommands;
-    private final Parser parser = new DefaultParser();
+  public static CompletionEngine completionEngine() {
+    return new CompletionEngine().register(new ChoiceCompletionProvider())
+        .register(new FilePathCompletionProvider()).register(new PathFallbackCompletionProvider());
+  }
 
-    private SlashCompleter(CommandLine command, Completer delegate, List<String> rootCommands) {
-      this.command = command;
-      this.delegate = delegate;
-      this.rootCommands = rootCommands;
-    }
+  public static Completer completer(CommandLine command) {
+    return completer(command, completionEngine());
+  }
 
-    @Override
-    public void complete(LineReader reader, ParsedLine line, List<Candidate> candidates) {
-      String raw = line.line();
-      if (raw == null || !raw.startsWith("/")) return;
-      if (!raw.substring(1).contains(" ")) {
-        BUILTINS.stream().filter(value -> value.startsWith(raw)).forEach(value -> candidates.add(new Candidate(value)));
-        rootCommands.stream().map(value -> "/" + value).filter(value -> value.startsWith(raw))
-            .forEach(value -> candidates.add(new Candidate(value)));
-        return;
-      }
-      if (raw.equals("/project add") || raw.startsWith("/project add ")) {
-        ProjectAddDirectoryCompletion.complete(raw, ProjectService.currentProjectOrStartupDirectory())
-            .forEach(value -> candidates.add(new Candidate(value)));
-        return;
-      }
-      try {
-        String stripped = raw.length() <= 1 ? "" : raw.substring(1);
-        delegate.complete(reader,
-            parser.parse(stripped, Math.max(0, line.cursor() - 1), Parser.ParseContext.COMPLETE), candidates);
-      } catch (SyntaxError ignored) {
-      } finally {
-        // Picocli completion rebuilds CommandLine instances and rebinds @Spec fields.
-        // Keep those instances on the shell writers instead of the default streams.
-        CommandLine completionCommand = command.getCommandSpec().commandLine();
-        completionCommand.setOut(command.getOut());
-        completionCommand.setErr(command.getErr());
-      }
-    }
+  public static Completer completer(CommandLine command, CompletionEngine engine) {
+    return new JLineCompletionAdapter(command, engine,
+        ProjectService::currentProjectOrStartupDirectory);
   }
 }

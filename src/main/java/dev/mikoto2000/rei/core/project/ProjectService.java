@@ -44,6 +44,15 @@ public class ProjectService {
   }
   public ProjectContext currentContext() { return registry.resolve(currentProject()); }
   public List<ProjectContext> registeredProjects() { return registry.list(); }
+  public List<ProjectContext> completionProjects() { return registry.completionSnapshot(); }
+  public static List<String> completionProjectPathStrings() {
+    var client = ProjectClientScope.current();
+    if (client == null) return List.of(ReiPaths.startupDirectory().toString());
+    var paths = new LinkedHashSet<String>();
+    paths.add(client.service.startupDirectory.toString());
+    client.service.completionProjects().forEach(project -> paths.add(project.root().toString()));
+    return List.copyOf(paths);
+  }
   public List<Path> list() {
     var paths = new LinkedHashSet<Path>();
     paths.add(startupDirectory);
