@@ -69,6 +69,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   private boolean toolInterruptedMessage;
   private String thinkingId;
   private boolean thinkingLineOpen;
+  private final java.util.List<AgentEvent> pendingLlmCompletions = new java.util.ArrayList<>();
   private Instant lastThrottledTopicSummaryAt;
   private final java.util.LinkedHashMap<String, String> subAgentNames = new java.util.LinkedHashMap<>();
 
@@ -190,6 +191,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       case AGENT_RUN_STARTED -> {
         closeAssistantLine();
         closeThinkingLine();
+        flushLlmCompletions();
         assistantMessageId = null;
         thinkingId = null;
         toolInterruptedMessage = false;
@@ -198,6 +200,9 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       case AGENT_RUN_COMPLETED -> {
         closeAssistantLine();
         closeThinkingLine();
+        flushLlmCompletions();
+        assistantMessageId = null;
+        thinkingId = null;
         AgentRunCompletedPayload payload = (AgentRunCompletedPayload) event.payload();
         String tokens = payload.completionTokens() == null
             ? "tokens unavailable"
@@ -214,11 +219,15 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         output.println("[agent] completed (" + formatSeconds(payload.duration()) + " s, " + tokens + ", "
             + ttft + ", " + outputSpeed + ", " + endToEndSpeed + ")");
       }
-      case AGENT_RUN_FAILED -> {
+      case AGENT_RUN_FAILED, AGENT_RUN_CANCELLED -> {
         closeAssistantLine();
         closeThinkingLine();
+        flushLlmCompletions();
+        assistantMessageId = null;
+        thinkingId = null;
         AgentRunFailedPayload payload = (AgentRunFailedPayload) event.payload();
-        output.println(payload.error() != null && "cancelled".equals(payload.error().code())
+        output.println(event.type() == dev.mikoto2000.rei.event.AgentEventType.AGENT_RUN_CANCELLED
+            || payload.error() != null && "cancelled".equals(payload.error().code())
             ? "[agent] cancelled" : "[agent] failed: " + errorMessage(payload.error()));
       }
       case LLM_REQUEST_STARTED -> {
@@ -240,6 +249,12 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         output.println("[llm] first token (" + payload.durationMs() + " ms)");
       }
       case LLM_RESPONSE_COMPLETED -> {
+        // Model completion can overtake downstream chunks across a scheduler boundary.
+        // Keep the notification until the consumer has finished rendering the stream.
+        if (assistantMessageId != null || thinkingId != null) {
+          pendingLlmCompletions.add(event);
+          break;
+        }
         closeAssistantLine();
         closeThinkingLine();
         LlmResponseCompletedPayload payload = (LlmResponseCompletedPayload) event.payload();
@@ -664,6 +679,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     if (!payload.thinkingId().equals(thinkingId)) return;
     closeThinkingLine();
     thinkingId = null;
+    if (assistantMessageId == null) flushLlmCompletions();
   }
 
   private void messageDelta(MessageDeltaPayload payload) {
@@ -681,11 +697,22 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     closeAssistantLine();
     assistantMessageId = null;
     toolInterruptedMessage = false;
+    if (thinkingId == null) flushLlmCompletions();
   }
 
   private void beforeTool() {
     if (assistantMessageId != null) toolInterruptedMessage = true;
     closeAssistantLine();
+    closeThinkingLine();
+    flushLlmCompletions();
+  }
+
+  private void flushLlmCompletions() {
+    for (AgentEvent event : pendingLlmCompletions) {
+      LlmResponseCompletedPayload payload = (LlmResponseCompletedPayload) event.payload();
+      output.println("[llm] response received (" + payload.durationMs() + " ms)");
+    }
+    pendingLlmCompletions.clear();
   }
 
   private void closeAssistantLine() {
