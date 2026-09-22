@@ -9,6 +9,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ActivityCaptureTest {
+  @Test void validationFailureLogsSanitizedDiagnostic() throws Exception {
+    when(extractor.extract(any(),any())).thenThrow(new ActivityOutputParser.InvalidOutput(List.of(new ActivityOutputParser.ResultError("/confidence","maximum"))));
+    var logger=(ch.qos.logback.classic.Logger)org.slf4j.LoggerFactory.getLogger(ActivityCapture.class);
+    var appender=new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();appender.start();logger.addAppender(appender);
+    try {capture.tick();assertTrue(appender.list.stream().anyMatch(e -> e.getFormattedMessage().contains("/confidence:maximum")));}
+    finally {logger.detachAppender(appender);appender.stop();}
+  }
   ActivityProperties properties;
   DesktopActivityObserver observer;
   ActivityExtractor extractor;

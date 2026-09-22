@@ -40,8 +40,14 @@ public final class VisionActivityExtractor implements ActivityExtractor {
     var user=UserMessage.builder().text(json.writeValueAsString(Map.of("monitorIdsInImageOrder",monitors,"foregroundOsEvidence",foreground))).media(media).build();
     var client=model.get(); dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(client);
     var response=client.call(new Prompt(List.of(new SystemMessage(system+"\n"+ActivityOutputParser.SCHEMA),user),requestOptions));
-    if(response==null || response.getResults().size()!=1 || response.hasToolCalls() || dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response))
-      throw new ActivityOutputParser.InvalidOutput(List.of(new ActivityOutputParser.ResultError("/","invalid_response")));
+    if(response==null || response.getResults().isEmpty()) throw invalidResponse("empty_response");
+    if(dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response)) throw invalidResponse("output_limit");
+    if(response.getResults().size()!=1) throw invalidResponse("multiple_results");
+    if(response.hasToolCalls()) throw invalidResponse("unexpected_tool_calls");
+    if(response.getResult().getOutput()==null) throw invalidResponse("empty_output");
     return new ActivityOutputParser().parse(response.getResult().getOutput().getText(),monitors);
+  }
+  private static ActivityOutputParser.InvalidOutput invalidResponse(String code) {
+    return new ActivityOutputParser.InvalidOutput(List.of(new ActivityOutputParser.ResultError("/",code)));
   }
 }

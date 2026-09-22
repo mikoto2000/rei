@@ -10,6 +10,21 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ActivityIntegrationTest {
+  @Test void truncatedVisionResponseHasActionableDiagnostic() throws Exception {
+    var model=mock(ChatModel.class);
+    var metadata=org.springframework.ai.chat.metadata.ChatGenerationMetadata.builder().finishReason("length").build();
+    when(model.call(any(org.springframework.ai.chat.prompt.Prompt.class))).thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage(""),metadata))));
+    var extractor=new VisionActivityExtractor(()->model,()->OpenAiChatOptions.builder().build());
+    var error=assertThrows(ActivityOutputParser.InvalidOutput.class,()->extractor.extract(ActivityCaptureTest.screen(20),new ForegroundWindow("idea",1,"rei","1")));
+    assertEquals("/:output_limit",error.diagnostic());
+  }
+  @Test void emptyVisionResponseIsDistinctFromInvalidJson() throws Exception {
+    var model=mock(ChatModel.class);
+    when(model.call(any(org.springframework.ai.chat.prompt.Prompt.class))).thenReturn(new ChatResponse(List.of()));
+    var extractor=new VisionActivityExtractor(()->model,()->OpenAiChatOptions.builder().build());
+    var error=assertThrows(ActivityOutputParser.InvalidOutput.class,()->extractor.extract(ActivityCaptureTest.screen(20),new ForegroundWindow("idea",1,"rei","1")));
+    assertEquals("/:empty_response",error.diagnostic());
+  }
   @Test void evidenceSettingsDefaultOffAndBindIndependently() {
     var defaults=new ActivityProperties();assertFalse(defaults.isKeepScreenshots());assertFalse(defaults.isKeepOnExtractionFailure());
     var binder=new org.springframework.boot.context.properties.bind.Binder(new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(

@@ -237,6 +237,25 @@ resume は `enabled=false` を上書きしない。
 
 ## Tests / TDD
 
+### InvalidOutputの切り分け
+
+`Activity extraction failed (InvalidOutput)` はVision応答の検証に失敗してRecordを保存しなかったことを示す。
+詳細診断では、例えば `/confidence:maximum` や `/:output_limit` のように
+既知のフィールド位置・理由コードだけをWARNに出す。画像、タイトル、値、モデル応答全文は出さない。
+
+| 理由 | 確認する点 |
+|---|---|
+| `output_limit` | `finish_reason=length`。`rei.llm.features.activity.max-output-tokens` とサーバーの生成上限・reasoning予算を確認 |
+| `empty_response` / `empty_output` | 応答結果/最終contentが空。サーバーのreasoning分離やモデル互換性を確認 |
+| `invalid_json` | JSON以外の説明・コードフェンス・reasoning混入・不完全JSONなど。構造化出力設定を確認 |
+| `required` / `type` / `maximum` 等 | 表示されたフィールドのSchema制約違反。値そのものはログに残さない |
+| `unknown_monitor` | 画像に渡したIDと応答中のmonitorが不一致 |
+
+vLLMを使う場合は、利用バージョンとモデルに適したreasoning parserとJSON Schema出力の組合せを確認する。
+設定条件は [vLLM Structured Outputs](https://docs.vllm.ai/en/latest/features/structured_outputs/) を参照。
+元の理由なしWARNだけから、サーバー設定やトークン不足を断定することはできない。
+診断を増やしてもSchema検証は緩めず、不正データの保存や画像の自動追加送信は行わない。
+
 外部Desktop/Vision/ScreenshotStore/ActivityStoreはPortとして差し替える。
 ポリシー→取得/解析→保存/検索の順にテストを先に追加し、コンパイル失敗のRedから実装した。
 summaryの言い回しによる過分割、pause/resumeを越えた誤結合についても、

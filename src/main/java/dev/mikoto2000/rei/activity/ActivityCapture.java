@@ -106,6 +106,8 @@ public final class ActivityCapture implements AutoCloseable {
   }
   private static void failure(String stage, Exception error) {
     // Never log window titles, screenshot content, provider payloads or parser source text.
-    log.warn("Activity {} failed ({})",stage,error.getClass().getSimpleName());
+    if (error instanceof ActivityOutputParser.InvalidOutput invalid)
+      log.warn("Activity {} failed (InvalidOutput): {}", stage, invalid.diagnostic());
+    else log.warn("Activity {} failed ({})",stage,error.getClass().getSimpleName());
   }
 }
