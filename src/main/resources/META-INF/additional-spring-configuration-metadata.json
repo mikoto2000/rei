@@ -6,6 +6,12 @@
     {"name":"rei.external-agents.codex.inactivity-timeout","type":"java.time.Duration","defaultValue":"5m","description":"Maximum interval without stdout or stderr activity."},
     {"name":"rei.external-agents.codex.max-output-bytes","type":"java.lang.Integer","defaultValue":4194304,"description":"Shared stdout and stderr capture byte limit."},
     {
+      "name": "rei.rerank.enabled",
+      "type": "java.lang.Boolean",
+      "defaultValue": true,
+      "description": "Enable external reranking when a base URL is configured."
+    },
+    {
       "name": "rei.rerank.base-url",
       "type": "java.lang.String",
       "description": "Rerank API base URL. Empty disables external reranking."
@@ -18,7 +24,7 @@
     {
       "name": "rei.rerank.model",
       "type": "java.lang.String",
-      "description": "Rerank model name. Required when the rerank base URL is set."
+      "description": "Rerank model name. Required when reranking is enabled and the base URL is set."
     },
     {
       "name": "rei.rerank.path",

@@ -48,6 +48,7 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("base-url: ${REI_OPENAI_EMBEDDING_BASE_URL:}"));
     assertTrue(content.contains("api-key: ${REI_OPENAI_EMBEDDING_API_KEY:}"));
     assertTrue(content.contains("embeddings-path: ${REI_OPENAI_EMBEDDING_PATH:/v1/embeddings}"));
+    assertTrue(content.contains("enabled: ${REI_RERANK_ENABLED:true}"));
     assertTrue(content.contains("base-url: ${REI_RERANK_BASE_URL:}"));
     assertTrue(content.contains("api-key: ${REI_RERANK_API_KEY:}"));
     assertTrue(content.contains("model: ${REI_RERANK_MODEL:}"));

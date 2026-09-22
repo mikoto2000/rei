@@ -114,6 +114,7 @@ spring:
 
 rei:
   rerank:
+    enabled: ${REI_RERANK_ENABLED:true}
     base-url: ${REI_RERANK_BASE_URL:}
     api-key: ${REI_RERANK_API_KEY:}
     model: ${REI_RERANK_MODEL:}
@@ -124,7 +125,9 @@ rei:
 `REI_OPENAI_EMBEDDING_BASE_URL` と `REI_RERANK_BASE_URL` にそれぞれの URL を設定します。
 各パスには API のパスを指定します。ベース URL に `/v1` を含める場合はパスを `/embeddings`、`/rerank` に変更してください。
 
-rerank は `base-url` を指定すると有効になり、`model` の指定が必須です。
+rerank は `enabled` が `true`（既定値）で、`base-url` を指定した場合に有効になり、`model` の指定が必須です。
+`enabled: false` または環境変数 `REI_RERANK_ENABLED=false` で、接続設定を残したまま無効化できます。
+`enabled` を省略した既存設定は従来どおり動作し、`base-url` が空の場合は実行しません。
 API キーは独立しており、空の場合は Authorization ヘッダーを送りません。
 API には `model`、`query`、文字列配列の `documents` を POST します。
 レスポンスは全候補の `index`（0 始まり）と `relevance_score` を持つ `results` 配列を想定します。

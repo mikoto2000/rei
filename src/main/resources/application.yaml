@@ -83,6 +83,7 @@ rei:
   embedding:
     enabled: ${REI_EMBEDDING_ENABLED:true}
   rerank:
+    enabled: ${REI_RERANK_ENABLED:true}
     base-url: ${REI_RERANK_BASE_URL:}
     api-key: ${REI_RERANK_API_KEY:}
     model: ${REI_RERANK_MODEL:}

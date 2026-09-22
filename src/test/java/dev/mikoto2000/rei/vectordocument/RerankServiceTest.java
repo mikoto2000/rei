@@ -17,6 +17,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -48,7 +51,7 @@ class RerankServiceTest {
   @AfterEach void stop() { server.stop(0); }
 
   private RerankService service() {
-    return new RerankService(new RerankProperties(baseUrl, "rerank-key", "reranker", "/custom/rerank"),
+    return new RerankService(new RerankProperties(true, baseUrl, "rerank-key", "reranker", "/custom/rerank"),
         RestClient.builder());
   }
 
@@ -74,8 +77,10 @@ class RerankServiceTest {
   }
 
   @Test void disabledAndEmptySearchDoNotSendRequests() {
-    var disabled = new RerankService(new RerankProperties("", "", "", null), RestClient.builder());
-    assertEquals(List.of("a"), disabled.rerank("q", List.of("a"), s -> s));
+    for (String url : new String[] {null, "", "  "}) {
+      var disabled = new RerankService(new RerankProperties(true, url, "", "", null), RestClient.builder());
+      assertEquals(List.of("a"), disabled.rerank("q", List.of("a"), s -> s));
+    }
     assertTrue(service().rerank("q", List.<String>of(), s -> s).isEmpty());
     assertNull(body.get());
   }
@@ -96,6 +101,37 @@ class RerankServiceTest {
 
   @Test void configuredEndpointRequiresModel() {
     assertThrows(IllegalArgumentException.class, () -> new RerankService(
-        new RerankProperties(baseUrl, "", "", null), RestClient.builder()));
+        new RerankProperties(true, baseUrl, "", "", null), RestClient.builder()));
+  }
+
+  @Test void explicitlyDisabledSkipsRequestsAndModelValidation() {
+    for (String model : new String[] {null, "", "reranker"}) {
+      var properties = bind(Map.of("rei.rerank.enabled", "false", "rei.rerank.base-url", baseUrl));
+      assertFalse(properties.enabled());
+      var disabled = new RerankService(new RerankProperties(properties.enabled(), properties.baseUrl(),
+          "rerank-key", model, "/custom/rerank"), RestClient.builder());
+      var candidates = List.of("a", "b");
+      assertSame(candidates, disabled.rerank("q", candidates, s -> s));
+    }
+    assertNull(body.get());
+  }
+
+  @Test void omittedEnabledPreservesExistingConfigurationAndExplicitTrueEnablesReranking() {
+    for (String enabled : new String[] {null, "true"}) {
+      var values = new java.util.HashMap<String, Object>();
+      values.put("rei.rerank.base-url", baseUrl);
+      values.put("rei.rerank.model", "reranker");
+      values.put("rei.rerank.path", "/custom/rerank");
+      if (enabled != null) values.put("rei.rerank.enabled", enabled);
+      var properties = bind(values);
+      assertTrue(properties.enabled());
+      var configured = new RerankService(properties, RestClient.builder());
+      assertEquals(List.of("b", "a"), configured.rerank("q", List.of("a", "b"), s -> s));
+    }
+  }
+
+  private RerankProperties bind(Map<String, ?> values) {
+    return new Binder(new MapConfigurationPropertySource(values))
+        .bind("rei.rerank", Bindable.of(RerankProperties.class)).get();
   }
 }

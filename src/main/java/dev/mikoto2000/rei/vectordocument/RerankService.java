@@ -25,12 +25,12 @@ public class RerankService {
 
   public RerankService(RerankProperties properties, RestClient.Builder builder) {
     this.properties = properties;
-    if (!properties.enabled()) {
+    if (!properties.enabled() || properties.baseUrl() == null || properties.baseUrl().isBlank()) {
       client = null;
       return;
     }
     if (properties.model() == null || properties.model().isBlank()) {
-      throw new IllegalArgumentException("rei.rerank.model is required when rei.rerank.base-url is set");
+      throw new IllegalArgumentException("rei.rerank.model is required when reranking is enabled and rei.rerank.base-url is set");
     }
     var factory = new JdkClientHttpRequestFactory(java.net.http.HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10)).build());
