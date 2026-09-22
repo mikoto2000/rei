@@ -9,6 +9,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class ActivityProperties {
   private boolean enabled = false;
   private boolean extractionEnabled = true;
+  private boolean keepScreenshots = false;
+  private boolean keepOnExtractionFailure = false;
   private int captureIntervalSeconds = 60;
   private int screenshotRetentionDays = 3;
   private double changeThreshold = .03;

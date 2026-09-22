@@ -19,9 +19,8 @@ public final class VisionActivityExtractor implements ActivityExtractor {
     var media=new ArrayList<Media>();var monitors=new ArrayList<String>();
     for(var display:screen.displays()) {
       monitors.add(display.geometry().id());
-      var bytes=new java.io.ByteArrayOutputStream();
-      if(!javax.imageio.ImageIO.write(display.image(),"png",bytes))throw new IllegalStateException("PNG unavailable");
-      media.add(new Media(org.springframework.util.MimeTypeUtils.IMAGE_PNG,new org.springframework.core.io.ByteArrayResource(bytes.toByteArray())));
+      var bytes=PngScreenshotEncoder.encode(display.image());
+      media.add(new Media(org.springframework.util.MimeTypeUtils.IMAGE_PNG,new org.springframework.core.io.ByteArrayResource(bytes)));
     }
     var format=new ResponseFormat();format.setType(ResponseFormat.Type.JSON_SCHEMA);
     format.setJsonSchema(ResponseFormat.JsonSchema.builder().name("activity_extraction").strict(true).schema(ActivityOutputParser.SCHEMA).build());

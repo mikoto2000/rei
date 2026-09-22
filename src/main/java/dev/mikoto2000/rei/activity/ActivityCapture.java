@@ -63,13 +63,23 @@ public final class ActivityCapture implements AutoCloseable {
           && sameGeometry(prior.observations(),observations) && change<=properties.getChangeThreshold()
           && Duration.between(prior.capturedAt(),at).getSeconds()<=Math.max(properties.getSessionGapSeconds(),properties.getCaptureIntervalSeconds()*2L);
       if (!allowed(token)) return;
-      var result=duplicate ? new ActivityExtractor.Result(prior.inference(),prior.confidence())
-          : properties.isExtractionEnabled() ? extractor.extract(screen,foreground)
-          : new ActivityExtractor.Result(new ActivityRecord.Inference("OS observation only; activity unknown",List.of()),0);
+      ActivityExtractor.Result result;
+      try {
+        result=duplicate ? new ActivityExtractor.Result(prior.inference(),prior.confidence())
+            : properties.isExtractionEnabled() ? extractor.extract(screen,foreground)
+            : new ActivityExtractor.Result(new ActivityRecord.Inference("OS observation only; activity unknown",List.of()),0);
+      } catch (Exception error) {
+        saveEvidence(token, UUID.randomUUID().toString(), at, screen, duplicate,
+            ScreenshotPersistencePolicy.Outcome.EXTRACTION_FAILURE);
+        resetEvidence();
+        failure("extraction", error);
+        return;
+      }
       synchronized(this) {
         if (!allowed(token)) return;
         var id=UUID.randomUUID().toString();
-        var refs=duplicate ? prior.screenshotReferences() : properties.getScreenshotRetentionDays()==0 ? List.<String>of() : screenshots.save(id,at,screen);
+        var refs=duplicate ? prior.screenshotReferences() : saveEvidence(token, id, at, screen, false,
+            ScreenshotPersistencePolicy.Outcome.SUCCESS);
         var record=new ActivityRecord(id,at,properties.getCaptureIntervalSeconds(),observations,foreground,result.inference(),result.confidence(),refs,change,duplicate,continuityId);
         store.append(record);
         previous=record;
@@ -78,6 +88,17 @@ public final class ActivityCapture implements AutoCloseable {
       }
     } catch (Exception e) { resetEvidence(); failure("capture/extraction/storage",e); }
     finally { running.set(false); }
+  }
+  private synchronized List<String> saveEvidence(long token, String id, Instant at,
+      dev.mikoto2000.rei.computeruse.CapturedScreen screen, boolean duplicate,
+      ScreenshotPersistencePolicy.Outcome outcome) {
+    // Called only after the foreground privacy checks. A pause/close invalidates in-flight failures too.
+    if (!allowed(token) || !new ScreenshotPersistencePolicy(properties).shouldSave(duplicate, outcome)) return List.of();
+    try { return screenshots.save(id, at, screen); }
+    catch (Exception error) {
+      failure("evidence persistence", error);
+      return List.of(); // A failed optional evidence write must not discard a valid ActivityRecord.
+    }
   }
   private synchronized void resetEvidence() { previous=null; fingerprints=Map.of(); continuityId=UUID.randomUUID().toString(); }
   private static boolean sameGeometry(List<ActivityRecord.Observation> a,List<ActivityRecord.Observation> b) {

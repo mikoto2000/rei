@@ -3,7 +3,6 @@ package dev.mikoto2000.rei.activity;
 import java.nio.file.*;
 import java.time.Instant;
 import java.util.*;
-import javax.imageio.ImageIO;
 import dev.mikoto2000.rei.computeruse.CapturedScreen;
 
 /** Flat generated filenames only; retention never follows links or touches journal tables. */
@@ -20,7 +19,7 @@ public final class FileScreenshotStore implements ScreenshotStore {
         String name=capturedAt.toEpochMilli()+"_"+id+"_"+(index++)+".png";
         references.add(name);
         try(var stream=Files.newOutputStream(root.resolve(name),StandardOpenOption.CREATE_NEW)) {
-          if(!ImageIO.write(display.image(),"png",stream)) throw new IllegalStateException("PNG unavailable");
+          PngScreenshotEncoder.write(display.image(), stream);
         }
       }
       return List.copyOf(references);

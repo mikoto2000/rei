@@ -9,7 +9,8 @@ Phase 1〜3: デスクトップを観測し、構造化した履歴を保存し�
 Spring @Scheduled → bounded activityExecutor (1 worker, queue=0)
   → ActivityCapture → DesktopActivityObserver
       foreground exclusion → RobotScreenCapture (per display) → foreground recheck
-  → ImageChange → ActivityExtractor / VisionActivityExtractor → ActivityOutputParser
+  → ImageChange (RAM) → ActivityExtractor / VisionActivityExtractor (RAM) → ActivityOutputParser
+  → ScreenshotPersistencePolicy → optional ScreenshotStore
   → ActivityRecord → SqliteActivityStore + SessionMergePolicy → ActivitySession
   → ActivityTimeline → ActivityCommand / ActivityTools
 ```
@@ -36,6 +37,8 @@ rei:
   activity:
     enabled: false
     extraction-enabled: true
+    keep-screenshots: false
+    keep-on-extraction-failure: false
     capture-interval-seconds: 60
     screenshot-retention-days: 3
     change-threshold: 0.03
@@ -73,6 +76,50 @@ Activity専用サーバーが設定されている場合、障害時にもデフ
 retention=0 は画像をディスクに保存しない。解析が有効ならメモリ上の画像を Vision に送る。
 設定変更は再起動で適用される。1秒などの短い間隔は画像取得・API費用・DB更新量が増えるため、通常は60秒から調整する。
 
+## Screenshot lifecycle / Memory-First
+
+画像は `CapturedScreen` 内のモニター別 `DisplayCapture.image` (`BufferedImage`) として取得する。
+`ImageChange` はRAM上で特徴量を計算する。重複画面はPNGエンコードもVision呼び出しも保存もせず、
+画像への参照を解放する。継続を記録する軽量ActivityRecordは従来どおり追加する。
+
+変更画面は `PngScreenshotEncoder` により
+`BufferedImage → MemoryCacheImageOutputStream → ByteArrayOutputStream → byte[]` と変換する。
+`VisionActivityExtractor` が `ByteArrayResource` / Spring AI `Media` に渡し、
+既存OpenAI互換クライアントがJSONリクエスト中の `data:image/png;base64,...` にする。
+画像用 `Path`、temporary PNG、multipartファイルは経由しない。
+ImageIOのOutputStream便利メソッドは内部でディスクキャッシュを使用し得るため、
+明示的な `MemoryCacheImageOutputStream` を使う。他機能に影響するグローバルな
+`ImageIO.setUseCache` の変更は行わない。形式は引き続き可逆PNGで、OCR精度を落とす圧縮変更はない。
+
+通常はVision成功後に構造化Recordだけを保存し、画像はRAMから解放する。
+ScreenshotStoreはEvidenceを明示的に保持するときだけ呼ばれるoptional persistence。
+
+| 判定結果 | 保存に必要な設定 | 保存しない場合 |
+|---|---|---|
+| 変更画像・解析成功（Phase 1のみの場合も含む） | `keep-screenshots: true` | Recordは保存、画像参照は空リスト |
+| 変更画像・解析失敗（encode/request/構造検証の失敗） | `keep-on-extraction-failure: true` | Recordも画像も保存しない |
+| 重複画像 | 設定にかかわらず新規保存なし | 直前の推論・既存参照を引き継ぐ |
+| 除外、foreground切替、pause/停止 | 設定にかかわらず保存なし | 取得前にスキップ、またはRAM内で破棄 |
+
+両設定のデフォルトは `false` で、独立して作用する。
+`keep-screenshots: true` だけでは失敗画像を保存しない。
+`keep-on-extraction-failure: true` だけでは成功画像を保存しない。
+retention=0は両設定より優先され、画像を保存しない。
+保存したい場合は対応する設定をtrueにしてretentionを正の値にする。
+Evidence保存が失敗しても、正常な解析結果は画像参照なしでRecordとして残す。
+解析失敗Evidenceには時刻・UUID・画面順序を含む既存のファイル名を使い、不正なRecordは作成しない。
+pause/close中に終わった解析失敗もEvidence保存を行わない。
+
+Retentionは成功・失敗のEvidenceに同じルールを適用する。
+保持設定を後から無効にしても過去のEvidenceの期限処理を継続する。
+新たな画像保存がなければEvidenceディレクトリも作成しない。
+
+**SSD write suppressionの範囲:** デフォルトの画像ファイル書き込みと、
+PNGエンコード時の隠れた画像一時ファイルをなくした。SQLiteの構造化Record/Session更新、
+小さな既存Agent lifecycle events、既存Win32 probeの一時foreground JSONは残る。
+従って「画像書き込み0」は「全種類のdisk I/Oが0」という意味ではない。
+foreground JSONは画像やVision入力ではなく、OS metadata取得用の小さな一時ファイルで、finallyで削除する。
+
 ## Capture flow / Privacy
 
 1. Retention を処理する。無効化・pause 中でも過去画像の期限は守る。
@@ -83,8 +130,9 @@ retention=0 は画像をディスクに保存しない。解析が有効なら�
 6. 各画像を32×32のRGB特徴量に縮小し、正規化平均絶対差を算出。
    最大差が閾値以下、モニター構成とforegroundが同じ、時間gapが小さい場合は重複扱い。
    最後に解析した画像と比較するため、少しずつ蓄積する変化も検出できる。
-7. 新規画面のみ構造化解析。Schema検証に通った結果だけを保存。
-8. pause/resume の世代番号を再確認し、停止前の解析結果が後から保存されることを防止。
+7. 新規画面のみRAM内で構造化解析。成功/失敗と設定からEvidence保存を判定する。
+8. pause/resume の世代番号を再確認し、停止前の解析結果・失敗Evidenceが後から保存されることを防止。
+9. Schema検証に通った構造化結果だけをRecordとして保存。画像参照の空リストを許容する。
 
 除外プロセスは大文字小文字と `.exe` の有無を無視する。
 タイトルは大文字小文字を無視した glob（`*` / `?`）の全体一致。
@@ -100,6 +148,8 @@ foreground 除外だけで完全には防げない。機密画面を扱う前に
 ログには失敗ステージと例外型だけを残し、画像・タイトル・モデル出力は記録しない。
 LLM の通常 lifecycle events と Tool events は既存 API を使用する。
 独自の Activity Event taxonomy は追加していない。
+毎回のcapture成功やduplicateをINFOへ追加しない。画像/Base64、巨大なrequest/response、
+multipart bodyはActivityログへ出力しない。既存の小さなLLM lifecycle eventsは維持する。
 
 ## ActivityRecord
 
@@ -154,6 +204,8 @@ Record追加と、その日のSession再構築を1トランザクションで行
 UTC epoch millisecondsに時間インデックスを持ち、日単位でレコードを読み直すので、
 全履歴をメモリにロードしない。画像は `<rei-data-dir>/activity/screenshots/` に分離。
 画像の削除にDBへのカスケードはなく、RecordとSessionは無期限で残る。
+SQLiteのpayloadはRecord/Sessionの型付き構造化情報のみ。画像BLOB/Base64、
+Vision request全文、未検証の巨大response全文は保存しない。
 画像名に保存したcapturedAtでretention判定し、シンボリックリンクは辿らない。
 DB保存失敗後の孤立画像もretention対象になる。
 
@@ -192,6 +244,9 @@ summaryの言い回しによる過分割、pause/resumeを越えた誤結合に�
 
 `ActivityPolicyTest`、`ActivityCaptureTest`、`ActivityExtractionTest`、
 `ActivityTimelineTest`、`ActivityIntegrationTest` が新機能を検証する。
+Memory-Firstの検証は `MemoryFirstVisionTest`（内部ディスクキャッシュ禁止・PNG精度）、
+`MemoryFirstStorageTest`（画像なしのDB/Timeline/Summary・Evidence retention）と
+`ActivityCaptureTest` の保存回数・呼出順序・失敗/除外/pause時のポリシーテストで行う。
 実機画面のキャプチャと実際の外部Vision API呼び出しは自動テストでは実行しない。
 
 ## 将来 Phase 3.5〜5

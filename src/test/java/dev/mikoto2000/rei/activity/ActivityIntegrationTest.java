@@ -10,6 +10,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ActivityIntegrationTest {
+  @Test void evidenceSettingsDefaultOffAndBindIndependently() {
+    var defaults=new ActivityProperties();assertFalse(defaults.isKeepScreenshots());assertFalse(defaults.isKeepOnExtractionFailure());
+    var binder=new org.springframework.boot.context.properties.bind.Binder(new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(
+        Map.of("rei.activity.keep-screenshots","true","rei.activity.keep-on-extraction-failure","true")));
+    var configured=binder.bind("rei.activity",ActivityProperties.class).get();
+    assertTrue(configured.isKeepScreenshots());assertTrue(configured.isKeepOnExtractionFailure());
+  }
   @Test void configurationIsLazyAndDisabled() {
     var provider=mock(dev.mikoto2000.rei.llm.LlmModelProvider.class);
     var ds=mock(javax.sql.DataSource.class);
