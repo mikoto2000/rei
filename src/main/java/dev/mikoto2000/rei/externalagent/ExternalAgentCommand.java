@@ -9,7 +9,7 @@ import dev.mikoto2000.rei.application.session.ShellConversationService;
 @Command(name = "agent", description = "Request an external agent review: /agent codex review [target]")
 public class ExternalAgentCommand implements java.util.concurrent.Callable<Integer> {
   private final ShellConversationService conversations;
-  @Parameters(arity = "0..*", paramLabel = "AGENT ACTION [TARGET]") private String[] arguments;
+  @Parameters(arity = "0..*", paramLabel = "AGENT ACTION [TARGET]", completionCandidates = ExternalAgentCompletionCandidates.class) private String[] arguments;
   @Spec private picocli.CommandLine.Model.CommandSpec spec;
   public ExternalAgentCommand() { this(null); }
   @org.springframework.beans.factory.annotation.Autowired

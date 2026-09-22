@@ -12,17 +12,11 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import org.jline.reader.Candidate;
 import org.jline.reader.Completer;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
-import org.jline.reader.LineReaderBuilder;
-import org.jline.reader.ParsedLine;
-import org.jline.reader.Parser;
 import org.jline.reader.Reference;
-import org.jline.reader.SyntaxError;
 import org.jline.reader.UserInterruptException;
-import org.jline.reader.impl.DefaultParser;
 import org.jline.keymap.KeyMap;
 import org.jline.terminal.Attributes;
 import org.jline.terminal.Terminal;
@@ -37,7 +31,6 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
-import dev.mikoto2000.rei.core.command.ProjectAddDirectoryCompletion;
 import dev.mikoto2000.rei.ui.shell.RootCommand;
 import dev.mikoto2000.rei.core.command.ReiLineReaderFactory;
 import dev.mikoto2000.rei.core.command.UserInputParser;
@@ -56,11 +49,12 @@ import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import picocli.CommandLine;
-import picocli.shell.jline3.PicocliJLineCompleter;
 
 @EnableScheduling
 @SpringBootApplication
 public class ReiApplication {
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private dev.mikoto2000.rei.core.completion.CompletionEngine completionEngine = ReiLineReaderFactory.completionEngine();
 
   private final RootCommand rootCommand;
   private final CommandLine.IFactory factory;
@@ -160,7 +154,7 @@ public class ReiApplication {
     configureCommandOutput(cmd, terminal);
     dev.mikoto2000.rei.ui.shell.ShellProjectCommands.configure(cmd, projects, client, projectShellActivity);
 
-    ReiLineReaderFactory.Session inputSession = ReiLineReaderFactory.create(terminal, cmd);
+    ReiLineReaderFactory.Session inputSession = ReiLineReaderFactory.create(terminal, cmd, completionEngine);
     LineReader reader = inputSession.reader();
     configureMultilineKeyBinding(reader);
     var eventOutput = new JLineShellEventOutput(reader);
@@ -330,7 +324,7 @@ public class ReiApplication {
   }
 
   void executeInteractiveShellCommand(CommandLine cmd, LineReader reader, Terminal terminal, String... args) {
-    executeInteractiveShellCommand(cmd, reader, terminal, ReiLineReaderFactory.completer(cmd), args);
+    executeInteractiveShellCommand(cmd, reader, terminal, ReiLineReaderFactory.completer(cmd, completionEngine), args);
   }
 
   void executeInteractiveShellCommand(CommandLine cmd, LineReader reader, Terminal terminal,

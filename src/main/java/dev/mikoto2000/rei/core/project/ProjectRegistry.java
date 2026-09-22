@@ -9,7 +9,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public final class ProjectRegistry {
   private final Path file;
   private final ObjectMapper mapper = new ObjectMapper();
-  public ProjectRegistry(Path file) { this.file = file; }
+  private volatile List<ProjectContext> completionSnapshot = List.of();
+  public ProjectRegistry(Path file) {
+    this.file = file;
+    try { read(); } catch (RuntimeException ignored) { /* Optional startup completion snapshot. */ }
+  }
+  public List<ProjectContext> completionSnapshot() { return completionSnapshot; }
   public record Entry(String id, String name, String path) {
     ProjectContext context() { return new ProjectContext(id, name, Path.of(path)); }
   }
@@ -48,8 +53,12 @@ public final class ProjectRegistry {
     save(entries);
   }
   private List<Entry> read() {
-    if (!Files.exists(file)) return new ArrayList<>();
-    try { return new ArrayList<>(mapper.readValue(Files.readString(file), Document.class).projects()); }
+    if (!Files.exists(file)) { completionSnapshot = List.of(); return new ArrayList<>(); }
+    try {
+      var entries = new ArrayList<>(mapper.readValue(Files.readString(file), Document.class).projects());
+      completionSnapshot = entries.stream().map(Entry::context).toList();
+      return entries;
+    }
     catch (IOException e) { throw new IllegalStateException("Cannot read project registry: " + file, e); }
   }
   private void save(List<Entry> entries) {
@@ -60,6 +69,7 @@ public final class ProjectRegistry {
       Files.writeString(temporary, mapper.writerWithDefaultPrettyPrinter().writeValueAsString(new Document(entries)));
       try { Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING); }
       catch (AtomicMoveNotSupportedException e) { Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING); }
+      completionSnapshot = entries.stream().map(Entry::context).toList();
     } catch (IOException e) { throw new IllegalStateException("Cannot save project registry: " + file, e); }
     finally {
       if (temporary != null) try { Files.deleteIfExists(temporary); }
