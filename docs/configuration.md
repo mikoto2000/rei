@@ -53,7 +53,7 @@ rei:
     output-limit:
       max-replans-per-goal: 2
       max-subgoals-per-replan: 8
-      max-llm-calls-per-run: 30
+      max-llm-calls-per-run: 120
   image:
     output-directory: ${rei.data-dir}/images
     size: 1024x1024
@@ -148,7 +148,7 @@ rei:
     output-limit:
       max-replans-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL:2}
       max-subgoals-per-replan: ${REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN:8}
-      max-llm-calls-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN:30}
+      max-llm-calls-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN:120}
     features:
       chat:
         base-url: ${REI_LLM_CHAT_BASE_URL:}
@@ -221,7 +221,7 @@ rei:
 | `REI_LLM_MAX_OUTPUT_TOKENS` | `8192` | 1 回の LLM 呼び出しの最大出力トークン数 |
 | `REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL` | `2` | 1 回の要求内で許可する再計画回数 |
 | `REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN` | `8` | Planner が返せる最大サブゴール数 |
-| `REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN` | `30` | 1 回の要求内で許可する LLM 呼び出し回数 |
+| `REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN` | `120` | 1 回の要求内で許可する LLM 呼び出し回数 |
 
 ## Google Calendar と Google Tasks
 

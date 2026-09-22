@@ -62,7 +62,7 @@ MCP ツールも共通境界で実行制御するが、独自名・独自形式�
 `OutputLimitRunBudget` は削除・リセットしない。
 
 - `rei.llm.max-output-tokens`：1回の出力上限（既定8192）。
-- `rei.llm.output-limit.max-llm-calls-per-run`：外側の初期／サブゴール／統合呼び出し、分割プランナー、内部の追加LLM反復の合計（既定30）。
+- `rei.llm.output-limit.max-llm-calls-per-run`：外側の初期／サブゴール／統合呼び出し、分割プランナー、内部の追加LLM反復の合計（既定120）。
 - `rei.llm.output-limit.max-replans-per-goal`：名前は既存互換のまま、実装上はrun全体の再計画上限（既定2）。出力上限による分割と停滞再計画で共有する。
 
 意味のある進捗が続いてもこの上限を超えない。エピソードの回復は hard budget を回復しない。

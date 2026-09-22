@@ -12,7 +12,7 @@ class LlmPropertiesTest {
 
     assertThat(properties.getOutputLimit().getMaxReplansPerGoal()).isEqualTo(2);
     assertThat(properties.getOutputLimit().getMaxSubgoalsPerReplan()).isEqualTo(8);
-    assertThat(properties.getOutputLimit().getMaxLlmCallsPerRun()).isEqualTo(30);
+    assertThat(properties.getOutputLimit().getMaxLlmCallsPerRun()).isEqualTo(120);
   }
 
   @Test
@@ -24,6 +24,6 @@ class LlmPropertiesTest {
 
     assertThat(properties.getOutputLimit().getMaxReplansPerGoal()).isEqualTo(2);
     assertThat(properties.getOutputLimit().getMaxSubgoalsPerReplan()).isEqualTo(8);
-    assertThat(properties.getOutputLimit().getMaxLlmCallsPerRun()).isEqualTo(30);
+    assertThat(properties.getOutputLimit().getMaxLlmCallsPerRun()).isEqualTo(120);
   }
 }

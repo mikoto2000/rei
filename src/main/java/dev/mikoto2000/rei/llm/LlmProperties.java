@@ -103,7 +103,7 @@ public class LlmProperties {
   public static class OutputLimit {
     private static final int DEFAULT_MAX_REPLANS_PER_GOAL = 2;
     private static final int DEFAULT_MAX_SUBGOALS_PER_REPLAN = 8;
-    private static final int DEFAULT_MAX_LLM_CALLS_PER_RUN = 30;
+    private static final int DEFAULT_MAX_LLM_CALLS_PER_RUN = 120;
 
     private Integer maxReplansPerGoal = DEFAULT_MAX_REPLANS_PER_GOAL;
     private Integer maxSubgoalsPerReplan = DEFAULT_MAX_SUBGOALS_PER_REPLAN;
