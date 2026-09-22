@@ -26,6 +26,9 @@ Rei は起動時に、組み込みの `application.yaml` に加えて、グロ�
 
 テンプレート作成:
 
+テンプレートには、Rei が使用する有効・無効の設定（`enabled` と `notification-enabled`）を含みます。
+`rei.web.enabled` は API キーの有無から起動時に自動決定されるため含めません。
+
 ```text
 /config init
 ```

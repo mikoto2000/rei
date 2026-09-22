@@ -1,13 +1,21 @@
 package dev.mikoto2000.rei.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Properties;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 
 class ExternalConfigFileServiceTest {
 
@@ -86,6 +94,40 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("alice.bsky.social"));
     String additionalSystemPrompt = Files.readString(service.additionalSystemPromptFilePath());
     assertTrue(additionalSystemPrompt.contains("Markdown で直接記述"));
+  }
+
+  @Test
+  void templateIncludesAllEnabledSettingsExceptWeb() {
+    ExternalConfigFileService service = new ExternalConfigFileService(tempDir);
+    Properties template = loadYaml(new FileSystemResource(service.initializeConfigFile(false)));
+    Properties defaults = loadYaml(new ClassPathResource("application.yaml"));
+    Set<String> expected = enabledKeys(defaults);
+    // These settings are declared in Java rather than the bundled application.yaml.
+    Set<String> javaSettings = Set.of("rei.computer-use.enabled",
+        "rei.computer-use.diagnostics.enabled", "rei.sound-notification.enabled");
+    expected.addAll(javaSettings);
+    expected.remove("rei.web.enabled");
+
+    assertEquals(expected, enabledKeys(template));
+    assertFalse(template.containsKey("rei.web.enabled"));
+    for (String key : javaSettings) {
+      assertEquals(false, template.get(key), key);
+    }
+  }
+
+  private Properties loadYaml(Resource resource) {
+    var factory = new YamlPropertiesFactoryBean();
+    factory.setResources(resource);
+    return factory.getObject();
+  }
+
+  private Set<String> enabledKeys(Properties properties) {
+    var keys = new TreeSet<String>();
+    for (Object name : properties.keySet()) {
+      String key = name.toString();
+      if (key.endsWith(".enabled") || key.endsWith("-enabled")) keys.add(key);
+    }
+    return keys;
   }
 
   @Test

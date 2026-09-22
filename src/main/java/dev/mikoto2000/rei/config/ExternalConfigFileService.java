@@ -83,8 +83,24 @@ public class ExternalConfigFileService {
               chat: openai
               embedding: openai
               image: openai
+            mcp:
+              client:
+                enabled: ${REI_MCP_ENABLED:false}
+                toolcallback:
+                  enabled: true
+          devtools:
+            restart:
+              enabled: false
 
         rei:
+          context-compression:
+            enabled: ${REI_CONTEXT_COMPRESSION_ENABLED:true}
+          computer-use:
+            enabled: false
+            diagnostics:
+              enabled: false
+          sound-notification:
+            enabled: false
           external-agents:
             codex:
               enabled: true
@@ -175,6 +191,14 @@ public class ExternalConfigFileService {
             enabled: true
             notification-enabled: false
             notification-cron: ${REI_INTEREST_NOTIFICATION_CRON:0 0 12 * * *}
+          topic-generator:
+            enabled: ${REI_TOPIC_GENERATOR_ENABLED:false}
+            idle-trigger:
+              enabled: ${REI_TOPIC_GENERATOR_IDLE_TRIGGER_ENABLED:true}
+            discovery:
+              enabled: ${REI_TOPIC_GENERATOR_DISCOVERY_ENABLED:true}
+          memory:
+            enabled: ${REI_MEMORY_ENABLED:true}
           feed:
             briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:3}
             cron: ${REI_FEED_CRON:0 0 4 * * *}
@@ -201,6 +225,8 @@ public class ExternalConfigFileService {
             application-name: Rei
             credentials-path: ${REI_GOOGLE_CREDENTIALS_PATH:${rei.data-dir}/google-calendar-credentials.json}
             tokens-directory: ${REI_GOOGLE_TOKENS_DIR:${rei.data-dir}/google-calendar-tokens}
+            token-refresh:
+              enabled: ${REI_GOOGLE_TOKEN_REFRESH_ENABLED:true}
             calendar:
               enabled: false
               default-calendar-id: ${REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID:primary}
