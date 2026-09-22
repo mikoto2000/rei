@@ -7,6 +7,7 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import dev.mikoto2000.rei.ui.shell.ChatCommand;
@@ -32,6 +33,11 @@ class ReiApplicationTests {
 
 	@Test
 	void contextLoads() {
+	}
+
+	@Test
+	void passwordAuthenticationUserIsNotCreated() {
+		org.assertj.core.api.Assertions.assertThat(applicationContext.getBeansOfType(UserDetailsService.class)).isEmpty();
 	}
 
 	@Test

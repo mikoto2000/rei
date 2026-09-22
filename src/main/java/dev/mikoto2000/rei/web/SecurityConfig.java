@@ -16,6 +16,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
   @Bean SecurityFilterChain apiSecurity(HttpSecurity http, ApiKeyProperties key) throws Exception {
     return http.csrf(csrf -> csrf.disable())
+        .httpBasic(basic -> basic.disable())
+        .formLogin(form -> form.disable())
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .requestCache(cache -> cache.disable())
         .authorizeHttpRequests(auth -> auth.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()

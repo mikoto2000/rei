@@ -26,6 +26,7 @@ import org.jline.utils.AttributedStyle;
 import org.jline.utils.NonBlockingReader;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.Environment;
@@ -51,7 +52,7 @@ import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import picocli.CommandLine;
 
 @EnableScheduling
-@SpringBootApplication
+@SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
 public class ReiApplication {
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   private dev.mikoto2000.rei.core.completion.CompletionEngine completionEngine = ReiLineReaderFactory.completionEngine();
