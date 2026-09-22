@@ -7,6 +7,14 @@ import org.mockito.Mockito;
 import org.springframework.ai.chat.model.ChatModel;
 
 class LlmModelProviderTest {
+  @Test
+  void activityDoesNotSendScreenshotsToFallbackServer() {
+    var properties = new LlmProperties();
+    var server = new LlmProperties.Server(); server.setBaseUrl("http://vision.example.test");
+    properties.getFeatures().put("activity", server);
+    assertThat(new LlmModelProvider(Mockito.mock(ChatModel.class), properties).chatModel("activity"))
+        .isInstanceOf(org.springframework.ai.openai.OpenAiChatModel.class);
+  }
 
   @Test
   void computerUseOutputBudgetDoesNotChangeChatBudget() {

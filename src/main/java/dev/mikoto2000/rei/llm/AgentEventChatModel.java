@@ -37,7 +37,8 @@ final class AgentEventChatModel implements ChatModel {
       publisher(prompt).publish(eventFactory.llmResponseCompleted(null, requestId, elapsedMillis(startedAtNanos)));
       return response;
     } catch (RuntimeException e) {
-      publisher(prompt).publish(eventFactory.llmRequestFailed(null, requestId, elapsedMillis(startedAtNanos), e));
+      publisher(prompt).publish(eventFactory.llmRequestFailed(null, requestId, elapsedMillis(startedAtNanos),
+          LlmFeature.ACTIVITY.equals(feature) ? new IllegalStateException("Activity model request failed") : e));
       throw e;
     }
   }

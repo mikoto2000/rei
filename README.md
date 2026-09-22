@@ -183,6 +183,9 @@ Web では認証付き `GET /api/v1/sessions`、`GET /api/v1/sessions/{sessionId
 
 ## 開発・ライセンス
 
+デスクトップの観測・作業履歴は [Activity Capture / Timeline](docs/activity-timeline.md) を参照してください。
+初期状態は無効です。有効化後は `/activity today`、`/activity yesterday`、`/activity pause` などで操作できます。
+
 開発やテストの手順は [DEVELOP.md](DEVELOP.md)、仕様・設計は [.kiro](.kiro/README.md) を参照してください。
 
 [MIT ライセンス](LICENSE)で提供しています。作者: mikoto2000 <mikoto2000@gmail.com>
