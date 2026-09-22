@@ -9,6 +9,32 @@ import dev.mikoto2000.rei.core.project.ProjectContext;
 import static org.assertj.core.api.Assertions.*;
 
 class BackgroundExecutionRegistryTest {
+  @org.junit.jupiter.api.io.TempDir Path directory;
+
+  @Test void summaryCapturesSelectedSessionBeforeClientSwitches() {
+    var projects = new dev.mikoto2000.rei.core.project.ProjectService(directory,
+        new dev.mikoto2000.rei.core.project.ProjectRegistry(directory.resolve("projects.json")));
+    var tasks = new ArrayList<Runnable>();
+    var memory = org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build();
+    var history = new dev.mikoto2000.rei.summarize.CurrentConversationHistoryAppender(memory, Optional.empty());
+    var router = new ConversationInputRouter(tasks::add, (c,p,q) -> {});
+    try (var client = dev.mikoto2000.rei.core.project.ProjectClientScope.open(projects.newClient())) {
+      var project = projects.currentContext();
+      String session = project.conversationId("chat:" + UUID.randomUUID());
+      projects.selectSession(session);
+      var execution = router.submitBackground(project, ExecutionType.SUMMARIZE, "url", e -> {
+        history.appendUserMessage("https://example.com/article");
+        history.appendAssistantMessage("要約");
+      });
+      projects.selectSession(project.conversationId("chat:other"));
+      tasks.getFirst().run();
+      assertThat(execution.conversationId()).isEqualTo(session);
+      assertThat(memory.get(session)).extracting(org.springframework.ai.chat.messages.Message::getText)
+          .containsExactly("https://example.com/article", "要約");
+      assertThat(memory.get(projects.currentSessionId())).isEmpty();
+    }
+  }
+
   ProjectContext a=new ProjectContext(UUID.randomUUID().toString(),"A",Path.of("a"));
   @Test void commandExecutionsCoexistAndOnlyAgentAcceptsInterventions() {
     var tasks=new ArrayList<Runnable>();

@@ -48,8 +48,12 @@ public final class ConversationInputRouter {
   public ActiveExecution submitBackground(ProjectContext project, ExecutionType type, String summary,
       Consumer<ActiveExecution> registered, Consumer<ActiveExecution> work) {
     if (type == ExecutionType.AGENT) throw new IllegalArgumentException("Agent input must use its intervention router");
+    String conversation = dev.mikoto2000.rei.core.project.ProjectService.selectedShellSession();
+    if (conversation == null || !conversation.startsWith("project:" + project.id() + ":")) {
+      conversation = project.conversationId(dev.mikoto2000.rei.llm.ConversationIds.chat());
+    }
     var execution = new ActiveExecution(UUID.randomUUID().toString(), project.id(),
-        project.conversationId(dev.mikoto2000.rei.llm.ConversationIds.chat()), project.root(), type,
+        conversation, project.root(), type,
         ActiveRun.summary(summary), java.time.Instant.now());
     background.put(execution.id(), execution); changed();
     try {

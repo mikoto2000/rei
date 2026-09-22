@@ -95,6 +95,7 @@ public class AiConfiguration {
   private final WebSearchTools webSearchTools;
   private final SoundNotificationTools soundNotificationTools;
   private final BlueskyPostTools blueskyPostTools;
+  private final dev.mikoto2000.rei.summarize.SummaryTools summaryTools;
   private final UrlContentFetchTools urlContentFetchTools;
   private final TextTools textTools;
   private final ClockTools clockTools;
@@ -144,7 +145,7 @@ public class AiConfiguration {
         .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors))
         .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
             soundNotificationTools, blueskyPostTools, urlContentFetchTools, textTools, clockTools, schedulerTools, taskStateTools,
-            conversationHistoryTools);
+            conversationHistoryTools, summaryTools);
 
     if (rawResultTools != null) builder.defaultTools(rawResultTools);
     ToolEventCallbackProvider toolCallbackProvider = toolEventCallbackProvider.getIfAvailable();
