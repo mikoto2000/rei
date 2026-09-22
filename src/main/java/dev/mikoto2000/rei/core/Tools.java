@@ -1053,9 +1053,12 @@ public class Tools {
    * <p>ファイルが 1 件だけの場合もこのツールを使用する。</p>
    */
   @Tool(name = "writeMultiFile", description = """
-      Write one or more known files and replace complete contents in a single call.
-      Use this for coordinated full-file writes. For a small edit to an existing file, prefer applyTextDiff.
-      @param files 書き込むファイルのリスト。各要素は path と content を持つ。
+      Write one or more known files in a single call: replace complete contents or append to each file.
+      Always pass a non-empty files array, even for one file. Put path, content, append, and charset inside each
+      files element, not at the top level. append: true appends; append: false or omitted replaces complete contents.
+      Use this for full-file writes or appending chunks. For a small edit to existing text, prefer applyTextDiff.
+      Example: {"files":[{"path":"notes.md","content":"More text","append":true,"charset":"UTF-8"}]}
+      @param files 書き込むファイルの空でないリスト。各要素に必須の path と content、任意の append と charset を指定する。
       @return ファイルごとの書き込み結果。path で識別できる。
       """)
   List<WriteFileResult> writeMultiFile(List<WriteFileRequest> files) throws IOException {

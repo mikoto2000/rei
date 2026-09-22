@@ -37,7 +37,7 @@ LLM に公開する Tool は、ユーザーの目的に近い workflow Tool を�
 - 場所が不明なコードやテキストの検索と読取: `searchAndRead`
 - 一致位置だけ: `grepMultiQuery`
 - 既知ファイルの読取: `readMultiFile`
-- 複数ファイルの全内容書込: `writeMultiFile`
+- 1件以上のファイルの全内容書込・追記: `writeMultiFile`（空でない `files` 配列の各要素に `path`、`content`、任意の `append`、`charset` を指定。`append: true` は追記、`false` または省略は全内容置換）
 - 既存ファイルの局所編集: `applyTextDiff`
 
 旧 Shell メソッドは内部互換コードとして残し、新規 LLM Tool definition からだけ除外する。保存済み Tool event や会話履歴の表示データは書き換えない。Tool object 内の annotation method 順序を framework が公開順として保証していないため、表示順制御にも依存しない。
