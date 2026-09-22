@@ -31,6 +31,7 @@ import dev.mikoto2000.rei.reminder.ReminderTools;
 import dev.mikoto2000.rei.search.SearchTools;
 import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
 import dev.mikoto2000.rei.sound.SoundNotificationTools;
+import dev.mikoto2000.rei.summarize.SummaryTools;
 import dev.mikoto2000.rei.task.TaskTools;
 import dev.mikoto2000.rei.text.TextTools;
 import dev.mikoto2000.rei.temporal.RuntimeContextAdvisor;
@@ -39,6 +40,9 @@ import dev.mikoto2000.rei.websearch.WebSearchTools;
 
 @Component
 public class LlmChatClientProvider {
+  private ObjectProvider<SummaryTools> summaryTools;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setSummaryTools(ObjectProvider<SummaryTools> tools) { this.summaryTools = tools; }
   private dev.mikoto2000.rei.core.contextbudget.ContextAssembler contextAssembler;
   private dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor contextHistory;
   private dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawResultTools;
@@ -168,6 +172,7 @@ public class LlmChatClientProvider {
         .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors));
 
     List<Object> toolObjects = new ArrayList<>();
+    if (LlmFeature.CHAT.equals(feature) && summaryTools != null) addIfAvailable(toolObjects, summaryTools);
     if (LlmFeature.CHAT.equals(feature) && rawResultTools != null) toolObjects.add(rawResultTools);
     addIfAvailable(toolObjects, tools);
     addIfAvailable(toolObjects, googleCalendarTools);
