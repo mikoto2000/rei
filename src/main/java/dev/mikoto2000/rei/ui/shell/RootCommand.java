@@ -33,6 +33,7 @@ version = "v1.0.0",
 name = "",
 description = "AI shell",
 subcommands = {
+  dev.mikoto2000.rei.activity.ActivityCommand.class,
   dev.mikoto2000.rei.externalagent.ExternalAgentCommand.class,
   dev.mikoto2000.rei.subagent.SubAgentCommand.class,
   ChatCommand.class,

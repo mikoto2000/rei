@@ -52,13 +52,13 @@ public class LlmModelProvider {
   }
 
   private ChatModel createFeatureModel(String feature) {
-    if (LlmFeature.COMPUTER_USE.equals(feature) || LlmFeature.COMPUTER_USE_PLANNER.equals(feature))
+    if (LlmFeature.COMPUTER_USE.equals(feature) || LlmFeature.COMPUTER_USE_PLANNER.equals(feature) || LlmFeature.ACTIVITY.equals(feature))
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(defaultChatModel);
     LlmProperties.Server server = properties.feature(feature);
     ChatModel model = defaultChatModel;
     if (server != null && server.hasCustomServer()) {
       ChatModel primary = createOpenAiCompatibleChatModel(server);
-      model = (LlmFeature.COMPUTER_USE.equals(feature) || LlmFeature.COMPUTER_USE_PLANNER.equals(feature)) ? primary
+      model = (LlmFeature.COMPUTER_USE.equals(feature) || LlmFeature.COMPUTER_USE_PLANNER.equals(feature) || LlmFeature.ACTIVITY.equals(feature)) ? primary
           : new FallbackChatModel(feature, primary, defaultChatModel, server.getModel());
     }
     return eventFactory == null || eventPublisher == null

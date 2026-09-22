@@ -43,6 +43,9 @@ public class LlmChatClientProvider {
   private ObjectProvider<SummaryTools> summaryTools;
   @org.springframework.beans.factory.annotation.Autowired
   void setSummaryTools(ObjectProvider<SummaryTools> tools) { this.summaryTools = tools; }
+  private ObjectProvider<dev.mikoto2000.rei.activity.ActivityTools> activityTools;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setActivityTools(ObjectProvider<dev.mikoto2000.rei.activity.ActivityTools> tools) { this.activityTools = tools; }
   private dev.mikoto2000.rei.core.contextbudget.ContextAssembler contextAssembler;
   private dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor contextHistory;
   private dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawResultTools;
@@ -173,6 +176,7 @@ public class LlmChatClientProvider {
 
     List<Object> toolObjects = new ArrayList<>();
     if (LlmFeature.CHAT.equals(feature) && summaryTools != null) addIfAvailable(toolObjects, summaryTools);
+    if (LlmFeature.CHAT.equals(feature) && activityTools != null) addIfAvailable(toolObjects, activityTools);
     if (LlmFeature.CHAT.equals(feature) && rawResultTools != null) toolObjects.add(rawResultTools);
     addIfAvailable(toolObjects, tools);
     addIfAvailable(toolObjects, googleCalendarTools);
