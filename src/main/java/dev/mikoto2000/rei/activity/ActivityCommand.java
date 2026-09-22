@@ -9,7 +9,12 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   private final ActivityTimeline timeline;
   private final ActivityCapture capture;
   private final ActivityProperties properties;
-  @Parameters(arity="0..1",defaultValue="today") private String action;
+  @Parameters(index="0",arity="0..1",defaultValue="today",completionCandidates=ActionCandidates.class) private String action;
+  public static final class ActionCandidates implements Iterable<String> {
+    @Override public java.util.Iterator<String> iterator() {
+      return java.util.List.of("today","yesterday","summary","pause","resume").iterator();
+    }
+  }
   @Spec private picocli.CommandLine.Model.CommandSpec spec;
   public ActivityCommand() {this(null,null,null);}
   @org.springframework.beans.factory.annotation.Autowired

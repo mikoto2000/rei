@@ -17,7 +17,8 @@ class ContextCompletionTest {
   CommandLine command() {
     return new CommandLine(CommandSpec.create()).addSubcommand("project", new ProjectCommand())
         .addSubcommand("history", new HistoryCommand()).addSubcommand("agent", new ExternalAgentCommand())
-        .addSubcommand("session", new SessionCommand());
+        .addSubcommand("session", new SessionCommand())
+        .addSubcommand("activity", new dev.mikoto2000.rei.activity.ActivityCommand());
   }
   List<Candidate> complete(CommandLine cmd, String line, int cursor) {
     var result = new ArrayList<Candidate>();
@@ -41,6 +42,14 @@ class ContextCompletionTest {
   @Test void subcommandsComeFromDefinitions() {
     assertThat(values(command(), "/history ")).contains("show", "search", "list");
     assertThat(values(command(), "/project ")).contains("add", "remove", "cd", "list");
+  }
+  @Test void activityActionsCompleteWithoutExecutingCaptureOrTimeline() {
+    var cmd = command();
+    assertThat(values(cmd, "/activity ")).containsExactlyInAnyOrder("today", "yesterday", "summary", "pause", "resume");
+    assertThat(values(cmd, "/activity y")).containsExactly("yesterday");
+    assertThat(values(cmd, "/activity re")).containsExactly("resume");
+    assertThat(values(cmd, "/activity today ")).isEmpty();
+    assertThat(values(cmd, "/activity 2026-09-")).isEmpty();
   }
   @Test void projectCdAndAddOnlyOfferDirectories() throws Exception {
     Files.createDirectory(root.resolve("docs")); Files.createFile(root.resolve("data.txt"));
