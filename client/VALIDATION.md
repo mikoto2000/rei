@@ -1,5 +1,19 @@
 # Live AgentEvent Activity validation
 
+## ユーザー／れいのアイコン（2026-09-22）
+
+Settings の「ユーザーアイコン」で PNG / JPEG / WebP（2 MB 以下）を選択・リセットできます。
+画像は端末内の WebView localStorage に保存し、サーバーには送信しません。
+過去の会話と実行中の会話に共通で反映します。
+れいの画像は `public/rei-avatar.png` に同梱し、会話・サイドバー・空の会話画面で使用します。
+
+Frontend 41件、build（型検査含む）、lint が成功。
+Playwright の Desktop / Mobile で画像選択、壊れた画像の拒否、再読込後の復元、
+保存済み／実行中の会話への表示、リセットを検証しました。
+全体検証ではページ読み込みの30秒タイムアウトが発生したため、複数回の
+再読み込みを行うアイコンテストの制限を60秒に設定しています。
+Tauri 実機でのファイル選択とネイティブ実行ファイルの再ビルドは未実施です。
+
 ## テキスト中心のイベント表示（追加検証）
 
 `feature/native-plain-event-text`: イベントの枠・太字・段組みを取り除き、12px 等幅フォントのテキスト行に変更。Frontend 32件、Desktop／Mobile 10件、型・lint・format、Windows assets 埋込みビルドが成功しました。Rust／Server の変更はありません。

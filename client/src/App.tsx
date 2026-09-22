@@ -13,6 +13,8 @@ import {
 } from "./entities/models";
 import { Chat } from "./features/chat/Chat";
 import { Settings } from "./features/settings/Settings";
+import { useUserAvatar } from "./features/settings/userAvatar";
+import { Avatar } from "./shared/Avatar";
 import { SessionList } from "./features/history/SessionList";
 import {
   useSessionList,
@@ -37,6 +39,7 @@ export function App({
   subscriptions?: Events;
 }) {
   const [data, setData] = useState(initial);
+  const [userAvatar, setUserAvatar] = useUserAvatar();
   const [page, setPage] = useState<Page>("conversations");
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -250,7 +253,7 @@ export function App({
             navigate("conversations");
           }}
         >
-          <span className="brand-mark">r.</span>
+          <Avatar role="assistant" className="brand-avatar" />
           <div>
             rei<span>WORKSPACE CLIENT</span>
           </div>
@@ -375,6 +378,8 @@ export function App({
           <>
             {page === "settings" && (
               <Settings
+                userAvatar={userAvatar}
+                onUserAvatar={setUserAvatar}
                 servers={data.servers}
                 connections={connections}
                 unlocked={data.unlocked}
@@ -577,6 +582,7 @@ export function App({
                   会話一覧へ戻る
                 </button>
                 <Chat
+                  userAvatar={userAvatar}
                   key={selectedConversation.localId}
                   conversation={selectedConversation}
                   projectName={projectName(

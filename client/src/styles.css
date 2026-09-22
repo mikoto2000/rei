@@ -460,10 +460,53 @@ main {
   font-size: 14px;
 }
 .message-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-size: 10px;
   letter-spacing: 2px;
   font-weight: 600;
   color: var(--mint);
+}
+.avatar {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.avatar-placeholder {
+  display: inline-grid;
+  place-items: center;
+  background: #263f39;
+  color: var(--mint);
+  font-size: 14px;
+  letter-spacing: 0;
+}
+.brand-avatar {
+  width: 44px;
+  height: 44px;
+}
+.welcome-avatar {
+  width: 88px;
+  height: 88px;
+}
+.avatar-settings {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.avatar-settings > .avatar {
+  width: 64px;
+  height: 64px;
+}
+.avatar-settings label {
+  flex: 1 1 210px;
+  min-width: 0;
+}
+.avatar-settings input {
+  max-width: 100%;
 }
 .user .message-label {
   color: #a1b1c7;

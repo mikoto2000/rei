@@ -2,6 +2,6 @@
   "$schema":"https://schema.tauri.app/config/2",
   "productName":"Rei Client","version":"0.1.0","identifier":"dev.mikoto2000.reiclient",
   "build":{"beforeDevCommand":"npm run dev","devUrl":"http://127.0.0.1:1420","beforeBuildCommand":"npm run build","frontendDist":"../dist","features":["native"]},
-  "app":{"windows":[{"label":"main","title":"Rei Client","width":1180,"height":800,"minWidth":360,"minHeight":540,"visible":false}],"security":{"csp":"default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; object-src 'none'; frame-src 'none'"}},
+  "app":{"windows":[{"label":"main","title":"Rei Client","width":1180,"height":800,"minWidth":360,"minHeight":540,"visible":false}],"security":{"csp":"default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' data: asset: http://asset.localhost; style-src 'self' 'unsafe-inline'; object-src 'none'; frame-src 'none'"}},
   "bundle":{"active":false,"icon":["icons/icon.png"]}
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AvatarSettings } from "./AvatarSettings";
 import type { Server, Connection } from "../../entities/models";
 import { errorText } from "../../entities/models";
 interface Props {
@@ -7,6 +8,8 @@ interface Props {
   unlocked: boolean;
   notifications: boolean;
   pending: boolean;
+  userAvatar?: string | null;
+  onUserAvatar?: (value: string | null) => void;
   onUnlock: (password: string) => void;
   onSave: (id: string | null, name: string, url: string, key: string) => void;
   onRemove: (id: string) => void;
@@ -26,6 +29,12 @@ export function Settings(props: Props) {
         </div>
         <span className="pill">Rei Client · 0.1</span>
       </header>
+      {props.onUserAvatar && (
+        <AvatarSettings
+          avatar={props.userAvatar ?? null}
+          onChange={props.onUserAvatar}
+        />
+      )}
       {!props.unlocked && (
         <section className="card">
           <h2>Credential Vault</h2>

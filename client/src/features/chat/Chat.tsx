@@ -1,6 +1,7 @@
 import { RunActivity, RunTimeline } from "./RunActivity";
 import { timeline } from "../history/timeline";
 import { useState } from "react";
+import { Avatar } from "../../shared/Avatar";
 import {
   activeRuns,
   canSubmit,
@@ -11,6 +12,7 @@ import {
 } from "../../entities/models";
 import type { HistoryState } from "../history/pagination";
 interface Props {
+  userAvatar?: string | null;
   conversation: Conversation;
   projectName: string;
   runs: Run[];
@@ -28,6 +30,7 @@ interface Props {
   onRefreshHistory?: () => void;
 }
 export function Chat({
+  userAvatar,
   conversation,
   projectName,
   runs,
@@ -97,7 +100,7 @@ export function Chat({
           !history?.loadingInitial &&
           !history?.error && (
             <div className="empty">
-              <div className="rei-mark">r.</div>
+              <Avatar role="assistant" className="welcome-avatar" />
               <h2>れいと、次の一歩へ。</h2>
               <p>コードの調査や作業を依頼してください。</p>
               <small>
@@ -115,12 +118,18 @@ export function Chat({
               className={`turn ${selectedRun === run.runId ? "highlight" : ""}`}
             >
               <div className="message user">
-                <span className="message-label">YOU</span>
+                <span className="message-label">
+                  <Avatar role="user" src={userAvatar} />
+                  YOU
+                </span>
                 <p>{run.prompt}</p>
               </div>
               <div className="message assistant">
                 <div className="message-heading">
-                  <span className="message-label">REI</span>
+                  <span className="message-label">
+                    <Avatar role="assistant" />
+                    REI
+                  </span>
                   <span className={`status ${run.status.toLowerCase()}`}>
                     {run.status}
                   </span>
@@ -195,11 +204,17 @@ export function Chat({
                 {new Date(turn.createdAt).toLocaleString()}
               </time>
               <div className="message user">
-                <span className="message-label">YOU</span>
+                <span className="message-label">
+                  <Avatar role="user" src={userAvatar} />
+                  YOU
+                </span>
                 <p>{turn.userMessage}</p>
               </div>
               <div className="message assistant">
-                <span className="message-label">REI</span>
+                <span className="message-label">
+                  <Avatar role="assistant" />
+                  REI
+                </span>
                 <div className="answer">
                   {turn.assistantMessage ?? "応答はまだ記録されていません。"}
                 </div>
