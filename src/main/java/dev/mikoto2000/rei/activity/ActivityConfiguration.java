@@ -22,7 +22,11 @@ public class ActivityConfiguration {
   @Bean ActivityCapture activityCapture(ActivityProperties p,DesktopActivityObserver observer,ActivityExtractor extractor,ActivityStore store,ScreenshotStore screenshots) {
     return new ActivityCapture(p,observer,extractor,store,screenshots,Clock.systemUTC());
   }
-  @Bean ActivityTimeline activityTimeline(ActivityStore store,ActivityProperties p) { return new ActivityTimeline(store,Clock.system(ZoneId.of(p.getZone()))); }
+  @Bean ActivityTimeline activityTimeline(ActivityStore store,ActivityProperties p) {
+    var zone=ZoneId.of(p.getZone());
+    return new ActivityTimeline(store,Clock.system(zone),new SemanticSessionPolicy(
+        Duration.ofSeconds(p.getSummaryGapSeconds()),Duration.ofSeconds(p.getSummaryBriefSwitchSeconds()),zone));
+  }
   @Bean ActivityTools activityTools(ActivityTimeline timeline) {return new ActivityTools(timeline);}
   @Bean ThreadPoolTaskExecutor activityExecutor() {
     var executor=new ThreadPoolTaskExecutor();executor.setCorePoolSize(1);executor.setMaxPoolSize(1);executor.setQueueCapacity(0);

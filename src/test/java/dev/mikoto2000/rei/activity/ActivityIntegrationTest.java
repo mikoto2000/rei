@@ -66,6 +66,11 @@ class ActivityIntegrationTest {
   }
   @Test void naturalLanguageToolsAreRegistered() {
     var callbacks=org.springframework.ai.tool.method.MethodToolCallbackProvider.builder().toolObjects(new ActivityTools(mock(ActivityTimeline.class))).build().getToolCallbacks();
-    assertEquals(Set.of("activityTimeline","activityBetween"),Arrays.stream(callbacks).map(c -> c.getToolDefinition().name()).collect(java.util.stream.Collectors.toSet()));
+    assertEquals(Set.of("activityTimeline","activityBetween","activitySummary"),Arrays.stream(callbacks).map(c -> c.getToolDefinition().name()).collect(java.util.stream.Collectors.toSet()));
+  }
+  @Test void summaryToolUsesCompressedProjection() {
+    var timeline=mock(ActivityTimeline.class);when(timeline.summary("today")).thenReturn("compressed summary");
+    assertEquals("compressed summary",new ActivityTools(timeline).activitySummary("today"));
+    verify(timeline).summary("today");verify(timeline,never()).query(anyString());
   }
 }

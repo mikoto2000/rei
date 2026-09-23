@@ -175,3 +175,94 @@ Project/Task/Working Set等の深い統合、専用クライアントTimeline画
 残課題: 実機の複数モニター/HiDPI/実Visionモデルでの確認、foreground以外の機密表示の
 マスキング、高頻度化時の日次projection差分更新、スキーマ移行、実操作/idle evidence。
 現在の除外はforeground主体であり、全画面の機密情報を自動検出するものではない。
+
+## Phase 3 集約・要約品質改善
+
+ブランチ: `codex/activity-timeline-session-refinement`。
+既存実装を含む `codex/startup-project-option` のHEADから分岐。
+コミットIDは最終報告に記載する（この文書自体を同じコミットに含める）。
+
+### データの3層と互換性
+
+1. `ActivityRecord`: 元のOS observations、foreground、Vision inference、confidence、changeAmount、
+   durationEstimate、continuity、画像参照をそのまま保存。
+2. Fine-grained `ActivitySession`: 従来のSessionMergePolicyで永続化。既存の細粒度境界、recordIds、
+   inference、時間情報を変更しない。旧JSON payloadの移行・過去履歴の再書込みは不要。
+3. `SummarySegment`: 役割付きSemantic Sessionを表示時に生成。primary / secondary / background、
+   confidence、根拠コード、元Record全件、fineSessionIds、observedSeconds / unobservedSecondsを保持。
+   DBにはSummary文字列を保存しない。
+
+以前の表示は、同じcontinuity・foreground・候補集合、90秒以内の観測間隔という細粒度結合の後、
+代表Vision文章を各行に出していた。今回その細粒度層は維持し、表示層の結合を追加した。
+開発カテゴリとproject文脈を軸にアプリ切替やSecondary変化を許容し、欠測gapは推定区間の終端から
+最大180秒まで許容する。A→B→AのBが120秒以内なら短い変化を表示上吸収する。
+異なる既知project、継続する主活動変更、長いgap、continuity・日付境界は維持する。
+二つの閾値は `summary-gap-seconds` / `summary-brief-switch-seconds` で変更可能。
+
+### 主要クラス
+
+| クラス | 責務 |
+|---|---|
+| ActivityRolePolicy / ActivityRoles | foreground process/titleとの対応から役割・推定confidenceを付与 |
+| SemanticSessionPolicy | 意味的結合、短時間切替の吸収、時間クリップ、観測秒数による代表選択 |
+| SummarySegment | 元Evidence・細粒度Session参照を持つ表示projection |
+| ActivitySummaryFormatter | 活動中心の短い定型文、先頭1回の注意文、欠測表示 |
+| ActivityTimeline | 日付・期間検索、Summaryと詳細Timelineの分離 |
+| ActivityStore / SqliteActivityStore | 元Recordの読み取り専用overlap queryを追加 |
+| ActivityProperties / ActivityConfiguration | 表示用gap・短時間切替の設定 |
+| ActivityTools | `activitySummary` を追加。詳細取得2ツールは維持 |
+
+PrimaryはVision文章の印象だけで決めない。process/applicationの対応、タイトルに現れるservice /
+content / projectを使い、候補が曖昧な場合は未判定にする。継続時間は推定観測秒数で重み付けし、
+短い候補より長くforeground evidenceがある候補を代表にする。confidenceは操作の確定度ではない。
+監視画面はBackground候補だが、foregroundならPrimaryへ昇格できる。残りはSecondary。
+全画面差分を個別ウィンドウの操作へ帰属させることは避け、changeAmountはEvidenceとして残した。
+入力監視は追加していない。
+
+### Summary生成とfixture結果
+
+詳細Sessionと元Recordの検索 → recordの役割推定 → semantic grouping → bounded A/B/A smoothing
+→ 元Session参照を付与 → 日本語の定型文、という流れ。追加LLMも画像再送信もない。
+全文Vision summaryは表示に流用せず、上限3種類の補助表示と「など」に圧縮する。
+存在しない「バグ修正」等を補わず、「開発・確認作業が中心と推定」までに留める。
+
+依頼文の時間帯に合わせた**合成fixture**（実機DBを読み出した結果ではない）:
+
+```text
+Before: 09:08–09:09 / 09:10–09:21 / 09:21–09:39 /
+        09:39–09:40 / 09:41–09:46 の5細粒度Session
+
+After:
+画面の観測に基づく振り返りです。
+表示内容からの推定を含み、実際の操作・集中を断定するものではありません。
+
+午前:
+- 09:08–09:46 rei関連の開発・確認作業が中心と推定。X・YouTube Musicも並行して表示。（未観測 120秒を含む）
+```
+
+5 → 1ブロック（80%減）、観測推定36分、未観測2分。
+別fixtureのTerminal / GVIMと補助サービスを交互に切り替える20 Sessionも1ブロック（95%減）。
+圧縮後も全Record、元の説明、画像参照と細粒度SessionをDB再オープン後に取得できることを検証。
+再現出力はテストで `target/activity-refinement-example.txt` に生成する。
+1日のブロック数を強制的に5〜12に丸めることはしない。
+
+### TDDと検証
+
+`ActivitySemanticTest` は未実装型によるRedから開始し、8件Greenの後に境界テストを追加。
+観測時間による代表選択は、長く続くmediaより先頭socialを選んでしまうRedを確認して修正。
+`ActivitySummaryQueryTest` とsummary toolも未実装APIのRedを確認してから実装した。
+既存のsummary文字列転記を期待したテストは、新しい表示と元の説明の保持を検証する形に変更。
+
+追加: semantic policy / roles / formatter 16件、SQLite query / retention 3件、summary tool 1件、計20件。
+Java全件は2069件成功（failure / error / skipすべて0）。クライアント41件、Rust64件成功。
+ブラウザE2Eは12件すべて成功（1 worker、1.2分）。今回の全件実行ではflaky / timeout / 再実行なし。
+`git diff --check` も成功。実画面の取得や実Vision APIは自動テストで呼んでいない。
+
+### 残課題・非目標
+
+ブラウザのタブやモニター別の入力先は観測しておらず、foregroundに対応付けられない候補は未判定。
+アプリ別名・カテゴリ正規化は限定的。未知のモデル表記への対応、実機データでの閾値調整、
+非常に多様な日の表示粒度の調整は今後の検証事項。今回の圧縮率は合成fixtureの値。
+将来のAnalyticsは元Recordと細粒度Sessionから計算する。表示上吸収した切替やgapを
+focusMinutes等へ流用しない。Behavior Evaluation、お小言、Productivity Score、週次/月次分析、
+Adaptive Coachingは今回も追加しない。

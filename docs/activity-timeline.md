@@ -12,7 +12,8 @@ Spring @Scheduled → bounded activityExecutor (1 worker, queue=0)
   → ImageChange (RAM) → ActivityExtractor / VisionActivityExtractor (RAM) → ActivityOutputParser
   → ScreenshotPersistencePolicy → optional ScreenshotStore
   → ActivityRecord → SqliteActivityStore + SessionMergePolicy → ActivitySession
-  → ActivityTimeline → ActivityCommand / ActivityTools
+  → ActivityTimeline + raw evidence → ActivityRolePolicy → SemanticSessionPolicy
+  → SummarySegment → ActivitySummaryFormatter → ActivityCommand / ActivityTools
 ```
 
 既存の `AwtRobotDriver` / `RobotScreenCapture` / `CapturedScreen` による
@@ -43,6 +44,8 @@ rei:
     screenshot-retention-days: 3
     change-threshold: 0.03
     session-gap-seconds: 90
+    summary-gap-seconds: 180
+    summary-brief-switch-seconds: 120
     zone: Asia/Tokyo
     excluded-processes:
       - KeePassXC.exe
@@ -178,7 +181,7 @@ multipart bodyはActivityログへ出力しない。既存の小さなLLM lifecy
 静止画面を idle と断定しない。サンプリング間の操作、キーボード/マウスの実使用、
 離席時間は今回測定していない。
 
-## ActivitySession / Persistence
+## Fine-grained ActivitySession / Persistence
 
 `activity_sessions` はレコードから生成する永続化された日次 projection。
 
@@ -209,6 +212,60 @@ Vision request全文、未検証の巨大response全文は保存しない。
 画像名に保存したcapturedAtでretention判定し、シンボリックリンクは辿らない。
 DB保存失敗後の孤立画像もretention対象になる。
 
+## Semantic Session / Primary・Secondary・Background
+
+Phase 3の表示改善は二段階集約とする。永続化された細粒度Sessionの境界は変更しない。
+`ActivityRolePolicy` が元Recordから役割を推定し、`SemanticSessionPolicy` が意味的に近い観測を
+表示用の `SummarySegment` にまとめる。SegmentがSemantic Sessionの役割を担い、
+`roles.primary / secondary / background`、推定confidence、判断根拠コード、全Evidence、
+参照先の `fineSessionIds` を保持する。追加のVision呼び出し・画像読出し・DB書込みは行わない。
+
+Primary判定はforeground processとcandidate applicationの対応、foreground title中のservice /
+content / project候補を材料にする。既知のアプリ表記差（WindowsTerminal / Terminalなど）は正規化する。
+project名だけでは主活動を決めず、ブラウザで複数の異なる候補が同点ならPrimaryは未判定にする。
+Segmentの代表はforegroundで裏付けられた候補の観測推定秒数で重み付けする。
+confidenceも観測秒数で重み付けし、未判定や短い別活動の分は確信度を下げる。
+これは校正済み確率ではなく補助指標であり、操作・集中の測定値ではない。
+
+監視カテゴリ、btop / Grafana / system monitor / ログ監視等の候補は背景役割を持つ。
+ただしforegroundで裏付けられればPrimaryになれる。固定的に除外するblacklistではない。
+残る候補はSecondary。全画面のchangeAmountを特定ウィンドウの操作に帰属させることはできないため、
+今回のPrimary昇格には使わずEvidenceに保持する。低レベル入力監視は追加しない。
+
+結合規則:
+
+- 開発カテゴリを正規化し、同じproject文脈ならTerminal / GVIM / GitHub等の切替を許容する。
+- SecondaryやBackgroundだけの変化は境界にしない。SNS / メディアは上位の共通文脈で結合できる。
+- 異なる既知projectは結合しない。project不明の観測を挟んでも別projectへ連鎖結合しない。
+- その他のカテゴリはservice / applicationやprojectの共通性も確認する。未判定同士は同じforegroundと候補集合が必要。
+- 未観測gapは直前の推定区間の終端から測り、`summary-gap-seconds`（既定180秒）以内を許容する。
+- A→B→Aと主文脈に戻る場合、Bの区間が`summary-brief-switch-seconds`（既定120秒）以内なら表示上まとめる。
+  継続する新しいPrimaryや戻りのない変化は分割する。短いBも元Evidenceから削除しない。
+- continuity境界（pause / 除外 / 失敗 / 再起動）と設定zoneの日付境界は越えない。
+
+`observedSeconds` は次の観測・日末・検索区間でクリップし、重複を除く。
+まとめた区間内の欠測は `unobservedSeconds` に分離し、Summaryにも表示する。
+gapを作業時間や集中時間として補完しない。
+
+## Summary Segment / User-facing Summary
+
+`ActivityRecord` はOS evidenceと元のVision推論を保持する。
+Fine-grained `ActivitySession` は詳細な時系列とrecordIdsを保持する。
+`SummarySegment` はその上の表示用projectionであり、元Recordと細粒度Sessionを消さない。
+`ActivitySummaryFormatter` はSegmentの役割から活動中心の短い日本語を生成する。
+Visionの長文summaryを転記しないため、各行の免責文・ウィンドウ名列挙を抑えられる。
+追加LLMは使用しない。時間計算と境界はコードだけで決める。
+
+先頭に不確実性の説明を一度置き、各ブロックは主活動の推定と補足表示（最大3種類＋「など」）にする。
+「開発・確認作業」までに留め、候補にない「バグ修正」や実際の視聴・操作を断定しない。
+Primaryを特定できない場合は、その旨を出す。見えているだけの活動を勝手に主活動に昇格させない。
+
+提示例相当の合成fixtureでは09:08–09:46の5細粒度Sessionが1 Segmentになり、
+交互にTerminal / GVIMを前面にした20細粒度Sessionも1 Segmentになる。
+5〜12ブロックは目標粒度であり、件数を達成するために異なるprojectや長い欠測を強制結合しない。
+将来のfocusMinutes / contextSwitchCount等はSummary文字列から逆算せず、元Record・細粒度Session・
+Evidenceから算出する。Productivity Score、行動評価、週次/月次分析、Adaptive Coachingは追加していない。
+
 ## Query / Slash commands / Summary
 
 ```text
@@ -220,8 +277,9 @@ DB保存失敗後の孤立画像もretention対象になる。
 /activity resume
 ```
 
-`summary` は今日のセッションを深夜・午前・午後・夜にまとめる。
-文章化は `ActivityTimeline.summary` の決定的なformatterで行い、追加LLMは不要。
+`summary` は今日の意味的なSegmentを開始時刻に応じて深夜・午前・午後・夜にまとめる。
+today / yesterday / 日付指定も同じ圧縮表示を使用する。
+文章化は `ActivitySummaryFormatter` で行い、追加LLMは不要。
 記録がない場合は「記録なし」と返し、何もしていなかったとは断定しない。
 pause はメモリ上の状態であり、再起動時には enabled 設定に従う。
 resume は `enabled=false` を上書きしない。
@@ -230,7 +288,12 @@ resume は `enabled=false` を上書きしない。
 `findBetween(startInclusive,endExclusive)` は半開区間で重なるSessionを返し、
 境界を指定時間にクリップする。最大31日。Record IDsは元のSessionの参照を保持する。
 
-通常のChatには `activityTimeline(date)` と `activityBetween(startInclusive,endExclusive)` を登録。
+`summarySegments(day)` / `summaryBetween(start,end)` は役割・元Evidence・細粒度Session参照付きの
+Segmentを返す。`findRecordsBetween(start,end)` は推定区間が重なる元Recordを改変せず返す。
+どのSummary queryも読み取り専用で、以前の日付に蓄積したデータも再収集せず新しい表示になる。
+自然言語の振り返りは `activitySummary`、詳細取得は既存の `activityTimeline` / `activityBetween` を使用する。
+
+通常のChatには `activitySummary(date)`、`activityTimeline(date)` と `activityBetween(startInclusive,endExclusive)` を登録。
 「昨日の夜なにしてた？」等は既存Agentが日時コンテキストを参照してToolを呼び出す。
 後者はオフセット付きISO-8601日時を受け付ける。自然言語の固定パターン表は追加しない。
 専用Timeline画面やクライアント独自Slash parserは今回追加していない。

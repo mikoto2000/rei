@@ -83,4 +83,25 @@ public final class SqliteActivityStore implements ActivityStore {
       }
     } catch(Exception e) { throw new IllegalStateException("Activity query failed",e); }
   }
+  /** Read-only overlap query; original payloads are retained even when their estimated intervals are clipped. */
+  @Override public synchronized List<ActivityRecord> findRecordsBetween(Instant start,Instant end) {
+    if(!start.isBefore(end)) throw new IllegalArgumentException("start must precede end");
+    try {
+      initialize();
+      try(var c=dataSource.getConnection()) {
+        // Estimates cannot cross the journal midnight, so only this day's preceding observations can overlap.
+        var lower=start.atZone(policy.zone()).toLocalDate().atStartOfDay(policy.zone()).toInstant();
+        var candidates=records(c,lower,end);var result=new ArrayList<ActivityRecord>();
+        for(int i=0;i<candidates.size();i++) {
+          var record=candidates.get(i);
+          var until=record.capturedAt().plusSeconds(record.durationEstimate());
+          var midnight=record.capturedAt().atZone(policy.zone()).toLocalDate().plusDays(1).atStartOfDay(policy.zone()).toInstant();
+          if(until.isAfter(midnight)) until=midnight;
+          if(i+1<candidates.size() && until.isAfter(candidates.get(i+1).capturedAt())) until=candidates.get(i+1).capturedAt();
+          if(until.isAfter(start)) result.add(record);
+        }
+        return List.copyOf(result);
+      }
+    } catch(Exception e) {throw new IllegalStateException("Activity evidence query failed",e);}
+  }
 }
