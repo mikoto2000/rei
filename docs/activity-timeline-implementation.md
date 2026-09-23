@@ -1,5 +1,31 @@
 # Activity Timeline 実装報告
 
+## Phase 3.6 Evidence-first（2026-09-23）
+
+使用ブランチ: `codex/activity-behavior-evaluation`。既存の前面・背景workerを維持したまま、
+`ActivityEvidencePipeline`を追加してOS観測の保存をVisionより先に移した。
+`ActivityEvidence` / `ActivityEvidenceAggregator` / `ActivityEvidenceSource` / `ActivityAgentEvidenceSource` / `ActivityClassifier` /
+`WindowActivityRules`を追加し、Windowsの`metadata.ps1`、`ActivityRecord.Detection`、専用1024 token上限、設定テンプレートを接続した。
+
+前面のprocess+titleで十分なら画像なしで保存。不十分なら前面cropで補足し、同じID・取得時刻を更新する。
+Background Visionは既定無効。API失敗や待機置換で元のEvidenceを失わず、旧Record JSONも読み込める。
+SQLite往復でBehavior/Summary互換と時間の非重複を確認するテストを追加した。
+
+分類器と先行保存パイプラインはRed→Greenで導入し、出力上限と範囲不明時の全画面送信抑止も失敗テストから修正した。
+従来のVision-firstのテストはmodeと背景opt-inを明示し、期待値を維持して回帰確認する。
+設定、sources、confidence、制限、計測項目は [Phase 3.6詳細](activity-evidence-first.md) を参照。
+
+検証結果: Java **2,221件**、client **41件**、Rust **64件**、E2E **12件**、すべて成功。
+Phase 3.6で新規テスト23件を追加。Windows metadata probeはPowerShell構文とWin32 C#宣言のコンパイルを確認。
+Maven packageも成功し、`target/rei-0.0.1-SNAPSHOT.jar`を更新した。
+SQLite fixtureでは2観測・Evidence-only 1件・前面Vision 1件・背景0件・call rate 50%・合計120秒を確認。
+遅延fixtureではVisionを待機させたまま4観測すべてを保存し、待機置換による観測欠落を0件とした。
+これらはmock/合成fixtureによる結果であり、実APIの速度・削減率ではない。
+稼働中アプリの再起動や実Vision APIでの長時間測定は未実施。Win32の実デスクトップでの可視判定、
+複数clientでのproject対応、タイトルルールの適用範囲、reasoningモデルの1024 tokenでの応答率は実運用での確認事項。
+
+以下は各Phaseの実装当時の報告であり、旧Vision-firstの既定動作はPhase 3.6で変更されている。
+
 実装日: 2026-09-23 / ブランチ: `codex/activity-timeline`
 
 Phase 1〜3 の初回実装は `082f744173c59b52461a2f5771cb9de17dbe1f3a`。

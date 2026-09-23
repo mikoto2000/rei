@@ -106,6 +106,15 @@ public class ExternalConfigFileService {
             capture-interval-seconds: 60
             vision-image-scale: 0.5
             background-analysis-interval-seconds: 300
+            detection:
+              mode: evidence-first
+              evidence-enabled: true
+              vision-enabled: true
+              fallback-enabled: true
+              skip-vision-confidence: 0.8
+              foreground-crop: true
+              background-full-screen-enabled: false
+              max-output-tokens: 1024
             keep-screenshots: false
             behavior:
               enabled: false

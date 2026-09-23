@@ -23,7 +23,7 @@ class ActivityCaptureTest {
   ScreenshotStore screenshots;
   ActivityCapture capture;
   @BeforeEach void setup() throws Exception {
-    properties = new ActivityProperties(); properties.setEnabled(true);
+    properties = new ActivityProperties(); properties.setEnabled(true);properties.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);properties.getDetection().setBackgroundFullScreenEnabled(true);
     observer = mock(DesktopActivityObserver.class); extractor = mock(ActivityExtractor.class);
     store = mock(ActivityStore.class); screenshots = mock(ScreenshotStore.class);
     when(observer.foreground()).thenReturn(new ForegroundWindow("idea",1,"rei","1"));

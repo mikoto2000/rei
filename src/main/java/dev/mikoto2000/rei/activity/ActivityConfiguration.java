@@ -17,12 +17,22 @@ public class ActivityConfiguration {
   @Bean DesktopActivityObserver activityObserver() { return new WindowsDesktopActivityObserver(); }
   @Bean ActivityExtractor activityExtractor(dev.mikoto2000.rei.llm.LlmModelProvider provider,dev.mikoto2000.rei.core.service.ModelHolderService current,ActivityProperties properties) {
     return new VisionActivityExtractor(() -> provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),
-        () -> provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get()),properties.getVisionImageScale());
+        () -> provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get()),properties.getVisionImageScale(),properties.getDetection().getMaxOutputTokens());
+  }
+  @Bean ActivityAgentEvidenceSource activityAgentEvidence(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.event.AgentEventBus> bus) {
+    return new ActivityAgentEvidenceSource(bus.getIfAvailable());
+  }
+  @Bean ActivityEvidenceSource activityProjectEvidence(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.project.ProjectService> projects) {
+    return at -> {
+      var service=projects.getIfAvailable();
+      var project=service==null?null:service.currentContext();
+      return new ActivityEvidenceSource.Contribution(project==null?"":project.name(),project==null?"":project.id(),java.util.List.of());
+    };
   }
   @Bean ActivityCapture activityCapture(ActivityProperties p,DesktopActivityObserver observer,ActivityExtractor extractor,ActivityStore store,ScreenshotStore screenshots,
       @Qualifier("activityAnalysisExecutor") ThreadPoolTaskExecutor analysisExecutor,
-      @Qualifier("activityBackgroundExecutor") ThreadPoolTaskExecutor backgroundExecutor) {
-    return new ActivityCapture(p,observer,extractor,store,screenshots,Clock.systemUTC(),analysisExecutor,backgroundExecutor);
+      @Qualifier("activityBackgroundExecutor") ThreadPoolTaskExecutor backgroundExecutor,java.util.List<ActivityEvidenceSource> sources) {
+    return new ActivityCapture(p,observer,extractor,store,screenshots,Clock.systemUTC(),analysisExecutor,backgroundExecutor,sources);
   }
   @Bean ActivityTimeline activityTimeline(ActivityStore store,ActivityProperties p) {
     var zone=ZoneId.of(p.getZone());

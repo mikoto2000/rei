@@ -14,6 +14,15 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ActivityVisionScaleTest {
+  @Test void activityHasIndependentSmallCompletionBudget() throws Exception {
+    var model=mock(ChatModel.class);
+    when(model.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage(ActivityExtractionTest.VALID)))));
+    new VisionActivityExtractor(()->model,()->OpenAiChatOptions.builder().maxTokens(32768).build())
+        .extract(ActivityCaptureTest.screen(20),new ForegroundWindow("Firefox",1,"Browser","window"));
+    var prompt=org.mockito.ArgumentCaptor.forClass(Prompt.class);verify(model).call(prompt.capture());
+    var options=(OpenAiChatOptions)prompt.getValue().getOptions();
+    assertEquals(1024,options.getMaxCompletionTokens());assertNull(options.getMaxTokens());
+  }
   private BufferedImage decode(byte[] bytes) throws Exception {return ImageIO.read(new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes)));}
   @Test void halfScaleReducesBothDimensionsWithoutChangingOriginal() throws Exception {
     var image=new BufferedImage(1920,1080,BufferedImage.TYPE_INT_RGB);image.setRGB(20,20,0xff336699);

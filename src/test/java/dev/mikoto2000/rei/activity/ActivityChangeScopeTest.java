@@ -20,7 +20,7 @@ class ActivityChangeScopeTest {
     return new CapturedScreen(image,new Rectangle(0,0,32,32));
   }
   @Test void backgroundMotionDoesNotTriggerForegroundAnalysisButIsSampledPeriodically() throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);var time=new Time();
+    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);p.getDetection().setBackgroundFullScreenEnabled(true);var time=new Time();
     var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var store=mock(ActivityStore.class);
     when(observer.foreground()).thenReturn(new ForegroundWindow("firefox",1,"X","1",new ActivityRecord.Bounds(0,0,16,32)));
     when(observer.capture()).thenReturn(screen(10,10),screen(10,200),screen(10,200));
@@ -35,7 +35,7 @@ class ActivityChangeScopeTest {
     assertEquals(32,images.getAllValues().get(2).image().getWidth());
   }
   @Test void foregroundMotionImmediatelyTriggersAnalysis() throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);
+    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);p.getDetection().setBackgroundFullScreenEnabled(true);var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);
     when(observer.foreground()).thenReturn(new ForegroundWindow("firefox",1,"X","1",new ActivityRecord.Bounds(0,0,16,32)));
     when(observer.capture()).thenReturn(screen(10,10),screen(200,10));
     when(extractor.extract(any(),any())).thenReturn(new ActivityExtractor.Result(ActivityPolicyTest.record("2026-09-22T10:00:00Z","social").inference(),.8));
@@ -43,7 +43,7 @@ class ActivityChangeScopeTest {
     capture.tick();capture.tick();verify(extractor,times(2)).extract(any(),any());
   }
   @Test void foregroundChangeAloneDoesNotCountAsBackgroundChangeWhenRefreshIsDue() throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var time=new Time();
+    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);p.getDetection().setBackgroundFullScreenEnabled(true);var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var time=new Time();
     when(observer.foreground()).thenReturn(new ForegroundWindow("firefox",1,"X","1",new ActivityRecord.Bounds(0,0,16,32)));
     when(observer.capture()).thenReturn(screen(10,10),screen(200,10));
     when(extractor.extract(any(),any())).thenReturn(new ActivityExtractor.Result(ActivityPolicyTest.record("2026-09-22T10:00:00Z","social").inference(),.8));
@@ -53,7 +53,7 @@ class ActivityChangeScopeTest {
     assertEquals(16,images.getAllValues().getLast().image().getWidth());
   }
   @Test void desktopResultIsNotReusedAsFreshBackgroundEvidenceOnForegroundOnlyTicks() throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var time=new Time();
+    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);p.getDetection().setBackgroundFullScreenEnabled(true);var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var time=new Time();
     when(observer.foreground()).thenReturn(new ForegroundWindow("firefox",1,"X","1",new ActivityRecord.Bounds(0,0,16,32)));
     when(observer.capture()).thenReturn(screen(10,10),screen(10,200),screen(10,50));
     when(extractor.extract(any(),any())).thenReturn(new ActivityExtractor.Result(ActivityPolicyTest.record("2026-09-22T10:00:00Z","social").inference(),.8));

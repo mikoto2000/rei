@@ -7,7 +7,7 @@ import static org.mockito.Mockito.*;
 
 class ActivityParallelTest {
   @Test void blockedBackgroundDoesNotBlockForegroundAndItsFailureDoesNotResetReuse() throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);p.setBackgroundAnalysisIntervalSeconds(60);
+    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);p.getDetection().setBackgroundFullScreenEnabled(true);p.setBackgroundAnalysisIntervalSeconds(60);
     var observer=mock(DesktopActivityObserver.class);var store=mock(ActivityStore.class);
     var time=new ActivityChangeScopeTest.Time();
     var entered=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);
@@ -29,7 +29,7 @@ class ActivityParallelTest {
     } finally {release.countDown();worker.shutdownNow();}
   }
   @Test void backgroundHasOneJobWithoutQueueWhileForegroundKeepsSaving() throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);p.setBackgroundAnalysisIntervalSeconds(60);
+    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);p.getDetection().setBackgroundFullScreenEnabled(true);p.setBackgroundAnalysisIntervalSeconds(60);
     var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var store=mock(ActivityStore.class);
     var time=new ActivityChangeScopeTest.Time();var backgrounds=new ArrayList<Runnable>();
     when(observer.foreground()).thenReturn(new ForegroundWindow("firefox",1,"X","1",new ActivityRecord.Bounds(0,0,16,32)));
@@ -48,7 +48,7 @@ class ActivityParallelTest {
     assertNotEquals(records.getAllValues().get(2).id(),updated.getValue().id());
   }
   @Test void pauseDiscardsQueuedBackgroundAndDoesNotPublishItAfterResume() throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);p.setBackgroundAnalysisIntervalSeconds(60);
+    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);p.getDetection().setBackgroundFullScreenEnabled(true);p.setBackgroundAnalysisIntervalSeconds(60);
     var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var store=mock(ActivityStore.class);
     var time=new ActivityChangeScopeTest.Time();var backgrounds=new ArrayList<Runnable>();
     when(observer.foreground()).thenReturn(new ForegroundWindow("firefox",1,"X","1",new ActivityRecord.Bounds(0,0,16,32)));
@@ -59,7 +59,7 @@ class ActivityParallelTest {
     verify(extractor,times(2)).extract(any(),any());verify(store,never()).replace(any());
   }
   @Test void backgroundCompletingFirstIsSupplementedWhenForegroundEventuallySaves() throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);p.setBackgroundAnalysisIntervalSeconds(60);
+    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);p.getDetection().setBackgroundFullScreenEnabled(true);p.setBackgroundAnalysisIntervalSeconds(60);
     var observer=mock(DesktopActivityObserver.class);var store=mock(ActivityStore.class);var time=new ActivityChangeScopeTest.Time();
     var tasks=new ArrayList<Runnable>();
     var social=new ActivityRecord.Activity("primary","social","Firefox","X","","");
@@ -77,7 +77,7 @@ class ActivityParallelTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
   void pauseOrCloseDuringBackgroundCallDiscardsCompletedResult(boolean close) throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);p.setBackgroundAnalysisIntervalSeconds(60);
+    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);p.getDetection().setBackgroundFullScreenEnabled(true);p.setBackgroundAnalysisIntervalSeconds(60);
     var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var store=mock(ActivityStore.class);
     var time=new ActivityChangeScopeTest.Time();
     when(observer.foreground()).thenReturn(new ForegroundWindow("firefox",1,"X","1",new ActivityRecord.Bounds(0,0,16,32)));

@@ -1,7 +1,13 @@
 # Activity Capture / Timeline
 
-Phase 1〜3: デスクトップを観測し、構造化した履歴を保存し、振り返る機能。
-デフォルトは無効。採点・行動評価・お小言は行わない。
+Phase 1〜3.6: デスクトップを観測し、構造化した履歴を保存し、振り返る機能。
+デフォルトは無効。お小言は別途Behavior設定で明示的に有効化する。
+
+Phase 3.6の既定経路は **Evidence-first**。前面・可視ウィンドウのOS情報とproject/tool情報から分類し、
+画像を取得する前にRecordを保存する。confidence 0.8以上ならVisionを省略し、不足するときだけ前面画像を解析する。
+待機画像の置換・Vision失敗でもOS観測は残る。背景全画面解析は既定無効、Activityの出力上限は1024 tokens。
+詳細な現在の仕様・設定・制限は [Evidence-first](activity-evidence-first.md) を参照。
+以下の画像差分、Vision成功後の保存、失敗時の未保存の説明は `detection.mode: vision-first` の互換経路についての記録である。
 
 ## Architecture
 
@@ -60,6 +66,15 @@ rei:
     capture-interval-seconds: 60
     vision-image-scale: 0.5
     background-analysis-interval-seconds: 300
+    detection:
+      mode: evidence-first
+      evidence-enabled: true
+      vision-enabled: true
+      fallback-enabled: true
+      skip-vision-confidence: 0.8
+      foreground-crop: true
+      background-full-screen-enabled: false
+      max-output-tokens: 1024
     screenshot-retention-days: 3
     change-threshold: 0.03
     session-gap-seconds: 90
@@ -90,14 +105,14 @@ Windowsの対話デスクトップで起動し、既存Computer Useと同様にJ
 .\mvnw.cmd spring-boot:run '-Dspring-boot.run.jvmArguments=-Djava.awt.headless=false'
 ```
 
-`extraction-enabled: false` にすれば Phase 1 のみ動作し、Vision を呼ばず OS evidence を残す。
-有効化後、解析が有効ならスクリーンショットと foreground 情報を設定した LLM サーバーに送信する。
+`extraction-enabled: false` にすればVisionを呼ばずOS evidenceの分類・保存を続ける。
+有効化後、Vision fallbackが必要なときにスクリーンショットとforeground情報を設定したLLMサーバーに送信する。
 `rei.llm.features.activity` が未設定の場合は既存のデフォルトモデル設定を使用する。
 Vision と JSON Schema structured output に対応したモデルを設定すること。
 Activity専用サーバーが設定されている場合、障害時にもデフォルトサーバーへ画像をフォールバック送信しない。
 
 間隔は1秒以上、retention は0日以上、差分閾値は0〜1、session gap は0秒以上。
-retention=0 は画像をディスクに保存しない。解析が有効ならメモリ上の画像を Vision に送る。
+retention=0 は画像をディスクに保存しない。Visionが必要ならメモリ上の画像を送る。
 設定変更は再起動で適用される。1秒などの短い間隔は画像取得・API費用・DB更新量が増えるため、通常は60秒から調整する。
 
 ## Screenshot lifecycle / Memory-First

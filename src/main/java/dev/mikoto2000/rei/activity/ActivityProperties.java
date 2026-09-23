@@ -14,6 +14,18 @@ public class ActivityProperties {
   private int captureIntervalSeconds = 60;
   private double visionImageScale = .5;
   private int backgroundAnalysisIntervalSeconds = 300;
+  private Detection detection = new Detection();
+  public enum DetectionMode { EVIDENCE_FIRST, VISION_FIRST }
+  @Data public static class Detection {
+    private DetectionMode mode=DetectionMode.EVIDENCE_FIRST;
+    private boolean evidenceEnabled=true;
+    private boolean visionEnabled=true;
+    private boolean fallbackEnabled=true;
+    private double skipVisionConfidence=.8;
+    private boolean foregroundCrop=true;
+    private boolean backgroundFullScreenEnabled=false;
+    private int maxOutputTokens=1024;
+  }
   private int screenshotRetentionDays = 3;
   private double changeThreshold = .03;
   private int sessionGapSeconds = 90;
@@ -28,6 +40,9 @@ public class ActivityProperties {
   private List<String> excludedWindowTitlePatterns = List.of("*Password*", "*Private Browsing*", "*InPrivate*");
 
   public void validate() {
+    if(detection==null || detection.mode==null || !Double.isFinite(detection.skipVisionConfidence)
+        || detection.skipVisionConfidence<0 || detection.skipVisionConfidence>1 || detection.maxOutputTokens<1)
+      throw new IllegalArgumentException("Invalid activity detection settings");
     if (captureIntervalSeconds < 1 || backgroundAnalysisIntervalSeconds < 1 || screenshotRetentionDays < 0 || sessionGapSeconds < 0
         || !Double.isFinite(visionImageScale) || visionImageScale<=0 || visionImageScale>1
         || (summaryGapSeconds != null && summaryGapSeconds < 0) || summaryBriefSwitchSeconds < 0

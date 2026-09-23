@@ -9,7 +9,7 @@ import static org.mockito.Mockito.*;
 
 class ActivityPipelineTest {
   @Test void observationContinuesWhileVisionRunsAndPendingImagesAreLatestOnly() throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);
+    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);p.getDetection().setBackgroundFullScreenEnabled(true);
     var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var store=mock(ActivityStore.class);
     var entered=new CountDownLatch(1);var release=new CountDownLatch(1);var written=new CountDownLatch(2);
     var time=new ActivityChangeScopeTest.Time();
@@ -32,7 +32,7 @@ class ActivityPipelineTest {
     } finally {release.countDown();executor.shutdownNow();}
   }
   @Test void pauseClearsPendingFramesAndInvalidatesInflightResult() throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var store=mock(ActivityStore.class);
+    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);p.getDetection().setBackgroundFullScreenEnabled(true);var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var store=mock(ActivityStore.class);
     when(observer.foreground()).thenReturn(new ForegroundWindow("firefox",1,"X","1"));when(observer.capture()).thenReturn(ActivityCaptureTest.screen(20));
     var tasks=new ArrayList<Runnable>();
     var capture=new ActivityCapture(p,observer,extractor,store,mock(ScreenshotStore.class),Clock.systemUTC(),tasks::add);
@@ -40,14 +40,14 @@ class ActivityPipelineTest {
     verifyNoInteractions(extractor,store);
   }
   @Test void excludedForegroundInvalidatesQueuedPublicImage() throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var store=mock(ActivityStore.class);
+    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);p.getDetection().setBackgroundFullScreenEnabled(true);var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var store=mock(ActivityStore.class);
     when(observer.foreground()).thenReturn(new ForegroundWindow("firefox",1,"X","1"));when(observer.capture()).thenReturn(ActivityCaptureTest.screen(20));
     var tasks=new ArrayList<Runnable>();var capture=new ActivityCapture(p,observer,extractor,store,mock(ScreenshotStore.class),Clock.systemUTC(),tasks::add);
     capture.tick();when(observer.foreground()).thenReturn(new ForegroundWindow("1password",2,"vault","2"));capture.tick();tasks.forEach(Runnable::run);
     verifyNoInteractions(extractor,store);
   }
   @Test void rejectedAnalysisSubmissionCanBeRetriedOnNextObservation() throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var store=mock(ActivityStore.class);
+    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);p.getDetection().setBackgroundFullScreenEnabled(true);var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var store=mock(ActivityStore.class);
     when(observer.foreground()).thenReturn(new ForegroundWindow("firefox",1,"X","1"));when(observer.capture()).thenReturn(ActivityCaptureTest.screen(20));
     when(extractor.extract(any(),any())).thenReturn(new ActivityExtractor.Result(ActivityPolicyTest.record("2026-09-22T10:00:00Z","social").inference(),.8));
     var attempts=new java.util.concurrent.atomic.AtomicInteger();

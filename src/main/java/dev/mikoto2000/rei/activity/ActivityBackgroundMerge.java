@@ -19,6 +19,6 @@ final class ActivityBackgroundMerge {
   }
   private static ActivityRecord withCandidates(ActivityRecord r,List<ActivityRecord.Activity> candidates) {
     return new ActivityRecord(r.id(),r.capturedAt(),r.durationEstimate(),r.observations(),r.foreground(),
-        new ActivityRecord.Inference(r.inference().summary(),candidates),r.confidence(),r.screenshotReferences(),r.changeAmount(),r.duplicate(),r.continuityId());
+        new ActivityRecord.Inference(r.inference().summary(),candidates),r.confidence(),r.screenshotReferences(),r.changeAmount(),r.duplicate(),r.continuityId(),r.detection());
   }
 }

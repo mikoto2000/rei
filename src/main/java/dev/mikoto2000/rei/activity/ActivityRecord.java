@@ -6,7 +6,16 @@ import java.util.List;
 /** Long-lived evidence and explicitly uncertain inference; screenshot references may expire independently. */
 public record ActivityRecord(String id, Instant capturedAt, long durationEstimate,
     List<Observation> observations, ForegroundWindow foreground, Inference inference, double confidence,
-    List<String> screenshotReferences, double changeAmount, boolean duplicate, String continuityId) {
+    List<String> screenshotReferences, double changeAmount, boolean duplicate, String continuityId,Detection detection) {
+  public ActivityRecord(String id,Instant capturedAt,long durationEstimate,List<Observation> observations,
+      ForegroundWindow foreground,Inference inference,double confidence,List<String> screenshotReferences,
+      double changeAmount,boolean duplicate,String continuityId) {
+    this(id,capturedAt,durationEstimate,observations,foreground,inference,confidence,screenshotReferences,changeAmount,duplicate,continuityId,null);
+  }
+  public record Detection(ActivityEvidence evidence,List<String> classificationSources,boolean visionUsed,
+      String classificationMode,String status,java.util.Map<String,Double> sourceConfidence,String reason) {
+    public Detection {classificationSources=List.copyOf(classificationSources);sourceConfidence=java.util.Map.copyOf(sourceConfidence);}
+  }
   public ActivityRecord(String id, Instant capturedAt, long durationEstimate, List<Observation> observations,
       ForegroundWindow foreground, Inference inference, double confidence, List<String> screenshotReferences,
       double changeAmount, boolean duplicate) {
@@ -22,7 +31,7 @@ public record ActivityRecord(String id, Instant capturedAt, long durationEstimat
   public record Inference(String summary, List<Activity> activities) {
     public Inference { activities = List.copyOf(activities); }
   }
-  /** All fields here, including visible application/content, are model candidates, not OS facts. */
+  /** Rule/model candidates, including visible application/content, are separate from OS facts. */
   public record Activity(String monitor, String type, String application, String service,
       String contentTitle, String projectCandidate) {}
 }

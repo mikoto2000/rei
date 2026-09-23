@@ -13,6 +13,7 @@ public final class ActivityCapture implements AutoCloseable {
   private final ActivityStore store;
   private final ScreenshotStore screenshots;
   private final Clock clock;
+  private final ActivityEvidencePipeline evidencePipeline;
   private final java.util.concurrent.Executor analysisExecutor;
   private final java.util.concurrent.Executor backgroundExecutor;
   private final AtomicBoolean running = new AtomicBoolean();
@@ -52,18 +53,25 @@ public final class ActivityCapture implements AutoCloseable {
   public ActivityCapture(ActivityProperties properties, DesktopActivityObserver observer, ActivityExtractor extractor,
       ActivityStore store, ScreenshotStore screenshots, Clock clock,java.util.concurrent.Executor analysisExecutor,
       java.util.concurrent.Executor backgroundExecutor) {
+    this(properties,observer,extractor,store,screenshots,clock,analysisExecutor,backgroundExecutor,List.of());
+  }
+  public ActivityCapture(ActivityProperties properties, DesktopActivityObserver observer, ActivityExtractor extractor,
+      ActivityStore store, ScreenshotStore screenshots, Clock clock,java.util.concurrent.Executor analysisExecutor,
+      java.util.concurrent.Executor backgroundExecutor,List<ActivityEvidenceSource> sources) {
     properties.validate();
     this.properties=properties; this.observer=observer; this.extractor=extractor; this.store=store; this.screenshots=screenshots; this.clock=clock;
     this.analysisExecutor=analysisExecutor;
     this.backgroundExecutor=backgroundExecutor;
+    this.evidencePipeline=new ActivityEvidencePipeline(properties,observer,extractor,store,screenshots,clock,analysisExecutor,backgroundExecutor,sources);
   }
-  public synchronized void pause() { paused=true; invalidate(); }
-  public synchronized void resume() { paused=false; invalidate(); }
+  public synchronized void pause() { paused=true; invalidate();evidencePipeline.pause(); }
+  public synchronized void resume() { paused=false; invalidate();evidencePipeline.resume(); }
   public synchronized boolean isPaused() { return paused; }
-  @Override public synchronized void close() { closed=true; pause(); }
+  @Override public synchronized void close() { closed=true; pause();evidencePipeline.close(); }
   private synchronized boolean allowed(long token) { return properties.isEnabled() && !paused && !closed && token==generation; }
 
   public void tick() {
+    if(properties.getDetection().getMode()==ActivityProperties.DetectionMode.EVIDENCE_FIRST){evidencePipeline.tick();return;}
     if (!running.compareAndSet(false,true)) return;
     long started=System.nanoTime();String status="skipped";
     try {
@@ -113,6 +121,7 @@ public final class ActivityCapture implements AutoCloseable {
     }
   }
   private synchronized boolean reserveBackground(Frame frame) {
+    if(!properties.getDetection().isBackgroundFullScreenEnabled() || !properties.getDetection().isVisionEnabled())return false;
     if(!allowed(frame.token()) || !properties.isExtractionEnabled() || ActivityImages.foreground(frame.screen(),frame.foreground())==frame.screen()) return false;
     if(analyzingBackground) {log.info("Activity background skipped: reason=busy");return false;}
     if(backgroundCheckedAt!=null && Duration.between(backgroundCheckedAt,frame.at()).getSeconds()<properties.getBackgroundAnalysisIntervalSeconds()) return false;
@@ -154,7 +163,7 @@ public final class ActivityCapture implements AutoCloseable {
         var b=d.geometry().bounds();
         return new ActivityRecord.Observation(d.geometry().id(),new ActivityRecord.Bounds(b.x,b.y,b.width,b.height),at);
       }).toList();
-      var front=ActivityImages.foreground(screen,foreground);
+      var front=properties.getDetection().isForegroundCrop()?ActivityImages.foreground(screen,foreground):screen;
       var current=fingerprints(front);
       ActivityRecord prior; Map<String,double[]> baseline;
       synchronized(this) {
@@ -170,7 +179,7 @@ public final class ActivityCapture implements AutoCloseable {
       ActivityExtractor.Result result;
       try {
         result=duplicate ? new ActivityExtractor.Result(prior.inference(),prior.confidence())
-            : properties.isExtractionEnabled() ? extract(front,foreground,"foreground")
+            : properties.isExtractionEnabled() && properties.getDetection().isVisionEnabled() ? extract(front,foreground,"foreground")
             : new ActivityExtractor.Result(new ActivityRecord.Inference("OS observation only; activity unknown",List.of()),0);
       } catch (Exception error) {
         saveEvidence(token, UUID.randomUUID().toString(), at, screen, duplicate,

@@ -15,7 +15,7 @@ class MemoryFirstStorageTest {
 
   @ParameterizedTest @ValueSource(booleans={false,true})
   void recordSessionSummaryAndRetentionWorkWithOptionalEvidence(boolean keep) throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);p.setKeepScreenshots(keep);
+    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);p.getDetection().setBackgroundFullScreenEnabled(true);p.setKeepScreenshots(keep);
     var ds=new org.sqlite.SQLiteDataSource();ds.setUrl("jdbc:sqlite:"+directory.resolve("activity.db"));
     var store=new SqliteActivityStore(ds,new SessionMergePolicy(Duration.ofSeconds(90),ZoneOffset.UTC));
     var screenshots=new FileScreenshotStore(directory.resolve("screenshots"));
@@ -50,7 +50,7 @@ class MemoryFirstStorageTest {
   }
 
   @Test void failedExtractionEvidenceUsesTheSameRetention() throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);p.setKeepOnExtractionFailure(true);
+    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setMode(ActivityProperties.DetectionMode.VISION_FIRST);p.getDetection().setBackgroundFullScreenEnabled(true);p.setKeepOnExtractionFailure(true);
     var screenshots=new FileScreenshotStore(directory.resolve("screenshots"));
     var observer=mock(DesktopActivityObserver.class);var store=mock(ActivityStore.class);
     when(observer.foreground()).thenReturn(new ForegroundWindow("idea",1,"rei","1"));when(observer.capture()).thenReturn(ActivityCaptureTest.screen(20));
