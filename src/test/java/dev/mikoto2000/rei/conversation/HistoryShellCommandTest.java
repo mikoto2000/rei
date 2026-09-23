@@ -47,11 +47,11 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
     return output.toString();
   }
   void add(ProjectContext project, String id, String role, String text) { logs.append(project.conversationId(id), role, text); }
-  @Test void defaultShowPreservesLegacyConversationAndLastLimits() {
+  @Test void explicitLegacyShowPreservesConversationAndLastLimits() {
     for (int i=0; i<65; i++) add(a,"chat:main","user","message-"+i);
     add(b,"chat:main","user","foreign");
-    String bare=run("show");
-    assertThat(bare).isEqualTo(run("show")).contains("Project: Alpha", "Conversation: chat:main", "message-15", "message-64")
+    String bare=run("show","chat:main");
+    assertThat(bare).isEqualTo(run("show","chat:main")).contains("Project: Alpha", "Conversation: chat:main", "message-15", "message-64")
         .doesNotContain("message-14", "foreign", "Usage:");
     assertThat(run("show","--last","2")).contains("message-63", "message-64").doesNotContain("message-62");
     assertThat(run("show","--all")).contains("message-0", "message-64");
@@ -73,7 +73,7 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
   @Test void displaysAllPersistedRolesAndInterventionsWithRedactionAndTruncation() {
     for (String role : List.of("system","user","assistant","tool","user")) add(a,"chat:main",role,role+" message");
     add(a,"chat:main","tool","Authorization: Bearer SECRET_VALUE\n"+"payload".repeat(600));
-    assertThat(run("show")).contains("] system", "] user", "] assistant", "] tool", "[REDACTED]", "(truncated)").doesNotContain("SECRET_VALUE");
+    assertThat(run("show","chat:main")).contains("] system", "] user", "] assistant", "] tool", "[REDACTED]", "(truncated)").doesNotContain("SECRET_VALUE");
   }
   @Test void searchUsesExistingScopesAndDisplaysProvenance() {
     add(a,"chat:main","user","Working Set local"); add(b,"chat:test","user","Working Set foreign");
@@ -92,7 +92,7 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
     router.submit(b.root(),b.conversationId("chat:main"),"B work");
     var before=router.activeRuns(); projects.cd(b.root().toString());
     try(var scope=AgentRunScope.open(new AgentRunContext("run-a",a,"chat:main"))) {
-      for(String text : List.of("/history show","/history search --current needle")) {
+      for(String text : List.of("/history show chat:main","/history search --current needle")) {
         var input=new UserInputService(new UserInputParser()).interpret(text);
         assertThat(input.kind()).isEqualTo(UserInputService.Kind.COMMAND);
         assertThat(run(Arrays.copyOfRange(input.arguments(),1,input.arguments().length))).contains("MaCa Editor").doesNotContain("A only");

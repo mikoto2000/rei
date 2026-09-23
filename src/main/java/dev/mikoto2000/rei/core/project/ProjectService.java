@@ -5,21 +5,34 @@ import java.util.*;
 import org.springframework.stereotype.Service;
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.application.session.SessionRepository;
 
 @Service
 public class ProjectService {
   private final Path startupDirectory;
   private final ProjectRegistry registry;
   private final boolean scoped;
+  private final SessionRepository sessions;
 
   public ProjectService() { this(ReiPaths.startupDirectory(), new ProjectRegistry(ReiPaths.projectsFilePath())); }
+  @org.springframework.beans.factory.annotation.Autowired
+  public ProjectService(SessionRepository sessions) {
+    this(ReiPaths.startupDirectory(), new ProjectRegistry(ReiPaths.projectsFilePath()), sessions);
+  }
   /** Compatibility constructor for callers that only use path management. */
   public ProjectService(Path startup, Path file) { this(startup, new ProjectRegistry(file), false); }
   public ProjectService(Path startup, ProjectRegistry registry) { this(startup, registry, true); }
+  public ProjectService(Path startup, ProjectRegistry registry, SessionRepository sessions) {
+    this(startup, registry, true, sessions);
+  }
   private ProjectService(Path startup, ProjectRegistry registry, boolean scoped) {
+    this(startup, registry, scoped, null);
+  }
+  private ProjectService(Path startup, ProjectRegistry registry, boolean scoped, SessionRepository sessions) {
     this.startupDirectory = startup.toAbsolutePath().normalize();
     this.registry = registry;
     this.scoped = scoped;
+    this.sessions = sessions;
   }
   public Path startupDirectory() { return startupDirectory; }
   public ProjectClient newClient() { return new ProjectClient(this, startupDirectory); }
@@ -64,7 +77,11 @@ public class ProjectService {
     var client = client();
     var context = registry.resolve(resolveDirectory(directory));
     synchronized (client) {
-      if (!client.selection.get().equals(context.root())) client.sessionId = null;
+      if (!client.selection.get().equals(context.root())) {
+        var latest = sessions == null ? List.<dev.mikoto2000.rei.application.session.SessionMetadata>of()
+            : sessions.findPage(context.id(), null, 1);
+        client.sessionId = latest.isEmpty() ? null : latest.getFirst().sessionId();
+      }
       client.selection.set(context.root());
     }
     return context.root();

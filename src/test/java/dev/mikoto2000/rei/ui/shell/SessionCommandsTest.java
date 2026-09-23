@@ -22,8 +22,8 @@ class SessionCommandsTest {
     assertThatThrownBy(() -> root.parseArgs("resume", "id")).isInstanceOf(picocli.CommandLine.UnmatchedArgumentException.class);
   }
   @Test void explicitNewAndResumePreserveProjectAndRejectUnknownOrForeignSessions() throws Exception {
-    var projects = new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json")));
     var repository = new FileSessionRepository(temp.resolve("sessions.json"));
+    var projects = new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json")), repository);
     var shell = new ShellConversationService(projects, new SessionLifecycle(repository, Clock.systemUTC()), (c,p)->{});
     var command = new picocli.CommandLine(new SessionCommand(), new picocli.CommandLine.IFactory() {
       public <K> K create(Class<K> type) throws Exception {
@@ -49,6 +49,18 @@ class SessionCommandsTest {
       assertThat(other.projectId()).isNotEqualTo(first.projectId());
       assertThat(repository.findById(first.conversationId()).orElseThrow().projectId()).isEqualTo(first.projectId());
       assertThat(other.conversationId()).isNotEqualTo(first.conversationId());
+      var cd = new picocli.CommandLine(new dev.mikoto2000.rei.core.command.ProjectCommand.CdCommand(projects));
+      assertThat(cd.execute(temp.toString())).isZero();
+      assertThat(shell.currentSessionId()).isEqualTo(first.conversationId());
+      assertThat(shell.submit("continued after cd").conversationId()).isEqualTo(first.conversationId());
+      assertThat(command.execute("resume", second.conversationId())).isZero();
+      assertThat(cd.execute(temp.toString())).isZero();
+      assertThat(shell.currentSessionId()).isEqualTo(second.conversationId());
+      assertThat(command.execute("new")).isZero();
+      assertThat(cd.execute(temp.toString())).isZero();
+      assertThat(shell.currentSessionId()).isNull();
+      assertThat(cd.execute(temp.resolve("other").toString())).isZero();
+      assertThat(shell.currentSessionId()).isEqualTo(other.conversationId());
     }
   }
 }

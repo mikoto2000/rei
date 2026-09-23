@@ -16,7 +16,7 @@ SessionLifecycle が Session create / validate / touch / Run context 作成 / en
 
 SessionLifecycle は共有 Repository の monitor 内で検証、metadata 保存、enqueue を直列化する。保存成功前に実行を受け付けず、同期 enqueue 失敗は既存 Repository の rollback を利用する。Shell の current session も受付成功後だけ更新する。title は既存 SessionTitle の最初の入力80 Unicode code points。継続で title / project / createdAt は変更しない。
 
-最初の送信は `project:<project UUID>:chat:<UUID>` を作り、以降は同じ ID。`/session new` は選択解除だけを行い、次の送信で作成する。`/session resume <sessionId>` は既知 Session と現在 project の一致を検証する。project 変更・削除による選択先変更では current session を解除し、同一 project 再選択は保持する。Shell 再起動は未選択で始まり、自動で直前の Session に戻らない。
+最初の送信は `project:<project UUID>:chat:<UUID>` を作り、以降は同じ ID。`/session new` は選択解除だけを行い、次の送信で作成する。`/session resume <sessionId>` は既知 Session と現在 project の一致を検証する。project 変更では移動先の最新更新 Session を選択し、存在しなければ未選択にする。project 削除による選択先変更では current session を解除し、同一 project 再選択は保持する。Shell 再起動は未選択で始まり、自動で直前の Session に戻らない。
 
 Shell の各入力は1 Run / 1 Turn とし、実行中も次の Run として FIFO に入る。これは旧 intervention 動作からの明示的な変更。Shell/Web 共通の実行処理が Turn を保存する。実行開始時の時刻が直前 Turn と同じか古ければ +1ns に補正し、日時・runId の API sort が実行順を逆転しないようにする。既存レコードの時刻は変更しない。
 

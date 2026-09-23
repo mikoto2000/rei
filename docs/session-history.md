@@ -52,16 +52,19 @@ Turn の createdAt は runner 開始時刻です。同一会話内の同時刻�
 /history
 /history --limit 20
 /history --project-id <projectId> --limit 20 --cursor <nextCursor>
+/history show
 /history show <sessionId>
 /history show <sessionId> --limit 20 --cursor <nextCursor>
 ```
+
+`/history show` は選択中の project で最後に更新された Session の内容を表示します。Session がなければ `No sessions.` を表示し、Session の作成や再開は行いません。実行中の Turn は入力と `(No response recorded)` を表示します。`--limit` は利用できますが、`--cursor` は Session ID の指定が必要です。
 
 `/history` は全 Session の最初のページを表示します。full sessionId、更新日時、project 名と ID、title を確認できます。`show <sessionId>` は metadata と時系列 Turn を表示します。いずれも既定50／最大100件で、次ページのコマンドを表示します。表示本文は既存 formatter に従い認証情報の伏せ字・制御文字除去・長文の表示上限を適用します。
 
 旧履歴コマンドは互換性のため残します。
 
 ```text
-/history show
+/history show chat:main
 /history show --last 100
 /history show --all
 /history show chat:test --project "MaCa Editor" --last 100
@@ -69,7 +72,7 @@ Turn の createdAt は runner 開始時刻です。同一会話内の同時刻�
 /history search --current "検索語"
 ```
 
-`show` 単体は選択中 project の直近50メッセージです。従来の `/history` 単体の表示はこちらで利用できます。明示的な旧 conversation ID に metadata がない場合は既存ログの参照に戻ります。`--project`／`--last`／`--all` は旧ログ参照用で、新しい `--limit`／`--cursor` と併用できません。旧 `history list` の offset は互換機能であり、新 Session 一覧は Web と同じ cursor query を使います。
+旧 `chat:main` は `/history show chat:main` で参照できます。明示的な旧 conversation ID に metadata がない場合は既存ログの参照に戻ります。`--project`／`--last`／`--all` は旧ログ参照用で、新しい `--limit`／`--cursor` と併用できません。旧 `history list` の offset は互換機能であり、新 Session 一覧は Web と同じ cursor query を使います。
 
 ## 永続化・移行・制約
 
@@ -90,7 +93,7 @@ Shell は最初の送信時に `project:<project UUID>:chat:<UUID>` を新規作
 
 - `/session new`: 選択を解除し、次の入力で新 Session を作成。実行中の Run は中止しません。
 - `/session resume <sessionId>`: 現在の project に属する既知 Session を選択。旧 `chat:main` や未知 ID は拒否します。別 project の場合は先に `/project cd` でその project を選びます。
-- `/project cd`: project が変わった場合は Session 選択を解除。元の Session の projectId は変更しません。同じ project の再選択では Session を保持します。
+- `/project cd`: project が変わった場合は移動先で最後に更新された Session を選択し、次の入力からその会話を継続します。Session がない場合は未選択となり、次の入力で新規作成します。元の Session の projectId は変更しません。同じ project の再選択では現在の選択（`/session new` 後の未選択状態を含む）を保持します。
 - `/history` / `/history show <sessionId>`: Shell / Web 共通の台帳・Turn を参照します。
 
 `ChatCommand` と `/agent` は ShellConversationService に委譲し、Web ChatSubmitService と共通の SessionLifecycle を利用します。初回入力の先頭80 Unicode code points を既存 SessionTitle で採用し、継続時は title / createdAt / projectId を保って updatedAt のみ更新します。保存または touch が失敗すれば Run を enqueue せずエラーにします。同期 enqueue 失敗は metadata を元に戻し、Shell の選択も変えません。

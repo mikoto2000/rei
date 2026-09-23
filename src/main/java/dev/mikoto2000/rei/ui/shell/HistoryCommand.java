@@ -62,8 +62,18 @@ public class HistoryCommand implements Callable<Integer> {
     return projects.registeredProjects().stream().filter(p -> p.id().equals(id)).findFirst()
         .map(p -> format.label(p.name()) + " [" + p.id() + "]").orElse(format.label(id));
   }
-  private int showSession(String id, Integer limit, String cursor) {
+  private int showSession(String requestedId, Integer limit, String cursor) {
     return execute(out -> {
+      String id = requestedId;
+      if (id == null) {
+        Pagination.limit(limit);
+        var selectedProject = projects.registeredProjects().stream()
+            .filter(project -> project.root().equals(projects.currentProject())).findFirst();
+        if (selectedProject.isEmpty()) { out.accept("No sessions."); return; }
+        var latest = sessions.listSessions(selectedProject.get().id(), 1, null);
+        if (latest.items().isEmpty()) { out.accept("No sessions."); return; }
+        id = latest.items().getFirst().sessionId();
+      }
       SessionMetadata row;
       try { row = sessions.getSession(id); }
       catch (ResourceNotFoundException error) {
@@ -98,7 +108,7 @@ public class HistoryCommand implements Callable<Integer> {
     @Option(names="--offset") int offset;
     public Integer call() { return parent.execute(out->parent.service.list(project,limit,offset,out)); }
   }
-  @Command(name="show",description="会話履歴（既定は直近50件）",mixinStandardHelpOptions=true)
+  @Command(name="show",description="会話履歴（ID省略時は現在のプロジェクトの最新Session）",mixinStandardHelpOptions=true)
   public static class ShowCommand implements Callable<Integer> {
     @ParentCommand HistoryCommand parent;
     @Parameters(index="0",arity="0..1",paramLabel="CONVERSATION",completionCandidates=SessionCompletionCandidates.class) String conversation;
@@ -111,7 +121,10 @@ public class HistoryCommand implements Callable<Integer> {
       @Option(names="--all",required=true) boolean all;
     }
     public Integer call() {
-      if (project == null && range == null && conversation != null) return parent.showSession(conversation, limit, cursor);
+      if (project == null && range == null) {
+        if (conversation == null && cursor != null) return parent.execute(out -> { throw new IllegalArgumentException("--cursor requires a session ID"); });
+        return parent.showSession(conversation, limit, cursor);
+      }
       if (limit != null || cursor != null) return parent.execute(out -> { throw new IllegalArgumentException("--limit/--cursor require a session ID without legacy options"); });
       return parent.show(project,conversation,range!=null&&range.last!=null?range.last:HistoryShellService.DEFAULT_LAST,range!=null&&range.all);
     }

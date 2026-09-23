@@ -13,21 +13,24 @@ import picocli.CommandLine;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-class SessionHistoryCommandTest {
+class SessionHistoryCommandTest extends ProjectClientTestSupport {
   @TempDir Path temp;
   final Instant now = Instant.parse("2026-09-16T08:00:00Z");
   FileSessionRepository repository;
   ConversationTurnStore turns;
   ProjectContext project;
+  ProjectRegistry registry;
+  ProjectService projects;
   CommandLine command;
   StringWriter output;
   @BeforeEach void setup() {
-    var registry = new ProjectRegistry(temp.resolve("projects.json"));
+    registry = new ProjectRegistry(temp.resolve("projects.json"));
     project = registry.resolve(temp);
     repository = new FileSessionRepository(temp.resolve("sessions.json"));
     turns = new ConversationTurnStore(temp);
+    projects = connect(new ProjectService(temp, registry));
     command = new CommandLine(new HistoryCommand(mock(HistoryShellService.class),
-        new SessionQueryService(repository, turns), new ProjectService(temp, registry)));
+        new SessionQueryService(repository, turns), projects));
     output = new StringWriter(); command.setOut(new PrintWriter(output)); command.setErr(new PrintWriter(output));
   }
   String run(String... args) {
@@ -35,6 +38,27 @@ class SessionHistoryCommandTest {
   }
   void add(String id, String title, Instant updated) {
     repository.accept(new SessionMetadata(id, project.id(), title, now, updated), () -> {});
+  }
+  @Test void defaultShowUsesLatestUpdatedSessionInSelectedProjectWithoutResumingIt() throws Exception {
+    var other = registry.resolve(Files.createDirectory(temp.resolve("other")));
+    repository.accept(new SessionMetadata("foreign", other.id(), "foreign title", now, now.plusSeconds(120)), () -> {});
+    assertThat(run("show")).contains("No sessions.").doesNotContain("foreign");
+    add("older", "old title", now);
+    add("latest", "latest title", now.plusSeconds(60));
+    projects.selectSession("older");
+    var context = new AgentRunContext("running", "latest", temp);
+    turns.start(context, "pending question", now);
+    assertThat(run("show")).contains("Session: latest", "pending question", "(No response recorded)")
+        .doesNotContain("old title", "foreign title");
+    assertThat(projects.currentSessionId()).isEqualTo("older");
+    turns.finish(context, ConversationTurnStore.Status.COMPLETED, "finished answer");
+    assertThat(run("show", "--limit", "1")).contains("finished answer");
+    projects.cd(other.root().toString());
+    assertThat(run("show")).contains("Session: foreign", "No turns.");
+    projects.cd(project.root().toString());
+    assertThat(run("show")).contains("Session: latest", "finished answer");
+    assertThat(projects.currentSessionId()).isNull();
+    assertThat(command.execute("show", "--cursor", "bad")).isNotZero();
   }
   @Test void bareHistoryListsBoundedSessionsInUpdatedOrderWithProjectAndFullId() {
     assertThat(run()).contains("No sessions");

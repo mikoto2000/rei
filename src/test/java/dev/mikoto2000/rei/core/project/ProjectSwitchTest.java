@@ -7,6 +7,23 @@ import static org.assertj.core.api.Assertions.*;
 
 class ProjectSwitchTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
+  @Test void failedSessionLookupPreservesSelectionAndOtherClients() throws Exception {
+    var sessions = org.mockito.Mockito.mock(dev.mikoto2000.rei.application.session.SessionRepository.class);
+    var service = connect(new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json")), sessions));
+    var target = Files.createDirectory(temp.resolve("target"));
+    var project = service.currentContext();
+    service.selectSession("original");
+    org.mockito.Mockito.when(sessions.findPage(org.mockito.ArgumentMatchers.anyString(),
+        org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.eq(1)))
+        .thenThrow(new IllegalStateException("Cannot read sessions"));
+    assertThatThrownBy(() -> service.cd(target.toString())).isInstanceOf(IllegalStateException.class);
+    assertThat(service.currentContext()).isEqualTo(project);
+    assertThat(service.currentSessionId()).isEqualTo("original");
+    try (var scope = service.newClient().open()) {
+      assertThat(service.currentSessionId()).isNull();
+    }
+    assertThat(service.currentSessionId()).isEqualTo("original");
+  }
   @Test void switchRestoresIdentityAndCapturedRunRemainsOwnedByA() throws Exception {
     Path a = Files.createDirectory(temp.resolve("a"));
     Path b = Files.createDirectory(temp.resolve("b"));
