@@ -128,7 +128,10 @@ LLM呼び出し中にserviceのmonitorを保持せず、`off`やChat開始を妨
 画面、Raw Evidence、タイトル、会話履歴、Task、Calendar、Working Setは渡さない。
 tools / tool callbacks / chat memory / advisorsは使わず、ツール実行を無効にする。
 
-NOTICEは軽く、WARNINGは少し明確に、STRONG_WARNINGははっきり区切りを促す2〜3文。
+2〜3文で、NOTICEは「そろそろ区切りをつけて」と明確に注意し、WARNINGは
+「ここでいったんやめて」と強めに中断を求め、STRONG_WARNINGは
+「今すぐやめて、画面から離れて」と厳しく即時の中断を求める。
+遠慮した提案で注意を弱めず、注意は行動に向ける。Severityの判定や通知間隔は変更しない。
 人格評価・侮辱・羞恥を避け、観測と実操作を混同せず、締切や未完了作業を創作しないよう指示する。
 confidence 0.7未満ではサービス名を入力から外し、不確実性を明示するよう指示する。
 空出力・長すぎる出力・生成上限到達・tool call・代表的な侮辱表現は配信しない。
