@@ -1,4 +1,9 @@
 package dev.mikoto2000.rei.activity;
 
 /** OS evidence, never supplied by Vision. */
-public record ForegroundWindow(String processName, long processId, String windowTitle, String windowId) {}
+public record ForegroundWindow(String processName, long processId, String windowTitle, String windowId,
+    ActivityRecord.Bounds bounds) {
+  public ForegroundWindow(String processName,long processId,String windowTitle,String windowId) {
+    this(processName,processId,windowTitle,windowId,null);
+  }
+}

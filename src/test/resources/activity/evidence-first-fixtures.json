@@ -1,0 +1,21 @@
+[
+  {
+    "name": "rei-editor-with-social-background",
+    "foreground": {"processName":"Code.exe","processId":1,"windowTitle":"BehaviorEvaluator.java - rei - Visual Studio Code","windowId":"1","bounds":{"x":0,"y":0,"width":16,"height":32}},
+    "visibleWindows": [
+      {"window":{"processName":"Firefox","processId":2,"windowTitle":"ホーム / X","windowId":"2"},"visible":true,"minimized":false,"offScreen":false,"monitor":"m1"},
+      {"window":{"processName":"Chrome","processId":3,"windowTitle":"Some Video - YouTube","windowId":"3"},"visible":true,"minimized":false,"offScreen":false,"monitor":"m2"},
+      {"window":{"processName":"WindowsTerminal","processId":4,"windowTitle":"Terminal","windowId":"4"},"visible":true,"minimized":false,"offScreen":false,"monitor":"m2"}
+    ],
+    "expectedPrimary":"development","expectedFallback":false
+  },
+  {
+    "name":"generic-browser-with-terminal-and-github",
+    "foreground":{"processName":"Firefox","processId":1,"windowTitle":"Mozilla Firefox","windowId":"1","bounds":{"x":0,"y":0,"width":16,"height":32}},
+    "visibleWindows":[
+      {"window":{"processName":"WindowsTerminal","processId":4,"windowTitle":"Terminal","windowId":"4"},"visible":true,"minimized":false,"offScreen":false,"monitor":"m2"},
+      {"window":{"processName":"Chrome","processId":3,"windowTitle":"rei - GitHub","windowId":"3"},"visible":true,"minimized":false,"offScreen":false,"monitor":"m2"}
+    ],
+    "expectedPrimary":"unknown","expectedFallback":true
+  }
+]

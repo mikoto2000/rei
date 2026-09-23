@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
+import java.util.Map;
+import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -104,8 +106,17 @@ class ExternalConfigFileServiceTest {
     Set<String> expected = enabledKeys(defaults);
     // These settings are declared in Java rather than the bundled application.yaml.
     Set<String> javaSettings = Set.of("rei.computer-use.enabled",
-        "rei.computer-use.diagnostics.enabled", "rei.sound-notification.enabled");
+        "rei.computer-use.diagnostics.enabled", "rei.sound-notification.enabled",
+        "rei.activity.enabled", "rei.activity.behavior.enabled");
     expected.addAll(javaSettings);
+    var detectionSettings=Map.of("rei.activity.detection.evidence-enabled",true,
+        "rei.activity.detection.vision-enabled",true,"rei.activity.detection.fallback-enabled",true,
+        "rei.activity.detection.background-full-screen-enabled",false);
+    expected.addAll(detectionSettings.keySet());
+    detectionSettings.forEach((key,value)->assertEquals(value,template.get(key),key));
+    for(String feature:List.of("unknown-registry","entertainment-registry","rule-suggestion","diagnostics")) {
+      String key="rei.activity.classification."+feature+".enabled";expected.add(key);assertEquals(true,template.get(key),key);
+    }
     expected.remove("rei.web.enabled");
 
     assertEquals(expected, enabledKeys(template));

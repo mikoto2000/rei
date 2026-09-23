@@ -1,5 +1,137 @@
 # Activity Timeline 実装報告
 
+## Phase 3.7.1 Operational Classification Toolkit（2026-09-23）
+
+ブランチは`codex/activity-behavior-evaluation`を継続。作業開始時の未コミット変更はなし。
+Phase 3.6/3.7の先行保存・RAM画像・前面/背景worker・同一Observation enrichmentを維持し、外部ルールと運用用telemetryを追加した。
+
+主要追加クラス:
+
+- `OperationalRules`: built-in/userの検証、compile、priority、immutable snapshot、atomic reload。
+- `ClassificationToolkit`: 診断、rules/status/registry表示、ActivityStoreとの接続、Privacyチェック。
+- `ClassificationTelemetryRepository`: ActivityRecordとは別のSQLite metadata、ID upsert、集計、retention。
+- `ClassificationDiagnostics` / `EntertainmentDisposition`: 各軸confidence、rule/source、Vision判断・理由と独立した娯楽判定。
+- `ClassificationRuleSuggestions` / `LlmClassificationRuleModel`: 人間の確認用の構造化候補提案。自動適用なし。
+
+`ActivityConfiguration`/`ActivityCapture`/`ActivityEvidencePipeline`、`ActivityRecord.Detection`、`BehaviorEvaluator`、`ActivityCommand`と設定テンプレートへ接続した。
+ユーザー用ファイルは`<rei-data-dir>/activity/classification-rules.yaml`。未作成でもbuilt-in分類16件・娯楽5件で動作する。
+同梱分類はPhase 3.7の動的抽出を継続し、娯楽ruleは別YAML。schema、priority/override、検証、reload、Registry、理由コード、metrics、提案とPrivacyは[運用仕様](activity-classification-rules.md)にまとめた。
+
+### TDD・fixtureでの確認
+
+ルールAPI/validation、registry・診断、提案、初回fallback metricsとretentionを失敗テストから実装した。
+後方参照・繰り返すgroup等を制限し、proposalにはscopeとcontextの両方を要求する。
+未知キー、空ID、重複ID、不正regex/category/disposition/confidence/priority、同順位の衝突、reload失敗時の世代保持を確認した。
+既存completionテストの期待値と設定テンプレートのキー一覧を、新しいコマンド/設定へ更新した。
+
+| fixture / 操作 | 確認結果 |
+|---|---|
+| Hugging Faceの未知タイトルを3回観測、各々Visionでresearchへ補足 | Registry保存上も1行・count=3・open=0・Vision成功3件・RESOLVED_BY_VISION。Observation数3のまま |
+| 上記からclassification提案 | 最低サンプル数を満たす一貫した成功結果でYAML候補を生成。effective snapshot・ユーザーファイルは不変 |
+| YouTube / JVM compilation deep diveを3回観測 | UNCERTAIN集約1件・count=3。文脈付きNON_ENTERTAINMENT候補を生成しても適用しない |
+| 同じservice/titleでmediaとotherが混在 | 固定ルール候補のLLM呼出しを抑止 |
+| ChatGPTのVisionがoutput_limit | OS観測1件を保存し、VISION_OUTPUT_LIMITを構造化診断・registryへ保持 |
+| chat-researchを手動追加してpoll reload、次の観測 | researchになりVisionを省略。2観測・API試行1件・user rule hit 1件・evidence-only 1件 |
+| media + NON_ENTERTAINMENT / research + ENTERTAINMENT | Behavior娯楽時間0秒 / 600秒。UNCERTAINは0秒。旧Recordのmediaは従来どおり600秒 |
+| SQLite telemetryを失敗させる | 本体ActivityStoreへの保存は実行され、例外をCaptureへ伝播しない |
+| 設定ファイルを削除しreload前に100回分類 | 同じcompile済みsnapshotを利用。次のpollでbuilt-inへ戻る |
+
+これらは依頼文の例と既存fixtureを基にした合成metadata＋mock LLM、実SQLiteでの検証であり、実ユーザーの画面・実LLM応答から抽出した新しい実運用測定ではない。
+当日の実unknown率・娯楽uncertain率・実モデルでの候補生成成功率は未測定。稼働中アプリを停止・再起動しておらず、ユーザー用ルールを実環境に自動追加していない。
+
+新規テスト21件。全Java **2,261件**、client **41件**、Rust **64件**、E2E **12件**が成功。
+Phase 3.5 Behavior、Summary、旧Record JSON、Phase 3.7 fixture、画像非保存・worker制限の既存回帰テストを含む。
+最終確認の同順位衝突修正後に関連305件、Registryの物理集約追加後にOperational関連19件も再実行して成功した。
+Maven packageが成功し、`target/rei-0.0.1-SNAPSHOT.jar`を更新した。分類Toolkit/Repositoryのクラスとrule/schemaの同梱をZIP内容で確認した。
+Windowsの通常成果物名での置換制約を避け、一時POMで別名にpackageしてから通常名へコピーした。一時POMは削除済み。
+
+### 運用上の変更と残課題
+
+新しい観測では明示的dispositionを優先するため、用途不明のYouTube等を従来のmediaカテゴリだけで娯楽時間へ加算しなくなる。
+古いRecordのcategory fallbackは維持し、reloadで過去の観測を書き換えない。
+Registryは正規化keyで集計するが、高度なタイトルpattern clusteringは行わない。LLMへは高頻度・一貫した候補だけを渡すため、タイトルの変動が多い場合は手動rule作成が必要。
+Ruleの意味的な同値/完全な競合判定はできず、regexの安全な部分集合と保守的検査を使う。Privacy検出も既知パターンに基づくため、既存のprocess/title除外設定を併用する。
+全設定・診断の詳細は`docs/activity-classification-rules.md`、完全な手動編集例は`docs/classification-rules.example.yaml`。
+
+## Phase 3.7 Evidence Classification Tuning（2026-09-23）
+
+使用ブランチ: `codex/activity-behavior-evaluation`。Phase 3.6の先行保存・前面1件+最新待機1件・背景1件待機なし・memory-firstを維持した。
+
+追加した主要クラスは`BrowserTitleRules`、`ActivityFieldConfidence`、`ForegroundActivityParser`、`ActivityEnrichment`、`ActivityVisionFailure`。
+`ActivityClassifier`/`WindowActivityRules`は優先順位付きbrowser title registryへ委譲し、`ActivityClassification`/`ActivityRecord.Detection`に独立した5軸confidenceとsecondary confidenceを保存する。
+`ActivityEvidencePipeline`はusable判定、各軸の補足、失敗別metricsを扱い、`VisionActivityExtractor`は前面専用schema/promptとreasoning token計測を使う。
+設定既定値と新規生成テンプレートのActivity専用上限を1024から2048へ変更した。明示設定がある場合はその値を維持する。
+
+前面schemaは単一objectのcategory/application/service/projectCandidate/contentCandidate/summary/confidenceのみ。
+観測配列・座標・monitorを生成させず、短いpromptとresponse_formatで構造を指定する。背景schemaは従来どおり。
+output_limit/timeout/validationは即時retryせず、取得済みEvidenceとpartialを保持する。known serviceをnullで消さない。
+categoryが既知で閾値以上、applicationまたはserviceが0.8以上ならusableとしてVisionを省略する。project/content不明だけではfallbackしない。
+category unknown、低確信度categoryなどusableでない観測は前面fallback候補になる。
+completeは5軸すべて既知、partialはapplication/service既知でcompleteでないもの。secondaryの確信度をprimaryへ加算しない。
+詳細なrule、各軸、設定、metrics、schema制約は[設計・運用説明](activity-evidence-first.md)を参照。
+
+### 同じ入力でのBefore / After
+
+旧HEADの分類器と新分類器に同一Evidenceを与え、Visionを呼ばずに比較した。以下のunknownはEvidence分類時点の値。
+
+| 入力 | Phase 3.6 usable / Vision不要 | Phase 3.7 usable / Vision不要 | unknown 前→後 | fallback候補 前→後 |
+|---|---:|---:|---:|---:|
+| 代表合成fixture 21件 | 4 (19.0%) | 14 (66.7%) | 17→4 | 17→7 |
+| 17:56–18:08の保存済み実Evidence 13件 | 2 (15.4%) | 4 (30.8%) | 11→9 | 11→9 |
+
+実Evidenceのpartialは両版13件（新定義で再計算）。Xに加えGoogle Newsとem dash区切りのBlueskyを拾えるようになった。
+generic browser 7件、generic terminal 1件、native ChatGPT 1件はcategoryを確定できず、実入力でのVision不要50%目標には未達。
+21件は合成fixtureであり実運用の削減率ではない。旧Phase 3.6 fixtureと互換テストも維持した。
+
+変更前の実運用ログは保存観測13件、Evidence-only 2件、Vision試行10件、成功3件 (30%)、失敗7件（全てoutput_limit）、最終unknown 8件、背景Vision 0件。
+観測間隔は約60秒、保存duration合計780秒で、この範囲に観測欠落は見られなかった。fallback候補11件と実API10件は待機等により一致しない。
+変更後の13件は保存済みEvidenceの再生であり、新版の実API試行数・成功率・output_limit・観測欠落を測定したものではない。
+旧最終unknown 8件（Vision補足済み）と新Evidence-only unknown 9件は比較できない。
+
+旧失敗は1024 completion tokensで本文が空の例があり、reasoningによる消費が疑われるが未確定。
+新しいreasoning_tokens/max_output_tokensログで確認できるようにした。2048で必ず成功するとは保証しない。
+稼働アプリをこの作業から停止・再起動しておらず、10〜20分の新版実API測定は未実施。再起動後の実測が残る。
+
+### TDDと検証
+
+分類API、軽量parser、失敗保持、実タイトル区切り、reasoning計測について失敗テストから実装した。新規テスト15件。
+Java **2,240件**、client **41件**、Rust **64件**、E2E **12件**がすべて成功。
+旧JSON（detectionなし・Phase 3.6の追加軸なし）、SQLite往復、同一ID補足、時間非重複、Phase 3.5 Behavior/Summaryの既存テストを含む。
+実行中1件と最新待機1件、背景opt-in、失敗時の観測維持も既存テストで回帰確認した。
+Maven packageが成功し、新しいforeground schemaを同梱した`target/rei-0.0.1-SNAPSHOT.jar`を更新した。
+通常の成果物名での置換制約を避けるため、一時POMで別名にpackageしてから通常のJAR名へコピーした。一時POMは削除済み。
+外部`application.yaml`のActivity専用上限も明示値1024から2048へ変更した。次回再起動から反映される。
+分類器は実データのOS Evidenceだけを読み取り、スクリーンショットや外部APIへの追加送信は行っていない。
+
+残課題はserviceを含まない一般タイトル、GitHub候補の曖昧さ、複数clientのproject対応、実モデルのreasoning予算と成功率。
+Phase 3.7でもタイトルだけから操作・集中を断定しない。
+
+## Phase 3.6 Evidence-first（2026-09-23）
+
+使用ブランチ: `codex/activity-behavior-evaluation`。既存の前面・背景workerを維持したまま、
+`ActivityEvidencePipeline`を追加してOS観測の保存をVisionより先に移した。
+`ActivityEvidence` / `ActivityEvidenceAggregator` / `ActivityEvidenceSource` / `ActivityAgentEvidenceSource` / `ActivityClassifier` /
+`WindowActivityRules`を追加し、Windowsの`metadata.ps1`、`ActivityRecord.Detection`、専用1024 token上限、設定テンプレートを接続した。
+
+前面のprocess+titleで十分なら画像なしで保存。不十分なら前面cropで補足し、同じID・取得時刻を更新する。
+Background Visionは既定無効。API失敗や待機置換で元のEvidenceを失わず、旧Record JSONも読み込める。
+SQLite往復でBehavior/Summary互換と時間の非重複を確認するテストを追加した。
+
+分類器と先行保存パイプラインはRed→Greenで導入し、出力上限と範囲不明時の全画面送信抑止も失敗テストから修正した。
+従来のVision-firstのテストはmodeと背景opt-inを明示し、期待値を維持して回帰確認する。
+設定、sources、confidence、制限、計測項目は [Phase 3.6詳細](activity-evidence-first.md) を参照。
+
+検証結果: Java **2,221件**、client **41件**、Rust **64件**、E2E **12件**、すべて成功。
+Phase 3.6で新規テスト23件を追加。Windows metadata probeはPowerShell構文とWin32 C#宣言のコンパイルを確認。
+Maven packageも成功し、`target/rei-0.0.1-SNAPSHOT.jar`を更新した。
+SQLite fixtureでは2観測・Evidence-only 1件・前面Vision 1件・背景0件・call rate 50%・合計120秒を確認。
+遅延fixtureではVisionを待機させたまま4観測すべてを保存し、待機置換による観測欠落を0件とした。
+これらはmock/合成fixtureによる結果であり、実APIの速度・削減率ではない。
+稼働中アプリの再起動や実Vision APIでの長時間測定は未実施。Win32の実デスクトップでの可視判定、
+複数clientでのproject対応、タイトルルールの適用範囲、reasoningモデルの1024 tokenでの応答率は実運用での確認事項。
+
+以下は各Phaseの実装当時の報告であり、旧Vision-firstの既定動作はPhase 3.6で変更されている。
+
 実装日: 2026-09-23 / ブランチ: `codex/activity-timeline`
 
 Phase 1〜3 の初回実装は `082f744173c59b52461a2f5771cb9de17dbe1f3a`。
@@ -550,3 +682,87 @@ project検証はヒューリスティックなので日本語名・空白を含�
 自然文は決定的なテンプレートであり、自由なLLM作文は行わない。
 変更対象は `/activity summary`。today / yesterday / 日付指定や自然言語ツールへの展開は行っていない。
 実Vision API・実画面・ユーザーのActivity DBにはアクセスしていない。
+
+## Phase 3.5: Behavior Evaluation / Behavior Notification
+
+Phase 3.4が取り込まれたmain `1963275` から専用ブランチ `codex/activity-behavior-evaluation` を作成。
+開始時の作業ツリーはclean。コミットは `git log --oneline --grep='add opt-in activity behavior evaluation'` で確認できる。
+
+### 主要クラス
+
+| クラス | 責務 |
+|---|---|
+| BehaviorProperties | デフォルト無効、カテゴリ、連続閾値、窓・比率・最小観測量、中断、cooldown、履歴範囲の設定・検証 |
+| BehaviorEvaluator | 詳細Sessionと参照先Recordを純粋に評価。Primary観測秒数、連続時間、両window、回復時刻を計算 |
+| BehaviorAssessment / BehaviorSeverity | NONE〜STRONG_WARNING、reason enum、観測秒数・比率、根拠カテゴリ・サービス・confidence |
+| BehaviorNotificationPolicy | cooldown、escalation、回復・新episode、現在の活動、Chat busyの抑制判断 |
+| BehaviorState / SqliteBehaviorStateStore | 1行のcheckpointと最大100件の重要な状態遷移の保存 |
+| BehaviorNotification / BehaviorMessageGenerator | 通知許可後の構造化評価と発話生成の境界 |
+| LlmBehaviorMessageGenerator | 既存キャラクターによる短い発話だけ。評価・境界・時間をLLMへ委譲しない |
+| BehaviorService / BehaviorConfiguration | 1 worker・queue 0で評価と通知を実行し、障害・生成中の状態変化を隔離 |
+| ActivityCommand | behavior on / off / status / evaluateと補完 |
+
+関連変更はcanonical categoryのgaming補完、gamingのSummary表示、LLM feature `activity-behavior`、
+MessageOrigin.BEHAVIOR、`/config init`のテンプレート。既存のチャット発話publisher / messageイベントを再利用し、
+Behavior専用イベントを増やしていない。
+
+### 評価・通知
+
+入力はFine-grained ActivitySessionと、そのrecordIdsが参照するActivityRecord。
+既存SessionがPrimary観測内訳を直接保持しないため、元Recordから既存ActivityRolePolicyで補う。
+Record推定区間をSession・次の観測・現在時刻・履歴範囲へclipし、重複を除き、SessionのobservedSecondsを上限とする。
+SummarySegmentは使わず、元の保存済みSessionやRaw Evidenceも変更しない。
+
+娯楽カテゴリはsocial / media / shopping / gaming。communicationを含む他カテゴリを一律に娯楽にしない。
+eligibleはPrimary既知かつunknown / other / idle以外の観測時間。unknown・未観測は分子/分母から除外する。
+連続娯楽はカテゴリ内切替をつなぐが、中断・未観測秒数を加算しない。60秒までの短いノイズは許容、
+長いunknown/gapとcontinuityId変更は連続性を切る。既知非娯楽5分で連続時間・episodeを回復する。
+
+連続30/60/120分でNOTICE/WARNING/STRONG_WARNING。直近60分はeligible30分以上・娯楽50%以上でNOTICE、
+直近120分はeligible60分以上・娯楽60%以上でWARNING。最大Severityを採用し、reasonをCONTINUOUS /
+RATIO / BOTHに構造化する。Assessmentには両窓の秒数・比率も残す。
+
+通知cooldownはNOTICE60分、WARNING45分、STRONG_WARNING30分。理由が変化しても同じ傾向として抑制し、
+直前の通知Severityからのescalationのみ突破できる。回復通知は出さず、回復後の通知には新しい区間自身が
+閾値を満たすことも要求する。昔のwindowの高比率だけで即再通知しない。
+Chat busy・Capture無効/pause・現在娯楽でない・古い観測は通知しない。
+
+予約をSQLiteへ保存してからLLMを呼ぶため、再起動・生成失敗・送信破棄でもcooldownは残る。
+状態保存失敗時は通知しない。重要なstate変化だけ書き込み、履歴は最大100件。
+生成中にoffやChat開始が可能で、送信直前の再評価で作業復帰等が分かれば発話を破棄する。
+
+### 発話と設定
+
+SystemPromptServiceのキャラクターを再利用。Severity・reason・観測時間・比率・カテゴリ・confidence等だけを
+小さなJSONで渡す。低confidenceではサービス名を外す。Raw画像・タイトル・会話履歴・Task/Calendarは渡さない。
+ツール・memory・advisorsを使わず、評価の変更、攻撃的表現、実操作や未完了作業の創作を禁止する指示を加える。
+空・上限到達・過長・tool call・代表的な侮辱語を含む出力は配信しない。
+モデル指定は `rei.llm.features.activity-behavior`。カスタムサーバーから別サーバーへのfallbackは使わない。
+
+全既定値・設定例は [activity-behavior-evaluation.md](activity-behavior-evaluation.md) に記載。
+自動評価は60秒ごと、履歴範囲24時間、enabled=false。on/offは起動中のoverride、再起動時はYAMLに従う。
+statusは保存済みcooldownも表示し、evaluateは無効中でも明示的に行える通知なしdry run。
+`/config init`テンプレートと設定bindingのテストも更新した。
+
+### Fixture / TDD
+
+SNS20分→動画10分→開発5分→unknown30秒→gap5分→SNS10分→動画15分→開発10分→SNS30分という
+合成fixtureで、連続娯楽30分、60分窓50/60分（83.3%）、120分窓85/100分（85%）、WARNING / BOTHを確認。
+unknown30秒・gap5分を除外し、workで連続時間がリセットされる。結果は `target/activity35-example.txt`。
+実機のActivity DBは使っていない。
+
+最初にEvaluator/Policyテストを追加して未実装のRedを確認し、純粋ロジックを実装。
+次に「LLM生成中に作業へ戻る」テストの失敗を確認して、送信直前の再評価を追加した。
+設定テンプレートの既存全enabledキー検査にもActivity/Behaviorの新規Java設定を追加した。
+
+追加47件: Evaluator20、Policy6、Service12、Wording3、Configuration3、SQLite統合2、補完1。
+Java全2,171件成功（failure / error / skip=0、2分18秒）。Client41件、Rust64件成功。
+ブラウザーE2Eも12件成功（1 worker、46.2秒）。flaky / timeoutなし。`git diff --check`成功。
+
+### 残課題・境界
+
+LLMのトーン・事実忠実性を完全な意味検証で保証するものではなく、実モデルでの使用感確認は残る。
+通知予約後の失敗・キャンセルではcooldownを保持するため、通知が欠けることがある。
+履歴範囲を超える連続時間は取得範囲内の下限値。休憩の意図や仕事が終わったかは推定しない。
+Task / Calendar / 締切 / Working Set / 未完了project / Score / 週次月次分析 / Adaptive Coachingは未実装。
+実画面・実LLMへのアクセスや実通知は行わず、既存Memory-First・画像retentionを維持した。

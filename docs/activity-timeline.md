@@ -1,7 +1,19 @@
 # Activity Capture / Timeline
 
-Phase 1〜3: デスクトップを観測し、構造化した履歴を保存し、振り返る機能。
-デフォルトは無効。採点・行動評価・お小言は行わない。
+Phase 1〜3.7.1: デスクトップを観測し、構造化した履歴を保存し、振り返る機能。
+デフォルトは無効。お小言は別途Behavior設定で明示的に有効化する。
+
+Phase 3.7.1は`/activity classification status|reload|unknowns|rules|suggest-rules`と
+`/activity behavior uncertain|suggest-rules`を追加した。外部分類・娯楽ルールは再起動なしで反映できる。
+新しい観測の明示的な娯楽判定をカテゴリより優先し、UNCERTAINは娯楽時間に加算しない。
+詳細・設定例・既存データとの互換性は[Classification Toolkit](activity-classification-rules.md)を参照。
+
+Phase 3.7の既定経路は **Evidence-first**。前面・可視ウィンドウのOS情報とproject/tool情報から分類し、
+画像を取得する前にRecordを保存する。category confidenceが0.8以上、applicationまたはserviceが0.8以上ならVisionを省略する。
+project/contentが不明なだけでは解析を要求しない。各軸confidenceとpartialを保持し、不十分な分類だけ前面の7キー軽量schemaで補足する。
+待機画像の置換・Vision失敗でもOS観測は残る。背景全画面解析は既定無効、Activityの出力上限はPhase 3.7から2048 tokens。
+詳細な現在の仕様・設定・制限は [Evidence-first](activity-evidence-first.md) を参照。
+以下の画像差分、Vision成功後の保存、失敗時の未保存の説明は `detection.mode: vision-first` の互換経路についての記録である。
 
 ## Architecture
 
@@ -9,6 +21,10 @@ Phase 1〜3: デスクトップを観測し、構造化した履歴を保存し�
 Spring @Scheduled → bounded activityExecutor (1 worker, queue=0)
   → ActivityCapture → DesktopActivityObserver
       foreground exclusion → RobotScreenCapture (per display) → foreground recheck
+  → latest pending frame (RAM, capacity=1) → activityAnalysisExecutor (1 worker)
+      → foreground crop / foreground fingerprint → foreground analysis
+  → periodic background fingerprint → activityBackgroundExecutor (1 worker, no pending images)
+      → desktop analysis → supplement the same captured observation
   → ImageChange (RAM) → ActivityExtractor / VisionActivityExtractor (RAM) → ActivityOutputParser
   → ScreenshotPersistencePolicy → optional ScreenshotStore
   → ActivityRecord → SqliteActivityStore + SessionMergePolicy → ActivitySession
@@ -22,9 +38,21 @@ Spring @Scheduled → bounded activityExecutor (1 worker, queue=0)
 主 DataSource (`memory.db`)、Picocli `RootCommand`、Chat の Tool 登録を再利用する。
 Win32 foreground 取得は `WindowsDesktopActivityObserver` に隔離している。
 既存の Computer Use の UIA probe は入力欄の内容も取得するため、Activity では
-タイトル・PID・プロセス名・ウィンドウ識別子だけを取得する専用の read-only probe を使う。
+タイトル・PID・プロセス名・ウィンドウ識別子・ウィンドウ範囲を取得する専用の read-only probe を使う。
 
-専用 executor の最大並列数は1、キューは0。解析中の次回 tick は捨てる。
+観測・前面解析・背景解析は別の専用 executor（それぞれ最大並列数1）で実行する。
+LLMへのActivityリクエストは前面1件＋背景1件の最大2並列。同じvLLMでの実際の同時処理・速度向上はサーバーの容量や設定による。
+前面解析中も次回 tick の観測は続き、前面の待機画像は最新1件に置き換える。
+背景解析中は追加の背景リクエストを捨て、待機画像を蓄積しない。背景の遅延・失敗は前面解析の開始や継続判定を塞がない。
+保持画像は前面解析中1件、前面待機1件、背景解析中1件が上限で、観測中は一時的にもう1件存在する。
+前面と背景が同じ観測を扱う場合は元画像を共有する。古い待機画像は解放し、画像をディスクに退避しない。
+解析 executor の Runnable キュー1件は worker 終了時の引継ぎ用で、画像を追加蓄積するキューではない。
+置換された観測や失敗した解析を、推測で継続時間へ加算しない。解析済みの画面が再観測でも変化していなければ、従来どおり軽量Recordを追加する。
+保存時刻には解析完了時刻ではなく、実際の取得時刻を使う。長い欠測を1件のdurationEstimateで埋めない。
+前面結果は背景を待たずに保存する。背景結果は同じ取得時刻・IDの記録に候補を追加し、SQLite上のRecordとSessionをトランザクションで更新する。
+背景が先に完了した場合は前面の保存時に補足する。背景の別Recordは作らず、durationEstimateを増やさない。
+背景の補足では前面のsummary・confidence・主活動を維持し、主活動の判定を変える候補や低確信度の背景結果は採用しない。
+前面が失敗・待機置換で未保存になった観測の背景結果は破棄する。背景の候補は次の前面重複Recordには引き継がない。
 Chat や共通 scheduler 上で画像処理・ネットワーク待ちを行わない。
 初回実行は設定間隔後。画面キャプチャもモデルの解決も起動時には実行しない。
 停止時には executor を停止し、ActivityCapture の世代を無効化する。
@@ -42,6 +70,17 @@ rei:
     keep-screenshots: false
     keep-on-extraction-failure: false
     capture-interval-seconds: 60
+    vision-image-scale: 0.5
+    background-analysis-interval-seconds: 300
+    detection:
+      mode: evidence-first
+      evidence-enabled: true
+      vision-enabled: true
+      fallback-enabled: true
+      skip-vision-confidence: 0.8
+      foreground-crop: true
+      background-full-screen-enabled: false
+      max-output-tokens: 2048
     screenshot-retention-days: 3
     change-threshold: 0.03
     session-gap-seconds: 90
@@ -72,30 +111,72 @@ Windowsの対話デスクトップで起動し、既存Computer Useと同様にJ
 .\mvnw.cmd spring-boot:run '-Dspring-boot.run.jvmArguments=-Djava.awt.headless=false'
 ```
 
-`extraction-enabled: false` にすれば Phase 1 のみ動作し、Vision を呼ばず OS evidence を残す。
-有効化後、解析が有効ならスクリーンショットと foreground 情報を設定した LLM サーバーに送信する。
+`extraction-enabled: false` にすればVisionを呼ばずOS evidenceの分類・保存を続ける。
+有効化後、Vision fallbackが必要なときにスクリーンショットとforeground情報を設定したLLMサーバーに送信する。
 `rei.llm.features.activity` が未設定の場合は既存のデフォルトモデル設定を使用する。
 Vision と JSON Schema structured output に対応したモデルを設定すること。
 Activity専用サーバーが設定されている場合、障害時にもデフォルトサーバーへ画像をフォールバック送信しない。
 
 間隔は1秒以上、retention は0日以上、差分閾値は0〜1、session gap は0秒以上。
-retention=0 は画像をディスクに保存しない。解析が有効ならメモリ上の画像を Vision に送る。
+retention=0 は画像をディスクに保存しない。Visionが必要ならメモリ上の画像を送る。
 設定変更は再起動で適用される。1秒などの短い間隔は画像取得・API費用・DB更新量が増えるため、通常は60秒から調整する。
 
 ## Screenshot lifecycle / Memory-First
+
+通常の Vision 送信は前面ウィンドウと各モニターの交差範囲に限定し、その画像を `vision-image-scale` で縮小する。
+モニターをまたぐ前面ウィンドウは該当モニターごとの画像になり、モニターIDは維持する。
+Win32では物理座標で範囲を取得し、AWTの画面倍率と元画像サイズから切り出し位置を計算する。
+Windows AWTは原点を物理座標、幅・高さをスケール調整した値で返すため、両者を変換する
+（[OpenJDKの実装](https://github.com/openjdk/jdk/blob/master/src/java.desktop/windows/native/libawt/windows/awt_Win32GraphicsConfig.cpp)）。
+範囲が不明・画面外なら全画面にフォールバックする。元の取得画像と任意保存のEvidenceは全画面のまま。
+
+重複判定には前面領域の差分を使う。前面以外の動画や点滅だけでは通常の解析を起こさない。
+背景用の差分では前面領域に触れるサンプルをマスクし、前面の変化を混入させない。
+`background-analysis-interval-seconds`（既定300、1以上）ごとに背景の変化を確認し、変化があれば全画面を解析する。
+全画面解析と独立して前面解析・重複判定を継続し、古い背景の推論を新しい背景観測として引き継がない。
+前面範囲が不明で全画面フォールバックとなる場合、同一画像への背景リクエストは追加しない。
+背景の観測頻度は抑えられるため、背景の短い活動は記録されないことがある。範囲不明時は従来の全画面差分になる。
+ウィンドウ切り替え、移動・サイズ変更、モニター構成変更は前面の再解析対象になる。
 
 画像は `CapturedScreen` 内のモニター別 `DisplayCapture.image` (`BufferedImage`) として取得する。
 `ImageChange` はRAM上で特徴量を計算する。重複画面はPNGエンコードもVision呼び出しも保存もせず、
 画像への参照を解放する。継続を記録する軽量ActivityRecordは従来どおり追加する。
 
-変更画面は `PngScreenshotEncoder` により
+変更画面は送信専用コピーを `rei.activity.vision-image-scale`（既定0.5）で縦横それぞれ縮小し、`PngScreenshotEncoder` により
 `BufferedImage → MemoryCacheImageOutputStream → ByteArrayOutputStream → byte[]` と変換する。
 `VisionActivityExtractor` が `ByteArrayResource` / Spring AI `Media` に渡し、
 既存OpenAI互換クライアントがJSONリクエスト中の `data:image/png;base64,...` にする。
 画像用 `Path`、temporary PNG、multipartファイルは経由しない。
 ImageIOのOutputStream便利メソッドは内部でディスクキャッシュを使用し得るため、
 明示的な `MemoryCacheImageOutputStream` を使う。他機能に影響するグローバルな
-`ImageIO.setUseCache` の変更は行わない。形式は引き続き可逆PNGで、OCR精度を落とす圧縮変更はない。
+`ImageIO.setUseCache` の変更は行わない。形式はPNGのまま。0.5なら1920×1080は960×540、画素数は約1/4になる。
+小さい文字の認識精度と処理負荷のトレードオフがある。設定範囲は0超〜1以下、1.0で原寸送信へ戻せる。
+端数は四捨五入し各辺最低1px。元画像・モニター座標・変化検出・任意の保存Evidenceは原寸を維持する。
+縮小とPNG変換はRAM内だけで行う。これは入力画像の負荷軽減であり、出力上限超過や接続障害の解消を保証しない。
+
+### 計測ログ
+
+INFOで次の数値を記録する。画像、タイトル、プロンプト、モデルの応答本文、APIキーは記録しない。
+
+| ログの項目 | 意味 |
+|---|---|
+| `observe_ms` | foreground取得・画面取得・再確認など、観測の所要時間 |
+| `queue_wait_ms` / `replaced_pending=1` | 解析開始までの待ち時間 / 古い待機画像を置換したこと |
+| `change_check_ms` / `scope` / `duplicate` | 前面の切り出し・差分判定の時間 / foreground・background・desktop_fallback / 再利用の有無 |
+| `input_prepare_ms` | 縮小・PNG変換・プロンプトなどクライアント側の入力準備 |
+| `llm_roundtrip_ms` | 同期LLM呼び出し開始から応答・エラーまで。通信、SDKの再試行、サーバーの待機・画像処理・推論・出力生成を含む |
+| `output_parse_ms` | 応答の終了条件・JSON構造・フィールド検証 |
+| `images` / `pixels` / `png_bytes` | 送信画像数・縮小後の画素数・PNGバイト数（Base64化前） |
+| `output_chars` / `input_tokens` / `output_tokens` | 応答本文の文字数 / サーバー報告のトークン数。未報告のトークン数はnullまたはSDK既定値 |
+| `status` | success / output_limit / request_failed / input_failed / invalid_output |
+| Visionログの `scope` | foreground / background。並列時も各リクエストの用途を識別できる |
+| `Activity background skipped: reason=busy` | 背景解析中のため追加リクエストをスキップ |
+| `Activity background supplemented` | 取得時刻が同じ既存Recordに背景結果を補足 |
+| `storage_ms` / `observation_age_ms` | 任意のEvidence保存を含むRecord保存の時間 / 取得から保存までの経過時間 |
+
+失敗時にも Vision の時間を記録する。`llm_roundtrip_ms` が大きければ、画像準備やJSON検証よりLLM呼び出し側が支配的と判断できる。
+一括応答なので、サーバー内部の入力処理・推論・出力生成それぞれの時間や初回トークン時間は測れない。
+これらを厳密に分離するには、サーバー側のメトリクスまたは別途ストリーミング対応が必要。
 
 通常はVision成功後に構造化Recordだけを保存し、画像はRAMから解放する。
 ScreenshotStoreはEvidenceを明示的に保持するときだけ呼ばれるoptional persistence。
@@ -470,7 +551,18 @@ Memory-Firstの検証は `MemoryFirstVisionTest`（内部ディスクキャッ�
 `ActivityCaptureTest` の保存回数・呼出順序・失敗/除外/pause時のポリシーテストで行う。
 実機画面のキャプチャと実際の外部Vision API呼び出しは自動テストでは実行しない。
 
-## 将来 Phase 3.5〜5
+## Phase 3.5: Behavior Evaluation / お小言
+
+デフォルト無効のBehavior Evaluationを追加。詳細Sessionと対応する元RecordのPrimary観測区間から、
+social / media / shopping / gamingの連続時間とeligible observed timeに対する割合をコードで評価する。
+SummarySegmentの時間幅は評価に使わない。通知可否・cooldown・回復stateは文章生成と分離し、
+通知許可時だけ既存キャラクタープロンプトで短い発話を生成する。
+
+`/activity behavior on|off|status|evaluate`で操作できる。evaluateは通知しない手動評価。
+全設定・既定値、unknown/未観測の扱い、再起動時のcooldown保持、失敗時の扱いは
+[Activity Behavior Evaluation](activity-behavior-evaluation.md)を参照。
+
+## 将来 Phase 4〜5
 
 Recordを失わず、時刻・推定duration・foreground・モニター・変化量・並行Activity・
 project/content/service候補・confidence・継続境界を保持しているため、
@@ -480,5 +572,5 @@ focus/idle/entertainment minutesを作る場合も、今のデータだけで実
 
 高頻度化時は日次projection再構築を差分更新へ変更し、schema migration、
 集計バージョン、日次summaryキャッシュを加えられる。
-Phase 3.5以降のBehavior Evaluation、Project/Task/Working Set深い統合、
+Phase 4以降のProject/Task/Working Set深い統合、
 週次/月次Analytics、2〜6のProductivity Score、Adaptive Coachingは意図的に未実装。

@@ -1,0 +1,21 @@
+entertainmentRules:
+  - id: youtube-tech
+    priority: 150
+    match: {serviceRegex: '(?i)^YouTube(?: Music)?$', titleRegex: '(?i)Java|Spring|Rust|Docker|Kubernetes|tutorial|解説'}
+    classify: {entertainmentDisposition: NON_ENTERTAINMENT, confidence: 0.9}
+  - id: youtube-music
+    priority: 150
+    match: {serviceRegex: '(?i)^YouTube(?: Music)?$', titleRegex: '(?i)\bMV\b|Music Video|Official Audio|Gaming Stream|Entertainment Show'}
+    classify: {entertainmentDisposition: ENTERTAINMENT, confidence: 0.9}
+  - id: social-default
+    priority: 10
+    match: {activityCategoryRegex: '^social$'}
+    classify: {entertainmentDisposition: ENTERTAINMENT, confidence: 0.85}
+  - id: shopping-gaming-default
+    priority: 10
+    match: {activityCategoryRegex: '^(shopping|gaming)$'}
+    classify: {entertainmentDisposition: ENTERTAINMENT, confidence: 0.85}
+  - id: work-default
+    priority: 10
+    match: {activityCategoryRegex: '^(development|research|documentation|monitoring|navigation)$'}
+    classify: {entertainmentDisposition: NON_ENTERTAINMENT, confidence: 0.85}

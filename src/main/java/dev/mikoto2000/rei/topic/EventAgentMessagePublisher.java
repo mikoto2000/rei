@@ -13,13 +13,16 @@ public class EventAgentMessagePublisher implements AgentMessagePublisher {
   private final AgentEventFactory eventFactory;
   private final AgentEventPublisher eventPublisher;
   private final AgentActivityTracker activityTracker;
+  private final dev.mikoto2000.rei.ui.shell.sound.AgentMessageNarrator narrator;
 
   public EventAgentMessagePublisher(ConversationLogStore conversationLogStore, AgentEventFactory eventFactory,
-      AgentEventPublisher eventPublisher, AgentActivityTracker activityTracker) {
+      AgentEventPublisher eventPublisher, AgentActivityTracker activityTracker,
+      dev.mikoto2000.rei.ui.shell.sound.AgentMessageNarrator narrator) {
     this.conversationLogStore = conversationLogStore;
     this.eventFactory = eventFactory;
     this.eventPublisher = eventPublisher;
     this.activityTracker = activityTracker;
+    this.narrator = narrator;
   }
 
   @Override
@@ -32,5 +35,6 @@ public class EventAgentMessagePublisher implements AgentMessagePublisher {
     if ("assistant".equalsIgnoreCase(message.role())) {
       activityTracker.recordAgentCompleted(message.createdAt());
     }
+    narrator.onPublished(message);
   }
 }

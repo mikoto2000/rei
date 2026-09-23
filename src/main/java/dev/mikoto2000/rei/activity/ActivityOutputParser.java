@@ -47,7 +47,7 @@ public final class ActivityOutputParser {
   public static final class InvalidOutput extends IllegalArgumentException {
     private static final Set<String> SAFE_CODES=Set.of("size","empty_output","invalid_json","unknown_monitor",
         "invalid_response","empty_response","multiple_results","unexpected_tool_calls","output_limit",
-        "type","required","additionalProperties","minimum","maximum","minLength","maxLength","maxItems");
+        "type","enum","required","additionalProperties","minimum","maximum","minLength","maxLength","maxItems");
     private final List<ResultError> errors;
     public InvalidOutput(List<ResultError> errors) { super("Invalid activity structured output"); this.errors=List.copyOf(errors); }
     public List<ResultError> errors() { return errors; }
@@ -58,7 +58,7 @@ public final class ActivityOutputParser {
           .distinct().collect(java.util.stream.Collectors.joining(", "));
     }
     private static String safePath(String path) {
-      return path!=null && path.matches("/(summary|confidence|activities(?:/[0-9]{1,4}(?:/(?:monitor|type|application|service|contentTitle|projectCandidate))?)?)") ? path : "/";
+      return path!=null && path.matches("/(category|application|service|projectCandidate|contentCandidate|summary|confidence|activities(?:/[0-9]{1,4}(?:/(?:monitor|type|application|service|contentTitle|projectCandidate))?)?)") ? path : "/";
     }
   }
 }

@@ -45,11 +45,19 @@ class ContextCompletionTest {
   }
   @Test void activityActionsCompleteWithoutExecutingCaptureOrTimeline() {
     var cmd = command();
-    assertThat(values(cmd, "/activity ")).containsExactlyInAnyOrder("today", "yesterday", "summary", "pause", "resume");
+    assertThat(values(cmd, "/activity ")).containsExactlyInAnyOrder("today", "yesterday", "summary", "pause", "resume", "behavior", "classification");
     assertThat(values(cmd, "/activity y")).containsExactly("yesterday");
     assertThat(values(cmd, "/activity re")).containsExactly("resume");
     assertThat(values(cmd, "/activity today ")).isEmpty();
     assertThat(values(cmd, "/activity 2026-09-")).isEmpty();
+  }
+  @Test void behaviorActionsCompleteFromSubcommandDefinition() {
+    assertThat(values(command(), "/activity behavior ")).containsExactlyInAnyOrder("on","off","status","evaluate","uncertain","suggest-rules");
+    assertThat(values(command(), "/activity behavior ev")).containsExactly("evaluate");
+  }
+  @Test void classificationActionsCompleteFromSubcommandDefinition() {
+    assertThat(values(command(), "/activity classification ")).containsExactlyInAnyOrder("status","reload","unknowns","rules","suggest-rules");
+    assertThat(values(command(), "/activity classification su")).containsExactly("suggest-rules");
   }
   @Test void projectCdAndAddOnlyOfferDirectories() throws Exception {
     Files.createDirectory(root.resolve("docs")); Files.createFile(root.resolve("data.txt"));

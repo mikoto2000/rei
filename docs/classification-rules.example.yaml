@@ -1,0 +1,41 @@
+# Copy reviewed rules to <rei-data-dir>/activity/classification-rules.yaml.
+# This example is not loaded automatically.
+classificationRules:
+  - id: company-gitlab
+    enabled: true
+    priority: 300
+    match:
+      processRegex: '(?i)firefox|chrome|msedge'
+      titleRegex: '(?i)gitlab\.example\.com'
+    classify:
+      category: development
+      service: Company GitLab
+      categoryConfidence: 0.95
+      serviceConfidence: 0.98
+  - id: my-chatgpt-research
+    priority: 300
+    match:
+      processRegex: '(?i)firefox|chrome|msedge'
+      titleRegex: '(?i)ChatGPT'
+    classify:
+      category: research
+      service: ChatGPT
+      categoryConfidence: 0.85
+      serviceConfidence: 0.95
+entertainmentRules:
+  - id: my-youtube-technical
+    priority: 300
+    match:
+      serviceRegex: '(?i)^YouTube$'
+      titleRegex: '(?i)Java|Spring|Rust|Docker|Kubernetes|tutorial|解説'
+    classify:
+      entertainmentDisposition: NON_ENTERTAINMENT
+      confidence: 0.9
+  - id: my-youtube-music
+    priority: 300
+    match:
+      serviceRegex: '(?i)^YouTube(?: Music)?$'
+      titleRegex: '(?i)Music Video|Official Audio'
+    classify:
+      entertainmentDisposition: ENTERTAINMENT
+      confidence: 0.9
