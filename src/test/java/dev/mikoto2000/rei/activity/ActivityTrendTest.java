@@ -26,7 +26,7 @@ class ActivityTrendTest {
     assertEquals(1,result.size());assertEquals(TrendSummarySegment.Continuity.INTERMITTENT,result.getFirst().continuity());
     assertEquals(120,result.getFirst().observedSeconds());assertEquals(900,result.getFirst().unobservedSeconds());
     String text=new TrendSummaryFormatter(ZoneOffset.UTC).format(result);
-    assertTrue(text.contains("観測できた範囲"));assertFalse(text.contains("ずっと"));assertFalse(text.contains("未観測の割合が高い"));
+    assertFalse(text.contains("観測できた範囲"));assertTrue(text.contains("断続的"));assertFalse(text.contains("ずっと"));assertFalse(text.contains("未観測の割合が高い"));
   }
   @Test void continuousDevelopmentHasExplicitSemantics() {
     var s=trends(dev(0,"Terminal","X"),dev(1,"GVIM","X"),dev(2,"Terminal","X")).getFirst();

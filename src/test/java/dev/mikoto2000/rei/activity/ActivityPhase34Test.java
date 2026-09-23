@@ -123,18 +123,21 @@ class ActivityPhase34Test {
     assertTrue(result.contains("rei関連の開発・確認が中心"));assertFalse(result.contains("観測できた範囲では"));
     assertFalse(result.contains("に関する画面"));assertFalse(result.contains("バグ修正"));assertFalse(result.contains("集中して"));
   }
-  @Test void sparseObservationsKeepQualification() {
+  @Test void sparseObservationsKeepIntermittentWordingWithoutRepeatedQualification() {
     String result=text(trends(sample(0,"development","rei"),sample(15,"development","rei")));
-    assertTrue(result.contains("観測できた範囲では"));assertTrue(result.contains("断続的"));
+    assertFalse(result.contains("観測できた範囲では"));assertTrue(result.contains("断続的"));
+    assertTrue(result.startsWith("画面の観測に基づく振り返りです。"));
   }
   @Test void weakPrimaryConfidenceDoesNotGetStrongContinuousWording() {
     var r=sample(0,"development","rei");
     r=new ActivityRecord(r.id(),r.capturedAt(),60,r.observations(),r.foreground(),r.inference(),.6,r.screenshotReferences(),.1,false,r.continuityId());
-    String result=text(trends(r));assertTrue(result.contains("観測できた範囲では"));assertFalse(result.contains("が中心"));
+    String result=text(trends(r));assertFalse(result.contains("観測できた範囲では"));assertFalse(result.contains("が中心"));
+    assertTrue(result.contains("関連の画面が断続的に表示されていました。"));
   }
   @Test void mixedAndUnknownWordingStayCautious() {
     String mixed=text(trends(sample(0,"development","rei"),sample(2,"social",""),sample(4,"development","rei")));
-    assertTrue(mixed.contains("混在"));assertTrue(mixed.contains("観測できた範囲では"));
+    assertTrue(mixed.contains("混在"));assertFalse(mixed.contains("観測できた範囲では"));
     String unknown=text(trends(unknown(0)));assertTrue(unknown.contains("主活動は判定できません"));assertFalse(unknown.contains("が中心"));
+    assertFalse(unknown.contains("観測できた範囲でも"));
   }
 }

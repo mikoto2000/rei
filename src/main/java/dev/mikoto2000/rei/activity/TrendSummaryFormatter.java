@@ -17,9 +17,8 @@ public record TrendSummaryFormatter(ZoneId zone) {
       boolean unknown=s.knownSeconds()==0;
       boolean strong=strongEvidence(s);
       boolean dense=s.unobservedSeconds()<=Duration.between(s.startedAt(),s.endedAt()).getSeconds()*.1;
-      if(unknown) out.append("観測できた範囲でも主活動は判定できません。");
+      if(unknown) out.append("主活動は判定できません。");
       else {
-        if(!strong || !dense || s.continuity()==TrendSummarySegment.Continuity.INTERMITTENT) out.append("観測できた範囲では、");
         out.append(description(s));
         if(!strong) out.append(s.continuity()==TrendSummarySegment.Continuity.MIXED?"関連の画面が混在していました。":"関連の画面が断続的に表示されていました。");
         else if(s.continuity()==TrendSummarySegment.Continuity.MIXED) out.append("が混在。");
