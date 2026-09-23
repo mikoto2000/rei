@@ -7,6 +7,18 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BehaviorEvaluatorTest {
+  @Test void successfulObservationIncludesExcludedCategoriesButNotMissingTime() {
+    var a=assess(3600,record(0,600,"social"),record(600,600,"unknown"),record(1800,600,"idle"),record(2400,600,"other"));
+    var w=a.windows().getFirst();
+    assertEquals(2400,w.observedSeconds());assertEquals(600,w.eligibleObservedSeconds());
+    assertEquals(600,w.entertainmentObservedSeconds());assertEquals(1,w.entertainmentRatio());
+    assertEquals(BehaviorSeverity.NONE,a.severity());
+  }
+  @Test void successfulObservationIsClippedToWindowAndDoesNotDoubleCountOverlap() {
+    var a=assess(7200,record(0,5400,"unknown"),record(3600,3600,"social"));
+    assertEquals(3600,a.windows().getFirst().observedSeconds());
+    assertEquals(7200,a.windows().getLast().observedSeconds());
+  }
   static final Instant START=Instant.parse("2026-09-23T09:00:00Z");
   static ActivityRecord record(int startSeconds,int seconds,String category) {
     String service=switch(category) {case "social"->"X";case "media"->"YouTube";case "shopping"->"Amazon";default->"";};

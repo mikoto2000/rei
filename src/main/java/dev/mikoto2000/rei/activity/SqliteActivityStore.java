@@ -25,13 +25,21 @@ public final class SqliteActivityStore implements ActivityStore {
     }
   }
   @Override public synchronized void append(ActivityRecord record) {
+    persist(record,false);
+  }
+  @Override public synchronized void replace(ActivityRecord record) {
+    persist(record,true);
+  }
+  private void persist(ActivityRecord record,boolean replace) {
     try {
       initialize();
       try(var c=dataSource.getConnection()) {
         c.setAutoCommit(false);
         try {
-          try(var s=c.prepareStatement("INSERT INTO activity_records VALUES(?,?,?)")) {
-            s.setString(1,record.id());s.setLong(2,record.capturedAt().toEpochMilli());s.setString(3,mapper.writeValueAsString(record));s.executeUpdate();
+          try(var s=c.prepareStatement(replace?"UPDATE activity_records SET payload=? WHERE id=? AND captured_at=?":"INSERT INTO activity_records VALUES(?,?,?)")) {
+            if(replace) {s.setString(1,mapper.writeValueAsString(record));s.setString(2,record.id());s.setLong(3,record.capturedAt().toEpochMilli());}
+            else {s.setString(1,record.id());s.setLong(2,record.capturedAt().toEpochMilli());s.setString(3,mapper.writeValueAsString(record));}
+            if(s.executeUpdate()!=1) throw new IllegalStateException("Activity observation no longer exists");
           }
           var date=record.capturedAt().atZone(policy.zone()).toLocalDate();
           var start=date.atStartOfDay(policy.zone()).toInstant(); var end=date.plusDays(1).atStartOfDay(policy.zone()).toInstant();

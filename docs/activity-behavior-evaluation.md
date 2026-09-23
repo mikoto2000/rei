@@ -34,6 +34,11 @@ development / research / documentation / communication / monitoring / navigation
 Slack / Discord / ChatGPTというサービス名だけで娯楽に振り分けない。
 
 `eligibleObservedDuration`はPrimaryを判定できた観測時間のうちunknown / other / idle以外。
+`/activity behavior evaluate` は各窓に「観測成功」「評価対象観測」「娯楽観測」を表示する。
+「観測成功」は保存済みRecordと対応する詳細Sessionから算出した観測推定時間で、主活動不明・低確信度・unknown / other / idleも含む。
+重複や背景補足を二重計上せず、窓の境界・現在時刻でクリップする。欠測・解析失敗・解析待ちの未保存時間は含めない。
+画面が変わらず推論を再利用したRecordや、抽出無効時のOS観測Recordも含むため、LLM呼び出しの成功率ではない。
+括弧内の娯楽割合の分母は引き続き「評価対象観測」。通知の閾値・判定条件は変わらない。
 communication / monitoring / navigationもeligibleだが娯楽には加算しない。
 unknown / other / idle / 未観測は分子にも分母にも入れない。最小eligible観測量を別に要求し、
 少数サンプルだけによる100%の割合で通知しない。

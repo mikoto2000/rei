@@ -95,11 +95,14 @@ public final class BehaviorEvaluator {
   }
   private BehaviorAssessment.Window window(List<Sample> samples,Instant now,BehaviorProperties.Window window,BehaviorSeverity severity,Instant floor) {
     Instant start=now.minusSeconds(window.getDurationMinutes()*60L);if(floor!=null) start=max(start,floor);
-    long eligible=0,entertainment=0;
-    for(var s:samples) if(s.eligible()) {long seconds=overlap(s,start,now);eligible+=seconds;if(entertainment(s)) entertainment+=seconds;}
+    long observed=0,eligible=0,entertainment=0;
+    for(var s:samples) {
+      long seconds=overlap(s,start,now);observed+=seconds;
+      if(s.eligible()) {eligible+=seconds;if(entertainment(s)) entertainment+=seconds;}
+    }
     double ratio=eligible==0?0:(double)entertainment/eligible;
     return new BehaviorAssessment.Window(window.getDurationMinutes(),entertainment,eligible,ratio,
-        eligible>=window.getMinimumObservedMinutes()*60L && ratio>=window.getRatio()?severity:BehaviorSeverity.NONE);
+        eligible>=window.getMinimumObservedMinutes()*60L && ratio>=window.getRatio()?severity:BehaviorSeverity.NONE,observed);
   }
   private static List<String> rank(Map<String,Long> weights) {return weights.entrySet().stream().filter(e->e.getValue()>0)
       .sorted(Map.Entry.<String,Long>comparingByValue().reversed().thenComparing(Map.Entry::getKey)).limit(4).map(Map.Entry::getKey).toList();}

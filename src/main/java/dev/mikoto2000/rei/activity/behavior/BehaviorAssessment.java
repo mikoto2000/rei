@@ -9,6 +9,6 @@ public record BehaviorAssessment(BehaviorSeverity severity,Reason reason,Instant
     double confidence,Instant latestObservedAt,boolean activeEntertainment,Instant recoveredAt,
     Instant episodeStartedAt,boolean episodeQualified) {
   public enum Reason { NONE, CONTINUOUS_ENTERTAINMENT, ENTERTAINMENT_RATIO_HIGH, BOTH }
-  public record Window(int durationMinutes,long entertainmentObservedSeconds,long eligibleObservedSeconds,double entertainmentRatio,BehaviorSeverity severity) {}
+  public record Window(int durationMinutes,long entertainmentObservedSeconds,long eligibleObservedSeconds,double entertainmentRatio,BehaviorSeverity severity,long observedSeconds) {}
   public BehaviorAssessment {windows=List.copyOf(windows);dominantCategories=List.copyOf(dominantCategories);services=List.copyOf(services);}
 }

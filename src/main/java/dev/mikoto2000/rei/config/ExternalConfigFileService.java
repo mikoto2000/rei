@@ -105,6 +105,7 @@ public class ExternalConfigFileService {
             enabled: false
             capture-interval-seconds: 60
             vision-image-scale: 0.5
+            background-analysis-interval-seconds: 300
             keep-screenshots: false
             behavior:
               enabled: false

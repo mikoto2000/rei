@@ -13,6 +13,7 @@ public class ActivityProperties {
   private boolean keepOnExtractionFailure = false;
   private int captureIntervalSeconds = 60;
   private double visionImageScale = .5;
+  private int backgroundAnalysisIntervalSeconds = 300;
   private int screenshotRetentionDays = 3;
   private double changeThreshold = .03;
   private int sessionGapSeconds = 90;
@@ -27,7 +28,7 @@ public class ActivityProperties {
   private List<String> excludedWindowTitlePatterns = List.of("*Password*", "*Private Browsing*", "*InPrivate*");
 
   public void validate() {
-    if (captureIntervalSeconds < 1 || screenshotRetentionDays < 0 || sessionGapSeconds < 0
+    if (captureIntervalSeconds < 1 || backgroundAnalysisIntervalSeconds < 1 || screenshotRetentionDays < 0 || sessionGapSeconds < 0
         || !Double.isFinite(visionImageScale) || visionImageScale<=0 || visionImageScale>1
         || (summaryGapSeconds != null && summaryGapSeconds < 0) || summaryBriefSwitchSeconds < 0
         || summaryNormalMergeGapSeconds < 0 || summaryMaximumMergeGapSeconds < summaryNormalMergeGapSeconds

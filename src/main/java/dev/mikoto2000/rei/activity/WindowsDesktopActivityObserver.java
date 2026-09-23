@@ -28,7 +28,10 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
       var node=mapper.readTree(Files.readString(output,StandardCharsets.UTF_8).strip());
       if(node==null || !node.path("processName").isTextual() || !node.path("windowTitle").isTextual()
           || !node.path("windowId").isTextual() || !node.path("processId").isIntegralNumber())return null;
-      return new ForegroundWindow(node.get("processName").asText(),node.get("processId").asLong(),node.get("windowTitle").asText(),node.get("windowId").asText());
+      var b=node.path("bounds");
+      ActivityRecord.Bounds bounds=b.path("width").asInt()>0 && b.path("height").asInt()>0
+          ? new ActivityRecord.Bounds(b.path("x").asInt(),b.path("y").asInt(),b.path("width").asInt(),b.path("height").asInt()):null;
+      return new ForegroundWindow(node.get("processName").asText(),node.get("processId").asLong(),node.get("windowTitle").asText(),node.get("windowId").asText(),bounds);
     } catch(InterruptedException e) { Thread.currentThread().interrupt();throw e; }
     finally { if(process!=null && process.isAlive())process.destroyForcibly();Files.deleteIfExists(output); }
   }

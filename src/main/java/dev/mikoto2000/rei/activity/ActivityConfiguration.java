@@ -19,8 +19,10 @@ public class ActivityConfiguration {
     return new VisionActivityExtractor(() -> provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),
         () -> provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get()),properties.getVisionImageScale());
   }
-  @Bean ActivityCapture activityCapture(ActivityProperties p,DesktopActivityObserver observer,ActivityExtractor extractor,ActivityStore store,ScreenshotStore screenshots) {
-    return new ActivityCapture(p,observer,extractor,store,screenshots,Clock.systemUTC());
+  @Bean ActivityCapture activityCapture(ActivityProperties p,DesktopActivityObserver observer,ActivityExtractor extractor,ActivityStore store,ScreenshotStore screenshots,
+      @Qualifier("activityAnalysisExecutor") ThreadPoolTaskExecutor analysisExecutor,
+      @Qualifier("activityBackgroundExecutor") ThreadPoolTaskExecutor backgroundExecutor) {
+    return new ActivityCapture(p,observer,extractor,store,screenshots,Clock.systemUTC(),analysisExecutor,backgroundExecutor);
   }
   @Bean ActivityTimeline activityTimeline(ActivityStore store,ActivityProperties p) {
     var zone=ZoneId.of(p.getZone());
@@ -30,8 +32,20 @@ public class ActivityConfiguration {
   }
   @Bean ActivityTools activityTools(ActivityTimeline timeline) {return new ActivityTools(timeline);}
   @Bean ThreadPoolTaskExecutor activityExecutor() {
+    return worker("rei-activity-observe-");
+  }
+  @Bean ThreadPoolTaskExecutor activityAnalysisExecutor() {
+    var executor=worker("rei-activity-analyze-");
+    // A drain may relinquish ownership just before its Runnable returns. One slot covers that handoff.
+    executor.setQueueCapacity(1);return executor;
+  }
+  @Bean ThreadPoolTaskExecutor activityBackgroundExecutor() {
+    var executor=worker("rei-activity-background-");
+    executor.setQueueCapacity(1);return executor;
+  }
+  private static ThreadPoolTaskExecutor worker(String name) {
     var executor=new ThreadPoolTaskExecutor();executor.setCorePoolSize(1);executor.setMaxPoolSize(1);executor.setQueueCapacity(0);
-    executor.setThreadNamePrefix("rei-activity-");executor.setDaemon(true);executor.setWaitForTasksToCompleteOnShutdown(false);executor.setAwaitTerminationSeconds(5);
+    executor.setThreadNamePrefix(name);executor.setDaemon(true);executor.setWaitForTasksToCompleteOnShutdown(false);executor.setAwaitTerminationSeconds(5);
     return executor;
   }
   @Bean ActivityJob activityJob(ActivityCapture capture,@Qualifier("activityExecutor") ThreadPoolTaskExecutor executor) {return new ActivityJob(capture,executor);}

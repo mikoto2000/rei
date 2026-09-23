@@ -91,6 +91,8 @@ class BehaviorServiceTest {
     assertEquals(0,command.execute("behavior","on"));assertTrue(service.enabled());
     assertEquals(0,command.execute("behavior","status"));assertTrue(output.toString().contains("enabled=true"));
     assertEquals(0,command.execute("behavior","evaluate"));verifyNoInteractions(generator,publisher);verify(state,never()).save(any(),any());
+    assertTrue(output.toString().contains("60分窓: 観測成功="));assertTrue(output.toString().contains("120分窓: 観測成功="));
+    assertTrue(output.toString().contains("(評価対象の"));
     assertEquals(0,command.execute("behavior","off"));assertFalse(service.enabled());assertEquals(2,command.execute("behavior","invalid"));
   }
 }

@@ -38,7 +38,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
           case "status" -> spec.commandLine().getOut().println(service.status());
           case "evaluate" -> {
             var a=service.evaluate();spec.commandLine().getOut().println("通知しない手動評価: severity="+a.severity()+"; reason="+a.reason()+"; continuousObservedMinutes="+a.continuousEntertainmentSeconds()/60.0);
-            for(var w:a.windows()) spec.commandLine().getOut().printf(java.util.Locale.ROOT,"%d分窓: 娯楽観測=%.1f分 / 評価対象観測=%.1f分 (%.1f%%)%n",w.durationMinutes(),w.entertainmentObservedSeconds()/60.0,w.eligibleObservedSeconds()/60.0,w.entertainmentRatio()*100);
+            for(var w:a.windows()) spec.commandLine().getOut().printf(java.util.Locale.ROOT,"%d分窓: 観測成功=%.1f分 / 評価対象観測=%.1f分 / 娯楽観測=%.1f分 (評価対象の%.1f%%)%n",w.durationMinutes(),w.observedSeconds()/60.0,w.eligibleObservedSeconds()/60.0,w.entertainmentObservedSeconds()/60.0,w.entertainmentRatio()*100);
           }
           default -> {spec.commandLine().getErr().println("activity behavior: on | off | status | evaluate");return 2;}
         }
