@@ -76,11 +76,13 @@ public final class ProjectRegistry {
       catch (IOException e) { org.slf4j.LoggerFactory.getLogger(ProjectRegistry.class).warn("Cannot remove registry temporary file", e); }
     }
   }
-  private static Path canonical(Path path) {
+  static Path canonical(Path path) {
     try {
       Path canonical = path.toRealPath();
-      if (!Files.isDirectory(canonical)) throw new IllegalArgumentException("Not a directory: " + path);
+      if (!Files.isDirectory(canonical)) throw new IllegalArgumentException("Project path is not a directory: " + path);
       return canonical;
+    } catch (NoSuchFileException e) {
+      throw new IllegalArgumentException("Project directory does not exist: " + path, e);
     } catch (IOException e) { throw new IllegalArgumentException("Cannot resolve project: " + path, e); }
   }
 }

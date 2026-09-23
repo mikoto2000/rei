@@ -27,7 +27,8 @@ class MemoryFirstStorageTest {
     ActivityExtractor extractor=(screen,foreground)->new ActivityOutputParser().parse(ActivityExtractionTest.VALID,List.of("m1","m2"));
     new ActivityCapture(p,observer,extractor,store,screenshots,clock).tick();
     var timeline=new ActivityTimeline(store,clock);
-    assertEquals(1,timeline.query("today").size());assertTrue(timeline.summary("today").contains("X and YouTube"));
+    assertEquals(1,timeline.query("today").size());assertTrue(timeline.summary("today").contains("X・YouTube"));
+    assertEquals("X and YouTube are visible",timeline.query("today").getFirst().inference().summary());
     try(var c=ds.getConnection();var s=c.createStatement()) {
       for(var table:List.of("activity_records","activity_sessions")) {
         try(var result=s.executeQuery("SELECT payload FROM "+table)) {
@@ -45,7 +46,7 @@ class MemoryFirstStorageTest {
     p.setKeepScreenshots(false);p.setEnabled(false);
     new ActivityCapture(p,observer,extractor,store,screenshots,Clock.fixed(at.plus(Duration.ofDays(4)),ZoneOffset.UTC)).tick();
     if(keep)try(var files=Files.list(directory.resolve("screenshots"))) {assertEquals(0,files.count());}
-    assertEquals(1,timeline.query("today").size());assertTrue(timeline.summary("today").contains("X and YouTube"));
+    assertEquals(1,timeline.query("today").size());assertTrue(timeline.summary("today").contains("X・YouTube"));
   }
 
   @Test void failedExtractionEvidenceUsesTheSameRetention() throws Exception {

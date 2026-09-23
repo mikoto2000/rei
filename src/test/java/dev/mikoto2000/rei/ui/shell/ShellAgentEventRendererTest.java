@@ -75,6 +75,60 @@ class ShellAgentEventRendererTest {
   }
 
   @Test
+  void defersLlmCompletionUntilTheLastAnswerChunkIsRendered() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.messageStarted("m1", "assistant"));
+    renderer.onEvent(events.messageDelta("m1", "もっと絞って"));
+    renderer.onEvent(events.llmResponseCompleted("run-1", "request-1", 27682));
+    assertEquals("=== answer ===\nもっと絞って", output.text());
+    renderer.onEvent(events.messageCompleted("other", "assistant", ""));
+    renderer.onEvent(events.messageDelta("m1", "提案するよ。"));
+    renderer.onEvent(events.messageCompleted("m1", "assistant", "もっと絞って提案するよ。"));
+    assertEquals("=== answer ===\nもっと絞って提案するよ。\n[llm] response received (27682 ms)\n", output.text());
+  }
+
+  @Test
+  void defersLlmCompletionUntilThinkingIsRendered() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.thinkingStarted("t1"));
+    renderer.onEvent(events.thinkingDelta("t1", "確認"));
+    renderer.onEvent(events.llmResponseCompleted("run-1", "request-1", 20));
+    renderer.onEvent(events.thinkingDelta("t1", "します。"));
+    renderer.onEvent(events.thinkingCompleted("t1", "確認します。"));
+    assertEquals("=== thinking ===\n確認します。\n[llm] response received (20 ms)\n", output.text());
+  }
+
+  @Test
+  void flushesPendingCompletionOnFailureWithoutLeakingIntoNextRun() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.messageStarted("m1", "assistant"));
+    renderer.onEvent(events.messageDelta("m1", "途中"));
+    renderer.onEvent(events.llmResponseCompleted("run-1", "request-1", 20));
+    renderer.onEvent(events.runCancelled("run-1", new ErrorInformation("CancellationException", "cancelled", "cancelled")));
+    renderer.onEvent(events.runStarted("run-2", "user", null));
+    renderer.onEvent(events.llmResponseCompleted("run-2", "request-2", 30));
+    assertEquals("=== answer ===\n途中\n[llm] response received (20 ms)\n"
+        + "[agent] cancelled\n[agent] running\n[llm] response received (30 ms)\n", output.text());
+  }
+
+  @Test
+  void flushesPendingCompletionBeforeToolsAndResumesAnswer() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.messageStarted("m1", "assistant"));
+    renderer.onEvent(events.messageDelta("m1", "確認します。"));
+    renderer.onEvent(events.llmResponseCompleted("run-1", "request-1", 20));
+    renderer.onEvent(events.toolStarted("c1", "readMultiFile", ""));
+    renderer.onEvent(events.messageDelta("m1", "完了。"));
+    renderer.onEvent(events.messageCompleted("m1", "assistant", "確認します。完了。"));
+    assertEquals("=== answer ===\n確認します。\n[llm] response received (20 ms)\n"
+        + "  → readMultiFile\n\n完了。\n", output.text());
+  }
+
+  @Test
   void streamsJapaneseMessageWithoutRepeatingPrefixes() {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);

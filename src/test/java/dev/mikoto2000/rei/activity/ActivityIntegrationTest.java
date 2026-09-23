@@ -60,12 +60,18 @@ class ActivityIntegrationTest {
     when(timeline.summary(anyString())).thenReturn("timeline");
     var command=new picocli.CommandLine(new ActivityCommand(timeline,capture,properties));
     command.setOut(new java.io.PrintWriter(new java.io.StringWriter()));
-    for(var arg:List.of("today","yesterday","summary","2026-09-22")) {assertEquals(0,command.execute(arg));verify(timeline).summary(arg);}
+    for(var arg:List.of("today","yesterday","2026-09-22")) {assertEquals(0,command.execute(arg));verify(timeline).summary(arg);}
+    assertEquals(0,command.execute("summary"));verify(timeline).trendSummary("today");
     assertEquals(0,command.execute("pause"));verify(capture).pause();
     assertEquals(0,command.execute("resume"));verify(capture).resume();assertFalse(properties.isEnabled());
   }
   @Test void naturalLanguageToolsAreRegistered() {
     var callbacks=org.springframework.ai.tool.method.MethodToolCallbackProvider.builder().toolObjects(new ActivityTools(mock(ActivityTimeline.class))).build().getToolCallbacks();
-    assertEquals(Set.of("activityTimeline","activityBetween"),Arrays.stream(callbacks).map(c -> c.getToolDefinition().name()).collect(java.util.stream.Collectors.toSet()));
+    assertEquals(Set.of("activityTimeline","activityBetween","activitySummary"),Arrays.stream(callbacks).map(c -> c.getToolDefinition().name()).collect(java.util.stream.Collectors.toSet()));
+  }
+  @Test void summaryToolUsesCompressedProjection() {
+    var timeline=mock(ActivityTimeline.class);when(timeline.summary("today")).thenReturn("compressed summary");
+    assertEquals("compressed summary",new ActivityTools(timeline).activitySummary("today"));
+    verify(timeline).summary("today");verify(timeline,never()).query(anyString());
   }
 }

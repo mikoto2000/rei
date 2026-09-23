@@ -175,3 +175,378 @@ Project/Task/Working Set等の深い統合、専用クライアントTimeline画
 残課題: 実機の複数モニター/HiDPI/実Visionモデルでの確認、foreground以外の機密表示の
 マスキング、高頻度化時の日次projection差分更新、スキーマ移行、実操作/idle evidence。
 現在の除外はforeground主体であり、全画面の機密情報を自動検出するものではない。
+
+## Phase 3 集約・要約品質改善
+
+ブランチ: `codex/activity-timeline-session-refinement`。
+既存実装を含む `codex/startup-project-option` のHEADから分岐。
+コミットIDは最終報告に記載する（この文書自体を同じコミットに含める）。
+
+### データの3層と互換性
+
+1. `ActivityRecord`: 元のOS observations、foreground、Vision inference、confidence、changeAmount、
+   durationEstimate、continuity、画像参照をそのまま保存。
+2. Fine-grained `ActivitySession`: 従来のSessionMergePolicyで永続化。既存の細粒度境界、recordIds、
+   inference、時間情報を変更しない。旧JSON payloadの移行・過去履歴の再書込みは不要。
+3. `SummarySegment`: 役割付きSemantic Sessionを表示時に生成。primary / secondary / background、
+   confidence、根拠コード、元Record全件、fineSessionIds、observedSeconds / unobservedSecondsを保持。
+   DBにはSummary文字列を保存しない。
+
+以前の表示は、同じcontinuity・foreground・候補集合、90秒以内の観測間隔という細粒度結合の後、
+代表Vision文章を各行に出していた。今回その細粒度層は維持し、表示層の結合を追加した。
+開発カテゴリとproject文脈を軸にアプリ切替やSecondary変化を許容し、欠測gapは推定区間の終端から
+最大180秒まで許容する。A→B→AのBが120秒以内なら短い変化を表示上吸収する。
+異なる既知project、継続する主活動変更、長いgap、continuity・日付境界は維持する。
+二つの閾値は `summary-gap-seconds` / `summary-brief-switch-seconds` で変更可能。
+
+### 主要クラス
+
+| クラス | 責務 |
+|---|---|
+| ActivityRolePolicy / ActivityRoles | foreground process/titleとの対応から役割・推定confidenceを付与 |
+| SemanticSessionPolicy | 意味的結合、短時間切替の吸収、時間クリップ、観測秒数による代表選択 |
+| SummarySegment | 元Evidence・細粒度Session参照を持つ表示projection |
+| ActivitySummaryFormatter | 活動中心の短い定型文、先頭1回の注意文、欠測表示 |
+| ActivityTimeline | 日付・期間検索、Summaryと詳細Timelineの分離 |
+| ActivityStore / SqliteActivityStore | 元Recordの読み取り専用overlap queryを追加 |
+| ActivityProperties / ActivityConfiguration | 表示用gap・短時間切替の設定 |
+| ActivityTools | `activitySummary` を追加。詳細取得2ツールは維持 |
+
+PrimaryはVision文章の印象だけで決めない。process/applicationの対応、タイトルに現れるservice /
+content / projectを使い、候補が曖昧な場合は未判定にする。継続時間は推定観測秒数で重み付けし、
+短い候補より長くforeground evidenceがある候補を代表にする。confidenceは操作の確定度ではない。
+監視画面はBackground候補だが、foregroundならPrimaryへ昇格できる。残りはSecondary。
+全画面差分を個別ウィンドウの操作へ帰属させることは避け、changeAmountはEvidenceとして残した。
+入力監視は追加していない。
+
+### Summary生成とfixture結果
+
+詳細Sessionと元Recordの検索 → recordの役割推定 → semantic grouping → bounded A/B/A smoothing
+→ 元Session参照を付与 → 日本語の定型文、という流れ。追加LLMも画像再送信もない。
+全文Vision summaryは表示に流用せず、上限3種類の補助表示と「など」に圧縮する。
+存在しない「バグ修正」等を補わず、「開発・確認作業が中心と推定」までに留める。
+
+依頼文の時間帯に合わせた**合成fixture**（実機DBを読み出した結果ではない）:
+
+```text
+Before: 09:08–09:09 / 09:10–09:21 / 09:21–09:39 /
+        09:39–09:40 / 09:41–09:46 の5細粒度Session
+
+After:
+画面の観測に基づく振り返りです。
+表示内容からの推定を含み、実際の操作・集中を断定するものではありません。
+
+午前:
+- 09:08–09:46 rei関連の開発・確認作業が中心と推定。X・YouTube Musicも並行して表示。（未観測 120秒を含む）
+```
+
+5 → 1ブロック（80%減）、観測推定36分、未観測2分。
+別fixtureのTerminal / GVIMと補助サービスを交互に切り替える20 Sessionも1ブロック（95%減）。
+圧縮後も全Record、元の説明、画像参照と細粒度SessionをDB再オープン後に取得できることを検証。
+再現出力はテストで `target/activity-refinement-example.txt` に生成する。
+1日のブロック数を強制的に5〜12に丸めることはしない。
+
+### TDDと検証
+
+`ActivitySemanticTest` は未実装型によるRedから開始し、8件Greenの後に境界テストを追加。
+観測時間による代表選択は、長く続くmediaより先頭socialを選んでしまうRedを確認して修正。
+`ActivitySummaryQueryTest` とsummary toolも未実装APIのRedを確認してから実装した。
+既存のsummary文字列転記を期待したテストは、新しい表示と元の説明の保持を検証する形に変更。
+
+追加: semantic policy / roles / formatter 16件、SQLite query / retention 3件、summary tool 1件、計20件。
+Java全件は2069件成功（failure / error / skipすべて0）。クライアント41件、Rust64件成功。
+ブラウザE2Eは12件すべて成功（1 worker、1.2分）。今回の全件実行ではflaky / timeout / 再実行なし。
+`git diff --check` も成功。実画面の取得や実Vision APIは自動テストで呼んでいない。
+
+### 残課題・非目標
+
+ブラウザのタブやモニター別の入力先は観測しておらず、foregroundに対応付けられない候補は未判定。
+アプリ別名・カテゴリ正規化は限定的。未知のモデル表記への対応、実機データでの閾値調整、
+非常に多様な日の表示粒度の調整は今後の検証事項。今回の圧縮率は合成fixtureの値。
+将来のAnalyticsは元Recordと細粒度Sessionから計算する。表示上吸収した切替やgapを
+focusMinutes等へ流用しない。Behavior Evaluation、お小言、Productivity Score、週次/月次分析、
+Adaptive Coachingは今回も追加しない。
+
+## Phase 3.1 — Gap / Primary / Summary theme
+
+開始時のブランチは `codex/activity-timeline-session-refinement`、git statusはclean。
+依頼どおり新規ブランチを作らず、Phase 3の`f4831ff`へ追加実装した。
+今回のコミットIDは最終報告に記載する。
+
+### 主要変更とポリシー
+
+- `SessionGapPolicy`: 通常120秒、最大300秒。通常超は同じcanonical categoryと同じ既知project、
+  または同じservice/applicationという強い一致が必要。結合時confidenceを0.85倍へ下げる。
+  単一gapだけでなく、Segmentの累積未観測秒数も300秒以下に制限する。
+- `ActivityVocabulary`: canonical categoryとservice/applicationの正規化、表示ラベルを分離。
+  categoryはdevelopment / research / documentation / communication / social / media / shopping /
+  monitoring / navigation / idle / other / unknown。coding等はdevelopment、Terminal / Shell /
+  Web / local等はunknown。原Recordのモデル候補は監査可能なEvidenceとして保持する。
+- `ActivityRolePolicy`: foreground process一致を必須とする8点、タイトルservice一致5点、content4点、
+  project1点。別プロセスの候補はタイトル一致だけで主活動にならない。同点の異なる候補はunknown。
+  score≥12はモデルconfidence×0.95、それ未満は×0.75。既定閾値0.5未満はunknown。
+  監視候補はforegroundの裏付けがなければbackground。全画面差分を操作証拠には転用しない。
+- `SemanticSessionPolicy`: canonical categoryで意味的な区間を作成。観測秒数による代表選択、
+  短い往復切替の吸収を維持し、異なるprojectや累積欠測上限を回避する結合を防ぐ。
+- `SummaryGroupingPolicy`: social / media / shoppingはweb-browsing、同じprojectのdevelopment /
+  research / documentationはwork-developmentへまとめる。表示テーマは元categoryを書き換えない。
+  同じgap policy、日付・continuity境界を守り、長いgapはテーマが同じでも跨がない。
+- `SummarySegment`: themeとprimaryCategoriesを追加。観測秒数、欠測秒数、元Evidence、fineSessionIdsを維持。
+- `ActivitySummaryFormatter`: 未観測率10%未満は注記なし、10〜30%は「一部未観測時間あり」、
+  30%超は「観測できた時間帯のみ」「未観測の割合が高い期間」と明示。秒数は構造化値に残す。
+  unknownでも確認できるsecondary / backgroundを最大3種類補足する。themeの文章に存在しないカテゴリを足さない。
+- `ActivityTimeline` / `ActivityConfiguration` / `ActivityProperties`: 新しい層と設定を接続。
+  `ActivitySession`には時間範囲から欠測秒数を取得する計算メソッドを追加。
+
+設定は `rei.activity.summary-normal-merge-gap-seconds: 120`、
+`summary-maximum-merge-gap-seconds: 300`、`primary-confidence-threshold: 0.5`。
+従来の `summary-gap-seconds` を明示している場合は追加の上限として尊重する。
+Rei→rei、Twitter / X (Twitter)→内部x・表示X、Local terminal / PowerShell等→terminal・表示ターミナル。
+
+### データ保持とAnalytics
+
+ActivityRecord → 永続Fine-grained ActivitySession → 役割付き意味区間 → SummarySegment → 表示。
+永続化した細粒度Sessionの境界、元Recordと自由文、画像参照は変更しない。
+新しいcanonical categoryは意味projectionの値であり、古い原文カテゴリを削除する移行は行わない。
+Summary theme、primaryCategories、役割、confidenceは元Evidenceから再構成できる。
+時間範囲はwall-clock、observedSecondsは重複を除く観測推定時間、unobservedSecondsはその差。
+欠測をfocusMinutesやSNS利用時間へ加算しない。表示上の圧縮を将来のスコア計算には使わない。
+
+### Before / Afterと件数
+
+提示例の相対時刻・カテゴリをfixture化したテストでは、
+09:52–09:53 shopping / 09:54–10:10 social / 10:11–10:16 social /
+10:27–10:32 social相当の4件から2 Segmentになる。
+
+```text
+09:52–10:16 Web閲覧が中心と推定。
+10:27–10:32 SNS閲覧が中心と推定。
+```
+
+前半の短いgapは許容し、後半の11分欠測は結合しない。
+別の半日相当fixtureでは24細粒度Session→6 Segment（75%減）。
+再現出力は `target/activity31-example.txt`。実機DB全体は読み出していないため、
+実運用の平均Segment件数は未測定。6件は合成fixtureの値であり、件数上限を強制していない。
+小さなgapが連鎖して欠測540秒になる例も、累積300秒の上限で分割されることを検証した。
+
+### TDD / テスト
+
+Phase 3.1の新API・gap・category・foreground・unknown・themeテストを先に追加し、Redを確認して実装。
+unknownでbackgroundしかないと補足が出ない回帰も、失敗を確認してから修正した。
+旧canonical値と集約層変更の期待値を更新し、原データ保持の検証は維持。
+追加18件（`ActivityPhase31Test` 17件、`ActivitySummaryQueryTest` 1件）。
+前回Java2069件、Client41件、Rust64件、E2E12件。
+今回Java2087件成功（2069 + 18、failure / error / skipすべて0）、Client41件成功、Rust64件成功。
+E2Eは12件すべて成功（1 worker、53.0秒）。今回flaky / timeout / 再実行はなし。
+`git diff --check`成功。実画面・実Vision APIは呼ばず、実機DBも変更していない。
+
+### 残課題
+
+foreground processとVisionのapplication表記を対応付けられないものはunknownになる。
+alias辞書と閾値は実運用データでの調整余地がある。入力操作やブラウザタブの実使用は未測定。
+Summaryの件数より観測の正確さを優先するため、頻繁な欠測やproject変更があれば目標件数を超え得る。
+Behavior Evaluation、お小言、Productivity Score、週次/月次分析、Adaptive Coachingは追加していない。
+
+## Phase 3.2 — 時間帯の傾向Summary
+
+開始時のブランチは `codex/activity-timeline-session-refinement`、git statusはclean。
+新しいブランチは作成せず、Phase 3.1の`b8fc282`へ追加実装。今回のコミットIDは最終報告に記載する。
+
+### 責務と変更範囲
+
+Fine-grained ActivitySessionは詳細・将来Analytics用。Phase 3.1のSemanticSessionPolicy、
+SessionGapPolicy、Primary / Secondary / Backgroundの判定も変更しない。
+Phase 3.1の `SummarySegment` をsourceとして保持し、その上に表示専用の `TrendSummarySegment` を追加した。
+時間範囲は「そこで観測された傾向」であり、同じ活動が連続したという意味ではない。
+
+変更するコマンドは `/activity summary`。today / yesterday / 日付指定 / 引数省略、
+既存の詳細query、自然言語ツールはPhase 3.1の挙動を維持する。
+新しい読み取りAPIは `ActivityTimeline.trendSegments(day)` / `trendSummary(day)`。
+旧summarySegments等の結果も変更しない。データ移行・DB書換え・追加LLM・画像再送信は不要。
+
+### 主要クラス
+
+| クラス | 責務 |
+|---|---|
+| TrendSummaryPolicy | 時間帯grouping、foreground evidenceに基づくproject・category・時間集計、補足ラベル選定 |
+| TrendSummarySegment | continuity、theme、既知/未判定/未観測時間、全Evidence・元Segment・fineSessionIdsを保持 |
+| TrendSummaryFormatter | 観測範囲を限定した活動中心の定型文。otherを有用な主活動として表示しない |
+| ActivityDisplayLabels | 表示専用alias。未知の固有名詞は推測で変更しない |
+| ActivityTimeline / ActivityCommand | 既存APIを維持してsummaryの新しい経路を接続 |
+
+### Grouping / 時間 / unknown
+
+新たな結合では全体60分以内、隣接gap20分以内、同じ日付を要求する。
+単独ですでに長い連続区間は強制分割しない。上位family、project、service/application、
+短い変化、unknownを材料にまとめる。SNS / media / shoppingはweb-browsing、開発 / 調査 /
+文書はdevelopment-research。同じprojectの異なる作業カテゴリを結合し、異なる既知projectは分ける。
+unknownを跨いでもprojectの競合は消さない。
+
+観測推定時間は元Recordの区間をsource境界・次の観測でクリップして集計。
+observedSeconds = knownSeconds + unknownSeconds、unobservedSeconds = 時間範囲 − observedSeconds。
+otherは表示用のunknownSecondsへ含めるが元カテゴリは保持。
+Primaryが判定できた時間が観測の半分以上なら既知カテゴリをテーマに用い、半分未満なら
+可視候補を画面表示の傾向として参照する。これを実操作へ置き換えない。
+
+- CONTINUOUS: 同系統の既知観測のみ、同じcontinuityId、最大gap120秒以下、未観測率10%以下。
+- INTERMITTENT: 欠測・unknown / other・continuityId変更等を含む。
+- MIXED: 複数系統の既知観測を含む。欠測秒数も別に保持する。
+
+unknown / otherは時間帯へ吸収しても再分類しない。「主活動を判定できない時間帯もあります」と
+一度補足する。全て未判定なら「主活動は判定できません」と確認できる表示名を返す。
+いずれも「観測できた範囲では」と限定し、「未観測の割合が高い期間」の反復をやめた。
+Analyticsはこの長い時間幅を使わず、Fine-grained Session / Recordを入力とする。
+
+### Label normalization
+
+browser→ブラウザ、cmd→ターミナル、gradle→ビルド、python→Python関連、shopping→ショッピング、
+video→動画、openai→AIツール、chatgpt→ChatGPT、notion→Notion、asus→ASUS。
+spomin dashboard等、意味不明な固有名詞はそのまま保持する。
+最大4件をPrimaryとの一致、観測秒数で重み付けした出現頻度、projectとの対応の順で選ぶ。
+重複は同一観測内で二重加算しない。foreground判定用aliasと表示名を分離している。
+
+### Before / After
+
+実機DBを読んだ結果ではなく、依頼文の時間・カテゴリを基にした**合成fixture**で検証。
+
+- 08:03–08:43相当の9区間 → 1傾向。観測21分、未観測19分、continuity=INTERMITTENT。
+- 午前07:24–11:55の35細粒度Session → 5傾向（約86%減）。開発・SNS・買い物・Slack・
+  yagisan-reports文書作業とunknownを含む。35件のEvidenceは全件残る。
+- unknown / knownを挟む5件をSQLiteへ保存し、傾向化後も全5細粒度Session、
+  Phase 3.1のprojection、元Recordと画像参照を再取得できることを検証。
+
+Beforeは数分ごとの「主活動は判定できません」「SNS閲覧が中心」等が35行。
+Afterの出力例（先頭の全体説明は省略）:
+
+```text
+08:31–09:30 観測できた範囲では、reiの開発・確認やSNSに関する画面が断続的に見られました。
+X・ターミナル・エディタ・GitHubなどが表示されていました。主活動を判定できない時間帯もあります。
+
+11:42–11:55 観測できた範囲では、yagisan-reportsの文書作業に関する画面が断続的に見られました。
+エディタ・Python関連などが表示されていました。
+```
+
+全出力はテストが `target/activity32-example.txt` に生成する。
+5件という数値はこのfixtureの結果であり、実運用平均ではない。件数を達成するための削除・ハード上限はない。
+
+### TDD / テスト
+
+Trend型とquery APIのテストを先に追加し、未実装のRedを確認してから実装した。
+Green後に時間帯・ラベル・定型文の責務を分離し、日付・continuityId・実例の時間集計テストを追加。
+追加16件（ActivityTrendTest 13件、ActivityTrendQueryTest 3件）。
+既存のsummaryコマンドdispatchテストは新しい経路へ更新し、他の操作・詳細API検証は維持。
+Java全件2103件成功（前回2087 + 追加16、failure / error / skipすべて0）。
+Client41件、Rust64件も成功。E2Eは12件すべて成功（1 worker、58.1秒）。
+今回flaky / timeout / 再実行なし。`git diff --check`成功。実画面・実Vision API・実機DBへのアクセスは行っていない。
+
+### 残課題
+
+最大60分・gap20分は初期のgrouping基準。実履歴に応じた調整余地がある。
+前面アプリを判定できない区間は今後も未判定として残る。themeも操作内容の実測ではない。
+既存の長い単独区間には時間窓による強制分割を行わない。
+今回の対象はsummaryコマンドだけで、自然言語ツールやtoday表示への展開は行っていない。
+Behavior Evaluation、お小言、Productivity Score、週次/月次分析、Adaptive Coachingは追加していない。
+
+## Phase 3.4: Summary表示品質と意味境界の調整
+
+ブランチは `codex/activity-timeline-session-refinement` を継続。開始時の作業ツリーはclean。
+Phase 3.2の `6882c7d` に追加実装し、Activity判定・細粒度Sessionのmerge policyは変更しない。
+コミットIDは `git log --oneline --grep='polish activity trend labels'` で確認できる。
+
+### 主要クラスと役割
+
+| クラス | 変更 |
+|---|---|
+| ActivityDisplayLabels | 表示用canonical alias、表示名、Summary限定のproject候補検証 |
+| TrendSummaryPolicy | 45分soft limit、内部Evidenceに基づく意味境界、project/context優先の最大4ラベル |
+| TrendSummaryFormatter | 観測密度・Primary confidenceによるcontinuous / intermittent / mixedの文面 |
+| TrendSummarySegment | 子のEvidence・時間範囲に対応する正確なfineSessionIdsの解決 |
+| ActivityTimeline | 同じ読み取りで取得したfine sessionsを分割後の参照解決にも利用 |
+
+### ラベルと意味役割
+
+rawは変更せず、`WindowsTerminal` → canonical `terminal` → display `ターミナル` の順に表示だけを正規化。
+case / whitespace / NFKC / 既知aliasのpunctuation差を吸収する。Text Editor / text editor / Local editorを
+エディタ、Local log fileをローカルログ、Twitter / X (Twitter) / X (旧Twitter)をXにする。
+canonical化した表示キーで重複除去し、同じ観測の頻度を二重に数えない。
+未知の固有名詞は推測で翻訳せず、既知projectとの対応→Primary→頻度の順で最大4件を選ぶ。
+
+project候補はforeground側に存在しても無条件では採用しない。英字始まりの2〜60文字の識別子
+（英数字・`_`・`.`・`-`）であることを要求し、category、既知service/application、同じEvidence内の
+service/applicationに一致する値を除外する。`rei` / `yagisan-reports` / `another_project`は保持。
+`x browsing` / X / GitHub / ChatGPT / WindowsTerminal / development / 機能設計の提案はproject表示に使わない。
+content/topicからprojectを作らず、不確実な場合は一般的な活動名に戻す。
+これは構文・意味役割の保守的検証であり、実在projectの登録簿を確認するものではない。
+
+### 分割
+
+softMaximumDurationは既定45分（Javaポリシー値。YAML設定は未追加）。Phase 3.2の候補生成時の
+最大60分・隣接gap20分を維持し、生成した候補内部を観測単位で再検討する。
+
+- project switchは長さにかかわらず強い境界。unknownを跨いだ別projectへの切替も検出。
+- dominant themeは前後各10分以内で観測推定秒数を集計し、各側5分以上・観測時間の70%以上を占める
+  異なるfamilyの持続的変化として判定。work（development/research/documentation）と
+  leisure（social/media/shopping）の境界もここに含む。45分未満でも分割可能。
+- 45分超ではforeground文脈の持続的変化、5分以上の未観測gap（両側5分以上観測）、同family内の
+  Primary category変更も検討。優先度はproject、theme、foreground、gap、category。
+  同順位は中央寄りの境界を採用し、子も同じルールで再評価する。
+- 同project内のツール変更だけでは分割しない。55分の同一傾向は1件のまま。2分のSNSへの寄り道も
+  前後の開発から無理に切り離さない。分割点はサンプル境界であり45分ちょうどではない。
+
+既存の長いPhase 3.1 SummarySegment内のEvidenceも確認する。元sourceSegmentsはそのまま親参照として残す。
+子のEvidence・観測秒数を再集計し、Timeline APIは子に対応するfineSessionIdsを解決する。
+元Record・細粒度Session・Raw Evidence・roles・confidence・画像参照を変更せず、DB更新もしない。
+分割により子区間外となる未観測gapは、活動時間へ加算しない。Analyticsの入力は今後も細粒度Session。
+
+### 自然文と不確実性
+
+追加LLMは使わない。既知Primary時間が観測の70%以上、既存RolePolicyのPrimary confidenceを
+観測秒数で重み付けした値が0.7以上なら活動名を使う。
+CONTINUOUSで未観測率10%以下なら「〜が中心」。INTERMITTENTや未観測が多い場合は
+「観測できた範囲では」「断続的に」を残す。MIXEDは「〜と〜が混在」。
+confidenceが弱い場合は「〜関連の画面」へ戻し、全unknownは主活動未判定とする。
+冒頭の観測・推定の説明、一部unknownの短い補足を維持する。操作、集中、バグ修正等は追加しない。
+
+### Before / After
+
+ユーザー提示例の問題:
+
+```text
+reiの開発・確認に関する画面が見られました。Local log file・Text Editor・text editor・GitHub…
+x browsingの開発・確認やSNSやコミュニケーションに関する画面…
+```
+
+Phase 3.4では上記ラベルをローカルログ・エディタに正規化し、エディタの重複と偽project名を除去する。
+以下は実機DBの再生ではなく、同種の問題を持つEvidence fixtureからの実際の出力:
+
+```text
+09:08–09:46 rei関連の開発・確認が中心。ターミナル、GitHubなどが表示されていました。
+
+09:08–09:13 観測できた範囲では、開発・確認とSNS閲覧が混在。
+ターミナル、X、GitHubなどが断続的に表示されていました。
+
+09:08–09:38 SNS閲覧が中心。X、GitHubなどが表示されていました。
+09:38–09:58 rei関連の開発・確認が中心。ターミナル、GitHubなどが表示されていました。
+```
+
+最後の例は50分の候補を持続的なテーマ変化の位置で30分＋20分へ分割したもの。
+全出力は `target/activity34-example.txt` にテストが生成する。ユーザーの実データの正確な分割位置は
+元Evidenceに依存するため、提示された旧Summaryの文章だけからは復元しない。
+
+### 検証と残課題
+
+先に16件の回帰テストを追加し、旧実装でラベル・project・内部境界・文面の失敗を確認してから実装。
+確信度の高いfixtureには画面タイトルと一致するcontent evidenceを明示し、低確信度のfixtureと分離した。
+さらにsoft limit変更、長いgap、unknownを挟む切替、出力例、SQLiteの細粒度参照・再読込のテストを追加。
+追加21件（ActivityPhase34Test 20件、ActivityTrendQueryTest 1件）。
+
+最終検証: Java 2,124件（failure / error / skipすべて0、2分29秒）、Client 41件、Rust 64件、
+ブラウザーE2E 12件（1 worker、54.5秒）がすべて成功。flaky / timeoutなし。
+TDD中の意図したRedと実装修正後の検証を除き、全体スイートの再実行は不要だった。
+`git diff --check`も確認。
+
+project検証はヒューリスティックなので日本語名・空白を含む正当なprojectは一般化される。
+境界検出は5分以上の裏付けを要求するため、疎な観測の細かな変化は混在のまま残る。
+自然文は決定的なテンプレートであり、自由なLLM作文は行わない。
+変更対象は `/activity summary`。today / yesterday / 日付指定や自然言語ツールへの展開は行っていない。
+実Vision API・実画面・ユーザーのActivity DBにはアクセスしていない。

@@ -34,7 +34,7 @@ class ActivityTimelineTest {
     assertTrue(Files.exists(directory.resolve("screenshots").resolve(recent.getFirst())));
     assertEquals(2,timeline.query("yesterday").getFirst().recordIds().size());
   }
-  @Test void summaryUsesSessions() { String summary=timeline.summary("yesterday"); assertTrue(summary.contains("visible coding")); assertTrue(summary.contains("10:00")); }
+  @Test void summaryUsesSemanticProjection() { String summary=timeline.summary("yesterday"); assertTrue(summary.contains("rei関連の開発")); assertFalse(summary.contains("visible coding")); assertTrue(summary.contains("10:00")); }
   @Test void daylightSavingDateHasCorrectBounds() {
     var mock=org.mockito.Mockito.mock(ActivityStore.class);
     var t=new ActivityTimeline(mock,Clock.fixed(Instant.parse("2026-03-08T12:00:00Z"),ZoneId.of("America/New_York")));

@@ -12,7 +12,9 @@ Spring @Scheduled → bounded activityExecutor (1 worker, queue=0)
   → ImageChange (RAM) → ActivityExtractor / VisionActivityExtractor (RAM) → ActivityOutputParser
   → ScreenshotPersistencePolicy → optional ScreenshotStore
   → ActivityRecord → SqliteActivityStore + SessionMergePolicy → ActivitySession
-  → ActivityTimeline → ActivityCommand / ActivityTools
+  → ActivityTimeline + raw evidence → ActivityRolePolicy → SemanticSessionPolicy
+  → SummaryGroupingPolicy → SummarySegment → ActivitySummaryFormatter → today / date / ActivityTools
+  → TrendSummaryPolicy → TrendSummarySegment → TrendSummaryFormatter → /activity summary
 ```
 
 既存の `AwtRobotDriver` / `RobotScreenCapture` / `CapturedScreen` による
@@ -43,6 +45,10 @@ rei:
     screenshot-retention-days: 3
     change-threshold: 0.03
     session-gap-seconds: 90
+    summary-normal-merge-gap-seconds: 120
+    summary-maximum-merge-gap-seconds: 300
+    summary-brief-switch-seconds: 120
+    primary-confidence-threshold: 0.5
     zone: Asia/Tokyo
     excluded-processes:
       - KeePassXC.exe
@@ -178,7 +184,7 @@ multipart bodyはActivityログへ出力しない。既存の小さなLLM lifecy
 静止画面を idle と断定しない。サンプリング間の操作、キーボード/マウスの実使用、
 離席時間は今回測定していない。
 
-## ActivitySession / Persistence
+## Fine-grained ActivitySession / Persistence
 
 `activity_sessions` はレコードから生成する永続化された日次 projection。
 
@@ -209,7 +215,194 @@ Vision request全文、未検証の巨大response全文は保存しない。
 画像名に保存したcapturedAtでretention判定し、シンボリックリンクは辿らない。
 DB保存失敗後の孤立画像もretention対象になる。
 
+## Semantic Session / Primary・Secondary・Background
+
+Phase 3 / 3.1の表示改善は二段階集約とする。永続化された細粒度Sessionの境界は変更しない。
+`ActivityRolePolicy` が元Recordから役割を推定し、`SemanticSessionPolicy` が意味的に近い観測を
+表示用の `SummarySegment` にまとめる。SegmentがSemantic Sessionの役割を担い、
+`roles.primary / secondary / background`、推定confidence、判断根拠コード、全Evidence、
+参照先の `fineSessionIds` を保持する。追加のVision呼び出し・画像読出し・DB書込みは行わない。
+
+Primary判定はforeground processとcandidate applicationの対応、foreground title中のservice /
+content / project候補を材料にする。既知のアプリ表記差（WindowsTerminal / Terminalなど）は正規化する。
+project名だけでは主活動を決めず、ブラウザで複数の異なる候補が同点ならPrimaryは未判定にする。
+foreground processとの一致を必須にし、8点を付与する。対応する候補についてのみ、
+タイトル中のservice一致を5点、content一致を4点、project一致を1点加算する。
+別プロセスの画面候補は、タイトルに名前があるだけではPrimaryにならない。
+scoreが12以上ならモデルconfidence×0.95、それ未満は×0.75とし、
+`primary-confidence-threshold`（既定0.5）未満、未知カテゴリ、異なる候補の同点はunknownとする。
+Segmentの代表はforegroundで裏付けられた候補の観測推定秒数で重み付けする。
+semantic集約では支持観測が半分未満なら未判定、confidenceは支持観測秒数で重み付けする。
+通常上限を超えたgapで結合した場合はconfidenceを0.85倍にし、閾値を下回ればunknownへ戻す。
+これは校正済み確率ではなく補助指標であり、操作・集中の測定値ではない。
+
+監視カテゴリ、btop / Grafana / system monitor / ログ監視等の候補は背景役割を持つ。
+ただしforegroundで裏付けられればPrimaryになれる。固定的に除外するblacklistではない。
+残る候補はSecondary。全画面のchangeAmountを特定ウィンドウの操作に帰属させることはできないため、
+今回のPrimary昇格には使わずEvidenceに保持する。低レベル入力監視は追加しない。
+
+結合規則:
+
+- 開発カテゴリを正規化し、同じproject文脈ならTerminal / GVIM / GitHub等の切替を許容する。
+- SecondaryやBackgroundだけの変化は境界にしない。異なるcanonical categoryの上位テーマ集約はSummary専用層で行う。
+- 異なる既知projectは結合しない。project不明の観測を挟んでも別projectへ連鎖結合しない。
+- その他のカテゴリはservice / applicationやprojectの共通性も確認する。未判定同士は同じforegroundと候補集合が必要。
+- 未観測gapは直前の推定区間の終端から測る。`SessionGapPolicy`の通常上限は120秒、最大は300秒。
+  120秒以内は通常の結合候補。120秒超〜300秒は同じcategoryと同じ既知project、または同じservice/applicationという強い一致が必要。
+  300秒超は結合しない。小さなgapの連鎖も、1 Segmentの累積未観測が300秒を超える結合は止める。
+- A→B→Aと主文脈に戻る場合、Bの区間が`summary-brief-switch-seconds`（既定120秒）以内なら表示上まとめる。
+  継続する新しいPrimaryや戻りのない変化は分割する。短いBも元Evidenceから削除しない。
+- continuity境界（pause / 除外 / 失敗 / 再起動）と設定zoneの日付境界は越えない。
+
+`observedSeconds` は次の観測・日末・検索区間でクリップし、重複を除く。
+まとめた区間内の欠測は `unobservedSeconds` に分離する。細粒度Sessionにも同名の計算メソッドがある。
+gapを作業時間や集中時間として補完しない。
+
+### Canonical category / 表記正規化
+
+`ActivityVocabulary` のカテゴリは development / research / documentation / communication /
+social / media / shopping / monitoring / navigation / idle / other / unknown。
+coding・debugging等はdevelopment、snsはsocial、video・musicはmediaに正規化する。
+Terminal / Shell / Web / local等はカテゴリとして採用せずunknownとする。
+application（道具）、service、categoryは分離し、genericなservice候補（local / Web / Shell等）も表示から除く。
+
+正規化するのは役割付け・集約用projection。元Recordの自由文字列typeはVisionの原候補として残し、
+既存DBのEvidenceを改変しない。正規化後の意味カテゴリは `ActivityRoles.category()` で取得する。
+projectはNFKC・小文字へ正規化（Rei→rei）。Twitter / X (Twitter)は内部値x、表示名Xへ統一。
+Terminal / Local terminal / PowerShell等は道具のterminalへ正規化し、表示名はターミナル。
+同じ正規化をprocessとの照合にも使用する。
+
+旧 `summary-gap-seconds` を明示している場合は、互換用の最大gap・累積欠測の追加上限として扱う。
+未設定なら新しい120 / 300秒を使う。新しい上限は0以上かつ通常≤最大、confidence閾値は0〜1。
+
+## Summary Segment / User-facing Summary
+
+`ActivityRecord` はOS evidenceと元のVision推論を保持する。
+Fine-grained `ActivitySession` は詳細な時系列とrecordIdsを保持する。
+`SummarySegment` はその上の表示用projectionであり、元Recordと細粒度Sessionを消さない。
+`SemanticSessionPolicy`の役割付き区間を、`SummaryGroupingPolicy`がより広いthemeへまとめる。
+social / media / shoppingはweb-browsing、development / research / documentationはwork-development。
+異なる作業カテゴリの結合には同じ既知projectが必要。異なるprojectは短い往復切替でも結合しない。
+themeは表示用であり元のcategoryを上書きしない。`primaryCategories`に構成する主活動カテゴリを残す。
+この層も同じgap上限・累積欠測上限・continuity・日付境界を守る。
+`ActivitySummaryFormatter` はSegmentの役割から活動中心の短い日本語を生成する。
+Visionの長文summaryを転記しないため、各行の免責文・ウィンドウ名列挙を抑えられる。
+追加LLMは使用しない。時間計算と境界はコードだけで決める。
+
+先頭に不確実性の説明を一度置き、各ブロックは主活動の推定と補足表示（最大3種類＋「など」）にする。
+未知の場合もsecondary / backgroundから確認できる表示を最大3種類補足する。
+未観測率（未観測秒数÷区間全体）が10%未満なら注記省略、10〜30%なら「一部未観測時間あり」、
+30%超なら時間範囲を「観測できた時間帯のみ」と限定し「未観測の割合が高い期間」と明示する。
+秒数の技術的表示はSummaryでは出さず、構造化Segmentに保持する。
+「開発・確認作業」までに留め、候補にない「バグ修正」や実際の視聴・操作を断定しない。
+Primaryを特定できない場合は、その旨を出す。見えているだけの活動を勝手に主活動に昇格させない。
+
+提示例相当の合成fixtureでは09:08–09:46の5細粒度Sessionが1 Segmentになり、
+交互にTerminal / GVIMを前面にした20細粒度Sessionも1 Segmentになる。
+半日5〜10・1日8〜15ブロックは目標粒度であり、件数を達成するために異なるprojectや長い欠測を強制結合しない。
+Phase 3.1の半日合成fixtureは24細粒度Session→6テーマ。実機履歴全体の平均Segment数は未測定。
+将来のfocusMinutes / contextSwitchCount等はSummary文字列から逆算せず、元Record・細粒度Session・
+Evidenceから算出する。Productivity Score、行動評価、週次/月次分析、Adaptive Coachingは追加していない。
+
 ## Query / Slash commands / Summary
+
+### Phase 3.2 / 3.4: 時間帯の傾向と表示品質
+
+`/activity summary`には表示専用の `TrendSummarySegment` を使用する。
+Phase 3.1の `SummarySegment` / SemanticSessionPolicy / gap policyは変更せず、
+その上に `TrendSummaryPolicy` を追加した。元の永続Fine-grained ActivitySession、
+Raw Evidence、Primary / Secondary / Background、confidenceを上書きしない。
+`sourceSegments` に元projection、`fineSessionIds` に細粒度Session参照を保持する。
+
+新たにまとめる時間幅は最大60分、隣接した観測区間間のgapは最大20分（ポリシーの既定値）。
+単独ですでに長い連続区間は分割を強制しない。同じ日付内で、上位テーマ、foregroundで裏付けられた
+project、service/applicationの共通性、短い切替を使って候補をまとめる。
+unknown / otherは近隣の時間帯へ吸収できるが、既知の活動として再ラベルしない。
+異なる既知projectは分割する。未知の区間を挟んだprojectの連鎖結合も防ぐ。
+Phase 3.1の300秒上限は元projectionに適用され、傾向表示にまで流用しない。
+
+観測推定区間を元Recordからクリップして集計し、`observedSeconds` / `unobservedSeconds`に加え、
+`knownSeconds` / `unknownSeconds`を保持する。otherは表示用の未判定時間に含め、原カテゴリは残す。
+既知のPrimaryが観測時間の半分以上ならそのカテゴリをテーマに用い、それ未満なら可視候補も
+画面表示の傾向として参照する。操作や実利用の時間には変換しない。
+
+continuityは以下の**観測の性質**を表す。
+
+- `CONTINUOUS`: 同系統の既知活動だけ、同じcontinuityId、最大gap120秒以内、未観測率10%以下。
+  実際に操作し続けたことを証明する値ではない。
+- `INTERMITTENT`: 欠測、unknown / other、continuityIdの変化などを含む。
+- `MIXED`: foregroundで裏付けられた複数系統の活動を含む。欠測の有無・秒数は別途保持する。
+
+themeはdevelopment-research / web-browsing / communication等とmixed-work / mixed / unknown。
+元の細粒度categoryを上書きしない。projectはforegroundで裏付けられた候補だけを見出しへ使用する。
+表示は確信度と観測密度に応じて「〜が中心」「観測できた範囲では」「断続的に見られました」を使い分け、欠測中の継続を主張しない。
+未観測率の定型注意を各行へ重ねず、未判定を含む場合だけ短く補足する。
+otherだけの場合も「その他の活動が中心」とは出さず、主活動を判定できない旨を表示する。
+
+`ActivityDisplayLabels` は表示だけを正規化する。browser→ブラウザ、cmd→ターミナル、
+gradle→ビルド、python→Python関連、shopping→ショッピング、video→動画、openai→AIツール、
+chatgpt→ChatGPT、notion→Notion、asus→ASUS。未知の固有名詞を推測で書き換えない。
+補足は最大4ラベル。妥当なprojectとの対応、Primaryとの一致、観測秒数で重み付けした出現頻度の順に選ぶ。
+同一観測内の重複ラベルを頻度へ二重加算しない。
+
+#### Phase 3.4: raw / canonical / display と意味役割
+
+Raw Evidenceは変更せず、表示レイヤーの `ActivityDisplayLabels.canonical` と `label` で別々に扱う。
+例えばWindowsTerminal / Windows Terminal / Windows-Terminal / cmd / PowerShell / Local terminalは
+canonical=`terminal`、display=`ターミナル`。Text Editor / text editor / Local editorは`editor`→`エディタ`。
+Local log file / log fileは`log-file`→`ローカルログ`、Twitter / X (Twitter) / X (旧Twitter)は`x`→`X`。
+NFKC、case、空白、既知aliasの区切り記号を正規化し、表示ラベルをcanonical化したキーで重複除去する。
+未知の固有名詞の綴りや意味は推測で変更しない。Activity判定用の既存Vocabulary / RolePolicyは変更しない。
+
+project、service/application、activity、content/topicは別の役割として扱う。
+Summaryのproject候補は、foregroundで採用された候補のうち英字始まりの2〜60文字の識別子
+（英数字・`_`・`.`・`-`）に限定し、カテゴリ、既知サービス/アプリ、同じEvidence内のサービス/アプリとの
+一致を除外する。`rei` / `yagisan-reports`等は保持し、`x browsing` / X / GitHub / WindowsTerminal等を
+projectにしない。`機能設計の提案`等の自然文トピックもproject扱いせず、原文はEvidenceに残す。
+不確かな候補はSummary上のproject名を省略する。これは保守的な構文・役割検証であり、実在する
+リポジトリの照合ではない。日本語名や空白を含む正当なprojectも一般化される制約がある。
+
+#### Phase 3.4: soft maximum duration と意味境界
+
+`TrendSummaryPolicy.softMaximumDuration`の既定値は45分。これは表示候補の内部境界を再検討する
+トリガーであり、45分の位置で切るタイマーではない（現時点ではJavaポリシーの値で、YAML設定項目はない）。
+Phase 3.2の新規結合60分・隣接gap20分という候補生成の制限は維持する。
+55分ずっと同じ傾向なら1件のまま。既存の長いsource projectionの内部も元Evidenceを見て検討する。
+
+- 妥当なprojectが別projectへ変わった場合は長さによらず分割。unknownを挟んでも競合を隠さない。
+- dominant themeの持続的変化は45分未満でも分割。前後各10分以内の観測推定秒数を集計し、
+  各側で同じテーマが5分以上、かつ観測時間の70%以上ある場合を意味のある切替とする。
+  development / research / documentationはwork、social / media / shoppingはWeb/娯楽のfamily。
+  work ↔ leisureもこの判定に含める。unknownは既知カテゴリへ変換せず、比率の分母に残す。
+- 45分を超えた場合は、さらに持続的なforeground文脈の変化、5分以上の未観測gap（両側に5分以上の観測）、
+  同family内のPrimary categoryの変化を境界候補にする。同じ妥当なproject内のツール変更だけでは分けない。
+- project競合を優先し、次にtheme、foreground、gap、categoryの順で選ぶ。同順位では時間的に中央に近い
+  境界を選び、子区間も同じ基準で評価する。短い寄り道や1分のサンプルだけでは持続的変化にしない。
+
+分割対象はTrendSummarySegmentだけ。元Record、Fine-grained Session、Phase 3.1 SummarySegment、
+元のroles/confidenceは変更しない。子のEvidenceと観測秒数を再集計し、`sourceSegments`は元projectionを
+そのまま参照する（同じ親が複数の子から参照され得る）。Timeline APIの`fineSessionIds`は子のEvidence・
+時間との対応で解決し直す。分割によって区間外になった未観測gapを活動時間へ足し込まない。
+
+#### Phase 3.4: 文面の自然化
+
+追加LLMは呼ばず、コードで安全な文面を選ぶ。既知Primaryの時間が観測の70%以上、観測秒数で重み付けした
+Primary confidenceが0.7以上なら活動ベースの表現を使う。confidence計算も既存RolePolicyに従う。
+
+- CONTINUOUSかつ未観測率10%以下で上記条件を満たす場合は「rei関連の開発・確認が中心」。
+- INTERMITTENTや未観測率が高い場合は「観測できた範囲では」「断続的に」を残す。
+- MIXEDは「開発・確認とSNS閲覧が混在」。確信度が弱いときは「〜関連の画面が混在していました」へ戻す。
+- 全て未判定なら主活動を判定できない旨を表示。一部未判定も短く補足する。
+
+冒頭の画面観測・推定に関する説明は維持する。「集中」「バグ修正」等、Evidenceにない操作や成果は生成しない。
+service/applicationの補足は表示された事実として記述する。
+
+追加LLM・画像取得・DB更新は不要。`ActivityTimeline.trendSegments(day)`と`trendSummary(day)`が
+新しい読み取り用API。既存query / findBetween / summarySegments / summaryBetween / summaryおよび
+自然言語ツールの挙動は維持する。将来のAnalyticsは元Record・細粒度Sessionを入力にし、
+傾向Segmentの時間幅を集中時間・SNS利用時間へ転用しない。
+
+### コマンドと既存API
 
 ```text
 /activity today
@@ -220,8 +413,9 @@ DB保存失敗後の孤立画像もretention対象になる。
 /activity resume
 ```
 
-`summary` は今日のセッションを深夜・午前・午後・夜にまとめる。
-文章化は `ActivityTimeline.summary` の決定的なformatterで行い、追加LLMは不要。
+`summary` は今日の時間帯の傾向を `TrendSummaryFormatter` で表示する。
+today / yesterday / 日付指定（引数省略を含む）はPhase 3.1の `ActivitySummaryFormatter` 表示を維持する。
+追加LLMは不要。
 記録がない場合は「記録なし」と返し、何もしていなかったとは断定しない。
 pause はメモリ上の状態であり、再起動時には enabled 設定に従う。
 resume は `enabled=false` を上書きしない。
@@ -230,7 +424,12 @@ resume は `enabled=false` を上書きしない。
 `findBetween(startInclusive,endExclusive)` は半開区間で重なるSessionを返し、
 境界を指定時間にクリップする。最大31日。Record IDsは元のSessionの参照を保持する。
 
-通常のChatには `activityTimeline(date)` と `activityBetween(startInclusive,endExclusive)` を登録。
+`summarySegments(day)` / `summaryBetween(start,end)` は役割・元Evidence・細粒度Session参照付きの
+Segmentを返す。`findRecordsBetween(start,end)` は推定区間が重なる元Recordを改変せず返す。
+どのSummary queryも読み取り専用で、以前の日付に蓄積したデータも再収集せず新しい表示になる。
+自然言語の振り返りは `activitySummary`、詳細取得は既存の `activityTimeline` / `activityBetween` を使用する。
+
+通常のChatには `activitySummary(date)`、`activityTimeline(date)` と `activityBetween(startInclusive,endExclusive)` を登録。
 「昨日の夜なにしてた？」等は既存Agentが日時コンテキストを参照してToolを呼び出す。
 後者はオフセット付きISO-8601日時を受け付ける。自然言語の固定パターン表は追加しない。
 専用Timeline画面やクライアント独自Slash parserは今回追加していない。
