@@ -9,6 +9,41 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class SseBridgeTest {
+  @Test void broadcastsShutdownToAllRunsAndDrainsBeforeBridgeCloses() throws Exception {
+    var registry = new RunRegistry(Clock.systemUTC());
+    registry.register(RunRegistryTest.context("one"));
+    registry.register(RunRegistryTest.context("two"));
+    var bus = new InMemoryAgentEventBus();
+    var factory = new AgentEventFactory(Clock.systemUTC());
+    var first = new Sink();
+    var second = new Sink();
+    try (var bridge = new SseBridge(bus, new RunService(registry), "")) {
+      bridge.connect("one", first);
+      bridge.connect("two", second);
+      bus.publish(factory.applicationShutdownStarted("context_closed"));
+    }
+    for (var sink : List.of(first, second)) {
+      assertThat(sink.ended.getCount()).isZero();
+      assertThat(sink.error).isNull();
+      assertThat(sink.events).extracting(WebApiEventDto::type).containsExactly("application.shutdown.started");
+      assertThat(sink.events.getFirst().payload()).containsEntry("reason", "context_closed");
+      assertThat(sink.events.getFirst().runId()).isNull();
+    }
+    assertThat(registry.get("one").status()).isEqualTo(RunStatus.QUEUED);
+  }
+
+  @Test void connectionOpenedDuringShutdownReceivesNotification() throws Exception {
+    var registry = new RunRegistry(Clock.systemUTC());
+    registry.register(RunRegistryTest.context("run"));
+    var bus = new InMemoryAgentEventBus();
+    try (var bridge = new SseBridge(bus, new RunService(registry), "")) {
+      bus.publish(new AgentEventFactory(Clock.systemUTC()).applicationShutdownStarted("shell_exit"));
+      var sink = new Sink();
+      bridge.connect("run", sink);
+      assertThat(sink.ended.await(5, TimeUnit.SECONDS)).isTrue();
+      assertThat(sink.events).extracting(WebApiEventDto::type).containsExactly("application.shutdown.started");
+    }
+  }
   static class Sink implements SseBridge.Sink {
     final List<WebApiEventDto> events = new CopyOnWriteArrayList<>();
     final CountDownLatch ended = new CountDownLatch(1);

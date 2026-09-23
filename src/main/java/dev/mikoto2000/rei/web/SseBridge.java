@@ -21,6 +21,9 @@ public final class SseBridge implements AutoCloseable {
   private final ExecutorService writers;
   private final ScheduledExecutorService heartbeats;
   private final Set<Connection> connections = ConcurrentHashMap.newKeySet();
+  private final AgentEventBus.Subscription lifecycleSubscription;
+  private volatile AgentEvent shutdownEvent;
+  private volatile CompletableFuture<Void> shutdownDelivery = CompletableFuture.completedFuture(null);
 
   public SseBridge(AgentEventBus bus, RunService runs, String apiKey) {
     this(bus, runs, apiKey, Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("rei-sse-", 0).factory()),
@@ -28,6 +31,14 @@ public final class SseBridge implements AutoCloseable {
   }
   SseBridge(AgentEventBus bus, RunService runs, String apiKey, ExecutorService writers, ScheduledExecutorService heartbeats) {
     this.bus = bus; this.runs = runs; this.apiKey = apiKey; this.writers = writers; this.heartbeats = heartbeats;
+    lifecycleSubscription = bus.subscribe(event -> {
+      if (event.type() != AgentEventType.APPLICATION_SHUTDOWN_STARTED) return;
+      shutdownEvent = event;
+      var active = java.util.List.copyOf(connections);
+      shutdownDelivery = CompletableFuture.allOf(active.stream()
+          .map(connection -> connection.deliveryComplete).toArray(CompletableFuture[]::new));
+      active.forEach(connection -> connection.offer(new Frame(event)));
+    });
   }
   public Connection connect(String runId, Sink sink) {
     return connect(runId, null, sink);
@@ -44,6 +55,10 @@ public final class SseBridge implements AutoCloseable {
       connection.alreadyComplete = run.status().isTerminal() && replay.terminalSequence() != null
           && lastEventId != null && lastEventId >= replay.terminalSequence();
       connections.add(connection);
+      if (shutdownEvent != null) {
+        connection.offer(new Frame(shutdownEvent));
+        shutdownDelivery = CompletableFuture.allOf(shutdownDelivery, connection.deliveryComplete);
+      }
     }
     connection.start();
     return connection;
@@ -53,6 +68,7 @@ public final class SseBridge implements AutoCloseable {
     private final Sink sink;
     private final ArrayBlockingQueue<Frame> queue = new ArrayBlockingQueue<>(1000);
     private final AtomicBoolean closed = new AtomicBoolean();
+    private final CompletableFuture<Void> deliveryComplete = new CompletableFuture<>();
     private volatile AgentEventBus.Subscription subscription;
     private volatile Future<?> writer;
     private volatile Future<?> heartbeat;
@@ -81,10 +97,11 @@ public final class SseBridge implements AutoCloseable {
       } catch (Exception error) { finish(error); }
     }
     private boolean writeEvent(AgentEvent event) throws Exception {
-      boolean cancelled = runs.get(runId).status() == RunStatus.CANCELLED;
+      boolean shuttingDown = event.type() == AgentEventType.APPLICATION_SHUTDOWN_STARTED;
+      boolean cancelled = !shuttingDown && runs.get(runId).status() == RunStatus.CANCELLED;
       var dto = WebApiEventMapper.from(event, cancelled, apiKey);
       sink.event(dto);
-      if (Set.of("agent.run.completed", "agent.run.failed", "agent.run.cancelled").contains(dto.type())) {
+      if (shuttingDown || Set.of("agent.run.completed", "agent.run.failed", "agent.run.cancelled").contains(dto.type())) {
         finish(null); return true;
       }
       return false;
@@ -93,10 +110,18 @@ public final class SseBridge implements AutoCloseable {
       if (!closed.compareAndSet(false, true)) return;
       cleanup();
       // Even error completion can interact with servlet IO: never invoke it on the publisher thread.
-      writers.execute(() -> sink.complete(error));
+      writers.execute(() -> {
+        try { sink.complete(error); }
+        finally { deliveryComplete.complete(null); }
+      });
     }
     public boolean isClosed() { return closed.get(); }
-    @Override public void close() { if (closed.compareAndSet(false, true)) cleanup(); }
+    @Override public void close() {
+      if (closed.compareAndSet(false, true)) {
+        cleanup();
+        deliveryComplete.complete(null);
+      }
+    }
     private void cleanup() {
       if (subscription != null) subscription.unsubscribe();
       if (heartbeat != null) heartbeat.cancel(false);
@@ -105,8 +130,13 @@ public final class SseBridge implements AutoCloseable {
     }
   }
   @Override public void close() {
+    lifecycleSubscription.unsubscribe();
+    // A slow socket must not hold up shutdown indefinitely, but queued lifecycle
+    // notifications need a chance to reach clients before writers are interrupted.
+    try { shutdownDelivery.get(2, TimeUnit.SECONDS); }
+    catch (InterruptedException error) { Thread.currentThread().interrupt(); }
+    catch (ExecutionException | TimeoutException ignored) { }
     connections.forEach(Connection::close);
     heartbeats.shutdownNow(); writers.shutdownNow();
   }
 }
-

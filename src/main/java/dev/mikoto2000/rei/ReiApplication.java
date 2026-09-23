@@ -78,6 +78,8 @@ public class ReiApplication {
   private dev.mikoto2000.rei.ui.shell.ActiveRunDisplay activeRunDisplay;
   @Autowired
   private ProjectService projects;
+  @Autowired
+  private ApplicationShutdownNotifier shutdownNotifier;
 
   private static final String COMMAND_COMPLETION_MESSAGE = "コマンド実行が完了しました";
   private static final String MULTILINE_CONTINUATION = "\\";
@@ -246,6 +248,7 @@ public class ReiApplication {
         }
       }
     } finally {
+      shutdownNotifier.begin("shell_exit");
       commandExecutor.shutdownNow();
       shellEvents.close();
     }

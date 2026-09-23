@@ -33,6 +33,13 @@ public class AgentEventFactory {
 
   // ---- Agent Run ----
 
+  public AgentEvent applicationShutdownStarted(String reason) {
+    // Do not inherit the run/execution scope of the thread initiating shutdown.
+    return new AgentEvent(UUID.randomUUID().toString(), 0L, Instant.now(clock),
+        AgentEventType.APPLICATION_SHUTDOWN_STARTED, VERSION, null, null, null, null, null,
+        new ApplicationShutdownStartedPayload(reason));
+  }
+
   public AgentEvent contextCompression(AgentEventType type, ContextCompressionPayload payload) {
     if (type != AgentEventType.CONTEXT_COMPRESSION_STARTED && type != AgentEventType.CONTEXT_COMPRESSION_COMPLETED
         && type != AgentEventType.CONTEXT_COMPRESSION_FAILED) throw new IllegalArgumentException("Not a compression event");

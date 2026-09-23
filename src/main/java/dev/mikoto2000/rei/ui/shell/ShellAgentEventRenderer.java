@@ -154,6 +154,11 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       return;
     }
     switch (event.type()) {
+      case APPLICATION_SHUTDOWN_STARTED -> {
+        closeAssistantLine();
+        closeThinkingLine();
+        output.println("[application] グレースフルシャットダウンを開始します。");
+      }
       case COMPUTER_USE_PROGRESS -> {
         closeAssistantLine();
         closeThinkingLine();

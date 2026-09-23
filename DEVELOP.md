@@ -96,6 +96,18 @@ OS 標準の Rei Data Directory に保存します。Windows は `%LOCALAPPDATA%
 - `*`, `?`, `[]` を含む引数は Java 側で glob 展開
 - 終了時に埋め込みが進行中なら警告を出して確認
 
+## 終了開始イベント
+
+グレースフルシャットダウンの開始時に `application.shutdown.started` を一度だけ発行します。
+`/exit`・EOF による Shell 終了では購読解除前に、Spring コンテキスト終了では lifecycle の停止前に通知します。
+payload は `{"reason":"shell_exit"}` または `{"reason":"context_closed"}` です。
+プロセス全体のイベントなので `projectId`・`sessionId`・`turnId`・`runId` は `null` です。
+
+Shell は「グレースフルシャットダウンを開始します。」を表示します。
+Web API は接続中の `/api/v1/runs/{runId}/events` SSE に同じイベントを配信し、接続を完了します。
+これは Run の成功・失敗・キャンセルを意味しません。Run 単位の replay には保存しません。
+SSE bridge の破棄時には送信完了を最大 2 秒待機します。切断済み・送信不能な接続への配送や、強制終了時の通知は保証しません。
+
 ## MCP
 
 - Spring AI MCP client を使用

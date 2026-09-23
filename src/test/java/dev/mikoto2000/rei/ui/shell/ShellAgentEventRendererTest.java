@@ -19,6 +19,11 @@ import dev.mikoto2000.rei.topic.TopicScoreBreakdown;
 import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
 
 class ShellAgentEventRendererTest {
+  @Test void rendersShutdownNotification() {
+    var output = new RecordingOutput();
+    new ShellAgentEventRenderer(output).onEvent(events.applicationShutdownStarted("shell_exit"));
+    assertEquals("[application] グレースフルシャットダウンを開始します。\n", output.text());
+  }
   @Test void rendersHistorySearchCountsWithoutMessageContent() {
     var output = new RecordingOutput();
     new ShellAgentEventRenderer(output).onEvent(events.historySearchCompleted(

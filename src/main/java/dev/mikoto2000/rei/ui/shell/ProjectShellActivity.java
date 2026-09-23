@@ -40,6 +40,7 @@ public class ProjectShellActivity implements AgentEventListener {
   }
   @Override public synchronized void onEvent(AgentEvent event) {
     if (renderer == null) return;
+    if (event.type() == AgentEventType.APPLICATION_SHUTDOWN_STARTED) renderer.finish();
     if(event.payload() instanceof BackgroundExecutionPayload payload) {
       renderer.renderBackgroundExecution(payload,activeRuns==null?event.projectId():activeRuns.projectName(event.projectId()));
       return;
