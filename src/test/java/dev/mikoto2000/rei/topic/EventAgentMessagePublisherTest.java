@@ -20,6 +20,23 @@ import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.llm.ConversationIds;
 
 class EventAgentMessagePublisherTest {
+  @Test
+  void behaviorNarrationStartsOnlyAfterSuccessfulDelivery() {
+    var logStore=mock(ConversationLogStore.class);
+    var bus=mock(dev.mikoto2000.rei.event.AgentEventPublisher.class);
+    var narrator=mock(dev.mikoto2000.rei.ui.shell.sound.AgentMessageNarrator.class);
+    var publisher=new EventAgentMessagePublisher(logStore,new AgentEventFactory(clock()),bus,
+        new DefaultAgentActivityTracker(clock()),narrator);
+    var message=new AgentMessage("behavior","assistant","休憩しましょう",MessageOrigin.BEHAVIOR,clock().instant());
+    publisher.publish(message);
+    var order=org.mockito.Mockito.inOrder(bus,narrator);
+    order.verify(bus,org.mockito.Mockito.times(3)).publish(org.mockito.ArgumentMatchers.any());
+    order.verify(narrator).onPublished(message);
+    org.mockito.Mockito.reset(narrator);
+    org.mockito.Mockito.doThrow(new IllegalStateException()).when(logStore).append(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString());
+    org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,()->publisher.publish(message));
+    org.mockito.Mockito.verifyNoInteractions(narrator);
+  }
 
   @Test
   void appendsConversationLogAndPublishesMessageEvents() {
@@ -29,7 +46,8 @@ class EventAgentMessagePublisherTest {
     bus.subscribe(events::add);
     DefaultAgentActivityTracker tracker = new DefaultAgentActivityTracker(clock());
     EventAgentMessagePublisher publisher = new EventAgentMessagePublisher(
-        logStore, new AgentEventFactory(clock()), bus, tracker);
+        logStore, new AgentEventFactory(clock()), bus, tracker,
+        mock(dev.mikoto2000.rei.ui.shell.sound.AgentMessageNarrator.class));
 
     Instant createdAt = Instant.parse("2026-09-02T00:01:00Z");
     publisher.publish(new AgentMessage("message-id", "assistant", "hello", MessageOrigin.TOPIC_GENERATOR, createdAt));

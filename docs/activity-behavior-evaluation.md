@@ -14,7 +14,14 @@ Fine-grained ActivitySession + 対応するActivityRecord
   → BehaviorNotification
   → LlmBehaviorMessageGenerator
   → 既存AgentMessagePublisher / messageイベント / 会話履歴
+  → AgentMessageNarrator → 既存の音声通知（有効時のみ、非同期）
 ```
+
+お小言の配信成功後、`rei.sound-notification.enabled: true`なら既存の
+`rei.sound-notification.command`で本文を読み上げる。Activity専用の追加音声設定は不要。
+Markdown等は通常の回答と同じ方法で整形する。手動の`/activity behavior evaluate`、
+cooldown等で抑制された通知、生成・配信に失敗した通知は読み上げない。
+音声の完了待ちでBehaviorのロックを保持せず、音声失敗が配信済み通知を失敗扱いにすることもない。
 
 Evaluatorは時刻・設定・詳細セッション・対応する元Evidenceだけを入力とする純粋ロジック。
 LLM、UI、SummarySegment / TrendSummarySegment、外部ツールには依存しない。

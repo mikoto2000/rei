@@ -57,7 +57,7 @@ class DefaultTopicOrchestratorTest {
     ConversationLogStore logStore = mock(ConversationLogStore.class);
     RecordingActivityTracker tracker = new RecordingActivityTracker(now().minus(Duration.ofMinutes(5)));
     EventAgentMessagePublisher publisher = new EventAgentMessagePublisher(logStore, new AgentEventFactory(clock()),
-        bus, tracker);
+        bus, tracker, mock(dev.mikoto2000.rei.ui.shell.sound.AgentMessageNarrator.class));
     DefaultTopicOrchestrator orchestrator = new DefaultTopicOrchestrator(
         service(properties, new TemplateTopicMessageGenerator(), bus),
         store, () -> context(), tracker, publisher, properties, new AgentEventFactory(clock()), bus, clock());
