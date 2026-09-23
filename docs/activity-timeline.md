@@ -42,6 +42,7 @@ rei:
     keep-screenshots: false
     keep-on-extraction-failure: false
     capture-interval-seconds: 60
+    vision-image-scale: 0.5
     screenshot-retention-days: 3
     change-threshold: 0.03
     session-gap-seconds: 90
@@ -88,14 +89,17 @@ retention=0 は画像をディスクに保存しない。解析が有効なら�
 `ImageChange` はRAM上で特徴量を計算する。重複画面はPNGエンコードもVision呼び出しも保存もせず、
 画像への参照を解放する。継続を記録する軽量ActivityRecordは従来どおり追加する。
 
-変更画面は `PngScreenshotEncoder` により
+変更画面は送信専用コピーを `rei.activity.vision-image-scale`（既定0.5）で縦横それぞれ縮小し、`PngScreenshotEncoder` により
 `BufferedImage → MemoryCacheImageOutputStream → ByteArrayOutputStream → byte[]` と変換する。
 `VisionActivityExtractor` が `ByteArrayResource` / Spring AI `Media` に渡し、
 既存OpenAI互換クライアントがJSONリクエスト中の `data:image/png;base64,...` にする。
 画像用 `Path`、temporary PNG、multipartファイルは経由しない。
 ImageIOのOutputStream便利メソッドは内部でディスクキャッシュを使用し得るため、
 明示的な `MemoryCacheImageOutputStream` を使う。他機能に影響するグローバルな
-`ImageIO.setUseCache` の変更は行わない。形式は引き続き可逆PNGで、OCR精度を落とす圧縮変更はない。
+`ImageIO.setUseCache` の変更は行わない。形式はPNGのまま。0.5なら1920×1080は960×540、画素数は約1/4になる。
+小さい文字の認識精度と処理負荷のトレードオフがある。設定範囲は0超〜1以下、1.0で原寸送信へ戻せる。
+端数は四捨五入し各辺最低1px。元画像・モニター座標・変化検出・任意の保存Evidenceは原寸を維持する。
+縮小とPNG変換はRAM内だけで行う。これは入力画像の負荷軽減であり、出力上限超過や接続障害の解消を保証しない。
 
 通常はVision成功後に構造化Recordだけを保存し、画像はRAMから解放する。
 ScreenshotStoreはEvidenceを明示的に保持するときだけ呼ばれるoptional persistence。

@@ -12,6 +12,7 @@ public class ActivityProperties {
   private boolean keepScreenshots = false;
   private boolean keepOnExtractionFailure = false;
   private int captureIntervalSeconds = 60;
+  private double visionImageScale = .5;
   private int screenshotRetentionDays = 3;
   private double changeThreshold = .03;
   private int sessionGapSeconds = 90;
@@ -27,6 +28,7 @@ public class ActivityProperties {
 
   public void validate() {
     if (captureIntervalSeconds < 1 || screenshotRetentionDays < 0 || sessionGapSeconds < 0
+        || !Double.isFinite(visionImageScale) || visionImageScale<=0 || visionImageScale>1
         || (summaryGapSeconds != null && summaryGapSeconds < 0) || summaryBriefSwitchSeconds < 0
         || summaryNormalMergeGapSeconds < 0 || summaryMaximumMergeGapSeconds < summaryNormalMergeGapSeconds
         || !Double.isFinite(primaryConfidenceThreshold) || primaryConfidenceThreshold < 0 || primaryConfidenceThreshold > 1

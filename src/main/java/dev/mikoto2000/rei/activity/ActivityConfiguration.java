@@ -15,9 +15,9 @@ public class ActivityConfiguration {
   }
   @Bean ScreenshotStore activityScreenshots() { return new FileScreenshotStore(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve("activity/screenshots")); }
   @Bean DesktopActivityObserver activityObserver() { return new WindowsDesktopActivityObserver(); }
-  @Bean ActivityExtractor activityExtractor(dev.mikoto2000.rei.llm.LlmModelProvider provider,dev.mikoto2000.rei.core.service.ModelHolderService current) {
+  @Bean ActivityExtractor activityExtractor(dev.mikoto2000.rei.llm.LlmModelProvider provider,dev.mikoto2000.rei.core.service.ModelHolderService current,ActivityProperties properties) {
     return new VisionActivityExtractor(() -> provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),
-        () -> provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get()));
+        () -> provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get()),properties.getVisionImageScale());
   }
   @Bean ActivityCapture activityCapture(ActivityProperties p,DesktopActivityObserver observer,ActivityExtractor extractor,ActivityStore store,ScreenshotStore screenshots) {
     return new ActivityCapture(p,observer,extractor,store,screenshots,Clock.systemUTC());

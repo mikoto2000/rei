@@ -14,12 +14,17 @@ import java.util.function.Supplier;
 public final class VisionActivityExtractor implements ActivityExtractor {
   private final Supplier<ChatModel> model;
   private final Supplier<OpenAiChatOptions> options;
-  public VisionActivityExtractor(Supplier<ChatModel> model,Supplier<OpenAiChatOptions> options) {this.model=model;this.options=options;}
+  private final double imageScale;
+  public VisionActivityExtractor(Supplier<ChatModel> model,Supplier<OpenAiChatOptions> options) {this(model,options,.5);}
+  public VisionActivityExtractor(Supplier<ChatModel> model,Supplier<OpenAiChatOptions> options,double imageScale) {
+    if(!Double.isFinite(imageScale) || imageScale<=0 || imageScale>1) throw new IllegalArgumentException("Invalid Vision image scale");
+    this.model=model;this.options=options;this.imageScale=imageScale;
+  }
   @Override public Result extract(CapturedScreen screen,ForegroundWindow foreground) throws Exception {
     var media=new ArrayList<Media>();var monitors=new ArrayList<String>();
     for(var display:screen.displays()) {
       monitors.add(display.geometry().id());
-      var bytes=PngScreenshotEncoder.encode(display.image());
+      var bytes=PngScreenshotEncoder.encode(display.image(),imageScale);
       media.add(new Media(org.springframework.util.MimeTypeUtils.IMAGE_PNG,new org.springframework.core.io.ByteArrayResource(bytes)));
     }
     var schema=ActivityOutputParser.schemaForMonitors(monitors);
