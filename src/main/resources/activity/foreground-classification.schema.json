@@ -1,0 +1,15 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "type":"object",
+  "additionalProperties":false,
+  "required":["category","application","service","projectCandidate","contentCandidate","summary","confidence"],
+  "properties":{
+    "category":{"type":"string","enum":["development","research","documentation","communication","social","media","shopping","gaming","monitoring","navigation","idle","other","unknown"]},
+    "application":{"type":["string","null"],"maxLength":64},
+    "service":{"type":["string","null"],"maxLength":64},
+    "projectCandidate":{"type":["string","null"],"maxLength":80},
+    "contentCandidate":{"type":["string","null"],"maxLength":120},
+    "summary":{"type":"string","maxLength":160},
+    "confidence":{"type":"number","minimum":0,"maximum":1}
+  }
+}

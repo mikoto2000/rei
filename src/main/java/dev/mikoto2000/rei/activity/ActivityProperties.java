@@ -24,7 +24,7 @@ public class ActivityProperties {
     private double skipVisionConfidence=.8;
     private boolean foregroundCrop=true;
     private boolean backgroundFullScreenEnabled=false;
-    private int maxOutputTokens=1024;
+    private int maxOutputTokens=2048;
   }
   private int screenshotRetentionDays = 3;
   private double changeThreshold = .03;

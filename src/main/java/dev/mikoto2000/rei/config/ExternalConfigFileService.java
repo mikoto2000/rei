@@ -114,7 +114,7 @@ public class ExternalConfigFileService {
               skip-vision-confidence: 0.8
               foreground-crop: true
               background-full-screen-enabled: false
-              max-output-tokens: 1024
+              max-output-tokens: 2048
             keep-screenshots: false
             behavior:
               enabled: false

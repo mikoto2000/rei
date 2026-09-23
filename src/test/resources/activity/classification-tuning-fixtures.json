@@ -1,0 +1,23 @@
+[
+  {"process":"Firefox","title":"Home — Bluesky — Mozilla Firefox","category":"social","service":"Bluesky","content":"Home","skip":true},
+  {"process":"Firefox","title":"Google ニュース - トップニュース — Mozilla Firefox","category":"research","service":"Google News","content":"","skip":true},
+  {"process":"Firefox","title":"ホーム / X — Mozilla Firefox","category":"social","service":"X","content":"ホーム","skip":true},
+  {"process":"Firefox","title":"X","category":"social","service":"X","content":"","skip":true},
+  {"process":"chrome.exe","title":"Twitter","category":"social","service":"X","content":"","skip":true},
+  {"process":"msedge","title":"X (Twitter)","category":"social","service":"X","content":"","skip":true},
+  {"process":"Firefox","title":"Example Video - YouTube — Mozilla Firefox","category":"media","service":"YouTube","content":"Example Video","skip":true},
+  {"process":"Firefox","title":"YouTube","category":"media","service":"YouTube","content":"","skip":true},
+  {"process":"Firefox","title":"YouTube Music","category":"media","service":"YouTube Music","content":"","skip":true},
+  {"process":"Firefox","title":"Amazon.co.jp: 本","category":"shopping","service":"Amazon","content":"","skip":true},
+  {"process":"Firefox","title":"Amazon","category":"shopping","service":"Amazon","content":"","skip":true},
+  {"process":"Firefox","title":"mikoto2000/rei - GitHub","category":"development","service":"GitHub","content":"mikoto2000/rei","skip":false},
+  {"process":"Firefox","title":"mikoto2000/rei","category":"research","service":"GitHub","content":"mikoto2000/rei","skip":false},
+  {"process":"Firefox","title":"GitHub","category":"research","service":"GitHub","content":"","skip":false},
+  {"process":"Firefox","title":"ChatGPT","category":"unknown","service":"ChatGPT","content":"","skip":false},
+  {"process":"ChatGPT.exe","title":"ChatGPT","category":"unknown","service":"ChatGPT","content":"","skip":false},
+  {"process":"Firefox","title":"Java record - Google 検索","category":"research","service":"Google","content":"Java record","skip":true},
+  {"process":"Firefox","title":"Mozilla Firefox","category":"unknown","service":"","content":"","skip":false},
+  {"process":"Code.exe","title":"YouTube.md - rei - Visual Studio Code","category":"development","service":"","content":"YouTube.md - rei - Visual Studio Code","skip":true},
+  {"process":"Firefox","title":"YouTube API guide - Documentation","category":"unknown","service":"","content":"","skip":false},
+  {"process":"Firefox","title":"How to use Amazon - Google 検索","category":"research","service":"Google","content":"How to use Amazon","skip":true}
+]

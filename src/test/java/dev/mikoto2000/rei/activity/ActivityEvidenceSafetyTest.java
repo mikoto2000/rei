@@ -87,11 +87,11 @@ class ActivityEvidenceSafetyTest {
     var evidence=new ActivityEvidence(at,fg,List.of(),"rei","p",List.of(new ActivityEvidence.RecentEvent(at,"p","SHELL")),null);
     assertEquals(.9,new ActivityClassifier().classify(evidence).confidence());
     var history=new ActivityEvidence.History(at,fg,new ActivityRecord.Inference("old",List.of()),.99);
-    assertEquals(.4,new ActivityClassifier().classify(new ActivityEvidence(at,fg,List.of(),"rei","p",List.of(),history)).confidence());
+    assertEquals(0,new ActivityClassifier().classify(new ActivityEvidence(at,fg,List.of(),"rei","p",List.of(),history)).confidence());
   }
   @Test void configBindsDefaultsAndRejectsInvalidThresholds() {
     var defaults=new ActivityProperties();assertEquals(ActivityProperties.DetectionMode.EVIDENCE_FIRST,defaults.getDetection().getMode());
-    assertEquals(.8,defaults.getDetection().getSkipVisionConfidence());assertFalse(defaults.getDetection().isBackgroundFullScreenEnabled());assertEquals(1024,defaults.getDetection().getMaxOutputTokens());
+    assertEquals(.8,defaults.getDetection().getSkipVisionConfidence());assertFalse(defaults.getDetection().isBackgroundFullScreenEnabled());assertEquals(2048,defaults.getDetection().getMaxOutputTokens());
     var binder=new org.springframework.boot.context.properties.bind.Binder(new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(Map.of("rei.activity.detection.mode","vision-first","rei.activity.detection.max-output-tokens","512")));
     var p=binder.bind("rei.activity",ActivityProperties.class).get();assertEquals(ActivityProperties.DetectionMode.VISION_FIRST,p.getDetection().getMode());assertEquals(512,p.getDetection().getMaxOutputTokens());
     for(double value:new double[]{-.1,1.1,Double.NaN}){p.getDetection().setSkipVisionConfidence(value);assertThrows(IllegalArgumentException.class,p::validate);}

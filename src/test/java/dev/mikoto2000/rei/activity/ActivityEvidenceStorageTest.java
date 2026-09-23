@@ -26,6 +26,7 @@ class ActivityEvidenceStorageTest {
     var records=store.findRecordsBetween(start,time.instant());assertEquals(2,records.size());assertEquals(before.getLast().id(),records.getLast().id());
     assertEquals(120,records.stream().mapToLong(ActivityRecord::durationEstimate).sum());assertTrue(records.getLast().detection().visionUsed());
     assertFalse(records.getFirst().detection().visionUsed());assertNotNull(records.getFirst().detection().evidence());
+    assertTrue(records.getFirst().detection().fieldConfidence().usable(.8));assertEquals(0,records.getFirst().detection().fieldConfidence().project());
     var evaluator=new dev.mikoto2000.rei.activity.behavior.BehaviorEvaluator(new dev.mikoto2000.rei.activity.behavior.BehaviorProperties(),.5);
     var assessed=evaluator.evaluate(store.findBetween(start,time.instant()),records,time.instant());
     assertEquals(120,assessed.windows().getFirst().observedSeconds());assertEquals(120,assessed.windows().getFirst().entertainmentObservedSeconds());
@@ -37,6 +38,14 @@ class ActivityEvidenceStorageTest {
     var node=mapper.valueToTree(ActivityPolicyTest.record("2026-09-22T10:00:00Z","social"));
     ((com.fasterxml.jackson.databind.node.ObjectNode)node).remove("detection");
     assertNull(mapper.treeToValue(node,ActivityRecord.class).detection());
+  }
+  @Test void phase36DetectionWithoutFieldConfidenceStillLoads() throws Exception {
+    var mapper=new com.fasterxml.jackson.databind.ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+    var node=(com.fasterxml.jackson.databind.node.ObjectNode)mapper.valueToTree(ActivityPolicyTest.record("2026-09-22T10:00:00Z","social"));
+    var detection=node.putObject("detection");detection.putArray("classificationSources").add("WINDOW_TITLE");detection.put("visionUsed",false);
+    detection.put("classificationMode","EVIDENCE_ONLY");detection.put("status","FINAL");detection.putObject("sourceConfidence").put("WINDOW_TITLE",.95);detection.put("reason","browser_title");
+    var record=mapper.treeToValue(node,ActivityRecord.class);assertNull(record.detection().fieldConfidence());assertTrue(record.detection().secondaryConfidence().isEmpty());
+    assertEquals("social",new ActivityRolePolicy().classify(record).primary().type());
   }
   @Test void agentSourceKeepsOnlyBoundedRecentKindsAndProjectIds() {
     var source=new ActivityAgentEvidenceSource(null);var at=Instant.now();

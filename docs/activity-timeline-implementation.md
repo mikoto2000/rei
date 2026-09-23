@@ -1,5 +1,58 @@
 # Activity Timeline 実装報告
 
+## Phase 3.7 Evidence Classification Tuning（2026-09-23）
+
+使用ブランチ: `codex/activity-behavior-evaluation`。Phase 3.6の先行保存・前面1件+最新待機1件・背景1件待機なし・memory-firstを維持した。
+
+追加した主要クラスは`BrowserTitleRules`、`ActivityFieldConfidence`、`ForegroundActivityParser`、`ActivityEnrichment`、`ActivityVisionFailure`。
+`ActivityClassifier`/`WindowActivityRules`は優先順位付きbrowser title registryへ委譲し、`ActivityClassification`/`ActivityRecord.Detection`に独立した5軸confidenceとsecondary confidenceを保存する。
+`ActivityEvidencePipeline`はusable判定、各軸の補足、失敗別metricsを扱い、`VisionActivityExtractor`は前面専用schema/promptとreasoning token計測を使う。
+設定既定値と新規生成テンプレートのActivity専用上限を1024から2048へ変更した。明示設定がある場合はその値を維持する。
+
+前面schemaは単一objectのcategory/application/service/projectCandidate/contentCandidate/summary/confidenceのみ。
+観測配列・座標・monitorを生成させず、短いpromptとresponse_formatで構造を指定する。背景schemaは従来どおり。
+output_limit/timeout/validationは即時retryせず、取得済みEvidenceとpartialを保持する。known serviceをnullで消さない。
+categoryが既知で閾値以上、applicationまたはserviceが0.8以上ならusableとしてVisionを省略する。project/content不明だけではfallbackしない。
+category unknown、低確信度categoryなどusableでない観測は前面fallback候補になる。
+completeは5軸すべて既知、partialはapplication/service既知でcompleteでないもの。secondaryの確信度をprimaryへ加算しない。
+詳細なrule、各軸、設定、metrics、schema制約は[設計・運用説明](activity-evidence-first.md)を参照。
+
+### 同じ入力でのBefore / After
+
+旧HEADの分類器と新分類器に同一Evidenceを与え、Visionを呼ばずに比較した。以下のunknownはEvidence分類時点の値。
+
+| 入力 | Phase 3.6 usable / Vision不要 | Phase 3.7 usable / Vision不要 | unknown 前→後 | fallback候補 前→後 |
+|---|---:|---:|---:|---:|
+| 代表合成fixture 21件 | 4 (19.0%) | 14 (66.7%) | 17→4 | 17→7 |
+| 17:56–18:08の保存済み実Evidence 13件 | 2 (15.4%) | 4 (30.8%) | 11→9 | 11→9 |
+
+実Evidenceのpartialは両版13件（新定義で再計算）。Xに加えGoogle Newsとem dash区切りのBlueskyを拾えるようになった。
+generic browser 7件、generic terminal 1件、native ChatGPT 1件はcategoryを確定できず、実入力でのVision不要50%目標には未達。
+21件は合成fixtureであり実運用の削減率ではない。旧Phase 3.6 fixtureと互換テストも維持した。
+
+変更前の実運用ログは保存観測13件、Evidence-only 2件、Vision試行10件、成功3件 (30%)、失敗7件（全てoutput_limit）、最終unknown 8件、背景Vision 0件。
+観測間隔は約60秒、保存duration合計780秒で、この範囲に観測欠落は見られなかった。fallback候補11件と実API10件は待機等により一致しない。
+変更後の13件は保存済みEvidenceの再生であり、新版の実API試行数・成功率・output_limit・観測欠落を測定したものではない。
+旧最終unknown 8件（Vision補足済み）と新Evidence-only unknown 9件は比較できない。
+
+旧失敗は1024 completion tokensで本文が空の例があり、reasoningによる消費が疑われるが未確定。
+新しいreasoning_tokens/max_output_tokensログで確認できるようにした。2048で必ず成功するとは保証しない。
+稼働アプリをこの作業から停止・再起動しておらず、10〜20分の新版実API測定は未実施。再起動後の実測が残る。
+
+### TDDと検証
+
+分類API、軽量parser、失敗保持、実タイトル区切り、reasoning計測について失敗テストから実装した。新規テスト15件。
+Java **2,240件**、client **41件**、Rust **64件**、E2E **12件**がすべて成功。
+旧JSON（detectionなし・Phase 3.6の追加軸なし）、SQLite往復、同一ID補足、時間非重複、Phase 3.5 Behavior/Summaryの既存テストを含む。
+実行中1件と最新待機1件、背景opt-in、失敗時の観測維持も既存テストで回帰確認した。
+Maven packageが成功し、新しいforeground schemaを同梱した`target/rei-0.0.1-SNAPSHOT.jar`を更新した。
+通常の成果物名での置換制約を避けるため、一時POMで別名にpackageしてから通常のJAR名へコピーした。一時POMは削除済み。
+外部`application.yaml`のActivity専用上限も明示値1024から2048へ変更した。次回再起動から反映される。
+分類器は実データのOS Evidenceだけを読み取り、スクリーンショットや外部APIへの追加送信は行っていない。
+
+残課題はserviceを含まない一般タイトル、GitHub候補の曖昧さ、複数clientのproject対応、実モデルのreasoning予算と成功率。
+Phase 3.7でもタイトルだけから操作・集中を断定しない。
+
 ## Phase 3.6 Evidence-first（2026-09-23）
 
 使用ブランチ: `codex/activity-behavior-evaluation`。既存の前面・背景workerを維持したまま、

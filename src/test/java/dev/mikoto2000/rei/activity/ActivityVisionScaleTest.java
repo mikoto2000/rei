@@ -21,7 +21,7 @@ class ActivityVisionScaleTest {
         .extract(ActivityCaptureTest.screen(20),new ForegroundWindow("Firefox",1,"Browser","window"));
     var prompt=org.mockito.ArgumentCaptor.forClass(Prompt.class);verify(model).call(prompt.capture());
     var options=(OpenAiChatOptions)prompt.getValue().getOptions();
-    assertEquals(1024,options.getMaxCompletionTokens());assertNull(options.getMaxTokens());
+    assertEquals(2048,options.getMaxCompletionTokens());assertNull(options.getMaxTokens());
   }
   private BufferedImage decode(byte[] bytes) throws Exception {return ImageIO.read(new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes)));}
   @Test void halfScaleReducesBothDimensionsWithoutChangingOriginal() throws Exception {

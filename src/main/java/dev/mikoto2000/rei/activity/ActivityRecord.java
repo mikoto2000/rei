@@ -13,8 +13,12 @@ public record ActivityRecord(String id, Instant capturedAt, long durationEstimat
     this(id,capturedAt,durationEstimate,observations,foreground,inference,confidence,screenshotReferences,changeAmount,duplicate,continuityId,null);
   }
   public record Detection(ActivityEvidence evidence,List<String> classificationSources,boolean visionUsed,
-      String classificationMode,String status,java.util.Map<String,Double> sourceConfidence,String reason) {
-    public Detection {classificationSources=List.copyOf(classificationSources);sourceConfidence=java.util.Map.copyOf(sourceConfidence);}
+      String classificationMode,String status,java.util.Map<String,Double> sourceConfidence,String reason,
+      ActivityFieldConfidence fieldConfidence,List<ActivityClassification.Secondary> secondaryConfidence) {
+    public Detection {classificationSources=List.copyOf(classificationSources);sourceConfidence=java.util.Map.copyOf(sourceConfidence);secondaryConfidence=secondaryConfidence==null?List.of():List.copyOf(secondaryConfidence);}
+    public Detection(ActivityEvidence evidence,List<String> sources,boolean visionUsed,String mode,String status,java.util.Map<String,Double> weights,String reason) {
+      this(evidence,sources,visionUsed,mode,status,weights,reason,null,List.of());
+    }
   }
   public ActivityRecord(String id, Instant capturedAt, long durationEstimate, List<Observation> observations,
       ForegroundWindow foreground, Inference inference, double confidence, List<String> screenshotReferences,

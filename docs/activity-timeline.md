@@ -1,11 +1,12 @@
 # Activity Capture / Timeline
 
-Phase 1〜3.6: デスクトップを観測し、構造化した履歴を保存し、振り返る機能。
+Phase 1〜3.7: デスクトップを観測し、構造化した履歴を保存し、振り返る機能。
 デフォルトは無効。お小言は別途Behavior設定で明示的に有効化する。
 
-Phase 3.6の既定経路は **Evidence-first**。前面・可視ウィンドウのOS情報とproject/tool情報から分類し、
-画像を取得する前にRecordを保存する。confidence 0.8以上ならVisionを省略し、不足するときだけ前面画像を解析する。
-待機画像の置換・Vision失敗でもOS観測は残る。背景全画面解析は既定無効、Activityの出力上限は1024 tokens。
+Phase 3.7の既定経路は **Evidence-first**。前面・可視ウィンドウのOS情報とproject/tool情報から分類し、
+画像を取得する前にRecordを保存する。category confidenceが0.8以上、applicationまたはserviceが0.8以上ならVisionを省略する。
+project/contentが不明なだけでは解析を要求しない。各軸confidenceとpartialを保持し、不十分な分類だけ前面の7キー軽量schemaで補足する。
+待機画像の置換・Vision失敗でもOS観測は残る。背景全画面解析は既定無効、Activityの出力上限はPhase 3.7から2048 tokens。
 詳細な現在の仕様・設定・制限は [Evidence-first](activity-evidence-first.md) を参照。
 以下の画像差分、Vision成功後の保存、失敗時の未保存の説明は `detection.mode: vision-first` の互換経路についての記録である。
 
@@ -74,7 +75,7 @@ rei:
       skip-vision-confidence: 0.8
       foreground-crop: true
       background-full-screen-enabled: false
-      max-output-tokens: 1024
+      max-output-tokens: 2048
     screenshot-retention-days: 3
     change-threshold: 0.03
     session-gap-seconds: 90

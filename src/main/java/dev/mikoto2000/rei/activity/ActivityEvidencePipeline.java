@@ -20,6 +20,7 @@ final class ActivityEvidencePipeline {
   private final ActivityClassifier classifier=new ActivityClassifier();
   private final AtomicBoolean observing=new AtomicBoolean();
   private final LongAdder observations=new LongAdder(),evidenceOnly=new LongAdder(),fallbacks=new LongAdder(),skipped=new LongAdder(),foregroundCalls=new LongAdder(),backgroundCalls=new LongAdder(),success=new LongAdder(),failure=new LongAdder(),timeout=new LongAdder();
+  private final LongAdder outputLimits=new LongAdder(),validationFailures=new LongAdder(),unknownCount=new LongAdder(),partialCount=new LongAdder(),usableCount=new LongAdder();
   private boolean paused,closed,foregroundBusy,backgroundBusy;
   private long generation;
   private String continuity=UUID.randomUUID().toString();
@@ -59,17 +60,21 @@ final class ActivityEvidencePipeline {
       try {classification=p.getDetection().isEvidenceEnabled()?classifier.classify(evidence):unknown(fg);}
       catch(Exception e){warn("classification",e);classification=unknown(fg);}
       boolean fallback=p.isExtractionEnabled() && p.getDetection().isVisionEnabled() && p.getDetection().isFallbackEnabled()
-          && classification.confidence()<p.getDetection().getSkipVisionConfidence();
+          && !classification.usable(p.getDetection().getSkipVisionConfidence());
       ActivityRecord record;
       synchronized(this) {
         if(!allowed(token))return;
-        var detection=new ActivityRecord.Detection(evidence,classification.sources(),false,"EVIDENCE_ONLY",fallback?"PROVISIONAL":"FINAL",classification.sourceConfidence(),classification.reason());
+        var detection=new ActivityRecord.Detection(evidence,classification.sources(),false,"EVIDENCE_ONLY",fallback?"PROVISIONAL":"FINAL",classification.sourceConfidence(),classification.reason(),classification.fieldConfidence(),classification.secondaryConfidence());
         record=new ActivityRecord(UUID.randomUUID().toString(),at,p.getCaptureIntervalSeconds(),List.of(),fg,classification.inference(),classification.confidence(),List.of(),0,false,continuity,detection);
         store.append(record);previous=record;observations.increment();
+        classificationCounts(record,1);
         if(!fallback){evidenceOnly.increment();skipped.increment();}
         else fallbacks.increment();
       }
       log.info("Activity evidence saved: classification_ms={} confidence={} fallback={}",millis(started),record.confidence(),fallback);
+      var axes=classification.fieldConfidence();
+      log.debug("Activity classification: category={} categoryConfidence={} applicationConfidence={} serviceConfidence={} projectConfidence={} contentConfidence={} usable={} complete={} visionSkipped={} matchedRule={}",
+          record.inference().activities().getFirst().type(),axes.category(),axes.application(),axes.service(),axes.project(),axes.content(),classification.usable(p.getDetection().getSkipVisionConfidence()),classification.complete(),!fallback,classification.reason());
       boolean background;
       synchronized(this) {
         background=p.isExtractionEnabled() && p.getDetection().isVisionEnabled() && p.getDetection().isBackgroundFullScreenEnabled()
@@ -131,25 +136,28 @@ final class ActivityEvidencePipeline {
         if(!allowed(work.generation))return;
         var base=work.record;ActivityRecord merged;
         if(background) merged=ActivityBackgroundMerge.merge(base,result,p.getPrimaryConfidenceThreshold());
-        else if(result.confidence()>base.confidence()) {
-          merged=copy(base,result.inference(),result.confidence(),base.detection(),base.screenshotReferences());
-          merged=ActivityBackgroundMerge.merge(merged,new ActivityExtractor.Result(base.inference(),base.confidence()),0);
-        } else merged=base;
+        else merged=ActivityEnrichment.merge(base,result);
         var d=merged.detection();var sources=new LinkedHashSet<>(d.classificationSources());sources.add(source);
         var weights=new LinkedHashMap<>(d.sourceConfidence());weights.put(source,result.confidence());
-        var detection=new ActivityRecord.Detection(d.evidence(),List.copyOf(sources),true,"EVIDENCE_PLUS_VISION","FINAL",weights,d.reason());
-        work.record=copy(merged,merged.inference(),merged.confidence(),detection,merged.screenshotReferences());store.replace(work.record);
+        var secondary=new ArrayList<>(d.secondaryConfidence());
+        if(background)for(var candidate:merged.inference().activities())
+          if(!base.inference().activities().contains(candidate))secondary.add(new ActivityClassification.Secondary(candidate,ActivityFieldConfidence.from(candidate,result.confidence()).secondary()));
+        var detection=new ActivityRecord.Detection(d.evidence(),List.copyOf(sources),true,"EVIDENCE_PLUS_VISION","FINAL",weights,d.reason(),d.fieldConfidence(),secondary);
+        var updated=copy(merged,merged.inference(),merged.confidence(),detection,merged.screenshotReferences());store.replace(updated);work.record=updated;
+        classificationCounts(base,-1);classificationCounts(work.record,1);
         if(previous!=null && previous.id().equals(work.record.id()))previous=work.record;
         success.increment();
       }
       log.info("Activity evidence enriched: scope={} observation_age_ms={}",background?"background":"foreground",Duration.between(original.capturedAt(),clock.instant()).toMillis());
     } catch(Exception e) {
-      failure.increment();if(isTimeout(e))timeout.increment();warn(background?"background Vision":"foreground Vision",e);
+      failure.increment();var kind=ActivityVisionFailure.classify(e);
+      switch(kind){case OUTPUT_LIMIT->outputLimits.increment();case TIMEOUT->timeout.increment();case VALIDATION->validationFailures.increment();default->{}}
+      log.warn("Activity Vision failure: scope={} reason={} evidence_retained=true",background?"background":"foreground",kind);
       synchronized(this) {
         if(allowed(work.generation))try {
           var r=work.record;var d=r.detection();var sources=new LinkedHashSet<>(d.classificationSources());sources.add(source);
           var status=d.status().equals("FINAL")?"FINAL":"VISION_FAILED";
-          var detection=new ActivityRecord.Detection(d.evidence(),List.copyOf(sources),true,d.classificationMode(),status,d.sourceConfidence(),d.reason());
+          var detection=new ActivityRecord.Detection(d.evidence(),List.copyOf(sources),true,d.classificationMode(),status,d.sourceConfidence(),d.reason(),d.fieldConfidence(),d.secondaryConfidence());
           var refs=r.screenshotReferences();
           if(new ScreenshotPersistencePolicy(p).shouldSave(false,ScreenshotPersistencePolicy.Outcome.EXTRACTION_FAILURE))
             try{refs=screenshots.save(r.id(),r.capturedAt(),work.screen);}catch(Exception imageError){warn("failure evidence",imageError);}
@@ -162,7 +170,7 @@ final class ActivityEvidencePipeline {
     }
   }
   private ActivityClassification unknown(ForegroundWindow fg) {
-    return new ActivityClassification(new ActivityRecord.Inference("主活動を判定できないOS観測",List.of(new ActivityRecord.Activity("foreground","unknown",fg.processName(),"","",""))),0,List.of("FOREGROUND_WINDOW"),Map.of(),"insufficient_evidence");
+    return new ActivityClassification(new ActivityRecord.Inference("主活動を判定できないOS観測",List.of(new ActivityRecord.Activity("foreground","unknown",fg.processName(),"","",""))),0,List.of("FOREGROUND_WINDOW"),Map.of("FOREGROUND_WINDOW",1.0),"insufficient_evidence",new ActivityFieldConfidence(0,1,0,0,0),List.of());
   }
   private static ActivityRecord copy(ActivityRecord r,ActivityRecord.Inference inference,double confidence,ActivityRecord.Detection detection,List<String> refs) {
     return new ActivityRecord(r.id(),r.capturedAt(),r.durationEstimate(),r.observations(),r.foreground(),inference,confidence,refs,r.changeAmount(),r.duplicate(),r.continuityId(),detection);
@@ -170,8 +178,15 @@ final class ActivityEvidencePipeline {
   private void metrics() {
     long count=observations.sum(),calls=foregroundCalls.sum()+backgroundCalls.sum();
     log.info("Activity detection metrics: observations={} evidence_only={} vision_fallback={} vision_skipped={} foreground_vision={} background_vision={} vision_success={} vision_failure={} vision_timeout={} vision_call_rate={}",count,evidenceOnly.sum(),fallbacks.sum(),skipped.sum(),foregroundCalls.sum(),backgroundCalls.sum(),success.sum(),failure.sum(),timeout.sum(),count==0?0:(double)calls/count);
+    log.info("Activity classification metrics: observations={} unknown={} partial={} vision_output_limit={} vision_validation={} evidence_only_rate={} vision_success_rate={} unknown_rate={} partial_rate={} usable={} usable_rate={}",
+        count,unknownCount.sum(),partialCount.sum(),outputLimits.sum(),validationFailures.sum(),rate(evidenceOnly.sum(),count),rate(success.sum(),success.sum()+failure.sum()),rate(unknownCount.sum(),count),rate(partialCount.sum(),count),usableCount.sum(),rate(usableCount.sum(),count));
   }
-  private static boolean isTimeout(Throwable error) {for(int i=0;error!=null && i<8;i++,error=error.getCause())if(error instanceof java.net.SocketTimeoutException || error instanceof java.util.concurrent.TimeoutException || error instanceof java.net.http.HttpTimeoutException)return true;return false;}
+  private void classificationCounts(ActivityRecord record,int delta) {
+    if(record.inference().activities().isEmpty() || ActivityVocabulary.category(record.inference().activities().getFirst().type()).equals("unknown"))unknownCount.add(delta);
+    if(ActivityEnrichment.fields(record).partial())partialCount.add(delta);
+    if(ActivityEnrichment.fields(record).usable(p.getDetection().getSkipVisionConfidence()))usableCount.add(delta);
+  }
+  private static double rate(long count,long total){return total==0?0:(double)count/total;}
   private static long millis(long start){return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start);}
   private static void warn(String stage,Exception e){log.warn("Activity evidence {} failed ({})",stage,e.getClass().getSimpleName());}
 }
