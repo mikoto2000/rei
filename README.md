@@ -77,6 +77,17 @@ Rei の入力プロンプトが表示されたら、文章をそのまま入力�
 
 操作コマンドは `/` で始めます。`/help` でヘルプを表示し、`/exit` で終了できます。
 
+起動時に作業するプロジェクトのディレクトリを指定できます。
+
+```sh
+rei --project F:\project\rei
+rei -p ../other-project
+rei --project .
+```
+
+Maven Wrapper から起動する場合は `./mvnw spring-boot:run -Dspring-boot.run.arguments="--project ../other-project"`（Windows は `mvnw.cmd`）を使用します。
+相対パスは起動時のカレントディレクトリが基準です。`/project cd` と同じ正規化・登録処理を使い、会話などの状態も指定プロジェクトを使用します。存在しないパスやファイルを指定すると、ディレクトリを作成せずエラー終了します。未指定時の動作は従来どおりです。`rei --help` で起動オプションを確認できます。
+
 ## 基本操作
 
 以下はすべて Rei の入力プロンプトに入力するコマンドです。

@@ -122,6 +122,14 @@ public class ReiApplication {
   }
 
   public static void main(String[] args) throws IOException {
+    try {
+      var options = StartupOptions.parse(args, dev.mikoto2000.rei.core.datasource.ReiPaths.startupDirectory());
+      if (options.printHelpIfRequested()) return;
+    } catch (CommandLine.ParameterException error) {
+      System.err.println("Error: " + error.getMessage());
+      System.exit(error.getCommandLine().getCommandSpec().exitCodeOnInvalidInput());
+      return;
+    }
     System.setProperty("rei.data-dir", dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().toString());
     SpringApplication application = new SpringApplication(ReiApplication.class);
     application.setDefaultProperties(ExternalConfigSupport.defaultProperties());
@@ -142,13 +150,16 @@ public class ReiApplication {
   }
 
   void run(String[] args) throws IOException {
+    var options = StartupOptions.parse(args, projects.startupDirectory());
+    if (options.printHelpIfRequested()) return;
     var client = projects.newClient();
     try (var scope = client.open()) {
+      if (options.project() != null) projects.cd(options.project().toString());
       runShell(args, client);
     }
   }
 
-  private void runShell(String[] args, dev.mikoto2000.rei.core.project.ProjectClient client) throws IOException {
+  void runShell(String[] args, dev.mikoto2000.rei.core.project.ProjectClient client) throws IOException {
     var cmd = new picocli.CommandLine(rootCommand, factory);
     rootCommand.configureCommands(cmd);
     var terminal = terminalBuilder(System.out).build();

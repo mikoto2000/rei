@@ -111,8 +111,15 @@ public class ProjectService {
     return List.copyOf(paths);
   }
   private Path resolveDirectory(String directory) {
+    return resolveDirectory(currentProject(), directory);
+  }
+  /** Read-only validation, shared with registry selection, before application startup. */
+  public static Path resolveExistingDirectory(Path base, String directory) {
+    return ProjectRegistry.canonical(resolveDirectory(base, directory));
+  }
+  private static Path resolveDirectory(Path base, String directory) {
     if (directory == null || directory.isBlank()) throw new IllegalArgumentException("directory must not be blank");
     Path path = Path.of(directory);
-    return (path.isAbsolute() ? path : currentProject().resolve(path)).toAbsolutePath().normalize();
+    return (path.isAbsolute() ? path : base.resolve(path)).toAbsolutePath().normalize();
   }
 }
