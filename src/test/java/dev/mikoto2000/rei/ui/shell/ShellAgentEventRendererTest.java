@@ -71,7 +71,21 @@ class ShellAgentEventRendererTest {
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
     renderer.onEvent(events.llmRequestStarted("run-1", "request-1", "chat"));
     renderer.onEvent(events.llmResponseCompleted("run-1", "request-1", 1_234));
-    assertEquals("[llm] request sent (chat)\n[llm] response received (1234 ms)\n", output.text());
+    assertEquals("[llm] request sent (chat)\n[llm] response received (chat, 1234 ms)\n", output.text());
+  }
+
+  @Test
+  void matchesDeferredResponsesToInterleavedRequests() {
+    RecordingOutput output = new RecordingOutput();
+    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.llmRequestStarted("run-1", "request-1", "chat"));
+    renderer.onEvent(events.llmRequestStarted("run-1", "request-2", "activity"));
+    renderer.onEvent(events.messageStarted("m1", "assistant"));
+    renderer.onEvent(events.llmResponseCompleted("run-1", "request-2", 20));
+    renderer.onEvent(events.llmResponseCompleted("run-1", "request-1", 30));
+    renderer.onEvent(events.messageCompleted("m1", "assistant", ""));
+    assertTrue(output.text().endsWith("[llm] response received (activity, 20 ms)\n"
+        + "[llm] response received (chat, 30 ms)\n"));
   }
 
   @Test
@@ -85,7 +99,7 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.messageCompleted("other", "assistant", ""));
     renderer.onEvent(events.messageDelta("m1", "提案するよ。"));
     renderer.onEvent(events.messageCompleted("m1", "assistant", "もっと絞って提案するよ。"));
-    assertEquals("=== answer ===\nもっと絞って提案するよ。\n[llm] response received (27682 ms)\n", output.text());
+    assertEquals("=== answer ===\nもっと絞って提案するよ。\n[llm] response received (request-1, 27682 ms)\n", output.text());
   }
 
   @Test
@@ -97,7 +111,7 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.llmResponseCompleted("run-1", "request-1", 20));
     renderer.onEvent(events.thinkingDelta("t1", "します。"));
     renderer.onEvent(events.thinkingCompleted("t1", "確認します。"));
-    assertEquals("=== thinking ===\n確認します。\n[llm] response received (20 ms)\n", output.text());
+    assertEquals("=== thinking ===\n確認します。\n[llm] response received (request-1, 20 ms)\n", output.text());
   }
 
   @Test
@@ -110,8 +124,8 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.runCancelled("run-1", new ErrorInformation("CancellationException", "cancelled", "cancelled")));
     renderer.onEvent(events.runStarted("run-2", "user", null));
     renderer.onEvent(events.llmResponseCompleted("run-2", "request-2", 30));
-    assertEquals("=== answer ===\n途中\n[llm] response received (20 ms)\n"
-        + "[agent] cancelled\n[agent] running\n[llm] response received (30 ms)\n", output.text());
+    assertEquals("=== answer ===\n途中\n[llm] response received (request-1, 20 ms)\n"
+        + "[agent] cancelled\n[agent] running\n[llm] response received (request-2, 30 ms)\n", output.text());
   }
 
   @Test
@@ -124,7 +138,7 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.toolStarted("c1", "readMultiFile", ""));
     renderer.onEvent(events.messageDelta("m1", "完了。"));
     renderer.onEvent(events.messageCompleted("m1", "assistant", "確認します。完了。"));
-    assertEquals("=== answer ===\n確認します。\n[llm] response received (20 ms)\n"
+    assertEquals("=== answer ===\n確認します。\n[llm] response received (request-1, 20 ms)\n"
         + "  → readMultiFile\n\n完了。\n", output.text());
   }
 

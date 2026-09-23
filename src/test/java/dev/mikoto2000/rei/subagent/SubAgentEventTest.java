@@ -63,6 +63,7 @@ class SubAgentEventTest {
       try (var scope = AgentRunScope.open(new AgentRunContext(run, "subagent:" + run, directory))) {
         renderer.onEvent(factory.subAgentLifecycle(AgentEventType.SUBAGENT_STARTED,
             "parent", run, "reviewer", "task", "RUNNING", 0, null));
+        renderer.onEvent(factory.llmRequestStarted(run, "request", "subagent-" + run));
       }
     }
     for (String run : java.util.List.of("first", "second", "unknown")) {
@@ -80,7 +81,7 @@ class SubAgentEventTest {
       String prefix = "[subagent:" + (run.equals("unknown") ? "" : "reviewer/") + run + "] ";
       assertThat(output.toString()).contains(
           prefix + "[llm] first token (10 ms)",
-          prefix + "[llm] response received (20 ms)",
+          prefix + "[llm] response received (" + (run.equals("unknown") ? "request" : "subagent-" + run) + ", 20 ms)",
           prefix + "[llm] request failed (30 ms): failure",
           prefix + "  ✓ webSearch (40 ms)",
           prefix + "  ✗ webSearch: failure",

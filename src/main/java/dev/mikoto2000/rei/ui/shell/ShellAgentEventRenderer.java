@@ -70,6 +70,8 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   private String thinkingId;
   private boolean thinkingLineOpen;
   private final java.util.List<AgentEvent> pendingLlmCompletions = new java.util.ArrayList<>();
+  private record LlmRequestKey(String runId, String requestId) { }
+  private final java.util.Map<LlmRequestKey, String> llmRequestFeatures;
   private Instant lastThrottledTopicSummaryAt;
   private final java.util.LinkedHashMap<String, String> subAgentNames = new java.util.LinkedHashMap<>();
 
@@ -78,7 +80,13 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   }
 
   public ShellAgentEventRenderer(ShellEventOutput output, TopicNotificationOptions topicNotificationOptions) {
+    this(output, topicNotificationOptions, new java.util.HashMap<>());
+  }
+
+  private ShellAgentEventRenderer(ShellEventOutput output, TopicNotificationOptions topicNotificationOptions,
+      java.util.Map<LlmRequestKey, String> llmRequestFeatures) {
     this.output = output;
+    this.llmRequestFeatures = llmRequestFeatures;
     this.topicNotificationOptions = topicNotificationOptions == null
         ? TopicNotificationOptions.summary()
         : topicNotificationOptions;
@@ -117,7 +125,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         public void print(String text) { output.print(prefix + text); }
         public void println(String text) { output.println(prefix + text); }
         public void flush() { output.flush(); }
-      }, topicNotificationOptions).renderEvent(event);
+      }, topicNotificationOptions, llmRequestFeatures).renderEvent(event);
       return;
     }
     renderEvent(event);
@@ -204,6 +212,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         assistantMessageId = null;
         thinkingId = null;
         AgentRunCompletedPayload payload = (AgentRunCompletedPayload) event.payload();
+        llmRequestFeatures.keySet().removeIf(key -> java.util.Objects.equals(key.runId(), event.runId()));
         String tokens = payload.completionTokens() == null
             ? "tokens unavailable"
             : payload.completionTokens() + " tokens";
@@ -226,6 +235,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         assistantMessageId = null;
         thinkingId = null;
         AgentRunFailedPayload payload = (AgentRunFailedPayload) event.payload();
+        llmRequestFeatures.keySet().removeIf(key -> java.util.Objects.equals(key.runId(), event.runId()));
         output.println(event.type() == dev.mikoto2000.rei.event.AgentEventType.AGENT_RUN_CANCELLED
             || payload.error() != null && "cancelled".equals(payload.error().code())
             ? "[agent] cancelled" : "[agent] failed: " + errorMessage(payload.error()));
@@ -234,12 +244,14 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         closeAssistantLine();
         closeThinkingLine();
         LlmRequestStartedPayload payload = (LlmRequestStartedPayload) event.payload();
+        llmRequestFeatures.put(new LlmRequestKey(event.runId(), payload.requestId()), payload.feature());
         output.println("[llm] request sent (" + payload.feature() + ")");
       }
       case LLM_REQUEST_FAILED -> {
         closeAssistantLine();
         closeThinkingLine();
         LlmRequestFailedPayload payload = (LlmRequestFailedPayload) event.payload();
+        llmRequestFeatures.remove(new LlmRequestKey(event.runId(), payload.requestId()));
         output.println("[llm] request failed (" + payload.durationMs() + " ms): " + errorMessage(payload.error()));
       }
       case LLM_RESPONSE_FIRST_TOKEN -> {
@@ -257,8 +269,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         }
         closeAssistantLine();
         closeThinkingLine();
-        LlmResponseCompletedPayload payload = (LlmResponseCompletedPayload) event.payload();
-        output.println("[llm] response received (" + payload.durationMs() + " ms)");
+        renderLlmCompletion(event);
       }
       case MESSAGE_STARTED -> messageStarted((MessageStartedPayload) event.payload());
       case MESSAGE_DELTA -> messageDelta((MessageDeltaPayload) event.payload());
@@ -709,10 +720,16 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   private void flushLlmCompletions() {
     for (AgentEvent event : pendingLlmCompletions) {
-      LlmResponseCompletedPayload payload = (LlmResponseCompletedPayload) event.payload();
-      output.println("[llm] response received (" + payload.durationMs() + " ms)");
+      renderLlmCompletion(event);
     }
     pendingLlmCompletions.clear();
+  }
+
+  private void renderLlmCompletion(AgentEvent event) {
+    LlmResponseCompletedPayload payload = (LlmResponseCompletedPayload) event.payload();
+    String feature = llmRequestFeatures.remove(new LlmRequestKey(event.runId(), payload.requestId()));
+    output.println("[llm] response received (" + (feature == null ? payload.requestId() : feature)
+        + ", " + payload.durationMs() + " ms)");
   }
 
   private void closeAssistantLine() {
