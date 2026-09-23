@@ -446,3 +446,107 @@ Client41件、Rust64件も成功。E2Eは12件すべて成功（1 worker、58.1�
 既存の長い単独区間には時間窓による強制分割を行わない。
 今回の対象はsummaryコマンドだけで、自然言語ツールやtoday表示への展開は行っていない。
 Behavior Evaluation、お小言、Productivity Score、週次/月次分析、Adaptive Coachingは追加していない。
+
+## Phase 3.4: Summary表示品質と意味境界の調整
+
+ブランチは `codex/activity-timeline-session-refinement` を継続。開始時の作業ツリーはclean。
+Phase 3.2の `6882c7d` に追加実装し、Activity判定・細粒度Sessionのmerge policyは変更しない。
+コミットIDは `git log --oneline --grep='polish activity trend labels'` で確認できる。
+
+### 主要クラスと役割
+
+| クラス | 変更 |
+|---|---|
+| ActivityDisplayLabels | 表示用canonical alias、表示名、Summary限定のproject候補検証 |
+| TrendSummaryPolicy | 45分soft limit、内部Evidenceに基づく意味境界、project/context優先の最大4ラベル |
+| TrendSummaryFormatter | 観測密度・Primary confidenceによるcontinuous / intermittent / mixedの文面 |
+| TrendSummarySegment | 子のEvidence・時間範囲に対応する正確なfineSessionIdsの解決 |
+| ActivityTimeline | 同じ読み取りで取得したfine sessionsを分割後の参照解決にも利用 |
+
+### ラベルと意味役割
+
+rawは変更せず、`WindowsTerminal` → canonical `terminal` → display `ターミナル` の順に表示だけを正規化。
+case / whitespace / NFKC / 既知aliasのpunctuation差を吸収する。Text Editor / text editor / Local editorを
+エディタ、Local log fileをローカルログ、Twitter / X (Twitter) / X (旧Twitter)をXにする。
+canonical化した表示キーで重複除去し、同じ観測の頻度を二重に数えない。
+未知の固有名詞は推測で翻訳せず、既知projectとの対応→Primary→頻度の順で最大4件を選ぶ。
+
+project候補はforeground側に存在しても無条件では採用しない。英字始まりの2〜60文字の識別子
+（英数字・`_`・`.`・`-`）であることを要求し、category、既知service/application、同じEvidence内の
+service/applicationに一致する値を除外する。`rei` / `yagisan-reports` / `another_project`は保持。
+`x browsing` / X / GitHub / ChatGPT / WindowsTerminal / development / 機能設計の提案はproject表示に使わない。
+content/topicからprojectを作らず、不確実な場合は一般的な活動名に戻す。
+これは構文・意味役割の保守的検証であり、実在projectの登録簿を確認するものではない。
+
+### 分割
+
+softMaximumDurationは既定45分（Javaポリシー値。YAML設定は未追加）。Phase 3.2の候補生成時の
+最大60分・隣接gap20分を維持し、生成した候補内部を観測単位で再検討する。
+
+- project switchは長さにかかわらず強い境界。unknownを跨いだ別projectへの切替も検出。
+- dominant themeは前後各10分以内で観測推定秒数を集計し、各側5分以上・観測時間の70%以上を占める
+  異なるfamilyの持続的変化として判定。work（development/research/documentation）と
+  leisure（social/media/shopping）の境界もここに含む。45分未満でも分割可能。
+- 45分超ではforeground文脈の持続的変化、5分以上の未観測gap（両側5分以上観測）、同family内の
+  Primary category変更も検討。優先度はproject、theme、foreground、gap、category。
+  同順位は中央寄りの境界を採用し、子も同じルールで再評価する。
+- 同project内のツール変更だけでは分割しない。55分の同一傾向は1件のまま。2分のSNSへの寄り道も
+  前後の開発から無理に切り離さない。分割点はサンプル境界であり45分ちょうどではない。
+
+既存の長いPhase 3.1 SummarySegment内のEvidenceも確認する。元sourceSegmentsはそのまま親参照として残す。
+子のEvidence・観測秒数を再集計し、Timeline APIは子に対応するfineSessionIdsを解決する。
+元Record・細粒度Session・Raw Evidence・roles・confidence・画像参照を変更せず、DB更新もしない。
+分割により子区間外となる未観測gapは、活動時間へ加算しない。Analyticsの入力は今後も細粒度Session。
+
+### 自然文と不確実性
+
+追加LLMは使わない。既知Primary時間が観測の70%以上、既存RolePolicyのPrimary confidenceを
+観測秒数で重み付けした値が0.7以上なら活動名を使う。
+CONTINUOUSで未観測率10%以下なら「〜が中心」。INTERMITTENTや未観測が多い場合は
+「観測できた範囲では」「断続的に」を残す。MIXEDは「〜と〜が混在」。
+confidenceが弱い場合は「〜関連の画面」へ戻し、全unknownは主活動未判定とする。
+冒頭の観測・推定の説明、一部unknownの短い補足を維持する。操作、集中、バグ修正等は追加しない。
+
+### Before / After
+
+ユーザー提示例の問題:
+
+```text
+reiの開発・確認に関する画面が見られました。Local log file・Text Editor・text editor・GitHub…
+x browsingの開発・確認やSNSやコミュニケーションに関する画面…
+```
+
+Phase 3.4では上記ラベルをローカルログ・エディタに正規化し、エディタの重複と偽project名を除去する。
+以下は実機DBの再生ではなく、同種の問題を持つEvidence fixtureからの実際の出力:
+
+```text
+09:08–09:46 rei関連の開発・確認が中心。ターミナル、GitHubなどが表示されていました。
+
+09:08–09:13 観測できた範囲では、開発・確認とSNS閲覧が混在。
+ターミナル、X、GitHubなどが断続的に表示されていました。
+
+09:08–09:38 SNS閲覧が中心。X、GitHubなどが表示されていました。
+09:38–09:58 rei関連の開発・確認が中心。ターミナル、GitHubなどが表示されていました。
+```
+
+最後の例は50分の候補を持続的なテーマ変化の位置で30分＋20分へ分割したもの。
+全出力は `target/activity34-example.txt` にテストが生成する。ユーザーの実データの正確な分割位置は
+元Evidenceに依存するため、提示された旧Summaryの文章だけからは復元しない。
+
+### 検証と残課題
+
+先に16件の回帰テストを追加し、旧実装でラベル・project・内部境界・文面の失敗を確認してから実装。
+確信度の高いfixtureには画面タイトルと一致するcontent evidenceを明示し、低確信度のfixtureと分離した。
+さらにsoft limit変更、長いgap、unknownを挟む切替、出力例、SQLiteの細粒度参照・再読込のテストを追加。
+追加21件（ActivityPhase34Test 20件、ActivityTrendQueryTest 1件）。
+
+最終検証: Java 2,124件（failure / error / skipすべて0、2分29秒）、Client 41件、Rust 64件、
+ブラウザーE2E 12件（1 worker、54.5秒）がすべて成功。flaky / timeoutなし。
+TDD中の意図したRedと実装修正後の検証を除き、全体スイートの再実行は不要だった。
+`git diff --check`も確認。
+
+project検証はヒューリスティックなので日本語名・空白を含む正当なprojectは一般化される。
+境界検出は5分以上の裏付けを要求するため、疎な観測の細かな変化は混在のまま残る。
+自然文は決定的なテンプレートであり、自由なLLM作文は行わない。
+変更対象は `/activity summary`。today / yesterday / 日付指定や自然言語ツールへの展開は行っていない。
+実Vision API・実画面・ユーザーのActivity DBにはアクセスしていない。

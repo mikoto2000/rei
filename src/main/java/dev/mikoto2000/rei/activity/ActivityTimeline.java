@@ -31,6 +31,9 @@ public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPo
   public List<SummarySegment> summaryBetween(Instant start,Instant end) {
     validateRange(start,end);
     var fine=store.findBetween(start,end);
+    return summaryBetween(start,end,fine);
+  }
+  private List<SummarySegment> summaryBetween(Instant start,Instant end,List<ActivitySession> fine) {
     var records=store.findRecordsBetween(start,end);
     return new SummaryGroupingPolicy(summaryPolicy).aggregate(summaryPolicy.aggregate(records,start,end)).stream().map(segment -> {
       var ids=new HashSet<>(segment.evidence().stream().map(ActivityRecord::id).toList());
@@ -43,7 +46,11 @@ public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPo
     return new ActivitySummaryFormatter(clock.getZone()).format(summarySegments(day));
   }
   public List<TrendSummarySegment> trendSegments(String day) {
-    return new TrendSummaryPolicy(clock.getZone(),summaryPolicy.minimumConfidence()).aggregate(summarySegments(day));
+    var date=date(day);var start=date.atStartOfDay(clock.getZone()).toInstant();
+    var end=date.plusDays(1).atStartOfDay(clock.getZone()).toInstant();
+    var fine=store.findBetween(start,end);
+    return new TrendSummaryPolicy(clock.getZone(),summaryPolicy.minimumConfidence()).aggregate(summaryBetween(start,end,fine)).stream()
+        .map(s->s.withFineSessions(fine)).toList();
   }
   public String trendSummary(String day) {
     return new TrendSummaryFormatter(clock.getZone()).format(trendSegments(day));

@@ -33,4 +33,22 @@ class ActivityTrendQueryTest {
     assertTrue(timeline.trendSegments("yesterday").isEmpty());assertTrue(timeline.trendSummary("today").contains("記録はありません"));
     assertThrows(java.time.DateTimeException.class,()->timeline.trendSummary("invalid"));
   }
+  @Test void splitProjectionRetainsExactFineReferencesAndStoredRecords() {
+    var ds=new org.sqlite.SQLiteDataSource();ds.setUrl("jdbc:sqlite:"+directory.resolve("split.db"));
+    var store=new SqliteActivityStore(ds,new SessionMergePolicy(Duration.ofSeconds(90),ZoneOffset.UTC));
+    var records=new ArrayList<ActivityRecord>();
+    for(int i=0;i<55;i++) records.add(ActivitySemanticTest.record(i,"Terminal","rei",
+        ActivitySemanticTest.activity(i<30?"development":"documentation","Terminal","","rei")));
+    records.forEach(store::append);var timeline=new ActivityTimeline(store,Clock.fixed(ActivitySemanticTest.START,ZoneOffset.UTC));
+    var before=timeline.query("today");var sources=timeline.summarySegments("today");
+    var result=timeline.trendSegments("today");assertEquals(2,result.size());
+    assertEquals(before,timeline.query("today"));assertEquals(sources,timeline.summarySegments("today"));
+    assertEquals(records,result.stream().flatMap(s->s.evidence().stream()).toList());
+    for(var s:result) {
+      var ids=s.evidence().stream().map(ActivityRecord::id).toList();
+      assertEquals(before.stream().filter(f->f.recordIds().stream().anyMatch(ids::contains)).map(ActivitySession::id).toList(),s.fineSessionIds());
+    }
+    var reopened=new SqliteActivityStore(ds,new SessionMergePolicy(Duration.ofSeconds(90),ZoneOffset.UTC));
+    assertEquals(records,reopened.findRecordsBetween(ActivitySemanticTest.START,ActivitySemanticTest.START.plusSeconds(3300)));
+  }
 }

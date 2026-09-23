@@ -13,4 +13,12 @@ public record TrendSummarySegment(Instant startedAt,Instant endedAt,Continuity c
     sourceSegments=List.copyOf(sourceSegments);evidence=List.copyOf(evidence);fineSessionIds=List.copyOf(fineSessionIds);
   }
   public long unobservedSeconds() {return Math.max(0,Duration.between(startedAt,endedAt).getSeconds()-observedSeconds);}
+  /** Resolve exact child references after splitting a source projection that spanned several fine sessions. */
+  public TrendSummarySegment withFineSessions(List<ActivitySession> sessions) {
+    var ids=new java.util.HashSet<>(evidence.stream().map(ActivityRecord::id).toList());
+    var included=sessions.stream().filter(s->s.startedAt().isBefore(endedAt) && s.endedAt().isAfter(startedAt)
+        && s.recordIds().stream().anyMatch(ids::contains)).map(ActivitySession::id).toList();
+    return new TrendSummarySegment(startedAt,endedAt,continuity,theme,observedSeconds,knownSeconds,unknownSeconds,
+        categories,projects,labels,sourceSegments,evidence,included);
+  }
 }

@@ -306,7 +306,7 @@ Evidenceから算出する。Productivity Score、行動評価、週次/月次�
 
 ## Query / Slash commands / Summary
 
-### Phase 3.2: 時間帯の傾向
+### Phase 3.2 / 3.4: 時間帯の傾向と表示品質
 
 `/activity summary`には表示専用の `TrendSummarySegment` を使用する。
 Phase 3.1の `SummarySegment` / SemanticSessionPolicy / gap policyは変更せず、
@@ -335,15 +335,67 @@ continuityは以下の**観測の性質**を表す。
 
 themeはdevelopment-research / web-browsing / communication等とmixed-work / mixed / unknown。
 元の細粒度categoryを上書きしない。projectはforegroundで裏付けられた候補だけを見出しへ使用する。
-表示は「観測できた範囲では」「断続的に見られました」とし、欠測中の継続を主張しない。
+表示は確信度と観測密度に応じて「〜が中心」「観測できた範囲では」「断続的に見られました」を使い分け、欠測中の継続を主張しない。
 未観測率の定型注意を各行へ重ねず、未判定を含む場合だけ短く補足する。
 otherだけの場合も「その他の活動が中心」とは出さず、主活動を判定できない旨を表示する。
 
 `ActivityDisplayLabels` は表示だけを正規化する。browser→ブラウザ、cmd→ターミナル、
 gradle→ビルド、python→Python関連、shopping→ショッピング、video→動画、openai→AIツール、
 chatgpt→ChatGPT、notion→Notion、asus→ASUS。未知の固有名詞を推測で書き換えない。
-補足は最大4ラベル。Primaryとの一致、観測秒数で重み付けした出現頻度、projectの具体性の順に選ぶ。
+補足は最大4ラベル。妥当なprojectとの対応、Primaryとの一致、観測秒数で重み付けした出現頻度の順に選ぶ。
 同一観測内の重複ラベルを頻度へ二重加算しない。
+
+#### Phase 3.4: raw / canonical / display と意味役割
+
+Raw Evidenceは変更せず、表示レイヤーの `ActivityDisplayLabels.canonical` と `label` で別々に扱う。
+例えばWindowsTerminal / Windows Terminal / Windows-Terminal / cmd / PowerShell / Local terminalは
+canonical=`terminal`、display=`ターミナル`。Text Editor / text editor / Local editorは`editor`→`エディタ`。
+Local log file / log fileは`log-file`→`ローカルログ`、Twitter / X (Twitter) / X (旧Twitter)は`x`→`X`。
+NFKC、case、空白、既知aliasの区切り記号を正規化し、表示ラベルをcanonical化したキーで重複除去する。
+未知の固有名詞の綴りや意味は推測で変更しない。Activity判定用の既存Vocabulary / RolePolicyは変更しない。
+
+project、service/application、activity、content/topicは別の役割として扱う。
+Summaryのproject候補は、foregroundで採用された候補のうち英字始まりの2〜60文字の識別子
+（英数字・`_`・`.`・`-`）に限定し、カテゴリ、既知サービス/アプリ、同じEvidence内のサービス/アプリとの
+一致を除外する。`rei` / `yagisan-reports`等は保持し、`x browsing` / X / GitHub / WindowsTerminal等を
+projectにしない。`機能設計の提案`等の自然文トピックもproject扱いせず、原文はEvidenceに残す。
+不確かな候補はSummary上のproject名を省略する。これは保守的な構文・役割検証であり、実在する
+リポジトリの照合ではない。日本語名や空白を含む正当なprojectも一般化される制約がある。
+
+#### Phase 3.4: soft maximum duration と意味境界
+
+`TrendSummaryPolicy.softMaximumDuration`の既定値は45分。これは表示候補の内部境界を再検討する
+トリガーであり、45分の位置で切るタイマーではない（現時点ではJavaポリシーの値で、YAML設定項目はない）。
+Phase 3.2の新規結合60分・隣接gap20分という候補生成の制限は維持する。
+55分ずっと同じ傾向なら1件のまま。既存の長いsource projectionの内部も元Evidenceを見て検討する。
+
+- 妥当なprojectが別projectへ変わった場合は長さによらず分割。unknownを挟んでも競合を隠さない。
+- dominant themeの持続的変化は45分未満でも分割。前後各10分以内の観測推定秒数を集計し、
+  各側で同じテーマが5分以上、かつ観測時間の70%以上ある場合を意味のある切替とする。
+  development / research / documentationはwork、social / media / shoppingはWeb/娯楽のfamily。
+  work ↔ leisureもこの判定に含める。unknownは既知カテゴリへ変換せず、比率の分母に残す。
+- 45分を超えた場合は、さらに持続的なforeground文脈の変化、5分以上の未観測gap（両側に5分以上の観測）、
+  同family内のPrimary categoryの変化を境界候補にする。同じ妥当なproject内のツール変更だけでは分けない。
+- project競合を優先し、次にtheme、foreground、gap、categoryの順で選ぶ。同順位では時間的に中央に近い
+  境界を選び、子区間も同じ基準で評価する。短い寄り道や1分のサンプルだけでは持続的変化にしない。
+
+分割対象はTrendSummarySegmentだけ。元Record、Fine-grained Session、Phase 3.1 SummarySegment、
+元のroles/confidenceは変更しない。子のEvidenceと観測秒数を再集計し、`sourceSegments`は元projectionを
+そのまま参照する（同じ親が複数の子から参照され得る）。Timeline APIの`fineSessionIds`は子のEvidence・
+時間との対応で解決し直す。分割によって区間外になった未観測gapを活動時間へ足し込まない。
+
+#### Phase 3.4: 文面の自然化
+
+追加LLMは呼ばず、コードで安全な文面を選ぶ。既知Primaryの時間が観測の70%以上、観測秒数で重み付けした
+Primary confidenceが0.7以上なら活動ベースの表現を使う。confidence計算も既存RolePolicyに従う。
+
+- CONTINUOUSかつ未観測率10%以下で上記条件を満たす場合は「rei関連の開発・確認が中心」。
+- INTERMITTENTや未観測率が高い場合は「観測できた範囲では」「断続的に」を残す。
+- MIXEDは「開発・確認とSNS閲覧が混在」。確信度が弱いときは「〜関連の画面が混在していました」へ戻す。
+- 全て未判定なら主活動を判定できない旨を表示。一部未判定も短く補足する。
+
+冒頭の画面観測・推定に関する説明は維持する。「集中」「バグ修正」等、Evidenceにない操作や成果は生成しない。
+service/applicationの補足は表示された事実として記述する。
 
 追加LLM・画像取得・DB更新は不要。`ActivityTimeline.trendSegments(day)`と`trendSummary(day)`が
 新しい読み取り用API。既存query / findBetween / summarySegments / summaryBetween / summaryおよび
