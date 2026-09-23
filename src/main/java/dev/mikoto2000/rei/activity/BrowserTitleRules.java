@@ -43,4 +43,9 @@ final class BrowserTitleRules {
     }
     return WindowActivityRules.match(monitor,"unknown",window.processName(),"","","",0,"GENERIC_BROWSER");
   }
+  static List<OperationalRules.Rule> catalog() {
+    return RULES.stream().map(r->new OperationalRules.Rule(r.id(),"classification","built-in",r.priority(),true,
+        Map.of("processRegex","(?i)firefox|chrome|msedge","titleRegex",r.pattern().pattern()),Map.of(),
+        Map.of("titleRegex",r.pattern()))).toList();
+  }
 }

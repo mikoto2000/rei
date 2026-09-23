@@ -1,4 +1,8 @@
-# Activity Timeline Phase 3.7 — Evidence Classification Tuning
+# Activity Timeline Phase 3.7.1 — Evidence Classification Operations
+
+Phase 3.7.1で外部ルール、atomic hot reload、Unknown/Entertainment Registry、診断、LLMによる未適用候補提案を追加した。
+設定・rule schema・娯楽判定・コマンドとPrivacyは[Classification Toolkit](activity-classification-rules.md)を参照。
+以下の先行保存・Vision fallback・memory-firstの構成は維持する。
 
 既定の判定経路を、画像→Vision成功→保存から、OS情報→ルール判定→即時保存→必要な場合だけVisionで補足へ変更した。Activity自体の既定値は引き続き無効。
 

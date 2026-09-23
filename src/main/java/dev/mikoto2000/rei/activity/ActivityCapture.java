@@ -65,6 +65,7 @@ public final class ActivityCapture implements AutoCloseable {
     this.evidencePipeline=new ActivityEvidencePipeline(properties,observer,extractor,store,screenshots,clock,analysisExecutor,backgroundExecutor,sources);
   }
   public synchronized void pause() { paused=true; invalidate();evidencePipeline.pause(); }
+  public void useToolkit(ClassificationToolkit toolkit){evidencePipeline.useToolkit(toolkit);}
   public synchronized void resume() { paused=false; invalidate();evidencePipeline.resume(); }
   public synchronized boolean isPaused() { return paused; }
   @Override public synchronized void close() { closed=true; pause();evidencePipeline.close(); }

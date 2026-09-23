@@ -17,7 +17,8 @@ final class ActivityEvidencePipeline {
   private final Clock clock;
   private final Executor foregroundExecutor,backgroundExecutor;
   private final ActivityEvidenceAggregator aggregator;
-  private final ActivityClassifier classifier=new ActivityClassifier();
+  private java.util.function.Function<ActivityEvidence,ActivityClassification> classify=new ActivityClassifier()::classify;
+  void useToolkit(ClassificationToolkit toolkit){classify=toolkit::classify;}
   private final AtomicBoolean observing=new AtomicBoolean();
   private final LongAdder observations=new LongAdder(),evidenceOnly=new LongAdder(),fallbacks=new LongAdder(),skipped=new LongAdder(),foregroundCalls=new LongAdder(),backgroundCalls=new LongAdder(),success=new LongAdder(),failure=new LongAdder(),timeout=new LongAdder();
   private final LongAdder outputLimits=new LongAdder(),validationFailures=new LongAdder(),unknownCount=new LongAdder(),partialCount=new LongAdder(),usableCount=new LongAdder();
@@ -57,7 +58,7 @@ final class ActivityEvidencePipeline {
       var at=clock.instant();
       var evidence=aggregator.collect(at,metadata,prior);
       ActivityClassification classification;
-      try {classification=p.getDetection().isEvidenceEnabled()?classifier.classify(evidence):unknown(fg);}
+      try {classification=p.getDetection().isEvidenceEnabled()?classify.apply(evidence):unknown(fg);}
       catch(Exception e){warn("classification",e);classification=unknown(fg);}
       boolean fallback=p.isExtractionEnabled() && p.getDetection().isVisionEnabled() && p.getDetection().isFallbackEnabled()
           && !classification.usable(p.getDetection().getSkipVisionConfidence());
@@ -157,7 +158,8 @@ final class ActivityEvidencePipeline {
         if(allowed(work.generation))try {
           var r=work.record;var d=r.detection();var sources=new LinkedHashSet<>(d.classificationSources());sources.add(source);
           var status=d.status().equals("FINAL")?"FINAL":"VISION_FAILED";
-          var detection=new ActivityRecord.Detection(d.evidence(),List.copyOf(sources),true,d.classificationMode(),status,d.sourceConfidence(),d.reason(),d.fieldConfidence(),d.secondaryConfidence());
+          String reason=d.reason().split("\\|",2)[0]+"|"+switch(kind){case OUTPUT_LIMIT->"VISION_OUTPUT_LIMIT";case TIMEOUT->"VISION_TIMEOUT";case VALIDATION->"VISION_VALIDATION_FAILED";default->"VISION_FAILED";};
+          var detection=new ActivityRecord.Detection(d.evidence(),List.copyOf(sources),true,d.classificationMode(),status,d.sourceConfidence(),reason,d.fieldConfidence(),d.secondaryConfidence());
           var refs=r.screenshotReferences();
           if(new ScreenshotPersistencePolicy(p).shouldSave(false,ScreenshotPersistencePolicy.Outcome.EXTRACTION_FAILURE))
             try{refs=screenshots.save(r.id(),r.capturedAt(),work.screen);}catch(Exception imageError){warn("failure evidence",imageError);}

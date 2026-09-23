@@ -1,0 +1,23 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "type":"object","additionalProperties":false,
+  "required":["ruleType","id","priority","match","classify","proposalConfidence","rationale"],
+  "properties":{
+    "ruleType":{"type":"string","enum":["CLASSIFICATION","ENTERTAINMENT"]},
+    "id":{"type":"string","pattern":"^[A-Za-z0-9_-]{1,80}$"},
+    "priority":{"type":"integer","minimum":0,"maximum":10000},
+    "match":{"type":"object","additionalProperties":false,"required":["processRegex","titleRegex","serviceRegex","contentRegex"],"properties":{
+      "processRegex":{"type":["string","null"],"maxLength":256},"titleRegex":{"type":["string","null"],"maxLength":256},
+      "serviceRegex":{"type":["string","null"],"maxLength":256},"contentRegex":{"type":["string","null"],"maxLength":256}
+    }},
+    "classify":{"type":"object","additionalProperties":false,"required":["category","service","categoryConfidence","serviceConfidence","entertainmentDisposition","confidence"],"properties":{
+      "category":{"type":["string","null"],"enum":[null,"development","research","documentation","communication","social","media","shopping","gaming","monitoring","navigation","idle","other","unknown"]},
+      "service":{"type":["string","null"],"maxLength":80},
+      "categoryConfidence":{"anyOf":[{"type":"number","minimum":0,"maximum":1},{"type":"null"}]},"serviceConfidence":{"anyOf":[{"type":"number","minimum":0,"maximum":1},{"type":"null"}]},
+      "entertainmentDisposition":{"type":["string","null"],"enum":[null,"ENTERTAINMENT","NON_ENTERTAINMENT","UNCERTAIN"]},
+      "confidence":{"anyOf":[{"type":"number","minimum":0,"maximum":1},{"type":"null"}]}
+    }},
+    "proposalConfidence":{"type":"number","minimum":0,"maximum":1},
+    "rationale":{"type":"string","maxLength":240}
+  }
+}

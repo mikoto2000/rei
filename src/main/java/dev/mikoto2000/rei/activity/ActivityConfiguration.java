@@ -10,8 +10,11 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @Configuration(proxyBeanMethods=false)
 @EnableConfigurationProperties(ActivityProperties.class)
 public class ActivityConfiguration {
-  @Bean ActivityStore activityStore(javax.sql.DataSource ds,ActivityProperties p) {
-    p.validate();return new SqliteActivityStore(ds,new SessionMergePolicy(Duration.ofSeconds(p.getSessionGapSeconds()),ZoneId.of(p.getZone())));
+  @Bean ClassificationToolkit classificationToolkit(javax.sql.DataSource ds,ActivityProperties p) {
+    p.validate();return new ClassificationToolkit(p,new OperationalRules(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve(p.getClassification().getUserRulesFile())),new ClassificationTelemetryRepository(ds),Clock.systemUTC());
+  }
+  @Bean ActivityStore activityStore(javax.sql.DataSource ds,ActivityProperties p,ClassificationToolkit toolkit) {
+    p.validate();return toolkit.wrap(new SqliteActivityStore(ds,new SessionMergePolicy(Duration.ofSeconds(p.getSessionGapSeconds()),ZoneId.of(p.getZone()))));
   }
   @Bean ScreenshotStore activityScreenshots() { return new FileScreenshotStore(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve("activity/screenshots")); }
   @Bean DesktopActivityObserver activityObserver() { return new WindowsDesktopActivityObserver(); }
@@ -31,8 +34,8 @@ public class ActivityConfiguration {
   }
   @Bean ActivityCapture activityCapture(ActivityProperties p,DesktopActivityObserver observer,ActivityExtractor extractor,ActivityStore store,ScreenshotStore screenshots,
       @Qualifier("activityAnalysisExecutor") ThreadPoolTaskExecutor analysisExecutor,
-      @Qualifier("activityBackgroundExecutor") ThreadPoolTaskExecutor backgroundExecutor,java.util.List<ActivityEvidenceSource> sources) {
-    return new ActivityCapture(p,observer,extractor,store,screenshots,Clock.systemUTC(),analysisExecutor,backgroundExecutor,sources);
+      @Qualifier("activityBackgroundExecutor") ThreadPoolTaskExecutor backgroundExecutor,java.util.List<ActivityEvidenceSource> sources,ClassificationToolkit toolkit) {
+    var capture=new ActivityCapture(p,observer,extractor,store,screenshots,Clock.systemUTC(),analysisExecutor,backgroundExecutor,sources);capture.useToolkit(toolkit);return capture;
   }
   @Bean ActivityTimeline activityTimeline(ActivityStore store,ActivityProperties p) {
     var zone=ZoneId.of(p.getZone());
@@ -41,6 +44,9 @@ public class ActivityConfiguration {
         Duration.ofSeconds(p.getSummaryBriefSwitchSeconds()),p.getPrimaryConfidenceThreshold(),zone));
   }
   @Bean ActivityTools activityTools(ActivityTimeline timeline) {return new ActivityTools(timeline);}
+  @Bean ClassificationRuleSuggestions classificationRuleSuggestions(ClassificationToolkit toolkit,dev.mikoto2000.rei.llm.LlmModelProvider provider,dev.mikoto2000.rei.core.service.ModelHolderService current) {
+    return new ClassificationRuleSuggestions(toolkit,new LlmClassificationRuleModel(()->provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),()->provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get())));
+  }
   @Bean ThreadPoolTaskExecutor activityExecutor() {
     return worker("rei-activity-observe-");
   }
@@ -59,6 +65,10 @@ public class ActivityConfiguration {
     return executor;
   }
   @Bean ActivityJob activityJob(ActivityCapture capture,@Qualifier("activityExecutor") ThreadPoolTaskExecutor executor) {return new ActivityJob(capture,executor);}
+  @Bean ClassificationReloadJob classificationReloadJob(ClassificationToolkit toolkit){return new ClassificationReloadJob(toolkit);}
+  public record ClassificationReloadJob(ClassificationToolkit toolkit) {
+    @Scheduled(fixedDelay=3000,initialDelay=3000) public void poll(){toolkit.poll();}
+  }
   public record ActivityJob(ActivityCapture capture,ThreadPoolTaskExecutor executor) implements AutoCloseable {
     @Override public void close() { capture.close(); }
     @Scheduled(fixedDelayString="#{${rei.activity.capture-interval-seconds:60} * 1000}",initialDelayString="#{${rei.activity.capture-interval-seconds:60} * 1000}")

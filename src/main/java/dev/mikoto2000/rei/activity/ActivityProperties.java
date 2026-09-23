@@ -15,6 +15,18 @@ public class ActivityProperties {
   private double visionImageScale = .5;
   private int backgroundAnalysisIntervalSeconds = 300;
   private Detection detection = new Detection();
+  private Classification classification=new Classification();
+  @Data public static class Classification {
+    private String userRulesFile="activity/classification-rules.yaml";
+    private boolean hotReload=true;
+    private Registry unknownRegistry=new Registry();
+    private Registry entertainmentRegistry=new Registry();
+    private RuleSuggestion ruleSuggestion=new RuleSuggestion();
+    private Diagnostics diagnostics=new Diagnostics();
+  }
+  @Data public static class Registry { private boolean enabled=true;private int retentionDays=30;private int maxEntries=1000; }
+  @Data public static class RuleSuggestion { private boolean enabled=true;private int minimumSamples=3; }
+  @Data public static class Diagnostics { private boolean enabled=true; }
   public enum DetectionMode { EVIDENCE_FIRST, VISION_FIRST }
   @Data public static class Detection {
     private DetectionMode mode=DetectionMode.EVIDENCE_FIRST;
@@ -40,6 +52,9 @@ public class ActivityProperties {
   private List<String> excludedWindowTitlePatterns = List.of("*Password*", "*Private Browsing*", "*InPrivate*");
 
   public void validate() {
+    if(classification==null || classification.userRulesFile==null || classification.userRulesFile.isBlank() || classification.unknownRegistry==null || classification.entertainmentRegistry==null || classification.ruleSuggestion==null || classification.diagnostics==null || classification.ruleSuggestion.minimumSamples<1)
+      throw new IllegalArgumentException("Invalid classification toolkit settings");
+    for(var registry:List.of(classification.unknownRegistry,classification.entertainmentRegistry))if(registry.retentionDays<1 || registry.maxEntries<1 || registry.maxEntries>10000)throw new IllegalArgumentException("Invalid registry retention");
     if(detection==null || detection.mode==null || !Double.isFinite(detection.skipVisionConfidence)
         || detection.skipVisionConfidence<0 || detection.skipVisionConfidence>1 || detection.maxOutputTokens<1)
       throw new IllegalArgumentException("Invalid activity detection settings");

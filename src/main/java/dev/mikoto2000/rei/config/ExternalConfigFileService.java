@@ -115,6 +115,22 @@ public class ExternalConfigFileService {
               foreground-crop: true
               background-full-screen-enabled: false
               max-output-tokens: 2048
+            classification:
+              user-rules-file: activity/classification-rules.yaml
+              hot-reload: true
+              unknown-registry:
+                enabled: true
+                retention-days: 30
+                max-entries: 1000
+              entertainment-registry:
+                enabled: true
+                retention-days: 30
+                max-entries: 1000
+              rule-suggestion:
+                enabled: true
+                minimum-samples: 3
+              diagnostics:
+                enabled: true
             keep-screenshots: false
             behavior:
               enabled: false

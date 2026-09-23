@@ -1,7 +1,12 @@
 # Activity Capture / Timeline
 
-Phase 1〜3.7: デスクトップを観測し、構造化した履歴を保存し、振り返る機能。
+Phase 1〜3.7.1: デスクトップを観測し、構造化した履歴を保存し、振り返る機能。
 デフォルトは無効。お小言は別途Behavior設定で明示的に有効化する。
+
+Phase 3.7.1は`/activity classification status|reload|unknowns|rules|suggest-rules`と
+`/activity behavior uncertain|suggest-rules`を追加した。外部分類・娯楽ルールは再起動なしで反映できる。
+新しい観測の明示的な娯楽判定をカテゴリより優先し、UNCERTAINは娯楽時間に加算しない。
+詳細・設定例・既存データとの互換性は[Classification Toolkit](activity-classification-rules.md)を参照。
 
 Phase 3.7の既定経路は **Evidence-first**。前面・可視ウィンドウのOS情報とproject/tool情報から分類し、
 画像を取得する前にRecordを保存する。category confidenceが0.8以上、applicationまたはserviceが0.8以上ならVisionを省略する。

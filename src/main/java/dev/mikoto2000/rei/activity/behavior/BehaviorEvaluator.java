@@ -8,7 +8,7 @@ import java.util.*;
 public final class BehaviorEvaluator {
   private final BehaviorProperties config;
   private final ActivityRolePolicy roles;
-  private record Sample(Instant start,Instant end,String category,String service,double confidence,String continuity) {
+  private record Sample(Instant start,Instant end,String category,String service,double confidence,String continuity,EntertainmentDisposition disposition) {
     long seconds() {return Duration.between(start,end).getSeconds();}
     boolean eligible() {return !Set.of("unknown","other","idle").contains(category);}
   }
@@ -82,13 +82,14 @@ public final class BehaviorEvaluator {
         end=min(end,start.plusSeconds(budget));
         if(!start.isBefore(end)) continue;
         String service=role.primary()==null?"":ActivityDisplayLabels.label(role.primary().service());
-        result.add(new Sample(start,end,role.category(),service,role.confidence(),r.continuityId()));covered=end;
+        var diagnostics=r.detection()==null?null:r.detection().diagnostics();
+        result.add(new Sample(start,end,role.category(),service,role.confidence(),r.continuityId(),diagnostics==null?null:diagnostics.entertainmentDisposition()));covered=end;
         remaining.put(session.id(),budget-Duration.between(start,end).getSeconds());
       }
     }
     return result;
   }
-  private boolean entertainment(Sample s) {return config.getEntertainmentCategories().contains(s.category());}
+  private boolean entertainment(Sample s) {return s.eligible() && (s.disposition()==null?config.getEntertainmentCategories().contains(s.category()):s.disposition()==EntertainmentDisposition.ENTERTAINMENT);}
   private BehaviorSeverity continuousSeverity(long seconds) {
     var c=config.getContinuous();return seconds>=c.getStrongWarningMinutes()*60L?BehaviorSeverity.STRONG_WARNING:
         seconds>=c.getWarningMinutes()*60L?BehaviorSeverity.WARNING:seconds>=c.getNoticeMinutes()*60L?BehaviorSeverity.NOTICE:BehaviorSeverity.NONE;

@@ -1,5 +1,58 @@
 # Activity Timeline 実装報告
 
+## Phase 3.7.1 Operational Classification Toolkit（2026-09-23）
+
+ブランチは`codex/activity-behavior-evaluation`を継続。作業開始時の未コミット変更はなし。
+Phase 3.6/3.7の先行保存・RAM画像・前面/背景worker・同一Observation enrichmentを維持し、外部ルールと運用用telemetryを追加した。
+
+主要追加クラス:
+
+- `OperationalRules`: built-in/userの検証、compile、priority、immutable snapshot、atomic reload。
+- `ClassificationToolkit`: 診断、rules/status/registry表示、ActivityStoreとの接続、Privacyチェック。
+- `ClassificationTelemetryRepository`: ActivityRecordとは別のSQLite metadata、ID upsert、集計、retention。
+- `ClassificationDiagnostics` / `EntertainmentDisposition`: 各軸confidence、rule/source、Vision判断・理由と独立した娯楽判定。
+- `ClassificationRuleSuggestions` / `LlmClassificationRuleModel`: 人間の確認用の構造化候補提案。自動適用なし。
+
+`ActivityConfiguration`/`ActivityCapture`/`ActivityEvidencePipeline`、`ActivityRecord.Detection`、`BehaviorEvaluator`、`ActivityCommand`と設定テンプレートへ接続した。
+ユーザー用ファイルは`<rei-data-dir>/activity/classification-rules.yaml`。未作成でもbuilt-in分類16件・娯楽5件で動作する。
+同梱分類はPhase 3.7の動的抽出を継続し、娯楽ruleは別YAML。schema、priority/override、検証、reload、Registry、理由コード、metrics、提案とPrivacyは[運用仕様](activity-classification-rules.md)にまとめた。
+
+### TDD・fixtureでの確認
+
+ルールAPI/validation、registry・診断、提案、初回fallback metricsとretentionを失敗テストから実装した。
+後方参照・繰り返すgroup等を制限し、proposalにはscopeとcontextの両方を要求する。
+未知キー、空ID、重複ID、不正regex/category/disposition/confidence/priority、同順位の衝突、reload失敗時の世代保持を確認した。
+既存completionテストの期待値と設定テンプレートのキー一覧を、新しいコマンド/設定へ更新した。
+
+| fixture / 操作 | 確認結果 |
+|---|---|
+| Hugging Faceの未知タイトルを3回観測、各々Visionでresearchへ補足 | Registry保存上も1行・count=3・open=0・Vision成功3件・RESOLVED_BY_VISION。Observation数3のまま |
+| 上記からclassification提案 | 最低サンプル数を満たす一貫した成功結果でYAML候補を生成。effective snapshot・ユーザーファイルは不変 |
+| YouTube / JVM compilation deep diveを3回観測 | UNCERTAIN集約1件・count=3。文脈付きNON_ENTERTAINMENT候補を生成しても適用しない |
+| 同じservice/titleでmediaとotherが混在 | 固定ルール候補のLLM呼出しを抑止 |
+| ChatGPTのVisionがoutput_limit | OS観測1件を保存し、VISION_OUTPUT_LIMITを構造化診断・registryへ保持 |
+| chat-researchを手動追加してpoll reload、次の観測 | researchになりVisionを省略。2観測・API試行1件・user rule hit 1件・evidence-only 1件 |
+| media + NON_ENTERTAINMENT / research + ENTERTAINMENT | Behavior娯楽時間0秒 / 600秒。UNCERTAINは0秒。旧Recordのmediaは従来どおり600秒 |
+| SQLite telemetryを失敗させる | 本体ActivityStoreへの保存は実行され、例外をCaptureへ伝播しない |
+| 設定ファイルを削除しreload前に100回分類 | 同じcompile済みsnapshotを利用。次のpollでbuilt-inへ戻る |
+
+これらは依頼文の例と既存fixtureを基にした合成metadata＋mock LLM、実SQLiteでの検証であり、実ユーザーの画面・実LLM応答から抽出した新しい実運用測定ではない。
+当日の実unknown率・娯楽uncertain率・実モデルでの候補生成成功率は未測定。稼働中アプリを停止・再起動しておらず、ユーザー用ルールを実環境に自動追加していない。
+
+新規テスト21件。全Java **2,261件**、client **41件**、Rust **64件**、E2E **12件**が成功。
+Phase 3.5 Behavior、Summary、旧Record JSON、Phase 3.7 fixture、画像非保存・worker制限の既存回帰テストを含む。
+最終確認の同順位衝突修正後に関連305件、Registryの物理集約追加後にOperational関連19件も再実行して成功した。
+Maven packageが成功し、`target/rei-0.0.1-SNAPSHOT.jar`を更新した。分類Toolkit/Repositoryのクラスとrule/schemaの同梱をZIP内容で確認した。
+Windowsの通常成果物名での置換制約を避け、一時POMで別名にpackageしてから通常名へコピーした。一時POMは削除済み。
+
+### 運用上の変更と残課題
+
+新しい観測では明示的dispositionを優先するため、用途不明のYouTube等を従来のmediaカテゴリだけで娯楽時間へ加算しなくなる。
+古いRecordのcategory fallbackは維持し、reloadで過去の観測を書き換えない。
+Registryは正規化keyで集計するが、高度なタイトルpattern clusteringは行わない。LLMへは高頻度・一貫した候補だけを渡すため、タイトルの変動が多い場合は手動rule作成が必要。
+Ruleの意味的な同値/完全な競合判定はできず、regexの安全な部分集合と保守的検査を使う。Privacy検出も既知パターンに基づくため、既存のprocess/title除外設定を併用する。
+全設定・診断の詳細は`docs/activity-classification-rules.md`、完全な手動編集例は`docs/classification-rules.example.yaml`。
+
 ## Phase 3.7 Evidence Classification Tuning（2026-09-23）
 
 使用ブランチ: `codex/activity-behavior-evaluation`。Phase 3.6の先行保存・前面1件+最新待機1件・背景1件待機なし・memory-firstを維持した。
