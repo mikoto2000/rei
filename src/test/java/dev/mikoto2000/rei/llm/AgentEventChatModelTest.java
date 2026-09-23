@@ -25,6 +25,43 @@ import reactor.core.publisher.Flux;
 class AgentEventChatModelTest {
 
   @Test
+  void activityCallsReturnResponsesAndPropagateErrorsWithoutNotifications() {
+    ChatModel delegate = mock(ChatModel.class);
+    Prompt prompt = new Prompt("detect activity");
+    ChatResponse response = mock(ChatResponse.class);
+    var failure = new IllegalStateException("activity failed");
+    when(delegate.call(prompt)).thenReturn(response).thenThrow(failure);
+    List<AgentEvent> events = new ArrayList<>();
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    bus.subscribe(events::add);
+    var model = new AgentEventChatModel(LlmFeature.ACTIVITY, delegate,
+        new AgentEventFactory(Clock.systemUTC()), bus);
+
+    assertEquals(response, model.call(prompt));
+    assertEquals(failure, assertThrows(IllegalStateException.class, () -> model.call(prompt)));
+    assertEquals(List.of(), events);
+  }
+
+  @Test
+  void activityStreamsReturnTokensAndPropagateErrorsWithoutNotifications() {
+    ChatModel delegate = mock(ChatModel.class);
+    Prompt prompt = new Prompt("detect activity");
+    ChatResponse response = mock(ChatResponse.class);
+    var failure = new IllegalStateException("activity failed");
+    when(delegate.stream(prompt)).thenReturn(Flux.just(response, response))
+        .thenReturn(Flux.error(failure));
+    List<AgentEvent> events = new ArrayList<>();
+    InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+    bus.subscribe(events::add);
+    var model = new AgentEventChatModel(LlmFeature.ACTIVITY, delegate,
+        new AgentEventFactory(Clock.systemUTC()), bus);
+
+    assertEquals(List.of(response, response), model.stream(prompt).collectList().block());
+    assertEquals(failure, assertThrows(IllegalStateException.class, () -> model.stream(prompt).blockLast()));
+    assertEquals(List.of(), events);
+  }
+
+  @Test
   void publishesFeatureLifecycleForSynchronousCalls() {
     ChatModel delegate = mock(ChatModel.class);
     Prompt prompt = new Prompt("select a skill");

@@ -11,7 +11,7 @@ import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import reactor.core.publisher.Flux;
 
-/** Publishes lifecycle events around every text LLM invocation. */
+/** Publishes lifecycle events for text LLM invocations except background activity detection. */
 final class AgentEventChatModel implements ChatModel {
 
   private final String feature;
@@ -29,6 +29,8 @@ final class AgentEventChatModel implements ChatModel {
 
   @Override
   public ChatResponse call(Prompt prompt) {
+    // Activity polling must not produce Shell or Web API notifications.
+    if (LlmFeature.ACTIVITY.equals(feature)) return delegate.call(prompt);
     String requestId = UUID.randomUUID().toString();
     long startedAtNanos = System.nanoTime();
     publisher(prompt).publish(eventFactory.llmRequestStarted(null, requestId, feature));
@@ -38,13 +40,14 @@ final class AgentEventChatModel implements ChatModel {
       return response;
     } catch (RuntimeException e) {
       publisher(prompt).publish(eventFactory.llmRequestFailed(null, requestId, elapsedMillis(startedAtNanos),
-          LlmFeature.ACTIVITY.equals(feature) ? new IllegalStateException("Activity model request failed") : e));
+          e));
       throw e;
     }
   }
 
   @Override
   public Flux<ChatResponse> stream(Prompt prompt) {
+    if (LlmFeature.ACTIVITY.equals(feature)) return Flux.defer(() -> delegate.stream(prompt));
     return Flux.defer(() -> {
       String requestId = UUID.randomUUID().toString();
       long startedAtNanos = System.nanoTime();
