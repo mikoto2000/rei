@@ -470,7 +470,18 @@ Memory-Firstの検証は `MemoryFirstVisionTest`（内部ディスクキャッ�
 `ActivityCaptureTest` の保存回数・呼出順序・失敗/除外/pause時のポリシーテストで行う。
 実機画面のキャプチャと実際の外部Vision API呼び出しは自動テストでは実行しない。
 
-## 将来 Phase 3.5〜5
+## Phase 3.5: Behavior Evaluation / お小言
+
+デフォルト無効のBehavior Evaluationを追加。詳細Sessionと対応する元RecordのPrimary観測区間から、
+social / media / shopping / gamingの連続時間とeligible observed timeに対する割合をコードで評価する。
+SummarySegmentの時間幅は評価に使わない。通知可否・cooldown・回復stateは文章生成と分離し、
+通知許可時だけ既存キャラクタープロンプトで短い発話を生成する。
+
+`/activity behavior on|off|status|evaluate`で操作できる。evaluateは通知しない手動評価。
+全設定・既定値、unknown/未観測の扱い、再起動時のcooldown保持、失敗時の扱いは
+[Activity Behavior Evaluation](activity-behavior-evaluation.md)を参照。
+
+## 将来 Phase 4〜5
 
 Recordを失わず、時刻・推定duration・foreground・モニター・変化量・並行Activity・
 project/content/service候補・confidence・継続境界を保持しているため、
@@ -480,5 +491,5 @@ focus/idle/entertainment minutesを作る場合も、今のデータだけで実
 
 高頻度化時は日次projection再構築を差分更新へ変更し、schema migration、
 集計バージョン、日次summaryキャッシュを加えられる。
-Phase 3.5以降のBehavior Evaluation、Project/Task/Working Set深い統合、
+Phase 4以降のProject/Task/Working Set深い統合、
 週次/月次Analytics、2〜6のProductivity Score、Adaptive Coachingは意図的に未実装。

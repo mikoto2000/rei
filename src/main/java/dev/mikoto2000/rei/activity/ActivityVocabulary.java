@@ -7,7 +7,7 @@ import dev.mikoto2000.rei.activity.ActivityRecord.Activity;
 public final class ActivityVocabulary {
   private ActivityVocabulary() {}
   public static final Set<String> CATEGORIES=Set.of("development","research","documentation","communication",
-      "social","media","shopping","monitoring","navigation","idle","other","unknown");
+      "social","media","shopping","gaming","monitoring","navigation","idle","other","unknown");
   public static String category(String value) {
     String normalized=ActivityRolePolicy.normalize(value);
     return switch(normalized) {

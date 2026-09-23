@@ -104,7 +104,8 @@ class ExternalConfigFileServiceTest {
     Set<String> expected = enabledKeys(defaults);
     // These settings are declared in Java rather than the bundled application.yaml.
     Set<String> javaSettings = Set.of("rei.computer-use.enabled",
-        "rei.computer-use.diagnostics.enabled", "rei.sound-notification.enabled");
+        "rei.computer-use.diagnostics.enabled", "rei.sound-notification.enabled",
+        "rei.activity.enabled", "rei.activity.behavior.enabled");
     expected.addAll(javaSettings);
     expected.remove("rei.web.enabled");
 

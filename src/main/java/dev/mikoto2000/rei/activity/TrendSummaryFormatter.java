@@ -54,7 +54,7 @@ public record TrendSummaryFormatter(ZoneId zone) {
     if(!work.isEmpty()) parts.add((s.projects().size()==1?s.projects().getFirst()+"関連の":"")+String.join("・",work));
     var leisure=List.of("social","media","shopping").stream().filter(s.categories()::contains).map(TrendSummaryFormatter::categoryLabel).toList();
     if(!leisure.isEmpty()) parts.add(String.join("・",leisure));
-    for(var c:List.of("communication","navigation","monitoring")) if(s.categories().contains(c)) parts.add(categoryLabel(c));
+    for(var c:List.of("gaming","communication","navigation","monitoring")) if(s.categories().contains(c)) parts.add(categoryLabel(c));
     return parts.isEmpty()?"複数の活動":String.join("と",parts.stream().limit(3).toList());
   }
   private static String categoryLabel(String category) {
@@ -62,6 +62,7 @@ public record TrendSummaryFormatter(ZoneId zone) {
       case "development" -> "開発・確認";case "research" -> "調査";case "documentation" -> "文書作業";
       case "social" -> "SNS閲覧";case "media" -> "動画・音楽視聴";case "shopping" -> "ショッピング関連の閲覧";
       case "communication" -> "コミュニケーション";case "navigation" -> "予定・経路確認";
+      case "gaming" -> "ゲーム関連の表示";
       case "monitoring" -> "監視";default -> "";
     };
   }

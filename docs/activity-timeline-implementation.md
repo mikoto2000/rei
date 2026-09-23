@@ -550,3 +550,87 @@ project検証はヒューリスティックなので日本語名・空白を含�
 自然文は決定的なテンプレートであり、自由なLLM作文は行わない。
 変更対象は `/activity summary`。today / yesterday / 日付指定や自然言語ツールへの展開は行っていない。
 実Vision API・実画面・ユーザーのActivity DBにはアクセスしていない。
+
+## Phase 3.5: Behavior Evaluation / Behavior Notification
+
+Phase 3.4が取り込まれたmain `1963275` から専用ブランチ `codex/activity-behavior-evaluation` を作成。
+開始時の作業ツリーはclean。コミットは `git log --oneline --grep='add opt-in activity behavior evaluation'` で確認できる。
+
+### 主要クラス
+
+| クラス | 責務 |
+|---|---|
+| BehaviorProperties | デフォルト無効、カテゴリ、連続閾値、窓・比率・最小観測量、中断、cooldown、履歴範囲の設定・検証 |
+| BehaviorEvaluator | 詳細Sessionと参照先Recordを純粋に評価。Primary観測秒数、連続時間、両window、回復時刻を計算 |
+| BehaviorAssessment / BehaviorSeverity | NONE〜STRONG_WARNING、reason enum、観測秒数・比率、根拠カテゴリ・サービス・confidence |
+| BehaviorNotificationPolicy | cooldown、escalation、回復・新episode、現在の活動、Chat busyの抑制判断 |
+| BehaviorState / SqliteBehaviorStateStore | 1行のcheckpointと最大100件の重要な状態遷移の保存 |
+| BehaviorNotification / BehaviorMessageGenerator | 通知許可後の構造化評価と発話生成の境界 |
+| LlmBehaviorMessageGenerator | 既存キャラクターによる短い発話だけ。評価・境界・時間をLLMへ委譲しない |
+| BehaviorService / BehaviorConfiguration | 1 worker・queue 0で評価と通知を実行し、障害・生成中の状態変化を隔離 |
+| ActivityCommand | behavior on / off / status / evaluateと補完 |
+
+関連変更はcanonical categoryのgaming補完、gamingのSummary表示、LLM feature `activity-behavior`、
+MessageOrigin.BEHAVIOR、`/config init`のテンプレート。既存のチャット発話publisher / messageイベントを再利用し、
+Behavior専用イベントを増やしていない。
+
+### 評価・通知
+
+入力はFine-grained ActivitySessionと、そのrecordIdsが参照するActivityRecord。
+既存SessionがPrimary観測内訳を直接保持しないため、元Recordから既存ActivityRolePolicyで補う。
+Record推定区間をSession・次の観測・現在時刻・履歴範囲へclipし、重複を除き、SessionのobservedSecondsを上限とする。
+SummarySegmentは使わず、元の保存済みSessionやRaw Evidenceも変更しない。
+
+娯楽カテゴリはsocial / media / shopping / gaming。communicationを含む他カテゴリを一律に娯楽にしない。
+eligibleはPrimary既知かつunknown / other / idle以外の観測時間。unknown・未観測は分子/分母から除外する。
+連続娯楽はカテゴリ内切替をつなぐが、中断・未観測秒数を加算しない。60秒までの短いノイズは許容、
+長いunknown/gapとcontinuityId変更は連続性を切る。既知非娯楽5分で連続時間・episodeを回復する。
+
+連続30/60/120分でNOTICE/WARNING/STRONG_WARNING。直近60分はeligible30分以上・娯楽50%以上でNOTICE、
+直近120分はeligible60分以上・娯楽60%以上でWARNING。最大Severityを採用し、reasonをCONTINUOUS /
+RATIO / BOTHに構造化する。Assessmentには両窓の秒数・比率も残す。
+
+通知cooldownはNOTICE60分、WARNING45分、STRONG_WARNING30分。理由が変化しても同じ傾向として抑制し、
+直前の通知Severityからのescalationのみ突破できる。回復通知は出さず、回復後の通知には新しい区間自身が
+閾値を満たすことも要求する。昔のwindowの高比率だけで即再通知しない。
+Chat busy・Capture無効/pause・現在娯楽でない・古い観測は通知しない。
+
+予約をSQLiteへ保存してからLLMを呼ぶため、再起動・生成失敗・送信破棄でもcooldownは残る。
+状態保存失敗時は通知しない。重要なstate変化だけ書き込み、履歴は最大100件。
+生成中にoffやChat開始が可能で、送信直前の再評価で作業復帰等が分かれば発話を破棄する。
+
+### 発話と設定
+
+SystemPromptServiceのキャラクターを再利用。Severity・reason・観測時間・比率・カテゴリ・confidence等だけを
+小さなJSONで渡す。低confidenceではサービス名を外す。Raw画像・タイトル・会話履歴・Task/Calendarは渡さない。
+ツール・memory・advisorsを使わず、評価の変更、攻撃的表現、実操作や未完了作業の創作を禁止する指示を加える。
+空・上限到達・過長・tool call・代表的な侮辱語を含む出力は配信しない。
+モデル指定は `rei.llm.features.activity-behavior`。カスタムサーバーから別サーバーへのfallbackは使わない。
+
+全既定値・設定例は [activity-behavior-evaluation.md](activity-behavior-evaluation.md) に記載。
+自動評価は60秒ごと、履歴範囲24時間、enabled=false。on/offは起動中のoverride、再起動時はYAMLに従う。
+statusは保存済みcooldownも表示し、evaluateは無効中でも明示的に行える通知なしdry run。
+`/config init`テンプレートと設定bindingのテストも更新した。
+
+### Fixture / TDD
+
+SNS20分→動画10分→開発5分→unknown30秒→gap5分→SNS10分→動画15分→開発10分→SNS30分という
+合成fixtureで、連続娯楽30分、60分窓50/60分（83.3%）、120分窓85/100分（85%）、WARNING / BOTHを確認。
+unknown30秒・gap5分を除外し、workで連続時間がリセットされる。結果は `target/activity35-example.txt`。
+実機のActivity DBは使っていない。
+
+最初にEvaluator/Policyテストを追加して未実装のRedを確認し、純粋ロジックを実装。
+次に「LLM生成中に作業へ戻る」テストの失敗を確認して、送信直前の再評価を追加した。
+設定テンプレートの既存全enabledキー検査にもActivity/Behaviorの新規Java設定を追加した。
+
+追加47件: Evaluator20、Policy6、Service12、Wording3、Configuration3、SQLite統合2、補完1。
+Java全2,171件成功（failure / error / skip=0、2分18秒）。Client41件、Rust64件成功。
+ブラウザーE2Eも12件成功（1 worker、46.2秒）。flaky / timeoutなし。`git diff --check`成功。
+
+### 残課題・境界
+
+LLMのトーン・事実忠実性を完全な意味検証で保証するものではなく、実モデルでの使用感確認は残る。
+通知予約後の失敗・キャンセルではcooldownを保持するため、通知が欠けることがある。
+履歴範囲を超える連続時間は取得範囲内の下限値。休憩の意図や仕事が終わったかは推定しない。
+Task / Calendar / 締切 / Working Set / 未完了project / Score / 週次月次分析 / Adaptive Coachingは未実装。
+実画面・実LLMへのアクセスや実通知は行わず、既存Memory-First・画像retentionを維持した。

@@ -101,6 +101,35 @@ public class ExternalConfigFileService {
               enabled: false
           sound-notification:
             enabled: false
+          activity:
+            enabled: false
+            capture-interval-seconds: 60
+            keep-screenshots: false
+            behavior:
+              enabled: false
+              check-interval-seconds: 60
+              history-minutes: 1440
+              entertainment-categories: [social, media, shopping, gaming]
+              continuous:
+                notice-minutes: 30
+                warning-minutes: 60
+                strong-warning-minutes: 120
+              windows:
+                short-window:
+                  duration-minutes: 60
+                  minimum-observed-minutes: 30
+                  ratio: 0.50
+                long-window:
+                  duration-minutes: 120
+                  minimum-observed-minutes: 60
+                  ratio: 0.60
+              interruption:
+                reset-after-work-minutes: 5
+                noise-tolerance-seconds: 60
+              cooldown:
+                notice-minutes: 60
+                warning-minutes: 45
+                strong-warning-minutes: 30
           external-agents:
             codex:
               enabled: true
@@ -123,6 +152,10 @@ public class ExternalConfigFileService {
               max-subgoals-per-replan: ${REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN:8}
               max-llm-calls-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN:120}
             features:
+              activity-behavior:
+                base-url: ${REI_LLM_ACTIVITY_BEHAVIOR_BASE_URL:}
+                api-key: ${REI_LLM_ACTIVITY_BEHAVIOR_API_KEY:}
+                model: ${REI_LLM_ACTIVITY_BEHAVIOR_MODEL:}
               chat:
                 base-url: ${REI_LLM_CHAT_BASE_URL:}
                 api-key: ${REI_LLM_CHAT_API_KEY:}
