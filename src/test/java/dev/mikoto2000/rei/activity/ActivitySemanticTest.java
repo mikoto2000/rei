@@ -25,7 +25,7 @@ class ActivitySemanticTest {
   }
   @Test void developmentToolsAndSecondaryChangesMerge() {
     var result=segments(dev(0,"Terminal","X"),dev(1,"GVIM","YouTube"),dev(2,"Terminal","X"));
-    assertEquals(1,result.size());assertEquals("coding",result.getFirst().roles().primary().type());
+    assertEquals(1,result.size());assertEquals("development",result.getFirst().roles().primary().type());
     assertEquals(3,result.getFirst().evidence().size());assertEquals(180,result.getFirst().observedSeconds());
   }
   @Test void sustainedForegroundMediaSplits() {
@@ -34,7 +34,7 @@ class ActivitySemanticTest {
   }
   @Test void monitorIsBackgroundUnlessForeground() {
     var roles=new ActivityRolePolicy().classify(dev(0,"Terminal","X"));
-    assertEquals("Terminal",roles.primary().application());
+    assertEquals("terminal",roles.primary().application());
     assertEquals("btop",roles.background().getFirst().application());
     var monitor=activity("monitoring","btop","","");
     assertEquals(monitor,new ActivityRolePolicy().classify(record(1,"btop","system monitor",monitor)).primary());
@@ -54,7 +54,7 @@ class ActivitySemanticTest {
   @Test void shortDetourReturnsToDevelopmentWithoutLosingEvidence() {
     var result=segments(dev(0,"Terminal","X"),record(1,"Firefox","YouTube",activity("media","Firefox","YouTube","")),dev(2,"GVIM","X"));
     assertEquals(1,result.size());assertEquals(3,result.getFirst().evidence().size());
-    assertTrue(result.getFirst().roles().secondary().stream().anyMatch(a->a.service().equals("YouTube")));
+    assertTrue(result.getFirst().roles().secondary().stream().anyMatch(a->a.service().equals("youtube")));
   }
   @Test void twentyFineSessionsBecomeOneSummaryBlock() {
     var records=java.util.stream.IntStream.range(0,20).mapToObj(i->dev(i,i%2==0?"Terminal":"GVIM",i%3==0?"X":"YouTube")).toList();
@@ -68,9 +68,10 @@ class ActivitySemanticTest {
   }
   @Test void primaryWithinMergedContextUsesObservedDuration() {
     var social=activity("social","Firefox","X","");var media=activity("media","Firefox","YouTube","");
-    var s=segments(record(0,"Firefox","X",social),record(1,"Firefox","YouTube",media),record(2,"Firefox","YouTube",media)).getFirst();
+    var policy=new SemanticSessionPolicy(Duration.ofMinutes(3),Duration.ofMinutes(2),ZoneOffset.UTC);
+    var s=new SummaryGroupingPolicy(policy).aggregate(segments(record(0,"Firefox","X",social),record(1,"Firefox","YouTube",media),record(2,"Firefox","YouTube",media))).getFirst();
     assertEquals("media",s.roles().primary().type());
-    assertTrue(s.roles().secondary().contains(social));
+    assertTrue(s.roles().secondary().contains(ActivityVocabulary.canonical(social)));
   }
   @Test void sustainedChangeRemainsSeparateEvenAfterReturn() {
     var video=activity("media","Firefox","YouTube","");
@@ -117,7 +118,7 @@ class ActivitySemanticTest {
     java.nio.file.Files.writeString(java.nio.file.Path.of("target/activity-refinement-example.txt"),"Synthetic fixture: 5 fine sessions -> 1 summary segment\n"+text);
   }
   @Test void thresholdsAreConfigurableAndValidated() {
-    var p=new ActivityProperties();assertEquals(180,p.getSummaryGapSeconds());assertEquals(120,p.getSummaryBriefSwitchSeconds());
+    var p=new ActivityProperties();assertNull(p.getSummaryGapSeconds());assertEquals(120,p.effectiveNormalGapSeconds());assertEquals(300,p.effectiveMaximumGapSeconds());assertEquals(120,p.getSummaryBriefSwitchSeconds());
     p.setSummaryGapSeconds(-1);assertThrows(IllegalArgumentException.class,p::validate);
     p.setSummaryGapSeconds(0);p.setSummaryBriefSwitchSeconds(-1);assertThrows(IllegalArgumentException.class,p::validate);
     assertEquals(2,new SemanticSessionPolicy(Duration.ZERO,Duration.ZERO,ZoneOffset.UTC).aggregate(List.of(dev(0,"Terminal","X"),dev(2,"GVIM","X"))).size());

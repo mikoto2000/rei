@@ -25,7 +25,8 @@ public class ActivityConfiguration {
   @Bean ActivityTimeline activityTimeline(ActivityStore store,ActivityProperties p) {
     var zone=ZoneId.of(p.getZone());
     return new ActivityTimeline(store,Clock.system(zone),new SemanticSessionPolicy(
-        Duration.ofSeconds(p.getSummaryGapSeconds()),Duration.ofSeconds(p.getSummaryBriefSwitchSeconds()),zone));
+        Duration.ofSeconds(p.effectiveNormalGapSeconds()),Duration.ofSeconds(p.effectiveMaximumGapSeconds()),
+        Duration.ofSeconds(p.getSummaryBriefSwitchSeconds()),p.getPrimaryConfidenceThreshold(),zone));
   }
   @Bean ActivityTools activityTools(ActivityTimeline timeline) {return new ActivityTools(timeline);}
   @Bean ThreadPoolTaskExecutor activityExecutor() {

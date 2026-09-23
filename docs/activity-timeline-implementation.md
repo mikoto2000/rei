@@ -266,3 +266,83 @@ Java全件は2069件成功（failure / error / skipすべて0）。クライア�
 将来のAnalyticsは元Recordと細粒度Sessionから計算する。表示上吸収した切替やgapを
 focusMinutes等へ流用しない。Behavior Evaluation、お小言、Productivity Score、週次/月次分析、
 Adaptive Coachingは今回も追加しない。
+
+## Phase 3.1 — Gap / Primary / Summary theme
+
+開始時のブランチは `codex/activity-timeline-session-refinement`、git statusはclean。
+依頼どおり新規ブランチを作らず、Phase 3の`f4831ff`へ追加実装した。
+今回のコミットIDは最終報告に記載する。
+
+### 主要変更とポリシー
+
+- `SessionGapPolicy`: 通常120秒、最大300秒。通常超は同じcanonical categoryと同じ既知project、
+  または同じservice/applicationという強い一致が必要。結合時confidenceを0.85倍へ下げる。
+  単一gapだけでなく、Segmentの累積未観測秒数も300秒以下に制限する。
+- `ActivityVocabulary`: canonical categoryとservice/applicationの正規化、表示ラベルを分離。
+  categoryはdevelopment / research / documentation / communication / social / media / shopping /
+  monitoring / navigation / idle / other / unknown。coding等はdevelopment、Terminal / Shell /
+  Web / local等はunknown。原Recordのモデル候補は監査可能なEvidenceとして保持する。
+- `ActivityRolePolicy`: foreground process一致を必須とする8点、タイトルservice一致5点、content4点、
+  project1点。別プロセスの候補はタイトル一致だけで主活動にならない。同点の異なる候補はunknown。
+  score≥12はモデルconfidence×0.95、それ未満は×0.75。既定閾値0.5未満はunknown。
+  監視候補はforegroundの裏付けがなければbackground。全画面差分を操作証拠には転用しない。
+- `SemanticSessionPolicy`: canonical categoryで意味的な区間を作成。観測秒数による代表選択、
+  短い往復切替の吸収を維持し、異なるprojectや累積欠測上限を回避する結合を防ぐ。
+- `SummaryGroupingPolicy`: social / media / shoppingはweb-browsing、同じprojectのdevelopment /
+  research / documentationはwork-developmentへまとめる。表示テーマは元categoryを書き換えない。
+  同じgap policy、日付・continuity境界を守り、長いgapはテーマが同じでも跨がない。
+- `SummarySegment`: themeとprimaryCategoriesを追加。観測秒数、欠測秒数、元Evidence、fineSessionIdsを維持。
+- `ActivitySummaryFormatter`: 未観測率10%未満は注記なし、10〜30%は「一部未観測時間あり」、
+  30%超は「観測できた時間帯のみ」「未観測の割合が高い期間」と明示。秒数は構造化値に残す。
+  unknownでも確認できるsecondary / backgroundを最大3種類補足する。themeの文章に存在しないカテゴリを足さない。
+- `ActivityTimeline` / `ActivityConfiguration` / `ActivityProperties`: 新しい層と設定を接続。
+  `ActivitySession`には時間範囲から欠測秒数を取得する計算メソッドを追加。
+
+設定は `rei.activity.summary-normal-merge-gap-seconds: 120`、
+`summary-maximum-merge-gap-seconds: 300`、`primary-confidence-threshold: 0.5`。
+従来の `summary-gap-seconds` を明示している場合は追加の上限として尊重する。
+Rei→rei、Twitter / X (Twitter)→内部x・表示X、Local terminal / PowerShell等→terminal・表示ターミナル。
+
+### データ保持とAnalytics
+
+ActivityRecord → 永続Fine-grained ActivitySession → 役割付き意味区間 → SummarySegment → 表示。
+永続化した細粒度Sessionの境界、元Recordと自由文、画像参照は変更しない。
+新しいcanonical categoryは意味projectionの値であり、古い原文カテゴリを削除する移行は行わない。
+Summary theme、primaryCategories、役割、confidenceは元Evidenceから再構成できる。
+時間範囲はwall-clock、observedSecondsは重複を除く観測推定時間、unobservedSecondsはその差。
+欠測をfocusMinutesやSNS利用時間へ加算しない。表示上の圧縮を将来のスコア計算には使わない。
+
+### Before / Afterと件数
+
+提示例の相対時刻・カテゴリをfixture化したテストでは、
+09:52–09:53 shopping / 09:54–10:10 social / 10:11–10:16 social /
+10:27–10:32 social相当の4件から2 Segmentになる。
+
+```text
+09:52–10:16 Web閲覧が中心と推定。
+10:27–10:32 SNS閲覧が中心と推定。
+```
+
+前半の短いgapは許容し、後半の11分欠測は結合しない。
+別の半日相当fixtureでは24細粒度Session→6 Segment（75%減）。
+再現出力は `target/activity31-example.txt`。実機DB全体は読み出していないため、
+実運用の平均Segment件数は未測定。6件は合成fixtureの値であり、件数上限を強制していない。
+小さなgapが連鎖して欠測540秒になる例も、累積300秒の上限で分割されることを検証した。
+
+### TDD / テスト
+
+Phase 3.1の新API・gap・category・foreground・unknown・themeテストを先に追加し、Redを確認して実装。
+unknownでbackgroundしかないと補足が出ない回帰も、失敗を確認してから修正した。
+旧canonical値と集約層変更の期待値を更新し、原データ保持の検証は維持。
+追加18件（`ActivityPhase31Test` 17件、`ActivitySummaryQueryTest` 1件）。
+前回Java2069件、Client41件、Rust64件、E2E12件。
+今回Java2087件成功（2069 + 18、failure / error / skipすべて0）、Client41件成功、Rust64件成功。
+E2Eは12件すべて成功（1 worker、53.0秒）。今回flaky / timeout / 再実行はなし。
+`git diff --check`成功。実画面・実Vision APIは呼ばず、実機DBも変更していない。
+
+### 残課題
+
+foreground processとVisionのapplication表記を対応付けられないものはunknownになる。
+alias辞書と閾値は実運用データでの調整余地がある。入力操作やブラウザタブの実使用は未測定。
+Summaryの件数より観測の正確さを優先するため、頻繁な欠測やproject変更があれば目標件数を超え得る。
+Behavior Evaluation、お小言、Productivity Score、週次/月次分析、Adaptive Coachingは追加していない。

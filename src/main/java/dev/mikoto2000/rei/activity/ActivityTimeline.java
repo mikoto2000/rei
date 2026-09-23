@@ -5,7 +5,7 @@ import java.util.*;
 
 public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPolicy summaryPolicy) {
   public ActivityTimeline(ActivityStore store,Clock clock) {
-    this(store,clock,new SemanticSessionPolicy(Duration.ofMinutes(3),Duration.ofMinutes(2),clock.getZone()));
+    this(store,clock,new SemanticSessionPolicy(Duration.ofSeconds(120),Duration.ofSeconds(300),Duration.ofSeconds(120),.5,clock.getZone()));
   }
   public List<ActivitySession> findByDate(LocalDate date) {
     return store.findBetween(date.atStartOfDay(clock.getZone()).toInstant(),date.plusDays(1).atStartOfDay(clock.getZone()).toInstant());
@@ -32,10 +32,10 @@ public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPo
     validateRange(start,end);
     var fine=store.findBetween(start,end);
     var records=store.findRecordsBetween(start,end);
-    return summaryPolicy.aggregate(records,start,end).stream().map(segment -> {
+    return new SummaryGroupingPolicy(summaryPolicy).aggregate(summaryPolicy.aggregate(records,start,end)).stream().map(segment -> {
       var ids=new HashSet<>(segment.evidence().stream().map(ActivityRecord::id).toList());
       var fineIds=fine.stream().filter(s->s.recordIds().stream().anyMatch(ids::contains)).map(ActivitySession::id).toList();
-      return new SummarySegment(segment.startedAt(),segment.endedAt(),segment.observedSeconds(),segment.roles(),segment.evidence(),fineIds);
+      return new SummarySegment(segment.startedAt(),segment.endedAt(),segment.observedSeconds(),segment.roles(),segment.evidence(),fineIds,segment.theme(),segment.primaryCategories());
     }).toList();
   }
   /** Display-only semantic projection; raw records and persisted fine sessions are never rewritten. */

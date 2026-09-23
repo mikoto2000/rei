@@ -43,4 +43,12 @@ class ActivitySummaryQueryTest {
     assertTrue(timeline.summarySegments("yesterday").isEmpty());
     assertThrows(IllegalArgumentException.class,()->timeline.summaryBetween(ActivitySemanticTest.START,ActivitySemanticTest.START.plus(Duration.ofDays(32))));
   }
+  @Test void themeGroupingPreservesOriginalCategoriesAndEvidence() {
+    var records=List.of(ActivityPhase31Test.web(0,"social","Twitter"),ActivityPhase31Test.web(1,"shopping","Amazon"),ActivityPhase31Test.web(2,"social","X (Twitter)"));
+    records.forEach(store::append);var fineBefore=timeline.query("today");
+    var result=timeline.summarySegments("today");assertEquals(1,result.size());assertEquals("web-browsing",result.getFirst().theme());
+    assertEquals(fineBefore,timeline.query("today"));assertEquals(records,result.getFirst().evidence());
+    assertEquals(3,result.getFirst().fineSessionIds().size());
+    assertTrue(result.getFirst().primaryCategories().containsAll(List.of("social","shopping")));
+  }
 }

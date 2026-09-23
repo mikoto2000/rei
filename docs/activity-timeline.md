@@ -13,7 +13,7 @@ Spring @Scheduled → bounded activityExecutor (1 worker, queue=0)
   → ScreenshotPersistencePolicy → optional ScreenshotStore
   → ActivityRecord → SqliteActivityStore + SessionMergePolicy → ActivitySession
   → ActivityTimeline + raw evidence → ActivityRolePolicy → SemanticSessionPolicy
-  → SummarySegment → ActivitySummaryFormatter → ActivityCommand / ActivityTools
+  → SummaryGroupingPolicy → SummarySegment → ActivitySummaryFormatter → ActivityCommand / ActivityTools
 ```
 
 既存の `AwtRobotDriver` / `RobotScreenCapture` / `CapturedScreen` による
@@ -44,8 +44,10 @@ rei:
     screenshot-retention-days: 3
     change-threshold: 0.03
     session-gap-seconds: 90
-    summary-gap-seconds: 180
+    summary-normal-merge-gap-seconds: 120
+    summary-maximum-merge-gap-seconds: 300
     summary-brief-switch-seconds: 120
+    primary-confidence-threshold: 0.5
     zone: Asia/Tokyo
     excluded-processes:
       - KeePassXC.exe
@@ -214,7 +216,7 @@ DB保存失敗後の孤立画像もretention対象になる。
 
 ## Semantic Session / Primary・Secondary・Background
 
-Phase 3の表示改善は二段階集約とする。永続化された細粒度Sessionの境界は変更しない。
+Phase 3 / 3.1の表示改善は二段階集約とする。永続化された細粒度Sessionの境界は変更しない。
 `ActivityRolePolicy` が元Recordから役割を推定し、`SemanticSessionPolicy` が意味的に近い観測を
 表示用の `SummarySegment` にまとめる。SegmentがSemantic Sessionの役割を担い、
 `roles.primary / secondary / background`、推定confidence、判断根拠コード、全Evidence、
@@ -223,8 +225,14 @@ Phase 3の表示改善は二段階集約とする。永続化された細粒度S
 Primary判定はforeground processとcandidate applicationの対応、foreground title中のservice /
 content / project候補を材料にする。既知のアプリ表記差（WindowsTerminal / Terminalなど）は正規化する。
 project名だけでは主活動を決めず、ブラウザで複数の異なる候補が同点ならPrimaryは未判定にする。
+foreground processとの一致を必須にし、8点を付与する。対応する候補についてのみ、
+タイトル中のservice一致を5点、content一致を4点、project一致を1点加算する。
+別プロセスの画面候補は、タイトルに名前があるだけではPrimaryにならない。
+scoreが12以上ならモデルconfidence×0.95、それ未満は×0.75とし、
+`primary-confidence-threshold`（既定0.5）未満、未知カテゴリ、異なる候補の同点はunknownとする。
 Segmentの代表はforegroundで裏付けられた候補の観測推定秒数で重み付けする。
-confidenceも観測秒数で重み付けし、未判定や短い別活動の分は確信度を下げる。
+semantic集約では支持観測が半分未満なら未判定、confidenceは支持観測秒数で重み付けする。
+通常上限を超えたgapで結合した場合はconfidenceを0.85倍にし、閾値を下回ればunknownへ戻す。
 これは校正済み確率ではなく補助指標であり、操作・集中の測定値ではない。
 
 監視カテゴリ、btop / Grafana / system monitor / ログ監視等の候補は背景役割を持つ。
@@ -235,34 +243,63 @@ confidenceも観測秒数で重み付けし、未判定や短い別活動の分�
 結合規則:
 
 - 開発カテゴリを正規化し、同じproject文脈ならTerminal / GVIM / GitHub等の切替を許容する。
-- SecondaryやBackgroundだけの変化は境界にしない。SNS / メディアは上位の共通文脈で結合できる。
+- SecondaryやBackgroundだけの変化は境界にしない。異なるcanonical categoryの上位テーマ集約はSummary専用層で行う。
 - 異なる既知projectは結合しない。project不明の観測を挟んでも別projectへ連鎖結合しない。
 - その他のカテゴリはservice / applicationやprojectの共通性も確認する。未判定同士は同じforegroundと候補集合が必要。
-- 未観測gapは直前の推定区間の終端から測り、`summary-gap-seconds`（既定180秒）以内を許容する。
+- 未観測gapは直前の推定区間の終端から測る。`SessionGapPolicy`の通常上限は120秒、最大は300秒。
+  120秒以内は通常の結合候補。120秒超〜300秒は同じcategoryと同じ既知project、または同じservice/applicationという強い一致が必要。
+  300秒超は結合しない。小さなgapの連鎖も、1 Segmentの累積未観測が300秒を超える結合は止める。
 - A→B→Aと主文脈に戻る場合、Bの区間が`summary-brief-switch-seconds`（既定120秒）以内なら表示上まとめる。
   継続する新しいPrimaryや戻りのない変化は分割する。短いBも元Evidenceから削除しない。
 - continuity境界（pause / 除外 / 失敗 / 再起動）と設定zoneの日付境界は越えない。
 
 `observedSeconds` は次の観測・日末・検索区間でクリップし、重複を除く。
-まとめた区間内の欠測は `unobservedSeconds` に分離し、Summaryにも表示する。
+まとめた区間内の欠測は `unobservedSeconds` に分離する。細粒度Sessionにも同名の計算メソッドがある。
 gapを作業時間や集中時間として補完しない。
+
+### Canonical category / 表記正規化
+
+`ActivityVocabulary` のカテゴリは development / research / documentation / communication /
+social / media / shopping / monitoring / navigation / idle / other / unknown。
+coding・debugging等はdevelopment、snsはsocial、video・musicはmediaに正規化する。
+Terminal / Shell / Web / local等はカテゴリとして採用せずunknownとする。
+application（道具）、service、categoryは分離し、genericなservice候補（local / Web / Shell等）も表示から除く。
+
+正規化するのは役割付け・集約用projection。元Recordの自由文字列typeはVisionの原候補として残し、
+既存DBのEvidenceを改変しない。正規化後の意味カテゴリは `ActivityRoles.category()` で取得する。
+projectはNFKC・小文字へ正規化（Rei→rei）。Twitter / X (Twitter)は内部値x、表示名Xへ統一。
+Terminal / Local terminal / PowerShell等は道具のterminalへ正規化し、表示名はターミナル。
+同じ正規化をprocessとの照合にも使用する。
+
+旧 `summary-gap-seconds` を明示している場合は、互換用の最大gap・累積欠測の追加上限として扱う。
+未設定なら新しい120 / 300秒を使う。新しい上限は0以上かつ通常≤最大、confidence閾値は0〜1。
 
 ## Summary Segment / User-facing Summary
 
 `ActivityRecord` はOS evidenceと元のVision推論を保持する。
 Fine-grained `ActivitySession` は詳細な時系列とrecordIdsを保持する。
 `SummarySegment` はその上の表示用projectionであり、元Recordと細粒度Sessionを消さない。
+`SemanticSessionPolicy`の役割付き区間を、`SummaryGroupingPolicy`がより広いthemeへまとめる。
+social / media / shoppingはweb-browsing、development / research / documentationはwork-development。
+異なる作業カテゴリの結合には同じ既知projectが必要。異なるprojectは短い往復切替でも結合しない。
+themeは表示用であり元のcategoryを上書きしない。`primaryCategories`に構成する主活動カテゴリを残す。
+この層も同じgap上限・累積欠測上限・continuity・日付境界を守る。
 `ActivitySummaryFormatter` はSegmentの役割から活動中心の短い日本語を生成する。
 Visionの長文summaryを転記しないため、各行の免責文・ウィンドウ名列挙を抑えられる。
 追加LLMは使用しない。時間計算と境界はコードだけで決める。
 
 先頭に不確実性の説明を一度置き、各ブロックは主活動の推定と補足表示（最大3種類＋「など」）にする。
+未知の場合もsecondary / backgroundから確認できる表示を最大3種類補足する。
+未観測率（未観測秒数÷区間全体）が10%未満なら注記省略、10〜30%なら「一部未観測時間あり」、
+30%超なら時間範囲を「観測できた時間帯のみ」と限定し「未観測の割合が高い期間」と明示する。
+秒数の技術的表示はSummaryでは出さず、構造化Segmentに保持する。
 「開発・確認作業」までに留め、候補にない「バグ修正」や実際の視聴・操作を断定しない。
 Primaryを特定できない場合は、その旨を出す。見えているだけの活動を勝手に主活動に昇格させない。
 
 提示例相当の合成fixtureでは09:08–09:46の5細粒度Sessionが1 Segmentになり、
 交互にTerminal / GVIMを前面にした20細粒度Sessionも1 Segmentになる。
-5〜12ブロックは目標粒度であり、件数を達成するために異なるprojectや長い欠測を強制結合しない。
+半日5〜10・1日8〜15ブロックは目標粒度であり、件数を達成するために異なるprojectや長い欠測を強制結合しない。
+Phase 3.1の半日合成fixtureは24細粒度Session→6テーマ。実機履歴全体の平均Segment数は未測定。
 将来のfocusMinutes / contextSwitchCount等はSummary文字列から逆算せず、元Record・細粒度Session・
 Evidenceから算出する。Productivity Score、行動評価、週次/月次分析、Adaptive Coachingは追加していない。
 

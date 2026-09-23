@@ -8,4 +8,5 @@ public record ActivityRoles(ActivityRecord.Activity primary, List<ActivityRecord
   public ActivityRoles {
     secondary=List.copyOf(secondary); background=List.copyOf(background); basis=List.copyOf(basis);
   }
+  public String category() {return primary==null?"unknown":primary.type();}
 }
