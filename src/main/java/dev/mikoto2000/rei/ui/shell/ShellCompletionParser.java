@@ -13,6 +13,10 @@ public final class ShellCompletionParser implements Parser {
   private final UserInputParser tokenizer = new UserInputParser();
   public ShellCompletionParser(Path home) { this.home = home; }
 
+  // LineReader.finish() also consults this flag after parsing. The default treats
+  // backslashes as escapes and strips Windows path separators before execution.
+  @Override public boolean isEscapeChar(char ch) { return false; }
+
   @Override public ParsedLine parse(String line, int cursor, ParseContext context) {
     if (cursor < 0 || cursor > line.length()) throw new IllegalArgumentException("Cursor outside input");
     var tokens = tokenizer.tokenize(line);

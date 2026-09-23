@@ -33,6 +33,17 @@ class ReiApplicationMultilineInputTest {
   }
 
   @Test
+  void readPossiblyMultilineInput_preservesTrailingCommandPathSeparator() {
+    ReiApplication app = newApp();
+    LineReader reader = Mockito.mock(LineReader.class);
+    for (String line : java.util.List.of("/project cd F:\\", "/project cd .\\rei\\",
+        " /project add \"F:\\My Documents\\", "/embed add F:\\docs\\")) {
+      assertEquals(line, app.readPossiblyMultilineInput(line, reader));
+    }
+    Mockito.verifyNoInteractions(reader);
+  }
+
+  @Test
   void readPossiblyMultilineInput_joinsContinuationLines() {
     ReiApplication app = newApp();
     LineReader reader = Mockito.mock(LineReader.class);

@@ -182,7 +182,7 @@ public class ReiApplication {
 
     System.out.println("AI Shell");
     System.out.println("通常入力は chat として扱います。/exit で終了します。");
-    System.out.println("複数行入力: 複数行ペースト対応。行末に \\\\ を付けるか、Ctrl+J でも改行できます。");
+    System.out.println("複数行入力: 複数行ペースト対応。通常入力では行末に \\ を付けるか、Ctrl+J でも改行できます。");
     System.out.println("/paste で確実な複数行入力モード（終了は単独行の . ）");
 
     ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
@@ -387,7 +387,9 @@ public class ReiApplication {
   }
 
   String readPossiblyMultilineInput(String firstLine, LineReader reader) {
-    if (!firstLine.endsWith(MULTILINE_CONTINUATION)) {
+    // Slash-command arguments use literal backslashes, including the trailing
+    // separator inserted by directory completion. Continuation is for chat input.
+    if (firstLine.stripLeading().startsWith("/") || !firstLine.endsWith(MULTILINE_CONTINUATION)) {
       return firstLine;
     }
 
