@@ -13,7 +13,8 @@ Spring @Scheduled → bounded activityExecutor (1 worker, queue=0)
   → ScreenshotPersistencePolicy → optional ScreenshotStore
   → ActivityRecord → SqliteActivityStore + SessionMergePolicy → ActivitySession
   → ActivityTimeline + raw evidence → ActivityRolePolicy → SemanticSessionPolicy
-  → SummaryGroupingPolicy → SummarySegment → ActivitySummaryFormatter → ActivityCommand / ActivityTools
+  → SummaryGroupingPolicy → SummarySegment → ActivitySummaryFormatter → today / date / ActivityTools
+  → TrendSummaryPolicy → TrendSummarySegment → TrendSummaryFormatter → /activity summary
 ```
 
 既存の `AwtRobotDriver` / `RobotScreenCapture` / `CapturedScreen` による
@@ -305,6 +306,52 @@ Evidenceから算出する。Productivity Score、行動評価、週次/月次�
 
 ## Query / Slash commands / Summary
 
+### Phase 3.2: 時間帯の傾向
+
+`/activity summary`には表示専用の `TrendSummarySegment` を使用する。
+Phase 3.1の `SummarySegment` / SemanticSessionPolicy / gap policyは変更せず、
+その上に `TrendSummaryPolicy` を追加した。元の永続Fine-grained ActivitySession、
+Raw Evidence、Primary / Secondary / Background、confidenceを上書きしない。
+`sourceSegments` に元projection、`fineSessionIds` に細粒度Session参照を保持する。
+
+新たにまとめる時間幅は最大60分、隣接した観測区間間のgapは最大20分（ポリシーの既定値）。
+単独ですでに長い連続区間は分割を強制しない。同じ日付内で、上位テーマ、foregroundで裏付けられた
+project、service/applicationの共通性、短い切替を使って候補をまとめる。
+unknown / otherは近隣の時間帯へ吸収できるが、既知の活動として再ラベルしない。
+異なる既知projectは分割する。未知の区間を挟んだprojectの連鎖結合も防ぐ。
+Phase 3.1の300秒上限は元projectionに適用され、傾向表示にまで流用しない。
+
+観測推定区間を元Recordからクリップして集計し、`observedSeconds` / `unobservedSeconds`に加え、
+`knownSeconds` / `unknownSeconds`を保持する。otherは表示用の未判定時間に含め、原カテゴリは残す。
+既知のPrimaryが観測時間の半分以上ならそのカテゴリをテーマに用い、それ未満なら可視候補も
+画面表示の傾向として参照する。操作や実利用の時間には変換しない。
+
+continuityは以下の**観測の性質**を表す。
+
+- `CONTINUOUS`: 同系統の既知活動だけ、同じcontinuityId、最大gap120秒以内、未観測率10%以下。
+  実際に操作し続けたことを証明する値ではない。
+- `INTERMITTENT`: 欠測、unknown / other、continuityIdの変化などを含む。
+- `MIXED`: foregroundで裏付けられた複数系統の活動を含む。欠測の有無・秒数は別途保持する。
+
+themeはdevelopment-research / web-browsing / communication等とmixed-work / mixed / unknown。
+元の細粒度categoryを上書きしない。projectはforegroundで裏付けられた候補だけを見出しへ使用する。
+表示は「観測できた範囲では」「断続的に見られました」とし、欠測中の継続を主張しない。
+未観測率の定型注意を各行へ重ねず、未判定を含む場合だけ短く補足する。
+otherだけの場合も「その他の活動が中心」とは出さず、主活動を判定できない旨を表示する。
+
+`ActivityDisplayLabels` は表示だけを正規化する。browser→ブラウザ、cmd→ターミナル、
+gradle→ビルド、python→Python関連、shopping→ショッピング、video→動画、openai→AIツール、
+chatgpt→ChatGPT、notion→Notion、asus→ASUS。未知の固有名詞を推測で書き換えない。
+補足は最大4ラベル。Primaryとの一致、観測秒数で重み付けした出現頻度、projectの具体性の順に選ぶ。
+同一観測内の重複ラベルを頻度へ二重加算しない。
+
+追加LLM・画像取得・DB更新は不要。`ActivityTimeline.trendSegments(day)`と`trendSummary(day)`が
+新しい読み取り用API。既存query / findBetween / summarySegments / summaryBetween / summaryおよび
+自然言語ツールの挙動は維持する。将来のAnalyticsは元Record・細粒度Sessionを入力にし、
+傾向Segmentの時間幅を集中時間・SNS利用時間へ転用しない。
+
+### コマンドと既存API
+
 ```text
 /activity today
 /activity yesterday
@@ -314,9 +361,9 @@ Evidenceから算出する。Productivity Score、行動評価、週次/月次�
 /activity resume
 ```
 
-`summary` は今日の意味的なSegmentを開始時刻に応じて深夜・午前・午後・夜にまとめる。
-today / yesterday / 日付指定も同じ圧縮表示を使用する。
-文章化は `ActivitySummaryFormatter` で行い、追加LLMは不要。
+`summary` は今日の時間帯の傾向を `TrendSummaryFormatter` で表示する。
+today / yesterday / 日付指定（引数省略を含む）はPhase 3.1の `ActivitySummaryFormatter` 表示を維持する。
+追加LLMは不要。
 記録がない場合は「記録なし」と返し、何もしていなかったとは断定しない。
 pause はメモリ上の状態であり、再起動時には enabled 設定に従う。
 resume は `enabled=false` を上書きしない。

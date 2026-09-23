@@ -23,6 +23,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
     try {
       String result;
       switch(action) {
+        case "summary" -> result=timeline.trendSummary("today");
         case "pause" -> {capture.pause();result="Activity Capture を一時停止しました。";}
         case "resume" -> {capture.resume();result=properties.isEnabled()?"Activity Capture を再開しました。":"Activity Capture は設定で無効です。rei.activity.enabled=true が必要です。";}
         default -> result=timeline.summary(action);

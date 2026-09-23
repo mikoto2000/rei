@@ -42,4 +42,10 @@ public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPo
   public String summary(String day) {
     return new ActivitySummaryFormatter(clock.getZone()).format(summarySegments(day));
   }
+  public List<TrendSummarySegment> trendSegments(String day) {
+    return new TrendSummaryPolicy(clock.getZone(),summaryPolicy.minimumConfidence()).aggregate(summarySegments(day));
+  }
+  public String trendSummary(String day) {
+    return new TrendSummaryFormatter(clock.getZone()).format(trendSegments(day));
+  }
 }
