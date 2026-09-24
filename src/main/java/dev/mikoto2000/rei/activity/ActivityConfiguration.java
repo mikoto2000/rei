@@ -45,7 +45,7 @@ public class ActivityConfiguration {
   }
   @Bean ActivityTools activityTools(ActivityTimeline timeline) {return new ActivityTools(timeline);}
   @Bean ClassificationRuleSuggestions classificationRuleSuggestions(ClassificationToolkit toolkit,dev.mikoto2000.rei.llm.LlmModelProvider provider,dev.mikoto2000.rei.core.service.ModelHolderService current) {
-    return new ClassificationRuleSuggestions(toolkit,new LlmClassificationRuleModel(()->provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),()->provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get())));
+    return new ClassificationRuleSuggestions(toolkit,new LlmClassificationRuleModel(()->provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),()->provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get()),toolkit.properties().getClassification().getRuleSuggestion().getMaxOutputTokens()));
   }
   @Bean ThreadPoolTaskExecutor activityExecutor() {
     return worker("rei-activity-observe-");

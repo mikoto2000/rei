@@ -100,13 +100,15 @@ public final class OperationalRules {
         if(!(r.get("id") instanceof String id) || !id.matches("[A-Za-z0-9_-]{1,80}") || !ids.add(id))throw invalid();
         int priority=integer(r.getOrDefault("priority",100));if(priority<0 || priority>10000)throw invalid();
         Object enabled=r.getOrDefault("enabled",true);if(!(enabled instanceof Boolean))throw invalid();
-        var match=map(r.get("match"));keys(match,MATCH);if(match.isEmpty())throw invalid();
-        if(type.equals("classification") && match.keySet().stream().anyMatch(k->!Set.of("processRegex","titleRegex").contains(k)))throw invalid();
+        var match=map(r.get("match"));keys(match,MATCH);if(match.isEmpty())throw invalid("EMPTY_MATCH: matchに条件が必要です。");
+        if(type.equals("classification") && match.keySet().stream().anyMatch(k->!Set.of("processRegex","titleRegex").contains(k)))throw invalid("CLASSIFICATION_MATCH_FIELDS: classificationのmatchはprocessRegex/titleRegexのみ指定できます。");
         var patterns=new LinkedHashMap<String,Pattern>();var strings=new LinkedHashMap<String,String>();
         for(var e:match.entrySet()) {
-          if(!(e.getValue() instanceof String regex) || regex.isBlank() || regex.length()>256)throw invalid();
+          if(!(e.getValue() instanceof String regex) || regex.isBlank() || regex.length()>256)throw invalid("REGEX_LENGTH: match."+e.getKey()+"は空白以外の1〜256文字が必要です。");
           // Disallow backreferences and nested repetitions: untrusted rules must not stall capture.
-          if(regex.matches(".*\\\\[1-9].*") || Pattern.compile("\\)[+*{]").matcher(regex).find() || Pattern.compile("[+*]").matcher(regex).results().count()>2)throw invalid();
+          if(regex.matches(".*\\\\[1-9].*"))throw invalid("REGEX_BACKREFERENCE: match."+e.getKey()+"の後方参照は使用できません。");
+          if(Pattern.compile("\\)[+*{]").matcher(regex).find())throw invalid("REGEX_GROUP_REPETITION: match."+e.getKey()+"のグループ繰り返しは使用できません。");
+          if(Pattern.compile("[+*]").matcher(regex).results().count()>2)throw invalid("REGEX_QUANTIFIER_LIMIT: match."+e.getKey()+"の+/*は合計2個までです。");
           var pattern=Pattern.compile(regex);patterns.put(e.getKey(),pattern);strings.put(e.getKey(),regex);
         }
         var classify=new LinkedHashMap<>(map(r.get("classify")));keys(classify,CLASSIFY);
@@ -119,17 +121,20 @@ public final class OperationalRules {
           else if(!(e.getValue() instanceof String s) || s.length()>256)throw invalid();
         }
         if(type.equals("classification")) {
-          if(!CATEGORIES.contains(string(classify,"category","")) || classify.containsKey("entertainmentDisposition") || classify.containsKey("confidence"))throw invalid();
-          if(string(classify,"category","").equals("unknown") && conf(classify,"categoryConfidence",0)>0)throw invalid();
+          if(!CATEGORIES.contains(string(classify,"category","")))throw invalid("CLASSIFICATION_CATEGORY: classify.categoryに有効なカテゴリが必要です。");
+          if(classify.containsKey("entertainmentDisposition") || classify.containsKey("confidence"))throw invalid("CLASSIFICATION_FIELDS: classificationではclassify.entertainmentDisposition/confidenceは指定できません。");
+          if(string(classify,"category","").equals("unknown") && conf(classify,"categoryConfidence",0)>0)throw invalid("UNKNOWN_CATEGORY_CONFIDENCE: category=unknownのcategoryConfidenceは0のみです。");
         }else {
-          keys(classify,Set.of("entertainmentDisposition","confidence"));
-          try{EntertainmentDisposition.valueOf(string(classify,"entertainmentDisposition",""));}catch(Exception e){throw invalid();}
-          if(!classify.containsKey("confidence"))throw invalid();
+          if(!Set.of("entertainmentDisposition","confidence").containsAll(classify.keySet()))throw invalid("ENTERTAINMENT_FIELDS: entertainmentのclassifyはentertainmentDisposition/confidenceのみ指定できます。");
+          try{EntertainmentDisposition.valueOf(string(classify,"entertainmentDisposition",""));}catch(Exception e){throw invalid("ENTERTAINMENT_DISPOSITION: classify.entertainmentDispositionに有効な判定が必要です。");}
+          if(!classify.containsKey("confidence"))throw invalid("ENTERTAINMENT_CONFIDENCE: classify.confidenceが必要です。");
         }
         if(proposal) {
           boolean contextual=patterns.entrySet().stream().anyMatch(e->Set.of("titleRegex","contentRegex").contains(e.getKey()) && !broad(e.getValue()));
           boolean scoped=patterns.entrySet().stream().anyMatch(e->Set.of("processRegex","serviceRegex","applicationRegex").contains(e.getKey()) && !broad(e.getValue()));
-          if(!contextual || !scoped || patterns.values().stream().anyMatch(OperationalRules::broad))throw invalid();
+          for(var e:patterns.entrySet())if(broad(e.getValue()))throw invalid("BROAD_REGEX: match."+e.getKey()+"が空文字または無関係な文字列にも一致します。");
+          if(!contextual)throw invalid("MISSING_CONTEXT: match.titleRegexまたはcontentRegexが必要です。");
+          if(!scoped)throw invalid("MISSING_SCOPE: match.processRegex/serviceRegex/applicationRegexのいずれかが必要です。");
         }
         result.add(new Rule(id,type,"user",priority,(Boolean)enabled,Map.copyOf(strings),Map.copyOf(classify),Map.copyOf(patterns)));
       }
@@ -145,6 +150,11 @@ public final class OperationalRules {
   static String string(Map<String,Object> m,String key,String fallback){return m.containsKey(key)?Objects.toString(m.get(key)):fallback;}
   private static String safe(String value){return value==null?"":value.substring(0,Math.min(512,value.length()));}
   private static IllegalArgumentException invalid(){return new IllegalArgumentException("Invalid rule definition (id, match, classify, regex, priority or confidence)");}
+  /** Diagnostics contain only fixed text and validated field names, never rule values. */
+  static final class InvalidDefinition extends IllegalArgumentException {
+    InvalidDefinition(String detail){super(detail);}
+  }
+  private static InvalidDefinition invalid(String detail){return new InvalidDefinition(detail);}
   private static List<Rule> builtIns() {
     try(var in=OperationalRules.class.getResourceAsStream("/activity/operational-rules.yaml")) {
       var rules=compile(new String(Objects.requireNonNull(in).readAllBytes(),java.nio.charset.StandardCharsets.UTF_8),false);

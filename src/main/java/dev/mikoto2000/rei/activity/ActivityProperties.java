@@ -25,7 +25,11 @@ public class ActivityProperties {
     private Diagnostics diagnostics=new Diagnostics();
   }
   @Data public static class Registry { private boolean enabled=true;private int retentionDays=30;private int maxEntries=1000; }
-  @Data public static class RuleSuggestion { private boolean enabled=true;private int minimumSamples=3; }
+  @Data public static class RuleSuggestion {
+    public static final int DEFAULT_MAX_OUTPUT_TOKENS=8192;
+    private boolean enabled=true;private int minimumSamples=3;
+    private int maxOutputTokens=DEFAULT_MAX_OUTPUT_TOKENS;
+  }
   @Data public static class Diagnostics { private boolean enabled=true; }
   public enum DetectionMode { EVIDENCE_FIRST, VISION_FIRST }
   @Data public static class Detection {
@@ -54,6 +58,8 @@ public class ActivityProperties {
   public void validate() {
     if(classification==null || classification.userRulesFile==null || classification.userRulesFile.isBlank() || classification.unknownRegistry==null || classification.entertainmentRegistry==null || classification.ruleSuggestion==null || classification.diagnostics==null || classification.ruleSuggestion.minimumSamples<1)
       throw new IllegalArgumentException("Invalid classification toolkit settings");
+    if(classification.ruleSuggestion.maxOutputTokens<1)
+      throw new IllegalArgumentException("rei.activity.classification.rule-suggestion.max-output-tokens must be positive");
     for(var registry:List.of(classification.unknownRegistry,classification.entertainmentRegistry))if(registry.retentionDays<1 || registry.maxEntries<1 || registry.maxEntries>10000)throw new IllegalArgumentException("Invalid registry retention");
     if(detection==null || detection.mode==null || !Double.isFinite(detection.skipVisionConfidence)
         || detection.skipVisionConfidence<0 || detection.skipVisionConfidence>1 || detection.maxOutputTokens<1)

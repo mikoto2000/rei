@@ -40,6 +40,7 @@ rei:
       rule-suggestion:
         enabled: true
         minimum-samples: 3
+        max-output-tokens: 8192
       diagnostics:
         enabled: true
 ```
@@ -162,7 +163,8 @@ Telemetry失敗時は本体観測を維持しWARNを出す。その場合status�
 ## LLM提案
 
 `ClassificationRuleSuggestions`が頻出候補を選び、`LlmClassificationRuleModel`を使って1コマンドにつき最大1候補を提案する。
-モデル/endpointは`rei.llm.features.activity`を利用し、toolなし・出力2048上限・JSON schema指定。自動定期生成やretryは追加しない。
+モデル/endpointは`rei.llm.features.activity`を利用し、toolなし・出力8192トークン上限（既定）・JSON schema指定。自動定期生成やretryは追加しない。
+出力上限は`rei.activity.classification.rule-suggestion.max-output-tokens`（正の整数）で変更できる。`OUTPUT_LIMIT`が続く場合は、モデルが対応する範囲で16384などへ増やして再起動する。上限を増やすと生成時間や消費トークンが増える可能性がある。
 最低3サンプル（設定可能）。Activity候補は成功Visionが最低数あり、category/serviceの結果が一種類で一貫することを要求する。
 Entertainment候補もcategory/serviceの用途が混在していれば除外する。既存ルールで対応済みなら呼び出さない。
 
@@ -170,6 +172,8 @@ Entertainment候補もcategory/serviceの用途が混在していれば除外す
 タイトル・ルール文字列は命令ではなく信頼しないデータとして扱う。
 出力schemaは`activity/rule-suggestion.schema.json`。ruleType/id/priority/match/classify/proposalConfidence/rationaleの単一object、余分なキーを拒否する。
 未使用match/classifyフィールドはnull。通常ルール用YAMLへ変換後、通常のcompile/validationを再利用する。
+モデルへ送るスキーマは要求した種類に合わせて制約する。ClassificationではprocessRegex/titleRegexとcategoryを必須の非nullにし、serviceRegex/contentRegexと娯楽用classifyフィールドはnullに限定する。Entertainmentでは分類用classifyフィールドをnullに限定し、disposition/confidenceを非nullにする。
+生成指示にも正規表現の制限を明記する。`INVALID_RULE_DEFINITION`には禁止フィールド、グループ繰り返し、量指定子数、広すぎる正規表現、scope/context不足など、該当条件のコードと項目名を表示する（ルールの値は表示しない）。
 
 追加検証はproposalConfidence>=0.7、既存ID/同一match重複の拒否、対象sampleに実際に一致すること、Activity結果が成功Visionと一致すること、機密文字列の抑止。
 scope（process/service/application）とcontext（title/content）の両方を要求する。空文字や無関係な検査文字列にも一致するregexなどは過剰に広い候補として拒否する。
@@ -178,6 +182,11 @@ proposalConfidenceはモデルの提案確信度で、校正済み確率では�
 
 候補はコピー可能なYAMLと短い根拠として表示する。suggestionコードにはルール書込・reloadを呼ぶ経路がなく、前後のeffective snapshotが同一であることをテストする。
 LLM不可・不正JSON・不正regex・打ち切り等でも現在の有効ルールを変更せず、registry/status/reloadは引き続き利用できる。
+失敗時はclassification/behaviorの両方で「失敗段階」と「理由」を表示する。
+`OUTPUT_LIMIT`は設定されたトークン上限での打ち切り（実際の上限と変更する設定名を表示）、`INVALID_JSON`はJSON解析失敗、`SCHEMA_VALIDATION_FAILED`はスキーマ不一致（該当スキーマ位置と制約を最大5件表示）。
+`INVALID_REGEX`/`INVALID_RULE_DEFINITION`はルール定義の検証失敗、`EXISTING_RULE_ID`/`EXISTING_RULE_MATCH`は既存ルールとの重複、`SAMPLE_MISMATCH`/`EVIDENCE_CONFLICT`は観測との不一致を示す。
+空応答、入力・応答サイズ超過、機密情報検出、確信度不足も個別の理由コードで表示する。
+予期しない例外は例外型と原因の型（最大8段、HTTP例外はステータスコードも）を表示する。API応答本文・例外メッセージ・候補の生データは診断に出さない。
 
 ## Behavior互換性とPrivacy
 
