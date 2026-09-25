@@ -92,7 +92,9 @@ public class HistoryCommand implements Callable<Integer> {
       if (page.items().isEmpty()) out.accept("No turns.");
       for (var turn : page.items()) {
         out.accept("\nTurn: " + format.label(turn.runId()) + "  " + format.timestamp(turn.createdAt().toString()));
-        out.accept("User:\n" + format.body(turn.userMessage()));
+        if (turn.userMessage() != null && !turn.userMessage().isBlank()) out.accept("User:\n" + format.body(turn.userMessage()));
+        if (turn.source() != null) out.accept("Source: " + format.label(turn.source()));
+        if (turn.metadata().containsKey("severity")) out.accept("Severity: " + format.label(turn.metadata().get("severity")));
         out.accept("Rei:\n" + (turn.assistantMessage() == null ? "(No response recorded)" : format.body(turn.assistantMessage())));
       }
       if (page.nextCursor() != null) out.accept("Next page: /history show " + format.label(id)

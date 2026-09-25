@@ -155,7 +155,7 @@ public class ReiApplication {
     var options = StartupOptions.parse(args, projects.startupDirectory());
     if (options.printHelpIfRequested()) return;
     var client = projects.newClient();
-    try (var scope = client.open()) {
+    try (var scope = client.open(); var notifications = projects.notificationsFollow(client)) {
       if (options.project() != null) projects.cd(options.project().toString());
       runShell(args, client);
     }

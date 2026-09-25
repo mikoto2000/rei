@@ -33,7 +33,7 @@ class EventAgentMessagePublisherTest {
     order.verify(bus,org.mockito.Mockito.times(3)).publish(org.mockito.ArgumentMatchers.any());
     order.verify(narrator).onPublished(message);
     org.mockito.Mockito.reset(narrator);
-    org.mockito.Mockito.doThrow(new IllegalStateException()).when(logStore).append(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.anyString());
+    org.mockito.Mockito.doThrow(new IllegalStateException()).when(bus).publish(org.mockito.ArgumentMatchers.any());
     org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,()->publisher.publish(message));
     org.mockito.Mockito.verifyNoInteractions(narrator);
   }

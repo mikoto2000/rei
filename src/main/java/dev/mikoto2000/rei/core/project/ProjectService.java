@@ -5,6 +5,7 @@ import java.util.*;
 import org.springframework.stereotype.Service;
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.application.session.SessionRepository;
 
 @Service
@@ -13,6 +14,39 @@ public class ProjectService {
   private final ProjectRegistry registry;
   private final boolean scoped;
   private final SessionRepository sessions;
+  private volatile ProjectClient notificationClient;
+  private volatile AgentRunContext notificationConversation;
+  public record NotificationSelection(ProjectContext project,String conversationId) {}
+
+  /** Explicit Shell lifetime binding; scheduled workers must never rely on inheriting ThreadLocal state. */
+  public interface NotificationBinding extends AutoCloseable { @Override void close(); }
+  public NotificationBinding notificationsFollow(ProjectClient client) {
+    var previous=notificationClient;notificationClient=client;
+    return ()->{if(notificationClient==client)notificationClient=previous;};
+  }
+  public void rememberConversation(AgentRunContext context) {notificationConversation=context;}
+  public Object notificationLock() {
+    var scopedClient=ProjectClientScope.current();
+    var selected=scopedClient!=null && scopedClient.service==this?scopedClient:notificationClient;
+    return selected!=null?selected:sessions!=null?sessions:this;
+  }
+  public NotificationSelection notificationSelection() {
+    var scopedClient=ProjectClientScope.current();
+    var selected=scopedClient!=null && scopedClient.service==this?scopedClient:notificationClient;
+    if(selected!=null)synchronized(selected) {
+      return new NotificationSelection(registry.resolve(selected.selection.get()),selected.sessionId);
+    }
+    var recent=notificationConversation;
+    if(recent!=null)return new NotificationSelection(new ProjectContext(recent.projectId(),recent.projectRoot().getFileName().toString(),recent.projectRoot()),recent.conversationId());
+    return new NotificationSelection(registry.resolve(startupDirectory),null);
+  }
+  public void selectNotificationDefault(String projectId,String conversationId) {
+    var scopedClient=ProjectClientScope.current();
+    var selected=scopedClient!=null && scopedClient.service==this?scopedClient:notificationClient;
+    if(selected!=null)synchronized(selected) {
+      if(selected.sessionId==null && registry.resolve(selected.selection.get()).id().equals(projectId))selected.sessionId=conversationId;
+    }
+  }
 
   public ProjectService() { this(ReiPaths.startupDirectory(), new ProjectRegistry(ReiPaths.projectsFilePath())); }
   @org.springframework.beans.factory.annotation.Autowired

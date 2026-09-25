@@ -12,6 +12,8 @@ import dev.mikoto2000.rei.llm.ConversationIds;
 public final class SessionLifecycle {
   private final SessionRepository repository;
   private final Clock clock;
+  private java.util.function.Consumer<AgentRunContext> selected=context->{};
+  public void onSelected(java.util.function.Consumer<AgentRunContext> selected){this.selected=selected;}
   public SessionLifecycle(SessionRepository repository, Clock clock) {
     this.repository = repository; this.clock = clock;
   }
@@ -33,6 +35,7 @@ public final class SessionLifecycle {
       } else metadata = validate(sessionId, project.id()).touched(now);
       var context = new AgentRunContext(UUID.randomUUID().toString(), sessionId, project.root(), project.id(), source);
       repository.accept(metadata, () -> enqueue.accept(context));
+      selected.accept(context);
       return context;
     }
   }

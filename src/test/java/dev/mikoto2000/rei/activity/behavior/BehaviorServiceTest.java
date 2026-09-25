@@ -28,6 +28,27 @@ class BehaviorServiceTest {
     when(generator.generate(any())).thenReturn("観測できた範囲ではSNSが長く続いているみたい。少し区切りをつけようか。");
     activity.setEnabled(true);return new BehaviorService(properties,activity,capture,store,state,generator,publisher,tracker,clock);
   }
+  @Test void noneAssessmentNeverGeneratesOrPublishesHistory() throws Exception {
+    var service=service();service.setEnabled(true);
+    when(store.findBetween(any(),any())).thenReturn(List.of());when(store.findRecordsBetween(any(),any())).thenReturn(List.of());
+    service.tick();verifyNoInteractions(generator,publisher);
+  }
+  @Test void oneGenerationFeedsDisplayConversationAndTimelineWithSharedId() throws Exception {
+    service();
+    var logs=new dev.mikoto2000.rei.conversation.ConversationLogStore(directory,clock,
+        new com.fasterxml.jackson.databind.ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    var events=new java.util.ArrayList<dev.mikoto2000.rei.event.AgentEvent>();
+    var bus=new dev.mikoto2000.rei.event.InMemoryAgentEventBus();bus.subscribe(events::add);
+    var delivery=new EventAgentMessagePublisher(logs,new dev.mikoto2000.rei.event.AgentEventFactory(clock),bus,tracker,
+        mock(dev.mikoto2000.rei.ui.shell.sound.AgentMessageNarrator.class));
+    var service=new BehaviorService(properties,activity,capture,store,state,generator,delivery,tracker,clock);
+    service.setEnabled(true);service.tick();service.tick();
+    verify(generator,times(1)).generate(any());
+    var entries=logs.readConversation("chat:main");assertEquals(1,entries.size());assertEquals(3,events.size());
+    verify(state).appendEvent(argThat(e->e.outcome()==BehaviorTimelineEvent.Outcome.EMITTED
+        && e.id().equals(entries.getFirst().sourceId()) && e.timestamp().equals(entries.getFirst().timestamp().toInstant())));
+    assertEquals("BEHAVIOR_NOTIFICATION",entries.getFirst().source());
+  }
   @Test void disabledDoesNotReadEvaluatePersistOrCallLlm() throws Exception {
     var service=service();clearInvocations(store,state,generator);service.tick();verifyNoInteractions(store,state,generator,publisher);
   }
@@ -114,7 +135,7 @@ class BehaviorServiceTest {
     var event=org.mockito.ArgumentCaptor.forClass(BehaviorTimelineEvent.class);verify(state).appendEvent(event.capture());
     assertEquals(clock.instant().plusSeconds(30),event.getValue().timestamp());
     assertEquals(BehaviorTimelineEvent.Outcome.EMITTED,event.getValue().outcome());
-    verify(publisher).publish(argThat(m->m.createdAt().equals(event.getValue().timestamp())));
+    verify(publisher).publish(argThat(m->m.createdAt().equals(event.getValue().timestamp()) && m.id().equals(event.getValue().id())));
   }
   @Test void slashActionsUseRuntimeOverrideAndEvaluateNeverNotifies() throws Exception {
     var service=service();var command=new picocli.CommandLine(new ActivityCommand(null,capture,activity,service));

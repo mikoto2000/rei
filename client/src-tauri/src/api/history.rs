@@ -84,6 +84,10 @@ struct TurnResponse {
     run_id: String,
     user_message: String,
     assistant_message: Option<String>,
+    source: Option<String>,
+    source_id: Option<String>,
+    #[serde(default)]
+    metadata: std::collections::BTreeMap<String, String>,
     created_at: String,
 }
 #[derive(Deserialize)]
@@ -109,6 +113,9 @@ impl TurnPageResponse {
                     run_id: turn.run_id,
                     user_message: turn.user_message,
                     assistant_message: turn.assistant_message,
+                    source: turn.source,
+                    source_id: turn.source_id,
+                    metadata: turn.metadata,
                     created_at: timestamp(&turn.created_at)?,
                 })
             })
@@ -117,5 +124,34 @@ impl TurnPageResponse {
             items,
             next_cursor: self.next_cursor,
         })
+    }
+}
+
+#[cfg(test)]
+mod notification_tests {
+    use super::*;
+    #[test]
+    fn old_server_turns_default_to_no_source() {
+        let wire = r#"{"sessionId":"s","items":[{"turnId":"r","runId":"r","userMessage":"q","assistantMessage":"a","createdAt":"2026-09-25T12:00:00Z"}],"nextCursor":null}"#;
+        let page = serde_json::from_str::<TurnPageResponse>(wire)
+            .unwrap()
+            .into_domain("s", 50)
+            .unwrap();
+        assert!(page.items[0].source.is_none());
+        assert!(page.items[0].metadata.is_empty());
+    }
+    #[test]
+    fn notification_source_survives_http_domain_and_ui_boundaries() {
+        let wire = r#"{"sessionId":"s","items":[{"turnId":"behavior:b1","runId":"behavior:b1","userMessage":"","assistantMessage":"戻ろう。","createdAt":"2026-09-25T12:00:00Z","source":"BEHAVIOR_NOTIFICATION","sourceId":"b1","metadata":{"severity":"NOTICE"}}],"nextCursor":null}"#;
+        let page = serde_json::from_str::<TurnPageResponse>(wire)
+            .unwrap()
+            .into_domain("s", 50)
+            .unwrap();
+        let json = serde_json::to_value(crate::dto::TurnPageDto::from(page)).unwrap();
+        assert_eq!(json["items"][0]["userMessage"], "");
+        assert_eq!(json["items"][0]["assistantMessage"], "戻ろう。");
+        assert_eq!(json["items"][0]["source"], "BEHAVIOR_NOTIFICATION");
+        assert_eq!(json["items"][0]["sourceId"], "b1");
+        assert_eq!(json["items"][0]["metadata"]["severity"], "NOTICE");
     }
 }

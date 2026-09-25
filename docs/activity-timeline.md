@@ -626,3 +626,7 @@ focus/idle/entertainment minutesを作る場合も、今のデータだけで実
 集計バージョン、日次summaryキャッシュを加えられる。
 Phase 4以降のProject/Task/Working Set深い統合、
 週次/月次Analytics、2〜6のProductivity Score、Adaptive Coachingは意図的に未実装。
+
+## Behavior Notification の会話履歴
+
+新しく emitted された通知は assistant / source=BEHAVIOR_NOTIFICATION として通常履歴・LLM context に保存します。suppressed / NONE は対象外です。同じ通知 ID を Timeline と共有し、再起動後の重複も防止します。Project/Session、圧縮、Privacy、障害時の扱いは [設計・実装記録](behavior-conversation-history.md) を参照してください。

@@ -39,6 +39,9 @@ pub struct ConversationTurn {
     pub run_id: String,
     pub user_message: String,
     pub assistant_message: Option<String>,
+    pub source: Option<String>,
+    pub source_id: Option<String>,
+    pub metadata: std::collections::BTreeMap<String, String>,
     pub created_at: DateTime<Utc>,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]

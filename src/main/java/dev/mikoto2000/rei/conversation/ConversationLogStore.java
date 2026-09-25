@@ -70,6 +70,58 @@ public class ConversationLogStore {
     }
   }
 
+  public static final String BEHAVIOR_NOTIFICATION="BEHAVIOR_NOTIFICATION";
+
+  /** The durable log is the idempotency source, including across restart/project switches. */
+  public java.util.Optional<ConversationLogEntry> findNotification(String sourceId) {
+    synchronized(writeLock) {
+      var directories=new ArrayList<Path>();
+      if(directory!=null)directories.add(directory);
+      else {
+        var base=dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current();
+        directories.add(base.resolve("conversations"));
+        var projects=base.resolve("projects");
+        if(Files.isDirectory(projects))try(var paths=Files.list(projects)) {
+          paths.filter(Files::isDirectory).forEach(p->directories.add(p.resolve("conversations")));
+        }catch(IOException e){throw new IllegalStateException("Cannot inspect notification history",e);}
+      }
+      for(var location:directories) {
+        if(!Files.isDirectory(location))continue;
+        // Fail closed on unreadable history: never mistake an I/O failure for an absent id.
+        try(var files=Files.list(location)) {
+          for(var file:files.filter(p->p.getFileName().toString().endsWith(".jsonl")).sorted().toList())
+            try(var lines=Files.newBufferedReader(file,StandardCharsets.UTF_8)) {
+              String line;
+              while((line=lines.readLine())!=null) {
+                if(line.isBlank())continue;
+                var entry=objectMapper.readValue(line,ConversationLogEntry.class);
+                if(BEHAVIOR_NOTIFICATION.equals(entry.source()) && sourceId.equals(entry.sourceId()))return java.util.Optional.of(entry);
+              }
+            }
+        }catch(IOException e){throw new IllegalStateException("Cannot inspect notification history",e);}
+      }
+      return java.util.Optional.empty();
+    }
+  }
+
+  public ConversationLogEntry appendNotification(String conversationId,String sourceId,String text,
+      java.time.Instant occurredAt,java.util.Map<String,String> metadata) {
+    if(conversationId==null || conversationId.isBlank() || sourceId==null || sourceId.isBlank() || text==null || text.isBlank())
+      throw new IllegalArgumentException("Notification identity and text are required");
+    synchronized(writeLock) {
+      var existing=findNotification(sourceId);if(existing.isPresent())return existing.get();
+      var timestamp=occurredAt.atZone(clock.getZone()).toOffsetDateTime();
+      var location=directoryFor(conversationId);var file=location.resolve(FILE_DATE.format(timestamp)+".jsonl");
+      long next=contextSequences.computeIfAbsent(conversationId,key->readConversation(key).stream().mapToLong(ConversationLogEntry::sequence).max().orElse(0))+1;
+      var entry=new ConversationLogEntry(conversationId,scopeOf(conversationId),"assistant",timestamp,text,next,BEHAVIOR_NOTIFICATION,sourceId,metadata);
+      try {
+        Files.createDirectories(location);
+        Files.writeString(file,objectMapper.writeValueAsString(entry)+System.lineSeparator(),StandardCharsets.UTF_8,StandardOpenOption.CREATE,StandardOpenOption.APPEND);
+        contextSequences.put(conversationId,next);return entry;
+      }catch(IOException e){throw new IllegalStateException("Cannot append notification history",e);}
+    }
+  }
+
   public List<ConversationLogEntry> readAll() {
     return readDirectory(directoryFor(null));
   }

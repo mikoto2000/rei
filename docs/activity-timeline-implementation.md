@@ -850,3 +850,7 @@ LLMのトーン・事実忠実性を完全な意味検証で保証するもの�
 履歴範囲を超える連続時間は取得範囲内の下限値。休憩の意図や仕事が終わったかは推定しない。
 Task / Calendar / 締切 / Working Set / 未完了project / Score / 週次月次分析 / Adaptive Coachingは未実装。
 実画面・実LLMへのアクセスや実通知は行わず、既存Memory-First・画像retentionを維持した。
+
+## Behavior Notification の会話履歴
+
+新しく emitted された通知は assistant / source=BEHAVIOR_NOTIFICATION として通常履歴・LLM context に保存します。suppressed / NONE は対象外です。同じ通知 ID を Timeline と共有し、再起動後の重複も防止します。Project/Session、圧縮、Privacy、障害時の扱いは [設計・実装記録](behavior-conversation-history.md) を参照してください。

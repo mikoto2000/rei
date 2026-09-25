@@ -10,7 +10,21 @@ import dev.mikoto2000.rei.application.session.*;
 /** Conversation lifecycle metadata, independent of the bounded chat memory window. */
 public class ConversationTurnStore implements ConversationHistory {
   public enum Status { RUNNING, COMPLETED, FAILED, CANCELLED }
-  public record Turn(String runId, String request, Status status, String assistantMessage, java.time.Instant createdAt) {}
+  public record Turn(String runId,String request,Status status,String assistantMessage,java.time.Instant createdAt,
+      String source,String sourceId,Map<String,String> metadata) {
+    public Turn {metadata=metadata==null?Map.of():Map.copyOf(metadata);}
+    public Turn(String runId,String request,Status status,String assistantMessage,java.time.Instant createdAt) {
+      this(runId,request,status,assistantMessage,createdAt,null,null,Map.of());
+    }
+  }
+
+  public synchronized void appendAssistantNotification(ConversationLogEntry entry) {
+    var rows=new ArrayList<>(read(entry.conversationId()));
+    if(rows.stream().anyMatch(t->ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(t.source()) && entry.sourceId().equals(t.sourceId())))return;
+    rows.add(new Turn("behavior:"+entry.sourceId(),"",Status.COMPLETED,entry.content(),entry.timestamp().toInstant(),
+        entry.source(),entry.sourceId(),entry.metadata()));
+    save(entry.conversationId(),rows);
+  }
   private final Path base;
   private final ObjectMapper mapper = new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
   private final Map<String, List<Turn>> conversations = new HashMap<>();
@@ -63,7 +77,7 @@ public class ConversationTurnStore implements ConversationHistory {
         .filter(turn -> after == null || turn.createdAt().isAfter(after.time())
             || turn.createdAt().equals(after.time()) && turn.runId().compareTo(after.id()) > 0)
         .sorted(Comparator.comparing(Turn::createdAt).thenComparing(Turn::runId)).limit(fetchLimit)
-        .map(turn -> new SessionTurn(turn.runId(), turn.request(), turn.assistantMessage(), turn.createdAt())).toList();
+        .map(turn -> new SessionTurn(turn.runId(),turn.request(),turn.assistantMessage(),turn.createdAt(),turn.source(),turn.sourceId(),turn.metadata())).toList();
   }
 
   public synchronized String cancelledContext(String conversationId) {

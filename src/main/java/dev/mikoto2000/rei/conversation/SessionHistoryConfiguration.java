@@ -8,8 +8,10 @@ import org.springframework.beans.factory.annotation.Value;
 /** Shared by the interactive Shell and the Web application. */
 @Configuration(proxyBeanMethods = false)
 public class SessionHistoryConfiguration {
-  @Bean dev.mikoto2000.rei.application.session.SessionLifecycle sessionLifecycle(SessionRepository repository, java.time.Clock clock) {
-    return new dev.mikoto2000.rei.application.session.SessionLifecycle(repository, clock);
+  @Bean dev.mikoto2000.rei.application.session.SessionLifecycle sessionLifecycle(SessionRepository repository, java.time.Clock clock,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.project.ProjectService> projects) {
+    var lifecycle=new dev.mikoto2000.rei.application.session.SessionLifecycle(repository,clock);
+    lifecycle.onSelected(context->projects.ifAvailable(project->project.rememberConversation(context)));return lifecycle;
   }
   @Bean dev.mikoto2000.rei.application.session.SessionQueryService sessionQueryService(SessionRepository repository,
       ConversationTurnStore turns) {

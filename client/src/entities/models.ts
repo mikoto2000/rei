@@ -33,6 +33,9 @@ export interface ConversationTurn {
   userMessage: string;
   assistantMessage: string | null;
   createdAt: string;
+  source?: string | null;
+  sourceId?: string | null;
+  metadata?: Record<string, string>;
 }
 export interface SessionPage {
   items: SessionSummary[];

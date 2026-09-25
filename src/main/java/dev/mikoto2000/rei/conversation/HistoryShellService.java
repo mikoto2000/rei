@@ -42,7 +42,8 @@ public class HistoryShellService {
   public void show(String reference,String conversation,int last,boolean all,Consumer<String> out) {
     positive(last,10000,"--last");
     var project=project(reference);
-    String logical=conversation==null?ConversationIds.chat():conversation;
+    String selected=projects.currentSessionId();
+    String logical=conversation==null?(selected!=null && selected.startsWith("project:"+project.id()+":")?selected:ConversationIds.chat()):conversation;
     String id=logical.startsWith("project:")?logical:project.conversationId(logical);
     if(!id.startsWith("project:"+project.id()+":")) throw new IllegalArgumentException("Conversation not found: "+logical);
     var recent=store.recentConversation(project.id(),id,all?1:last);
