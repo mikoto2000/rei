@@ -874,3 +874,10 @@ Summary側に ProjectThemeAssociation を追加し、強い関連だけspecific 
 ## Phase 3.8.3: Summary Theme Consolidation
 
 canonicalProject / summaryThemeGroup / displayTheme を分離し、全体・時間帯の候補を共有consolidatorで選ぶ。alias/group設定はatomic reloadする。[実装記録](activity-theme-consolidation.md) を参照。
+
+## Phase 3.8.3 Consolidation Pipeline Fix
+
+未設定による raw alias 残存と、GROUP 不採用時の PROJECT/THEME 包含抑制漏れを区別して修正。
+stable groupIds を全日・時間帯の共通 consolidator で使用し、LLM へは最終候補を渡す。
+numeric score の電話番号誤検知も修正した。原因・設定適用手順・fixture の段階別比較・全テスト結果は
+[Consolidation Pipeline Fix](activity-consolidation-pipeline-fix.md) を参照。

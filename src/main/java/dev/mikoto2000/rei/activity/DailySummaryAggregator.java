@@ -56,6 +56,13 @@ public final class DailySummaryAggregator {
         if(project.isBlank())rejectedProjects++;
         else if(names.aliasHit(primary.projectCandidate()))canonicalizationHits++;
       }
+      if(log.isDebugEnabled()) {
+        String raw=primary==null?"":ActivityRolePolicy.normalize(primary.projectCandidate()).replaceAll("\\p{Cntrl}","");
+        raw=raw.substring(0,Math.min(60,raw.length()));
+        log.debug("[summary-theme] raw project={}",raw);
+        log.debug("[summary-theme] canonical project={} aliasHit={} groupIds={}",project,
+            primary!=null && names.aliasHit(primary.projectCandidate()),groups.idsFor(project,List.of()));
+      }
       if(!project.isBlank()) {
         projects.merge(project,seconds,Long::sum);
         if(previousEnd!=null && Duration.between(previousEnd,s.start()).getSeconds()<=300
@@ -103,6 +110,7 @@ public final class DailySummaryAggregator {
       c.secondary.remove("AI支援");c.background.remove("AI支援");
       var secondary=top(c.secondary,1).stream().filter(v->v.seconds()>=c.observed*.2).map(Weighted::name).filter(v->!dominant.contains(v)).toList();
       var ranked=c.workThemes.ranked(Integer.MAX_VALUE);
+      log.debug("[summary-theme] scope={}",key);
       var consolidated=consolidator.consolidate(ranked,groups,2);
       var workLabels=consolidated.labels();
       var secondaryThemes=dominant.stream().filter(v->!Set.of("開発","調査","文書作業").contains(v)).limit(1).toList();
@@ -117,6 +125,7 @@ public final class DailySummaryAggregator {
           associations.stream().filter(ProjectThemeAssociation::strong).count(),
           associations.stream().filter(a->!a.strong()).count(),rejectedProjects,canonicalizationHits);
     }
+    log.debug("[summary-theme] scope=wholeDay");
     var consolidated=consolidator.consolidate(themes.ranked(Integer.MAX_VALUE),groups,5);
     long span=Math.max(0,Duration.between(range.fromInclusive(),range.toExclusive()).getSeconds());
     return new DailySummaryAggregate(date,observed,Math.max(0,span-observed),Map.copyOf(categories),Map.copyOf(dispositions),

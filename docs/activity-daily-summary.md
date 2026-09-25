@@ -272,3 +272,10 @@ project/topic を同一観測の根拠・foreground支持・回数・時間で�
 ## Phase 3.8.3 Summary Theme Consolidation
 
 既存aliasファイルに任意の themeGroups を追加し、全体・時間帯で同じgroup/包含抑制を使う。設定・スコア・fallback・比較・検証結果は [Theme Consolidation](activity-theme-consolidation.md) を参照。
+
+## Phase 3.8.3 Consolidation Pipeline Fix
+
+未設定による raw alias 残存と、GROUP 不採用時の PROJECT/THEME 包含抑制漏れを区別して修正。
+stable groupIds を全日・時間帯の共通 consolidator で使用し、LLM へは最終候補を渡す。
+numeric score の電話番号誤検知も修正した。原因・設定適用手順・fixture の段階別比較・全テスト結果は
+[Consolidation Pipeline Fix](activity-consolidation-pipeline-fix.md) を参照。

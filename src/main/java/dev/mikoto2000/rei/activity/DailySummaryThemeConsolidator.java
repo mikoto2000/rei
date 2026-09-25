@@ -31,7 +31,7 @@ public final class DailySummaryThemeConsolidator {
       double themeSupport=input.stream().filter(s->s.canonicalProject().isBlank() && !s.themeCandidates().isEmpty())
           .mapToDouble(s->score(s)*s.themeCandidates().stream().filter(group.themes()::contains).count()/s.themeCandidates().size()).sum();
       double score=members.stream().mapToDouble(DailySummaryThemeConsolidator::score).sum()*(1+.15*coverage)+themeSupport;
-      replacements.add(new SummaryThemeCandidate("group:"+group.id(),group.displayName(),Level.GROUP,
+      replacements.add(new SummaryThemeCandidate("group:"+group.id(),group.displayName(),Level.GROUP,List.of(group.id()),
           members.stream().sorted(Comparator.comparingLong(ProjectThemeStat::observedSeconds).reversed().thenComparing(ProjectThemeStat::canonicalProject))
               .map(ProjectThemeStat::canonicalProject).limit(2).toList(),members.size(),categories,List.of(),seconds,
           members.stream().mapToInt(ProjectThemeStat::observationCount).sum(),
@@ -39,18 +39,22 @@ public final class DailySummaryThemeConsolidator {
       members.forEach(s->grouped.add(s.canonicalProject()));eligible.put("group:"+group.id(),group);
     }
     var base=new ArrayList<SummaryThemeCandidate>(replacements);
-    for(var stat:input)if(!grouped.contains(stat.canonicalProject()))base.add(project(stat));
-    // Suppress theme-only labels only when their explicitly configured parent is actually selected.
-    // Newly freed slots can select another group; the selected group set grows monotonically.
+    for(var stat:input)if(!grouped.contains(stat.canonicalProject()))base.add(project(stat,config));
+    // A retained project also represents its explicit group for display de-duplication.
+    // Only selected representatives cover topics; unrelated and unselected groups never suppress them.
+    // Topic scores can only decrease, so retained project/group representatives grow monotonically.
+    log.debug("[summary-theme] grouped eligible={} replacedProjects={}",eligible.keySet(),grouped);
+    log.debug("[summary-theme] scored candidates={}",base);
     Set<String> parents=Set.of();List<SummaryThemeCandidate> selected=List.of();int suppressedTopics=0;
-    for(int iteration=0;iteration<=eligible.size()+1;iteration++) {
-      var covered=new HashSet<String>();parents.forEach(id->covered.addAll(eligible.get(id).themes()));
+    for(int iteration=0;iteration<=config.groups().size()+1;iteration++) {
+      var covered=new HashSet<String>();
+      for(var group:config.groups())if(parents.contains(group.id()))covered.addAll(group.themes());
       var candidates=new ArrayList<SummaryThemeCandidate>();suppressedTopics=0;
       for(var c:base) {
         if(c.level()!=Level.THEME){candidates.add(c);continue;}
         var remaining=c.themes().stream().filter(t->!covered.contains(t)).toList();
         suppressedTopics+=c.themes().size()-remaining.size();
-        if(!remaining.isEmpty())candidates.add(new SummaryThemeCandidate("theme:"+String.join("・",remaining),String.join("・",remaining),c.level(),c.memberProjects(),
+        if(!remaining.isEmpty())candidates.add(new SummaryThemeCandidate("theme:"+String.join("・",remaining),String.join("・",remaining),c.level(),config.idsFor("",remaining),c.memberProjects(),
             c.memberProjectCount(),c.activities(),remaining,c.durationSeconds(),c.observationCount(),c.longestContinuousSeconds(),
             c.associationConfidence(),c.specificity(),c.groupCoverage(),c.score()*remaining.size()/c.themes().size(),String.join("・",remaining)));
       }
@@ -60,9 +64,12 @@ public final class DailySummaryThemeConsolidator {
           .sorted(Comparator.comparingDouble(SummaryThemeCandidate::score).reversed().thenComparing(SummaryThemeCandidate::label))
           .forEach(c->unique.putIfAbsent(c.label(),c));
       selected=unique.values().stream().limit(limit).toList();
-      var next=new HashSet<String>();selected.stream().filter(c->c.level()==Level.GROUP).forEach(c->next.add(c.id()));
+      var next=new HashSet<String>();selected.stream().filter(c->c.level()==Level.GROUP || c.level()==Level.PROJECT)
+          .forEach(c->next.addAll(c.groupIds()));
       if(next.equals(parents))break;parents=Set.copyOf(next);
     }
+    log.debug("[summary-theme] suppressed projects={} coveredGroupIds={} topicCount={}",grouped,parents,suppressedTopics);
+    log.debug("[summary-theme] final candidates={}",selected);
     var metrics=new Metrics(input.size(),eligible.size(),grouped.size(),suppressedTopics,selected.size());
     log.debug("Summary theme consolidation canonical={} groups={} suppressedChildren={} suppressedTopics={} selected={}",
         metrics.canonicalCandidates(),metrics.groupCandidates(),metrics.suppressedChildren(),metrics.suppressedTopics(),metrics.selectedThemes());
@@ -72,9 +79,9 @@ public final class DailySummaryThemeConsolidator {
     return s.strongAssociations().stream().mapToDouble(ProjectThemeAssociation::associationConfidence).average().orElse(0);
   }
   private static double score(ProjectThemeStat s){return s.score()*(s.strongAssociations().isEmpty()?1:.9+.1*confidence(s));}
-  private static SummaryThemeCandidate project(ProjectThemeStat s) {
+  private static SummaryThemeCandidate project(ProjectThemeStat s,SummaryThemeGroups config) {
     var level=!s.canonicalProject().isBlank()?Level.PROJECT:!s.themeCandidates().isEmpty()?Level.THEME:Level.GENERIC;
-    return new SummaryThemeCandidate("candidate:"+s.label(),s.canonicalProject().isBlank()?s.label():s.canonicalProject(),level,
+    return new SummaryThemeCandidate("candidate:"+s.label(),s.canonicalProject().isBlank()?s.label():s.canonicalProject(),level,config.idsFor(s.canonicalProject(),s.themeCandidates()),
         s.canonicalProject().isBlank()?List.of():List.of(s.canonicalProject()),s.canonicalProject().isBlank()?0:1,
         s.categories(),s.themeCandidates(),s.observedSeconds(),s.observationCount(),s.longestContinuousSeconds(),
         confidence(s),s.specificity(),0,score(s),s.label());

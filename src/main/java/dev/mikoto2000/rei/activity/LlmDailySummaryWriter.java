@@ -60,8 +60,12 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
     this.model=model;this.options=options;this.timeout=timeout;
   }
   @Override public DailySummary write(DailySummaryAggregate aggregate) throws Exception {
-    String input=JSON.writeValueAsString(aggregate);
-    if(input.length()>16000 || new dev.mikoto2000.rei.memory.util.SensitiveInfoDetector().containsSensitiveInfo(input))
+    var structured=JSON.valueToTree(aggregate);
+    // Work labels come exclusively from final candidates, not pre-consolidation project/block lists.
+    ((com.fasterxml.jackson.databind.node.ObjectNode)structured).remove("topProjects");
+    structured.path("majorWorkBlocks").forEach(block->((com.fasterxml.jackson.databind.node.ObjectNode)block).remove("theme"));
+    String input=JSON.writeValueAsString(structured);
+    if(input.length()>16000 || sensitiveText(structured))
       throw new IllegalArgumentException("Unsafe summary input");
     log.debug("Daily summary segments={} projects={} categories={} promptChars={} estimatedTokens={}",
         aggregate.sourceSegmentCount(),aggregate.topProjects().size(),aggregate.categorySeconds().size(),input.length()+INSTRUCTIONS.length(),(input.length()+INSTRUCTIONS.length()+1)/2);
@@ -81,6 +85,11 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
       if(result.length()>8000)throw new IllegalArgumentException("Summary too large");
     }).blockLast(timeout);
     return parse(result.toString(),aggregate);
+  }
+  private static boolean sensitiveText(JsonNode node) {
+    if(node.isTextual())return new dev.mikoto2000.rei.memory.util.SensitiveInfoDetector().containsSensitiveInfo(node.textValue());
+    for(var child:node)if(sensitiveText(child))return true;
+    return false;
   }
   static DailySummary parse(String output,DailySummaryAggregate aggregate) throws Exception {
     if(output==null || output.length()>8000)throw new IllegalArgumentException("Invalid summary response");

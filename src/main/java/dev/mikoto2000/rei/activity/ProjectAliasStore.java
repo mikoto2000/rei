@@ -36,8 +36,8 @@ public final class ProjectAliasStore implements java.util.function.Supplier<Proj
       }
       var names=new ProjectNameNormalizer(aliases);
       current=new SummaryThemeConfiguration(names,SummaryThemeGroups.parse(groupData,names));
-      log.debug("Daily summary configuration file={} exists={} canonicalAndAliasEntries={} groups={}",
-          file,Files.exists(file),names.aliasCount(),current.groups().groups().size());
+      log.debug("[summary-theme] config file={} exists={} canonicalAndAliasEntries={} groups={}",
+          file.toAbsolutePath().normalize(),Files.exists(file),names.aliasCount(),current.groups().groups());
     }catch(Exception error){log.warn("Daily summary configuration unavailable; last valid alias/group snapshot retained");}
     return current;
   }

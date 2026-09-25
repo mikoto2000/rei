@@ -7,6 +7,10 @@ public final class SummaryThemeGroups {
   private SummaryThemeGroups(List<Group> groups){this.groups=List.copyOf(groups);}
   public static SummaryThemeGroups empty(){return new SummaryThemeGroups(List.of());}
   public List<Group> groups(){return groups;}
+  List<String> idsFor(String project,List<String> topics) {
+    return groups.stream().filter(g->!project.isBlank()?g.projects().contains(project):topics.stream().anyMatch(g.themes()::contains))
+        .map(Group::id).sorted().toList();
+  }
   static SummaryThemeGroups parse(Object data,ProjectNameNormalizer names) {
     if(data==null)return empty();
     if(!(data instanceof Map<?,?> entries) || entries.size()>50)throw new IllegalArgumentException("Invalid theme groups");

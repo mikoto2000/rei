@@ -1,0 +1,23 @@
+# Explicit mappings for the reported 2026-09-24 projects. Not loaded automatically.
+# Install as activity/project-aliases.yaml under the effective rei data directory.
+projectAliases:
+  sensevoice-input:
+    - sensevoice
+    - sensevoiceinput
+    - sensorvoice-input
+    - sansvoice-input
+themeGroups:
+  speech-input:
+    displayName: 音声入力・文字起こし系
+    projects: [sensevoice-input]
+    themes: [音声入力, 文字起こし]
+    allowSingleProject: true
+  speech-translation:
+    displayName: 音声翻訳系
+    projects: [livevingo]
+    themes: [翻訳, 音声翻訳]
+    allowSingleProject: true
+  vision-model:
+    displayName: DeepSeek / Vision関連
+    projects: [deepseek-vl-flash-vision-exp]
+    allowSingleProject: true
