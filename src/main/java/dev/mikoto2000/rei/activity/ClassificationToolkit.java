@@ -36,7 +36,7 @@ public final class ClassificationToolkit {
       boolean required=!usable && p.isExtractionEnabled() && p.getDetection().isVisionEnabled() && p.getDetection().isFallbackEnabled();
       var diagnostics=new ClassificationDiagnostics(List.copyOf(matching),winning,source,fields,usable,required,usable?"CLASSIFICATION_USABLE":required?"INSUFFICIENT_CLASSIFICATION":"VISION_DISABLED",List.copyOf(reasons),entertainment.disposition(),entertainment.confidence(),entertainment.ruleId(),entertainment.source(),entertainment.reason());
       if(d==null)d=new ActivityRecord.Detection(null,List.of(),false,"LEGACY","FINAL",Map.of(),"legacy");
-      var updated=new ActivityRecord.Detection(d.evidence(),d.classificationSources(),d.visionUsed(),d.classificationMode(),d.status(),d.sourceConfidence(),d.reason(),fields,d.secondaryConfidence(),diagnostics);
+      var updated=new ActivityRecord.Detection(d.evidence(),d.classificationSources(),d.visionUsed(),d.classificationMode(),d.status(),d.sourceConfidence(),d.reason(),fields,d.secondaryConfidence(),diagnostics,d.visionDiagnostics());
       if(p.getClassification().getDiagnostics().isEnabled())log.debug("Activity operational classification: rule={} source={} usable={} visionReason={} entertainment={} entertainmentRule={}",winning,source,usable,diagnostics.visionRequiredReason(),entertainment.disposition(),entertainment.ruleId());
       return new ActivityRecord(r.id(),r.capturedAt(),r.durationEstimate(),r.observations(),r.foreground(),r.inference(),r.confidence(),r.screenshotReferences(),r.changeAmount(),r.duplicate(),r.continuityId(),updated);
     }catch(Exception e){log.warn("Activity classification diagnostics unavailable");return r;}

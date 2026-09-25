@@ -22,11 +22,13 @@ class ActivityTrendQueryTest {
     assertEquals(before,reopened.findBetween(ActivitySemanticTest.START,ActivitySemanticTest.START.plusSeconds(31*60)));
   }
   @Test void onlySummarySlashActionUsesTrendFormatter() {
-    var timeline=mock(ActivityTimeline.class);when(timeline.trendSummary("today")).thenReturn("trend");when(timeline.summary("today")).thenReturn("detail");
-    var command=new picocli.CommandLine(new ActivityCommand(timeline,mock(ActivityCapture.class),new ActivityProperties()));
+    var timeline=mock(ActivityTimeline.class);when(timeline.trendSummary("today")).thenReturn("trend");
+    var presentation=mock(ActivityTimelinePresentationService.class);when(presentation.format("today",false)).thenReturn("detail");
+    var activityCommand=new ActivityCommand(timeline,mock(ActivityCapture.class),new ActivityProperties());activityCommand.timelinePresentation(presentation);
+    var command=new picocli.CommandLine(activityCommand);
     var output=new java.io.StringWriter();command.setOut(new java.io.PrintWriter(output));
     assertEquals(0,command.execute("summary"));assertEquals("trend",output.toString().strip());verify(timeline,never()).summary(anyString());
-    assertEquals(0,command.execute("today"));verify(timeline).summary("today");
+    assertEquals(0,command.execute("today"));verify(presentation).format("today",false);
   }
   @Test void dateAndNoDataQueriesRemainSafe() {
     var store=mock(ActivityStore.class);var timeline=new ActivityTimeline(store,Clock.fixed(ActivitySemanticTest.START,ZoneOffset.UTC));

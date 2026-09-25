@@ -44,6 +44,9 @@ public class ActivityConfiguration {
         Duration.ofSeconds(p.getSummaryBriefSwitchSeconds()),p.getPrimaryConfidenceThreshold(),zone));
   }
   @Bean ActivityTools activityTools(ActivityTimeline timeline) {return new ActivityTools(timeline);}
+  @Bean ActivityTimelinePresentationService activityTimelinePresentation(ActivityTimeline timeline,org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.activity.behavior.BehaviorStateStore> behavior) {
+    return new ActivityTimelinePresentationService(timeline,behavior.getIfAvailable());
+  }
   @Bean ClassificationRuleSuggestions classificationRuleSuggestions(ClassificationToolkit toolkit,dev.mikoto2000.rei.llm.LlmModelProvider provider,dev.mikoto2000.rei.core.service.ModelHolderService current) {
     return new ClassificationRuleSuggestions(toolkit,new LlmClassificationRuleModel(()->provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),()->provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get()),toolkit.properties().getClassification().getRuleSuggestion().getMaxOutputTokens()));
   }

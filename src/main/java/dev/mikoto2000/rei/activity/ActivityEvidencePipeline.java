@@ -65,7 +65,7 @@ final class ActivityEvidencePipeline {
       ActivityRecord record;
       synchronized(this) {
         if(!allowed(token))return;
-        var detection=new ActivityRecord.Detection(evidence,classification.sources(),false,"EVIDENCE_ONLY",fallback?"PROVISIONAL":"FINAL",classification.sourceConfidence(),classification.reason(),classification.fieldConfidence(),classification.secondaryConfidence());
+        var detection=new ActivityRecord.Detection(evidence,classification.sources(),false,"EVIDENCE_ONLY",fallback?"PROVISIONAL":"FINAL",classification.sourceConfidence(),classification.reason(),classification.fieldConfidence(),classification.secondaryConfidence(),null,VisionDiagnostics.initial());
         record=new ActivityRecord(UUID.randomUUID().toString(),at,p.getCaptureIntervalSeconds(),List.of(),fg,classification.inference(),classification.confidence(),List.of(),0,false,continuity,detection);
         store.append(record);previous=record;observations.increment();
         classificationCounts(record,1);
@@ -132,6 +132,7 @@ final class ActivityEvidencePipeline {
         skipped.increment();log.info("Activity fallback skipped: reason=foreground_bounds_unavailable evidence_retained=true");return;
       }
       if(background)backgroundCalls.increment();else foregroundCalls.increment();
+      recordAttempt(work,background);
       var result=extractor.extract(image,original.foreground());
       synchronized(this) {
         if(!allowed(work.generation))return;
@@ -143,7 +144,9 @@ final class ActivityEvidencePipeline {
         var secondary=new ArrayList<>(d.secondaryConfidence());
         if(background)for(var candidate:merged.inference().activities())
           if(!base.inference().activities().contains(candidate))secondary.add(new ActivityClassification.Secondary(candidate,ActivityFieldConfidence.from(candidate,result.confidence()).secondary()));
-        var detection=new ActivityRecord.Detection(d.evidence(),List.copyOf(sources),true,"EVIDENCE_PLUS_VISION","FINAL",weights,d.reason(),d.fieldConfidence(),secondary);
+        boolean used=!base.inference().equals(merged.inference()) || !ActivityEnrichment.fields(base).equals(ActivityEnrichment.fields(merged));
+        var vision=VisionDiagnostics.of(d).with(background,used?VisionDiagnostics.State.USED:VisionDiagnostics.State.ATTEMPTED_SUCCEEDED_NOT_USED,null);
+        var detection=new ActivityRecord.Detection(d.evidence(),List.copyOf(sources),true,"EVIDENCE_PLUS_VISION","FINAL",weights,d.reason(),d.fieldConfidence(),secondary,d.diagnostics(),vision);
         var updated=copy(merged,merged.inference(),merged.confidence(),detection,merged.screenshotReferences());store.replace(updated);work.record=updated;
         classificationCounts(base,-1);classificationCounts(work.record,1);
         if(previous!=null && previous.id().equals(work.record.id()))previous=work.record;
@@ -159,7 +162,7 @@ final class ActivityEvidencePipeline {
           var r=work.record;var d=r.detection();var sources=new LinkedHashSet<>(d.classificationSources());sources.add(source);
           var status=d.status().equals("FINAL")?"FINAL":"VISION_FAILED";
           String reason=d.reason().split("\\|",2)[0]+"|"+switch(kind){case OUTPUT_LIMIT->"VISION_OUTPUT_LIMIT";case TIMEOUT->"VISION_TIMEOUT";case VALIDATION->"VISION_VALIDATION_FAILED";default->"VISION_FAILED";};
-          var detection=new ActivityRecord.Detection(d.evidence(),List.copyOf(sources),true,d.classificationMode(),status,d.sourceConfidence(),reason,d.fieldConfidence(),d.secondaryConfidence());
+          var detection=new ActivityRecord.Detection(d.evidence(),List.copyOf(sources),true,d.classificationMode(),status,d.sourceConfidence(),reason,d.fieldConfidence(),d.secondaryConfidence(),d.diagnostics(),VisionDiagnostics.of(d).with(background,VisionDiagnostics.State.ATTEMPTED_FAILED,kind));
           var refs=r.screenshotReferences();
           if(new ScreenshotPersistencePolicy(p).shouldSave(false,ScreenshotPersistencePolicy.Outcome.EXTRACTION_FAILURE))
             try{refs=screenshots.save(r.id(),r.capturedAt(),work.screen);}catch(Exception imageError){warn("failure evidence",imageError);}
@@ -173,6 +176,13 @@ final class ActivityEvidencePipeline {
   }
   private ActivityClassification unknown(ForegroundWindow fg) {
     return new ActivityClassification(new ActivityRecord.Inference("主活動を判定できないOS観測",List.of(new ActivityRecord.Activity("foreground","unknown",fg.processName(),"","",""))),0,List.of("FOREGROUND_WINDOW"),Map.of("FOREGROUND_WINDOW",1.0),"insufficient_evidence",new ActivityFieldConfidence(0,1,0,0,0),List.of());
+  }
+  private synchronized void recordAttempt(Work work,boolean background) {
+    if(!allowed(work.generation))return;
+    var r=work.record;var d=r.detection();
+    var detection=new ActivityRecord.Detection(d.evidence(),d.classificationSources(),d.visionUsed(),d.classificationMode(),d.status(),d.sourceConfidence(),d.reason(),d.fieldConfidence(),d.secondaryConfidence(),d.diagnostics(),VisionDiagnostics.of(d).with(background,VisionDiagnostics.State.ATTEMPTED,null));
+    work.record=copy(r,r.inference(),r.confidence(),detection,r.screenshotReferences());
+    try {store.replace(work.record);}catch(Exception e){warn("attempt diagnostics",e);}
   }
   private static ActivityRecord copy(ActivityRecord r,ActivityRecord.Inference inference,double confidence,ActivityRecord.Detection detection,List<String> refs) {
     return new ActivityRecord(r.id(),r.capturedAt(),r.durationEstimate(),r.observations(),r.foreground(),inference,confidence,refs,r.changeAmount(),r.duplicate(),r.continuityId(),detection);

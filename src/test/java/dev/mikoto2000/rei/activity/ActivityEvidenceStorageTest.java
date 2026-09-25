@@ -54,4 +54,14 @@ class ActivityEvidenceStorageTest {
     var evidence=source.collect(at);assertEquals(16,evidence.events().size());assertEquals("SHELL",evidence.events().getFirst().kind());assertFalse(evidence.toString().contains("private"));
     assertTrue(source.collect(at.plusSeconds(121)).events().isEmpty());source.close();
   }
+  @Test void optionalVisionDiagnosticsRoundTripAndOldDetectionRemainsUnknown() throws Exception {
+    var mapper=new com.fasterxml.jackson.databind.ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+    var r=ActivityEvidenceDisplayFormatterTest.record(ActivityEvidenceDisplayFormatterTest.state(VisionDiagnostics.State.USED),ActivityEvidenceDisplayFormatterTest.state(VisionDiagnostics.State.NOT_ATTEMPTED));
+    assertEquals(r,mapper.readValue(mapper.writeValueAsString(r),ActivityRecord.class));
+    var node=(com.fasterxml.jackson.databind.node.ObjectNode)mapper.valueToTree(r);
+    ((com.fasterxml.jackson.databind.node.ObjectNode)node.get("detection")).remove("visionDiagnostics");
+    var old=mapper.treeToValue(node,ActivityRecord.class);assertNull(old.detection().visionDiagnostics());
+    assertEquals("Window",new ActivityEvidenceDisplayFormatter().evidence(old));
+    assertTrue(new ActivityEvidenceDisplayFormatter().verbose(old).contains("Foreground Vision: UNKNOWN"));
+  }
 }

@@ -19,7 +19,7 @@ final class ActivityEnrichment {
         service?next.service():old.service(),content?next.contentTitle():conflict?"":old.contentTitle(),project?next.projectCandidate():conflict?"":old.projectCandidate());
     var fields=new ActivityFieldConfidence(Math.max(a.category(),b.category()),a.application(),Math.max(a.service(),b.service()),Math.max(a.project(),b.project()),Math.max(a.content(),b.content()));
     var d=base.detection();
-    var detection=new ActivityRecord.Detection(d.evidence(),d.classificationSources(),d.visionUsed(),d.classificationMode(),d.status(),d.sourceConfidence(),d.reason(),fields,d.secondaryConfidence());
+    var detection=new ActivityRecord.Detection(d.evidence(),d.classificationSources(),d.visionUsed(),d.classificationMode(),d.status(),d.sourceConfidence(),d.reason(),fields,d.secondaryConfidence(),d.diagnostics(),d.visionDiagnostics());
     var merged=new ActivityRecord(base.id(),base.capturedAt(),base.durationEstimate(),base.observations(),base.foreground(),
         new ActivityRecord.Inference(category?result.inference().summary():base.inference().summary(),List.of(primary)),fields.overall(),base.screenshotReferences(),base.changeAmount(),base.duplicate(),base.continuityId(),detection);
     var secondary=base.inference().activities().stream().skip(1).toList();

@@ -4,6 +4,16 @@
 
 ## 使い方
 
+保存済み判定をその日の活動と照合するには `/activity [today|yesterday|YYYY-MM-DD] --verbose` を使う。
+通常一覧はWindow / Foreground Vision / Background Visionの採用済み根拠だけを表示し、verboseでは
+confidenceの各軸、winning/matched rule、usable、classification mode/status、Vision required/unknown reasonと前面/背景別の結果を表示する。
+Visionはattemptedとusedを区別する。成功しても分類へ採用されなければ `ATTEMPTED_SUCCEEDED_NOT_USED`、
+失敗は `ATTEMPTED_FAILED` と既存failure reason、採用は `USED`。旧 `visionUsed` だけでは使用済みと判断しない。
+診断のない旧データはUnknownとして扱い、画像を再解析して埋め直さない。判定ルールの再適用・更新も行わない。
+Behaviorの実通知は通常一覧へ、抑制/失敗とtrigger・観測指標はverboseへ表示する。
+raw screenshot/base64/full prompt/full responseと通知本文を診断目的で追加保存・表示しない。
+詳細は [Activity Timeline](activity-timeline.md#コマンドと既存api) を参照。
+
 ```text
 /activity classification status
 /activity classification unknowns --top 20

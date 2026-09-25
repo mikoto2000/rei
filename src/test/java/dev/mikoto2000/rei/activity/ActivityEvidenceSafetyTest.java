@@ -22,7 +22,7 @@ class ActivityEvidenceSafetyTest {
     var backgrounds=new ArrayList<Runnable>();var capture=new ActivityCapture(p,observer,extractor,store,mock(ScreenshotStore.class),time,Runnable::run,backgrounds::add);
     capture.tick();time.advance(60);capture.tick();assertEquals(1,backgrounds.size());verify(store,times(2)).append(any());
     backgrounds.getFirst().run();var appended=org.mockito.ArgumentCaptor.forClass(ActivityRecord.class);var updated=org.mockito.ArgumentCaptor.forClass(ActivityRecord.class);
-    verify(store,times(2)).append(appended.capture());verify(store).replace(updated.capture());
+    verify(store,times(2)).append(appended.capture());verify(store,times(2)).replace(updated.capture());
     assertEquals(appended.getAllValues().getFirst().id(),updated.getValue().id());assertEquals("social",new ActivityRolePolicy().classify(updated.getValue()).primary().type());
   }
   @Test void disabledFallbackOrVisionStillStoresUnknownObservationWithoutPixels() throws Exception {
@@ -61,7 +61,8 @@ class ActivityEvidenceSafetyTest {
       try {
         capture.tick();assertTrue(entered.await(5,TimeUnit.SECONDS));
         for(int i=0;i<3;i++){time.advance(60);capture.tick();}
-        verify(store,times(4)).append(any());capture.pause();release.countDown();
+        verify(store,times(4)).append(any());verify(store).replace(argThat(r->r.detection().visionDiagnostics().foreground().state()==VisionDiagnostics.State.ATTEMPTED));
+        clearInvocations(store);capture.pause();release.countDown();
         worker.submit(()->{}).get(5,TimeUnit.SECONDS);
         verify(extractor).extract(any(),any());verify(store,never()).replace(any());
       } finally {release.countDown();capture.close();}
