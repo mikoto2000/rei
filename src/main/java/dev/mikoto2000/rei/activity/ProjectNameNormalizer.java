@@ -39,7 +39,7 @@ public final class ProjectNameNormalizer {
     if(aliases.containsKey(normalized))return aliases.get(normalized);
     if(normalized.isBlank() || normalized.length()>60 || !normalized.matches("[\\p{L}][\\p{L}\\p{N}-]*"))return "";
     // Implementation identifiers are not projects; an explicit alias may intentionally override this filter.
-    if(Set.of("repl","suggest-rules","unknown","other","local","browser","terminal","editor","github","chatgpt",
+    if(Set.of("repl","build-and-chat","software-development","suggest-rules","unknown","other","local","browser","terminal","editor","github","chatgpt",
         "youtube","firefox","chrome","powershell","x","code","vscode").contains(normalized)
         || ActivityVocabulary.CATEGORIES.contains(normalized)
         || normalized.matches(".*(factory|controller|configuration)$"))return "";

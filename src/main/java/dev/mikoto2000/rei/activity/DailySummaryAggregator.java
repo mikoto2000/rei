@@ -13,7 +13,8 @@ public final class DailySummaryAggregator {
   private record Sample(ActivityRecord record,Instant start,Instant end,ActivityRoles roles) {}
   private static final class Counts {
     long observed;
-    final Map<String,Long> categories=new HashMap<>(),secondary=new HashMap<>(),background=new HashMap<>(),workThemes=new HashMap<>();
+    final Map<String,Long> categories=new HashMap<>(),secondary=new HashMap<>(),background=new HashMap<>();
+    final WorkThemeAggregation workThemes=new WorkThemeAggregation();
   }
   public DailySummaryAggregate aggregate(LocalDate date,ActivityQueryRange range,ZoneId zone,List<SummarySegment> source) {
     // A record can appear in multiple projections. Clip it to source coverage, then de-overlap on the global time axis.
@@ -27,7 +28,7 @@ public final class DailySummaryAggregator {
     }
     var ordered=samples.values().stream().sorted(Comparator.comparing(Sample::start).thenComparing(s->s.record().id())).toList();
     var categories=new HashMap<String,Long>();var dispositions=new EnumMap<EntertainmentDisposition,Long>(EntertainmentDisposition.class);
-    var projects=new HashMap<String,Long>();var services=new HashMap<String,Long>();var themes=new HashMap<String,Long>();var leisure=new HashMap<String,Long>();
+    var projects=new HashMap<String,Long>();var services=new HashMap<String,Long>();var themes=new WorkThemeAggregation();var leisure=new HashMap<String,Long>();
     var buckets=new LinkedHashMap<String,Counts>();var workBlocks=new ArrayList<Block>();var leisureBlocks=new ArrayList<Block>();
     long observed=0;int switches=0;String previousProject="";Instant previousEnd=null;
     Block pending=null;boolean pendingWork=false;String pendingContinuity="";
@@ -53,7 +54,8 @@ public final class DailySummaryAggregator {
       boolean work=WORK.contains(category) && disposition!=EntertainmentDisposition.ENTERTAINMENT;
       boolean fun=disposition==EntertainmentDisposition.ENTERTAINMENT;
       String theme=work?(project.isBlank()?"":project+" の")+categoryLabel(category):"";
-      if(work)themes.merge(theme,seconds,Long::sum);
+      var topics=work?WorkThemeAggregation.topics(primary,s.record()):List.<String>of();
+      if(work)themes.add(project,category,topics,s.record(),s.start(),end);
       String leisureLabel=Set.of("social","media","shopping","gaming").contains(category)?categoryLabel(category):"娯楽として分類された閲覧";
       if(fun)leisure.merge(leisureLabel,seconds,Long::sum);
       var visible=new HashSet<String>();
@@ -66,7 +68,7 @@ public final class DailySummaryAggregator {
         if(weight==0)continue;
         var count=buckets.computeIfAbsent(BUCKET_ORDER.get(b),k->new Counts());count.observed+=weight;
         count.categories.merge(category,weight,Long::sum);
-        if(work)count.workThemes.merge(theme,weight,Long::sum);
+        if(work)count.workThemes.add(project,category,topics,s.record(),max(s.start(),from),min(end,until));
         addVisible(count.secondary,s.roles().secondary(),weight);addVisible(count.background,s.roles().background(),weight);
       }
       String blockTheme=work?theme:fun?leisureLabel:"";
@@ -87,13 +89,18 @@ public final class DailySummaryAggregator {
     for(var key:BUCKET_ORDER)if(buckets.containsKey(key)) {
       var c=buckets.get(key);
       var dominant=top(c.categories,2).stream().filter(v->!v.name().equals("unknown") && v.seconds()>=c.observed*.15).map(v->categoryLabel(v.name())).toList();
+      c.secondary.remove("AI支援");c.background.remove("AI支援");
       var secondary=top(c.secondary,1).stream().filter(v->v.seconds()>=c.observed*.2).map(Weighted::name).filter(v->!dominant.contains(v)).toList();
-      sections.put(key,new Bucket(c.observed,dominant,secondary,top(c.background,1).stream().map(Weighted::name).toList(),
-          top(c.workThemes,2).stream().filter(v->v.seconds()>=c.observed*.15).map(Weighted::name).toList()));
+      var ranked=c.workThemes.ranked(3);
+      var workLabels=ranked.stream().map(ProjectThemeStat::label).toList();
+      var secondaryThemes=dominant.stream().filter(v->!Set.of("開発","調査","文書作業").contains(v)).limit(1).toList();
+      sections.put(key,new Bucket(c.observed,Map.copyOf(c.categories),dominant,secondary,
+          top(c.background,1).stream().map(Weighted::name).toList(),workLabels,
+          ranked.stream().map(ProjectThemeStat::canonicalProject).filter(v->!v.isBlank()).toList(),secondaryThemes));
     }
     long span=Math.max(0,Duration.between(range.fromInclusive(),range.toExclusive()).getSeconds());
     return new DailySummaryAggregate(date,observed,Math.max(0,span-observed),Map.copyOf(categories),Map.copyOf(dispositions),
-        top(projects,5),top(services,3),Collections.unmodifiableMap(sections),top(themes,5).stream().map(Weighted::name).toList(),
+        top(projects,5),top(services,3),Collections.unmodifiableMap(sections),themes.ranked(5),services.getOrDefault("AI支援",0L)>=Math.max(600,observed*.2),themes.labels(5),
         top(leisure,3).stream().map(Weighted::name).toList(),blocks(workBlocks),blocks(leisureBlocks),switches,switches>=FREQUENT_SWITCHES,
         observed==0?0:categories.getOrDefault("unknown",0L)/(double)observed,source.size());
   }

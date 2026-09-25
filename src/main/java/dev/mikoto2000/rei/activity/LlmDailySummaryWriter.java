@@ -35,6 +35,13 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
       Task、締切、意図、生産性、集中度、実際の操作・成果を推測・断定しない。「集中していた」と書かない。
       同じ注意書き、unknownや未観測の説明を繰り返さない。注意書きとunknown/UNCERTAIN注記はコード側が一回表示するので出力しない。
       「関連の画面」「混在していました」を繰り返さず、主と補助の関係を明確にする。Markdownや改行を文字列に含めない。
+      projectThemeStatsと時間帯workThemes/dominantProjectsはコード側で順位付け済み。再ランキングせず代表的な2〜3テーマに絞る。
+      generic categoryだけでなくproject/themeを優先し、具体的候補がある場合「開発」「調査」だけの作業テーマを避ける。
+      overviewには上位project/themeを1〜2個含める。各時間帯の固有project/themeを出し、隣接時間帯で同じ定型文を繰り返さない。
+      workThemesは主活動の観測に由来する。secondary/backgroundは補助表示で実際の作業ではない。categorySecondsでSNSが大半ならSNSが多いことも残す。
+      入力canonicalProject/themeCandidatesにないproject/themeを捏造しない。クラス名から設計変更などを推測しない。application/serviceを羅列しない。
+      AI支援は時間帯別では言及しない。significantAiAssistanceがtrueの場合だけ全体または傾向に一回までまとめる。
+      傾向ではproject名の列挙を繰り返さず、切り替えや長い観測区間など横断的な特徴を書く。
       JSON schemaに従い返答し、ツールを実行しない。
       """;
   private final Supplier<ChatModel> model;private final Supplier<OpenAiChatOptions> options;

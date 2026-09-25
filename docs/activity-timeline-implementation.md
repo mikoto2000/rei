@@ -862,3 +862,7 @@ Slash Command の summary 出力を、区間の全件列挙から上限付きの
 元 ActivityRecord / ActivitySession / SummarySegment、Timeline、Behavior / classification は変更しない。
 新規クラス、alias、schema、timeout/fallback、fixture比較、全テスト結果は
 [Daily Summary 実装記録](activity-daily-summary.md) を参照。
+
+## Phase 3.8.1: Theme Enrichment
+
+WorkThemeAggregation による canonical project 統合、保存済み topic 候補の抽出、generic 抑制と順位付けを追加。Bucket ごとの project/theme を fallback と LLM 入力へ渡す。仕様・比較・検証結果は [Theme Enrichment 実装記録](activity-theme-enrichment.md) を参照。

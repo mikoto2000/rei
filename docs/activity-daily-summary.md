@@ -260,3 +260,7 @@ TDD の最初の失敗は target/daily-summary-red.log、段階的確認は dail
 非トランザクションの履歴移行や日次cacheは本件では実施していない。コミットIDは作業完了メッセージ参照。
 
 最終 Java 実行の Activity / Behavior / classification 関連は374ケースすべて成功。追加28ケースも全件成功。
+
+## Phase 3.8.1 Theme Enrichment
+
+project / topic の集約、generic 抑制、時間帯別テーマ、AI支援の反復抑制を追加。詳細・比較・検証結果は [Theme Enrichment](activity-theme-enrichment.md) を参照。

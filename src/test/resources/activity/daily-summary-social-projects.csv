@@ -1,0 +1,9 @@
+minute,seconds,category,project,service,disposition
+0,18000,social,,ChatGPT,ENTERTAINMENT
+300,1800,development,rei,ChatGPT,NON_ENTERTAINMENT
+360,18000,social,,ChatGPT,ENTERTAINMENT
+660,1800,development,sensevoiceinput,ChatGPT,NON_ENTERTAINMENT
+720,18000,social,,ChatGPT,ENTERTAINMENT
+1020,1800,development,livevingo,ChatGPT,NON_ENTERTAINMENT
+1080,18000,social,,ChatGPT,ENTERTAINMENT
+1380,1800,development,palabra,ChatGPT,NON_ENTERTAINMENT
