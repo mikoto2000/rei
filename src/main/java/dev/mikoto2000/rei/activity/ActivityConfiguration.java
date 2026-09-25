@@ -37,11 +37,19 @@ public class ActivityConfiguration {
       @Qualifier("activityBackgroundExecutor") ThreadPoolTaskExecutor backgroundExecutor,java.util.List<ActivityEvidenceSource> sources,ClassificationToolkit toolkit) {
     var capture=new ActivityCapture(p,observer,extractor,store,screenshots,Clock.systemUTC(),analysisExecutor,backgroundExecutor,sources);capture.useToolkit(toolkit);return capture;
   }
-  @Bean ActivityTimeline activityTimeline(ActivityStore store,ActivityProperties p) {
+  @Bean DailySummaryService dailySummaryService(ActivityProperties p,dev.mikoto2000.rei.llm.LlmModelProvider provider,
+      dev.mikoto2000.rei.core.service.ModelHolderService current) {
+    var aliases=new ProjectAliasStore(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve(p.getSummary().getProjectAliasesFile()));
+    DailySummaryWriter writer=p.getSummary().isLlmEnabled()?new LlmDailySummaryWriter(
+        ()->provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),
+        ()->provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get()),Duration.ofSeconds(p.getSummary().getTimeoutSeconds())):null;
+    return new DailySummaryService(aliases,writer);
+  }
+  @Bean ActivityTimeline activityTimeline(ActivityStore store,ActivityProperties p,DailySummaryService dailySummary) {
     var zone=ZoneId.of(p.getZone());
     return new ActivityTimeline(store,Clock.system(zone),new SemanticSessionPolicy(
         Duration.ofSeconds(p.effectiveNormalGapSeconds()),Duration.ofSeconds(p.effectiveMaximumGapSeconds()),
-        Duration.ofSeconds(p.getSummaryBriefSwitchSeconds()),p.getPrimaryConfidenceThreshold(),zone));
+        Duration.ofSeconds(p.getSummaryBriefSwitchSeconds()),p.getPrimaryConfidenceThreshold(),zone),dailySummary);
   }
   @Bean ActivityTools activityTools(ActivityTimeline timeline) {return new ActivityTools(timeline);}
   @Bean ActivityTimelinePresentationService activityTimelinePresentation(ActivityTimeline timeline,org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.activity.behavior.BehaviorStateStore> behavior) {

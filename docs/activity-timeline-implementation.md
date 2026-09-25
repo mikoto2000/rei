@@ -854,3 +854,11 @@ Task / Calendar / 締切 / Working Set / 未完了project / Score / 週次月次
 ## Behavior Notification の会話履歴
 
 新しく emitted された通知は assistant / source=BEHAVIOR_NOTIFICATION として通常履歴・LLM context に保存します。suppressed / NONE は対象外です。同じ通知 ID を Timeline と共有し、再起動後の重複も防止します。Project/Session、圧縮、Privacy、障害時の扱いは [設計・実装記録](behavior-conversation-history.md) を参照してください。
+
+## Phase 3.8: Daily Summary Synthesis
+
+Slash Command の summary 出力を、区間の全件列挙から上限付きの DailySummary に変更した。
+保存済み SummarySegment の証拠をコードで日次集約し、LLM は文章化のみを行う。
+元 ActivityRecord / ActivitySession / SummarySegment、Timeline、Behavior / classification は変更しない。
+新規クラス、alias、schema、timeout/fallback、fixture比較、全テスト結果は
+[Daily Summary 実装記録](activity-daily-summary.md) を参照。

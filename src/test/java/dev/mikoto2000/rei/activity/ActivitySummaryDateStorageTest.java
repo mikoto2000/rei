@@ -27,7 +27,7 @@ class ActivitySummaryDateStorageTest {
     var yesterday=timeline.trendSummary("yesterday");var today=timeline.trendSummary("today");
     assertTrue(yesterday.contains("previous-project"));assertFalse(yesterday.contains("today-project"));
     assertTrue(today.startsWith("Activity Summary — 2026-09-25"));
-    assertTrue(today.contains("today-project"));assertTrue(today.contains("11:59–12:00"));
+    assertTrue(today.contains("today-project"));assertTrue(today.contains("観測時間: 0時間1分30秒"));
     assertFalse(today.contains("previous-project"));assertFalse(today.contains("at-now-project"));assertFalse(today.contains("future-project"));
     assertEquals(today,timeline.trendSummary("2026-09-25"));
     assertEquals(yesterday,timeline.trendSummary("2026-09-24"));

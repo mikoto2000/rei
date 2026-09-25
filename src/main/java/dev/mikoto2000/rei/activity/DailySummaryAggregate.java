@@ -1,0 +1,24 @@
+package dev.mikoto2000.rei.activity;
+import java.time.*;
+import java.util.*;
+/** Bounded, evidence-free writer input. Durations are seconds of observations, not wall-clock engagement. */
+public record DailySummaryAggregate(LocalDate targetDate,long observedSeconds,long unobservedSeconds,
+    Map<String,Long> categorySeconds,Map<EntertainmentDisposition,Long> entertainmentSeconds,
+    List<Weighted> topProjects,List<Weighted> services,Map<String,Bucket> timeOfDay,
+    List<String> dominantThemes,List<String> leisureActivities,List<Block> majorWorkBlocks,List<Block> majorLeisureBlocks,
+    int projectSwitchCount,boolean frequentProjectSwitches,double unknownRatio,int sourceSegmentCount) {
+  public record Weighted(String name,long seconds) {}
+  public record Bucket(long observedSeconds,List<String> dominant,List<String> secondary,List<String> background,List<String> workThemes) {}
+  public record Block(String start,String end,long observedSeconds,String theme) {}
+  public static final Map<String,String> BUCKET_LABELS=Collections.unmodifiableMap(new LinkedHashMap<>(Map.of(
+      "lateNight","深夜","morning","午前","afternoon","午後","evening","夜")));
+  public static final List<String> BUCKET_ORDER=List.of("lateNight","morning","afternoon","evening");
+  public static String categoryLabel(String category) {
+    return switch(category) {
+      case "development"->"開発";case "research"->"調査";case "documentation"->"文書作業";
+      case "social"->"SNS閲覧";case "media"->"動画・音楽の閲覧";case "shopping"->"ショッピング";
+      case "gaming"->"ゲーム";case "communication"->"コミュニケーション";case "monitoring"->"監視";
+      case "navigation"->"予定・経路確認";case "idle"->"待機";default->"判定不能";
+    };
+  }
+}
