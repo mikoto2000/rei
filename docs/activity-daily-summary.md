@@ -286,3 +286,9 @@ numeric score の電話番号誤検知も修正した。原因・設定適用手
 実保存データ626区間のローカルcommand再生で提示出力を再現し、既存設定例による比較も実施。
 DEBUG trace、Slashからwriter/formatterまでの7ケースを追加し、clean buildしたJARを起動先へ反映。
 [実行環境・各stage・Before/After・全検証結果](activity-summary-runtime-trace.md) を参照。
+
+## Phase 3.8.3: allowSingleProject の表示セマンティクス
+
+明示trueのgroup membershipをDaily Summaryの表示名解決に使い、GROUP集約のcoverage/時間条件と分離した。
+全日・主テーマ・全時間帯・fallbackで同じ表示候補を使い、canonical projectのprovenanceは内部に保持する。
+[正式仕様・実データBefore/After・全テスト結果](activity-single-project-display.md) を参照。

@@ -16,7 +16,8 @@ Phase 3.8.2 の品質審査済み ProjectThemeStat から最終候補を生成�
 別projectのidentityを統合せず、表示上の候補だけをまとめる。
 
 `SummaryThemeCandidate` は id、displayTheme、level（GROUP / PROJECT / THEME / GENERIC）、
-memberProjects（観測された代表最大2件）、memberProjectCount、activities、themes、
+displaySource（PROJECT / THEME_GROUP / GENERIC_THEME）、groupIds、
+memberProjects（内部診断用の観測された代表最大2件）、memberProjectCount、activities、themes、
 durationSeconds、observationCount、longestContinuousSeconds、associationConfidence、
 specificity、groupCoverage、score、label を持つ。
 THEME はproject不明でも強い明示テーマを捨てないためのlevel。
@@ -48,7 +49,9 @@ themeGroups:
 
 projects は必須・空不可。themes は任意で、project不明のtheme-only候補との包含関係を明示する。
 themes が未設定なら、そのgroupのproject候補は統合するが、意味の類似だけでtheme-only候補は消さない。
-allowSingleProject は既定 false。明示 true の場合だけ単独projectにもdisplay groupを使える。
+allowSingleProject は既定 false。明示 true なら、group集約の支持条件を満たさない場合も、
+所属projectのDaily Summary表示にdisplayNameを使う。証拠のlevelやscoreは変えない。
+詳細は [表示セマンティクス調整](activity-single-project-display.md) を参照。
 Built-in group / 自動group推論 / theme alias設定は導入しない。すべてユーザー設定なので
 既定groupとの競合や暗黙priorityはない。未設定projectは従来のproject + theme/categoryへ戻る。
 
@@ -95,7 +98,8 @@ groupの採用条件はすべて以下を満たすこと:
    または、メンバー1件でallowSingleProjectがtrue。
 
 1件だけが55分、もう1件が5分ならgroup化しない。
-条件を満たさない場合はproject-levelの具体性を残す。
+条件を満たさない場合はproject-levelの証拠を残す。ただしallowSingleProject=trueなら
+表示名はgroup.displayNameへ正規化する（集約採用と表示名の解決を分離）。
 日全体ではcoverage不足でも、その時間帯では条件を満たせばgroup化できる。
 
 groupのduration・observationCountはメンバーの排他的主活動の合計。

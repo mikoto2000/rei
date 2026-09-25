@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.activity;
 import java.util.*;
 import static dev.mikoto2000.rei.activity.DailySummaryAggregate.*;
 import static dev.mikoto2000.rei.activity.SummaryThemeCandidate.Level;
+import static dev.mikoto2000.rei.activity.SummaryThemeCandidate.DisplaySource;
 /** Shared day/bucket display selection over already canonical, quality-checked associations. */
 public final class DailySummaryThemeConsolidator {
   private static final org.slf4j.Logger log=org.slf4j.LoggerFactory.getLogger(DailySummaryThemeConsolidator.class);
@@ -31,7 +32,7 @@ public final class DailySummaryThemeConsolidator {
       double themeSupport=input.stream().filter(s->s.canonicalProject().isBlank() && !s.themeCandidates().isEmpty())
           .mapToDouble(s->score(s)*s.themeCandidates().stream().filter(group.themes()::contains).count()/s.themeCandidates().size()).sum();
       double score=members.stream().mapToDouble(DailySummaryThemeConsolidator::score).sum()*(1+.15*coverage)+themeSupport;
-      replacements.add(new SummaryThemeCandidate("group:"+group.id(),group.displayName(),Level.GROUP,List.of(group.id()),
+      replacements.add(new SummaryThemeCandidate("group:"+group.id(),group.displayName(),Level.GROUP,DisplaySource.THEME_GROUP,List.of(group.id()),
           members.stream().sorted(Comparator.comparingLong(ProjectThemeStat::observedSeconds).reversed().thenComparing(ProjectThemeStat::canonicalProject))
               .map(ProjectThemeStat::canonicalProject).limit(2).toList(),members.size(),categories,List.of(),seconds,
           members.stream().mapToInt(ProjectThemeStat::observationCount).sum(),
@@ -39,7 +40,7 @@ public final class DailySummaryThemeConsolidator {
       members.forEach(s->grouped.add(s.canonicalProject()));eligible.put("group:"+group.id(),group);
     }
     var base=new ArrayList<SummaryThemeCandidate>(replacements);
-    for(var stat:input)if(!grouped.contains(stat.canonicalProject()))base.add(project(stat,config));
+    for(var stat:input)if(!grouped.contains(stat.canonicalProject()))base.add(resolveDisplay(project(stat,config),config));
     // A retained project also represents its explicit group for display de-duplication.
     // Only selected representatives cover topics; unrelated and unselected groups never suppress them.
     // Topic scores can only decrease, so retained project/group representatives grow monotonically.
@@ -54,7 +55,7 @@ public final class DailySummaryThemeConsolidator {
         if(c.level()!=Level.THEME){candidates.add(c);continue;}
         var remaining=c.themes().stream().filter(t->!covered.contains(t)).toList();
         suppressedTopics+=c.themes().size()-remaining.size();
-        if(!remaining.isEmpty())candidates.add(new SummaryThemeCandidate("theme:"+String.join("・",remaining),String.join("・",remaining),c.level(),config.idsFor("",remaining),c.memberProjects(),
+        if(!remaining.isEmpty())candidates.add(new SummaryThemeCandidate("theme:"+String.join("・",remaining),String.join("・",remaining),c.level(),c.displaySource(),config.idsFor("",remaining),c.memberProjects(),
             c.memberProjectCount(),c.activities(),remaining,c.durationSeconds(),c.observationCount(),c.longestContinuousSeconds(),
             c.associationConfidence(),c.specificity(),c.groupCoverage(),c.score()*remaining.size()/c.themes().size(),String.join("・",remaining)));
       }
@@ -75,13 +76,28 @@ public final class DailySummaryThemeConsolidator {
         metrics.canonicalCandidates(),metrics.groupCandidates(),metrics.suppressedChildren(),metrics.suppressedTopics(),metrics.selectedThemes());
     return new Result(selected,metrics);
   }
+  private static SummaryThemeCandidate resolveDisplay(SummaryThemeCandidate candidate,SummaryThemeGroups config) {
+    if(candidate.level()!=Level.PROJECT)return candidate;
+    var group=config.groups().stream().filter(g->g.allowSingleProject() && candidate.groupIds().contains(g.id())).findFirst().orElse(null);
+    if(group==null)return candidate;
+    // Membership controls presentation independently of group aggregation eligibility.
+    // Categories are observed activities; configured topics describe containment, not a new activity.
+    String detail=String.join("・",candidate.activities().stream().limit(2).map(DailySummaryAggregate::categoryLabel).toList());
+    String label=group.displayName()+(detail.isBlank() || group.displayName().endsWith(detail)?"":"の"+detail);
+    log.debug("[summary-theme-display] canonicalProject={} group={} allowSingleProject=true resolvedDisplay={}",
+        candidate.memberProjects(),group.id(),group.displayName());
+    return new SummaryThemeCandidate(candidate.id(),group.displayName(),candidate.level(),DisplaySource.THEME_GROUP,
+        candidate.groupIds(),candidate.memberProjects(),candidate.memberProjectCount(),candidate.activities(),candidate.themes(),
+        candidate.durationSeconds(),candidate.observationCount(),candidate.longestContinuousSeconds(),candidate.associationConfidence(),
+        candidate.specificity(),candidate.groupCoverage(),candidate.score(),label);
+  }
   private static double confidence(ProjectThemeStat s) {
     return s.strongAssociations().stream().mapToDouble(ProjectThemeAssociation::associationConfidence).average().orElse(0);
   }
   private static double score(ProjectThemeStat s){return s.score()*(s.strongAssociations().isEmpty()?1:.9+.1*confidence(s));}
   private static SummaryThemeCandidate project(ProjectThemeStat s,SummaryThemeGroups config) {
     var level=!s.canonicalProject().isBlank()?Level.PROJECT:!s.themeCandidates().isEmpty()?Level.THEME:Level.GENERIC;
-    return new SummaryThemeCandidate("candidate:"+s.label(),s.canonicalProject().isBlank()?s.label():s.canonicalProject(),level,config.idsFor(s.canonicalProject(),s.themeCandidates()),
+    return new SummaryThemeCandidate("candidate:"+s.label(),s.canonicalProject().isBlank()?s.label():s.canonicalProject(),level,level==Level.PROJECT?DisplaySource.PROJECT:DisplaySource.GENERIC_THEME,config.idsFor(s.canonicalProject(),s.themeCandidates()),
         s.canonicalProject().isBlank()?List.of():List.of(s.canonicalProject()),s.canonicalProject().isBlank()?0:1,
         s.categories(),s.themeCandidates(),s.observedSeconds(),s.observationCount(),s.longestContinuousSeconds(),
         confidence(s),s.specificity(),0,score(s),s.label());

@@ -39,7 +39,7 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
       generic categoryだけでなくproject/themeを優先し、具体的候補がある場合「開発」「調査」だけの作業テーマを避ける。
       overviewには上位project/themeを1〜2個含める。各時間帯の固有project/themeを出し、隣接時間帯で同じ定型文を繰り返さない。
       workThemesは主活動の観測に由来する。secondary/backgroundは補助表示で実際の作業ではない。categorySecondsでSNSが大半ならSNSが多いことも残す。
-      入力consolidated candidateのdisplayTheme/memberProjects/themesにないproject/themeを捏造しない。クラス名から設計変更などを推測しない。application/serviceを羅列しない。
+      入力consolidated candidateのlabel/displayTheme/themesにないproject/themeを捏造しない。クラス名から設計変更などを推測しない。application/serviceを羅列しない。
       AI支援は時間帯別では言及しない。significantAiAssistanceがtrueの場合だけ全体または傾向に一回までまとめる。
       傾向ではproject名の列挙を繰り返さず、切り替えや長い観測区間など横断的な特徴を書く。
       PROJECTのspecific themeはコードが選んだcandidateのthemesだけ。associationConfidence >= 0.75を満たす関連のみ含まれている。
@@ -47,7 +47,8 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
       weak associationは入力labelのproject + generic categoryへ戻す。generic project名を使わない。
       candidateのthemesが空ならlabelのgeneric categoryを使う。別候補からthemeを借りない。
       GROUPは明示設定された表示グループで、project identityや個別project-theme関連を新たに示すものではない。
-      GROUPとそのmemberProjectsの個別テーマを同じ一覧へ再展開しない。grouping/alias判定/親子抑制をLLMでやり直さない。
+      displaySource=THEME_GROUPならlabelの表示名をそのまま使い、canonical project名やtopicを再付加しない。
+      GROUPと個別projectのテーマを同じ一覧へ再展開しない。grouping/alias判定/親子抑制をLLMでやり直さない。
       各時間帯は統合済み作業テーマ1〜2件と非作業傾向1件まで。canonical以外のraw aliasを復活させない。
       冒頭の共通注意書きに委ね、「画面が見られました」「表示がありました」を繰り返さず、根拠に応じて「開発が中心でした」「も一部で見られました」と簡潔にする。
       時間帯ごとに同じ定型句を繰り返さず、「作業テーマとして見られました」「補助表示」など機械的な表現を避ける。
@@ -71,6 +72,20 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
     // Work labels come exclusively from final candidates, not pre-consolidation project/block lists.
     ((com.fasterxml.jackson.databind.node.ObjectNode)structured).remove("topProjects");
     structured.path("majorWorkBlocks").forEach(block->((com.fasterxml.jackson.databind.node.ObjectNode)block).remove("theme"));
+    var hiddenProjects=new HashSet<String>();
+    var candidates=new ArrayList<JsonNode>();
+    structured.path("mainWorkThemeCandidates").forEach(candidates::add);
+    structured.path("timeOfDay").forEach(bucket->bucket.path("timeOfDayThemeCandidates").forEach(candidates::add));
+    for(var candidate:candidates)if(candidate.path("displaySource").asText().equals("THEME_GROUP")) {
+      candidate.path("memberProjects").forEach(project->hiddenProjects.add(project.asText()));
+      ((com.fasterxml.jackson.databind.node.ObjectNode)candidate).remove(List.of("id","memberProjects","themes"));
+    }
+    structured.path("timeOfDay").forEach(bucket->{
+      ((com.fasterxml.jackson.databind.node.ObjectNode)bucket).remove("dominantProjects");
+      var associations=(com.fasterxml.jackson.databind.node.ArrayNode)bucket.path("strongAssociations");
+      for(int i=associations.size()-1;i>=0;i--)
+        if(hiddenProjects.contains(associations.get(i).path("canonicalProject").asText()))associations.remove(i);
+    });
     String input=JSON.writeValueAsString(structured);
     if(input.length()>16000 || sensitiveText(structured))
       throw new IllegalArgumentException("Unsafe summary input");

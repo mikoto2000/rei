@@ -117,7 +117,8 @@ public final class DailySummaryAggregator {
       sections.put(key,new Bucket(c.observed,Map.copyOf(c.categories),dominant,secondary,
           top(c.background,1).stream().map(Weighted::name).toList(),workLabels,
           consolidated.candidates().stream().flatMap(v->v.memberProjects().stream()).distinct().limit(4).toList(),secondaryThemes,
-          ranked.stream().filter(s->workLabels.contains(s.label())).flatMap(v->v.strongAssociations().stream()).limit(4).toList(),consolidated.candidates()));
+          ranked.stream().filter(s->workLabels.contains(s.label()) || consolidated.candidates().stream()
+              .anyMatch(candidate->candidate.level()==SummaryThemeCandidate.Level.PROJECT && candidate.memberProjects().contains(s.canonicalProject()))).flatMap(v->v.strongAssociations().stream()).limit(4).toList(),consolidated.candidates()));
     }
     if(log.isDebugEnabled()) {
       var associations=themes.associations();

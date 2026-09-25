@@ -83,8 +83,8 @@ class ConsolidationPipelineTest {
     var file=dir.resolve("summary.yaml");
     Files.copy(Path.of("docs/testdata/summary-theme-groups-2026-09-24.yaml"),file);
     var store=new ProjectAliasStore(file);var a=aggregate(store);
-    assertThat(a.dominantThemes()).containsExactlyInAnyOrder("音声入力・文字起こし系の文書作業","音声翻訳系の開発","rei の開発","deepseek-vl-flash-vision-exp の開発");
-    // The low day-wide Vision coverage keeps the project; it can be grouped in the smaller night scope.
+    assertThat(a.dominantThemes()).containsExactlyInAnyOrder("音声入力・文字起こし系の文書作業","音声翻訳系の開発","rei の開発","DeepSeek / Vision関連の開発");
+    // Low day-wide coverage keeps project-level evidence, but the configured display name is used in every scope.
     assertThat(a.timeOfDay().get("lateNight").workThemes()).contains("DeepSeek / Vision関連の開発");
     var model=mock(ChatModel.class);
     when(model.stream(any(Prompt.class))).thenAnswer(call->{
