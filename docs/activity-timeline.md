@@ -489,12 +489,23 @@ service/applicationの補足は表示された事実として記述する。
 /activity today
 /activity yesterday
 /activity summary
+/activity summary today
+/activity summary yesterday
+/activity summary YYYY-MM-DD
 /activity 2026-09-22
 /activity pause
 /activity resume
 ```
 
-`summary` は今日の時間帯の傾向を `TrendSummaryFormatter` で表示する。
+`summary [today|yesterday|YYYY-MM-DD]` は指定日の傾向を既存の `TrendSummaryFormatter` で表示する。
+引数なしは `summary today` と同義。日付境界は `rei.activity.zone`（Activity Timeline の設定）基準で、
+当日（明示日付も含む）は `[00:00, now)`、過去日は `[00:00, 翌日00:00)` を対象にする。
+翌日の開始時刻はローカル日付から計算するため、DSTで23時間・25時間になる日にも対応する。
+未来日は「YYYY-MM-DD は未来の日付です。」、不正な日付・余分な引数は利用方法付きの入力エラーとなる。
+明示日付は厳密な `YYYY-MM-DD` 形式のみ対応し、存在しない日付も拒否する。
+データなしは正常終了し、「YYYY-MM-DD の Activity は記録されていません。」を表示する。
+記録がある場合は `Activity Summary — YYYY-MM-DD` の見出しを付ける。
+Shell補完は `summary today` / `summary yesterday` に対応する。
 today / yesterday / 日付指定（引数省略を含む）はPhase 3.1の `ActivitySummaryFormatter` 表示を維持する。
 追加LLMは不要。
 記録がない場合は「記録なし」と返し、何もしていなかったとは断定しない。

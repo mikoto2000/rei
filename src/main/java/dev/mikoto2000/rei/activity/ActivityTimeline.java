@@ -48,11 +48,21 @@ public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPo
   public List<TrendSummarySegment> trendSegments(String day) {
     var date=date(day);var start=date.atStartOfDay(clock.getZone()).toInstant();
     var end=date.plusDays(1).atStartOfDay(clock.getZone()).toInstant();
+    return trendBetween(start,end);
+  }
+  private List<TrendSummarySegment> trendBetween(Instant start,Instant end) {
+    if(start.equals(end)) return List.of();
     var fine=store.findBetween(start,end);
     return new TrendSummaryPolicy(clock.getZone(),summaryPolicy.minimumConfidence()).aggregate(summaryBetween(start,end,fine)).stream()
         .map(s->s.withFineSessions(fine)).toList();
   }
   public String trendSummary(String day) {
-    return new TrendSummaryFormatter(clock.getZone()).format(trendSegments(day));
+    // Freeze once so date resolution and range building cannot straddle midnight.
+    var snapshot=Clock.fixed(clock.instant(),clock.getZone());
+    var date=new ActivityDateArgumentResolver(snapshot).resolve(day);
+    var range=ActivityQueryRange.forDate(date,snapshot);
+    var segments=trendBetween(range.fromInclusive(),range.toExclusive());
+    if(segments.isEmpty()) return date+" の Activity は記録されていません。";
+    return "Activity Summary — "+date+"\n\n"+new TrendSummaryFormatter(clock.getZone()).format(segments);
   }
 }

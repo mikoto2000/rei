@@ -55,6 +55,11 @@ class ContextCompletionTest {
     assertThat(values(command(), "/activity behavior ")).containsExactlyInAnyOrder("on","off","status","evaluate","uncertain","suggest-rules");
     assertThat(values(command(), "/activity behavior ev")).containsExactly("evaluate");
   }
+  @Test void summaryDatesCompleteFromSubcommandDefinition() {
+    assertThat(values(command(), "/activity summary ")).containsExactlyInAnyOrder("today","yesterday");
+    assertThat(values(command(), "/activity summary y")).containsExactly("yesterday");
+    assertThat(values(command(), "/activity summary today ")).isEmpty();
+  }
   @Test void classificationActionsCompleteFromSubcommandDefinition() {
     assertThat(values(command(), "/activity classification ")).containsExactlyInAnyOrder("status","reload","unknowns","rules","suggest-rules");
     assertThat(values(command(), "/activity classification su")).containsExactly("suggest-rules");

@@ -4,7 +4,7 @@ import org.springframework.stereotype.Component;
 import picocli.CommandLine.*;
 
 @Component
-@Command(name="activity",description="Activity timeline and classification",subcommands={ActivityCommand.BehaviorCommand.class,ActivityCommand.ClassificationCommand.class})
+@Command(name="activity",description="Activity timeline and classification",subcommands={ActivityCommand.SummaryCommand.class,ActivityCommand.BehaviorCommand.class,ActivityCommand.ClassificationCommand.class})
 public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   private final ActivityTimeline timeline;
   private final ActivityCapture capture;
@@ -17,7 +17,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   @Parameters(index="0",arity="0..1",defaultValue="today",completionCandidates=ActionCandidates.class) private String action;
   public static final class ActionCandidates implements Iterable<String> {
     @Override public java.util.Iterator<String> iterator() {
-      return java.util.List.of("today","yesterday","summary","pause","resume").iterator();
+      return java.util.List.of("today","yesterday","pause","resume").iterator();
     }
   }
   @Spec private picocli.CommandLine.Model.CommandSpec spec;
@@ -25,6 +25,24 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   public ActivityCommand(ActivityTimeline timeline,ActivityCapture capture,ActivityProperties properties) {this(timeline,capture,properties,null);}
   @org.springframework.beans.factory.annotation.Autowired
   public ActivityCommand(ActivityTimeline timeline,ActivityCapture capture,ActivityProperties properties,dev.mikoto2000.rei.activity.behavior.BehaviorService behavior) {this.timeline=timeline;this.capture=capture;this.properties=properties;this.behavior=behavior;}
+  @Command(name="summary",description="Activity Summary for a local date (default: today)")
+  public static class SummaryCommand implements java.util.concurrent.Callable<Integer> {
+    @ParentCommand private ActivityCommand parent;
+    @Spec private picocli.CommandLine.Model.CommandSpec spec;
+    @Parameters(index="0",arity="0..1",defaultValue="today",paramLabel="today|yesterday|YYYY-MM-DD",completionCandidates=DateCandidates.class)
+    private String date;
+    public static class DateCandidates implements Iterable<String> {
+      public java.util.Iterator<String> iterator() {return java.util.List.of("today","yesterday").iterator();}
+    }
+    @Override public Integer call() {
+      try {spec.commandLine().getOut().println(parent.timeline.trendSummary(date));return 0;}
+      catch(java.time.DateTimeException e) {
+        spec.commandLine().getErr().println(e.getMessage());
+        spec.commandLine().getErr().println("Usage: /activity summary [today|yesterday|YYYY-MM-DD]");return 2;
+      }
+      catch(Exception e) {spec.commandLine().getErr().println("Activity の操作に失敗しました。ログを確認してください。");return 1;}
+    }
+  }
   @Command(name="behavior",description="Behavior evaluation: on, off, status, evaluate (manual, no notification)")
   public static class BehaviorCommand implements java.util.concurrent.Callable<Integer> {
     @ParentCommand private ActivityCommand parent;
@@ -81,7 +99,6 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
     try {
       String result;
       switch(action) {
-        case "summary" -> result=timeline.trendSummary("today");
         case "pause" -> {capture.pause();result="Activity Capture を一時停止しました。";}
         case "resume" -> {capture.resume();result=properties.isEnabled()?"Activity Capture を再開しました。":"Activity Capture は設定で無効です。rei.activity.enabled=true が必要です。";}
         default -> result=timeline.summary(action);
