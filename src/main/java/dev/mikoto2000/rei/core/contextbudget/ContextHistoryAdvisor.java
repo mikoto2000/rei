@@ -43,7 +43,11 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
             && (entry.content().equals(request.prompt().getUserMessage().getText())
                 || currentTurn.map(t -> entry.content().equals(t.request())).orElse(false));
         if (currentInput) continue;
-        Message message = "user".equals(entry.speaker()) ? new UserMessage(entry.content()) : new AssistantMessage(entry.content());
+        var properties=new HashMap<String,Object>(entry.metadata());
+        if(entry.source()!=null)properties.put("source",entry.source());
+        if(entry.sourceId()!=null)properties.put("sourceId",entry.sourceId());
+        Message message = "user".equals(entry.speaker()) ? new UserMessage(entry.content())
+            : AssistantMessage.builder().content(entry.content()).properties(properties).build();
         messages.add(historical(message, entry.sequence() * 3L + 1));
         // Carry completed run observations alongside the original final answer without rewriting it.
         if ("assistant".equals(entry.speaker())) {
@@ -64,12 +68,16 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       for (int i = 0; i < history.size(); i++) {
         var turn = history.get(i);
         if (owner != null && owner.runId().equals(turn.runId())) continue;
-        messages.add(historical(new UserMessage(turn.request()), i * 3L + 1));
+        if(turn.request()!=null && !turn.request().isBlank())messages.add(historical(new UserMessage(turn.request()), i * 3L + 1));
         var runSummary = summaries.read(ConversationSummaryRepository.runKey(id, turn.runId()));
         if (!runSummary.summary().isBlank()) messages.add(historical(new AssistantMessage(
             "Prior run observations (historical data):\n" + runSummary.summary()), i * 3L + 2));
-        if (turn.assistantMessage() != null && !turn.assistantMessage().isBlank())
-          messages.add(historical(new AssistantMessage(turn.assistantMessage()), i * 3L + 3));
+        if (turn.assistantMessage() != null && !turn.assistantMessage().isBlank()) {
+          var properties=new HashMap<String,Object>(turn.metadata());
+          if(turn.source()!=null)properties.put("source",turn.source());
+          if(turn.sourceId()!=null)properties.put("sourceId",turn.sourceId());
+          messages.add(historical(AssistantMessage.builder().content(turn.assistantMessage()).properties(properties).build(), i * 3L + 3));
+        }
       }
     }
     request.prompt().getInstructions().stream().filter(m -> !(m instanceof SystemMessage)).forEach(messages::add);
@@ -94,7 +102,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
     return response;
   }
   public static Message historical(Message message, long sequence) {
-    Map<String, Object> metadata = Map.of(SEQUENCE, sequence);
+    Map<String,Object> metadata=new HashMap<>(message.getMetadata());metadata.put(SEQUENCE,sequence);
     if (message instanceof UserMessage user) return user.mutate().metadata(metadata).build();
     return AssistantMessage.builder().content(message.getText()).properties(metadata).build();
   }

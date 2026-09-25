@@ -101,3 +101,7 @@ Shell は最初の送信時に `project:<project UUID>:chat:<UUID>` を新規作
 Shell の実行中追加入力は同一 Run への介入ではなく、同一 Session の次の Run として project FIFO に入ります。`1 Run = 1 Turn` です。SessionLifecycle は Repository の monitor 内で検証・保存・enqueue を行い、Shell / Web の競合でも受付順と queue 順を一致させます。実行は monitor 外で行います。実行開始時に共通 ChatExecutionService → ConversationTurnStore へ保存し、ConversationLogStore と ChatMemory も同じ conversationId を使います。ChatMemory は既存のメモリーウィンドウであり、今回再起動時のモデル文脈復元は追加していません。
 
 Native Client は同じ Rei プロセスの Web API に接続して一覧を更新すると、Shell の新しい Session を表示・再開できます。HTTP schema と Native Client の変更は不要です。Web で開始した Session も `/session resume` で Shell から選択できます。同じ data-dir に Shell プロセスと Web 専用プロセスを並行して書き込む構成は引き続き対象外です。
+
+## Behavior Notification の会話履歴
+
+新しく emitted された通知は assistant / source=BEHAVIOR_NOTIFICATION として通常履歴・LLM context に保存します。suppressed / NONE は対象外です。同じ通知 ID を Timeline と共有し、再起動後の重複も防止します。Project/Session、圧縮、Privacy、障害時の扱いは [設計・実装記録](behavior-conversation-history.md) を参照してください。

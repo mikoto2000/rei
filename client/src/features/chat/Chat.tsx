@@ -203,13 +203,15 @@ export function Chat({
               <time className="muted" dateTime={turn.createdAt}>
                 {new Date(turn.createdAt).toLocaleString()}
               </time>
-              <div className="message user">
-                <span className="message-label">
-                  <Avatar role="user" src={userAvatar} />
-                  YOU
-                </span>
-                <p>{turn.userMessage}</p>
-              </div>
+              {turn.userMessage && (
+                <div className="message user">
+                  <span className="message-label">
+                    <Avatar role="user" src={userAvatar} />
+                    YOU
+                  </span>
+                  <p>{turn.userMessage}</p>
+                </div>
+              )}
               <div className="message assistant">
                 <span className="message-label">
                   <Avatar role="assistant" />

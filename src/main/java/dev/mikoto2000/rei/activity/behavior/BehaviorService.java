@@ -57,16 +57,21 @@ public final class BehaviorService {
             || current.recoveredAt()!=null && (a.recoveredAt()==null || current.recoveredAt().isAfter(a.recoveredAt()))) {suppression="CONTEXT_CHANGED";recordEvent(a,clock.instant(),BehaviorTimelineEvent.Outcome.SUPPRESSED,suppression);return;}
         if(message==null || message.isBlank()) throw new IllegalStateException("Empty behavior message");
         var emittedAt=clock.instant();
-        publisher.publish(new AgentMessage(UUID.randomUUID().toString(),"assistant",message,MessageOrigin.BEHAVIOR,emittedAt));
+        var notificationId=UUID.randomUUID().toString();
+        publisher.publish(new AgentMessage(notificationId,"assistant",message,MessageOrigin.BEHAVIOR,emittedAt,
+            Map.of("severity",a.severity().name(),"triggerType",a.reason().name())));
         suppression="DELIVERED";
-        recordEvent(a,emittedAt,BehaviorTimelineEvent.Outcome.EMITTED,suppression);
+        recordEvent(a,emittedAt,BehaviorTimelineEvent.Outcome.EMITTED,suppression,notificationId);
       }
     } catch(Exception error) {suppression="FAILED";if(attempted!=null)recordEvent(attempted,clock.instant(),BehaviorTimelineEvent.Outcome.FAILED,suppression);log.warn("Behavior evaluation/notification failed ({})",error.getClass().getSimpleName());}
     finally {running.set(false);}
   }
   private void recordEvent(BehaviorAssessment a,Instant at,BehaviorTimelineEvent.Outcome outcome,String reason) {
+    recordEvent(a,at,outcome,reason,UUID.randomUUID().toString());
+  }
+  private void recordEvent(BehaviorAssessment a,Instant at,BehaviorTimelineEvent.Outcome outcome,String reason,String id) {
     if(a.severity()==BehaviorSeverity.NONE)return;
-    try {persistence.appendEvent(new BehaviorTimelineEvent(UUID.randomUUID().toString(),at,a.severity(),a.reason(),outcome,reason,a.continuousEntertainmentSeconds(),a.windows()));}
+    try {persistence.appendEvent(new BehaviorTimelineEvent(id,at,a.severity(),a.reason(),outcome,reason,a.continuousEntertainmentSeconds(),a.windows()));}
     catch(Exception e){log.warn("Behavior timeline history unavailable; delivery policy unchanged");}
   }
   public synchronized String status() {

@@ -33,6 +33,9 @@ pub struct ConversationTurnDto {
     run_id: String,
     user_message: String,
     assistant_message: Option<String>,
+    source: Option<String>,
+    source_id: Option<String>,
+    metadata: std::collections::BTreeMap<String, String>,
     created_at: String,
 }
 impl From<ConversationTurn> for ConversationTurnDto {
@@ -42,6 +45,9 @@ impl From<ConversationTurn> for ConversationTurnDto {
             run_id: t.run_id,
             user_message: t.user_message,
             assistant_message: t.assistant_message,
+            source: t.source,
+            source_id: t.source_id,
+            metadata: t.metadata,
             created_at: t
                 .created_at
                 .to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true),
