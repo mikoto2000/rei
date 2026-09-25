@@ -12,9 +12,13 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   private final dev.mikoto2000.rei.activity.behavior.BehaviorService behavior;
   private ClassificationToolkit toolkit;
   private ClassificationRuleSuggestions suggestions;
+  private ActivityTimelinePresentationService presentation;
+  @org.springframework.beans.factory.annotation.Autowired
+  void timelinePresentation(ActivityTimelinePresentationService presentation){this.presentation=presentation;}
+  @Option(names="--verbose",description="Show saved evidence, Vision, rule and Behavior diagnostics") private boolean verbose;
   @org.springframework.beans.factory.annotation.Autowired
   void operationalToolkit(ClassificationToolkit toolkit,ClassificationRuleSuggestions suggestions){this.toolkit=toolkit;this.suggestions=suggestions;}
-  @Parameters(index="0",arity="0..1",defaultValue="today",completionCandidates=ActionCandidates.class) private String action;
+  @Parameters(index="0",arity="0..1",defaultValue="today",paramLabel="today|yesterday|YYYY-MM-DD|pause|resume",completionCandidates=ActionCandidates.class) private String action;
   public static final class ActionCandidates implements Iterable<String> {
     @Override public java.util.Iterator<String> iterator() {
       return java.util.List.of("today","yesterday","pause","resume").iterator();
@@ -24,7 +28,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   public ActivityCommand() {this(null,null,null);}
   public ActivityCommand(ActivityTimeline timeline,ActivityCapture capture,ActivityProperties properties) {this(timeline,capture,properties,null);}
   @org.springframework.beans.factory.annotation.Autowired
-  public ActivityCommand(ActivityTimeline timeline,ActivityCapture capture,ActivityProperties properties,dev.mikoto2000.rei.activity.behavior.BehaviorService behavior) {this.timeline=timeline;this.capture=capture;this.properties=properties;this.behavior=behavior;}
+  public ActivityCommand(ActivityTimeline timeline,ActivityCapture capture,ActivityProperties properties,dev.mikoto2000.rei.activity.behavior.BehaviorService behavior) {this.timeline=timeline;this.capture=capture;this.properties=properties;this.behavior=behavior;this.presentation=new ActivityTimelinePresentationService(timeline,null);}
   @Command(name="summary",description="Activity Summary for a local date (default: today)")
   public static class SummaryCommand implements java.util.concurrent.Callable<Integer> {
     @ParentCommand private ActivityCommand parent;
@@ -101,10 +105,10 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
       switch(action) {
         case "pause" -> {capture.pause();result="Activity Capture を一時停止しました。";}
         case "resume" -> {capture.resume();result=properties.isEnabled()?"Activity Capture を再開しました。":"Activity Capture は設定で無効です。rei.activity.enabled=true が必要です。";}
-        default -> result=timeline.summary(action);
+        default -> result=presentation.format(action,verbose);
       }
       spec.commandLine().getOut().println(result);return 0;
-    }catch(java.time.DateTimeException | IllegalArgumentException e) {spec.commandLine().getErr().println("activity: today | yesterday | summary | YYYY-MM-DD | pause | resume");return 2;}
+    }catch(java.time.DateTimeException | IllegalArgumentException e) {spec.commandLine().getErr().println("activity: [today|yesterday|YYYY-MM-DD] [--verbose] | summary [today|yesterday|YYYY-MM-DD] | pause | resume");return 2;}
     catch(Exception e) {spec.commandLine().getErr().println("Activity の操作に失敗しました。ログを確認してください。");return 1;}
   }
 }

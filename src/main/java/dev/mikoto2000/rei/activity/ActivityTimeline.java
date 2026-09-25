@@ -21,8 +21,13 @@ public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPo
   public List<ActivitySession> query(String day) {
     return findByDate(date(day));
   }
-  private LocalDate date(String day) {
+  LocalDate date(String day) {
     return switch(day) {case "today","summary" -> LocalDate.now(clock);case "yesterday" -> LocalDate.now(clock).minusDays(1);default -> LocalDate.parse(day);};
+  }
+  /** Listing projection needs evidence, not persisted fine-session references: one bulk record query. */
+  public List<SummarySegment> timelineSegments(LocalDate date) {
+    var start=date.atStartOfDay(clock.getZone()).toInstant();var end=date.plusDays(1).atStartOfDay(clock.getZone()).toInstant();
+    return new SummaryGroupingPolicy(summaryPolicy).aggregate(summaryPolicy.aggregate(store.findRecordsBetween(start,end),start,end));
   }
   public List<SummarySegment> summarySegments(String day) {
     var date=date(day);

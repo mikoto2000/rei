@@ -485,6 +485,47 @@ service/applicationの補足は表示された事実として記述する。
 
 ### コマンドと既存API
 
+一覧の通常表示は、既存の活動ラベルに保存済み判定根拠と実際のBehavior通知を添える。
+`/activity`（today省略）、`/activity today`、`/activity yesterday`、`/activity YYYY-MM-DD` に共通で、
+`--verbose` は日付の前後どちらにも指定できる。
+
+```text
+/activity --verbose
+/activity today --verbose
+/activity --verbose yesterday
+
+- 09:52–10:16 SNS閲覧が中心と推定。
+  evidence: Window + Foreground Vision
+
+10:12 Behavior WARNING — notification: EMITTED
+```
+
+- `Window`: 分類元に保存されたウィンドウ情報（前面・タイトル・可視ウィンドウ）。
+- `Foreground Vision`: 前面解析の結果が分類値またはconfidenceの更新に採用されたもの。
+- `Background Vision`: 背景解析から実際に候補が追加されたもの。
+
+画像取得・Vision呼び出し・成功だけでは「使用済み」にならない。失敗や採用されなかった結果は通常のEvidenceに含めない。
+同じ活動区間内で根拠が変わった場合は `Window / Window + Foreground Vision（区間内で判定根拠が変化）` と表示する。
+画像採否の診断情報がない旧データは分かる根拠だけ表示し、何も確定できない場合は `Unknown` とする。
+旧 `visionUsed` / `VISION_*` の値だけから画像使用を推測しない。
+
+verboseは観測時刻ごとにconfidence（category/application/service/project/content）、mode/status、保存済み分類元、
+usable、winning/matched rule、Vision required/unknown reason、前面・背景の画像結果を表示する。
+画像結果は `NOT_ATTEMPTED` / `ATTEMPTED` / `ATTEMPTED_FAILED` / `ATTEMPTED_SUCCEEDED_NOT_USED` / `USED`。
+旧データ等で不明なら `UNKNOWN`。失敗理由は既存の `OUTPUT_LIMIT` / `TIMEOUT` / `VALIDATION` / `OTHER` を使用する。
+`ATTEMPTED` は完了結果が未記録であり、再起動前の未完了処理が残る場合もある。
+
+Behaviorは独立イベントとして、Activity開始時刻と通知結果時刻で昇順に表示する（区間は人工分割しない）。
+通常表示は `EMITTED` のNOTICE/WARNING/STRONG_WARNINGのみ。verboseでは `SUPPRESSED`（COOLDOWN等）と `FAILED`、
+既存trigger、観測された連続娯楽時間、各窓の娯楽比率も表示する。NONEと手動評価は記録対象外。
+通知発行はpublisherが正常に戻った時点で記録し、通知メッセージと同じ時刻を使う。通知前の予約・評価は発行扱いにしない。
+本文は新規保存しない。導入前のBehavior予約履歴から通知イベントを復元しないため、過去の通知が表示されない場合がある。
+publisherとSQLite間の原子的配送保証はなく、発行後の履歴保存失敗・プロセス終了では履歴が欠ける可能性がある。
+
+一覧は読み取り専用で、保存済みRecordとBehaviorイベントを対象日の範囲で一括取得する。
+スクリーンショット読込・再解析・Vision API・通知再送は行わない。raw image/base64/prompt/responseを診断用に保存・表示しない。
+`/activity summary ...` と自然言語Toolには診断情報を混ぜず、既存の出力を維持する。
+
 ```text
 /activity today
 /activity yesterday

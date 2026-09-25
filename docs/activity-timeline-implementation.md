@@ -1,5 +1,57 @@
 # Activity Timeline 実装報告
 
+## Activity Timeline diagnostics（2026-09-25）
+
+### 保存状況と最小拡張
+
+既存Record.DetectionにはclassificationSources、visionUsed、classificationMode/status、sourceConfidence、
+fieldConfidence、ClassificationDiagnostics（winning/matched rule、usable、Vision required/unknown理由）が保存されていた。
+ただし `visionUsed` と `VISION_FOREGROUND/BACKGROUND` は失敗・成功未採用でも設定され、採用判定には使えなかった。
+これらの既存フィールド・分類結果・分類telemetryの意味を変えず、nullableな `visionDiagnostics` を追加した。
+新しい画像解析は前面/背景別にattemptを記録し、既存mergeの前後の分類値/confidence差分でUSEDを判定する。
+背景は候補追加を判定する。既存 `ActivityVisionFailure` を失敗理由に利用する。新規画像・prompt・response保存はない。
+`ActivityEnrichment` と `ClassificationToolkit.decorate` は新しい診断情報を引き継ぐ。
+
+既存Behaviorの永続化はcheckpointと直近100件のassessment transitionのみ。
+lastNotificationAtはLLM前の予約時刻で、publisherへの発行成功や本文・抑制結果は履歴化されていなかった。
+`BehaviorTimelineEvent` を追加し、`BehaviorStateStore` のappend/range query経由でSQLiteの
+`activity_behavior_events(id, occurred_at, payload)` と時刻indexへ保存する。既存テーブル変更やデータ再生成は不要。
+テーブルは初回保存時に作成し、旧DBの一覧読込だけでは作成しない。旧checkpoint/transitionを通知履歴へ変換しない。
+新イベントは本文を持たず、id・時刻・severity・既存Reason trigger・EMITTED/SUPPRESSED/FAILED・理由・既存観測指標のみ。
+NONEとmanual evaluateは記録しない。新イベントの自動削除は行わない。
+履歴保存の失敗は通知policyに影響させない。publisherとDBの分散transactionは導入せず、発行後の履歴欠落はあり得る。
+
+### Query / presentation
+
+`ActivityTimeline.timelineSegments` は既存日付解決とzone・SummaryPolicy/Groupingを使い、対象日のRecordを1回取得する。
+細粒度Sessionの参照IDが不要な一覧ではSession個別問い合わせをせず、N+1を避ける。
+`ActivityTimelinePresentationService` は同じ `[ローカル00:00, 翌日00:00)` のBehaviorイベントを一括取得し、
+sealed `ActivityTimelineEntry`（ActivityEntry=interval、BehaviorEntry=instant）をtimestamp昇順に安定ソートする。
+同時刻はActivityを先に表示し、区間を人工分割しない。`ActivityEvidenceDisplayFormatter` がcanonical source
+WINDOW_METADATA / FOREGROUND_VISION / BACKGROUND_VISIONと診断テキストを担当する。
+旧データの画像採否はUNKNOWNとし、推測でUSEDにしない。保存済みraw source名はverboseに残す。
+
+`ActivityCommand` は日付と `--verbose` をpresentationへ渡すだけ。pause/resume/behavior/classification/summaryは従来の経路。
+`ActivitySummaryFormatter.formatEntry` を抽出して既存ラベルを共有する。既存Summary生成・自然言語Tool・
+Phase 3.5 evaluator/policy・Phase 3.7.xルールの判定処理は変更しない。
+通常はEvidenceとEMITTED通知、verboseは観測単位のconfidence/rule/Vision結果とSUPPRESSED/FAILED・trigger/指標を追加する。
+
+### TDD
+
+既存CLIに対するverbose4ケースの失敗を先に確認し、formatterとBehavior履歴の未実装APIでもRedを確認した。
+Window/前面/背景の使用・不使用・失敗、旧JSON、新診断のround trip、時系列merge、severity、suppression、
+通知予約と発行時刻の区別、保存失敗の分離、日付・verboseの位置、Summary非影響、一括queryを検証する。
+
+検証結果:
+- 追加25ケース成功。Activity関連348件成功（既存Summary/Behavior/Classificationを含む）。
+- Java全2338件: 2336成功、2失敗、0エラー。専用REI_DATA_DIRとローカルMaven依存キャッシュを使用。
+  失敗は前回から確認されている変更範囲外の `WebBoundaryTest.heartbeatHasNoSequenceAndDisconnectReleasesListenerAndTimer` と
+  `sendIOExceptionUnsubscribesAndDoesNotCancelRun` の購読数期待値不一致。
+- client 41件、Rust 64件、E2E（1ワーカー）12件成功。
+- 一時SQLiteにWindow-only / 前面使用 / 前面+背景使用 / Vision failure / emitted / suppressedを保存し、
+  実際のpicocliで `/activity`、`/activity today`、`/activity --verbose`、`/activity today --verbose` を実行して表示を確認。
+  手元の `.rei/memory.db` はread-onlyで確認したがActivityテーブルがなく、稼働実データによる確認は未実施。
+
 ## Activity Summary の単一日指定（2026-09-25）
 
 `/activity summary`、`/activity summary today`、`/activity summary yesterday`、

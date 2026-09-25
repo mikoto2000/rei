@@ -69,6 +69,7 @@ class BehaviorServiceTest {
     var service=service();service.setEnabled(true);
     when(generator.generate(any())).thenAnswer(inv->{var work=record(0,3600,"development");when(store.findBetween(any(),any())).thenReturn(sessions(List.of(work)));when(store.findRecordsBetween(any(),any())).thenReturn(List.of(work));return "message";});
     service.tick();verifyNoInteractions(publisher);
+    verify(state).appendEvent(argThat(e->e.outcome()==BehaviorTimelineEvent.Outcome.SUPPRESSED && e.reason().equals("CONTEXT_CHANGED")));
   }
   @Test void sqliteCheckpointSurvivesRestartAndAvoidsRepeatedWrites() throws Exception {
     var ds=new org.sqlite.SQLiteDataSource();ds.setUrl("jdbc:sqlite:"+directory.resolve("behavior.db"));
@@ -84,6 +85,36 @@ class BehaviorServiceTest {
     var ds=new org.sqlite.SQLiteDataSource();ds.setUrl("jdbc:sqlite:"+directory.resolve("bounded.db"));var persistence=new SqliteBehaviorStateStore(ds);
     var a=assess(1800,record(0,1800,"social"));for(int i=0;i<105;i++) persistence.save(BehaviorState.empty(),a);
     try(var c=ds.getConnection();var s=c.createStatement();var r=s.executeQuery("SELECT COUNT(*) FROM activity_behavior_transitions")) {assertTrue(r.next());assertEquals(100,r.getInt(1));}
+  }
+  @Test void notificationHistoryDistinguishesDeliveryFromCooldownAndManualAssessment() throws Exception {
+    var service=service();service.evaluate();verify(state,never()).appendEvent(any());
+    service.setEnabled(true);service.tick();service.tick();
+    var events=org.mockito.ArgumentCaptor.forClass(BehaviorTimelineEvent.class);verify(state,times(2)).appendEvent(events.capture());
+    assertEquals(BehaviorTimelineEvent.Outcome.EMITTED,events.getAllValues().get(0).outcome());
+    assertEquals(clock.instant(),events.getAllValues().get(0).timestamp());
+    assertEquals(BehaviorSeverity.WARNING,events.getAllValues().get(0).severity());
+    assertEquals(BehaviorTimelineEvent.Outcome.SUPPRESSED,events.getValue().outcome());assertEquals("COOLDOWN",events.getValue().reason());
+  }
+  @Test void failedPublicationNeverRecordsEmittedAndHistoryFailureDoesNotChangeDelivery() throws Exception {
+    var service=service();service.setEnabled(true);doThrow(new IllegalStateException()).when(publisher).publish(any());service.tick();
+    verify(state,never()).appendEvent(argThat(e->e.outcome()==BehaviorTimelineEvent.Outcome.EMITTED));
+    verify(state).appendEvent(argThat(e->e.outcome()==BehaviorTimelineEvent.Outcome.FAILED));
+    reset(state,publisher);service=service();service.setEnabled(true);doThrow(new IllegalStateException()).when(state).appendEvent(any());
+    service.tick();verify(publisher).publish(any());assertTrue(service.status().contains("DELIVERED"));
+  }
+  @Test void eventUsesPublicationTimeAfterGenerationRatherThanReservationTime() throws Exception {
+    service();var now=new java.util.concurrent.atomic.AtomicReference<>(clock.instant());
+    var moving=new Clock() {
+      public ZoneId getZone(){return ZoneOffset.UTC;}
+      public Clock withZone(ZoneId zone){return Clock.fixed(instant(),zone);}
+      public Instant instant(){return now.get();}
+    };
+    when(generator.generate(any())).thenAnswer(inv->{now.set(clock.instant().plusSeconds(30));return "message";});
+    var service=new BehaviorService(properties,activity,capture,store,state,generator,publisher,tracker,moving);service.setEnabled(true);service.tick();
+    var event=org.mockito.ArgumentCaptor.forClass(BehaviorTimelineEvent.class);verify(state).appendEvent(event.capture());
+    assertEquals(clock.instant().plusSeconds(30),event.getValue().timestamp());
+    assertEquals(BehaviorTimelineEvent.Outcome.EMITTED,event.getValue().outcome());
+    verify(publisher).publish(argThat(m->m.createdAt().equals(event.getValue().timestamp())));
   }
   @Test void slashActionsUseRuntimeOverrideAndEvaluateNeverNotifies() throws Exception {
     var service=service();var command=new picocli.CommandLine(new ActivityCommand(null,capture,activity,service));

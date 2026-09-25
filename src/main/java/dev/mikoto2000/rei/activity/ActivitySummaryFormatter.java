@@ -9,11 +9,18 @@ public record ActivitySummaryFormatter(ZoneId zone) {
   public String format(List<SummarySegment> segments) {
     if(segments.isEmpty()) return "この期間の Activity 記録はありません。";
     var out=new StringBuilder("画面の観測に基づく振り返りです。\n表示内容からの推定を含み、実際の操作・集中を断定するものではありません。\n");
-    var time=DateTimeFormatter.ofPattern("HH:mm").withZone(zone);String section="";
+    String section="";
     for(var segment:segments) {
       int hour=segment.startedAt().atZone(zone).getHour();
       String next=hour<6?"深夜":hour<12?"午前":hour<18?"午後":"夜";
       if(!next.equals(section)) {out.append('\n').append(next).append(":\n");section=next;}
+      out.append(formatEntry(segment));
+    }
+    return out.toString();
+  }
+  public String formatEntry(SummarySegment segment) {
+    var out=new StringBuilder();
+    var time=DateTimeFormatter.ofPattern("HH:mm").withZone(zone);
       out.append("- ").append(time.format(segment.startedAt())).append("–").append(time.format(segment.endedAt())).append(' ');
       long wall=Duration.between(segment.startedAt(),segment.endedAt()).getSeconds();
       double missing=wall==0?0:(double)segment.unobservedSeconds()/wall;
@@ -40,7 +47,6 @@ public record ActivitySummaryFormatter(ZoneId zone) {
       if(missing>=.1 && missing<=.3) out.append("（一部未観測時間あり）");
       else if(missing>.3) out.append("（未観測の割合が高い期間）");
       out.append('\n');
-    }
     return out.toString();
   }
   private static String clean(String text,int max) {

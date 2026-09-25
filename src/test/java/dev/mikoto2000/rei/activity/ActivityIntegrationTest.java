@@ -57,10 +57,11 @@ class ActivityIntegrationTest {
   }
   @Test void slashCommandsAndDateDispatch() {
     var timeline=mock(ActivityTimeline.class);var capture=mock(ActivityCapture.class);var properties=new ActivityProperties();
-    when(timeline.summary(anyString())).thenReturn("timeline");
-    var command=new picocli.CommandLine(new ActivityCommand(timeline,capture,properties));
+    var presentation=mock(ActivityTimelinePresentationService.class);when(presentation.format(anyString(),eq(false))).thenReturn("timeline");
+    var activityCommand=new ActivityCommand(timeline,capture,properties);activityCommand.timelinePresentation(presentation);
+    var command=new picocli.CommandLine(activityCommand);
     command.setOut(new java.io.PrintWriter(new java.io.StringWriter()));
-    for(var arg:List.of("today","yesterday","2026-09-22")) {assertEquals(0,command.execute(arg));verify(timeline).summary(arg);}
+    for(var arg:List.of("today","yesterday","2026-09-22")) {assertEquals(0,command.execute(arg));verify(presentation).format(arg,false);}
     assertEquals(0,command.execute("summary"));verify(timeline).trendSummary("today");
     assertEquals(0,command.execute("pause"));verify(capture).pause();
     assertEquals(0,command.execute("resume"));verify(capture).resume();assertFalse(properties.isEnabled());

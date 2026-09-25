@@ -13,7 +13,7 @@ class ActivityTuningPipelineTest {
       var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var store=mock(ActivityStore.class);
       when(observer.foreground()).thenReturn(ActivityEvidenceClassifierTest.window("Firefox","X"));when(observer.capture()).thenReturn(ActivityChangeScopeTest.screen(10,20));when(extractor.extract(any(),any())).thenReturn(result);
       new ActivityCapture(p,observer,extractor,store,mock(ScreenshotStore.class),new ActivityChangeScopeTest.Time()).tick();
-      var saved=org.mockito.ArgumentCaptor.forClass(ActivityRecord.class);verify(store).replace(saved.capture());
+      var saved=org.mockito.ArgumentCaptor.forClass(ActivityRecord.class);verify(store,times(2)).replace(saved.capture());
       assertEquals("social",saved.getValue().inference().activities().getFirst().type());assertEquals("X",saved.getValue().inference().activities().getFirst().service());assertEquals(.95,saved.getValue().confidence());
     }
   }
@@ -31,7 +31,7 @@ class ActivityTuningPipelineTest {
     when(extractor.extract(any(),any())).thenReturn(new ActivityExtractor.Result(new ActivityRecord.Inference("調査",List.of(new ActivityRecord.Activity("primary","research","","","",""))),.9));
     new ActivityCapture(p,observer,extractor,store,mock(ScreenshotStore.class),new ActivityChangeScopeTest.Time()).tick();
     var initial=org.mockito.ArgumentCaptor.forClass(ActivityRecord.class);var updated=org.mockito.ArgumentCaptor.forClass(ActivityRecord.class);
-    verify(store).append(initial.capture());verify(store).replace(updated.capture());
+    verify(store).append(initial.capture());verify(store,times(2)).replace(updated.capture());
     assertEquals(initial.getValue().id(),updated.getValue().id());assertEquals(60,updated.getValue().durationEstimate());
     var a=updated.getValue().inference().activities().getFirst();assertEquals("research",a.type());assertEquals("ChatGPT",a.service());assertEquals("Firefox",a.application());
     assertEquals(.9,updated.getValue().detection().fieldConfidence().category());assertEquals(.95,updated.getValue().detection().fieldConfidence().service());
@@ -41,7 +41,7 @@ class ActivityTuningPipelineTest {
       var p=new ActivityProperties();p.setEnabled(true);var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var store=mock(ActivityStore.class);
       when(observer.foreground()).thenReturn(ActivityEvidenceClassifierTest.window("Firefox","ChatGPT"));when(observer.capture()).thenReturn(ActivityChangeScopeTest.screen(10,20));when(extractor.extract(any(),any())).thenThrow(error);
       new ActivityCapture(p,observer,extractor,store,mock(ScreenshotStore.class),new ActivityChangeScopeTest.Time()).tick();
-      verify(store).append(any());verify(extractor).extract(any(),any());var saved=org.mockito.ArgumentCaptor.forClass(ActivityRecord.class);verify(store).replace(saved.capture());
+      verify(store).append(any());verify(extractor).extract(any(),any());var saved=org.mockito.ArgumentCaptor.forClass(ActivityRecord.class);verify(store,times(2)).replace(saved.capture());
       assertEquals("ChatGPT",saved.getValue().inference().activities().getFirst().service());assertEquals("unknown",saved.getValue().inference().activities().getFirst().type());
       assertTrue(saved.getValue().detection().fieldConfidence().partial());assertEquals("VISION_FAILED",saved.getValue().detection().status());
     }
