@@ -264,3 +264,7 @@ TDD の最初の失敗は target/daily-summary-red.log、段階的確認は dail
 ## Phase 3.8.1 Theme Enrichment
 
 project / topic の集約、generic 抑制、時間帯別テーマ、AI支援の反復抑制を追加。詳細・比較・検証結果は [Theme Enrichment](activity-theme-enrichment.md) を参照。
+
+## Phase 3.8.2 Theme Attribution Quality
+
+project/topic を同一観測の根拠・foreground支持・回数・時間で審査する。弱い関連はgeneric categoryへ戻す。仕様・alias調査・比較・検証結果は [Theme Attribution](activity-theme-attribution.md) を参照。

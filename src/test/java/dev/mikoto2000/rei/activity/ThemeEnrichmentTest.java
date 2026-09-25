@@ -23,8 +23,8 @@ class ThemeEnrichmentTest {
   @Test void savedTitleAndSummarySupplyTopicsWithoutInventingFromIdentifiers() {
     var a=aggregate(List.of(withText(segment(0,600,"development","rei","",NON_ENTERTAINMENT),"Activity classification","AgentEventFactory"),
         withText(segment(20,600,"research","sensevoice","",NON_ENTERTAINMENT),"","音声入力")));
-    assertThat(a.dominantThemes()).contains("rei のActivity分類","sensevoice-input の音声入力");
-    assertThat(a.projectThemeStats()).allMatch(s->s.specificity()==3);
+    assertThat(a.dominantThemes()).contains("rei のActivity分類","sensevoice-input の調査");
+    assertThat(a.projectThemeStats()).anyMatch(s->s.specificity()==3).anyMatch(s->s.specificity()==2);
     var plain=aggregate(List.of(withText(segment(0,600,"development","rei","",NON_ENTERTAINMENT),"AgentEventFactory project.cd build_and_chat","API")));
     assertThat(plain.dominantThemes()).containsExactly("rei の開発");
   }

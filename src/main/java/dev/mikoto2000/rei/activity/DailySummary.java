@@ -44,10 +44,16 @@ public record DailySummary(String overview,Map<String,String> timeOfDay,List<Str
       if(work.isEmpty())text=String.join("・",b.dominant())+"の表示が主でした。";
       else if(nonWork.isPresent())text=nonWork.get()+"の観測が多い一方、"+String.join("、",work)+"の表示も見られました。";
       else {
-        text=String.join("、",work)+"が作業テーマとして見られました。";
+        String ending=switch(key) {
+          case "lateNight"->"に関する画面が見られました。";
+          case "morning"->"の表示がありました。";
+          case "afternoon"->"に関する記録がありました。";
+          default->"が観測されています。";
+        };
+        text=String.join("、",work)+ending;
         if(!b.secondaryThemes().isEmpty())text+=String.join("・",b.secondaryThemes())+"も観測されています。";
       }
-      if(!b.secondary().isEmpty())text+=b.secondary().getFirst()+"の補助表示もありました。";
+      if(!b.secondary().isEmpty())text+=b.secondary().getFirst()+"も一部で表示されていました。";
       sections.put(key,text);
     }
     String trend=a.frequentProjectSwitches()?"観測された作業対象の切り替えが多い日でした。":

@@ -29,6 +29,7 @@ public final class ProjectAliasStore implements java.util.function.Supplier<Proj
         }
       }
       current=new ProjectNameNormalizer(aliases);
+      log.debug("Daily summary aliases file={} exists={} canonicalAndAliasEntries={}",file,Files.exists(file),current.aliasCount());
     }catch(Exception error){log.warn("Daily summary aliases unavailable; last valid aliases retained");}
     return current;
   }

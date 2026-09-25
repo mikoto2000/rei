@@ -42,6 +42,11 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
       入力canonicalProject/themeCandidatesにないproject/themeを捏造しない。クラス名から設計変更などを推測しない。application/serviceを羅列しない。
       AI支援は時間帯別では言及しない。significantAiAssistanceがtrueの場合だけ全体または傾向に一回までまとめる。
       傾向ではproject名の列挙を繰り返さず、切り替えや長い観測区間など横断的な特徴を書く。
+      projectとspecific themeを結び付けるのはコードが選んだstrongAssociations（associationConfidence >= 0.75）だけ。
+      同じsessionや時間帯という理由で未関連のproject/themeを組み合わせない。LLMでassociationを再計算しない。
+      weak associationは入力labelのproject + generic categoryへ戻す。generic project名を使わない。
+      strongAssociationsのないprojectThemeStatsはfallback候補。workThemes/labelを根拠にし、別候補からthemeを借りない。
+      時間帯ごとに同じ定型句を繰り返さず、「作業テーマとして見られました」「補助表示」など機械的な表現を避ける。
       JSON schemaに従い返答し、ツールを実行しない。
       """;
   private final Supplier<ChatModel> model;private final Supplier<OpenAiChatOptions> options;

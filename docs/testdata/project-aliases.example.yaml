@@ -1,0 +1,7 @@
+# Copy to the configured summary project-aliases-file only when these mappings are intentional.
+projectAliases:
+  sensevoice-input:
+    - sensevoiceinput
+    - sensevoice
+    - sensorvoice-input
+    - sansvoice-input

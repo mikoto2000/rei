@@ -9,9 +9,10 @@ public record DailySummaryAggregate(LocalDate targetDate,long observedSeconds,lo
     int projectSwitchCount,boolean frequentProjectSwitches,double unknownRatio,int sourceSegmentCount) {
   public record Weighted(String name,long seconds) {}
   public record ProjectThemeStat(String canonicalProject,List<String> categories,List<String> themeCandidates,
-      long observedSeconds,int observationCount,long longestContinuousSeconds,int specificity,double score,String label) {}
+      long observedSeconds,int observationCount,long longestContinuousSeconds,int specificity,double score,String label,List<ProjectThemeAssociation> strongAssociations) {}
   public record Bucket(long observedSeconds,Map<String,Long> categorySeconds,List<String> dominant,List<String> secondary,
-      List<String> background,List<String> workThemes,List<String> dominantProjects,List<String> secondaryThemes) {}
+      List<String> background,List<String> workThemes,List<String> dominantProjects,List<String> secondaryThemes,
+      List<ProjectThemeAssociation> strongAssociations) {}
   public record Block(String start,String end,long observedSeconds,String theme) {}
   public static final Map<String,String> BUCKET_LABELS=Collections.unmodifiableMap(new LinkedHashMap<>(Map.of(
       "lateNight","深夜","morning","午前","afternoon","午後","evening","夜")));

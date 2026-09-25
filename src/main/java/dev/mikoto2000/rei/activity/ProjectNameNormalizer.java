@@ -34,12 +34,24 @@ public final class ProjectNameNormalizer {
     var normalized=key(value);
     return aliases.getOrDefault(normalized,normalized);
   }
+  int aliasCount(){return aliases.size();}
+  boolean aliasHit(String value){return configured(value) && !key(value).equals(normalize(value));}
+  public boolean configured(String value){return aliases.containsKey(key(value));}
+  /** The only raw activity -> canonical project boundary used by daily aggregation. */
+  public String project(ActivityRecord.Activity activity) {
+    if(activity==null)return "";
+    String value=activity.projectCandidate(),normalized=key(value);
+    if(configured(value))return project(value);
+    if(normalized.equals(key(activity.service()))
+        || ActivityRolePolicy.application(value).equals(ActivityRolePolicy.application(activity.application())))return "";
+    return project(value);
+  }
   public String project(String value) {
     var normalized=key(value);
     if(aliases.containsKey(normalized))return aliases.get(normalized);
-    if(normalized.isBlank() || normalized.length()>60 || !normalized.matches("[\\p{L}][\\p{L}\\p{N}-]*"))return "";
+    if(normalized.length()<2 || normalized.length()>60 || !normalized.matches("[\\p{L}][\\p{L}\\p{N}-]*"))return "";
     // Implementation identifiers are not projects; an explicit alias may intentionally override this filter.
-    if(Set.of("repl","build-and-chat","software-development","suggest-rules","unknown","other","local","browser","terminal","editor","github","chatgpt",
+    if(Set.of("project","repository","repo","workspace","software","coding","source","src","main","app","application","repl","build-and-chat","software-development","suggest-rules","unknown","other","local","browser","terminal","editor","github","chatgpt",
         "youtube","firefox","chrome","powershell","x","code","vscode").contains(normalized)
         || ActivityVocabulary.CATEGORIES.contains(normalized)
         || normalized.matches(".*(factory|controller|configuration)$"))return "";

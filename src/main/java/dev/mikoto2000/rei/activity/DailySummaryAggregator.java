@@ -5,6 +5,7 @@ import java.util.*;
 import static dev.mikoto2000.rei.activity.DailySummaryAggregate.*;
 /** Read-only arithmetic over saved segment evidence. No model, capture, rule reload or persistence. */
 public final class DailySummaryAggregator {
+  private static final org.slf4j.Logger log=org.slf4j.LoggerFactory.getLogger(DailySummaryAggregator.class);
   private final ProjectNameNormalizer names;
   private final ActivityRolePolicy roles;
   private static final Set<String> WORK=Set.of("development","research","documentation");
@@ -30,7 +31,7 @@ public final class DailySummaryAggregator {
     var categories=new HashMap<String,Long>();var dispositions=new EnumMap<EntertainmentDisposition,Long>(EntertainmentDisposition.class);
     var projects=new HashMap<String,Long>();var services=new HashMap<String,Long>();var themes=new WorkThemeAggregation();var leisure=new HashMap<String,Long>();
     var buckets=new LinkedHashMap<String,Counts>();var workBlocks=new ArrayList<Block>();var leisureBlocks=new ArrayList<Block>();
-    long observed=0;int switches=0;String previousProject="";Instant previousEnd=null;
+    long observed=0;int switches=0,rejectedProjects=0,canonicalizationHits=0;String previousProject="";Instant previousEnd=null;
     Block pending=null;boolean pendingWork=false;String pendingContinuity="";
     for(int i=0;i<ordered.size();i++) {
       var s=ordered.get(i);Instant end=s.end();
@@ -44,7 +45,12 @@ public final class DailySummaryAggregator {
           ?EntertainmentDisposition.UNCERTAIN:diagnostics.entertainmentDisposition();
       dispositions.merge(disposition,seconds,Long::sum);
       var primary=s.roles().primary();
-      String project=primary==null || d!=null && d.fieldConfidence()!=null && d.fieldConfidence().project()<.5?"":names.project(primary.projectCandidate());
+      var projectFields=WorkThemeAggregation.fields(primary,s.record());
+      String project=primary==null || projectFields!=null && projectFields.project()<.5?"":names.project(primary);
+      if(primary!=null && !ActivityRolePolicy.normalize(primary.projectCandidate()).isBlank()) {
+        if(project.isBlank())rejectedProjects++;
+        else if(names.aliasHit(primary.projectCandidate()))canonicalizationHits++;
+      }
       if(!project.isBlank()) {
         projects.merge(project,seconds,Long::sum);
         if(previousEnd!=null && Duration.between(previousEnd,s.start()).getSeconds()<=300
@@ -54,8 +60,8 @@ public final class DailySummaryAggregator {
       boolean work=WORK.contains(category) && disposition!=EntertainmentDisposition.ENTERTAINMENT;
       boolean fun=disposition==EntertainmentDisposition.ENTERTAINMENT;
       String theme=work?(project.isBlank()?"":project+" の")+categoryLabel(category):"";
-      var topics=work?WorkThemeAggregation.topics(primary,s.record()):List.<String>of();
-      if(work)themes.add(project,category,topics,s.record(),s.start(),end);
+      var topics=work?WorkThemeAggregation.topics(primary,s.record()):List.<WorkThemeAggregation.Candidate>of();
+      if(work)themes.add(project,category,topics,s.record(),primary,s.start(),end);
       String leisureLabel=Set.of("social","media","shopping","gaming").contains(category)?categoryLabel(category):"娯楽として分類された閲覧";
       if(fun)leisure.merge(leisureLabel,seconds,Long::sum);
       var visible=new HashSet<String>();
@@ -68,7 +74,7 @@ public final class DailySummaryAggregator {
         if(weight==0)continue;
         var count=buckets.computeIfAbsent(BUCKET_ORDER.get(b),k->new Counts());count.observed+=weight;
         count.categories.merge(category,weight,Long::sum);
-        if(work)count.workThemes.add(project,category,topics,s.record(),max(s.start(),from),min(end,until));
+        if(work)count.workThemes.add(project,category,topics,s.record(),primary,max(s.start(),from),min(end,until));
         addVisible(count.secondary,s.roles().secondary(),weight);addVisible(count.background,s.roles().background(),weight);
       }
       String blockTheme=work?theme:fun?leisureLabel:"";
@@ -96,7 +102,13 @@ public final class DailySummaryAggregator {
       var secondaryThemes=dominant.stream().filter(v->!Set.of("開発","調査","文書作業").contains(v)).limit(1).toList();
       sections.put(key,new Bucket(c.observed,Map.copyOf(c.categories),dominant,secondary,
           top(c.background,1).stream().map(Weighted::name).toList(),workLabels,
-          ranked.stream().map(ProjectThemeStat::canonicalProject).filter(v->!v.isBlank()).toList(),secondaryThemes));
+          ranked.stream().map(ProjectThemeStat::canonicalProject).filter(v->!v.isBlank()).toList(),secondaryThemes,ranked.stream().flatMap(v->v.strongAssociations().stream()).toList()));
+    }
+    if(log.isDebugEnabled()) {
+      var associations=themes.associations();
+      log.debug("Daily theme attribution strong={} weak={} rejectedProjects={} canonicalizationHits={}",
+          associations.stream().filter(ProjectThemeAssociation::strong).count(),
+          associations.stream().filter(a->!a.strong()).count(),rejectedProjects,canonicalizationHits);
     }
     long span=Math.max(0,Duration.between(range.fromInclusive(),range.toExclusive()).getSeconds());
     return new DailySummaryAggregate(date,observed,Math.max(0,span-observed),Map.copyOf(categories),Map.copyOf(dispositions),
