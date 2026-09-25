@@ -30,7 +30,7 @@ class ActivityTrendQueryTest {
   }
   @Test void dateAndNoDataQueriesRemainSafe() {
     var store=mock(ActivityStore.class);var timeline=new ActivityTimeline(store,Clock.fixed(ActivitySemanticTest.START,ZoneOffset.UTC));
-    assertTrue(timeline.trendSegments("yesterday").isEmpty());assertTrue(timeline.trendSummary("today").contains("記録はありません"));
+    assertTrue(timeline.trendSegments("yesterday").isEmpty());assertTrue(timeline.trendSummary("today").contains("2026-09-23 の Activity は記録されていません。"));
     assertThrows(java.time.DateTimeException.class,()->timeline.trendSummary("invalid"));
   }
   @Test void splitProjectionRetainsExactFineReferencesAndStoredRecords() {

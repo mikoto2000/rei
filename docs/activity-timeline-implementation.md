@@ -1,5 +1,37 @@
 # Activity Timeline 実装報告
 
+## Activity Summary の単一日指定（2026-09-25）
+
+`/activity summary`、`/activity summary today`、`/activity summary yesterday`、
+`/activity summary YYYY-MM-DD` に対応。引数なしは today と同義。
+`ActivityCommand.SummaryCommand` に日付引数・usage・today/yesterday補完を定義し、余分な引数はpicocliが拒否する。
+
+`ActivityDateArgumentResolver` は null / 空文字 / today / yesterday / 厳密なYYYY-MM-DDを
+`LocalDate` に解決する。存在しない日付は利用可能形式付きの入力エラー、未来日は日付付きの入力エラー。
+`ActivityTimeline.trendSummary` が既存Clockを一度だけ固定し、resolverと `ActivityQueryRange.forDate` に渡す。
+timezoneは既存 `rei.activity.zone` を使用し、システム既定timezoneには依存しない。
+当日は `[ローカル00:00, now)`、過去日は `[ローカル00:00, 翌日00:00)`。
+翌日開始は日付とZoneIdから算出し、DSTに対応する。午前0時ちょうどは空範囲としてDB問い合わせを省略する。
+
+保存済みRecord / 細粒度Sessionから既存SummarySegment → TrendSummarySegment → TrendSummaryFormatterを再利用する。
+Summaryの永続化方式は追加せず、従来どおり読み取り時に構築する。Vision・Activity Extraction・画像再解析・DB更新は行わない。
+Phase 3.4のlabel normalization / grouping / project / mixed / 未観測時間の処理は変更しない。
+日付見出しを追加し、データなしは「YYYY-MM-DD の Activity は記録されていません。」で正常終了する。
+既存 `/activity today` / yesterday / YYYY-MM-DD と自然言語Tool、日単位の `trendSegments` APIは従来の範囲・表示を維持する。
+
+TDDではコマンド・範囲テストの16ケース中12件のRedを確認してから実装した。
+追加テストは日付形式、未来日、余分な引数、空データ、当日終端、過去日終端、UTC/Tokyo、DSTの23/25時間、
+午前0時の空範囲、SQLiteの23:59:59.500/翌日00:00境界、未来timestampの除外、保存データ保持、既存詳細表示、補完を検証する。
+
+検証結果:
+- 追加26ケース成功。Activity関連323件成功（Phase 3.4の20件を含む）。
+- Java全2313件: 2310成功、2失敗、1エラー。環境制限を解除し、専用 `REI_DATA_DIR` で再実行した結果。
+  `ToolsTest.runCommandAutoPromotesSameLongProcessWithoutStartingTwice` のファイルロックエラーは単独再実行で成功。
+  変更していない `WebBoundaryTest.heartbeatHasNoSequenceAndDisconnectReleasesListenerAndTimer` と
+  `sendIOExceptionUnsubscribesAndDoesNotCancelRun` は単独再実行でも購読数の期待値不一致で失敗する。
+- client 41件、Rust 64件成功。E2Eは初回2件がページ読込timeout、1ワーカー再実行で全12件成功。
+- 固定Clockと一時SQLiteでコマンド・日付境界を検証。稼働アプリの実Activityデータを使った手動コマンド確認は未実施。
+
 ## Phase 3.7.1 Operational Classification Toolkit（2026-09-23）
 
 ブランチは`codex/activity-behavior-evaluation`を継続。作業開始時の未コミット変更はなし。
