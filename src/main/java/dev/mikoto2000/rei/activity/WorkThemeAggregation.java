@@ -15,6 +15,7 @@ final class WorkThemeAggregation {
     TOPICS.put("Visionモデル",Pattern.compile("視覚モデル|画像認識|\\bvision[ -]model\\b",Pattern.CASE_INSENSITIVE));
     TOPICS.put("フィード要約",Pattern.compile("フィード要約|\\bfeed summary\\b",Pattern.CASE_INSENSITIVE));
   }
+  static boolean knownTopic(String value){return TOPICS.containsKey(value);}
   record Candidate(String theme,ProjectThemeAssociation.Origin origin,double confidence) {}
   static List<Candidate> topics(ActivityRecord.Activity primary,ActivityRecord record) {
     // Record-wide prose can refer to another monitor. Only use it for an unambiguous single activity.
@@ -94,7 +95,7 @@ final class WorkThemeAggregation {
       String label=(s.project.isBlank()?"":s.project+" の")+detail;
       // All terms use observed seconds; gaps never increase duration or continuity.
       double score=(s.seconds+Math.min(s.seconds*.2,s.observations.size()*30.0)+Math.min(s.seconds*.2,s.longest*.2))*(1+specificity*.25);
-      candidates.add(new ProjectThemeStat(s.project,categories,topics,s.seconds,s.observations.size(),s.longest,specificity,score,label,associations.stream().filter(ProjectThemeAssociation::strong).limit(2).toList()));
+      candidates.add(new ProjectThemeStat(s.project,categories,topics,s.seconds,s.observations.size(),s.longest,specificity,score,label,associations.stream().filter(ProjectThemeAssociation::strong).limit(2).toList(),Map.copyOf(s.categories)));
     }
     boolean specific=candidates.stream().anyMatch(s->s.specificity()>0);
     return candidates.stream().filter(s->!specific || s.specificity()>0)

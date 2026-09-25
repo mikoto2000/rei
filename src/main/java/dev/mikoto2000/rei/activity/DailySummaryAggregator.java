@@ -8,9 +8,14 @@ public final class DailySummaryAggregator {
   private static final org.slf4j.Logger log=org.slf4j.LoggerFactory.getLogger(DailySummaryAggregator.class);
   private final ProjectNameNormalizer names;
   private final ActivityRolePolicy roles;
+  private final SummaryThemeGroups groups;
+  private final DailySummaryThemeConsolidator consolidator=new DailySummaryThemeConsolidator();
   private static final Set<String> WORK=Set.of("development","research","documentation");
   public static final int FREQUENT_SWITCHES=10;
-  public DailySummaryAggregator(ProjectNameNormalizer names,double minimumConfidence){this.names=names;roles=new ActivityRolePolicy(minimumConfidence);}
+  public DailySummaryAggregator(ProjectNameNormalizer names,double minimumConfidence){this(names,minimumConfidence,SummaryThemeGroups.empty());}
+  public DailySummaryAggregator(ProjectNameNormalizer names,double minimumConfidence,SummaryThemeGroups groups) {
+    this.names=names;this.groups=groups;roles=new ActivityRolePolicy(minimumConfidence);
+  }
   private record Sample(ActivityRecord record,Instant start,Instant end,ActivityRoles roles) {}
   private static final class Counts {
     long observed;
@@ -97,12 +102,14 @@ public final class DailySummaryAggregator {
       var dominant=top(c.categories,2).stream().filter(v->!v.name().equals("unknown") && v.seconds()>=c.observed*.15).map(v->categoryLabel(v.name())).toList();
       c.secondary.remove("AI支援");c.background.remove("AI支援");
       var secondary=top(c.secondary,1).stream().filter(v->v.seconds()>=c.observed*.2).map(Weighted::name).filter(v->!dominant.contains(v)).toList();
-      var ranked=c.workThemes.ranked(3);
-      var workLabels=ranked.stream().map(ProjectThemeStat::label).toList();
+      var ranked=c.workThemes.ranked(Integer.MAX_VALUE);
+      var consolidated=consolidator.consolidate(ranked,groups,2);
+      var workLabels=consolidated.labels();
       var secondaryThemes=dominant.stream().filter(v->!Set.of("開発","調査","文書作業").contains(v)).limit(1).toList();
       sections.put(key,new Bucket(c.observed,Map.copyOf(c.categories),dominant,secondary,
           top(c.background,1).stream().map(Weighted::name).toList(),workLabels,
-          ranked.stream().map(ProjectThemeStat::canonicalProject).filter(v->!v.isBlank()).toList(),secondaryThemes,ranked.stream().flatMap(v->v.strongAssociations().stream()).toList()));
+          consolidated.candidates().stream().flatMap(v->v.memberProjects().stream()).distinct().limit(4).toList(),secondaryThemes,
+          ranked.stream().filter(s->workLabels.contains(s.label())).flatMap(v->v.strongAssociations().stream()).limit(4).toList(),consolidated.candidates()));
     }
     if(log.isDebugEnabled()) {
       var associations=themes.associations();
@@ -110,9 +117,10 @@ public final class DailySummaryAggregator {
           associations.stream().filter(ProjectThemeAssociation::strong).count(),
           associations.stream().filter(a->!a.strong()).count(),rejectedProjects,canonicalizationHits);
     }
+    var consolidated=consolidator.consolidate(themes.ranked(Integer.MAX_VALUE),groups,5);
     long span=Math.max(0,Duration.between(range.fromInclusive(),range.toExclusive()).getSeconds());
     return new DailySummaryAggregate(date,observed,Math.max(0,span-observed),Map.copyOf(categories),Map.copyOf(dispositions),
-        top(projects,5),top(services,3),Collections.unmodifiableMap(sections),themes.ranked(5),services.getOrDefault("AI支援",0L)>=Math.max(600,observed*.2),themes.labels(5),
+        top(projects,5),top(services,3),Collections.unmodifiableMap(sections),themes.ranked(5),consolidated.candidates(),consolidated.metrics(),services.getOrDefault("AI支援",0L)>=Math.max(600,observed*.2),consolidated.labels(),
         top(leisure,3).stream().map(Weighted::name).toList(),blocks(workBlocks),blocks(leisureBlocks),switches,switches>=FREQUENT_SWITCHES,
         observed==0?0:categories.getOrDefault("unknown",0L)/(double)observed,source.size());
   }

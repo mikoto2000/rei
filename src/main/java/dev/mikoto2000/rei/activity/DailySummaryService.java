@@ -3,14 +3,18 @@ import java.time.*;
 import java.util.*;
 import java.util.function.Supplier;
 public final class DailySummaryService {
-  private final Supplier<ProjectNameNormalizer> aliases;
+  private final Supplier<SummaryThemeConfiguration> configuration;
   private final DailySummaryWriter writer;
   private static final org.slf4j.Logger log=org.slf4j.LoggerFactory.getLogger(DailySummaryService.class);
-  public DailySummaryService(Supplier<ProjectNameNormalizer> aliases,DailySummaryWriter writer){this.aliases=aliases;this.writer=writer;}
+  public DailySummaryService(Supplier<ProjectNameNormalizer> aliases,DailySummaryWriter writer) {
+    this.configuration=()->new SummaryThemeConfiguration(aliases.get(),SummaryThemeGroups.empty());this.writer=writer;
+  }
+  public DailySummaryService(ProjectAliasStore store,DailySummaryWriter writer){this.configuration=store::snapshot;this.writer=writer;}
   public static DailySummaryService local(){return new DailySummaryService(()->new ProjectNameNormalizer(Map.of()),null);}
   public String summarize(LocalDate date,ActivityQueryRange range,ZoneId zone,double minimumConfidence,List<SummarySegment> segments) {
     if(segments.isEmpty())return date+" の Activity は記録されていません。";
-    var aggregate=new DailySummaryAggregator(aliases.get(),minimumConfidence).aggregate(date,range,zone,segments);
+    var config=configuration.get();
+    var aggregate=new DailySummaryAggregator(config.projects(),minimumConfidence,config.groups()).aggregate(date,range,zone,segments);
     if(aggregate.observedSeconds()==0)return date+" の Activity は記録されていません。";
     var result=DailySummary.fallback(aggregate);
     if(writer!=null)try {result=writer.write(aggregate).validated(aggregate);}

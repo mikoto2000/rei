@@ -35,17 +35,21 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
       Task、締切、意図、生産性、集中度、実際の操作・成果を推測・断定しない。「集中していた」と書かない。
       同じ注意書き、unknownや未観測の説明を繰り返さない。注意書きとunknown/UNCERTAIN注記はコード側が一回表示するので出力しない。
       「関連の画面」「混在していました」を繰り返さず、主と補助の関係を明確にする。Markdownや改行を文字列に含めない。
-      projectThemeStatsと時間帯workThemes/dominantProjectsはコード側で順位付け済み。再ランキングせず代表的な2〜3テーマに絞る。
+      mainWorkThemeCandidatesと時間帯timeOfDayThemeCandidatesはコード側で統合・包含抑制・順位付け済み。代表的な1〜2テーマを文章化する。
       generic categoryだけでなくproject/themeを優先し、具体的候補がある場合「開発」「調査」だけの作業テーマを避ける。
       overviewには上位project/themeを1〜2個含める。各時間帯の固有project/themeを出し、隣接時間帯で同じ定型文を繰り返さない。
       workThemesは主活動の観測に由来する。secondary/backgroundは補助表示で実際の作業ではない。categorySecondsでSNSが大半ならSNSが多いことも残す。
-      入力canonicalProject/themeCandidatesにないproject/themeを捏造しない。クラス名から設計変更などを推測しない。application/serviceを羅列しない。
+      入力consolidated candidateのdisplayTheme/memberProjects/themesにないproject/themeを捏造しない。クラス名から設計変更などを推測しない。application/serviceを羅列しない。
       AI支援は時間帯別では言及しない。significantAiAssistanceがtrueの場合だけ全体または傾向に一回までまとめる。
       傾向ではproject名の列挙を繰り返さず、切り替えや長い観測区間など横断的な特徴を書く。
-      projectとspecific themeを結び付けるのはコードが選んだstrongAssociations（associationConfidence >= 0.75）だけ。
+      PROJECTのspecific themeはコードが選んだcandidateのthemesだけ。associationConfidence >= 0.75を満たす関連のみ含まれている。
       同じsessionや時間帯という理由で未関連のproject/themeを組み合わせない。LLMでassociationを再計算しない。
       weak associationは入力labelのproject + generic categoryへ戻す。generic project名を使わない。
-      strongAssociationsのないprojectThemeStatsはfallback候補。workThemes/labelを根拠にし、別候補からthemeを借りない。
+      candidateのthemesが空ならlabelのgeneric categoryを使う。別候補からthemeを借りない。
+      GROUPは明示設定された表示グループで、project identityや個別project-theme関連を新たに示すものではない。
+      GROUPとそのmemberProjectsの個別テーマを同じ一覧へ再展開しない。grouping/alias判定/親子抑制をLLMでやり直さない。
+      各時間帯は統合済み作業テーマ1〜2件と非作業傾向1件まで。canonical以外のraw aliasを復活させない。
+      冒頭の共通注意書きに委ね、「画面が見られました」「表示がありました」を繰り返さず、根拠に応じて「開発が中心でした」「も一部で見られました」と簡潔にする。
       時間帯ごとに同じ定型句を繰り返さず、「作業テーマとして見られました」「補助表示」など機械的な表現を避ける。
       JSON schemaに従い返答し、ツールを実行しない。
       """;

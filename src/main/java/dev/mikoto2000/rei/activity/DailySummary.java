@@ -41,19 +41,15 @@ public record DailySummary(String overview,Map<String,String> timeOfDay,List<Str
       var nonWork=DailySummaryAggregator.top(b.categorySeconds(),1).stream()
           .filter(v->!Set.of("development","research","documentation","unknown").contains(v.name()) && v.seconds()>=b.observedSeconds()*.65)
           .map(v->DailySummaryAggregate.categoryLabel(v.name())).findFirst();
-      if(work.isEmpty())text=String.join("・",b.dominant())+"の表示が主でした。";
-      else if(nonWork.isPresent())text=nonWork.get()+"の観測が多い一方、"+String.join("、",work)+"の表示も見られました。";
+      if(work.isEmpty())text=String.join("・",b.dominant())+"が中心でした。";
+      else if(nonWork.isPresent())text=nonWork.get()+"が多く、"+String.join("、",work)+"も見られました。";
       else {
-        String ending=switch(key) {
-          case "lateNight"->"に関する画面が見られました。";
-          case "morning"->"の表示がありました。";
-          case "afternoon"->"に関する記録がありました。";
-          default->"が観測されています。";
-        };
-        text=String.join("、",work)+ending;
-        if(!b.secondaryThemes().isEmpty())text+=String.join("・",b.secondaryThemes())+"も観測されています。";
+        var shown=new HashSet<>(work);
+        long workSeconds=b.timeOfDayThemeCandidates().stream().filter(c->shown.contains(c.label())).mapToLong(SummaryThemeCandidate::durationSeconds).sum();
+        text=String.join("、",work)+(workSeconds>=b.observedSeconds()*.5?"が中心でした。":"も見られました。");
+        var secondary=!b.secondaryThemes().isEmpty()?b.secondaryThemes():b.secondary();
+        if(!secondary.isEmpty())text+=secondary.getFirst()+"も一部で見られました。";
       }
-      if(!b.secondary().isEmpty())text+=b.secondary().getFirst()+"も一部で表示されていました。";
       sections.put(key,text);
     }
     String trend=a.frequentProjectSwitches()?"観測された作業対象の切り替えが多い日でした。":

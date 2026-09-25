@@ -870,3 +870,7 @@ WorkThemeAggregation による canonical project 統合、保存済み topic 候
 ## Phase 3.8.2: Theme Attribution Quality
 
 Summary側に ProjectThemeAssociation を追加し、強い関連だけspecific themeとして表現する。詳細は [実装・検証記録](activity-theme-attribution.md) を参照。
+
+## Phase 3.8.3: Summary Theme Consolidation
+
+canonicalProject / summaryThemeGroup / displayTheme を分離し、全体・時間帯の候補を共有consolidatorで選ぶ。alias/group設定はatomic reloadする。[実装記録](activity-theme-consolidation.md) を参照。

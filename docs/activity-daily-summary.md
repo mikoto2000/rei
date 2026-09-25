@@ -268,3 +268,7 @@ project / topic の集約、generic 抑制、時間帯別テーマ、AI支援の
 ## Phase 3.8.2 Theme Attribution Quality
 
 project/topic を同一観測の根拠・foreground支持・回数・時間で審査する。弱い関連はgeneric categoryへ戻す。仕様・alias調査・比較・検証結果は [Theme Attribution](activity-theme-attribution.md) を参照。
+
+## Phase 3.8.3 Summary Theme Consolidation
+
+既存aliasファイルに任意の themeGroups を追加し、全体・時間帯で同じgroup/包含抑制を使う。設定・スコア・fallback・比較・検証結果は [Theme Consolidation](activity-theme-consolidation.md) を参照。

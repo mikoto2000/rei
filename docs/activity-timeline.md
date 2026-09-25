@@ -635,3 +635,5 @@ Phase 4以降のProject/Task/Working Set深い統合、
 Phase 3.8.1 では Daily Summary の project/topic と時間帯別テーマを強化した。Timeline 表示と分類は変更しない。詳細は [Theme Enrichment](activity-theme-enrichment.md) を参照。
 
 Phase 3.8.2 は Summary 内のproject/theme関連付け品質を改善する。Timeline一覧・分類は変更しない。[Theme Attribution](activity-theme-attribution.md) を参照。
+
+Phase 3.8.3 は設定に基づく Summary Theme Consolidation を追加する。Timeline一覧・分類は変更しない。[仕様と検証](activity-theme-consolidation.md) を参照。
