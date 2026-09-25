@@ -854,3 +854,43 @@ Task / Calendar / 締切 / Working Set / 未完了project / Score / 週次月次
 ## Behavior Notification の会話履歴
 
 新しく emitted された通知は assistant / source=BEHAVIOR_NOTIFICATION として通常履歴・LLM context に保存します。suppressed / NONE は対象外です。同じ通知 ID を Timeline と共有し、再起動後の重複も防止します。Project/Session、圧縮、Privacy、障害時の扱いは [設計・実装記録](behavior-conversation-history.md) を参照してください。
+
+## Phase 3.8: Daily Summary Synthesis
+
+Slash Command の summary 出力を、区間の全件列挙から上限付きの DailySummary に変更した。
+保存済み SummarySegment の証拠をコードで日次集約し、LLM は文章化のみを行う。
+元 ActivityRecord / ActivitySession / SummarySegment、Timeline、Behavior / classification は変更しない。
+新規クラス、alias、schema、timeout/fallback、fixture比較、全テスト結果は
+[Daily Summary 実装記録](activity-daily-summary.md) を参照。
+
+## Phase 3.8.1: Theme Enrichment
+
+WorkThemeAggregation による canonical project 統合、保存済み topic 候補の抽出、generic 抑制と順位付けを追加。Bucket ごとの project/theme を fallback と LLM 入力へ渡す。仕様・比較・検証結果は [Theme Enrichment 実装記録](activity-theme-enrichment.md) を参照。
+
+## Phase 3.8.2: Theme Attribution Quality
+
+Summary側に ProjectThemeAssociation を追加し、強い関連だけspecific themeとして表現する。詳細は [実装・検証記録](activity-theme-attribution.md) を参照。
+
+## Phase 3.8.3: Summary Theme Consolidation
+
+canonicalProject / summaryThemeGroup / displayTheme を分離し、全体・時間帯の候補を共有consolidatorで選ぶ。alias/group設定はatomic reloadする。[実装記録](activity-theme-consolidation.md) を参照。
+
+## Phase 3.8.3 Consolidation Pipeline Fix
+
+未設定による raw alias 残存と、GROUP 不採用時の PROJECT/THEME 包含抑制漏れを区別して修正。
+stable groupIds を全日・時間帯の共通 consolidator で使用し、LLM へは最終候補を渡す。
+numeric score の電話番号誤検知も修正した。原因・設定適用手順・fixture の段階別比較・全テスト結果は
+[Consolidation Pipeline Fix](activity-consolidation-pipeline-fix.md) を参照。
+
+## Phase 3.8.3: 実行バイナリと Summary 経路の追跡
+
+稼働JARは前回修正を含み、実effective alias/groupが空であることを確認した。
+実保存データ626区間のローカルcommand再生で提示出力を再現し、既存設定例による比較も実施。
+DEBUG trace、Slashからwriter/formatterまでの7ケースを追加し、clean buildしたJARを起動先へ反映。
+[実行環境・各stage・Before/After・全検証結果](activity-summary-runtime-trace.md) を参照。
+
+## Phase 3.8.3: allowSingleProject の表示セマンティクス
+
+明示trueのgroup membershipをDaily Summaryの表示名解決に使い、GROUP集約のcoverage/時間条件と分離した。
+全日・主テーマ・全時間帯・fallbackで同じ表示候補を使い、canonical projectのprovenanceは内部に保持する。
+[正式仕様・実データBefore/After・全テスト結果](activity-single-project-display.md) を参照。

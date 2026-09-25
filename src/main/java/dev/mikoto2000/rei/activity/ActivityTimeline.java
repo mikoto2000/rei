@@ -3,7 +3,10 @@ package dev.mikoto2000.rei.activity;
 import java.time.*;
 import java.util.*;
 
-public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPolicy summaryPolicy) {
+public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPolicy summaryPolicy,DailySummaryService dailySummaries) {
+  public ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPolicy summaryPolicy) {
+    this(store,clock,summaryPolicy,DailySummaryService.local());
+  }
   public ActivityTimeline(ActivityStore store,Clock clock) {
     this(store,clock,new SemanticSessionPolicy(Duration.ofSeconds(120),Duration.ofSeconds(300),Duration.ofSeconds(120),.5,clock.getZone()));
   }
@@ -66,8 +69,7 @@ public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPo
     var snapshot=Clock.fixed(clock.instant(),clock.getZone());
     var date=new ActivityDateArgumentResolver(snapshot).resolve(day);
     var range=ActivityQueryRange.forDate(date,snapshot);
-    var segments=trendBetween(range.fromInclusive(),range.toExclusive());
-    if(segments.isEmpty()) return date+" の Activity は記録されていません。";
-    return "Activity Summary — "+date+"\n\n"+new TrendSummaryFormatter(clock.getZone()).format(segments);
+    var segments=range.fromInclusive().equals(range.toExclusive())?List.<SummarySegment>of():summaryBetween(range.fromInclusive(),range.toExclusive());
+    return dailySummaries.summarize(date,range,clock.getZone(),summaryPolicy.minimumConfidence(),segments);
   }
 }

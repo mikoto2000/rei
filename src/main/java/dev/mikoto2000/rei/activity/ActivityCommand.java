@@ -39,7 +39,10 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
       public java.util.Iterator<String> iterator() {return java.util.List.of("today","yesterday").iterator();}
     }
     @Override public Integer call() {
-      try {spec.commandLine().getOut().println(parent.timeline.trendSummary(date));return 0;}
+      try {
+        org.slf4j.LoggerFactory.getLogger(SummaryCommand.class).debug("[summary-trace] command date={} handler=ActivityCommand.SummaryCommand",date);
+        spec.commandLine().getOut().println(parent.timeline.trendSummary(date));return 0;
+      }
       catch(java.time.DateTimeException e) {
         spec.commandLine().getErr().println(e.getMessage());
         spec.commandLine().getErr().println("Usage: /activity summary [today|yesterday|YYYY-MM-DD]");return 2;

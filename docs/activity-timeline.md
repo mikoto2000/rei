@@ -389,7 +389,8 @@ Evidenceから算出する。Productivity Score、行動評価、週次/月次�
 
 ### Phase 3.2 / 3.4: 時間帯の傾向と表示品質
 
-`/activity summary`には表示専用の `TrendSummarySegment` を使用する。
+Phase 3.4 時点の `/activity summary` は表示専用の `TrendSummarySegment` を使用していた。
+Phase 3.8 以降の Slash Command は [Daily Summary](activity-daily-summary.md) を表示する。以下の区間モデル/API は保持する。
 Phase 3.1の `SummarySegment` / SemanticSessionPolicy / gap policyは変更せず、
 その上に `TrendSummaryPolicy` を追加した。元の永続Fine-grained ActivitySession、
 Raw Evidence、Primary / Secondary / Background、confidenceを上書きしない。
@@ -538,7 +539,7 @@ publisherとSQLite間の原子的配送保証はなく、発行後の履歴保�
 /activity resume
 ```
 
-`summary [today|yesterday|YYYY-MM-DD]` は指定日の傾向を既存の `TrendSummaryFormatter` で表示する。
+`summary [today|yesterday|YYYY-MM-DD]` は指定日の [DailySummary](activity-daily-summary.md) を表示する（Phase 3.8）。
 引数なしは `summary today` と同義。日付境界は `rei.activity.zone`（Activity Timeline の設定）基準で、
 当日（明示日付も含む）は `[00:00, now)`、過去日は `[00:00, 翌日00:00)` を対象にする。
 翌日の開始時刻はローカル日付から計算するため、DSTで23時間・25時間になる日にも対応する。
@@ -630,3 +631,9 @@ Phase 4以降のProject/Task/Working Set深い統合、
 ## Behavior Notification の会話履歴
 
 新しく emitted された通知は assistant / source=BEHAVIOR_NOTIFICATION として通常履歴・LLM context に保存します。suppressed / NONE は対象外です。同じ通知 ID を Timeline と共有し、再起動後の重複も防止します。Project/Session、圧縮、Privacy、障害時の扱いは [設計・実装記録](behavior-conversation-history.md) を参照してください。
+
+Phase 3.8.1 では Daily Summary の project/topic と時間帯別テーマを強化した。Timeline 表示と分類は変更しない。詳細は [Theme Enrichment](activity-theme-enrichment.md) を参照。
+
+Phase 3.8.2 は Summary 内のproject/theme関連付け品質を改善する。Timeline一覧・分類は変更しない。[Theme Attribution](activity-theme-attribution.md) を参照。
+
+Phase 3.8.3 は設定に基づく Summary Theme Consolidation を追加する。Timeline一覧・分類は変更しない。[仕様と検証](activity-theme-consolidation.md) を参照。

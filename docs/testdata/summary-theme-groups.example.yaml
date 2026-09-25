@@ -1,0 +1,32 @@
+# Example only: put in the configured project-aliases-file when these mappings fit your projects.
+# Both sections reload atomically on the next /activity summary.
+projectAliases:
+  sensevoice-input:
+    - sensevoice
+    - sensevoiceinput
+    - sensorvoice-input
+    - sansvoice-input
+themeGroups:
+  speech-input:
+    displayName: 音声入力・文字起こし系
+    projects:
+      - sensevoice-input
+      - whisper-live-transcriber
+    themes:
+      - 音声入力
+      - 文字起こし
+  speech-translation:
+    displayName: 音声翻訳系
+    projects:
+      - my-translator
+      - livevingo
+      - livetrans
+      - palabra
+    themes:
+      - 音声翻訳
+      - 翻訳
+  vision-model:
+    displayName: DeepSeek / Vision関連
+    projects:
+      - deepseek-vl-flash-vision-exp
+    allowSingleProject: true

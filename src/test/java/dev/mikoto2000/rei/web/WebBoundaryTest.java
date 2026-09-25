@@ -31,17 +31,19 @@ class WebBoundaryTest {
     var beat = new CountDownLatch(1);
     var sink = new SseBridgeTest.Sink() { public void heartbeat() { beat.countDown(); } };
     try (var bridge = new SseBridge(bus, new RunService(registry), "", Executors.newVirtualThreadPerTaskExecutor(), scheduler)) {
+      assertThat(bus.subscriptions).hasValue(1); // Application shutdown listener belongs to the bridge.
       var connection = bridge.connect("run", sink);
       var task = org.mockito.ArgumentCaptor.forClass(Runnable.class);
       verify(scheduler).scheduleAtFixedRate(task.capture(), eq(20L), eq(20L), eq(TimeUnit.SECONDS));
       task.getValue().run();
       assertThat(beat.await(5, TimeUnit.SECONDS)).isTrue();
       assertThat(bus.lastSequence()).isZero();
-      assertThat(bus.subscriptions).hasValue(1);
+      assertThat(bus.subscriptions).hasValue(2);
       connection.close(); connection.close();
-      assertThat(bus.subscriptions).hasValue(0);
+      assertThat(bus.subscriptions).hasValue(1);
       verify(timer).cancel(false);
     }
+    assertThat(bus.subscriptions).hasValue(0);
   }
   @Test void sendIOExceptionUnsubscribesAndDoesNotCancelRun() throws Exception {
     var bus = new TrackingBus();
@@ -53,9 +55,10 @@ class WebBoundaryTest {
       bridge.connect("run", sink);
       bus.publish(new AgentEventFactory(Clock.systemUTC()).runStarted("run", "test", null));
       assertThat(sink.ended.await(5, TimeUnit.SECONDS)).isTrue();
-      assertThat(bus.subscriptions).hasValue(0);
+      assertThat(bus.subscriptions).hasValue(1); // Only the bridge's shutdown listener remains.
       assertThat(registry.get("run").status()).isEqualTo(RunStatus.QUEUED);
     }
+    assertThat(bus.subscriptions).hasValue(0);
   }
   @Test void runningCancellationWaitsForActualCleanupBeforeNextProjectRun() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());

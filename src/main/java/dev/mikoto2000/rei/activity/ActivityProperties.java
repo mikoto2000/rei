@@ -16,6 +16,12 @@ public class ActivityProperties {
   private int backgroundAnalysisIntervalSeconds = 300;
   private Detection detection = new Detection();
   private Classification classification=new Classification();
+  private Summary summary=new Summary();
+  @Data public static class Summary {
+    private boolean llmEnabled=true;
+    private int timeoutSeconds=30;
+    private String projectAliasesFile="activity/project-aliases.yaml";
+  }
   @Data public static class Classification {
     private String userRulesFile="activity/classification-rules.yaml";
     private boolean hotReload=true;
@@ -56,6 +62,8 @@ public class ActivityProperties {
   private List<String> excludedWindowTitlePatterns = List.of("*Password*", "*Private Browsing*", "*InPrivate*");
 
   public void validate() {
+    if(summary==null || summary.timeoutSeconds<1 || summary.timeoutSeconds>120 || summary.projectAliasesFile==null || summary.projectAliasesFile.isBlank())
+      throw new IllegalArgumentException("Invalid daily summary settings");
     if(classification==null || classification.userRulesFile==null || classification.userRulesFile.isBlank() || classification.unknownRegistry==null || classification.entertainmentRegistry==null || classification.ruleSuggestion==null || classification.diagnostics==null || classification.ruleSuggestion.minimumSamples<1)
       throw new IllegalArgumentException("Invalid classification toolkit settings");
     if(classification.ruleSuggestion.maxOutputTokens<1)
