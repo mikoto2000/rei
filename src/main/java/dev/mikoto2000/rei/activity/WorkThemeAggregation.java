@@ -91,8 +91,8 @@ final class WorkThemeAggregation {
       var associations=associations(s);
       var topics=associations.stream().filter(ProjectThemeAssociation::strong).limit(2).map(ProjectThemeAssociation::theme).toList();
       int specificity=!s.project.isBlank()?(!topics.isEmpty()?3:2):!topics.isEmpty()?1:0;
-      String detail=topics.isEmpty()?String.join("・",categories.stream().map(DailySummaryAggregate::categoryLabel).toList()):String.join("・",topics);
-      String label=(s.project.isBlank()?"":s.project+" の")+detail;
+      String label=topics.isEmpty()?ThemeActivityFormatter.format(s.project,categories,true):
+          (s.project.isBlank()?"":s.project+" の")+String.join("・",topics);
       // All terms use observed seconds; gaps never increase duration or continuity.
       double score=(s.seconds+Math.min(s.seconds*.2,s.observations.size()*30.0)+Math.min(s.seconds*.2,s.longest*.2))*(1+specificity*.25);
       candidates.add(new ProjectThemeStat(s.project,categories,topics,s.seconds,s.observations.size(),s.longest,specificity,score,label,associations.stream().filter(ProjectThemeAssociation::strong).limit(2).toList(),Map.copyOf(s.categories)));

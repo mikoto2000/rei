@@ -3,12 +3,19 @@ public final class DailySummaryFormatter {
   public String format(DailySummaryAggregate a,DailySummary summary) {
     var out=new StringBuilder("Activity Summary — ").append(a.targetDate()).append("\n\n")
         .append("画面の観測に基づく振り返りです。表示内容からの推定を含み、実際の操作・集中を断定するものではありません。\n")
-        .append("観測時間: ").append(duration(a.observedSeconds())).append(" / 未観測: ").append(duration(a.unobservedSeconds())).append("\n\n")
+        .append("画面観測データあり: ").append(duration(a.observedSeconds())).append(" / 観測データなし: ").append(duration(a.unobservedSeconds())).append("\n")
+        .append("観測データの有無を示す時間であり、PC利用時間や作業時間を表すものではありません。\n\n")
         .append("全体:\n").append(summary.overview()).append("\n");
     if(!summary.timeOfDay().isEmpty()) {
       out.append("\n時間帯別:\n");
-      for(var key:DailySummaryAggregate.BUCKET_ORDER)if(summary.timeOfDay().containsKey(key))
-        out.append(DailySummaryAggregate.BUCKET_LABELS.get(key)).append(":\n").append(summary.timeOfDay().get(key)).append("\n");
+      var buckets=new DailySummaryBucketFormatter();
+      for(var key:DailySummaryAggregate.BUCKET_ORDER)if(summary.timeOfDay().containsKey(key)) {
+        var bucket=a.timeOfDay().get(key);
+        // Re-render affected buckets from evidence, including successful LLM prose.
+        String text=bucket!=null && !buckets.redundantLabels(a,bucket).isEmpty()?
+            buckets.format(a,bucket):summary.timeOfDay().get(key);
+        out.append(DailySummaryAggregate.BUCKET_LABELS.get(key)).append(":\n").append(text).append("\n");
+      }
     }
     if(!summary.workThemes().isEmpty()){out.append("\n主な作業テーマ:\n");summary.workThemes().forEach(s->out.append("- ").append(s).append("\n"));}
     if(!summary.nonWorkActivities().isEmpty()){out.append("\n主な非作業活動（娯楽判定）:\n");summary.nonWorkActivities().forEach(s->out.append("- ").append(s).append("\n"));}

@@ -25,8 +25,7 @@ public final class DailySummaryThemeConsolidator {
       var activities=new HashMap<String,Long>();
       members.forEach(s->s.categorySeconds().forEach((c,d)->activities.merge(c,d,Long::sum)));
       var categories=DailySummaryAggregator.top(activities,2).stream().filter(c->c.seconds()>=Math.min(120,seconds*.2)).map(Weighted::name).toList();
-      String detail=String.join("・",categories.stream().map(DailySummaryAggregate::categoryLabel).toList());
-      String label=group.displayName()+(group.displayName().endsWith(detail)?"":"の"+detail);
+      String label=ThemeActivityFormatter.format(group.displayName(),categories,false);
       double confidence=members.stream().mapToDouble(s->confidence(s)*s.observedSeconds()).sum()/seconds;
       // Explicit topic containment contributes to display ranking, not project duration or association confidence.
       double themeSupport=input.stream().filter(s->s.canonicalProject().isBlank() && !s.themeCandidates().isEmpty())
@@ -82,8 +81,7 @@ public final class DailySummaryThemeConsolidator {
     if(group==null)return candidate;
     // Membership controls presentation independently of group aggregation eligibility.
     // Categories are observed activities; configured topics describe containment, not a new activity.
-    String detail=String.join("・",candidate.activities().stream().limit(2).map(DailySummaryAggregate::categoryLabel).toList());
-    String label=group.displayName()+(detail.isBlank() || group.displayName().endsWith(detail)?"":"の"+detail);
+    String label=ThemeActivityFormatter.format(group.displayName(),candidate.activities().stream().limit(2).toList(),false);
     log.debug("[summary-theme-display] canonicalProject={} group={} allowSingleProject=true resolvedDisplay={}",
         candidate.memberProjects(),group.id(),group.displayName());
     return new SummaryThemeCandidate(candidate.id(),group.displayName(),candidate.level(),DisplaySource.THEME_GROUP,

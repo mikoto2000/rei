@@ -29,27 +29,13 @@ public record DailySummary(String overview,Map<String,String> timeOfDay,List<Str
     var dominant=DailySummaryAggregator.top(a.categorySeconds(),3).stream().filter(w->!w.name().equals("unknown")).limit(2)
         .map(w->DailySummaryAggregate.categoryLabel(w.name())).toList();
     String overview=dominant.isEmpty()?"活動内容を特定するための情報が限られていました。":
-        "観測された主活動では、"+String.join("・",dominant)+"が多く見られました。";
+        "観測された主活動では、"+ThemeActivityFormatter.join(dominant)+"が多く見られました。";
     if(!a.dominantThemes().isEmpty())overview+="作業テーマには"+String.join("、",a.dominantThemes().stream().limit(2).toList())+"が見られました。";
     else if(!dominant.isEmpty())overview+="具体的な作業対象を示す情報は限られています。";
     var sections=new LinkedHashMap<String,String>();
     for(var key:DailySummaryAggregate.BUCKET_ORDER) {
       var b=a.timeOfDay().get(key);if(b==null || b.dominant().isEmpty() && b.workThemes().isEmpty())continue;
-      String text;
-      var work=b.workThemes().stream().limit(2).toList();
-      if(String.join("、",work).length()>130)work=work.subList(0,1);
-      var nonWork=DailySummaryAggregator.top(b.categorySeconds(),1).stream()
-          .filter(v->!Set.of("development","research","documentation","unknown").contains(v.name()) && v.seconds()>=b.observedSeconds()*.65)
-          .map(v->DailySummaryAggregate.categoryLabel(v.name())).findFirst();
-      if(work.isEmpty())text=String.join("・",b.dominant())+"が中心でした。";
-      else if(nonWork.isPresent())text=nonWork.get()+"が多く、"+String.join("、",work)+"も見られました。";
-      else {
-        var shown=new HashSet<>(work);
-        long workSeconds=b.timeOfDayThemeCandidates().stream().filter(c->shown.contains(c.label())).mapToLong(SummaryThemeCandidate::durationSeconds).sum();
-        text=String.join("、",work)+(workSeconds>=b.observedSeconds()*.5?"が中心でした。":"も見られました。");
-        var secondary=!b.secondaryThemes().isEmpty()?b.secondaryThemes():b.secondary();
-        if(!secondary.isEmpty())text+=secondary.getFirst()+"も一部で見られました。";
-      }
+      String text=new DailySummaryBucketFormatter().format(a,b);
       sections.put(key,text);
     }
     String trend=a.frequentProjectSwitches()?"観測された作業対象の切り替えが多い日でした。":

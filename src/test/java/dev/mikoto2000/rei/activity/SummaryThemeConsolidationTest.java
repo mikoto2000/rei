@@ -63,7 +63,7 @@ class SummaryThemeConsolidationTest {
     assertThat(c.durationSeconds()).isEqualTo(11400);assertThat(c.observationCount()).isEqualTo(3);
     assertThat(c.activities()).containsExactly("development","documentation");
     assertThat(c.memberProjectCount()).isEqualTo(2);
-    assertThat(c.label()).isEqualTo("音声入力・文字起こし系の開発・文書作業");
+    assertThat(c.label()).isEqualTo("音声入力・文字起こし系に関する開発や文書作業");
     assertThat(a.categorySeconds()).containsEntry("research",600L);
   }
   @Test void groupingRunsBeforeTopFiveTruncation() throws Exception {
