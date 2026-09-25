@@ -43,7 +43,7 @@ public final class DailySummaryThemeConsolidator {
     // A retained project also represents its explicit group for display de-duplication.
     // Only selected representatives cover topics; unrelated and unselected groups never suppress them.
     // Topic scores can only decrease, so retained project/group representatives grow monotonically.
-    log.debug("[summary-theme] grouped eligible={} replacedProjects={}",eligible.keySet(),grouped);
+    log.debug("[summary-trace] grouped-themes eligible={} replacedProjects={}",eligible.keySet(),grouped);
     log.debug("[summary-theme] scored candidates={}",base);
     Set<String> parents=Set.of();List<SummaryThemeCandidate> selected=List.of();int suppressedTopics=0;
     for(int iteration=0;iteration<=config.groups().size()+1;iteration++) {
@@ -68,8 +68,8 @@ public final class DailySummaryThemeConsolidator {
           .forEach(c->next.addAll(c.groupIds()));
       if(next.equals(parents))break;parents=Set.copyOf(next);
     }
-    log.debug("[summary-theme] suppressed projects={} coveredGroupIds={} topicCount={}",grouped,parents,suppressedTopics);
-    log.debug("[summary-theme] final candidates={}",selected);
+    log.debug("[summary-trace] suppressed-themes projects={} reason=PARENT_GROUP_SELECTED coveredGroupIds={} topicCount={} topicReason=GROUP_REPRESENTATIVE_SELECTED",grouped,parents,suppressedTopics);
+    log.debug("[summary-trace] final-themes candidates={}",selected);
     var metrics=new Metrics(input.size(),eligible.size(),grouped.size(),suppressedTopics,selected.size());
     log.debug("Summary theme consolidation canonical={} groups={} suppressedChildren={} suppressedTopics={} selected={}",
         metrics.canonicalCandidates(),metrics.groupCandidates(),metrics.suppressedChildren(),metrics.suppressedTopics(),metrics.selectedThemes());

@@ -60,6 +60,13 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
     this.model=model;this.options=options;this.timeout=timeout;
   }
   @Override public DailySummary write(DailySummaryAggregate aggregate) throws Exception {
+    String input=structuredInput(aggregate);
+    log.debug("[summary-trace] llm-input {}",input);
+    log.debug("Daily summary segments={} projects={} categories={} promptChars={} estimatedTokens={}",
+        aggregate.sourceSegmentCount(),aggregate.topProjects().size(),aggregate.categorySeconds().size(),input.length()+INSTRUCTIONS.length(),(input.length()+INSTRUCTIONS.length()+1)/2);
+    return request(aggregate,input);
+  }
+  static String structuredInput(DailySummaryAggregate aggregate) throws Exception {
     var structured=JSON.valueToTree(aggregate);
     // Work labels come exclusively from final candidates, not pre-consolidation project/block lists.
     ((com.fasterxml.jackson.databind.node.ObjectNode)structured).remove("topProjects");
@@ -67,8 +74,9 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
     String input=JSON.writeValueAsString(structured);
     if(input.length()>16000 || sensitiveText(structured))
       throw new IllegalArgumentException("Unsafe summary input");
-    log.debug("Daily summary segments={} projects={} categories={} promptChars={} estimatedTokens={}",
-        aggregate.sourceSegmentCount(),aggregate.topProjects().size(),aggregate.categorySeconds().size(),input.length()+INSTRUCTIONS.length(),(input.length()+INSTRUCTIONS.length()+1)/2);
+    return input;
+  }
+  private DailySummary request(DailySummaryAggregate aggregate,String input) throws Exception {
     var format=new ResponseFormat();format.setType(ResponseFormat.Type.JSON_SCHEMA);
     format.setJsonSchema(ResponseFormat.JsonSchema.builder().name("activity_daily_summary").strict(true).schema(SCHEMA).build());
     var request=new OpenAiChatOptions.Builder(options.get().copy()).responseFormat(format)
@@ -84,7 +92,9 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
         result.append(response.getResult().getOutput().getText());
       if(result.length()>8000)throw new IllegalArgumentException("Summary too large");
     }).blockLast(timeout);
-    return parse(result.toString(),aggregate);
+    var parsed=parse(result.toString(),aggregate);
+    if(log.isDebugEnabled())log.debug("[summary-trace] llm-output validated={}",JSON.writeValueAsString(parsed));
+    return parsed;
   }
   private static boolean sensitiveText(JsonNode node) {
     if(node.isTextual())return new dev.mikoto2000.rei.memory.util.SensitiveInfoDetector().containsSensitiveInfo(node.textValue());

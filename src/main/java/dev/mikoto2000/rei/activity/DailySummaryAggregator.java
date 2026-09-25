@@ -59,8 +59,8 @@ public final class DailySummaryAggregator {
       if(log.isDebugEnabled()) {
         String raw=primary==null?"":ActivityRolePolicy.normalize(primary.projectCandidate()).replaceAll("\\p{Cntrl}","");
         raw=raw.substring(0,Math.min(60,raw.length()));
-        log.debug("[summary-theme] raw project={}",raw);
-        log.debug("[summary-theme] canonical project={} aliasHit={} groupIds={}",project,
+        log.debug("[summary-trace] raw-themes project={} category={} topics={}",raw,category,WorkThemeAggregation.topics(primary,s.record()).stream().map(WorkThemeAggregation.Candidate::theme).toList());
+        log.debug("[summary-trace] canonical-themes project={} aliasHit={} groupIds={}",project,
             primary!=null && names.aliasHit(primary.projectCandidate()),groups.idsFor(project,List.of()));
       }
       if(!project.isBlank()) {

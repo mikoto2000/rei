@@ -881,3 +881,10 @@ canonicalProject / summaryThemeGroup / displayTheme を分離し、全体・時�
 stable groupIds を全日・時間帯の共通 consolidator で使用し、LLM へは最終候補を渡す。
 numeric score の電話番号誤検知も修正した。原因・設定適用手順・fixture の段階別比較・全テスト結果は
 [Consolidation Pipeline Fix](activity-consolidation-pipeline-fix.md) を参照。
+
+## Phase 3.8.3: 実行バイナリと Summary 経路の追跡
+
+稼働JARは前回修正を含み、実effective alias/groupが空であることを確認した。
+実保存データ626区間のローカルcommand再生で提示出力を再現し、既存設定例による比較も実施。
+DEBUG trace、Slashからwriter/formatterまでの7ケースを追加し、clean buildしたJARを起動先へ反映。
+[実行環境・各stage・Before/After・全検証結果](activity-summary-runtime-trace.md) を参照。
