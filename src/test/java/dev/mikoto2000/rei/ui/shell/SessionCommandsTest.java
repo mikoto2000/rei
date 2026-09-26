@@ -15,7 +15,7 @@ class SessionCommandsTest {
     var root = new picocli.CommandLine(new RootCommand());
     assertThat(root.getSubcommands()).containsKey("session").doesNotContainKeys("new", "resume");
     var session = root.getSubcommands().get("session");
-    assertThat(session.getSubcommands()).containsOnlyKeys("new", "resume");
+    assertThat(session.getSubcommands()).containsOnlyKeys("new", "resume", "switch", "show", "list");
     assertThat(root.execute("session", "--help")).isZero();
     assertThat(root.execute("session")).isZero();
     assertThatThrownBy(() -> root.parseArgs("new")).isInstanceOf(picocli.CommandLine.UnmatchedArgumentException.class);
@@ -35,7 +35,7 @@ class SessionCommandsTest {
     try (var scope = projects.newClient().open()) {
       var first = shell.submit("first");
       assertThat(command.execute("new")).isZero();
-      assertThat(shell.currentSessionId()).isNull();
+      assertThat(shell.currentSessionId()).isNotNull().isNotEqualTo(first.conversationId());
       var second = shell.submit("second");
       assertThat(second.conversationId()).isNotEqualTo(first.conversationId());
       assertThat(command.execute("resume", first.conversationId())).isZero();
@@ -57,8 +57,9 @@ class SessionCommandsTest {
       assertThat(cd.execute(temp.toString())).isZero();
       assertThat(shell.currentSessionId()).isEqualTo(second.conversationId());
       assertThat(command.execute("new")).isZero();
+      var fresh = shell.currentSessionId();
       assertThat(cd.execute(temp.toString())).isZero();
-      assertThat(shell.currentSessionId()).isNull();
+      assertThat(shell.currentSessionId()).isEqualTo(fresh);
       assertThat(cd.execute(temp.resolve("other").toString())).isZero();
       assertThat(shell.currentSessionId()).isEqualTo(other.conversationId());
     }

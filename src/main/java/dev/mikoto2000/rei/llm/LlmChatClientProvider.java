@@ -54,7 +54,9 @@ public class LlmChatClientProvider {
       dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor history,
       dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawTools,
       dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties properties) {
-    if (properties.isEnabled()) { contextAssembler = assembler; contextHistory = history; rawResultTools = rawTools; }
+    // Session continuation must load persisted history even when compression is disabled.
+    contextHistory = history;
+    if (properties.isEnabled()) { contextAssembler = assembler; rawResultTools = rawTools; }
   }
   private dev.mikoto2000.rei.externalagent.ExternalAgentTools externalAgentTools;
   private dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService externalDelegation;

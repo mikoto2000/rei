@@ -22,7 +22,14 @@ public final class ShellConversationService {
       return context;
     }
   }
-  public void newConversation() { synchronized (projects.currentClient()) { projects.selectSession(null); } }
+  public void newConversation() { newConversation(null); }
+  public SessionMetadata newConversation(String title) {
+    synchronized (projects.currentClient()) {
+      var session = lifecycle.create(projects.currentContext(), title);
+      projects.selectSession(session.sessionId());
+      return session;
+    }
+  }
   public void resume(String sessionId) {
     synchronized (projects.currentClient()) {
       lifecycle.validate(sessionId, projects.currentContext().id());

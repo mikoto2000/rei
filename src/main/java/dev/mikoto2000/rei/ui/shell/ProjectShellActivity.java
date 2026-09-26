@@ -19,6 +19,8 @@ public class ProjectShellActivity implements AgentEventListener {
   private ShellAgentEventRenderer renderer;
   private ShellAgentEventRenderer globalRenderer;
   private String visibleProject;
+  private String visibleSession;
+  private ProjectClient client;
   private final java.util.Map<String, ShellAgentEventRenderer> renderers = new java.util.HashMap<>();
   private ShellAgentEventRenderer.TopicNotificationOptions options = ShellAgentEventRenderer.TopicNotificationOptions.summary();
   @Value("${rei.events.recent-limit:20}") private int recentLimit = 20;
@@ -33,6 +35,8 @@ public class ProjectShellActivity implements AgentEventListener {
   public synchronized void attach(ShellEventOutput output) { attach(output, options); }
   public synchronized void attach(ShellEventOutput output, ShellAgentEventRenderer.TopicNotificationOptions options) {
     this.output = output; this.options = options;
+    client = projects.currentClient();
+    visibleSession = projects.currentSessionId();
     visibleProject = projects.currentContext().id();
     renderers.clear();
     renderer = rendererFor(visibleProject);
@@ -40,11 +44,14 @@ public class ProjectShellActivity implements AgentEventListener {
   }
   @Override public synchronized void onEvent(AgentEvent event) {
     if (renderer == null) return;
+    refreshSession();
     if (event.type() == AgentEventType.APPLICATION_SHUTDOWN_STARTED) renderer.finish();
     if(event.payload() instanceof BackgroundExecutionPayload payload) {
       renderer.renderBackgroundExecution(payload,activeRuns==null?event.projectId():activeRuns.projectName(event.projectId()));
       return;
     }
+    if (visibleSession != null && visibleProject.equals(event.projectId())
+        && event.sessionId() != null && !visibleSession.equals(event.sessionId())) return;
     if (activeRuns != null && event.projectId() != null && !event.projectId().equals(visibleProject)
         && (event.type() == AgentEventType.AGENT_RUN_COMPLETED || event.type() == AgentEventType.AGENT_RUN_FAILED)) {
       renderer.finish();
@@ -56,17 +63,33 @@ public class ProjectShellActivity implements AgentEventListener {
   }
   public synchronized void restore(ProjectContext project) {
     if (output == null) return;
+    refreshSession();
     renderer.finish();
     visibleProject = project.id();
     renderer = rendererFor(visibleProject);
     output.println("Switched project: " + project.name());
     if (activeRuns != null) output.println(activeRuns.summary());
-    output.println("Conversation restored: chat:main (" + memory.get(project.conversationId("chat:main")).size() + " messages)");
+    String conversation = visibleSession == null ? project.conversationId("chat:main") : visibleSession;
+    output.println("Conversation restored: " + (visibleSession == null ? "chat:main" : visibleSession)
+        + " (" + memory.get(conversation).size() + " messages)");
     output.println("Working Set restored: " + workingSet.getFiles().size() + " items");
-    output.println("Last run: " + states.read(project.id()).map(ProjectRunStateStore.State::status).orElse("none"));
+    if (visibleSession == null)
+      output.println("Last run: " + states.read(project.id()).map(ProjectRunStateStore.State::status).orElse("none"));
     output.println("Recent activity:");
-    for (var event : store.recent(project.id(), Math.max(1, Math.min(recentLimit, 1000)))) renderer.onRecentEvent(event);
+    for (var event : store.recent(project.id(), Math.max(1, Math.min(recentLimit, 1000))))
+      if (visibleSession == null || visibleSession.equals(event.sessionId())) renderer.onRecentEvent(event);
     output.flush();
+  }
+  /** Refresh on command completion and before asynchronous events; never replay a previous run as current. */
+  public synchronized void refreshSession() {
+    if (client == null || renderer == null) return;
+    String selected;
+    try (var scope = client.open()) { selected = projects.currentSessionId(); }
+    if (java.util.Objects.equals(selected, visibleSession)) return;
+    renderer.finish();
+    visibleSession = selected;
+    renderers.clear();
+    renderer = rendererFor(visibleProject);
   }
   private ShellAgentEventRenderer rendererFor(String projectId) {
     return renderers.computeIfAbsent(projectId, id -> new ShellAgentEventRenderer(new ShellEventOutput() {

@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 import picocli.CommandLine.*;
 
 @Component
-@Command(name="resume", description="現在の project の Session を明示的に選択します", mixinStandardHelpOptions=true)
+@Command(name="switch", aliases="resume", description="現在の project の Session を明示的に選択します", mixinStandardHelpOptions=true)
 public final class ResumeConversationCommand implements java.util.concurrent.Callable<Integer> {
   private final ShellConversationService conversations;
   @Parameters(index="0", paramLabel="SESSION_ID", completionCandidates=SessionCompletionCandidates.CurrentProject.class) String sessionId;
@@ -20,7 +20,7 @@ public final class ResumeConversationCommand implements java.util.concurrent.Cal
       spec.commandLine().getOut().println("Current session: " + new dev.mikoto2000.rei.conversation.HistoryFormatter().label(sessionId));
       return 0;
     } catch (ResourceNotFoundException error) {
-      spec.commandLine().getErr().println("Session not found."); return 2;
+      spec.commandLine().getErr().println("Session not found: " + new dev.mikoto2000.rei.conversation.HistoryFormatter().label(sessionId)); return 2;
     } catch (SessionConflictException error) {
       spec.commandLine().getErr().println("Session belongs to another project. Select that project first."); return 2;
     } catch (RuntimeException error) {

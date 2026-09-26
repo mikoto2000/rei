@@ -18,6 +18,41 @@ import dev.mikoto2000.rei.core.configuration.SystemPromptService;
 import dev.mikoto2000.rei.summarize.SummaryTools;
 
 class LlmChatClientProviderTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+  void persistedSessionHistoryIsAvailableRegardlessOfCompression(boolean compression,
+      @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) {
+    var turns = new dev.mikoto2000.rei.conversation.ConversationTurnStore(directory);
+    var context = new dev.mikoto2000.rei.core.chat.AgentRunContext("saved-run", "chat:saved", directory);
+    turns.startOrdered(context, "persisted-session-question", java.time.Instant.now());
+    turns.finish(context, dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.COMPLETED, "persisted-session-answer");
+    var prompts = new java.util.ArrayList<org.springframework.ai.chat.prompt.Prompt>();
+    ChatModel model = prompt -> {
+      prompts.add(prompt);
+      return new org.springframework.ai.chat.model.ChatResponse(List.of(new org.springframework.ai.chat.model.Generation(
+          new org.springframework.ai.chat.messages.AssistantMessage("response"))));
+    };
+    var models = mock(LlmModelProvider.class);
+    when(models.chatModel(LlmFeature.CHAT)).thenReturn(model);
+    when(models.chatOptions(LlmFeature.CHAT, null)).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
+    var system = mock(SystemPromptService.class); when(system.systemPrompt()).thenReturn("system");
+    var memory = org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build();
+    var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), system, memory,
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), null, null);
+    var properties = new dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties();
+    properties.setEnabled(compression);
+    var history = new dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor(
+        new dev.mikoto2000.rei.conversation.ConversationTurnStore(directory), memory,
+        new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(directory));
+    provider.setContextCompression(null, history, null, properties);
+    provider.chatClient(LlmFeature.CHAT).prompt().user("continue")
+        .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, "chat:saved")).call().content();
+    assertThat(prompts.getLast().toString()).contains("persisted-session-question", "persisted-session-answer");
+  }
 
   @Test
   void chatClientExposesLastSummaryTool() throws Exception {
