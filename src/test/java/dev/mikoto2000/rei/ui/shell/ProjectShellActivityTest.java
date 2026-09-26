@@ -13,6 +13,39 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
+  @Test void switchingSessionsHidesLateEventsFromPreviousRunEvenOnWorkerThread() throws Exception {
+    var projects = connect(new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json"))));
+    var repository = new dev.mikoto2000.rei.conversation.FileSessionRepository(temp.resolve("sessions.json"));
+    var shell = new dev.mikoto2000.rei.application.session.ShellConversationService(projects,
+        new dev.mikoto2000.rei.application.session.SessionLifecycle(repository, Clock.systemUTC()), (c,p)->{});
+    var first = shell.submit("first");
+    var text = new StringBuilder();
+    var activity = new ProjectShellActivity(projects, new ProjectAgentEventStore(temp), new ProjectRunStateStore(temp), new WorkingSet(), mock(ChatMemory.class));
+    activity.attach(new ShellEventOutput() {
+      public void print(String value) { text.append(value); }
+      public void println(String value) { text.append(value).append('\n'); }
+      public void flush() {}
+    });
+    var events = new AgentEventFactory(Clock.systemUTC());
+    activity.onEvent(events.messageStarted("old-message", "assistant").withOwnership(first));
+    shell.newConversation();
+    var second = shell.submit("second");
+    text.setLength(0);
+    try (var worker = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+      worker.submit(() -> {
+        activity.onEvent(events.messageDelta("old-message", "OLD-LEAK").withOwnership(first));
+        activity.onEvent(events.messageStarted("new-message", "assistant").withOwnership(second));
+        activity.onEvent(events.messageDelta("new-message", "NEW-CONTENT").withOwnership(second));
+      }).get();
+    }
+    assertThat(text.toString()).contains("NEW-CONTENT").doesNotContain("OLD-LEAK");
+    shell.resume(first.conversationId());
+    text.setLength(0);
+    activity.onEvent(events.messageDelta("new-message", "SECOND-LEAK").withOwnership(second));
+    activity.onEvent(events.messageStarted("old-message", "assistant").withOwnership(first));
+    activity.onEvent(events.messageDelta("old-message", "FIRST-CONTENT").withOwnership(first));
+    assertThat(text.toString()).contains("FIRST-CONTENT").doesNotContain("SECOND-LEAK");
+  }
   @Test void backgroundNotificationsRemainVisibleAfterProjectSwitch() throws Exception {
     var projects=connect(new ProjectService(Files.createDirectory(temp.resolve("A")),new ProjectRegistry(temp.resolve("registry.json"))));
     var a=projects.currentContext();

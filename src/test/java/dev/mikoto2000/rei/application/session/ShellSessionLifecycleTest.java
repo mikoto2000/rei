@@ -35,7 +35,10 @@ class ShellSessionLifecycleTest {
       assertThat(next.runId()).isNotEqualTo(first.runId());
       assertThat(repository.findById(first.conversationId())).contains(new SessionMetadata(first.conversationId(), first.projectId(), "😀".repeat(80), now, now.plusSeconds(5)));
       shell.newConversation();
-      assertThat(repository.findPage(null,null,100)).hasSize(1);
+      assertThat(repository.findPage(null,null,100)).hasSize(2);
+      assertThat(shell.currentSessionId()).isNotNull().isNotEqualTo(first.conversationId());
+      assertThat(projects.currentContext().id()).isEqualTo(first.projectId());
+      assertThat(accepted).hasSize(2);
       assertThat(shell.submit("new").conversationId()).isNotEqualTo(first.conversationId());
     }
     try (var restarted = projects.newClient().open()) {

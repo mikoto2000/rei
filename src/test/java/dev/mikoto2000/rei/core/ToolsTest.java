@@ -1451,7 +1451,11 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
       assertEquals("background", result.resolvedExecutionMode());
       assertTrue(result.processId().startsWith("proc-"));
       long deadline = System.currentTimeMillis() + 3_000;
-      while (!Files.exists(marker) && System.currentTimeMillis() < deadline) Thread.sleep(25);
+      // Add-Content creates the file before releasing its Windows write lock.
+      // The subsequent output proves the marker write has completed.
+      while (!manager.status(result.processId(), 100).stdout().contains("ready")
+          && System.currentTimeMillis() < deadline) Thread.sleep(25);
+      assertTrue(manager.status(result.processId(), 100).stdout().contains("ready"));
       assertEquals(1, Files.readAllLines(marker).size());
       assertTrue(manager.status(result.processId(), 100).found());
       manager.kill(result.processId());

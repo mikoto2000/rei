@@ -61,7 +61,7 @@ Shell built-in は `UserInputService.builtins()` を実行と補完の共通定�
 | `/agent <agent> ` | action enum |
 | `/agent <agent> <action> ` | 有効な組み合わせなら file-or-directory |
 | `/history show ` | Session ID（title は説明） |
-| `/session resume ` | 現在の Project に属する Session ID |
+| `/session switch ` / `/session resume ` | 現在の Project に属する Session ID |
 | `/image generate --output ` | file-or-directory |
 | 通常入力中の `./`、`../`、絶対パスなど | 明示的なパス prefix のときだけ汎用補完 |
 

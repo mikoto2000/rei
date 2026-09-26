@@ -56,6 +56,9 @@ class ShellSessionSafetyTest {
       fail.set(false); var first=shell.submit("first");
       var before=disk.findById(first.conversationId());
       fail.set(true);
+      assertThatThrownBy(shell::newConversation).isInstanceOf(IllegalStateException.class);
+      assertThat(shell.currentSessionId()).isEqualTo(first.conversationId());
+      assertThat(disk.findPage(null, null, 100)).hasSize(1);
       assertThatThrownBy(()->shell.submit("next")).isInstanceOf(IllegalStateException.class);
       assertThat(calls).hasValue(1); assertThat(shell.currentSessionId()).isEqualTo(first.conversationId());
       assertThat(disk.findById(first.conversationId())).isEqualTo(before);

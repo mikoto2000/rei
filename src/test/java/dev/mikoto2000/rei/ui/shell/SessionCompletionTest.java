@@ -67,7 +67,7 @@ class SessionCompletionTest {
       spring.refresh();
       var cmd = new picocli.CommandLine(picocli.CommandLine.Model.CommandSpec.create(), new picocli.spring.PicocliSpringFactory(spring))
           .addSubcommand("history", HistoryCommand.class).addSubcommand("session", SessionCommand.class);
-      for (String line : List.of("/history show ", "/session resume ")) {
+      for (String line : List.of("/history show ", "/session resume ", "/session switch ")) {
         var results = new ArrayList<org.jline.reader.Candidate>();
         new JLineCompletionAdapter(cmd, dev.mikoto2000.rei.core.command.ReiLineReaderFactory.completionEngine(), () -> root)
             .complete(null, dev.mikoto2000.rei.core.command.ReiLineReaderFactory.parser().parse(line, line.length()), results);
