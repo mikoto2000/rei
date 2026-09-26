@@ -91,6 +91,9 @@ public class LlmChatClientProvider {
   private final AgentEventFactory eventFactory;
   private final AgentEventPublisher eventPublisher;
   private final Map<String, ChatClient> cache = new ConcurrentHashMap<>();
+  private ObjectProvider<dev.mikoto2000.rei.memory.service.MemoryContextAdvisor> memoryContext;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setMemoryContext(ObjectProvider<dev.mikoto2000.rei.memory.service.MemoryContextAdvisor> advisor) { memoryContext=advisor; }
   private ObjectProvider<dev.mikoto2000.rei.computeruse.ComputerUseTools> computerUseTools;
   @org.springframework.beans.factory.annotation.Autowired
   void setComputerUseTools(ObjectProvider<dev.mikoto2000.rei.computeruse.ComputerUseTools> tools) { this.computerUseTools = tools; }
@@ -146,6 +149,8 @@ public class LlmChatClientProvider {
 
   private ChatClient createChatClient(String feature) {
     List<Advisor> advisors = new ArrayList<>();
+    if (LlmFeature.CHAT.equals(feature) && memoryContext != null && memoryContext.getIfAvailable() != null)
+      advisors.add(memoryContext.getObject());
     if (LlmFeature.CHAT.equals(feature) && externalDelegation != null)
       advisors.add(new dev.mikoto2000.rei.externalagent.ExternalAgentReviewAdvisor(externalDelegation, chatMemory));
     if (LlmFeature.CHAT.equals(feature) && contextHistory != null) advisors.add(contextHistory);

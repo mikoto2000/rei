@@ -286,6 +286,9 @@ public class ReiApplication {
       command.setShellOutput(writer);
     }
     var history = cmd.getSubcommands().get("history");
+    var sleep = cmd.getSubcommands().get("sleep");
+    if (sleep != null && sleep.getCommand() instanceof dev.mikoto2000.rei.memory.command.SleepCommand command)
+      command.setShellOutput(writer);
     if (history != null && history.getCommand() instanceof dev.mikoto2000.rei.ui.shell.HistoryCommand command) {
       command.setShellOutput(writer);
     }

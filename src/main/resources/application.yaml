@@ -241,6 +241,15 @@ rei:
       generation-timeout-seconds: ${REI_BLUESKY_REPLY_GENERATION_TIMEOUT_SECONDS:1200}
   memory:
     enabled: ${REI_MEMORY_ENABLED:true}
+    retrieval:
+      max-memories: ${REI_MEMORY_MAX_MEMORIES:5}
+      max-tokens: ${REI_MEMORY_MAX_TOKENS:1500}
+    sleep:
+      min-confidence: ${REI_MEMORY_MIN_CONFIDENCE:0.70}
+      min-importance: ${REI_MEMORY_MIN_IMPORTANCE:0.50}
+      max-turns: ${REI_MEMORY_SLEEP_MAX_TURNS:50}
+      max-input-tokens: ${REI_MEMORY_SLEEP_MAX_INPUT_TOKENS:12000}
+      timeout-seconds: ${REI_MEMORY_SLEEP_TIMEOUT_SECONDS:120}
     auto-trigger-message-threshold: ${REI_MEMORY_AUTO_TRIGGER_MSG_THRESHOLD:20}
     auto-trigger-context-percent: ${REI_MEMORY_AUTO_TRIGGER_CTX_PERCENT:80}
     search-max-results: ${REI_MEMORY_SEARCH_MAX_RESULTS:10}

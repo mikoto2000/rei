@@ -28,6 +28,7 @@ import picocli.CommandLine.Parameters;
 @Component
 @Command(name = "memory", description = "記憶管理コマンド", subcommands = {
     MemoryCommand.ListCommand.class,
+    MemoryCommand.ShowCommand.class,
     MemoryCommand.SearchCommand.class,
     MemoryCommand.ForgetCommand.class,
     MemoryCommand.ExportCommand.class,
@@ -41,9 +42,15 @@ public class MemoryCommand {
   @Command(name = "list", description = "保存済みメモリを表示します")
   public static class ListCommand implements Runnable {
     private final MemoryService memoryService;
+    private MemoryCommandSupport support;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setSupport(MemoryCommandSupport support) { this.support=support; }
+    @Option(names="--limit",defaultValue="20") int pageLimit=20;
+    @Option(names="--offset",defaultValue="0") int offset;
 
     @Override
     public void run() {
+      if(support!=null) { System.out.println(support.list(pageLimit,offset)); return; }
       List<Memory> memories = memoryService.listActiveWithExpiryCheck();
       if (memories.isEmpty()) {
         System.out.println("保存済みの記憶はありません");
@@ -71,15 +78,21 @@ public class MemoryCommand {
   @Command(name = "search", description = "記憶を検索します")
   public static class SearchCommand implements Runnable {
     private final MemoryService memoryService;
+    private MemoryCommandSupport support;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setSupport(MemoryCommandSupport support) { this.support=support; }
 
-    @Parameters(index = "0", description = "検索クエリ")
     String query;
+    @Parameters(index = "0..*", arity="1..*", description = "検索クエリ")
+    String[] queryWords;
 
     @Option(names = "--limit", defaultValue = "10")
     int limit;
 
     @Override
     public void run() {
+      if(queryWords!=null) query=String.join(" ",queryWords);
+      if(support!=null) { System.out.println(support.search(query,limit)); return; }
       if (query == null || query.isBlank()) {
         System.out.println("検索クエリを入力してください");
         return;
@@ -102,12 +115,16 @@ public class MemoryCommand {
   @Command(name = "forget", description = "記憶を論理削除します")
   public static class ForgetCommand implements Runnable {
     private final MemoryService memoryService;
+    private MemoryCommandSupport support;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setSupport(MemoryCommandSupport support) { this.support=support; }
 
     @Parameters(index = "0", description = "記憶ID")
     String id;
 
     @Override
     public void run() {
+      if(support!=null) { System.out.println(support.forget(id)); return; }
       if (id == null || id.isBlank()) {
         System.out.println("有効な記憶 ID を入力してください");
         return;
@@ -124,6 +141,15 @@ public class MemoryCommand {
       memoryService.updateStatus(id, MemoryStatus.DELETED);
       System.out.println("記憶 " + id + " を削除しました");
     }
+  }
+
+  @Component
+  @RequiredArgsConstructor
+  @Command(name="show",description="記憶の詳細と出典を表示します")
+  public static class ShowCommand implements Runnable {
+    private final MemoryCommandSupport support;
+    @Parameters(index="0") String id;
+    public void run() { System.out.println(support.show(id)); }
   }
 
   @Component

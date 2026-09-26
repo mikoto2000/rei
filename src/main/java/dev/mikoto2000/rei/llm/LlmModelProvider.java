@@ -51,6 +51,14 @@ public class LlmModelProvider {
     return model;
   }
 
+  /** Memory extraction has no tools, including fallback model defaults. */
+  public ChatModel memoryChatModel() {
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(defaultChatModel);
+    var model=chatModel(LlmFeature.MEMORY);
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+    return model;
+  }
+
   private ChatModel createFeatureModel(String feature) {
     if (LlmFeature.COMPUTER_USE.equals(feature) || LlmFeature.COMPUTER_USE_PLANNER.equals(feature) || LlmFeature.ACTIVITY.equals(feature) || LlmFeature.ACTIVITY_BEHAVIOR.equals(feature))
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(defaultChatModel);

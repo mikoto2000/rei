@@ -59,7 +59,7 @@ public final class SubAgentResultSchema {
     return path.matches("[A-Za-z0-9_-][A-Za-z0-9_./-]*\\.json")
         && java.util.Arrays.stream(path.split("/", -1)).noneMatch(part -> part.isEmpty() || part.equals(".") || part.equals(".."));
   }
-  java.util.List<com.networknt.schema.Error> validate(JsonNode node) { return compiled.validate(node); }
+  public java.util.List<com.networknt.schema.Error> validate(JsonNode node) { return compiled.validate(node); }
   public String json() { return json; }
   private static IllegalArgumentException invalid() {
     return new IllegalArgumentException("resultSchema: missing, unsafe, oversized or invalid Draft 2020-12 schema (external references are disabled)");

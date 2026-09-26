@@ -33,6 +33,14 @@ public class AgentEventFactory {
 
   // ---- Agent Run ----
 
+  public AgentEvent memory(AgentEventType type, String project, String session, MemoryLifecyclePayload payload) {
+    if(type!=AgentEventType.MEMORY_SLEEP_STARTED && type!=AgentEventType.MEMORY_SLEEP_COMPLETED
+        && type!=AgentEventType.MEMORY_SLEEP_FAILED && type!=AgentEventType.MEMORY_RETRIEVAL_COMPLETED)
+      throw new IllegalArgumentException("Not a memory event");
+    return new AgentEvent(UUID.randomUUID().toString(),0L,Instant.now(clock),type,VERSION,session,null,
+        null,payload.sleepRunId(),null,payload,project);
+  }
+
   public AgentEvent applicationShutdownStarted(String reason) {
     // Do not inherit the run/execution scope of the thread initiating shutdown.
     return new AgentEvent(UUID.randomUUID().toString(), 0L, Instant.now(clock),
