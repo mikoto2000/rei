@@ -34,6 +34,12 @@
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 	</properties>
 	<dependencies>
+		<!-- Direct use of the PDFBox version already supplied by Tika. -->
+		<dependency>
+			<groupId>org.apache.pdfbox</groupId>
+			<artifactId>pdfbox</artifactId>
+			<version>3.0.5</version>
+		</dependency>
 		<!-- Already used by Spring AI's MCP Jackson 3 support; declare our direct API usage. -->
 		<dependency>
 			<groupId>com.networknt</groupId>

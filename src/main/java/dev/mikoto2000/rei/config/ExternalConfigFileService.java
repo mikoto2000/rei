@@ -93,6 +93,9 @@ public class ExternalConfigFileService {
               enabled: false
 
         rei:
+          paper:
+            enabled: ${REI_PAPER_ENABLED:true}
+            open-alex-api-key: ${REI_PAPER_OPEN_ALEX_API_KEY:}
           context-compression:
             enabled: ${REI_CONTEXT_COMPRESSION_ENABLED:true}
           computer-use:

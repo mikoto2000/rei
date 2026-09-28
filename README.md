@@ -12,6 +12,7 @@ Rei は、ターミナルで使う AI 秘書シェルです。OpenAI 互換 API 
 ## できること
 
 - AI との対話、画像を添付した質問、画像生成
+- [論文検索・日本語要約・翻訳・Paper Library](docs/paper-research.md)（`/paper`）
 - Web 検索、URL の要約、登録した文書を参照した回答
 - プロジェクトごとの会話管理、履歴の検索、複数プロジェクトでの同時実行
 - Google Calendar の予定操作、Google Tasks のタスク管理
