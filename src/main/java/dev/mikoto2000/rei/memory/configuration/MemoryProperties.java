@@ -4,16 +4,27 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "rei.memory")
 public record MemoryProperties(
-    boolean enabled,
+    @org.springframework.boot.context.properties.bind.DefaultValue("true") boolean enabled,
     int autoTriggerMessageThreshold,
     int autoTriggerContextPercent,
     int searchMaxResults,
     int searchMaxInjected,
     int summarizeMaxLength,
     int conflictTimeoutSeconds,
-    ExpiryDefaults expiry) {
+    ExpiryDefaults expiry,
+    Retrieval retrieval,
+    Sleep sleep) {
 
+  public MemoryProperties(boolean enabled, int autoTriggerMessageThreshold, int autoTriggerContextPercent,
+      int searchMaxResults, int searchMaxInjected, int summarizeMaxLength, int conflictTimeoutSeconds, ExpiryDefaults expiry) {
+    this(enabled,autoTriggerMessageThreshold,autoTriggerContextPercent,searchMaxResults,searchMaxInjected,
+        summarizeMaxLength,conflictTimeoutSeconds,expiry,null,null);
+  }
+
+  @org.springframework.boot.context.properties.bind.ConstructorBinding
   public MemoryProperties {
+    if (retrieval == null) retrieval = new Retrieval(5,1500);
+    if (sleep == null) sleep = new Sleep(.70,.50,50,12000,120);
     if (autoTriggerMessageThreshold <= 0) {
       autoTriggerMessageThreshold = 20;
     }
@@ -34,6 +45,23 @@ public record MemoryProperties(
     }
     if (expiry == null) {
       expiry = new ExpiryDefaults(30, 365);
+    }
+  }
+
+  public record Retrieval(int maxMemories, int maxTokens) {
+    public Retrieval { if (maxMemories <= 0) maxMemories=5; if (maxTokens <= 0) maxTokens=1500; }
+  }
+  public record Sleep(
+      @org.springframework.boot.context.properties.bind.DefaultValue("0.70") double minConfidence,
+      @org.springframework.boot.context.properties.bind.DefaultValue("0.50") double minImportance,
+      int maxTurns, int maxInputTokens, int timeoutSeconds) {
+    public Sleep {
+      if (!Double.isFinite(minConfidence) || minConfidence < 0 || minConfidence > 1
+          || !Double.isFinite(minImportance) || minImportance < 0 || minImportance > 1)
+        throw new IllegalArgumentException("Invalid memory sleep thresholds");
+      if (maxTurns <= 0) maxTurns=50;
+      if (maxInputTokens <= 0) maxInputTokens=12000;
+      if (timeoutSeconds <= 0) timeoutSeconds=120;
     }
   }
 

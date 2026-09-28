@@ -1,0 +1,18 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "type":"object","additionalProperties":false,"required":["memories"],
+  "properties":{"memories":{"type":"array","maxItems":50,"items":{
+    "type":"object","additionalProperties":false,
+    "required":["type","scope","content","summary","confidence","importance","sourceTurnIds","tags"],
+    "properties":{
+      "type":{"enum":["FACT","PREFERENCE","DECISION","CONSTRAINT","PROJECT_STATE","PROCEDURE","LESSON","RELATION"]},
+      "scope":{"enum":["GLOBAL","PROJECT"]},
+      "content":{"type":"string","minLength":1,"maxLength":4000},
+      "summary":{"type":"string","minLength":1,"maxLength":500},
+      "confidence":{"type":"number","minimum":0,"maximum":1},
+      "importance":{"type":"number","minimum":0,"maximum":1},
+      "sourceTurnIds":{"type":"array","minItems":1,"maxItems":50,"uniqueItems":true,"items":{"type":"string","minLength":1}},
+      "tags":{"type":"array","maxItems":20,"uniqueItems":true,"items":{"type":"string","minLength":1,"maxLength":100}}
+    }
+  }}}
+}

@@ -10,6 +10,8 @@ public final class WebApiEventMapper {
       .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
   private static Set<String> fields(AgentEventType type) {
     String names = switch (type) {
+      case MEMORY_SLEEP_STARTED, MEMORY_SLEEP_COMPLETED, MEMORY_SLEEP_FAILED, MEMORY_RETRIEVAL_COMPLETED ->
+          "sleepRunId preview processedTurns candidateCount memoryCount status";
       case APPLICATION_SHUTDOWN_STARTED -> "reason";
       case CONTEXT_COMPRESSION_STARTED, CONTEXT_COMPRESSION_COMPLETED, CONTEXT_COMPRESSION_FAILED ->
           "beforeEstimatedTokens afterEstimatedTokens compressedMessageCount summaryThroughSequence reason";

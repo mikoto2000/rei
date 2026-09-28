@@ -147,6 +147,11 @@ SSE bridge の破棄時には送信完了を最大 2 秒待機します。切断
 - `SqliteVectorStoreTest`
   - `sqlite-vec` ベースの保存と検索
 
+## 長期記憶 / Manual Sleep
+
+`/sleep` で現在 Session の未処理 Turn を整理し、`/memory search` / `show` / `list` / `forget` で管理します。
+設定、DB 互換性、出典追跡、Context Budget、失敗時の動作は [長期記憶の設計・利用ガイド](docs/long-term-memory.md) を参照してください。Auto Sleep はありません。
+
 ## 補足
 
 - [`application.yaml`](./src/main/resources/application.yaml) にはローカル差分が入りやすいので、コミット時は注意してください

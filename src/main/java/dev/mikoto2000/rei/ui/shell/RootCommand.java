@@ -56,6 +56,7 @@ subcommands = {
   BskyCommand.class,
   InterestCommand.class,
   MemoryCommand.class,
+  dev.mikoto2000.rei.memory.command.SleepCommand.class,
   SkillCommand.class,
   ImageCommand.class,
   SummarizeCommand.class,

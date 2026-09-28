@@ -11,19 +11,24 @@ class MemoryModelTest {
 
   @Test
   void memoryTypeHasExpectedValues() {
-    assertEquals(7, MemoryType.values().length);
+    assertEquals(14, MemoryType.values().length);
+    assertTrue(java.util.EnumSet.allOf(MemoryType.class).containsAll(java.util.Set.of(MemoryType.FACT,
+        MemoryType.PREFERENCE,MemoryType.DECISION,MemoryType.CONSTRAINT,MemoryType.PROJECT_STATE,
+        MemoryType.PROCEDURE,MemoryType.LESSON,MemoryType.RELATION)));
     assertTrue(java.util.EnumSet.allOf(MemoryType.class).contains(MemoryType.USER_PREFERENCE));
   }
 
   @Test
   void memoryScopeHasExpectedValues() {
-    assertEquals(5, MemoryScope.values().length);
+    assertEquals(6, MemoryScope.values().length);
+    assertTrue(java.util.EnumSet.allOf(MemoryScope.class).contains(MemoryScope.GLOBAL));
     assertTrue(java.util.EnumSet.allOf(MemoryScope.class).contains(MemoryScope.PERMANENT));
   }
 
   @Test
   void memoryStatusHasExpectedValues() {
-    assertEquals(5, MemoryStatus.values().length);
+    assertEquals(6, MemoryStatus.values().length);
+    assertTrue(java.util.EnumSet.allOf(MemoryStatus.class).contains(MemoryStatus.SUPERSEDED));
     assertTrue(java.util.EnumSet.allOf(MemoryStatus.class).contains(MemoryStatus.ACTIVE));
   }
 

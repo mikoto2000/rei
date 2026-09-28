@@ -69,6 +69,12 @@ public class ContextAssembler {
       if (estimate(project(raw, h, a)) > threshold) compress(a, raw, check);
     }
     // Bounded degraded behavior. Remove oldest complete groups only from this projection.
+    // Retrieved memories are optional. Drop them before sacrificing more conversation at the hard limit.
+    if (estimate(project(raw, h, a)) > hard && raw.getInstructions().stream()
+        .anyMatch(m -> Boolean.TRUE.equals(m.getMetadata().get("rei.longTermMemory")))) {
+      raw = new Prompt(raw.getInstructions().stream()
+          .filter(m -> !Boolean.TRUE.equals(m.getMetadata().get("rei.longTermMemory"))).toList(), raw.getOptions());
+    }
     while (estimate(project(raw, h, a)) > hard && dropOldest(h)) { }
     while (estimate(project(raw, h, a)) > hard && dropOldest(a)) { }
     Prompt result = project(raw, h, a);

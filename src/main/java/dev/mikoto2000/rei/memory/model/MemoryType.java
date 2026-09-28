@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.memory.model;
 
 public enum MemoryType {
+  FACT, PREFERENCE, CONSTRAINT, PROJECT_STATE, PROCEDURE, LESSON, RELATION,
   USER_PREFERENCE,
   PROJECT_CONTEXT,
   DECISION,
