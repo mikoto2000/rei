@@ -40,6 +40,9 @@ import dev.mikoto2000.rei.websearch.WebSearchTools;
 
 @Component
 public class LlmChatClientProvider {
+  private ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> paperTools;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setPaperTools(ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> tools) { this.paperTools = tools; }
   private ObjectProvider<SummaryTools> summaryTools;
   @org.springframework.beans.factory.annotation.Autowired
   void setSummaryTools(ObjectProvider<SummaryTools> tools) { this.summaryTools = tools; }
@@ -182,6 +185,7 @@ public class LlmChatClientProvider {
         .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors));
 
     List<Object> toolObjects = new ArrayList<>();
+    if (LlmFeature.CHAT.equals(feature) && paperTools != null) addIfAvailable(toolObjects, paperTools);
     if (LlmFeature.CHAT.equals(feature) && summaryTools != null) addIfAvailable(toolObjects, summaryTools);
     if (LlmFeature.CHAT.equals(feature) && activityTools != null) addIfAvailable(toolObjects, activityTools);
     if (LlmFeature.CHAT.equals(feature) && rawResultTools != null) toolObjects.add(rawResultTools);

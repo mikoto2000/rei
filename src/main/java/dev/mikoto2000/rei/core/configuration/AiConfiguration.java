@@ -57,6 +57,9 @@ import lombok.RequiredArgsConstructor;
 @EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, BlueskyProperties.class, AgentSkillsProperties.class, LlmProperties.class, ImageProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
+  private ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> paperTools;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setPaperTools(ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> tools) { this.paperTools = tools; }
   private dev.mikoto2000.rei.core.contextbudget.ContextAssembler contextAssembler;
   private dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor contextHistory;
   private dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawResultTools;
@@ -148,6 +151,7 @@ public class AiConfiguration {
             conversationHistoryTools, summaryTools);
 
     if (rawResultTools != null) builder.defaultTools(rawResultTools);
+    if (paperTools != null && paperTools.getIfAvailable() != null) builder.defaultTools(paperTools.getObject());
     ToolEventCallbackProvider toolCallbackProvider = toolEventCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {
       builder.defaultToolCallbacks(toolCallbackProvider);

@@ -58,6 +58,9 @@ management:
       show-details: never
       show-components: never
 rei:
+  paper:
+    enabled: ${REI_PAPER_ENABLED:true}
+    open-alex-api-key: ${REI_PAPER_OPEN_ALEX_API_KEY:}
   context-compression:
     enabled: ${REI_CONTEXT_COMPRESSION_ENABLED:true}
     model-context-limit: ${REI_CONTEXT_MODEL_LIMIT:128000}

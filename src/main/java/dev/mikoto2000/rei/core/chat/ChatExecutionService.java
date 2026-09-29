@@ -64,6 +64,9 @@ import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 
 @Component
 public class ChatExecutionService {
+  private dev.mikoto2000.rei.paper.PaperCommandExecutor paperCommands;
+  @Autowired
+  void setPaperCommands(dev.mikoto2000.rei.paper.PaperCommandExecutor commands) { this.paperCommands = commands; }
 
   private static final Logger log = LoggerFactory.getLogger(ChatExecutionService.class);
 
@@ -212,8 +215,27 @@ public class ChatExecutionService {
       }
       eventPublisher.publish(eventFactory.runStarted(runId, "user-request", null));
       activityTracker.ifPresent(tracker -> tracker.recordAgentStarted(java.time.Instant.now(clock)));
-      ChatRunResult result = executePrompt(promptText, true, startedAtNanos, budget, execution, runId, skillRoutingContext,
-          runCompletionTokens, usageAvailable, lastGenerationMetrics);
+      ChatRunResult result;
+      if (paperCommands != null && dev.mikoto2000.rei.paper.PaperCommandExecutor.accepts(promptText)) {
+        String callId = UUID.randomUUID().toString();
+        eventPublisher.publish(eventFactory.toolStarted(callId, "paper", "paper command", "論文リサーチ"));
+        try {
+          String response = paperCommands.execute(promptText,
+              new dev.mikoto2000.rei.paper.PaperOperation(context.conversationId(), execution));
+          eventPublisher.publish(eventFactory.toolCompleted(callId, "paper", elapsedMillis(startedAtNanos), "論文処理終了"));
+          eventPublisher.publish(eventFactory.messageCompleted(UUID.randomUUID().toString(), "assistant", response));
+          if (chatMemory != null) chatMemory.add(context.conversationId(), java.util.List.of(new UserMessage(promptText),
+              new org.springframework.ai.chat.messages.AssistantMessage(response)));
+          result = ChatRunResult.success(response);
+        } catch (RuntimeException error) {
+          eventPublisher.publish(eventFactory.toolFailed(callId, "paper",
+              new ErrorInformation("Paper", "論文処理失敗", "paper_failed")));
+          throw error;
+        }
+      } else {
+        result = executePrompt(promptText, true, startedAtNanos, budget, execution, runId, skillRoutingContext,
+            runCompletionTokens, usageAvailable, lastGenerationMetrics);
+      }
       execution.checkActive();
       if (result.status() == ChatRunStatus.OUTPUT_LIMIT) {
         result = handleOutputLimit(promptText, promptText, "", result.text(), budget, execution, startedAtNanos, runId,
