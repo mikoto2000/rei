@@ -204,6 +204,8 @@ Web では認証付き `GET /api/v1/sessions`、`GET /api/v1/sessions/{sessionId
 
 開発やテストの手順は [DEVELOP.md](DEVELOP.md)、仕様・設計は [.kiro](.kiro/README.md) を参照してください。
 
+新規開発者向けの [図解付きプログラム構造ガイド](docs/program-structure.md) では、Shell・Web API・Native Client の関係と、会話処理・状態管理・ソースコードの読み進め方を説明しています。
+
 [MIT ライセンス](LICENSE)で提供しています。作者: mikoto2000 <mikoto2000@gmail.com>
 
 ### Shell / Native Client 共通の会話
