@@ -52,17 +52,23 @@ public class ToolEventCallbackDecorator implements ToolCallback {
     String toolCallId = resolveToolCallId(toolContext);
     long startedAtNanos = System.nanoTime();
 
-    eventPublisher.publish(eventFactory.toolStarted(toolCallId, toolName, summarize(toolInput)));
+    eventPublisher.publishBoundary(eventFactory.toolStarted(toolCallId, toolName, summarize(toolInput)));
+    String result;
     try {
-      String result = caller.get();
-      long duration = Duration.ofNanos(System.nanoTime() - startedAtNanos).toMillis();
-      eventPublisher.publish(eventFactory.toolCompleted(toolCallId, toolName, duration, summarize(result)));
-      return result;
+      // Cancellation can arrive while the durable STARTED boundary is being written.
+      if(Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException();
+      if(toolContext!=null&&toolContext.getContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+          instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)execution.checkActive();
+      result = caller.get();
     } catch (RuntimeException e) {
-      eventPublisher.publish(eventFactory.toolFailed(toolCallId, toolName,
+      eventPublisher.publishBoundary(eventFactory.toolFailed(toolCallId, toolName,
           new ErrorInformation(e.getClass().getSimpleName(), summarize(e.getMessage()), null)));
       throw e;
     }
+    long duration = Duration.ofNanos(System.nanoTime() - startedAtNanos).toMillis();
+    // Storage failure after the side effect must leave STARTED, never falsely record FAILED.
+    eventPublisher.publishBoundary(eventFactory.toolCompleted(toolCallId, toolName, duration, summarize(result)));
+    return result;
     }
   }
 

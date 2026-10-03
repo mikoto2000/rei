@@ -20,6 +20,14 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
   private static final Logger log = LoggerFactory.getLogger(InMemoryAgentEventBus.class);
 
   private final List<AgentEventListener> listeners = new CopyOnWriteArrayList<>();
+  private final List<AgentEventListener> boundaryListeners = new CopyOnWriteArrayList<>();
+  @Override public Subscription subscribeBoundary(AgentEventListener listener) {
+    boundaryListeners.add(listener); return () -> boundaryListeners.remove(listener);
+  }
+  @Override public void publishBoundary(AgentEvent event) {
+    for (var listener : boundaryListeners) listener.onEvent(event);
+    publish(event);
+  }
   private final AtomicLong sequence = new AtomicLong(0L);
   private final java.util.ArrayDeque<AgentEvent> pending = new java.util.ArrayDeque<>();
   private boolean dispatching;

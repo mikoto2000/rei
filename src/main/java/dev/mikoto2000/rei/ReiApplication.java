@@ -288,6 +288,10 @@ public class ReiApplication {
     var history = cmd.getSubcommands().get("history");
     var sleep = cmd.getSubcommands().get("sleep");
     var work = cmd.getSubcommands().get("work");
+    var checkpoint=cmd.getSubcommands().get("checkpoint");
+    if(checkpoint!=null && checkpoint.getCommand() instanceof dev.mikoto2000.rei.checkpoint.CheckpointCommand command) command.setShellOutput(writer);
+    var resume=cmd.getSubcommands().get("resume");
+    if(resume!=null && resume.getCommand() instanceof dev.mikoto2000.rei.checkpoint.ResumeCommand command) command.setShellOutput(writer);
     if (work != null && work.getCommand() instanceof dev.mikoto2000.rei.workcontext.WorkCommand command)
       command.setShellOutput(writer);
     if (sleep != null && sleep.getCommand() instanceof dev.mikoto2000.rei.memory.command.SleepCommand command)

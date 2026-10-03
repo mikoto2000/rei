@@ -23,7 +23,7 @@ public sealed interface AgentEventPayload
         WorkingSetContextInjectedPayload,
         ContextInjectedPayload, ContextBudgetEvaluatedPayload, ContextBudgetTrimmedPayload,
         FileSummarySavedPayload, FileSummaryInvalidatedPayload, FileSummaryStaleSkippedPayload,
-        CheckpointSavedPayload,
+        CheckpointSavedPayload, CheckpointLifecyclePayload,
         BackgroundProcessStartedPayload, BackgroundProcessCompletedPayload,
         BackgroundProcessFailedPayload, BackgroundProcessKilledPayload,
         TopicGenerationStartedPayload, TopicIdleTriggerEvaluatedPayload, TopicCandidatesRefreshedPayload,
