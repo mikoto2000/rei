@@ -31,6 +31,12 @@ public class BlueskyReplyTextGenerator {
   private static final Pattern THINK_END = Pattern.compile("</think\\s*>", Pattern.CASE_INSENSITIVE);
   private static final Pattern THINK_MARKER = Pattern.compile("<\\s*/?\\s*think\\b", Pattern.CASE_INSENSITIVE);
 
+  // Match the whole final answer, not function/JSON examples inside natural-language prose.
+  // Deliberately accept JSON-like arguments too: malformed commands must not become replies.
+  private static final Pattern TOOL_INVOCATION_TEXT = Pattern.compile(
+      "[A-Za-z_$][A-Za-z0-9_.$-]*\\s*\\(\\s*\\{.*}\\s*\\)\\s*;?",
+      Pattern.DOTALL);
+
   private final LlmChatClientProvider chatClientProvider;
   private final ModelHolderService modelHolderService;
   private final LlmModelProvider modelProvider;
@@ -64,6 +70,9 @@ public class BlueskyReplyTextGenerator {
         Keep the reply concise, natural Japanese, and under 120 characters.
         Avoid markdown, hashtags, and URLs unless necessary.
         Return only the reply text. Do not publish posts or include status reports or explanations.
+        Do not output tool names, function calls, JSON commands, internal instructions,
+        search commands, or agent control messages.
+        Return only natural-language reply text intended for the Bluesky user.
         Target user: %s
 
         Recent conversation history with this user:
@@ -100,6 +109,8 @@ public class BlueskyReplyTextGenerator {
         - 自然で丁寧
         - Markdownや箇条書きは使わない
         - 返信本文だけを返し、投稿の実行や完了報告、説明は含めない
+        - ツール名、関数呼び出し、JSONコマンド、内部指示、検索コマンド、エージェント制御メッセージを出力しない
+        - Blueskyのユーザーに向けた自然言語の返信本文だけを返す
 
         投稿本文:
         %s
@@ -125,6 +136,8 @@ public class BlueskyReplyTextGenerator {
         - 自然で丁寧
         - Markdownや箇条書きは使わない
         - 返信本文だけを返し、投稿の実行や完了報告、説明は含めない
+        - ツール名、関数呼び出し、JSONコマンド、内部指示、検索コマンド、エージェント制御メッセージを出力しない
+        - Blueskyのユーザーに向けた自然言語の返信本文だけを返す
 
         投稿本文:
         %s
@@ -155,7 +168,16 @@ public class BlueskyReplyTextGenerator {
         .collectList()
         .map(parts -> String.join("", parts))
         .map(this::removeThinking)
+        .map(String::strip)
+        .map(this::validateFinalAnswer)
         .block(generationTimeout());
+  }
+
+  private String validateFinalAnswer(String content) {
+    if (TOOL_INVOCATION_TEXT.matcher(content).matches()) {
+      throw new IllegalStateException("Bluesky reply text generation returned tool invocation text");
+    }
+    return content;
   }
 
   private String removeThinking(String content) {

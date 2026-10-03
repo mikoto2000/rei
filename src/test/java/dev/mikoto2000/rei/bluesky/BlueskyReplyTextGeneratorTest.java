@@ -231,7 +231,77 @@ class BlueskyReplyTextGeneratorTest {
         .isInstanceOf(IllegalStateException.class);
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "webSearchAndRead({\"query\": \"dots LLM モデル 触り方 使い方\", \"maxResults\": 5})",
+      "shell({\"command\":\"pwd\"})",
+      "readFile({\"path\":\"README.md\"})",
+      "webSearchAndRead({\n  \"query\": \"dots LLM\",\n  \"maxResults\": 5\n})",
+      "  webSearchAndRead({\"query\":\"dots\"});  ",
+      "someFutureTool({\"nested\":{\"values\":[1,2]}})",
+      "$agent.tools.read-file ( { \"path\": \"README.md\" } ) ;",
+      "<think>検索する必要がある</think>webSearchAndRead({\"query\":\"dots\"})"
+  })
+  void rejectsToolInvocationTextAcrossChunksForAllReplyPaths(String content) {
+    // Plain assistant content carries no structured tool calls.
+    assertThat(response(content).hasToolCalls()).isFalse();
+    BlueskyReplyTextGenerator generator = generatorStreaming(content);
+
+    assertThatThrownBy(() -> generator.generate("alice.bsky.social", "元投稿", List.of()))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("tool invocation text");
+    assertThatThrownBy(() -> generator.generateForManualReply("元投稿"))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("tool invocation text");
+    assertThatThrownBy(() -> generator.generateForManualReply("元投稿", "post-id"))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("tool invocation text");
+    assertThatThrownBy(() -> generator.generateForManualReply("元投稿", "alice.bsky.social", "post-id"))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("tool invocation text");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "まず公式READMEを見て、最小構成で推論を1回動かしてみるのがよさそうです。",
+      "設定は {\"model\":\"dots\"} みたいな形になると思います。",
+      "内部的には foo({\"bar\":1}) のような形式ですね。",
+      "関数で言えば foo(bar) みたいな感じですね",
+      "<think>shell({\"command\":\"pwd\"})</think>返信本文"
+  })
+  void allowsNaturalLanguageForAllReplyPaths(String content) {
+    BlueskyReplyTextGenerator generator = generatorStreaming(content);
+    String expected = content.contains("</think>") ? "返信本文" : content;
+
+    assertThat(generator.generate("alice.bsky.social", "元投稿", List.of())).isEqualTo(expected);
+    assertThat(generator.generateForManualReply("元投稿")).isEqualTo(expected);
+    assertThat(generator.generateForManualReply("元投稿", "post-id")).isEqualTo(expected);
+    assertThat(generator.generateForManualReply("元投稿", "alice.bsky.social", "post-id"))
+        .isEqualTo(expected);
+  }
+
+  @Test
+  void rejectsStructuredToolCallsForAllReplyPaths() {
+    ChatResponse toolResponse = new ChatResponse(List.of(new Generation(
+        AssistantMessage.builder().content("返信本文").toolCalls(List.of(
+            new AssistantMessage.ToolCall("call-1", "function", "shell", "{\"command\":\"pwd\"}")))
+            .build())));
+    assertThat(toolResponse.hasToolCalls()).isTrue();
+    BlueskyReplyTextGenerator generator = generatorStreaming(Flux.just(response("返信"), toolResponse));
+
+    assertThatThrownBy(() -> generator.generate("alice.bsky.social", "元投稿", List.of()))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("returned a tool call");
+    assertThatThrownBy(() -> generator.generateForManualReply("元投稿"))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("returned a tool call");
+    assertThatThrownBy(() -> generator.generateForManualReply("元投稿", "post-id"))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("returned a tool call");
+    assertThatThrownBy(() -> generator.generateForManualReply("元投稿", "alice.bsky.social", "post-id"))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("returned a tool call");
+  }
+
   private BlueskyReplyTextGenerator generatorStreaming(String content) {
+    // One character per chunk exercises every possible tag and invocation boundary.
+    return generatorStreaming(Flux.fromStream(
+        () -> content.chars().mapToObj(c -> response(String.valueOf((char) c)))));
+  }
+
+  private BlueskyReplyTextGenerator generatorStreaming(Flux<ChatResponse> responses) {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
     ObjectProvider<ChatClient> chatClientProvider = Mockito.mock(ObjectProvider.class);
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class);
@@ -242,9 +312,7 @@ class BlueskyReplyTextGeneratorTest {
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream()).thenReturn(streamSpec);
-    // One character per chunk exercises every possible tag boundary.
-    when(streamSpec.chatResponse()).thenReturn(Flux.fromStream(
-        () -> content.chars().mapToObj(c -> response(String.valueOf((char) c)))));
+    when(streamSpec.chatResponse()).thenReturn(responses);
     return new BlueskyReplyTextGenerator(chatClientProvider, modelHolderService);
   }
 }
