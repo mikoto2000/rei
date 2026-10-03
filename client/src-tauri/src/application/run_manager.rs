@@ -16,12 +16,15 @@ use tokio::task::JoinHandle;
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunView {
+    pub cancel_requested: bool,
     pub revision: u64,
     pub server_id: String,
     pub conversation_id: String,
     pub project_id: String,
     pub run_id: String,
+    #[serde(serialize_with = "serialize_ownership")]
     pub session_id: String,
+    #[serde(serialize_with = "serialize_ownership")]
     pub turn_id: String,
     pub prompt: String,
     pub status: RunStatus,
@@ -37,9 +40,20 @@ pub struct RunView {
     pub timeline: Vec<TimelineEntry>,
     pub working_set: Vec<WorkingSetItem>,
 }
+fn serialize_ownership<S: serde::Serializer>(
+    id: &str,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error> {
+    if id.is_empty() {
+        serializer.serialize_none()
+    } else {
+        serializer.serialize_str(id)
+    }
+}
 impl From<&Projection> for RunView {
     fn from(p: &Projection) -> Self {
         Self {
+            cancel_requested: p.cancel_requested,
             revision: p.revision,
             server_id: p.server_id.clone(),
             conversation_id: p.conversation_id.clone(),
@@ -151,8 +165,24 @@ impl RunManager {
     }
     pub async fn cancel(&self, server: &str, run: &str, api: Arc<dyn ReiClient>) -> Result<()> {
         self.get(server, run)?;
-        let snapshot = api.cancel(run).await?;
-        self.update(&(server.into(), run.into()), |p| p.recover(snapshot))?;
+        let receipt = api.cancel_receipt(run).await?;
+        self.update(&(server.into(), run.into()), |p| {
+            if receipt.accepted {
+                if receipt.snapshot.run_id != p.run_id
+                    || receipt.snapshot.project_id != p.project_id
+                    || receipt.snapshot.session_id != p.session_id
+                    || receipt.snapshot.turn_id != p.turn_id
+                {
+                    return Err(AppError::InvalidResponse);
+                }
+                if !p.status.terminal() {
+                    p.cancel_requested = true;
+                }
+                Ok(())
+            } else {
+                p.recover(receipt.snapshot)
+            }
+        })?;
         if self.get(server, run)?.status.terminal() {
             self.unsubscribe(server, run)?;
         }

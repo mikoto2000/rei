@@ -84,6 +84,7 @@ pub struct WorkingSetItem {
 }
 #[derive(Clone)]
 pub struct Projection {
+    pub cancel_requested: bool,
     pub(super) registered_order: usize,
     pub revision: u64,
     pub server_id: String,
@@ -121,6 +122,19 @@ struct WebEvent {
     payload: Value,
 }
 impl Projection {
+    pub fn background(server: &str, project: &str, run: &str, prompt: &str) -> Self {
+        Self::new(
+            server,
+            "",
+            project,
+            ChatReceipt {
+                run_id: run.into(),
+                session_id: String::new(),
+                turn_id: String::new(),
+            },
+            prompt,
+        )
+    }
     pub fn new(
         server: &str,
         conversation: &str,
@@ -129,6 +143,7 @@ impl Projection {
         prompt: &str,
     ) -> Self {
         Self {
+            cancel_requested: false,
             registered_order: 0,
             revision: 0,
             server_id: server.into(),
@@ -366,6 +381,7 @@ impl Projection {
         }
         self.last_sequence = Some(sequence);
         if self.status.terminal() {
+            self.cancel_requested = false;
             self.stream_state = StreamState::Closed;
             self.error = None;
         }
@@ -375,6 +391,7 @@ impl Projection {
         if snapshot.run_id != self.run_id
             || snapshot.project_id != self.project_id
             || snapshot.session_id != self.session_id
+            || snapshot.turn_id != self.turn_id
         {
             return Err(AppError::InvalidResponse);
         }
@@ -385,6 +402,7 @@ impl Projection {
             self.failure = Some("Run failed".into());
         }
         if self.status.terminal() {
+            self.cancel_requested = false;
             self.stream_state = StreamState::Closed;
             self.error = None;
         }

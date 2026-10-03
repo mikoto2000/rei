@@ -4,6 +4,27 @@ import { Chat } from "./Chat";
 import userEvent from "@testing-library/user-event";
 import type { Conversation, Run } from "../../entities/models";
 afterEach(cleanup);
+it("keeps a requested cancellation distinct from a terminal run", () => {
+  render(
+    <Chat
+      conversation={conversation}
+      projectName="rei"
+      runs={[{ ...run, status: "RUNNING", cancelRequested: true }]}
+      pending={false}
+      error={null}
+      onSend={vi.fn()}
+      onStop={vi.fn()}
+      onContinue={vi.fn()}
+      onRefresh={vi.fn()}
+      onSubscribe={vi.fn()}
+    />,
+  );
+  expect(screen.getByText("RUNNING")).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "キャンセル要求済み" }),
+  ).toHaveProperty("disabled", true);
+  expect(screen.queryByText("CANCELLED")).toBeNull();
+});
 
 it("sends with Enter, keeps Shift+Enter as a newline, and ignores IME confirmation", async () => {
   const user = userEvent.setup();

@@ -16,6 +16,7 @@ import { Settings } from "./features/settings/Settings";
 import { useUserAvatar } from "./features/settings/userAvatar";
 import { Avatar } from "./shared/Avatar";
 import { SessionList } from "./features/history/SessionList";
+import { Workspace } from "./features/workspace/Workspace";
 import {
   useSessionList,
   useSessionSelection,
@@ -30,7 +31,9 @@ const initial: Snapshot = {
   unlocked: false,
   notifications: false,
 };
-type Page = "conversations" | "new" | "chat" | "runs" | "settings";
+type Page =
+  "conversations" | "new" | "chat" | "runs" | "settings" | "workspace";
+const noProjects: Project[] = [];
 export function App({
   call = command,
   subscriptions = events,
@@ -270,6 +273,12 @@ export function App({
         </button>
         <nav aria-label="メイン">
           <button
+            className={page === "workspace" ? "selected" : ""}
+            onClick={() => navigate("workspace")}
+          >
+            Workspace
+          </button>
+          <button
             className={
               page === "conversations" || page === "chat" ? "selected" : ""
             }
@@ -376,6 +385,17 @@ export function App({
           <div className="empty">Rei Client を準備しています…</div>
         ) : (
           <>
+            {page === "workspace" && (
+              <Workspace
+                call={call}
+                serverId={data.unlocked ? data.selectedServer : null}
+                projects={projects[data.selectedServer ?? ""] ?? noProjects}
+                runs={data.runs}
+                onAccepted={(run) =>
+                  setData((d) => ({ ...d, runs: mergeRun(d.runs, run) }))
+                }
+              />
+            )}
             {page === "settings" && (
               <Settings
                 userAvatar={userAvatar}
@@ -552,6 +572,15 @@ export function App({
                               (c) => c.localId === r.conversationId,
                             );
                             if (c) openConversation(c, r.runId);
+                            else if (!r.conversationId) {
+                              void perform(async () => {
+                                if (data.selectedServer !== r.serverId)
+                                  await call("server_select", {
+                                    serverId: r.serverId,
+                                  });
+                                navigate("workspace");
+                              });
+                            }
                           }}
                         >
                           <span className="status running">{r.status}</span>
@@ -563,9 +592,10 @@ export function App({
                         </button>
                         <button
                           className="danger"
+                          disabled={r.cancelRequested}
                           onClick={() => runAction("run_cancel", r)}
                         >
-                          Stop
+                          {r.cancelRequested ? "キャンセル要求済み" : "Stop"}
                         </button>
                       </article>
                     ))}

@@ -2,6 +2,8 @@
 
 Tauri 2 + React + TypeScript + Rust の Run / Conversation クライアントです。Windows を主な検証対象とし、共通コアとレスポンシブ UI を Android / iOS と共有します。
 
+Web API Phase 1〜4 に対応しています。接続設定、Workspace の各操作、Run / SSE / cancel と既知の制限は [Web API 対応ガイド](../docs/native-web-api.md) を参照してください。
+
 ## ライブ Activity
 
 イベントは Shell と同様の小さなテキスト行で表示します（例: `→ readFile`、`✓ readFile 18 ms`、`[llm] …`）。枠・太字見出し・大きな余白は使わず、長い行は画面幅で折り返します。

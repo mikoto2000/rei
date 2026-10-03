@@ -26,6 +26,16 @@ pub trait NotificationPort: Send + Sync {
 pub type ByteStream = Pin<Box<dyn Stream<Item = Result<Vec<u8>>> + Send>>;
 #[async_trait]
 pub trait ReiClient: Send + Sync {
+    async fn background(
+        &self,
+        _project: &str,
+        _operation: BackgroundOperation,
+    ) -> Result<BackgroundReceipt> {
+        Err(AppError::InvalidResponse)
+    }
+    async fn workspace(&self, _operation: WorkspaceOperation) -> Result<WorkspaceResult> {
+        Err(AppError::InvalidResponse)
+    }
     async fn list_sessions(
         &self,
         _project: Option<&str>,
@@ -53,6 +63,12 @@ pub trait ReiClient: Send + Sync {
     ) -> Result<ChatReceipt>;
     async fn run(&self, run: &str) -> Result<RunSnapshot>;
     async fn cancel(&self, run: &str) -> Result<RunSnapshot>;
+    async fn cancel_receipt(&self, run: &str) -> Result<CancelReceipt> {
+        Ok(CancelReceipt {
+            accepted: false,
+            snapshot: self.cancel(run).await?,
+        })
+    }
     async fn events(&self, run: &str, last: Option<u64>) -> Result<ByteStream>;
 }
 

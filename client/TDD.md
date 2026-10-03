@@ -2,6 +2,16 @@
 
 Each slice starts with a failing behavior test, then implementation, then formatting/refactoring.
 
+## Native Client Web API Phase 1–4 (2026-10-03)
+
+Read transport, write allowlist, non-chat Run ownership, 202 cancel semantics,
+Workspace forms/navigation, chat cancel rendering, reminder zero-minutes,
+HTTP status/content-type contracts, nullable UI metadata, and background Run
+navigation were developed in separate Red → Green slices. Integer input
+validation also started with a failing fractional-ID test. The actual Red/Green
+observations are recorded in [the Web API TDD ledger](../docs/native-web-api.md#構造と-tdd).
+Full validation results are in [VALIDATION.md](VALIDATION.md).
+
 ## Live AgentEvent activity (2026-09-17)
 
 Tool indentation follow-up: existing desktop/mobile browser assertions changed

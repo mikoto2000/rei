@@ -137,6 +137,49 @@ const call = (async (
   args: Record<string, unknown> | undefined,
 ) => {
   if (name === "app_snapshot") return structuredClone(data);
+  if (name === "workspace_execute") {
+    const op = args?.operation as {
+      operation: string;
+      url?: string;
+      displayName?: string;
+    };
+    if (op.operation !== "feeds" && op.operation !== "createFeed")
+      throw "InvalidInput";
+    return {
+      title: "Feed",
+      items: [
+        {
+          id: "1",
+          title: op.operation === "feeds" ? "Fixture feed" : op.displayName,
+          fields: [
+            ["URL", op.url ?? "https://example.com/rss"],
+            ["Enabled", "true"],
+          ],
+        },
+      ],
+    };
+  }
+  if (name === "background_submit") {
+    const op = args?.operation as { operation: string; url: string };
+    if (args?.projectId !== "p" || op.operation !== "summary")
+      throw "InvalidInput";
+    const background: Run = {
+      ...run,
+      runId: "background",
+      conversationId: "",
+      sessionId: null,
+      turnId: null,
+      prompt: `Summary: ${op.url}`,
+      status: "COMPLETED",
+      streamState: "CLOSED",
+      assistantText: "Fixture summary result",
+      timeline: [],
+      activities: [],
+      tools: [],
+    };
+    data.runs.push(background);
+    return structuredClone(background);
+  }
   if (name === "session_list")
     return {
       items: [
