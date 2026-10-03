@@ -138,6 +138,8 @@ Web では認証付き `GET /api/v1/sessions`、`GET /api/v1/sessions/{sessionId
 
 ## 機能別ガイド
 
+プロジェクトの目的・決定・進捗・未解決点・次のアクションを会話間で引き継ぐ [Work Context](docs/project-work-context.md) は、`/work`・`/work update`・`/work history` と自然言語から利用できます。自動更新は初期状態では無効です。
+
 必要な機能の設定を済ませてから利用してください。日付・ファイルパス・ID は手元の値に置き換えます。
 
 | 機能 | 操作・設定 |

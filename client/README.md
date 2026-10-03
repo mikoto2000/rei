@@ -6,6 +6,8 @@ Web API Phase 1〜4 に対応しています。接続設定、Workspace の各�
 
 ## ライブ Activity
 
+プロジェクトの作業引き継ぎは [Work Contextガイド](../docs/project-work-context.md) を参照してください。会話選択時に短い引き継ぎを表示し、Workspaceで取得・履歴・Sessionからの更新を行えます。項目訂正や完了・再開・撤回は自然言語からも依頼できます。
+
 イベントは Shell と同様の小さなテキスト行で表示します（例: `→ readFile`、`✓ readFile 18 ms`、`[llm] …`）。枠・太字見出し・大きな余白は使わず、長い行は画面幅で折り返します。
 
 Tool の開始・完了・失敗ログは1段（1rem）インデントします。折り返した行も同じ位置に揃います。

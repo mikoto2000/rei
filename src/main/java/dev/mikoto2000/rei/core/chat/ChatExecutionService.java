@@ -64,6 +64,9 @@ import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 
 @Component
 public class ChatExecutionService {
+  private dev.mikoto2000.rei.workcontext.WorkContextAutomation workContext;
+  @Autowired
+  void setWorkContext(dev.mikoto2000.rei.workcontext.WorkContextAutomation workContext) { this.workContext=workContext; }
   private dev.mikoto2000.rei.paper.PaperCommandExecutor paperCommands;
   @Autowired
   void setPaperCommands(dev.mikoto2000.rei.paper.PaperCommandExecutor commands) { this.paperCommands = commands; }
@@ -206,6 +209,7 @@ public class ChatExecutionService {
 
     try {
       turns.startOrdered(context, promptText, clock.instant());
+      if (workContext != null) workContext.afterStart(context);
       execution.checkActive();
       activityTracker.ifPresent(tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));
       appendConversationLog(context.conversationId(), "user", promptText);
@@ -291,6 +295,7 @@ public class ChatExecutionService {
           cancellationHook.dispose();
           execution.close();
           turns.finish(context, execution.isCancelled() ? ConversationTurnStore.Status.CANCELLED : turnStatus, assistantMessage);
+          if (workContext != null) workContext.afterTerminal(context);
         } finally { if (interrupted) Thread.currentThread().interrupt(); }
       }
     }

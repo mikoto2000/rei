@@ -149,6 +149,8 @@ SSE bridge の破棄時には送信完了を最大 2 秒待機します。切断
 
 ## 長期記憶 / Manual Sleep
 
+プロジェクト固有の作業状態は [Work Context](docs/project-work-context.md) を参照してください。同じSQLite DataSourceに独立テーブルを追加し、Session所有権・Tool登録・Run終端・ContextAssemblerに統合します。Sleepの実行を前提としません。[設計とTDD記録](.kiro/specs/project-work-context/design.md)も参照してください。
+
 `/sleep` で現在 Session の未処理 Turn を整理し、`/memory search` / `show` / `list` / `forget` で管理します。
 設定、DB 互換性、出典追跡、Context Budget、失敗時の動作は [長期記憶の設計・利用ガイド](docs/long-term-memory.md) を参照してください。Auto Sleep はありません。
 

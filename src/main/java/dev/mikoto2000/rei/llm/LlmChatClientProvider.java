@@ -95,6 +95,11 @@ public class LlmChatClientProvider {
   private final AgentEventPublisher eventPublisher;
   private final Map<String, ChatClient> cache = new ConcurrentHashMap<>();
   private ObjectProvider<dev.mikoto2000.rei.memory.service.MemoryContextAdvisor> memoryContext;
+  private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextAdvisor> workContext;
+  private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextTools> workTools;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setWorkContext(ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextAdvisor> advisor,
+      ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextTools> tools) {workContext=advisor;workTools=tools;}
   @org.springframework.beans.factory.annotation.Autowired
   void setMemoryContext(ObjectProvider<dev.mikoto2000.rei.memory.service.MemoryContextAdvisor> advisor) { memoryContext=advisor; }
   private ObjectProvider<dev.mikoto2000.rei.computeruse.ComputerUseTools> computerUseTools;
@@ -152,6 +157,8 @@ public class LlmChatClientProvider {
 
   private ChatClient createChatClient(String feature) {
     List<Advisor> advisors = new ArrayList<>();
+    if (LlmFeature.CHAT.equals(feature) && workContext != null && workContext.getIfAvailable() != null)
+      advisors.add(workContext.getObject());
     if (LlmFeature.CHAT.equals(feature) && memoryContext != null && memoryContext.getIfAvailable() != null)
       advisors.add(memoryContext.getObject());
     if (LlmFeature.CHAT.equals(feature) && externalDelegation != null)
@@ -185,6 +192,7 @@ public class LlmChatClientProvider {
         .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors));
 
     List<Object> toolObjects = new ArrayList<>();
+    if (LlmFeature.CHAT.equals(feature) && workTools != null) addIfAvailable(toolObjects, workTools);
     if (LlmFeature.CHAT.equals(feature) && paperTools != null) addIfAvailable(toolObjects, paperTools);
     if (LlmFeature.CHAT.equals(feature) && summaryTools != null) addIfAvailable(toolObjects, summaryTools);
     if (LlmFeature.CHAT.equals(feature) && activityTools != null) addIfAvailable(toolObjects, activityTools);

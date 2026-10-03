@@ -6,6 +6,8 @@ import org.springframework.web.bind.annotation.*;
 
 @RestControllerAdvice(basePackages = "dev.mikoto2000.rei.web")
 public class ApiExceptionHandler {
+  @ExceptionHandler(java.util.ConcurrentModificationException.class)
+  public ResponseEntity<Error> workContextConflict() {return ResponseEntity.status(409).body(new Error("Work Context revision changed"));}
   @ExceptionHandler(dev.mikoto2000.rei.application.state.OperationConflictException.class)
   public ResponseEntity<Error> operationConflict() {
     return ResponseEntity.status(409).body(new Error("Resource conflict"));

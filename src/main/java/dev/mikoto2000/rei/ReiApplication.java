@@ -287,6 +287,9 @@ public class ReiApplication {
     }
     var history = cmd.getSubcommands().get("history");
     var sleep = cmd.getSubcommands().get("sleep");
+    var work = cmd.getSubcommands().get("work");
+    if (work != null && work.getCommand() instanceof dev.mikoto2000.rei.workcontext.WorkCommand command)
+      command.setShellOutput(writer);
     if (sleep != null && sleep.getCommand() instanceof dev.mikoto2000.rei.memory.command.SleepCommand command)
       command.setShellOutput(writer);
     if (history != null && history.getCommand() instanceof dev.mikoto2000.rei.ui.shell.HistoryCommand command) {

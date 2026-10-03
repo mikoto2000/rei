@@ -95,7 +95,10 @@ public enum AgentEventType {
   CONTEXT_SNAPSHOT_UPDATED("context.snapshot.updated"),
   FILE_CREATED("file.created"),
   FILE_MODIFIED("file.modified"),
-  FILE_DELETED("file.deleted");
+  FILE_DELETED("file.deleted"),
+  WORK_CONTEXT_UPDATE_STARTED("work_context.update.started"),
+  WORK_CONTEXT_UPDATED("work_context.updated"),
+  WORK_CONTEXT_UPDATE_FAILED("work_context.update.failed");
 
   private final String value;
 

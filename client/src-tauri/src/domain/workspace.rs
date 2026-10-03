@@ -25,6 +25,15 @@ pub struct BackgroundReceipt {
     deny_unknown_fields
 )]
 pub enum WorkspaceOperation {
+    WorkContext {
+        project_id: String,
+    },
+    WorkContextHistory {
+        project_id: String,
+    },
+    WorkContextUpdate {
+        session_id: String,
+    },
     Feeds,
     Feed {
         id: i64,

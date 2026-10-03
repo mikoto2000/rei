@@ -1,4 +1,6 @@
 export type WorkspaceOperation =
+  | { operation: "workContext" | "workContextHistory"; projectId: string }
+  | { operation: "workContextUpdate"; sessionId: string }
   | {
       operation:
         | "feeds"

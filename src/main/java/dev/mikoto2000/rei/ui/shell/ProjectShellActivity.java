@@ -10,6 +10,10 @@ import dev.mikoto2000.rei.event.*;
 /** Shell restoration and live rendering share AgentEvent and the same renderer, with different display modes. */
 @Component
 public class ProjectShellActivity implements AgentEventListener {
+  private dev.mikoto2000.rei.workcontext.WorkContextPresenter workContext;
+  private final java.util.Set<String> workContextSeen = new java.util.HashSet<>();
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setWorkContext(dev.mikoto2000.rei.workcontext.WorkContextPresenter presenter) {workContext=presenter;}
   private final ProjectService projects;
   private final ProjectAgentEventStore store;
   private final ProjectRunStateStore states;
@@ -41,6 +45,7 @@ public class ProjectShellActivity implements AgentEventListener {
     renderers.clear();
     renderer = rendererFor(visibleProject);
     globalRenderer = new ShellAgentEventRenderer(output, options);
+    presentWorkContext(projects.currentContext(), visibleSession);
   }
   @Override public synchronized void onEvent(AgentEvent event) {
     if (renderer == null) return;
@@ -66,6 +71,7 @@ public class ProjectShellActivity implements AgentEventListener {
     refreshSession();
     renderer.finish();
     visibleProject = project.id();
+    presentWorkContext(project, visibleSession);
     renderer = rendererFor(visibleProject);
     output.println("Switched project: " + project.name());
     if (activeRuns != null) output.println(activeRuns.summary());
@@ -84,12 +90,24 @@ public class ProjectShellActivity implements AgentEventListener {
   public synchronized void refreshSession() {
     if (client == null || renderer == null) return;
     String selected;
-    try (var scope = client.open()) { selected = projects.currentSessionId(); }
+    ProjectContext selectedProject;
+    try (var scope = client.open()) { selected = projects.currentSessionId(); selectedProject=projects.currentContext(); }
     if (java.util.Objects.equals(selected, visibleSession)) return;
     renderer.finish();
     visibleSession = selected;
+    presentWorkContext(selectedProject, selected);
     renderers.clear();
     renderer = rendererFor(visibleProject);
+  }
+  private void presentWorkContext(ProjectContext project, String session) {
+    if (workContext == null || output == null) return;
+    try {
+      workContext.present(project, session, workContextSeen).ifPresent(output::println);
+      output.flush();
+    } catch (RuntimeException error) {
+      dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
+      org.slf4j.LoggerFactory.getLogger(getClass()).warn("Work Context presentation unavailable ({})", error.getClass().getSimpleName());
+    }
   }
   private ShellAgentEventRenderer rendererFor(String projectId) {
     return renderers.computeIfAbsent(projectId, id -> new ShellAgentEventRenderer(new ShellEventOutput() {

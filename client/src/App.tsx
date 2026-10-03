@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { command, type Command } from "./tauri/commands";
 import { events, type Events } from "./tauri/events";
 import {
@@ -17,6 +17,7 @@ import { useUserAvatar } from "./features/settings/userAvatar";
 import { Avatar } from "./shared/Avatar";
 import { SessionList } from "./features/history/SessionList";
 import { Workspace } from "./features/workspace/Workspace";
+import { WorkContextNotice } from "./features/workspace/WorkContextNotice";
 import {
   useSessionList,
   useSessionSelection,
@@ -42,6 +43,7 @@ export function App({
   subscriptions?: Events;
 }) {
   const [data, setData] = useState(initial);
+  const workContextSeen = useRef(new Set<string>());
   const [userAvatar, setUserAvatar] = useUserAvatar();
   const [page, setPage] = useState<Page>("conversations");
   const [ready, setReady] = useState(false);
@@ -605,6 +607,13 @@ export function App({
             )}
             {page === "chat" && selectedConversation && (
               <>
+                <WorkContextNotice
+                  call={call}
+                  serverId={selectedConversation.serverProfileId}
+                  projectId={selectedConversation.projectId}
+                  conversationId={selectedConversation.localId}
+                  seen={workContextSeen.current}
+                />
                 <button
                   className="history-back"
                   onClick={() => navigate("conversations")}
