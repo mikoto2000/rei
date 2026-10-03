@@ -210,6 +210,95 @@ impl HttpReiClient {
         op: WorkspaceOperation,
     ) -> Result<WorkspaceResult> {
         match op {
+            WorkspaceOperation::WorkContext { project_id } => {
+                let dto: serde_json::Value = Self::json(
+                    self.request(
+                        Method::GET,
+                        &format!(
+                            "/api/v1/projects/{}/work-context/summary",
+                            segment(&project_id)?
+                        ),
+                        true,
+                    )?,
+                    Operation::Resource,
+                )
+                .await?;
+                Ok(result(
+                    "Work Context",
+                    vec![WorkspaceItem {
+                        id: Some(project_id),
+                        title: "過去の作業状態 / 自動実行しません".into(),
+                        fields: vec![
+                            (
+                                "引き継ぎ".into(),
+                                dto.get("text")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or_default()
+                                    .into(),
+                            ),
+                            (
+                                "Auto present".into(),
+                                dto.get("autoPresent")
+                                    .and_then(|v| v.as_bool())
+                                    .unwrap_or(false)
+                                    .to_string(),
+                            ),
+                        ],
+                    }],
+                ))
+            }
+            WorkspaceOperation::WorkContextHistory { project_id } => {
+                let dtos: Vec<serde_json::Value> = Self::json(
+                    self.request(
+                        Method::GET,
+                        &format!(
+                            "/api/v1/projects/{}/work-context/history",
+                            segment(&project_id)?
+                        ),
+                        true,
+                    )?,
+                    Operation::Resource,
+                )
+                .await?;
+                Ok(result(
+                    "Work Context history",
+                    dtos.into_iter()
+                        .map(|dto| WorkspaceItem {
+                            id: None,
+                            title: format!("revision {}", dto["revision"]),
+                            fields: vec![
+                                (
+                                    "Updated".into(),
+                                    dto["updatedAt"].as_str().unwrap_or_default().into(),
+                                ),
+                                ("Items".into(), dto["itemCount"].to_string()),
+                            ],
+                        })
+                        .collect(),
+                ))
+            }
+            WorkspaceOperation::WorkContextUpdate { session_id } => {
+                let dto: serde_json::Value = Self::json(
+                    self.request(
+                        Method::POST,
+                        &format!(
+                            "/api/v1/sessions/{}/work-context/update",
+                            segment(&session_id)?
+                        ),
+                        true,
+                    )?,
+                    Operation::Resource,
+                )
+                .await?;
+                Ok(result(
+                    "Work Context update",
+                    vec![WorkspaceItem {
+                        id: None,
+                        title: "確定Turnの保存結果".into(),
+                        fields: vec![("Result".into(), dto.to_string())],
+                    }],
+                ))
+            }
             WorkspaceOperation::Feeds => {
                 let dtos: Vec<FeedDto> = Self::json(
                     self.request(Method::GET, "/api/v1/feed", true)?,

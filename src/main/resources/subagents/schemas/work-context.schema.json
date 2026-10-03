@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false, "required": ["changes"],
+  "properties": {"changes": {"type": "array", "maxItems": 40, "items": {
+    "type": "object", "additionalProperties": false,
+    "required": ["action","targetId","kind","text","reason","status","sourceIds","certainty"],
+    "properties": {
+      "certainty": {"enum": ["USER","TOOL","ASSISTANT","INFERENCE"]},
+      "action": {"enum": ["ADD","CORRECT","STATUS","SUPERSEDE","CONFLICT"]},
+      "targetId": {"type": ["string","null"], "maxLength": 100},
+      "kind": {"enum": ["PURPOSE","CURRENT_WORK","DECISION","COMPLETED_WORK","PENDING","VERIFICATION","BLOCKER","NEXT_ACTION","ARTIFACT"]},
+      "text": {"type": "string", "minLength": 1, "maxLength": 2000},
+      "reason": {"type": "string", "maxLength": 2000},
+      "status": {"enum": ["OPEN","COMPLETED","WITHDRAWN","SUPERSEDED","UNCONFIRMED"]},
+      "sourceIds": {"type": "array", "minItems": 1, "maxItems": 20, "uniqueItems": true,"items": {"type": "string", "minLength": 1,"maxLength": 200}}
+    }
+  }}}
+}

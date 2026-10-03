@@ -58,7 +58,7 @@ public class ConversationTurnStore implements ConversationHistory {
         t.runId().equals(context.runId()) && t.status() == Status.RUNNING)) return;
     var turns = read(context.conversationId()).stream().map(turn ->
         turn.runId().equals(context.runId()) && turn.status() == Status.RUNNING
-            ? new Turn(turn.runId(), turn.request(), status, assistantMessage, turn.createdAt()) : turn).toList();
+            ? new Turn(turn.runId(), turn.request(), status, assistantMessage, turn.createdAt(),turn.source(),turn.sourceId(),turn.metadata()) : turn).toList();
     save(context.conversationId(), turns);
   }
 
@@ -68,6 +68,14 @@ public class ConversationTurnStore implements ConversationHistory {
       try { return List.of(mapper.readValue(Files.readString(file(id)), Turn[].class)); }
       catch (java.io.IOException error) { throw new IllegalStateException("Cannot read conversation turns", error); }
     });
+  }
+  /** Optional observed work-time metadata, captured by the owner without changing turn identity. */
+  public synchronized void recordMetadata(AgentRunContext context,Map<String,String> metadata) {
+    var rows=read(context.conversationId()).stream().map(t->{
+      if(!t.runId().equals(context.runId())) return t;
+      var combined=new HashMap<>(t.metadata());combined.putAll(metadata);
+      return new Turn(t.runId(),t.request(),t.status(),t.assistantMessage(),t.createdAt(),t.source(),t.sourceId(),combined);
+    }).toList();save(context.conversationId(),rows);
   }
 
   @Override public synchronized List<SessionTurn> findTurns(String sessionId, CursorKey after, int fetchLimit) {

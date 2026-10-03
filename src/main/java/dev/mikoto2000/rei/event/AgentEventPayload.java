@@ -31,5 +31,5 @@ public sealed interface AgentEventPayload
         TopicCandidateRejectedPayload, TopicSelectedPayload, TopicSpeakSkippedPayload, TopicSpokenPayload,
         TopicGenerationCompletedPayload, TopicGenerationFailedPayload, TopicAutoSpeakSuppressedPayload,
         ContextSnapshotUpdatedPayload,
-        FileCreatedPayload, FileModifiedPayload, FileDeletedPayload {
+        WorkContextPayload, FileCreatedPayload, FileModifiedPayload, FileDeletedPayload {
 }

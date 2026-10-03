@@ -242,6 +242,13 @@ rei:
       exclude-reposts: ${REI_BLUESKY_REPLY_EXCLUDE_REPOSTS:true}
       max-post-age-minutes: ${REI_BLUESKY_REPLY_MAX_POST_AGE_MINUTES:120}
       generation-timeout-seconds: ${REI_BLUESKY_REPLY_GENERATION_TIMEOUT_SECONDS:1200}
+  work-context:
+    auto-update: ${REI_WORK_CONTEXT_AUTO_UPDATE:false}
+    auto-present: ${REI_WORK_CONTEXT_AUTO_PRESENT:true}
+    max-context-tokens: ${REI_WORK_CONTEXT_MAX_CONTEXT_TOKENS:1200}
+    max-input-tokens: ${REI_WORK_CONTEXT_MAX_INPUT_TOKENS:12000}
+    timeout-seconds: ${REI_WORK_CONTEXT_TIMEOUT_SECONDS:120}
+    max-turns: ${REI_WORK_CONTEXT_MAX_TURNS:20}
   memory:
     enabled: ${REI_MEMORY_ENABLED:true}
     retrieval:

@@ -57,6 +57,17 @@ import lombok.RequiredArgsConstructor;
 @EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, BlueskyProperties.class, AgentSkillsProperties.class, LlmProperties.class, ImageProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
+  private dev.mikoto2000.rei.event.AgentEventFactory eventFactory;
+  private dev.mikoto2000.rei.event.AgentEventPublisher eventPublisher;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setWorkEvents(dev.mikoto2000.rei.event.AgentEventFactory factory, dev.mikoto2000.rei.event.AgentEventPublisher publisher) {
+    eventFactory=factory; eventPublisher=publisher;
+  }
+  private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextAdvisor> workContext;
+  private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextTools> workTools;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setWorkContext(ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextAdvisor> advisor,
+      ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextTools> tools) {workContext=advisor;workTools=tools;}
   private ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> paperTools;
   @org.springframework.beans.factory.annotation.Autowired
   void setPaperTools(ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> tools) { this.paperTools = tools; }
@@ -121,6 +132,7 @@ public class AiConfiguration {
   @Bean
   public ChatClient chatClient() {
     List<Advisor> advisors = new ArrayList<>();
+    if (workContext != null && workContext.getIfAvailable() != null) advisors.add(workContext.getObject());
     if (contextHistory != null) advisors.add(contextHistory);
     else advisors.add(PromptChatMemoryAdvisor.builder(chatMemory)
         .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
@@ -151,6 +163,9 @@ public class AiConfiguration {
             conversationHistoryTools, summaryTools);
 
     if (rawResultTools != null) builder.defaultTools(rawResultTools);
+    if (workTools != null && workTools.getIfAvailable() != null) builder.defaultToolCallbacks(
+        new ToolEventCallbackProvider(org.springframework.ai.tool.method.MethodToolCallbackProvider.builder()
+            .toolObjects(workTools.getObject()).build(), eventFactory, eventPublisher));
     if (paperTools != null && paperTools.getIfAvailable() != null) builder.defaultTools(paperTools.getObject());
     ToolEventCallbackProvider toolCallbackProvider = toolEventCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {

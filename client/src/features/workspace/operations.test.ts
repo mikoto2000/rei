@@ -1,5 +1,21 @@
 import { it, expect } from "vitest";
 import { buildOperation, operations } from "./operations";
+it("binds handoff reads to an explicit project and updates to a session", () => {
+  expect(buildOperation("workContext", { projectId: "a" })).toEqual({
+    operation: "workContext",
+    projectId: "a",
+  });
+  expect(buildOperation("workContextHistory", { projectId: "a" })).toEqual({
+    operation: "workContextHistory",
+    projectId: "a",
+  });
+  expect(
+    buildOperation("workContextUpdate", { sessionId: "session-a" }),
+  ).toEqual({ operation: "workContextUpdate", sessionId: "session-a" });
+  expect(() =>
+    buildOperation("workContextUpdate", { projectId: "a" }),
+  ).toThrow();
+});
 it("rejects fractional IDs and non-finite counts before invoking native commands", () => {
   expect(() => buildOperation("deleteFeed", { id: "1.5" })).toThrow();
   expect(() => buildOperation("interests", { hours: "NaN" })).toThrow();

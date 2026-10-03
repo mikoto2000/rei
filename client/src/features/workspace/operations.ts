@@ -36,6 +36,18 @@ const remove = (key: string, label: string): Operation => ({
   fields: [id],
 });
 export const operations: Operation[] = [
+  read("workContext", "Work Context / 引き継ぎ", [
+    { key: "projectId", label: "Project ID" },
+  ]),
+  read("workContextHistory", "Work Context 更新履歴", [
+    { key: "projectId", label: "Project ID" },
+  ]),
+  {
+    id: "workContextUpdate",
+    label: "会話から引き継ぎを保存",
+    button: "更新",
+    fields: [{ key: "sessionId", label: "Session ID" }],
+  },
   read("feeds", "Feed 一覧"),
   read("feed", "Feed 詳細", [id]),
   create("createFeed", "Feed 追加", [url, displayName]),
@@ -150,6 +162,11 @@ export function buildOperation(
     return n;
   };
   switch (operation) {
+    case "workContext":
+    case "workContextHistory":
+      return { operation, projectId: v.projectId };
+    case "workContextUpdate":
+      return { operation, sessionId: v.sessionId };
     case "feed":
     case "reminder":
     case "deleteFeed":
