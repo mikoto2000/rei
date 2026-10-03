@@ -84,6 +84,36 @@ class LlmChatClientProviderTest {
         .containsExactly("getLastSummary");
   }
 
+  @Test
+  void blueskyReplyDoesNotExposeTools() throws Exception {
+    var models = mock(LlmModelProvider.class);
+    when(models.chatModel(LlmFeature.BLUESKY_REPLY)).thenReturn(mock(ChatModel.class));
+    when(models.chatOptions(LlmFeature.BLUESKY_REPLY, null))
+        .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
+    var systemPrompt = mock(SystemPromptService.class);
+    when(systemPrompt.systemPrompt()).thenReturn("system prompt");
+    var provider = new LlmChatClientProvider(models, new CoreProperties("system prompt", 100),
+        systemPrompt, mock(ChatMemory.class),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(mock(dev.mikoto2000.rei.bluesky.BlueskyPostTools.class)), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(mock(dev.mikoto2000.rei.event.ToolEventCallbackProvider.class)), null, null);
+    provider.setSummaryTools(optional(mock(SummaryTools.class)));
+
+    var client = provider.chatClient(LlmFeature.BLUESKY_REPLY);
+    var requestField = client.getClass().getDeclaredField("defaultChatClientRequest");
+    requestField.setAccessible(true);
+    var request = requestField.get(client);
+    var callbacksField = request.getClass().getDeclaredField("toolCallbackProviders");
+    callbacksField.setAccessible(true);
+    var callbacks = ((List<?>) callbacksField.get(request)).stream()
+        .map(ToolCallbackProvider.class::cast)
+        .flatMap(callbacksProvider -> Arrays.stream(callbacksProvider.getToolCallbacks()));
+    assertThat(callbacks.map(callback -> callback.getToolDefinition().name()))
+        .isEmpty();
+  }
+
   private static <T> ObjectProvider<T> optional(T value) {
     @SuppressWarnings("unchecked")
     ObjectProvider<T> provider = mock(ObjectProvider.class);

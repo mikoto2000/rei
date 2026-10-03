@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.bluesky;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -11,6 +12,7 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
@@ -61,6 +63,7 @@ public class BlueskyReplyTextGenerator {
         You are replying on Bluesky.
         Keep the reply concise, natural Japanese, and under 120 characters.
         Avoid markdown, hashtags, and URLs unless necessary.
+        Return only the reply text. Do not publish posts or include status reports or explanations.
         Target user: %s
 
         Recent conversation history with this user:
@@ -71,7 +74,7 @@ public class BlueskyReplyTextGenerator {
         """.formatted(handle, historyBlock.isBlank() ? "(none)" : historyBlock, postText);
 
     Prompt prompt = new Prompt(promptText,
-        modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, modelHolderService.get()));
+        replyOptions());
     String content = generateContent(prompt, conversationId);
     if (content == null || content.isBlank()) {
       throw new IllegalStateException("Bluesky reply text generation returned blank content");
@@ -96,12 +99,13 @@ public class BlueskyReplyTextGenerator {
         - 120文字以内
         - 自然で丁寧
         - Markdownや箇条書きは使わない
+        - 返信本文だけを返し、投稿の実行や完了報告、説明は含めない
 
         投稿本文:
         %s
         """.formatted(postText);
     Prompt prompt = new Prompt(promptText,
-        modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, modelHolderService.get()));
+        replyOptions());
     String content = generateContent(prompt, conversationId);
     if (content == null || content.isBlank()) {
       throw new IllegalStateException("Bluesky manual reply text generation returned blank content");
@@ -120,17 +124,25 @@ public class BlueskyReplyTextGenerator {
         - 120文字以内
         - 自然で丁寧
         - Markdownや箇条書きは使わない
+        - 返信本文だけを返し、投稿の実行や完了報告、説明は含めない
 
         投稿本文:
         %s
         """.formatted(postText);
     Prompt prompt = new Prompt(promptText,
-        modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, modelHolderService.get()));
+        replyOptions());
     String content = generateContent(prompt, conversationId);
     if (content == null || content.isBlank()) {
       throw new IllegalStateException("Bluesky manual reply text generation returned blank content");
     }
     return content.strip();
+  }
+
+  private OpenAiChatOptions replyOptions() {
+    return new OpenAiChatOptions.Builder(
+        modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, modelHolderService.get()))
+        .tools(null).toolChoice("none").toolCallbacks(List.of()).toolNames(Set.of())
+        .internalToolExecutionEnabled(false).build();
   }
 
   private String generateContent(Prompt prompt, String conversationId) {
@@ -168,6 +180,9 @@ public class BlueskyReplyTextGenerator {
   }
 
   private String answerText(ChatResponse response) {
+    if (response.hasToolCalls()) {
+      throw new IllegalStateException("Bluesky reply text generation returned a tool call");
+    }
     Generation generation = response.getResult();
     if (generation == null || generation.getOutput() == null) {
       return "";
