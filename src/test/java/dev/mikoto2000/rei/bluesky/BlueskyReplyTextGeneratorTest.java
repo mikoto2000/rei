@@ -58,7 +58,12 @@ class BlueskyReplyTextGeneratorTest {
     ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
     verify(chatClient).prompt(promptCaptor.capture());
     assertThat(promptCaptor.getValue().getOptions().getModel()).isEqualTo("qwen-test");
-    assertThat(promptCaptor.getValue().getContents()).contains("投稿本文");
+    assertThat(promptCaptor.getValue().getContents()).contains("投稿本文", "Return only the reply text");
+    var options = (org.springframework.ai.openai.OpenAiChatOptions) promptCaptor.getValue().getOptions();
+    assertThat(options.getToolChoice()).isEqualTo("none");
+    assertThat(options.getToolCallbacks()).isEmpty();
+    assertThat(options.getToolNames()).isEmpty();
+    assertThat(options.getInternalToolExecutionEnabled()).isFalse();
   }
 
   @Test

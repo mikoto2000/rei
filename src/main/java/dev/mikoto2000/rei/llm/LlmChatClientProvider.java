@@ -191,6 +191,9 @@ public class LlmChatClientProvider {
         .defaultOptions(modelProvider.chatOptions(feature, null))
         .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors));
 
+    // Reply generation returns text; only the caller may publish the reply.
+    if (LlmFeature.BLUESKY_REPLY.equals(feature)) return builder.build();
+
     List<Object> toolObjects = new ArrayList<>();
     if (LlmFeature.CHAT.equals(feature) && workTools != null) addIfAvailable(toolObjects, workTools);
     if (LlmFeature.CHAT.equals(feature) && paperTools != null) addIfAvailable(toolObjects, paperTools);
