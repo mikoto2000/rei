@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 import static dev.mikoto2000.rei.activity.DailySummaryTest.*;
 import static dev.mikoto2000.rei.activity.EntertainmentDisposition.*;
+@org.junit.jupiter.api.Tag("integration")
 class ThemeEnrichmentTest {
   static List<SummarySegment> differentProjects() {
     try(var in=ThemeEnrichmentTest.class.getResourceAsStream("/activity/daily-summary-social-projects.csv")) {

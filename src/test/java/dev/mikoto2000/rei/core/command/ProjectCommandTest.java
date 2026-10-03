@@ -14,6 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import picocli.CommandLine;
 
+@org.junit.jupiter.api.Tag("integration")
 class ProjectCommandTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
 
   @TempDir

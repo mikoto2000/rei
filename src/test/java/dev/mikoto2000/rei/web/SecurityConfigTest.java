@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.assertj.core.api.Assertions.assertThat;
 
+@org.junit.jupiter.api.Tag("integration")
 class SecurityConfigTest {
   @Configuration(proxyBeanMethods = false) @EnableWebMvc
   @Import({SecurityConfig.class, Endpoint.class})

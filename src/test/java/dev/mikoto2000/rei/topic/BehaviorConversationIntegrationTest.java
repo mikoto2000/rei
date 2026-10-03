@@ -18,6 +18,7 @@ import org.springframework.ai.chat.memory.*;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.prompt.Prompt;
 
+@org.junit.jupiter.api.Tag("integration")
 class BehaviorConversationIntegrationTest {
   @TempDir Path dir;
   final Clock clock=Clock.fixed(Instant.parse("2026-09-25T12:00:00Z"),ZoneOffset.UTC);

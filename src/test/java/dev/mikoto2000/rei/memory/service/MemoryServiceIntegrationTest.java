@@ -11,6 +11,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 
+@org.junit.jupiter.api.Tag("integration")
 class MemoryServiceIntegrationTest {
 
   @Test

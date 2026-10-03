@@ -5,6 +5,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.*;
 import static org.junit.jupiter.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ExternalAgentPolicyTest {
   @TempDir Path root;
   @Test void parsesOnlySupportedCommand() {

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.*;
 import static dev.mikoto2000.rei.activity.DailySummaryTest.*;
 import static dev.mikoto2000.rei.activity.ThemeEnrichmentTest.withText;
 import static dev.mikoto2000.rei.activity.EntertainmentDisposition.*;
+@org.junit.jupiter.api.Tag("integration")
 class ThemeAttributionTest {
   static SummarySegment sample(int minute,int seconds,String project,String topic) {
     return withText(segment(minute,seconds,"development",project,"",NON_ENTERTAINMENT),topic,"");

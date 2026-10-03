@@ -23,6 +23,7 @@ import com.google.api.client.util.store.FileDataStoreFactory;
 
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 
+@org.junit.jupiter.api.Tag("integration")
 class GoogleOAuthServiceTest {
   @TempDir Path directory;
 

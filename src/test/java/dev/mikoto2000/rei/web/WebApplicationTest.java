@@ -6,6 +6,7 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.context.annotation.Configuration;
 import static org.assertj.core.api.Assertions.assertThat;
 
+@org.junit.jupiter.api.Tag("integration")
 class WebApplicationTest {
   @Configuration(proxyBeanMethods = false) static class Empty {
     @org.springframework.context.annotation.Bean

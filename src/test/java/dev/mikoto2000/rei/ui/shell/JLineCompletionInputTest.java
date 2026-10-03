@@ -16,6 +16,7 @@ import picocli.CommandLine;
 import picocli.CommandLine.Model.CommandSpec;
 
 @Timeout(15)
+@org.junit.jupiter.api.Tag("integration")
 class JLineCompletionInputTest {
   @TempDir Path root;
   String tab(String input) throws Exception {

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
+@org.junit.jupiter.api.Tag("integration")
 class SubAgentCommandTest {
   @TempDir Path directory;
   @Test void listShowReloadValidateAndInit() throws Exception {

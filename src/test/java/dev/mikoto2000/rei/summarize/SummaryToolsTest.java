@@ -12,6 +12,7 @@ import dev.mikoto2000.rei.core.execution.ExecutionType;
 import dev.mikoto2000.rei.core.project.*;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class SummaryToolsTest {
   @TempDir Path directory;
 

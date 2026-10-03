@@ -22,6 +22,7 @@ import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.event.WorkingSetItemAddedPayload;
 import dev.mikoto2000.rei.event.WorkingSetItemRemovedPayload;
 
+@org.junit.jupiter.api.Tag("integration")
 class WorkingSetTest {
 
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");

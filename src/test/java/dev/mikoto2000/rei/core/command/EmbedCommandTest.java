@@ -22,6 +22,7 @@ import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
 import picocli.CommandLine;
 
+@org.junit.jupiter.api.Tag("integration")
 class EmbedCommandTest {
 
   @TempDir

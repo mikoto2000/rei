@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ChatControllerTest {
   @TempDir Path directory;
   @Test void acceptedResponseHasLocationAndInvalidRequestsHaveExplicitStatuses() throws Exception {

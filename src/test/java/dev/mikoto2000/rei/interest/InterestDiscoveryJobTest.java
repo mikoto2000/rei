@@ -23,6 +23,7 @@ import dev.mikoto2000.rei.search.SearchKnowledgeService;
 import dev.mikoto2000.rei.websearch.WebSearchContext;
 import dev.mikoto2000.rei.websearch.WebSearchPage;
 
+@org.junit.jupiter.api.Tag("integration")
 class InterestDiscoveryJobTest {
 
   @TempDir

@@ -27,6 +27,7 @@ import dev.mikoto2000.rei.memory.model.*;
 import dev.mikoto2000.rei.memory.service.*;
 import reactor.core.publisher.Flux;
 
+@org.junit.jupiter.api.Tag("integration")
 class MemoryIntegrationTest {
   @TempDir Path dir;
   @Test void chatCompressionRetainsMemoryWithoutWritingItToHistoryOrSummary() {

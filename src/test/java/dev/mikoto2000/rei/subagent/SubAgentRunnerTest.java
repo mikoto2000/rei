@@ -20,6 +20,7 @@ import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.event.*;
 import reactor.core.publisher.Flux;
 
+@org.junit.jupiter.api.Tag("integration")
 class SubAgentRunnerTest {
   @TempDir Path directory;
   final List<AgentEvent> events = new CopyOnWriteArrayList<>();

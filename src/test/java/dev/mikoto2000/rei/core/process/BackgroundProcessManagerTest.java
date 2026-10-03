@@ -22,6 +22,7 @@ import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.temporal.ManualMonotonicTimeSource;
 import dev.mikoto2000.rei.temporal.MonotonicTimeSource;
 
+@org.junit.jupiter.api.Tag("e2e")
 class BackgroundProcessManagerTest {
   private final BackgroundProcessManager manager = new BackgroundProcessManager(new SystemShellService());
 

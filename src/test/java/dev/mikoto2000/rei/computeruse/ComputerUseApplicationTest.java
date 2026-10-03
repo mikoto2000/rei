@@ -12,6 +12,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentRepository;
 
 @SpringBootTest(properties = {"spring.ai.openai.api-key=test-key", "rei.computer-use.enabled=true"})
+@org.junit.jupiter.api.Tag("integration")
 class ComputerUseApplicationTest {
   @MockitoBean ChatModel chatModel;
   @MockitoBean EmbeddingModel embeddingModel;

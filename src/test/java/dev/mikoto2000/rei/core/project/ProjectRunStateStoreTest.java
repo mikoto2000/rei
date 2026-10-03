@@ -9,6 +9,7 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.event.*;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ProjectRunStateStoreTest {
   @TempDir Path temp;
   @Test void cancellationIsNotRestoredAsFailure() {

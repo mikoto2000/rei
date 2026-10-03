@@ -6,6 +6,7 @@ import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+@org.junit.jupiter.api.Tag("integration")
 class ComputerDiagnosticsTest {
   @TempDir Path directory;
   @Test void storesOriginalImagesOverlayAndMappedCoordinatesWithoutChangingModelImage() throws Exception {

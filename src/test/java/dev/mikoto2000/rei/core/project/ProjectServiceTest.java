@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+@org.junit.jupiter.api.Tag("integration")
 class ProjectServiceTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
 
   @TempDir

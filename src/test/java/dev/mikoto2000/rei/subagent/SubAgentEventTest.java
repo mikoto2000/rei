@@ -10,6 +10,7 @@ import dev.mikoto2000.rei.event.*;
 import dev.mikoto2000.rei.ui.shell.*;
 import dev.mikoto2000.rei.ui.projection.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class SubAgentEventTest {
   @TempDir Path directory;
   @Test void shellShowsChildEventsAndPreservesParentProjection() {

@@ -1,0 +1,79 @@
+src/test\java\dev\mikoto2000\rei\ApplicationShutdownNotifierTest.java:8:import org.springframework.context.support.GenericApplicationContext;
+src/test\java\dev\mikoto2000\rei\ApplicationShutdownNotifierTest.java:23:    var context = new GenericApplicationContext();
+src/test\java\dev\mikoto2000\rei\ApplicationShutdownNotifierTest.java:41:    try (var context = new GenericApplicationContext()) {
+src/test\java\dev\mikoto2000\rei\computeruse\ComputerUseApplicationTest.java:14:@SpringBootTest(properties = {"spring.ai.openai.api-key=test-key", "rei.computer-use.enabled=true"})
+src/test\java\dev\mikoto2000\rei\computeruse\ComputerUseApplicationTest.java:17:  @MockitoBean ChatModel chatModel;
+src/test\java\dev\mikoto2000\rei\computeruse\ComputerUseApplicationTest.java:18:  @MockitoBean EmbeddingModel embeddingModel;
+src/test\java\dev\mikoto2000\rei\computeruse\ComputerUseApplicationTest.java:19:  @MockitoBean VectorStore vectorStore;
+src/test\java\dev\mikoto2000\rei\computeruse\ComputerUseApplicationTest.java:20:  @MockitoBean VectorDocumentRepository repository;
+src/test\java\dev\mikoto2000\rei\computeruse\ComputerUseApplicationTest.java:21:  @MockitoBean ScreenCapture capture;
+src/test\java\dev\mikoto2000\rei\computeruse\ComputerUseApplicationTest.java:22:  @MockitoBean ComputerVisionModel vision;
+src/test\java\dev\mikoto2000\rei\computeruse\ComputerUseApplicationTest.java:23:  @MockitoBean ComputerInput input;
+src/test\java\dev\mikoto2000\rei\computeruse\ComputerUseApplicationTest.java:24:  @MockitoBean UiStabilizer stabilizer;
+src/test\java\dev\mikoto2000\rei\workcontext\WorkContextSecurityTest.java:4:import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+src/test\java\dev\mikoto2000\rei\workcontext\WorkContextSecurityTest.java:22:    new WebApplicationContextRunner().withPropertyValues("rei.web.enabled=true").withUserConfiguration(Config.class).run(context->{
+src/test\java\dev\mikoto2000\rei\activity\ActivityIntegrationTest.java:4:import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+src/test\java\dev\mikoto2000\rei\activity\ActivityIntegrationTest.java:39:    new ApplicationContextRunner().withUserConfiguration(ActivityConfiguration.class)
+src/test\java\dev\mikoto2000\rei\computeruse\ComputerUseConfigurationTest.java:6:import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+src/test\java\dev\mikoto2000\rei\computeruse\ComputerUseConfigurationTest.java:30:  private final ApplicationContextRunner runner = new ApplicationContextRunner()
+src/test\java\dev\mikoto2000\rei\ExternalConfigLoadingTest.java:30:    SpringApplication application = new SpringApplication(TestConfiguration.class);
+src/test\java\dev\mikoto2000\rei\google\GoogleTokenRefreshJobTest.java:10:import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+src/test\java\dev\mikoto2000\rei\google\GoogleTokenRefreshJobTest.java:30:    var runner = new ApplicationContextRunner()
+src/test\java\dev\mikoto2000\rei\core\actionplan\ActionPlanSessionTest.java:10:import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+src/test\java\dev\mikoto2000\rei\core\actionplan\ActionPlanSessionTest.java:21:    try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+src/test\java\dev\mikoto2000\rei\core\checkpoint\CheckpointSessionTest.java:10:import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+src/test\java\dev\mikoto2000\rei\core\checkpoint\CheckpointSessionTest.java:21:    try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+src/test\java\dev\mikoto2000\rei\core\checkpoint\CheckpointSessionTest.java:32:    try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+src/test\java\dev\mikoto2000\rei\core\stagnation\StagnationSessionTest.java:10:import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+src/test\java\dev\mikoto2000\rei\core\stagnation\StagnationSessionTest.java:21:    try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+src/test\java\dev\mikoto2000\rei\core\configuration\EmbeddingEndpointTest.java:12:import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+src/test\java\dev\mikoto2000\rei\core\configuration\EmbeddingEndpointTest.java:40:    new ApplicationContextRunner()
+src/test\java\dev\mikoto2000\rei\core\contextbudget\ContextBudgetSessionTest.java:6:import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+src/test\java\dev\mikoto2000\rei\core\contextbudget\ContextBudgetSessionTest.java:13:    try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+src/test\java\dev\mikoto2000\rei\core\configuration\EmbeddingDisabledTest.java:13:import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+src/test\java\dev\mikoto2000\rei\core\configuration\EmbeddingDisabledTest.java:51:    new ApplicationContextRunner()
+src/test\java\dev\mikoto2000\rei\ReiApplicationTests.java:16:@SpringBootTest(properties = "spring.ai.openai.api-key=test-key")
+src/test\java\dev\mikoto2000\rei\ReiApplicationTests.java:20:	@MockitoBean
+src/test\java\dev\mikoto2000\rei\ReiApplicationTests.java:23:	@MockitoBean
+src/test\java\dev\mikoto2000\rei\ReiApplicationTests.java:26:	@MockitoBean
+src/test\java\dev\mikoto2000\rei\ReiApplicationTests.java:29:	@MockitoBean
+src/test\java\dev\mikoto2000\rei\core\searchcache\SearchResultCacheSessionTest.java:12:import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+src/test\java\dev\mikoto2000\rei\core\searchcache\SearchResultCacheSessionTest.java:34:    try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+src/test\java\dev\mikoto2000\rei\core\recentchanges\RecentChangesSessionTest.java:12:import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+src/test\java\dev\mikoto2000\rei\core\recentchanges\RecentChangesSessionTest.java:34:    try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+src/test\java\dev\mikoto2000\rei\core\taskstate\TaskStateSessionTest.java:10:import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+src/test\java\dev\mikoto2000\rei\core\taskstate\TaskStateSessionTest.java:27:    try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+src/test\java\dev\mikoto2000\rei\core\taskstate\TaskStateSessionTest.java:38:    try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+src/test\java\dev\mikoto2000\rei\core\project\ProjectSpringScopeTest.java:7:import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+src/test\java\dev\mikoto2000\rei\core\project\ProjectSpringScopeTest.java:18:    try (var beans = new AnnotationConfigApplicationContext()) {
+src/test\java\dev\mikoto2000\rei\core\relatedgraph\RelatedFileGraphSessionTest.java:12:import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+src/test\java\dev\mikoto2000\rei\core\relatedgraph\RelatedFileGraphSessionTest.java:34:    try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+src/test\java\dev\mikoto2000\rei\core\chat\ShellSessionExecutionTest.java:20:import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+src/test\java\dev\mikoto2000\rei\core\chat\ShellSessionExecutionTest.java:87:    try (var application = new AnnotationConfigApplicationContext(); var scope = projects.newClient().open()) {
+src/test\java\dev\mikoto2000\rei\web\WebApplicationTest.java:22:    var app = new SpringApplication(Empty.class);
+src/test\java\dev\mikoto2000\rei\web\WebApplicationTest.java:33:      SpringApplication app = new SpringApplication(Empty.class);
+src/test\java\dev\mikoto2000\rei\web\WebApplicationTest.java:43:    SpringApplication app = new SpringApplication(Empty.class);
+src/test\java\dev\mikoto2000\rei\subagent\SubAgentIntegrationTest.java:28:@SpringBootTest(properties = "spring.ai.openai.api-key=test-key")
+src/test\java\dev\mikoto2000\rei\subagent\SubAgentIntegrationTest.java:31:  @MockitoBean ChatModel model;
+src/test\java\dev\mikoto2000\rei\subagent\SubAgentIntegrationTest.java:32:  @MockitoBean EmbeddingModel embedding;
+src/test\java\dev\mikoto2000\rei\subagent\SubAgentIntegrationTest.java:33:  @MockitoBean VectorStore vectors;
+src/test\java\dev\mikoto2000\rei\subagent\SubAgentIntegrationTest.java:34:  @MockitoBean VectorDocumentRepository documents;
+src/test\java\dev\mikoto2000\rei\subagent\SubAgentIntegrationTest.java:41:  @DynamicPropertySource static void properties(DynamicPropertyRegistry properties) throws Exception {
+src/test\java\dev\mikoto2000\rei\web\WebApiIntegrationTest.java:56:      var application = new SpringApplication(Config.class);
+src/test\java\dev\mikoto2000\rei\web\WebApiIntegrationTest.java:97:    var application = new SpringApplication(Config.class);
+src/test\java\dev\mikoto2000\rei\web\StatefulHttpTest.java:35:    var app=new SpringApplication(Config.class);WebApplication.configure(app,"integration-key");
+src/test\java\dev\mikoto2000\rei\web\SessionWorkingSetTest.java:12:import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+src/test\java\dev\mikoto2000\rei\web\SessionWorkingSetTest.java:22:    try (var application = new AnnotationConfigApplicationContext()) {
+src/test\java\dev\mikoto2000\rei\core\filesummary\FileSummaryCacheSessionTest.java:12:import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+src/test\java\dev\mikoto2000\rei\core\filesummary\FileSummaryCacheSessionTest.java:34:    try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+src/test\java\dev\mikoto2000\rei\web\SessionControllerTest.java:7:import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+src/test\java\dev\mikoto2000\rei\web\SessionControllerTest.java:35:    new WebApplicationContextRunner().withPropertyValues("rei.web.enabled=true")
+src/test\java\dev\mikoto2000\rei\web\SecurityConfigTest.java:4:import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+src/test\java\dev\mikoto2000\rei\web\SecurityConfigTest.java:27:    new WebApplicationContextRunner().withPropertyValues("rei.web.enabled=true").withUserConfiguration(Config.class).run(context -> {
+src/test\java\dev\mikoto2000\rei\web\BehaviorHistoryApiTest.java:7:import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+src/test\java\dev\mikoto2000\rei\web\BehaviorHistoryApiTest.java:23:    new WebApplicationContextRunner().withPropertyValues("rei.web.enabled=true")
+src/test\java\dev\mikoto2000\rei\web\ReadHttpTest.java:41:    var app = new SpringApplication(Config.class); WebApplication.configure(app,"integration-key");
+src/test\java\dev\mikoto2000\rei\web\BackgroundRunHttpTest.java:30:    var app=new SpringApplication(Config.class); WebApplication.configure(app,"integration-key");
+src/test\java\dev\mikoto2000\rei\web\ProjectControllerTest.java:10:import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+src/test\java\dev\mikoto2000\rei\web\ProjectControllerTest.java:31:    new WebApplicationContextRunner().withPropertyValues("rei.web.enabled=true")
+src/test\java\dev\mikoto2000\rei\ui\shell\SessionCompletionTest.java:64:    try (var spring = new org.springframework.context.annotation.AnnotationConfigApplicationContext()) {

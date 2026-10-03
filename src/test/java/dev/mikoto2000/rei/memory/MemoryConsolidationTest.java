@@ -15,6 +15,7 @@ import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 
+@org.junit.jupiter.api.Tag("integration")
 class MemoryConsolidationTest {
   @TempDir Path dir;
   MemoryRepository repository;

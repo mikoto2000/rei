@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class MemoryFirstStorageTest {
   @TempDir Path directory;
 

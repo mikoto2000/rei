@@ -11,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 
+@org.junit.jupiter.api.Tag("integration")
 class ImageGenerationServiceCancellationTest {
 
   @TempDir

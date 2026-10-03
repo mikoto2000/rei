@@ -16,6 +16,7 @@ import org.mockito.Mockito;
 
 import dev.mikoto2000.rei.websearch.WebSearchPage;
 
+@org.junit.jupiter.api.Tag("integration")
 class FeedSummaryServiceTest {
 
   @TempDir

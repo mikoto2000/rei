@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class StatefulApiTest {
   @TempDir Path directory;
   @Test void existingPersistentOperationsHaveExplicitValidationAndHttpSemantics() throws Exception {

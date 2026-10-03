@@ -31,6 +31,7 @@ import dev.mikoto2000.rei.feed.FeedUpdateService;
 import dev.mikoto2000.rei.websearch.WebSearchPage;
 import picocli.CommandLine;
 
+@org.junit.jupiter.api.Tag("integration")
 class FeedCommandTest {
 
   @TempDir

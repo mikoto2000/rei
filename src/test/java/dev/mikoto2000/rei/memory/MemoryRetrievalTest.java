@@ -10,6 +10,7 @@ import dev.mikoto2000.rei.memory.service.*;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
 
+@org.junit.jupiter.api.Tag("integration")
 class MemoryRetrievalTest {
   @TempDir Path dir;
   MemoryRepository repository;

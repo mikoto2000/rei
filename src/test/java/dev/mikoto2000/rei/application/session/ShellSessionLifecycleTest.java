@@ -11,6 +11,7 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.*;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ShellSessionLifecycleTest {
   @TempDir Path temp;
   final Instant now = Instant.parse("2026-09-17T00:00:00Z");

@@ -19,6 +19,7 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+@org.junit.jupiter.api.Tag("integration")
 class ReminderToolsTest {
 
   @TempDir

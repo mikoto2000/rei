@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import static dev.mikoto2000.rei.activity.ActivitySemanticTest.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ActivityPhase31Test {
   static List<SummarySegment> summarize(ActivityRecord... records) {
     var policy=new SemanticSessionPolicy(Duration.ofSeconds(120),Duration.ofSeconds(300),Duration.ofSeconds(120),.5,ZoneOffset.UTC);

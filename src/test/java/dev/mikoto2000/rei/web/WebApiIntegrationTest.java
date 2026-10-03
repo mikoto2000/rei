@@ -16,6 +16,7 @@ import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.context.annotation.*;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class WebApiIntegrationTest {
   @Configuration(proxyBeanMethods = false)
   @Import({WebApiConfiguration.class, SecurityConfig.class, ChatController.class, RunController.class,

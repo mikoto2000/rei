@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.computeruse;
 import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 
+@org.junit.jupiter.api.Tag("integration")
 class NormalizedCoordinatesTest {
   private String click(String x, String y) {
     return ActionValidationTest.json("CLICK","target","{\"displayId\":\"left\",\"description\":\"button\",\"centerX\":" + x + ",\"centerY\":" + y + "}")

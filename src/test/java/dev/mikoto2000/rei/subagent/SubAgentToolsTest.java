@@ -8,6 +8,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+@org.junit.jupiter.api.Tag("integration")
 class SubAgentToolsTest {
   @TempDir Path directory;
   @Test void delegateReturnsTypedStatusesAndDynamicCatalogWithoutPrompts() throws Exception {

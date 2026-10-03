@@ -8,6 +8,7 @@ import dev.mikoto2000.rei.web.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+@org.junit.jupiter.api.Tag("integration")
 class WorkContextSecurityTest {
   @Configuration(proxyBeanMethods=false) @EnableWebMvc
   @Import({SecurityConfig.class,WorkContextController.class,ApiExceptionHandler.class})

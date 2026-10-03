@@ -27,6 +27,7 @@ import dev.mikoto2000.rei.search.SearchKnowledgeService;
  * Property 4: 既存検索クエリはスキップされる
  * Property 5: 保存データの完全性
  */
+@org.junit.jupiter.api.Tag("integration")
 class InterestDiscoveryJobPropertyTest {
 
   @TempDir

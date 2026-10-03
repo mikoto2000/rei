@@ -9,6 +9,7 @@ import dev.mikoto2000.rei.conversation.FileSessionRepository;
 import dev.mikoto2000.rei.core.project.*;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class SessionCommandsTest {
   @TempDir Path temp;
   @Test void rootExposesSessionGroupWithoutTopLevelAliases() {

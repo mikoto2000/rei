@@ -11,6 +11,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Configuration;
 
+@org.junit.jupiter.api.Tag("integration")
 class ExternalConfigLoadingTest {
 
   @TempDir

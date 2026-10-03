@@ -8,6 +8,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ActivityTrendQueryTest {
   @TempDir Path directory;
   @Test void trendReadPreservesFiveFineSessionsAndPhase31GapBoundaries() {

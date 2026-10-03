@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class BackgroundRunApiTest {
   @TempDir Path directory;
   @Test void summariesAndImagesUseCommonRunPollingSseReplayAndQueuedCancel() throws Exception {
@@ -73,17 +74,24 @@ class BackgroundRunApiTest {
     try(var executor=Executors.newVirtualThreadPerTaskExecutor()) {
       var router=new ConversationInputRouter(executor,(c,p,q)-> {chat.countDown(); bus.publish(events.runCompleted(c.runId(),1).withOwnership(c));});
       try(var runs=new RunService(registry,bus,events,cancellation,router::cancelQueued)) {
-        var submit=new BackgroundRunSubmitService(projects,registry,runs,router,cancellation,events,bus,summaries,images,new ImageProperties());
-        var slow=submit.summary(one.id(),"https://example.com"); assertThat(started.await(5,TimeUnit.SECONDS)).isTrue();
-        var queued=submit.image(one.id(),"queued",null);
-        var context=new AgentRunContext("chat","session",directory,one.id()); registry.register(context); router.submit(context,"chat",work->runs.execute(context,work));
-        var other=submit.image(two.id(),"other",null);
-        for(int i=0;i<100 && !runs.get(other.runId()).status().isTerminal();i++) Thread.sleep(10);
-        assertThat(runs.get(other.runId()).status()).isEqualTo(RunStatus.COMPLETED);
-        assertThat(chat.getCount()).isEqualTo(1); assertThat(runs.get(queued.runId()).status()).isEqualTo(RunStatus.QUEUED);
-        runs.cancel(slow.runId()); assertThat(interrupted.await(5,TimeUnit.SECONDS)).isTrue(); assertThat(chat.await(5,TimeUnit.SECONDS)).isTrue();
-        assertThat(runs.get(slow.runId()).status()).isEqualTo(RunStatus.CANCELLED);
-        assertThat(runs.get(queued.runId()).status()).isEqualTo(RunStatus.COMPLETED);
+        var otherCompleted = new CompletableFuture<String>();
+        var completion = bus.subscribe(event -> {
+          if (event.type() == AgentEventType.AGENT_RUN_COMPLETED && two.id().equals(event.projectId()))
+            otherCompleted.complete(event.runId());
+        });
+        try {
+          var submit=new BackgroundRunSubmitService(projects,registry,runs,router,cancellation,events,bus,summaries,images,new ImageProperties());
+          var slow=submit.summary(one.id(),"https://example.com"); assertThat(started.await(5,TimeUnit.SECONDS)).isTrue();
+          var queued=submit.image(one.id(),"queued",null);
+          var context=new AgentRunContext("chat","session",directory,one.id()); registry.register(context); router.submit(context,"chat",work->runs.execute(context,work));
+          var other=submit.image(two.id(),"other",null);
+          assertThat(otherCompleted.get(1, TimeUnit.SECONDS)).isEqualTo(other.runId());
+          assertThat(runs.get(other.runId()).status()).isEqualTo(RunStatus.COMPLETED);
+          assertThat(chat.getCount()).isEqualTo(1); assertThat(runs.get(queued.runId()).status()).isEqualTo(RunStatus.QUEUED);
+          runs.cancel(slow.runId()); assertThat(interrupted.await(5,TimeUnit.SECONDS)).isTrue(); assertThat(chat.await(5,TimeUnit.SECONDS)).isTrue();
+          assertThat(runs.get(slow.runId()).status()).isEqualTo(RunStatus.CANCELLED);
+          assertThat(runs.get(queued.runId()).status()).isEqualTo(RunStatus.COMPLETED);
+        } finally { completion.unsubscribe(); }
       }
     }
   }

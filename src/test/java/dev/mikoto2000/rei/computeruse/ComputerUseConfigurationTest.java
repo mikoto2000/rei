@@ -9,6 +9,7 @@ import dev.mikoto2000.rei.core.service.*;
 import dev.mikoto2000.rei.event.*;
 import dev.mikoto2000.rei.llm.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ComputerUseConfigurationTest {
   @Test void selectsShowUiOnlyWhenConfigured() {
     runner.withPropertyValues("rei.computer-use.enabled=true", "rei.computer-use.grounding=uitars")

@@ -9,6 +9,7 @@ import dev.mikoto2000.rei.core.working.*;
 import dev.mikoto2000.rei.event.*;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ProjectSpringScopeTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   @Test void injectedWorkingSetProxySwitchesTargets() throws Exception {

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class SessionWorkingSetTest {
   @TempDir Path directory;
   @Test void sessionsHaveIndependentWorkingSetsAndContinuationRestoresItsOwnFiles() {

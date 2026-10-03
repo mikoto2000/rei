@@ -10,6 +10,7 @@ import java.net.http.*;
 import static org.mockito.Mockito.*;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class BackgroundRunHttpTest {
   @Configuration(proxyBeanMethods=false)
   @Import({WebApiIntegrationTest.Config.class, BackgroundRunConfiguration.class, BackgroundRunController.class})

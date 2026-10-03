@@ -19,6 +19,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.ProfileEventLogStore;
 
+@org.junit.jupiter.api.Tag("integration")
 class ProfileCommandTest {
 
   @TempDir

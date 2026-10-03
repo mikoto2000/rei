@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+@org.junit.jupiter.api.Tag("integration")
 class BlueskyReplyDeduplicationTest {
   private static final String TARGET = "at://did:plc:alice/app.bsky.feed.post/target";
   private static final String URL = "https://bsky.app/profile/alice.bsky.social/post/target";

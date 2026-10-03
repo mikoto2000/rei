@@ -19,6 +19,7 @@ import dev.mikoto2000.rei.interest.InterestDiscoveryJob;
 import dev.mikoto2000.rei.interest.InterestUpdateService;
 import picocli.CommandLine;
 
+@org.junit.jupiter.api.Tag("integration")
 class InterestCommandTest {
 
   @TempDir

@@ -12,6 +12,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 
+@org.junit.jupiter.api.Tag("integration")
 class ContextHistoryAdvisorTest {
   @TempDir Path dir;
   @Test void includesInterventionsAndAuxiliaryResultsFromPersistentLog() {

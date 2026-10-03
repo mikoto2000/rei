@@ -10,6 +10,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static dev.mikoto2000.rei.activity.behavior.BehaviorEvaluatorTest.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class BehaviorIntegrationTest {
   @TempDir java.nio.file.Path directory;
   @Test void realFineStoreAndCheckpointSurviveRestartWithoutTouchingTimeline() throws Exception {

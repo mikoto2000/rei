@@ -16,6 +16,7 @@ import dev.mikoto2000.rei.core.project.*;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 
+@org.junit.jupiter.api.Tag("integration")
 class MemoryCliTest {
   @TempDir Path dir;
   @Test void manualSleepAndMemoryCommandsAreReachable() {

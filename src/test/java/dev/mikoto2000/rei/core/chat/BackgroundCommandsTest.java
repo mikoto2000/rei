@@ -14,6 +14,7 @@ import dev.mikoto2000.rei.event.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class BackgroundCommandsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   ProjectContext a,b;

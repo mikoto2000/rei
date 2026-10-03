@@ -22,6 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.mikoto2000.rei.core.configuration.SqliteVecProperties;
 import tools.jackson.databind.json.JsonMapper;
 
+@org.junit.jupiter.api.Tag("integration")
 class SqliteVecInstallerTest {
 
   @TempDir
@@ -44,6 +45,10 @@ class SqliteVecInstallerTest {
         downloadClient);
 
     assertEquals(cached, installer.resolveExtensionPath());
+    // Fresh test fixtures create fresh installers but must reuse the immutable binary.
+    SqliteVecInstaller nextFixture = new SqliteVecInstaller(properties,
+        () -> SqliteVecPlatform.LINUX_X86_64, new SqliteVecAssetResolver(), new JsonMapper(), downloadClient);
+    assertEquals(cached, nextFixture.resolveExtensionPath());
     assertEquals(0, downloadClient.requestCount());
   }
 

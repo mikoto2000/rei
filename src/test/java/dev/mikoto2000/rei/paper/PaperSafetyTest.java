@@ -13,6 +13,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class PaperSafetyTest {
   @TempDir Path dir;
   PaperProperties config = new PaperProperties();

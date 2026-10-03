@@ -11,6 +11,7 @@ import dev.mikoto2000.rei.core.project.*;
 import dev.mikoto2000.rei.core.command.ProjectCommand;
 import picocli.CommandLine;
 
+@org.junit.jupiter.api.Tag("e2e")
 class StartupProjectTest {
   @TempDir Path temp;
 

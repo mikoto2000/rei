@@ -6,6 +6,7 @@ import java.nio.file.*;
 import java.time.*;
 import static org.junit.jupiter.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ActivityTimelineTest {
   @TempDir Path directory;
   SqliteActivityStore store;

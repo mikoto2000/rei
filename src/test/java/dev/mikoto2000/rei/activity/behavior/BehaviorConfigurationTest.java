@@ -10,6 +10,7 @@ import org.springframework.core.io.FileSystemResource;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class BehaviorConfigurationTest {
   @TempDir java.nio.file.Path directory;
   @Test void generatedConfigContainsBindableBehaviorDefaults() {

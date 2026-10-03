@@ -9,6 +9,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+@org.junit.jupiter.api.Tag("integration")
 class GroundingRefinementTest {
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path diagnostics;
   private String point(GroundingProtocol p, boolean edge) {

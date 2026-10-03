@@ -11,6 +11,7 @@ import dev.mikoto2000.rei.conversation.FileSessionRepository;
 import dev.mikoto2000.rei.core.completion.*;
 import dev.mikoto2000.rei.core.project.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class SessionCompletionTest {
   @TempDir Path root;
   SessionMetadata row(String id, String project) {

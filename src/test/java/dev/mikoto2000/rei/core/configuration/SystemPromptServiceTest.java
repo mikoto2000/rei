@@ -11,6 +11,7 @@ import org.springframework.core.io.DefaultResourceLoader;
 
 import dev.mikoto2000.rei.config.ExternalConfigFileService;
 
+@org.junit.jupiter.api.Tag("integration")
 class SystemPromptServiceTest {
 
   @TempDir

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
+@org.junit.jupiter.api.Tag("integration")
 class ContextBudgetSessionTest {
 
   @Test

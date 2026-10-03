@@ -19,6 +19,7 @@ import reactor.core.publisher.Flux;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class WebSessionExecutionTest {
   @TempDir Path directory;
   @Test void realRunnerKeepsSubmittedIdsProjectAndSessionMemoryIndependentOfCliSelection() throws Exception {

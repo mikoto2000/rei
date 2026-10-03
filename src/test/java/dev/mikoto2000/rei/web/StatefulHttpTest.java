@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.net.http.*;
 import static org.mockito.Mockito.*;
 import static org.assertj.core.api.Assertions.*;
+@org.junit.jupiter.api.Tag("integration")
 class StatefulHttpTest {
   @Configuration(proxyBeanMethods=false)
   @Import({BackgroundRunHttpTest.Config.class,StatefulController.class,ReadController.class})

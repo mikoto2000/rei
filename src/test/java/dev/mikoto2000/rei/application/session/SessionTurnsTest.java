@@ -9,6 +9,7 @@ import dev.mikoto2000.rei.conversation.*;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class SessionTurnsTest {
   @TempDir Path temp;
   final Instant now = Instant.parse("2026-09-16T08:00:00Z");

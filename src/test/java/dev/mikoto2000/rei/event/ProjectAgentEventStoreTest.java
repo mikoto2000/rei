@@ -10,6 +10,7 @@ import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.ui.shell.*;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ProjectAgentEventStoreTest {
   @TempDir Path temp;
   AgentEventFactory factory = new AgentEventFactory(Clock.systemUTC());

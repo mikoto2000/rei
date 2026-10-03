@@ -12,6 +12,7 @@ import dev.mikoto2000.rei.externalagent.ExternalAgentCommand;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.CommandSpec;
 
+@org.junit.jupiter.api.Tag("integration")
 class ContextCompletionTest {
   @TempDir Path root;
   CommandLine command() {

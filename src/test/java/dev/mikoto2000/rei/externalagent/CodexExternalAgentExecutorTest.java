@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class CodexExternalAgentExecutorTest {
   @Test void nonzeroExitExtractsJsonErrorWithoutForwardingRawEvents() {
     var result = new CodexExternalAgentExecutor(new CodexProperties(), new ExternalAgentProcessRunner()).parse(

@@ -23,6 +23,7 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.json.JsonMapper;
 
+@org.junit.jupiter.api.Tag("integration")
 class RerankServiceTest {
   private HttpServer server;
   private String baseUrl;

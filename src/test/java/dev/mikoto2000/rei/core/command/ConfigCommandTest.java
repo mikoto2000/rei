@@ -13,6 +13,7 @@ import picocli.CommandLine;
 
 import dev.mikoto2000.rei.config.ExternalConfigFileService;
 
+@org.junit.jupiter.api.Tag("integration")
 class ConfigCommandTest {
 
   @TempDir

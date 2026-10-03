@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class BehaviorTimelineStoreTest {
   @TempDir java.nio.file.Path directory;
   @Test void eventsSurviveReopenAndRangeIsHalfOpenWithoutInventingOldDeliveries() throws Exception {

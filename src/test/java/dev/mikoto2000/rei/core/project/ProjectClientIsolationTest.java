@@ -7,6 +7,7 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.mikoto2000.rei.core.chat.*;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ProjectClientIsolationTest {
   @TempDir Path temp;
 

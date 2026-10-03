@@ -19,6 +19,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  * SoundNotificationService のプロパティテスト。
  * jqwik は JUnit 6 と互換性がないため、@ParameterizedTest + @MethodSource で代替する。
  */
+@org.junit.jupiter.api.Tag("e2e")
 class SoundNotificationServicePropertyTest {
 
   private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();

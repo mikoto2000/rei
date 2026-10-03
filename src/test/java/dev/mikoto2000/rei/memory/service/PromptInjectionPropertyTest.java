@@ -20,6 +20,7 @@ import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 import net.jqwik.api.constraints.IntRange;
 
+@net.jqwik.api.Tag("integration")
 class PromptInjectionPropertyTest {
 
   // Feature: ai-memory-consolidation, Property 9: プロンプト注入の件数上限

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 
 import dev.mikoto2000.rei.core.configuration.SqliteVecProperties;
 
+@org.junit.jupiter.api.Tag("integration")
 class SqliteVecExtensionLoaderTest {
 
   @Test
