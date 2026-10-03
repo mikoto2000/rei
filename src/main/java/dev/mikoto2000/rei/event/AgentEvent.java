@@ -39,7 +39,8 @@ public record AgentEvent(
   }
   public AgentEvent withOwnership(dev.mikoto2000.rei.core.chat.AgentRunContext context) {
     if (context == null) return this;
-    return new AgentEvent(id, sequence, timestamp, type, version, context.conversationId(), context.runId(),
+    boolean conversation = !context.conversationId().isEmpty();
+    return new AgentEvent(id, sequence, timestamp, type, version, conversation ? context.conversationId() : null, conversation ? context.runId() : null,
         runId == null ? context.runId() : runId, correlationId, parentEventId, payload, context.projectId());
   }
   public AgentEvent withExecutionOwnership(dev.mikoto2000.rei.core.execution.ActiveExecution execution) {

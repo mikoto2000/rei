@@ -13,8 +13,9 @@
 
 ## Phase 3
 
-- [ ] 共通 Run API に summary/image を統合して TDD と全テスト
-- [ ] 仕様・報告・feature/web-api-phase3 コミット
+- [x] 共通 Run API に summary/image を統合して TDD と全テスト
+- [x] Java 全2593テスト成功（failure/error/skip=0）、Client 全42成功、Native Client 全66成功
+- [x] 仕様・報告・feature/web-api-phase3 コミット
 
 ## Phase 4
 

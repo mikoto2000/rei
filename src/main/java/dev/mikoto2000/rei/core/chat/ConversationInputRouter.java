@@ -94,6 +94,11 @@ public final class ConversationInputRouter {
     }
     return removed;
   }
+  /** Explicit application work shares the agent FIFO without entering the chat runner or mailbox. */
+  public void submitOperation(AgentRunContext context, Runnable operation, Consumer<Runnable> lifecycle) {
+    projectQueue.enqueue(context.projectId(), context.runId(), () -> lifecycle.accept(operation),
+        () -> {}, () -> {}, error -> lifecycle.accept(() -> { throw error; }));
+  }
   private AgentRunContext cliContext(Path root, String conversation) {
     return new AgentRunContext(UUID.randomUUID().toString(), conversation, root,
         dev.mikoto2000.rei.core.project.ProjectStorage.projectId(conversation));

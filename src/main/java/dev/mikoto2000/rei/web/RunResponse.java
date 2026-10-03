@@ -7,7 +7,8 @@ public record RunResponse(String runId, String status, String sessionId, String 
   public record Failure(String type, String message) {}
   public static RunResponse from(RunSnapshot run) {
     var context = run.context();
-    return new RunResponse(context.runId(), run.status().name(), context.conversationId(), context.runId(),
+    boolean conversation = !context.conversationId().isEmpty();
+    return new RunResponse(context.runId(), run.status().name(), conversation ? context.conversationId() : null, conversation ? context.runId() : null,
         context.projectId(), run.startedAt() == null ? null : run.startedAt().toString(),
         run.completedAt() == null ? null : run.completedAt().toString(),
         run.failure() == null ? null : new Failure(run.failure().type(), run.failure().message()));

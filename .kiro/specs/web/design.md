@@ -11,6 +11,18 @@
 - 専用 DTO は内部 entity/event を serialize しない。ApiExceptionHandler は malformed JSON=400、未知 resource=404、既存 conflict=409、予期しない例外=安全な500を返す。Security matcher は変更しない。
 - 契約は ReadApiTest / ReadHttpTest と既存 Session/Run テストで固定。Phase 2 は write/reload endpoint を追加しない。
 
+## Phase 3: Background Execution API
+
+- `POST /api/v1/summaries` body={projectId,url}、`POST /api/v1/images` body={projectId,prompt,size?}。202 JSON={runId} と Location=/api/v1/runs/{runId} を返す。
+- BackgroundRunController → BackgroundRunSubmitService → 既存 WebPageSummarizerService / ImageGenerationService。Shell と同じ処理サービスを使い、ShellCommand/BackgroundCommands の現在 project 状態を参照しない。
+- ConversationInputRouter.submitOperation は既存 ProjectRunQueue へ明示した Runnable を登録する。chat と操作 run は同じ project FIFO を共有。Shell submitBackground/executeAuxiliary の既存動作は変更しない。Phase 1 の AGENT-only 制約は **明示的な Web operation も同じ FIFO に載せる** 形で拡張する。
+- 既存 RunRegistry/RunService/RunStatus/cancel/SSE/ReplayBuffer を再利用。新しい job API/status/event type は追加しない。結果は既存 message.delta、terminal は agent.run.completed/failed/cancelled。
+- 要約・画像は Session/Turn を必要としないため作成しない。内部 AgentRunContext の空 conversationId は非会話操作を示す。RunResponse と AgentEvent ownership の sessionId/turnId は null、chat の v1 JSON は変更しない。
+- CurrentConversationHistoryAppender は非会話 Web scope の追記を抑止し、他 project や Shell Session の履歴を汚染しない。既存 Shell 追記は維持。
+- URL は http/https、host 必須、userinfo 不可、4096文字以内。prompt は必須・10000文字以内。size は既存 ImageSize validation。登録済み projectId のみ。
+- 画像はサーバーで project root/.rei/web-images/{runId}.png を決める。HTTP はパス/model を受け取らない。SSE 結果は相対 artifact 名で、ダウンロード endpoint は追加していない。
+- BackgroundRunApiTest/BackgroundRunHttpTest/OperationHistoryIsolationTest により実 HTTP、FIFO、異なる project 並行、QUEUED/RUNNING cancel、非会話 SSE/replay/terminal/履歴分離を検証する。
+
 ## Session History 拡張
 
 Session History は Phase 1 の read-only 拡張として実装する。詳細な API／Shell 契約と保存方式は [Session History 仕様](../../../docs/session-history.md) を参照。

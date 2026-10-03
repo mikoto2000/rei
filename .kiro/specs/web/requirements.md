@@ -13,6 +13,10 @@ CLI と Web API は同じ application service を呼び、ShellCommand をその
 
 参照 API は design.md の Phase 2 契約に従う。history は Phase 1 の永続 Session API を再利用する。profile はイベント統計、skill は登録名による参照であり、存在しないユーザープロファイル更新や skill 作成/削除は追加しない。検索・feed・briefing 等の既存グローバルデータに偽の project/session 所属を作らない。全 endpoint に既存 Bearer 認証と DTO 分離を適用する。
 
+## Phase 3 の追加契約
+
+要約・画像の受付は `/api/v1/summaries` と `/api/v1/images` に明示した POST のみとし、202 と runId/Location を返す。その後の状態・SSE・cancel は既存 Run API を使う。chat と同じ project FIFO、異なる project の並行実行、ReplayBuffer、terminal、QUEUED/RUNNING cancel を適用する。Session/Turn を必要としない処理には架空の会話を作らない。任意 filesystem path/model 設定を入力しない。CLI は既存動作を維持する。
+
 ## Phase 1 実装範囲
 
 Phase 1 では Web API 基盤と Run API の確立を目的とし、**以下のみを実装対象とする**。
