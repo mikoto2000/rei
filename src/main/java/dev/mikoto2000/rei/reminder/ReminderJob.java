@@ -6,6 +6,7 @@ import java.time.ZoneOffset;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
 import lombok.RequiredArgsConstructor;
 
 @Component
@@ -13,12 +14,14 @@ import lombok.RequiredArgsConstructor;
 public class ReminderJob {
 
   private final ReminderService reminderService;
+  private final SoundNotificationService soundNotificationService;
 
   @Scheduled(fixedDelayString = "${rei.reminder.poll-interval-ms:60000}")
   public void runDueReminders() {
     OffsetDateTime now = now();
     for (Reminder reminder : reminderService.findDue(now)) {
       System.out.println("リマインド | " + reminder.remindAt() + " | " + reminder.message());
+      soundNotificationService.notify("リマインドです。" + reminder.message());
       reminderService.markNotified(reminder.id(), now);
     }
   }

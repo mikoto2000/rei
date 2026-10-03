@@ -12,12 +12,15 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
+
 class ReminderJobTest {
 
   @Test
-  void runDueRemindersPrintsAndMarksThemNotified() {
+  void runDueRemindersPrintsNarratesAndMarksThemNotified() {
     ReminderService service = org.mockito.Mockito.mock(ReminderService.class);
-    ReminderJob job = new ReminderJob(service) {
+    SoundNotificationService sound = org.mockito.Mockito.mock(SoundNotificationService.class);
+    ReminderJob job = new ReminderJob(service, sound) {
       @Override
       OffsetDateTime now() {
         return OffsetDateTime.of(2026, 3, 27, 9, 0, 0, 0, ZoneOffset.UTC);
@@ -46,6 +49,7 @@ class ReminderJobTest {
 
     assertTrue(out.toString().contains("リマインド"));
     assertTrue(out.toString().contains("顧客返信"));
+    verify(sound).notify("リマインドです。顧客返信");
     verify(service).markNotified(1L, OffsetDateTime.of(2026, 3, 27, 9, 0, 0, 0, ZoneOffset.UTC));
   }
 }
