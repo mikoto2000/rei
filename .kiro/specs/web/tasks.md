@@ -19,5 +19,10 @@
 
 ## Phase 4
 
-- [ ] 既存ドメインの操作単位で write API を TDD と全テスト
-- [ ] 仕様・報告・feature/web-api-phase4 コミット
+- [x] 既存ドメインの操作単位で write API を TDD と全テスト
+- [x] SQLite 永続化・実 HTTP・未知フィールド拒否・所有不明 scope 拒否・冪等性を検証
+- [x] Java 全2596テスト成功（failure/error/skip=0）、Client 全42成功、Native Client 全66成功
+- [x] V1DtoContractTest で Phase 2〜4 response DTO の JSON field 名を固定
+- [x] 仕様・報告・feature/web-api-phase4 コミット
+
+検証コマンド: Java は JAVA_HOME=C:\Java\jdk-25 で mvnw.cmd test、Client は npm test、Native Client は cargo test。外部 LLM 実呼出、ブラウザ E2E、native GUI E2E は未実行。各 Phase の検証は開始時の6ファイルの未コミット変更を保持した作業ツリー上で実行した。

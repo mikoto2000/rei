@@ -6,6 +6,12 @@ import org.springframework.web.bind.annotation.*;
 
 @RestControllerAdvice(basePackages = "dev.mikoto2000.rei.web")
 public class ApiExceptionHandler {
+  @ExceptionHandler(dev.mikoto2000.rei.application.state.OperationConflictException.class)
+  public ResponseEntity<Error> operationConflict() {
+    return ResponseEntity.status(409).body(new Error("Resource conflict"));
+  }
+  @ExceptionHandler(java.time.format.DateTimeParseException.class)
+  public ResponseEntity<Error> invalidDate() { return invalidRequest(); }
   @ExceptionHandler({org.springframework.http.converter.HttpMessageNotReadableException.class,
       org.springframework.beans.TypeMismatchException.class})
   public ResponseEntity<Error> malformedRequest() {

@@ -93,7 +93,7 @@ public class ReminderService {
     return new Reminder(id, message, type, remindAt, targetAt, minutesBefore, false, createdAt, null);
   }
 
-  private Reminder findById(long id) {
+  public Reminder findById(long id) {
     return jdbcClient.sql("""
         SELECT id, message, type, remind_at, remind_at_epoch, target_at, minutes_before, notified, created_at, notified_at
         FROM reminders
