@@ -1,5 +1,16 @@
 # 設計書: Web API 機能（Phase 1）
 
+## Phase 2: 参照 API
+
+- history は既存 `GET /api/v1/sessions`、`/{sessionId}`、`/{sessionId}/turns` を利用する。別名 `/history` は追加しない。未知 project filter が空一覧になる既存 v1 契約を維持する。
+- `ReadController → ReadQueryService → 既存サービス/port`。Shell と search/briefing/feed サービスを共有し、skill/profile は共通の SkillQueryService/ProfileQueryService を利用する。
+- `GET /api/v1/feed`、`GET /api/v1/feed/{id}`、`GET /api/v1/skills`、`GET /api/v1/skills/{name}`、`GET /api/v1/profile`、`GET /api/v1/briefing`、`POST /api/v1/search` を追加。
+- search body は query（必須、1〜2000文字）、vectorTopK/webTopK（1〜100、既定3/5）、threshold（0〜1）。任意 source/path は入力しない。検索結果を返し、Shell の回答表示処理を呼ばない。
+- feed/skill/profile/briefing/search の保存モデルは全体共有で project/session 所有ではない。グローバルデータに架空の project フィルタは追加しない。Session 分離は既存 API のまま。
+- profile はイベント統計。skill は登録名で参照する。ログファイル・skill directory/skillFile は DTO に含めない。
+- 専用 DTO は内部 entity/event を serialize しない。ApiExceptionHandler は malformed JSON=400、未知 resource=404、既存 conflict=409、予期しない例外=安全な500を返す。Security matcher は変更しない。
+- 契約は ReadApiTest / ReadHttpTest と既存 Session/Run テストで固定。Phase 2 は write/reload endpoint を追加しない。
+
 ## Session History 拡張
 
 Session History は Phase 1 の read-only 拡張として実装する。詳細な API／Shell 契約と保存方式は [Session History 仕様](../../../docs/session-history.md) を参照。

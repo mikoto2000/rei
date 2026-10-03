@@ -46,7 +46,7 @@ public class ProfileCommand implements Runnable {
   }
 
   void printSummary() {
-    ProfileSummary summary = logStore.summarize();
+    ProfileSummary summary = new dev.mikoto2000.rei.application.read.ProfileQueryService(logStore).summary();
     System.out.println("profile log: " + summary.file());
     System.out.println("events: " + summary.total());
     if (summary.total() == 0) {
@@ -85,7 +85,7 @@ public class ProfileCommand implements Runnable {
   }
 
   void printMermaid(int limit) {
-    ProfileSummary summary = logStore.summarize();
+    ProfileSummary summary = new dev.mikoto2000.rei.application.read.ProfileQueryService(logStore).summary();
     if (summary.total() == 0) {
       System.out.println("profile log is empty: " + summary.file());
       return;
