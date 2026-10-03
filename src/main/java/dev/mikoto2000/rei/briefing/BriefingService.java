@@ -20,9 +20,11 @@ import dev.mikoto2000.rei.interest.InterestUpdateService;
 import dev.mikoto2000.rei.task.Task;
 import dev.mikoto2000.rei.task.TaskService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class BriefingService {
 
   private final GoogleCalendarService googleCalendarService;
@@ -95,11 +97,20 @@ public class BriefingService {
       return List.of();
     }
 
-    return vectorStore.similaritySearch(SearchRequest.builder()
+    List<Document> documents;
+    try {
+      documents = vectorStore.similaritySearch(SearchRequest.builder()
             .query(query)
             .topK(3)
             .similarityThresholdAll()
-            .build())
+            .build());
+    } catch (RuntimeException exception) {
+      log.warn("関連文書の検索に失敗したため、関連文書なしでブリーフィングを生成します。"
+          + "埋め込み API の REI_OPENAI_EMBEDDING_BASE_URL / REI_OPENAI_EMBEDDING_PATH / "
+          + "REI_OPENAI_EMBEDDING_MODEL を確認してください。", exception);
+      return List.of();
+    }
+    return documents
         .stream()
         .map(this::formatDocument)
         .filter(value -> !value.isBlank())

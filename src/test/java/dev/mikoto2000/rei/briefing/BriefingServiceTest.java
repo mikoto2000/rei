@@ -31,6 +31,40 @@ import dev.mikoto2000.rei.task.TaskStatus;
 class BriefingServiceTest {
 
   @Test
+  void briefingForContinuesWhenEmbeddingEndpointReturns404() throws Exception {
+    GoogleCalendarService calendarService = org.mockito.Mockito.mock(GoogleCalendarService.class);
+    TaskService taskService = org.mockito.Mockito.mock(TaskService.class);
+    VectorStore vectorStore = org.mockito.Mockito.mock(VectorStore.class);
+    BriefingNarrator narrator = org.mockito.Mockito.mock(BriefingNarrator.class);
+    InterestUpdateService interests = org.mockito.Mockito.mock(InterestUpdateService.class);
+    FeedService feeds = org.mockito.Mockito.mock(FeedService.class);
+    BriefingService service = new BriefingService(
+        calendarService, taskService, vectorStore, narrator, interests, feeds, new FeedProperties(20));
+    LocalDate date = LocalDate.of(2026, 3, 27);
+    GoogleCalendarEventSummary event = new GoogleCalendarEventSummary(
+        "evt-1", "顧客定例", "2026-03-27T09:00:00+09:00", "2026-03-27T10:00:00+09:00",
+        "会議室A", "confirmed");
+    when(calendarService.listEventsForDate(date)).thenReturn(List.of(event));
+    when(taskService.listOpen()).thenReturn(List.of());
+    when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class)))
+        .thenThrow(new org.springframework.ai.retry.NonTransientAiException("HTTP 404 - {\"detail\":\"Not Found\"}"));
+    when(interests.listRecent(24)).thenReturn(List.of());
+    when(feeds.listBriefingItems(any(), any(), org.mockito.ArgumentMatchers.eq(20))).thenReturn(List.of());
+    when(narrator.narrate(any())).thenReturn(new BriefingNarration(
+        "顧客定例があります。", List.of(), List.of("会議の準備をする。")));
+
+    DailyBriefing briefing = service.briefingFor(date);
+
+    assertEquals(List.of(event), briefing.events());
+    assertEquals(List.of(), briefing.relatedDocuments());
+    assertEquals("顧客定例があります。", briefing.overview());
+    assertEquals(List.of("会議の準備をする。"), briefing.nextActions());
+    ArgumentCaptor<BriefingContext> context = ArgumentCaptor.forClass(BriefingContext.class);
+    verify(narrator).narrate(context.capture());
+    assertEquals(List.of(), context.getValue().relatedDocuments());
+  }
+
+  @Test
   void briefingForAggregatesEventsTasksAndDocuments() throws Exception {
     GoogleCalendarService calendarService = org.mockito.Mockito.mock(GoogleCalendarService.class);
     TaskService taskService = org.mockito.Mockito.mock(TaskService.class);
