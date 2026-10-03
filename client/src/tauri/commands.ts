@@ -11,7 +11,20 @@ import type {
   TurnPage,
 } from "../entities/models";
 type RunArgs = { serverId: string; runId: string };
+import type {
+  WorkspaceOperation,
+  BackgroundOperation,
+  WorkspaceResult,
+} from "../entities/workspace";
 interface Commands {
+  workspace_execute: [
+    { serverId: string; operation: WorkspaceOperation },
+    WorkspaceResult,
+  ];
+  background_submit: [
+    { serverId: string; projectId: string; operation: BackgroundOperation },
+    Run,
+  ];
   app_snapshot: [undefined, Snapshot];
   vault_unlock: [{ password: string }, void];
   server_list: [undefined, Server[]];

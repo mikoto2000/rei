@@ -62,13 +62,14 @@ export interface Connection {
   error: string | null;
 }
 export interface Run {
+  cancelRequested?: boolean;
   timeline?: TimelineEntry[];
   serverId: string;
   conversationId: string;
   projectId: string;
   runId: string;
-  sessionId: string;
-  turnId: string;
+  sessionId: string | null;
+  turnId: string | null;
   prompt: string;
   status: RunStatus;
   streamState: StreamState;
@@ -147,6 +148,7 @@ export const canSubmit = (
   !pending &&
   !activeRuns(runs).some((r) => r.conversationId === conversation);
 const errors: Record<string, string> = {
+  Conflict: "既存のリソースと競合しています。入力内容を確認してください。",
   InvalidCursor: "ページ情報が無効です。一覧を更新してください。",
   InvalidLimit: "取得件数は1〜100件で指定してください。",
   UnexpectedServerError:

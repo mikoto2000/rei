@@ -39,7 +39,7 @@ public class SkillCommand implements Runnable {
   }
 
   void list() {
-    java.util.List<AgentSkill> skills = repository.findAll();
+    java.util.List<AgentSkill> skills = new dev.mikoto2000.rei.application.read.SkillQueryService(repository).list();
     if (skills.isEmpty()) {
       out().println("Agent Skills は登録されていません");
       return;
@@ -54,7 +54,7 @@ public class SkillCommand implements Runnable {
   }
 
   void show(String name) {
-    repository.findByName(name).ifPresentOrElse(skill -> {
+    new dev.mikoto2000.rei.application.read.SkillQueryService(repository).find(name).ifPresentOrElse(skill -> {
       out().println("name: " + skill.name());
       out().println("enabled: " + skill.enabled());
       out().println("description: " + skill.description());
@@ -66,8 +66,8 @@ public class SkillCommand implements Runnable {
   }
 
   void reload() {
-    repository.reload();
-    out().println("Agent Skills を再読み込みしました: " + repository.findAll().size() + " 件");
+    int count = new dev.mikoto2000.rei.application.state.SkillReloadService(repository).reload();
+    out().println("Agent Skills を再読み込みしました: " + count + " 件");
   }
 
   private java.io.PrintWriter out() {

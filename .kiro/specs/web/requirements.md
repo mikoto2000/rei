@@ -9,6 +9,18 @@
 本 Web API は単なる「CLI の HTTP ラッパー」ではなく、`application/core` に対して Shell UI と Web UI が並列にぶら下がる構造を目指す。
 CLI と Web API は同じ application service を呼び、ShellCommand をそのまま HTTP 化しない。
 
+## Phase 2 の追加契約
+
+参照 API は design.md の Phase 2 契約に従う。history は Phase 1 の永続 Session API を再利用する。profile はイベント統計、skill は登録名による参照であり、存在しないユーザープロファイル更新や skill 作成/削除は追加しない。検索・feed・briefing 等の既存グローバルデータに偽の project/session 所属を作らない。全 endpoint に既存 Bearer 認証と DTO 分離を適用する。
+
+## Phase 3 の追加契約
+
+要約・画像の受付は `/api/v1/summaries` と `/api/v1/images` に明示した POST のみとし、202 と runId/Location を返す。その後の状態・SSE・cancel は既存 Run API を使う。chat と同じ project FIFO、異なる project の並行実行、ReplayBuffer、terminal、QUEUED/RUNNING cancel を適用する。Session/Turn を必要としない処理には架空の会話を作らない。任意 filesystem path/model 設定を入力しない。CLI は既存動作を維持する。
+
+## Phase 4 の追加契約
+
+永続状態の公開は design.md の操作表に明示した endpoint のみに限定する。write validation は application service に置き、専用 DTO を通す。ShellCommand、任意 path/外部投稿/OAuth/設定変更の包括的な expose は行わない。存在しないドメイン update/delete operation を作らない。所有情報を保存していない PROJECT/SESSION scope の legacy memory は deny by default とし、所有検証なしに公開しない。要件の project/session isolation を満たすために将来は所有情報の永続化が必要となる。
+
 ## Phase 1 実装範囲
 
 Phase 1 では Web API 基盤と Run API の確立を目的とし、**以下のみを実装対象とする**。

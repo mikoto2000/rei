@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 mod history;
 pub use history::*;
+mod workspace;
+pub use workspace::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AppError {
@@ -34,6 +36,7 @@ pub enum AppError {
     VaultLocked,
     Busy,
     NotFound,
+    Conflict,
 }
 pub type Result<T> = std::result::Result<T, AppError>;
 
@@ -87,11 +90,23 @@ impl RunStatus {
 #[serde(rename_all = "camelCase")]
 pub struct RunSnapshot {
     pub run_id: String,
+    #[serde(deserialize_with = "optional_ownership")]
     pub session_id: String,
+    #[serde(deserialize_with = "optional_ownership")]
     pub turn_id: String,
     pub project_id: String,
     pub status: RunStatus,
     pub failure: Option<serde_json::Value>,
+}
+pub struct CancelReceipt {
+    pub accepted: bool,
+    pub snapshot: RunSnapshot,
+}
+// Empty ownership is reserved for non-conversational runs, never chat receipts.
+fn optional_ownership<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<String, D::Error> {
+    Ok(Option::<String>::deserialize(deserializer)?.unwrap_or_default())
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -175,6 +190,7 @@ pub enum Operation {
     Stream,
     Sessions,
     Session,
+    Resource,
 }
 pub fn http_error(status: u16, op: Operation) -> AppError {
     match (status, op) {
@@ -187,6 +203,8 @@ pub fn http_error(status: u16, op: Operation) -> AppError {
         (404, Operation::Run | Operation::Stream) => AppError::RunNotFound,
         (409, Operation::Chat) => AppError::SessionProjectConflict,
         (409, Operation::Stream) => AppError::ReplayGap,
+        (409, Operation::Resource) => AppError::Conflict,
+        (404, Operation::Resource) => AppError::NotFound,
         (400 | 422, _) => AppError::RequestRejected,
         (404, _) => AppError::EndpointNotFound,
         (300..=399, _) => AppError::HttpRedirect,

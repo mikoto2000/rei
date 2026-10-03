@@ -43,6 +43,23 @@ impl NotificationPort for NativeNotifications {
     }
 }
 type App<'a> = State<'a, Arc<Application>>;
+#[tauri::command]
+async fn workspace_execute(
+    app: App<'_>,
+    server_id: String,
+    operation: WorkspaceOperation,
+) -> Result<WorkspaceResult> {
+    app.workspace(&server_id, operation).await
+}
+#[tauri::command]
+async fn background_submit(
+    app: App<'_>,
+    server_id: String,
+    project_id: String,
+    operation: BackgroundOperation,
+) -> Result<RunView> {
+    app.background(&server_id, &project_id, operation).await
+}
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ConversationDto {
@@ -315,6 +332,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            workspace_execute,
+            background_submit,
             app_snapshot,
             vault_unlock,
             server_list,

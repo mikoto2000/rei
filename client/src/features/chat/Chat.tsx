@@ -187,8 +187,12 @@ export function Chat({
                   </button>
                   {activeRuns([run]).length > 0 && (
                     <>
-                      <button className="danger" onClick={() => onStop(run)}>
-                        Stop
+                      <button
+                        className="danger"
+                        disabled={run.cancelRequested}
+                        onClick={() => onStop(run)}
+                      >
+                        {run.cancelRequested ? "キャンセル要求済み" : "Stop"}
                       </button>
                       {run.streamState === "CLOSED" && (
                         <button onClick={() => onSubscribe(run)}>再接続</button>

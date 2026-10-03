@@ -1,5 +1,35 @@
 # Live AgentEvent Activity validation
 
+## Web API Phase 1〜4 対応（2026-10-03）
+
+ブランチ `feature/native-client-web-api`、基点 `feature/web-api-phase4`（`a70dfb3`）。
+既存 Rust HttpReiClient / Vault / RunManager / SSE / Session API を拡張し、
+Workspace の read / write フォームと summary / image Run を追加しました。
+サーバーコードと開始時の6ファイルの未コミット変更は、この実装に含めていません。
+
+| 検証                                                          | 結果                                          |
+| ------------------------------------------------------------- | --------------------------------------------- |
+| Client Vitest                                                 | 14 files / 49 tests、全成功                   |
+| Rust `cargo test`                                             | 77 tests、全成功（追加 Web API 契約11 tests） |
+| Java `mvnw.cmd test`（JDK25）                                 | 2,596 tests、failure/error/skip=0             |
+| Playwright Desktop / Mobile Chrome                            | 14 tests、全成功（Workspace 2 tests を追加）  |
+| `npm run build` / typecheck / lint                            | 成功                                          |
+| 変更対象の Prettier / `cargo fmt -- --check`                  | 成功                                          |
+| `cargo clippy --all-targets --features native -- -D warnings` | 成功                                          |
+| `cargo check --features native`                               | 成功                                          |
+| `cargo build --features native --bin rei-client`              | Windows debug executable ビルド成功           |
+
+E2E の最初の並列実行ではページ読み込み・Chrome session のタイムアウトがあり、
+直列実行で確認しました。後片付け中の共有 Vite サーバー停止による失敗もあったため、
+最終実行は `CI=1`、`--workers=1 --reporter=list` で専用サーバーを使用しています。
+Workspace の selector は実際の accessible combobox role に合わせて修正しました。
+テストの期待動作とタイムアウトは弱めていません。
+
+Rust の incremental compilation の終了時に Windows access denied の警告が出ますが、
+テスト・コンパイル・リンクは成功しています。Native GUI 実操作、実 LLM / 画像 provider、
+LAN / Tailscale 実接続、Android / iOS 実機ビルドは未検証です。
+接続と制限事項は [Web API ガイド](../docs/native-web-api.md) を参照してください。
+
 ## ユーザー／れいのアイコン（2026-09-22）
 
 Settings の「ユーザーアイコン」で PNG / JPEG / WebP（2 MB 以下）を選択・リセットできます。

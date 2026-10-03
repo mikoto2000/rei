@@ -1,5 +1,55 @@
 # 設計書: Web API 機能（Phase 1）
 
+## Phase 2: 参照 API
+
+- history は既存 `GET /api/v1/sessions`、`/{sessionId}`、`/{sessionId}/turns` を利用する。別名 `/history` は追加しない。未知 project filter が空一覧になる既存 v1 契約を維持する。
+- `ReadController → ReadQueryService → 既存サービス/port`。Shell と search/briefing/feed サービスを共有し、skill/profile は共通の SkillQueryService/ProfileQueryService を利用する。
+- `GET /api/v1/feed`、`GET /api/v1/feed/{id}`、`GET /api/v1/skills`、`GET /api/v1/skills/{name}`、`GET /api/v1/profile`、`GET /api/v1/briefing`、`POST /api/v1/search` を追加。
+- search body は query（必須、1〜2000文字）、vectorTopK/webTopK（1〜100、既定3/5）、threshold（0〜1）。任意 source/path は入力しない。検索結果を返し、Shell の回答表示処理を呼ばない。
+- feed/skill/profile/briefing/search の保存モデルは全体共有で project/session 所有ではない。グローバルデータに架空の project フィルタは追加しない。Session 分離は既存 API のまま。
+- profile はイベント統計。skill は登録名で参照する。ログファイル・skill directory/skillFile は DTO に含めない。
+- 専用 DTO は内部 entity/event を serialize しない。ApiExceptionHandler は malformed JSON=400、未知 resource=404、既存 conflict=409、予期しない例外=安全な500を返す。Security matcher は変更しない。
+- 契約は ReadApiTest / ReadHttpTest と既存 Session/Run テストで固定。Phase 2 は write/reload endpoint を追加しない。
+
+## Phase 3: Background Execution API
+
+- `POST /api/v1/summaries` body={projectId,url}、`POST /api/v1/images` body={projectId,prompt,size?}。202 JSON={runId} と Location=/api/v1/runs/{runId} を返す。
+- BackgroundRunController → BackgroundRunSubmitService → 既存 WebPageSummarizerService / ImageGenerationService。Shell と同じ処理サービスを使い、ShellCommand/BackgroundCommands の現在 project 状態を参照しない。
+- ConversationInputRouter.submitOperation は既存 ProjectRunQueue へ明示した Runnable を登録する。chat と操作 run は同じ project FIFO を共有。Shell submitBackground/executeAuxiliary の既存動作は変更しない。Phase 1 の AGENT-only 制約は **明示的な Web operation も同じ FIFO に載せる** 形で拡張する。
+- 既存 RunRegistry/RunService/RunStatus/cancel/SSE/ReplayBuffer を再利用。新しい job API/status/event type は追加しない。結果は既存 message.delta、terminal は agent.run.completed/failed/cancelled。
+- 要約・画像は Session/Turn を必要としないため作成しない。内部 AgentRunContext の空 conversationId は非会話操作を示す。RunResponse と AgentEvent ownership の sessionId/turnId は null、chat の v1 JSON は変更しない。
+- CurrentConversationHistoryAppender は非会話 Web scope の追記を抑止し、他 project や Shell Session の履歴を汚染しない。既存 Shell 追記は維持。
+- URL は http/https、host 必須、userinfo 不可、4096文字以内。prompt は必須・10000文字以内。size は既存 ImageSize validation。登録済み projectId のみ。
+- 画像はサーバーで project root/.rei/web-images/{runId}.png を決める。HTTP はパス/model を受け取らない。SSE 結果は相対 artifact 名で、ダウンロード endpoint は追加していない。
+- BackgroundRunApiTest/BackgroundRunHttpTest/OperationHistoryIsolationTest により実 HTTP、FIFO、異なる project 並行、QUEUED/RUNNING cancel、非会話 SSE/replay/terminal/履歴分離を検証する。
+
+## Phase 4: 永続状態の明示操作
+
+| Method | Path | 成功 | Request / 意味 |
+| --- | --- | --- | --- |
+| POST | /api/v1/feed | 201 + Location | {url,displayName?}。http/https URL 登録のみ |
+| PATCH | /api/v1/feed/{id} | 200 | {displayName?,enabled?}。最低1項目 |
+| DELETE | /api/v1/feed/{id} | 204 | 未登録も204（既存 delete の自然な冪等性） |
+| GET | /api/v1/reminders | 200 | 未通知一覧 |
+| GET | /api/v1/reminders/{id} | 200 / 404 | 登録済み reminder 詳細 |
+| POST | /api/v1/reminders | 201 + Location | {message,at} または {message,target,minutesBefore} |
+| DELETE | /api/v1/reminders/{id} | 204 | 未登録も204。通知済み化の API は追加しない |
+| GET | /api/v1/interests | 200 | hours=1〜8760、既定24 |
+| POST | /api/v1/interests | 201 | {topic,reason,searchQuery,summary,sourceUrls}。既存 save operation。重複 query=409 |
+| GET | /api/v1/memories | 200 | 非 contextual scope の ACTIVE memory 一覧。参照時の期限切れ書換えをしない |
+| GET | /api/v1/memories/{id} | 200 / 404 | 非 contextual scope の詳細 |
+| POST | /api/v1/memories | 201 + Location | {content,type,scope,confidence?}。既存 save operation、ACTIVE、confidence既定0.8 |
+| DELETE | /api/v1/memories/{id} | 204 / 404 | 既存 updateStatus(DELETED)。既削除は204、未知/所有不明は404 |
+| POST | /api/v1/skills/reload | 200 | bodyなしまたは{}。サーバー設定済み catalog の再読込。{count} |
+
+- StatefulController → StatefulOperationService → Shell と共通の FeedService/ReminderService/InterestUpdateService/MemoryService。SkillReloadService は Shell と共通。domain validation は application adapter に置き、CLI の既存 validation/振る舞いを変更しない。
+- profile の write、reminder の update、interest の update/delete、memory content の update、skill の作成/変更/削除は既存 operation がないため追加しない。interest discovery、memory consolidate/summarize、feed refresh/import-opml、ファイル export はこの API に自動公開しない。
+- feed/reminder/interest と legacy MemoryService は全体共有データ。HTTP の全 write DTO は StrictApiRequest で未知フィールドを拒否し、架空の projectId/sessionId や path を受け付けない。
+- **既存モデルの矛盾**: MemoryScope.PROJECT/SESSION がある一方、Memory に所属 projectId/sessionId とそれを検証する repository column がない。deny by default のため当該 scope の作成は400、既存 contextual memory は一覧から除外し詳細/削除は404。将来公開する場合は永続所有情報を先に実装する必要がある。これは scope の名前だけで project isolation を仮装しないための制限。
+- Validation: URL 4096文字/http(s)/host/userinfoなし、feed displayName 200文字、reminder message 2000文字、at/target排他、minutesBefore 0〜525600、interest topic 200/reason 2000/query 2000/summary 10000/sourceUrls最大20、memory content 20000/enum名/confidence有限0〜1、正の数値ID。blank と未知フィールドは400、既存 feed/query の重複409、未知参照404、安全な例外500。
+- 専用 ReminderResponse/InterestResponse/MemoryResponse は enum を name、日時を ISO-8601 string として返す。内部 repository/entity 型を serialize しない。Security matcher は Phase 1 のまま。
+- StatefulApiTest は SQLite 実永続化、CRUD の存在する範囲、重複/validation/ownership/冪等性を検証。StatefulHttpTest は実 HTTP/Bearer/再起動後の永続性/非公開操作拒否を検証。既存 Phase 1〜3 と Shell 全テストも実行する。
+
 ## Session History 拡張
 
 Session History は Phase 1 の read-only 拡張として実装する。詳細な API／Shell 契約と保存方式は [Session History 仕様](../../../docs/session-history.md) を参照。

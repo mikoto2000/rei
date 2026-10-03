@@ -53,6 +53,38 @@ pub struct Application {
     submitting: Mutex<HashSet<String>>,
 }
 impl Application {
+    pub async fn workspace(
+        &self,
+        server: &str,
+        operation: WorkspaceOperation,
+    ) -> Result<WorkspaceResult> {
+        self.api(server, true)?.workspace(operation).await
+    }
+    pub async fn background(
+        &self,
+        server: &str,
+        project: &str,
+        operation: BackgroundOperation,
+    ) -> Result<RunView> {
+        let prompt = match &operation {
+            BackgroundOperation::Summary { url } => format!("Summarize: {url}"),
+            BackgroundOperation::Image { prompt, .. } => format!("Image: {prompt}"),
+        };
+        let api = self.api(server, true)?;
+        // Registered project IDs only, consistent with new-conversation selection.
+        if !api.projects().await?.iter().any(|p| p.id == project) {
+            return Err(AppError::ProjectNotFound);
+        }
+        let receipt = api.background(project, operation).await?;
+        self.runs.register(Projection::background(
+            server,
+            project,
+            &receipt.run_id,
+            &prompt,
+        ))?;
+        self.runs.subscribe(server, &receipt.run_id, api)?;
+        self.runs.get(server, &receipt.run_id)
+    }
     pub async fn session_list(
         &self,
         server: &str,

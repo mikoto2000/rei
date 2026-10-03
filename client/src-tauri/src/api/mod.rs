@@ -4,7 +4,10 @@ use futures_util::StreamExt;
 use reqwest::{Client, Method, Response};
 use serde::de::DeserializeOwned;
 use std::time::Duration;
+mod background;
 mod history;
+mod stateful;
+mod workspace;
 use history::*;
 
 pub struct HttpReiClient {
@@ -63,17 +66,25 @@ impl HttpReiClient {
         request: reqwest::RequestBuilder,
         op: Operation,
     ) -> Result<T> {
-        Self::checked(request.timeout(Duration::from_secs(30)), op)
-            .await?
-            .json()
-            .await
-            .map_err(|error| {
-                if error.is_timeout() {
-                    AppError::RequestTimeout
-                } else {
-                    AppError::InvalidResponse
-                }
-            })
+        let response = Self::checked(request.timeout(Duration::from_secs(30)), op).await?;
+        if matches!(op, Operation::Resource)
+            && (response.status() != reqwest::StatusCode::OK
+                || !response
+                    .headers()
+                    .get("content-type")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("")
+                    .starts_with("application/json"))
+        {
+            return Err(AppError::InvalidResponse);
+        }
+        response.json().await.map_err(|error| {
+            if error.is_timeout() {
+                AppError::RequestTimeout
+            } else {
+                AppError::InvalidResponse
+            }
+        })
     }
     fn run_path(run: &str, suffix: &str) -> Result<String> {
         if run.is_empty() || !run.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
@@ -84,6 +95,16 @@ impl HttpReiClient {
 }
 #[async_trait]
 impl ReiClient for HttpReiClient {
+    async fn background(
+        &self,
+        project: &str,
+        operation: BackgroundOperation,
+    ) -> Result<BackgroundReceipt> {
+        self.submit_background(project, operation).await
+    }
+    async fn workspace(&self, operation: WorkspaceOperation) -> Result<WorkspaceResult> {
+        self.workspace_operation(operation).await
+    }
     async fn list_sessions(
         &self,
         project: Option<&str>,
@@ -178,11 +199,24 @@ impl ReiClient for HttpReiClient {
         .await
     }
     async fn cancel(&self, run: &str) -> Result<RunSnapshot> {
-        Self::json(
-            self.request(Method::POST, &Self::run_path(run, "/cancel")?, true)?,
+        Ok(self.cancel_receipt(run).await?.snapshot)
+    }
+    async fn cancel_receipt(&self, run: &str) -> Result<CancelReceipt> {
+        let response = Self::checked(
+            self.request(Method::POST, &Self::run_path(run, "/cancel")?, true)?
+                .timeout(Duration::from_secs(30)),
             Operation::Run,
         )
-        .await
+        .await?;
+        let accepted = response.status() == reqwest::StatusCode::ACCEPTED;
+        if !accepted && response.status() != reqwest::StatusCode::OK {
+            return Err(AppError::InvalidResponse);
+        }
+        let snapshot = response
+            .json()
+            .await
+            .map_err(|_| AppError::InvalidResponse)?;
+        Ok(CancelReceipt { accepted, snapshot })
     }
     async fn events(&self, run: &str, last: Option<u64>) -> Result<ByteStream> {
         let mut request = self

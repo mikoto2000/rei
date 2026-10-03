@@ -24,17 +24,24 @@ public class CurrentConversationHistoryAppender implements ConversationHistoryAp
 
   @Override
   public void appendUserMessage(String content) {
+    if (nonConversationalWebRun()) return;
     chatMemory.add(ConversationIds.currentChat(), List.of(new UserMessage(content)));
     appendLog("user", content);
   }
 
   @Override
   public void appendAssistantMessage(String content) {
+    if (nonConversationalWebRun()) return;
     chatMemory.add(ConversationIds.currentChat(), List.of(new AssistantMessage(content)));
     appendLog("assistant", content);
   }
 
   private void appendLog(String speaker, String content) {
     conversationLogStore.ifPresent(store -> store.append(ConversationIds.currentChat(), speaker, content));
+  }
+  private boolean nonConversationalWebRun() {
+    var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    return run != null && run.requestSource() == dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.WEB
+        && run.conversationId().isEmpty();
   }
 }
