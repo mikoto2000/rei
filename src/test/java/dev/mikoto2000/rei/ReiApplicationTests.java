@@ -14,6 +14,7 @@ import dev.mikoto2000.rei.ui.shell.ChatCommand;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentRepository;
 
 @SpringBootTest(properties = "spring.ai.openai.api-key=test-key")
+@org.junit.jupiter.api.Tag("integration")
 class ReiApplicationTests {
 
 	@MockitoBean

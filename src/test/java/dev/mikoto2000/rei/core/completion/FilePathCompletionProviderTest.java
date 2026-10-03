@@ -7,6 +7,7 @@ import java.io.IOException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+@org.junit.jupiter.api.Tag("integration")
 class FilePathCompletionProviderTest {
   @TempDir Path root;
   private final FilePathCompletionProvider provider = new FilePathCompletionProvider();

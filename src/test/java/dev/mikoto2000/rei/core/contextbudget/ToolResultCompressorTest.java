@@ -7,6 +7,7 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.messages.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ToolResultCompressorTest {
   @TempDir Path dir;
   final TokenEstimator tokens = TokenEstimator.conservative();

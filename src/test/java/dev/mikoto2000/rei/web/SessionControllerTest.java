@@ -13,6 +13,7 @@ import dev.mikoto2000.rei.conversation.FileSessionRepository;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class SessionControllerTest {
   @TempDir Path directory;
   @Configuration(proxyBeanMethods = false) @EnableWebMvc

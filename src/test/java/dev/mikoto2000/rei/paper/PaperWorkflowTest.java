@@ -12,6 +12,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.*;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+@org.junit.jupiter.api.Tag("integration")
 class PaperWorkflowTest {
   @Test
   void glossaryIsReusedAcrossTranslationRequests() {

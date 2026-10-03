@@ -9,6 +9,7 @@ import static org.mockito.Mockito.*;
 import dev.mikoto2000.rei.conversation.*;
 import dev.mikoto2000.rei.event.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class BehaviorConversationPublicationTest {
   @TempDir Path directory;
   final Clock clock=Clock.fixed(Instant.parse("2026-09-25T12:00:00Z"),ZoneOffset.UTC);

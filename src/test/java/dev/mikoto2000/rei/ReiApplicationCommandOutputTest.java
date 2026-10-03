@@ -23,6 +23,7 @@ import dev.mikoto2000.rei.summarize.SummaryResult;
 import dev.mikoto2000.rei.summarize.command.SummarizeCommand;
 import picocli.CommandLine;
 
+@org.junit.jupiter.api.Tag("integration")
 class ReiApplicationCommandOutputTest {
 
   @org.junit.jupiter.api.io.TempDir

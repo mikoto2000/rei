@@ -32,6 +32,9 @@
 		<picocli.version>4.7.7</picocli.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+		<test.excludedGroups>integration | e2e</test.excludedGroups>
+		<test.groups></test.groups>
+		<test.dataDirectory>${project.build.directory}/test-performance/data</test.dataDirectory>
 	</properties>
 	<dependencies>
 		<!-- Direct use of the PDFBox version already supplied by Tika. -->
@@ -187,6 +190,23 @@
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<forkCount>1</forkCount>
+					<reuseForks>true</reuseForks>
+					<failIfNoTests>true</failIfNoTests>
+					<groups>${test.groups}</groups>
+					<excludedGroups>${test.excludedGroups}</excludedGroups>
+					<environmentVariables>
+						<REI_DATA_DIR>${test.dataDirectory}</REI_DATA_DIR>
+					</environmentVariables>
+					<systemPropertyVariables>
+						<junit.jupiter.execution.parallel.enabled>false</junit.jupiter.execution.parallel.enabled>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
 					<annotationProcessorPaths>
@@ -220,5 +240,27 @@
 			</plugin>
 		</plugins>
 	</build>
+	<profiles>
+		<!-- Existing tests stay in Surefire: verify must include the fast suite too. -->
+		<profile>
+			<id>integration</id>
+			<properties>
+				<test.excludedGroups></test.excludedGroups>
+			</properties>
+		</profile>
+		<profile>
+			<id>full</id>
+			<properties>
+				<test.excludedGroups></test.excludedGroups>
+			</properties>
+		</profile>
+		<profile>
+			<id>integration-only</id>
+			<properties>
+				<test.excludedGroups></test.excludedGroups>
+				<test.groups>integration | e2e</test.groups>
+			</properties>
+		</profile>
+	</profiles>
 
 </project>

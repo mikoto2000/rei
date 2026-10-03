@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
+@org.junit.jupiter.api.Tag("integration")
 class SqliteVecAssetResolverTest {
 
   private final SqliteVecAssetResolver resolver = new SqliteVecAssetResolver();

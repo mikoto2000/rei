@@ -46,6 +46,7 @@ import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.event.WorkingSetSearchCompletedPayload;
 
+@org.junit.jupiter.api.Tag("e2e")
 class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
 
   @TempDir

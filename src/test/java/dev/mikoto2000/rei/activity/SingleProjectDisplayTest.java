@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static dev.mikoto2000.rei.activity.DailySummaryTest.*;
 import static dev.mikoto2000.rei.activity.ThemeAttributionTest.sample;
+@org.junit.jupiter.api.Tag("integration")
 class SingleProjectDisplayTest {
   @TempDir Path dir;
   static List<SummarySegment> fixture() {

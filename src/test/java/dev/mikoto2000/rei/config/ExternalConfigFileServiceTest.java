@@ -19,6 +19,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 
+@org.junit.jupiter.api.Tag("integration")
 class ExternalConfigFileServiceTest {
 
   @TempDir

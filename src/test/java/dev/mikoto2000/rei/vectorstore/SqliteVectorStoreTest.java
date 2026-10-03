@@ -34,6 +34,7 @@ import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
 import dev.mikoto2000.rei.core.sqlitevec.SqliteVecInstaller;
 import tools.jackson.databind.json.JsonMapper;
 
+@org.junit.jupiter.api.Tag("integration")
 class SqliteVectorStoreTest {
 
   @TempDir
@@ -394,24 +395,8 @@ class SqliteVectorStoreTest {
   }
 
   private Path vecExtensionPath() {
-    try {
-      Path cacheDir = tempDir.resolve("sqlite-vec-cache");
-      SqliteVecProperties properties = new SqliteVecProperties();
-      properties.setVersion("0.1.9");
-      properties.setAutoDownload(true);
-      properties.setCacheDir(cacheDir.toString());
-      properties.setReleaseBaseUrl("https://github.com/asg017/sqlite-vec/releases/download");
-      SqliteVecInstaller installer = new SqliteVecInstaller(
-          properties,
-          new PlatformDetector(),
-          new SqliteVecAssetResolver(),
-          new JsonMapper());
-      return installer.resolveExtensionPath();
-    } catch (Exception e) {
-      throw new IllegalStateException("failed to prepare sqlite-vec extension", e);
-    }
+    return dev.mikoto2000.rei.testsupport.SqliteVecTestExtension.resolve();
   }
-
   private int countChunks(Path dbPath, String docId) {
     try (Connection connection = newVecDataSource(dbPath).getConnection();
         var statement = connection.prepareStatement("SELECT COUNT(*) FROM document_chunks_vec WHERE doc_id = ?")) {

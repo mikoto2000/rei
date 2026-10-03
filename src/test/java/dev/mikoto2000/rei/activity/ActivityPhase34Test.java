@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static dev.mikoto2000.rei.activity.ActivitySemanticTest.*;
 import static dev.mikoto2000.rei.activity.ActivityTrendTest.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ActivityPhase34Test {
   private static ActivityRecord sample(int minute,String category,String project) {
     String app=Set.of("social","media","shopping").contains(category)?"Firefox":"Terminal";

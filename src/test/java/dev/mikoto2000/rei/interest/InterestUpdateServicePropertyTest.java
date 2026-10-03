@@ -23,6 +23,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  * jqwik は JUnit 6 と互換性がないため、JUnit 6 の @ParameterizedTest で代替実装する。
  * 各テストは 30 パターン（days: 1〜30）または 30 パターン（hours: 1〜30）で実行する。
  */
+@org.junit.jupiter.api.Tag("integration")
 class InterestUpdateServicePropertyTest {
 
   @TempDir

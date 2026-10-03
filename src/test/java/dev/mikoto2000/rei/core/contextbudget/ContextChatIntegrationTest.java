@@ -22,6 +22,7 @@ import dev.mikoto2000.rei.event.*;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import reactor.core.publisher.Flux;
 
+@org.junit.jupiter.api.Tag("integration")
 class ContextChatIntegrationTest {
   @TempDir Path dir;
   @Test void realAdvisorAndModelChainSendSummaryRecentWorkingSetAndCurrentInput() {

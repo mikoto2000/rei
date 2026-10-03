@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+@org.junit.jupiter.api.Tag("integration")
 class ConversationHistoryServiceTest {
 
   @TempDir

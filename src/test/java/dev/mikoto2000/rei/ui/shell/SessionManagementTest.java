@@ -13,6 +13,7 @@ import dev.mikoto2000.rei.core.command.UserInputParser;
 import picocli.CommandLine;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class SessionManagementTest {
   @TempDir Path temp;
   @Test void showListNewAndSwitchUseSharedLedgerWithoutSubmittingMessages() throws Exception {

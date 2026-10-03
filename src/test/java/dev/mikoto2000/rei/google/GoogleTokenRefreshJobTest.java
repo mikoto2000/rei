@@ -9,6 +9,7 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
+@org.junit.jupiter.api.Tag("integration")
 class GoogleTokenRefreshJobTest {
   @Test void continuesAfterFailure() throws Exception {
     GoogleOAuthService service = mock(GoogleOAuthService.class);

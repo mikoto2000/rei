@@ -23,6 +23,12 @@ Rei の開発者向けドキュメントです。利用手順は [README.md](./R
 ./mvnw test -q
 ```
 
+日常用の Unit / 軽量 Component を実行します。SQLite、filesystem、Spring Context、HTTP、
+実プロセスを含む全テストは `./mvnw verify -Pintegration`（テストのみなら
+`./mvnw test -Pfull`）、Integration / System のみは `./mvnw test -Pintegration-only` です。
+変更を完了する前に全テストを実行してください。分類、計測結果、再計測手順は
+[テスト性能レポート](docs/test-performance.md) を参照してください。
+
 ## ローカルデータ
 
 OS 標準の Rei Data Directory に保存します。Windows は `%LOCALAPPDATA%\Rei`、他 OS と移行方法は [設計メモ](docs/agent-run-project-state.md) を参照してください。`REI_DATA_DIR` で上書きできます。

@@ -11,6 +11,7 @@ import dev.mikoto2000.rei.ui.projection.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ExternalAgentEventIntegrationTest {
   @TempDir Path root;
   @Test void typedEventsRoundTripAndDoNotReplaceParentRun() {

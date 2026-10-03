@@ -9,6 +9,7 @@ import dev.mikoto2000.rei.core.chat.*;
 import dev.mikoto2000.rei.core.project.*;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ActiveRunDisplayTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   @Test void includesEveryExecutionTypeInRowsAndPrompt() throws Exception {

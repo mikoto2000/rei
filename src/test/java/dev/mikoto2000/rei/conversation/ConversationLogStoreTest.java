@@ -14,6 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
+@org.junit.jupiter.api.Tag("integration")
 class ConversationLogStoreTest {
 
   @TempDir

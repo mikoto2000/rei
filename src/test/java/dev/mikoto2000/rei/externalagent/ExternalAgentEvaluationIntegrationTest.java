@@ -21,6 +21,7 @@ import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import reactor.core.publisher.Flux;
 import static org.junit.jupiter.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ExternalAgentEvaluationIntegrationTest {
   @TempDir Path root;
   @Test void naturalLanguageReturnsToReiAndDoesNotPersistRawLogs() { evaluate(false, false); }

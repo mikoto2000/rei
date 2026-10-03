@@ -6,6 +6,7 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ConversationTurnStoreTest {
   @TempDir Path temp;
   @Test void responseAndOriginalTimestampSurviveRestartAndTerminalUpdates() {

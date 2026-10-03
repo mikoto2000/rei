@@ -6,6 +6,7 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class HistoryStoreReadTest {
   @TempDir Path temp;
   String prior;

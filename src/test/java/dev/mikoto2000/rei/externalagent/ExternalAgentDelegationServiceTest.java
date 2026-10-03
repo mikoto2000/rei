@@ -12,6 +12,7 @@ import dev.mikoto2000.rei.event.*;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import static org.junit.jupiter.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ExternalAgentDelegationServiceTest {
   @TempDir Path root;
   RunExecutionContext run(String prompt) {

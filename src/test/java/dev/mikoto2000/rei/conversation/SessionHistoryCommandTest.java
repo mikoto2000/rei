@@ -13,6 +13,7 @@ import picocli.CommandLine;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class SessionHistoryCommandTest extends ProjectClientTestSupport {
   @TempDir Path temp;
   final Instant now = Instant.parse("2026-09-16T08:00:00Z");

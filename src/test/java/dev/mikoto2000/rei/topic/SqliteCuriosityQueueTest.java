@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+@org.junit.jupiter.api.Tag("integration")
 class SqliteCuriosityQueueTest {
 
   @TempDir

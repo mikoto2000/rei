@@ -8,6 +8,7 @@ import org.springframework.ai.chat.model.*;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+@org.junit.jupiter.api.Tag("integration")
 class VisionRefinementTest {
   static ChatResponse click(double x, double y, String risk) {
     return SpringAiComputerVisionModelTest.response(ActionValidationTest.json("CLICK","target",

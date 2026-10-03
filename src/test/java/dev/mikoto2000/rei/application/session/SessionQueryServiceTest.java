@@ -11,6 +11,7 @@ import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
 import dev.mikoto2000.rei.conversation.FileSessionRepository;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class SessionQueryServiceTest {
   @TempDir Path temp;
   final Instant now = Instant.parse("2026-09-16T08:00:00Z");

@@ -11,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import dev.mikoto2000.rei.core.service.SystemShellService;
 
+@org.junit.jupiter.api.Tag("integration")
 class ShCommandTest {
 
   @TempDir

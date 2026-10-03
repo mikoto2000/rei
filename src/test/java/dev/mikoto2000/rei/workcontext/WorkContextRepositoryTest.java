@@ -8,6 +8,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 import static org.junit.jupiter.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class WorkContextRepositoryTest {
   @TempDir Path directory;
   WorkContextRepository open() {

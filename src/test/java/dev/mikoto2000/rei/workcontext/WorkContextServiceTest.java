@@ -13,6 +13,7 @@ import dev.mikoto2000.rei.event.ProjectAgentEventStore;
 import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static dev.mikoto2000.rei.workcontext.WorkContext.*;
+@org.junit.jupiter.api.Tag("integration")
 class WorkContextServiceTest {
   @TempDir Path temp;
   WorkContextRepository repo; SessionRepository sessions; ProjectService projects;

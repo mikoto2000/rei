@@ -9,6 +9,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.node.ObjectNode;
 
+@org.junit.jupiter.api.Tag("integration")
 class SubAgentResultValidatorTest {
   @TempDir Path directory;
   final SubAgentResultParser parser = new SubAgentResultParser();

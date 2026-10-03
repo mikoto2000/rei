@@ -8,6 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import dev.mikoto2000.rei.conversation.*;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ProjectHistorySearchTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   @Test void scopedSearchDoesNotFallBackToUnownedGlobalHistory() throws Exception {

@@ -6,6 +6,7 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class BehaviorEvaluatorTest {
   @Test void successfulObservationIncludesExcludedCategoriesButNotMissingTime() {
     var a=assess(3600,record(0,600,"social"),record(600,600,"unknown"),record(1800,600,"idle"),record(2400,600,"other"));

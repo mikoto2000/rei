@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+@org.junit.jupiter.api.Tag("integration")
 class ActionHistoryTest {
   @Test void nextDecisionReceivesKeysScrollDirectionAndWaitDuration(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
     var actions=List.<ComputerAction>of(new ComputerAction.PressKey("TAB",ComputerAction.Risk.LOW),

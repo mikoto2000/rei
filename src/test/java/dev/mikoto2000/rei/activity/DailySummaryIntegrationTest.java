@@ -7,6 +7,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
+@org.junit.jupiter.api.Tag("integration")
 class DailySummaryIntegrationTest {
   @ParameterizedTest @ValueSource(strings={"","today","yesterday","2026-09-24"})
   void existingSummarySyntaxCallsDailyWriterButTimelineDoesNot(String date) {

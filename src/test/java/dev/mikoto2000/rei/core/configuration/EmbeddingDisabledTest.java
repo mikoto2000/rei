@@ -23,6 +23,7 @@ import dev.mikoto2000.rei.websearch.WebSearchContext;
 import dev.mikoto2000.rei.websearch.WebSearchOrchestrator;
 import picocli.CommandLine;
 
+@org.junit.jupiter.api.Tag("integration")
 class EmbeddingDisabledTest {
   @Test
   void briefingWithEventsWorksWithoutVectorDatabase() throws Exception {

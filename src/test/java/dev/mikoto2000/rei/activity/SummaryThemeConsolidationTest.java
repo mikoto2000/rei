@@ -6,6 +6,7 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.*;
 import static dev.mikoto2000.rei.activity.DailySummaryTest.*;
 import static dev.mikoto2000.rei.activity.ThemeAttributionTest.sample;
+@org.junit.jupiter.api.Tag("integration")
 class SummaryThemeConsolidationTest {
   @TempDir Path dir;
   static final String CONFIG="""

@@ -18,6 +18,7 @@ import org.sqlite.SQLiteDataSource;
 import reactor.core.publisher.Flux;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class RunScopedChatMemoryTest {
   @TempDir Path temp;
 

@@ -26,6 +26,7 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ShellWebHistoryIntegrationTest {
   @TempDir Path directory;
   @Test void shellWebShellShareHttpHistoryExecutionOrderAndModelMemory() throws Exception {

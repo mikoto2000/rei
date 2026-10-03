@@ -16,6 +16,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import dev.mikoto2000.rei.reminder.ReminderService;
 import picocli.CommandLine;
 
+@org.junit.jupiter.api.Tag("integration")
 class ReminderCommandTest {
 
   @TempDir

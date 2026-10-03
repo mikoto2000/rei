@@ -16,6 +16,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static dev.mikoto2000.rei.activity.DailySummaryTest.*;
 import static dev.mikoto2000.rei.activity.ThemeAttributionTest.sample;
+@org.junit.jupiter.api.Tag("integration")
 class ConsolidationPipelineTest {
   @TempDir Path dir;
   static final ObjectMapper JSON=new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());

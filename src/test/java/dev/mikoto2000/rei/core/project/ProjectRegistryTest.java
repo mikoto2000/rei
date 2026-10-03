@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ProjectRegistryTest {
   @TempDir Path temp;
   @Test void identitySurvivesReloadAndExplicitRelocation() throws Exception {

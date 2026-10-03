@@ -16,6 +16,7 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.mikoto2000.rei.core.sqlitevec.SqliteVecDataSource;
 import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
 
+@org.junit.jupiter.api.Tag("integration")
 class DataSourceConfigurationTest {
 
   @TempDir

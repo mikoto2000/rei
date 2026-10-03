@@ -8,6 +8,7 @@ import org.springframework.context.SmartLifecycle;
 import org.springframework.context.support.GenericApplicationContext;
 import static org.assertj.core.api.Assertions.assertThat;
 
+@org.junit.jupiter.api.Tag("integration")
 class ApplicationShutdownNotifierTest {
   @Test void contextCloseAnnouncesBeforeLifecycleStop() {
     var bus = new InMemoryAgentEventBus();

@@ -20,6 +20,7 @@ import com.sun.net.httpserver.HttpServer;
 import dev.mikoto2000.rei.websearch.WebSearchProperties.ProviderProperties;
 import tools.jackson.databind.json.JsonMapper;
 
+@org.junit.jupiter.api.Tag("integration")
 class WebSearchServiceTest {
 
   private HttpServer server;

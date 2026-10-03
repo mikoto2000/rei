@@ -11,6 +11,7 @@ import dev.mikoto2000.rei.memory.model.*;
 import dev.mikoto2000.rei.memory.service.*;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 
+@org.junit.jupiter.api.Tag("integration")
 class LongTermMemoryTest {
   @TempDir Path dir;
   MemoryRepository repository;

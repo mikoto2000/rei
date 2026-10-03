@@ -5,6 +5,7 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ActivitySemanticTest {
   static final Instant START=Instant.parse("2026-09-23T09:08:00Z");
   static ActivityRecord.Activity activity(String type,String app,String service,String project) {

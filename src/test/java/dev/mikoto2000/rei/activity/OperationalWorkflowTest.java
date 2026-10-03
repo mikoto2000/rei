@@ -6,6 +6,7 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+@org.junit.jupiter.api.Tag("integration")
 class OperationalWorkflowTest {
   @TempDir Path dir;
   @Test void failedVisionRetainsObservationThenUserRuleSkipsNextVision() throws Exception {

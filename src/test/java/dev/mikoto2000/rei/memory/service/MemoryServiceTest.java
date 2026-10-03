@@ -27,6 +27,7 @@ import dev.mikoto2000.rei.memory.model.MemoryScope;
 import dev.mikoto2000.rei.memory.model.MemoryStatus;
 import dev.mikoto2000.rei.memory.model.MemoryType;
 
+@org.junit.jupiter.api.Tag("integration")
 class MemoryServiceTest {
 
   @TempDir

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.content.Media;
 import org.springframework.util.MimeTypeUtils;
 
+@org.junit.jupiter.api.Tag("integration")
 class InlineFileAttachmentResolverTest {
 
   @TempDir

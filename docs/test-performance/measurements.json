@@ -1,0 +1,34 @@
+{
+  "Date": "2026-10-04",
+  "Timezone": "Asia/Tokyo",
+  "Java": "25",
+  "SpringBoot": "4.0.4",
+  "Maven": "3.9.14",
+  "Surefire": "3.5.5",
+  "BeforeFullSeconds": [
+    139.7140926,
+    143.987802
+  ],
+  "AfterFastSeconds": [
+    23.8303189,
+    22.5360702
+  ],
+  "AfterFullSeconds": [
+    125.8977909,
+    110.1286229
+  ],
+  "AfterIntegrationOnlySeconds": 105.526222,
+  "BeforeTests": 2626,
+  "AfterTests": 2628,
+  "FastTests": 1265,
+  "IntegrationSystemTests": 1363,
+  "BeforeFullMeanSeconds": 141.8509473,
+  "AfterFastMeanSeconds": 23.18319455,
+  "AfterFullMeanSeconds": 118.0132069,
+  "FastImprovementPercent": 83.6566515830381,
+  "FullImprovementPercent": 16.8047805486879,
+  "IsolatedVerifySeconds": 112.3165554,
+  "ClientTests": 51,
+  "NativeClientTests": 78,
+  "ClientE2ETests": 14
+}

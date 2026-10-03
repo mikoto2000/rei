@@ -8,6 +8,7 @@ import java.nio.file.Path;
 
 import org.junit.jupiter.api.Test;
 
+@org.junit.jupiter.api.Tag("integration")
 class SummarizeDependencyTest {
 
   @Test

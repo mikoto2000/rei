@@ -22,6 +22,7 @@ import dev.mikoto2000.rei.memory.service.MemoryService;
 import dev.mikoto2000.rei.memory.util.SensitiveInfoDetector;
 import picocli.CommandLine;
 
+@org.junit.jupiter.api.Tag("integration")
 class MemoryConsolidateCommandTest {
 
   @Test

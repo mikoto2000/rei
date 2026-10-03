@@ -20,6 +20,7 @@ import dev.mikoto2000.rei.event.*;
 import dev.mikoto2000.rei.llm.*;
 import reactor.core.publisher.Flux;
 
+@org.junit.jupiter.api.Tag("integration")
 class ContextCancellationTest {
   @TempDir Path dir;
   @Test void disposingParentCancelsInFlightSummaryHttpStream() throws Exception {

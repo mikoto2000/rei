@@ -7,6 +7,7 @@ import dev.mikoto2000.rei.core.chat.*;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ProjectCancellationTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   @Test void cancellingBDoesNotInterruptA() throws Exception {

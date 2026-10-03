@@ -10,6 +10,7 @@ import dev.mikoto2000.rei.conversation.FileSessionRepository;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class SessionAdmissionTest {
   @TempDir Path temp;
   final Instant now = Instant.parse("2026-09-16T08:00:00Z");

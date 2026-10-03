@@ -4,6 +4,7 @@ import java.nio.file.*;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class GlobalStorageDefaultsTest {
   @Test void bundledDefaultsDoNotCreateProjectLocalReiDirectory() throws Exception {
     assertThat(new dev.mikoto2000.rei.config.ExternalConfigFileService().configFilePath())

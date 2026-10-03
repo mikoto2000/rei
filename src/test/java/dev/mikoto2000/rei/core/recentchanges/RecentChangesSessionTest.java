@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Configuration;
 /**
  * Recent Changes がセッション（アプリケーション全体のシングルトン Bean）として保持されることを検証する。
  */
+@org.junit.jupiter.api.Tag("integration")
 class RecentChangesSessionTest {
 
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");

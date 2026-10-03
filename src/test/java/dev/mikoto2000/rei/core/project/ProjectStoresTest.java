@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.*;
 import dev.mikoto2000.rei.core.chat.*;
 import dev.mikoto2000.rei.conversation.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ProjectStoresTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
   @Test void logsAndSearchStayWithOwnerAfterSwitchAndReload() throws Exception {

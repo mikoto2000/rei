@@ -18,6 +18,7 @@ import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
+@org.junit.jupiter.api.Tag("integration")
 class FileSummaryAdvisorTest {
 
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");

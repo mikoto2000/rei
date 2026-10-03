@@ -17,6 +17,7 @@ import org.springframework.context.annotation.Configuration;
  * <p>Working Set と同じく、Task State はシングルトン Bean として保持され、
  * Advisor と Tools が同じインスタンスを共有する。</p>
  */
+@org.junit.jupiter.api.Tag("integration")
 class TaskStateSessionTest {
 
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");

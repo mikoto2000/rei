@@ -19,6 +19,7 @@ import java.util.*;
 import static org.mockito.Mockito.*;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class ReadHttpTest {
   @Configuration(proxyBeanMethods=false)
   @Import({WebApiIntegrationTest.Config.class, ReadController.class})

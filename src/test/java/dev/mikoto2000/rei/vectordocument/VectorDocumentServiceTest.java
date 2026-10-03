@@ -35,6 +35,7 @@ import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
 import dev.mikoto2000.rei.core.sqlitevec.SqliteVecInstaller;
 import dev.mikoto2000.rei.vectorstore.SqliteVectorStore;
 
+@org.junit.jupiter.api.Tag("integration")
 class VectorDocumentServiceTest {
 
   @TempDir
@@ -321,24 +322,8 @@ class VectorDocumentServiceTest {
   }
 
   private Path vecExtensionPath() {
-    try {
-      Path cacheDir = tempDir.resolve("sqlite-vec-cache");
-      SqliteVecProperties properties = new SqliteVecProperties();
-      properties.setVersion("0.1.9");
-      properties.setAutoDownload(true);
-      properties.setCacheDir(cacheDir.toString());
-      properties.setReleaseBaseUrl("https://github.com/asg017/sqlite-vec/releases/download");
-      SqliteVecInstaller installer = new SqliteVecInstaller(
-          properties,
-          new PlatformDetector(),
-          new SqliteVecAssetResolver(),
-          new tools.jackson.databind.json.JsonMapper());
-      return installer.resolveExtensionPath();
-    } catch (Exception e) {
-      throw new IllegalStateException("failed to prepare sqlite-vec extension", e);
-    }
+    return dev.mikoto2000.rei.testsupport.SqliteVecTestExtension.resolve();
   }
-
   private VectorDocumentEntry findEntry(List<VectorDocumentEntry> entries, String suffix) {
     return entries.stream()
         .filter(entry -> entry.source().endsWith(suffix))

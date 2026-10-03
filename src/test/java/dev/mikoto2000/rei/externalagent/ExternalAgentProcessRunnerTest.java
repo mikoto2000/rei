@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("e2e")
 class ExternalAgentProcessRunnerTest {
   @TempDir Path root;
   List<String> command(String mode) {

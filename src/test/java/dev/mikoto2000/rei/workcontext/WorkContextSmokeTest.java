@@ -19,6 +19,7 @@ import dev.mikoto2000.rei.application.session.*;
 import dev.mikoto2000.rei.event.ProjectAgentEventStore;
 import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.*;
+@org.junit.jupiter.api.Tag("integration")
 class WorkContextSmokeTest {
   @TempDir Path temp;
   @Test void conversationToSchemaValidatedUpdateToReopenedRepositoryAndNewSessionContext() throws Exception {

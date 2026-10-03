@@ -14,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+@org.junit.jupiter.api.Tag("integration")
 class EmbeddingEndpointTest {
   @Test void embeddingUsesItsOwnEndpointCredentialsAndPath() {
     verify("https://embedding.invalid/custom/embeddings", "embedding-key",

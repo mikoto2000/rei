@@ -8,6 +8,7 @@ import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import static org.assertj.core.api.Assertions.*;
 
+@org.junit.jupiter.api.Tag("integration")
 class OrderedSessionTurnsTest {
   @TempDir Path temp;
   @Test void equalOrRegressingClockCannotReverseExecutionOrderAcrossRestart() {

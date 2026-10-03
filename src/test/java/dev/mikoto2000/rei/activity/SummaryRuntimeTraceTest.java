@@ -13,6 +13,7 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
+@org.junit.jupiter.api.Tag("integration")
 class SummaryRuntimeTraceTest {
   @TempDir Path dir;
   record Harness(picocli.CommandLine command,java.io.StringWriter output,ActivityStore store) {}

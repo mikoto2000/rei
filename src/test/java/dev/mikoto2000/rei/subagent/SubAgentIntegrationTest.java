@@ -26,6 +26,7 @@ import dev.mikoto2000.rei.vectordocument.VectorDocumentRepository;
 import reactor.core.publisher.Flux;
 
 @SpringBootTest(properties = "spring.ai.openai.api-key=test-key")
+@org.junit.jupiter.api.Tag("integration")
 class SubAgentIntegrationTest {
   @MockitoBean ChatModel model;
   @MockitoBean EmbeddingModel embedding;

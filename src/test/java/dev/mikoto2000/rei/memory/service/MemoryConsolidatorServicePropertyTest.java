@@ -21,6 +21,7 @@ import net.jqwik.api.constraints.DoubleRange;
 import net.jqwik.api.constraints.IntRange;
 import net.jqwik.api.constraints.NotBlank;
 
+@net.jqwik.api.Tag("integration")
 class MemoryConsolidatorServicePropertyTest {
 
   // Feature: ai-memory-consolidation, Property 13: 自動トリガー判定の閾値
