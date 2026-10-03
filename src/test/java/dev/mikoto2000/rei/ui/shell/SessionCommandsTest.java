@@ -14,13 +14,13 @@ class SessionCommandsTest {
   @TempDir Path temp;
   @Test void rootExposesSessionGroupWithoutTopLevelAliases() {
     var root = new picocli.CommandLine(new RootCommand());
-    assertThat(root.getSubcommands()).containsKey("session").doesNotContainKeys("new", "resume");
+    assertThat(root.getSubcommands()).containsKeys("session","resume","checkpoint").doesNotContainKey("new");
     var session = root.getSubcommands().get("session");
     assertThat(session.getSubcommands()).containsOnlyKeys("new", "resume", "switch", "show", "list");
     assertThat(root.execute("session", "--help")).isZero();
     assertThat(root.execute("session")).isZero();
     assertThatThrownBy(() -> root.parseArgs("new")).isInstanceOf(picocli.CommandLine.UnmatchedArgumentException.class);
-    assertThatThrownBy(() -> root.parseArgs("resume", "id")).isInstanceOf(picocli.CommandLine.UnmatchedArgumentException.class);
+    assertThat(root.parseArgs("resume", "id").subcommand().commandSpec().userObject()).isInstanceOf(dev.mikoto2000.rei.checkpoint.ResumeCommand.class);
   }
   @Test void explicitNewAndResumePreserveProjectAndRejectUnknownOrForeignSessions() throws Exception {
     var repository = new FileSessionRepository(temp.resolve("sessions.json"));

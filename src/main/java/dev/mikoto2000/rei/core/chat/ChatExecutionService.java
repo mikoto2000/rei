@@ -64,6 +64,9 @@ import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 
 @Component
 public class ChatExecutionService {
+  private dev.mikoto2000.rei.checkpoint.PersistentCheckpointService checkpoints;
+  @Autowired
+  void setCheckpoints(dev.mikoto2000.rei.checkpoint.PersistentCheckpointService checkpoints) { this.checkpoints=checkpoints; }
   private dev.mikoto2000.rei.workcontext.WorkContextAutomation workContext;
   @Autowired
   void setWorkContext(dev.mikoto2000.rei.workcontext.WorkContextAutomation workContext) { this.workContext=workContext; }
@@ -198,6 +201,7 @@ public class ChatExecutionService {
         new ProgressEvaluator(context.projectRoot(),
             actionPlan), eventFactory, eventPublisher);
     execution.setRunContext(context);
+    if(checkpoints!=null)execution.setToolResultsCheckpoint(messages->checkpoints.preserveResults(context,messages));
     execution.setUserRequest(promptText);
     execution.setInterventions(interventions, text -> {
       if (chatMemory != null) chatMemory.add(context.conversationId(), java.util.List.of(new UserMessage(text)));
@@ -209,6 +213,7 @@ public class ChatExecutionService {
 
     try {
       turns.startOrdered(context, promptText, clock.instant());
+      if (checkpoints != null) checkpoints.start(context, promptText);
       if (workContext != null) workContext.afterStart(context);
       execution.checkActive();
       activityTracker.ifPresent(tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));
@@ -294,7 +299,8 @@ public class ChatExecutionService {
         try {
           cancellationHook.dispose();
           execution.close();
-          turns.finish(context, execution.isCancelled() ? ConversationTurnStore.Status.CANCELLED : turnStatus, assistantMessage);
+          try {turns.finish(context, execution.isCancelled() ? ConversationTurnStore.Status.CANCELLED : turnStatus, assistantMessage);}
+          finally {if (checkpoints != null) checkpoints.finish(context, execution.isCancelled() ? "CANCELLED" : turnStatus.name());}
           if (workContext != null) workContext.afterTerminal(context);
         } finally { if (interrupted) Thread.currentThread().interrupt(); }
       }

@@ -65,6 +65,11 @@ public class AiConfiguration {
   }
   private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextAdvisor> workContext;
   private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextTools> workTools;
+  private ObjectProvider<dev.mikoto2000.rei.checkpoint.ResumeContextAdvisor> resumeContext;
+  private ObjectProvider<dev.mikoto2000.rei.checkpoint.CheckpointTools> checkpointTools;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setCheckpoint(ObjectProvider<dev.mikoto2000.rei.checkpoint.ResumeContextAdvisor> advisor,
+      ObjectProvider<dev.mikoto2000.rei.checkpoint.CheckpointTools> tools){resumeContext=advisor;checkpointTools=tools;}
   @org.springframework.beans.factory.annotation.Autowired
   void setWorkContext(ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextAdvisor> advisor,
       ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextTools> tools) {workContext=advisor;workTools=tools;}
@@ -163,6 +168,9 @@ public class AiConfiguration {
             conversationHistoryTools, summaryTools);
 
     if (rawResultTools != null) builder.defaultTools(rawResultTools);
+    if(resumeContext!=null&&resumeContext.getIfAvailable()!=null)builder.defaultAdvisors(new dev.mikoto2000.rei.core.chat.RunScopedAdvisor(resumeContext.getObject()));
+    if(checkpointTools!=null&&checkpointTools.getIfAvailable()!=null)builder.defaultToolCallbacks(new ToolEventCallbackProvider(
+        org.springframework.ai.tool.method.MethodToolCallbackProvider.builder().toolObjects(checkpointTools.getObject()).build(),eventFactory,eventPublisher));
     if (workTools != null && workTools.getIfAvailable() != null) builder.defaultToolCallbacks(
         new ToolEventCallbackProvider(org.springframework.ai.tool.method.MethodToolCallbackProvider.builder()
             .toolObjects(workTools.getObject()).build(), eventFactory, eventPublisher));

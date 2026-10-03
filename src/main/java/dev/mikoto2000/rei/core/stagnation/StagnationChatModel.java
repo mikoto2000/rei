@@ -73,10 +73,12 @@ public class StagnationChatModel implements ChatModel {
           return Mono.fromCallable(() -> {
             context.checkActive();
             try {
+              context.planTools(result.getResult().getOutput().getToolCalls());
               var toolResult = tools.execute(prompt, result);
               if (assembler != null && context.runContext() != null)
                 assembler.preserveToolResults(toolResult.conversationHistory(), context.runContext().conversationId(),
                     context.runContext().runId());
+              context.preserveToolResults(toolResult.conversationHistory());
               return toolResult;
             }
             finally { context.endIteration(); }
@@ -136,14 +138,24 @@ public class StagnationChatModel implements ChatModel {
         if (context.externalDelegationUsed())
           return "External review is complete or already attempted. Evaluate the supplied result independently and answer; no further tool execution or automatic fixes are allowed in this review run.";
         var before = context.evaluator().beforeTool(name, input);
+        boolean decorated=delegateTool instanceof dev.mikoto2000.rei.event.ToolEventCallbackDecorator;
+        String actualId=context.claimToolId(name,input);
+        var capturedToolContext=new HashMap<String,Object>();if(toolContext!=null)capturedToolContext.putAll(toolContext.getContext());
+        capturedToolContext.put("toolCallId",actualId);
+        var invocationContext=new ToolContext(capturedToolContext);
+        String durableCall=decorated?null:context.beginDurableTool(actualId,name,input);
+        String result;
         try {
-          String result = toolContext == null ? delegateTool.call(input) : delegateTool.call(input, toolContext);
-          context.recordTool(name, input, result, before);
-          return result;
+          context.checkActive();
+          result = delegateTool.call(input,invocationContext);
         } catch (RuntimeException error) {
+          if(!decorated)context.failDurableTool(durableCall,name,error);
           context.recordFailure(name, input, error);
           throw error;
         }
+        if(!decorated)context.completeDurableTool(durableCall,name,result);
+        context.recordTool(name,input,result,before);
+        return result;
         }
       }
     };

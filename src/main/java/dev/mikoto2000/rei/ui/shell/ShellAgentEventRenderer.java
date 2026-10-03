@@ -426,6 +426,11 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         output.println("[checkpoint] saved " + valueOr(payload.taskId(), "task") + reasonSuffix(payload.reason())
             + ", " + payload.workingFileCount() + " files");
       }
+      case CHECKPOINT_RECONCILED, CHECKPOINT_RESUMED, CHECKPOINT_REVISION_SAVED -> {
+        closeAssistantLine();
+        var payload=(dev.mikoto2000.rei.event.CheckpointLifecyclePayload)event.payload();
+        output.println("[checkpoint] "+event.type().value()+" task="+payload.taskId()+" revision="+payload.revision()+" "+payload.decision());
+      }
       case TOPIC_GENERATION_STARTED -> {
         closeAssistantLine();
         TopicGenerationStartedPayload payload = (TopicGenerationStartedPayload) event.payload();

@@ -15,6 +15,7 @@ public interface AgentEventBus {
    * @return 購読解除用の Subscription
    */
   Subscription subscribe(AgentEventListener listener);
+  default Subscription subscribeBoundary(AgentEventListener listener) { return subscribe(listener); }
 
   /** Atomically snapshots replay and registers a live listener beyond the snapshot boundary. */
   default ReplaySubscription subscribe(String runId, long fromSequence, AgentEventListener listener) {

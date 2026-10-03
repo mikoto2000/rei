@@ -6,6 +6,15 @@ import org.springframework.web.bind.annotation.*;
 
 @RestControllerAdvice(basePackages = "dev.mikoto2000.rei.web")
 public class ApiExceptionHandler {
+  @ExceptionHandler(dev.mikoto2000.rei.checkpoint.CheckpointException.class)
+  public ResponseEntity<Error> checkpoint(dev.mikoto2000.rei.checkpoint.CheckpointException error) {
+    int status=switch(error.code()) {
+      case CAPACITY -> 507;
+      case CORRUPT_CHECKPOINT,INCOMPATIBLE_SCHEMA -> 422;
+      default -> 409;
+    };
+    return ResponseEntity.status(status).body(new Error("Checkpoint: "+error.code()));
+  }
   @ExceptionHandler(java.util.ConcurrentModificationException.class)
   public ResponseEntity<Error> workContextConflict() {return ResponseEntity.status(409).body(new Error("Work Context revision changed"));}
   @ExceptionHandler(dev.mikoto2000.rei.application.state.OperationConflictException.class)

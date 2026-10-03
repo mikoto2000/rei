@@ -77,6 +77,23 @@ public class ProjectAgentEventStore implements AgentEventListener {
   }
 
   /** Forward pagination is separate from normal Shell restoration. */
+  public Map<String,String> referenceStatus(String project,Set<String> ids) {
+    var result=new HashMap<String,String>();ids.forEach(id->result.put(id,"not-found"));
+    if(ids.isEmpty())return result;
+    Path path=file(project);if(!Files.exists(path))return result;
+    try {
+      if(Files.size(path)>8*1024*1024) {
+        ids.forEach(id->result.put(id,"requires-history-lookup"));
+        for(var event:recent(project,1000))if(ids.contains(event.id()))result.put(event.id(),"available");
+      } else try(var reader=Files.newBufferedReader(path)) {
+        String line;while((line=reader.readLine())!=null) {
+          if(Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException();
+          var event=decode(line,path);if(event!=null&&ids.contains(event.id()))result.put(event.id(),"available");
+        }
+      }
+    }catch(IOException error){ids.forEach(id->result.put(id,"unavailable"));}
+    return Map.copyOf(result);
+  }
   public List<AgentEvent> readAfter(String projectId, long afterSequence, int limit) {
     if (limit < 1 || limit > 1000) throw new IllegalArgumentException("Event limit must be between 1 and 1000");
     Path file = file(projectId);

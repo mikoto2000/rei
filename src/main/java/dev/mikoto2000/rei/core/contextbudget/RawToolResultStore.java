@@ -21,6 +21,10 @@ public class RawToolResultStore {
     try { return mapper.readValue(Files.readString(file(conversation, ref)), Result.class); }
     catch (java.io.IOException e) { throw new IllegalStateException("Cannot read raw tool result", e); }
   }
+  public boolean exists(String conversation,String ref) {
+    try{java.util.UUID.fromString(ref);return Files.isRegularFile(file(conversation,ref));}
+    catch(RuntimeException invalid){return false;}
+  }
   private Path file(String conversation, String ref) {
     return ContextFiles.directory(base, conversation).resolve("results").resolve(ContextFiles.key(conversation)).resolve(ref + ".json");
   }

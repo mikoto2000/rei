@@ -14,6 +14,31 @@ public class RunExecutionContext {
   private final ProgressEvaluator evaluator;
   private final AgentEventFactory factory;
   private final AgentEventPublisher publisher;
+  private final List<org.springframework.ai.chat.messages.AssistantMessage.ToolCall> plannedTools=new ArrayList<>();
+  public void planTools(List<org.springframework.ai.chat.messages.AssistantMessage.ToolCall> calls) {
+    synchronized(this){plannedTools.clear();plannedTools.addAll(calls);}
+    for(var call:calls){checkActive();publisher.publishBoundary(new AgentEvent(UUID.randomUUID().toString(),0,java.time.Instant.now(),AgentEventType.TOOL_PLANNED,1,null,null,runId,null,null,
+        new ToolStartedPayload(call.id(),call.name(),"planned",null)).withOwnership(runContext));
+    }
+  }
+  public synchronized String claimToolId(String name,String input) {
+    for(int i=0;i<plannedTools.size();i++)if(plannedTools.get(i).name().equals(name)&&plannedTools.get(i).arguments().equals(input))return plannedTools.remove(i).id();
+    return UUID.randomUUID().toString();
+  }
+  private java.util.function.Consumer<List<org.springframework.ai.chat.messages.Message>> toolResultsCheckpoint=messages->{};
+  public void setToolResultsCheckpoint(java.util.function.Consumer<List<org.springframework.ai.chat.messages.Message>> observer){toolResultsCheckpoint=observer;}
+  public void preserveToolResults(List<org.springframework.ai.chat.messages.Message> messages){toolResultsCheckpoint.accept(messages);}
+  public String beginDurableTool(String call,String name,String input) {
+    publisher.publishBoundary(factory.toolStarted(call,name,"Structured tool execution").withOwnership(runContext));return call;
+  }
+  public void completeDurableTool(String call,String name,String result) {
+    String summary=CredentialRedactor.redact(result==null?"":result);
+    if(summary.length()>1000)summary=summary.substring(0,1000);
+    publisher.publishBoundary(factory.toolCompleted(call,name,0,summary).withOwnership(runContext));
+  }
+  public void failDurableTool(String call,String name,RuntimeException error) {
+    publisher.publishBoundary(factory.toolFailed(call,name,new ErrorInformation(error.getClass().getSimpleName(),"Tool failed",null)).withOwnership(runContext));
+  }
   private final List<ProgressEvidence> pending = new ArrayList<>();
   private final Deque<String> recentActions = new ArrayDeque<>();
   private final Set<String> completedSubgoals = new HashSet<>();
