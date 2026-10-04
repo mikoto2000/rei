@@ -21,6 +21,7 @@ public class SubAgentToolCatalog {
     Set<String> names = new HashSet<>();
     createTools().forEach(callback -> names.add(callback.getToolDefinition().name()));
     names.add("delegateTask");
+    names.add("delegateTasks");
     return Set.copyOf(names);
   }
 }

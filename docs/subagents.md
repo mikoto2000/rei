@@ -117,8 +117,8 @@ Shell は開始・終了に加え、子の LLM リクエスト・応答・失敗
 子の回答・思考の token stream は親の回答に混ぜず、親の UI 状態も変更しません。
 
 永続化するのは既存の監査イベントで、子専用の会話履歴は保存しません。
-複数 Run の ID と状態は独立していますが、自動並列 orchestration はありません。
-再帰委譲、Agent 間会話、動的生成、DAG planner、協調プロトコル、GUI、remote agents は Phase 2 以降です。
+複数RunのIDと状態は独立しています。delegateTasksで独立した依頼をboundedに並列実行できます。
+再帰委譲、Agent間会話、動的生成、DAG planner、協調プロトコル、GUI、remote agentsは未対応です。
 
 ## 出力の構造検証（Phase 1）
 
@@ -187,3 +187,7 @@ SubAgent は provider 共通の Tool loop と fallback を使うため、それ�
 ## 検証エラーの修復
 
 任意のmaxRepairs設定で、共通の呼び出し予算とtimeoutの範囲内で最終JSONを修復できます。設定と結果履歴は [検証エラーの修復](subagent-validation-repair.md) を参照してください。
+
+## 並列委譲
+
+CHATのdelegateTasksは独立した依頼をまとめて実行し、個別結果を入力順に返します。制限と停止時の扱いは [複数SubAgentへの並列委譲](parallel-subagent-delegation.md) を参照してください。

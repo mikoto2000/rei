@@ -20,7 +20,7 @@
 | B13 | Document RAG | Already implemented | Already implemented。VectorDocumentService、SqliteVectorStore、SearchKnowledgeService、CHAT の retrieval が存在。二重実装しない |
 | C14 | SubAgent semantic validation | Not implemented | Implemented (evidence-contract slice)。opt-inで実際のTool応答・Run内ID・ハッシュ・引用・SUCCESS required Toolを独立照合。自由文の意味判断/特定引数のrequired taskはDeferred |
 | C15 | SubAgent repair/retry | Not implemented | Implemented (opt-in validation repair)。最大3回・共有maxSteps・単一timeout・cancel・元の診断履歴保持。モデル/Tool障害のretry・永続resumeはDeferred |
-| C16 | Parallel SubAgent Delegation | Not implemented | Deferred。単一 delegateTask が境界。単一呼び出しの信頼性改善後に検討 |
+| C16 | Parallel SubAgent Delegation | Not implemented | Implemented (bounded independent batch)。最大8依頼/worker2/受付1/120秒、事前検査・入力順結果・部分失敗・親cancel・既存Runner再利用。DAG/合意形成/永続復旧/全子token予算はDeferred |
 | C17 | External Delegation Phase 2+ | Partially implemented | Deferred。read-only Codex review は存在。fix/re-review/persisted session/複数実装はない |
 | C18 | Repository Map | Partially implemented | Deferred。RelatedFileGraph、FileSummary、Working Set は存在。リポジトリ全体の symbol/module index はない |
 | C19 | Change/Test Impact | Partially implemented | Deferred。RelatedFileGraph、テスト分類・性能改善は存在。変更から affected test を返す仕組みはない |
