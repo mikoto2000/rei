@@ -132,6 +132,8 @@ if (new URLSearchParams(location.search).has("timeline")) {
   ];
 }
 let onRun: (run: Run) => void = () => {};
+let checkpointResumed = false;
+let checkpointAbandoned = false;
 let acknowledged = false;
 let decided = false;
 const call = (async (
@@ -139,12 +141,41 @@ const call = (async (
   args: Record<string, unknown> | undefined,
 ) => {
   if (name === "app_snapshot") return structuredClone(data);
+  if (name === "checkpoint_resume" || name === "checkpoint_track") {
+    if (
+      args?.serverId !== "s" ||
+      args?.projectId !== "p" ||
+      args?.taskId !== "checkpoint-task"
+    )
+      throw "InvalidInput";
+    if (name === "checkpoint_resume") checkpointResumed = true;
+    if (!checkpointResumed) throw "RunNotFound";
+    const accepted: Run = {
+      ...run,
+      conversationId: "",
+      runId: "checkpoint-run",
+      sessionId: "session",
+      turnId: null,
+      prompt: "Checkpoint checkpoint-task",
+      status: "QUEUED",
+      revision: 1,
+      assistantText: "",
+      tools: [],
+      activities: [],
+      timeline: [],
+      messages: [],
+      workingSet: [],
+    };
+    onRun(accepted);
+    return accepted;
+  }
   if (name === "workspace_execute") {
     const op = args?.operation as {
       operation: string;
       url?: string;
       displayName?: string;
       projectId?: string;
+      taskId?: string;
       id?: string;
       approved?: boolean;
     };
@@ -199,6 +230,50 @@ const call = (async (
                     ],
                   },
                 ],
+      };
+    }
+    if (
+      [
+        "checkpoints",
+        "checkpoint",
+        "checkpointInspect",
+        "checkpointAbandon",
+      ].includes(op.operation)
+    ) {
+      if (op.projectId !== "p") throw "ProjectNotFound";
+      if (op.operation === "checkpointAbandon") checkpointAbandoned = true;
+      const state = {
+        id: "checkpoint-task",
+        title: "Fixture checkpoint outcome",
+        fields: [
+          ["Project", "p"],
+          ["Session", "session"],
+          ["Run", checkpointResumed ? "checkpoint-run" : "old"],
+          ["Revision", "3"],
+          ["Status", checkpointAbandoned ? "ABANDONED" : "INTERRUPTED"],
+        ],
+      };
+      return {
+        title: "Checkpoint",
+        items:
+          op.operation === "checkpointInspect"
+            ? [
+                {
+                  id: "checkpoint-task",
+                  title: "Reconciliation",
+                  fields: [
+                    ["Project", "p"],
+                    ["Decision", "CONFIRMATION_REQUIRED"],
+                    ["Changed", "Fixture file changed"],
+                    [
+                      "Unknown operations",
+                      "writeFile result requires confirmation",
+                    ],
+                    ["Next", "Verify before repeating effects"],
+                  ],
+                },
+              ]
+            : [state],
       };
     }
     if (op.operation !== "feeds" && op.operation !== "createFeed")

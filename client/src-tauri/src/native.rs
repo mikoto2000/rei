@@ -44,6 +44,26 @@ impl NotificationPort for NativeNotifications {
 }
 type App<'a> = State<'a, Arc<Application>>;
 #[tauri::command]
+async fn checkpoint_resume(
+    app: App<'_>,
+    server_id: String,
+    project_id: String,
+    task_id: String,
+) -> Result<RunView> {
+    app.checkpoint(&server_id, &project_id, &task_id, true)
+        .await
+}
+#[tauri::command]
+async fn checkpoint_track(
+    app: App<'_>,
+    server_id: String,
+    project_id: String,
+    task_id: String,
+) -> Result<RunView> {
+    app.checkpoint(&server_id, &project_id, &task_id, false)
+        .await
+}
+#[tauri::command]
 async fn workspace_execute(
     app: App<'_>,
     server_id: String,
@@ -333,6 +353,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             workspace_execute,
+            checkpoint_resume,
+            checkpoint_track,
             background_submit,
             app_snapshot,
             vault_unlock,

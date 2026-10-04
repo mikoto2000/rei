@@ -1,4 +1,10 @@
 export type WorkspaceOperation =
+  | { operation: "checkpoints"; projectId: string }
+  | {
+      operation: "checkpoint" | "checkpointInspect" | "checkpointAbandon";
+      projectId: string;
+      taskId: string;
+    }
   | { operation: "attention" | "approvals"; projectId: string }
   | { operation: "attentionAck"; projectId: string; id: string }
   | {

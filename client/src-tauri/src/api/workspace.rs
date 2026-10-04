@@ -210,6 +210,10 @@ impl HttpReiClient {
         op: WorkspaceOperation,
     ) -> Result<WorkspaceResult> {
         match op {
+            op @ (WorkspaceOperation::Checkpoints { .. }
+            | WorkspaceOperation::Checkpoint { .. }
+            | WorkspaceOperation::CheckpointInspect { .. }
+            | WorkspaceOperation::CheckpointAbandon { .. }) => self.checkpoint_operation(op).await,
             op @ (WorkspaceOperation::Attention { .. }
             | WorkspaceOperation::AttentionAck { .. }
             | WorkspaceOperation::Approvals { .. }

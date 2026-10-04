@@ -60,6 +60,68 @@ impl Application {
     ) -> Result<WorkspaceResult> {
         self.api(server, true)?.workspace(operation).await
     }
+    pub async fn checkpoint(
+        &self,
+        server: &str,
+        project: &str,
+        task: &str,
+        resume: bool,
+    ) -> Result<RunView> {
+        let key = format!("checkpoint:{server}:{project}:{task}");
+        {
+            let mut active = self.submitting.lock().unwrap();
+            if !active.insert(key.clone()) {
+                return Err(AppError::Busy);
+            }
+        }
+        let _reservation = Submission {
+            ids: &self.submitting,
+            id: key,
+        };
+        let api = self.api(server, true)?;
+        if !api.projects().await?.iter().any(|p| p.id == project) {
+            return Err(AppError::ProjectNotFound);
+        }
+        let receipt = if resume {
+            api.resume_checkpoint(project, task).await?
+        } else {
+            api.checkpoint_run(project, task).await?
+        };
+        if receipt.task_id != task
+            || receipt.snapshot.project_id != project
+            || receipt.snapshot.session_id.is_empty()
+        {
+            return Err(AppError::InvalidResponse);
+        }
+        let snapshot = receipt.snapshot;
+        let run = snapshot.run_id.clone();
+        if let Ok(existing) = self.runs.get(server, &run) {
+            if existing.project_id != snapshot.project_id
+                || existing.session_id != snapshot.session_id
+                || existing.turn_id != snapshot.turn_id
+            {
+                return Err(AppError::InvalidResponse);
+            }
+            let updated = self.runs.refresh(server, &run, api.clone()).await?;
+            self.runs.subscribe(server, &run, api)?;
+            return Ok(updated);
+        }
+        let mut projection = Projection::new(
+            server,
+            "",
+            project,
+            ChatReceipt {
+                run_id: run.clone(),
+                session_id: snapshot.session_id.clone(),
+                turn_id: snapshot.turn_id.clone(),
+            },
+            &format!("Checkpoint {task}"),
+        );
+        projection.recover(snapshot)?;
+        self.runs.register(projection)?;
+        self.runs.subscribe(server, &run, api)?;
+        self.runs.get(server, &run)
+    }
     pub async fn background(
         &self,
         server: &str,

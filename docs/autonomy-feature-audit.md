@@ -44,3 +44,7 @@ Auto Sleep、共通 Policy/永続承認、管理プロセス Waiting、永続一
 週月分析は既存の観測事実を集計し、推測や未観測時間を分離する。SubAgent 修復は bounded retry と元 error 保持を先に整備する。
 
 本表の Deferred は実装完了を意味しない。実装を行った機能の検証・Git 結果は別途実装レポートへ記録する。
+
+## Native Checkpoint recovery follow-up
+
+NativeのProject限定Checkpoint一覧・明示照合・差分/結果不明操作/阻害要因確認・再開/放棄確認・既存Runの読み取り追跡を追加。再開Runは保存Sessionを保持し既存実行一覧/SSEへ統合し、結果不明時にresume POSTを自動再送しない。A2/A5のCheckpoint画面部分を対応済みとし、Goal/Scheduler復旧・依存への人間回答UIおよび他のDeferred項目は引き続き未完了。詳細と検証はimplementation-report-native-checkpoint-recovery.mdを参照。

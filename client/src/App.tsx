@@ -16,6 +16,7 @@ import { Settings } from "./features/settings/Settings";
 import { useUserAvatar } from "./features/settings/userAvatar";
 import { Avatar } from "./shared/Avatar";
 import { SessionList } from "./features/history/SessionList";
+import { Recovery } from "./features/recovery/Recovery";
 import { Attention } from "./features/attention/Attention";
 import { Workspace } from "./features/workspace/Workspace";
 import { WorkContextNotice } from "./features/workspace/WorkContextNotice";
@@ -40,7 +41,8 @@ type Page =
   | "runs"
   | "settings"
   | "workspace"
-  | "attention";
+  | "attention"
+  | "recovery";
 const noProjects: Project[] = [];
 export function App({
   call = command,
@@ -282,6 +284,12 @@ export function App({
         </button>
         <nav aria-label="メイン">
           <button
+            className={page === "recovery" ? "selected" : ""}
+            onClick={() => navigate("recovery")}
+          >
+            復旧・再開
+          </button>
+          <button
             className={page === "attention" ? "selected" : ""}
             onClick={() => navigate("attention")}
           >
@@ -400,6 +408,16 @@ export function App({
           <div className="empty">Rei Client を準備しています…</div>
         ) : (
           <>
+            {page === "recovery" && (
+              <Recovery
+                call={call}
+                serverId={data.unlocked ? data.selectedServer : null}
+                projects={projects[data.selectedServer ?? ""] ?? noProjects}
+                onAccepted={(run) =>
+                  setData((d) => ({ ...d, runs: mergeRun(d.runs, run) }))
+                }
+              />
+            )}
             {page === "attention" && (
               <Attention
                 call={call}
