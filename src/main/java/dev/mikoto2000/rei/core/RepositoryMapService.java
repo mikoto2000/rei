@@ -123,7 +123,7 @@ public final class RepositoryMapService {
     return List.copyOf(result);
   }
   private static String module(String path){int marker=path.indexOf("/src/");return marker<0?".":path.substring(0,marker);}
-  private static boolean sensitive(Path path) {
+  static boolean sensitive(Path path) {
     for(var part:path) {String name=part.toString().toLowerCase(Locale.ROOT);if(Set.of(".git",".codex",".agents",".aws",".m2","target","build","node_modules").contains(name)
         || name.matches("\\.env(?:\\..*)?|credentials(?:[._].*)?|secrets(?:[._].*)?|.*\\.(key|pem)"))return true;}return false;
   }
