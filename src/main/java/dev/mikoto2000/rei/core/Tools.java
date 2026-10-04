@@ -290,7 +290,7 @@ public class Tools {
   Use executionMode=foreground when you explicitly need to wait for completion.
   Use executionMode=background when you explicitly want a managed background process.
   @param request command, optional executionMode (auto/foreground/background), and optional foreground timeoutSeconds
-  @return normalized completion or managed-process result
+  @return normalized completion or managed-process result, with bounded diagnosis (reported tests/causes/evidence/nextActions). Diagnostic suggestions never execute commands.
   """)
   RunCommandResult runCommand(RunCommandRequest request) throws IOException, InterruptedException {
     return runCommand(request, currentWorkingDirectory(), Duration.ofSeconds(3));
@@ -357,7 +357,7 @@ public class Tools {
   Get the status and recent logs of a managed shell process created by runCommand.
   @param processId runCommand が返した logical processId
   @param tailLines 返すログ末尾行数。null の場合は既定値です。
-  @return 状態、終了コード、直近の標準出力/標準エラー
+  @return 状態、終了コード、直近の標準出力/標準エラーと根拠付きdiagnosis。実行中の診断は暫定です。
   """)
   BackgroundProcessSnapshot getShellProcessStatus(String processId, Integer tailLines) {
     return backgroundProcessManager.status(processId, tailLines);

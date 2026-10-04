@@ -133,7 +133,7 @@ class BackgroundProcessManagerTest {
   @Test
   void processLifecyclePublishesEvents() throws Exception {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
-    List<AgentEvent> events = new java.util.ArrayList<>();
+    List<AgentEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
     bus.subscribe(events::add);
     BackgroundProcessManager manager = new BackgroundProcessManager(new SystemShellService(),
         Clock.fixed(Instant.parse("2026-08-16T16:30:00Z"), ZoneId.of("Asia/Tokyo")),
@@ -141,6 +141,10 @@ class BackgroundProcessManagerTest {
     try {
       BackgroundProcessSnapshot spawned = manager.spawnCommandLine(javaCommand("exit", "0"), tempDir);
       awaitStatus(spawned.processId(), BackgroundProcessStatus.EXITED, manager);
+
+      long deadline = System.nanoTime() + java.time.Duration.ofSeconds(5).toNanos();
+      while (events.stream().noneMatch(event -> event.type() == AgentEventType.BACKGROUND_PROCESS_COMPLETED)
+          && System.nanoTime() < deadline) Thread.sleep(10);
 
       assertEquals(AgentEventType.BACKGROUND_PROCESS_STARTED, events.get(0).type());
       assertTrue(events.stream().anyMatch(event -> event.type() == AgentEventType.BACKGROUND_PROCESS_COMPLETED));
