@@ -7,10 +7,11 @@ import java.util.function.Predicate;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Safe scalar/map YAML only. Diagnostics never echo arbitrary YAML or prompts. */
 public final class SubAgentDefinitionLoader {
-  private static final Set<String> FIELDS = Set.of("id", "name", "description", "systemPrompt", "tools", "model", "maxSteps", "timeout", "resultSchema", "evidenceTools", "maxRepairs");
+  private static final Set<String> FIELDS = Set.of("id", "name", "description", "systemPrompt", "tools", "model", "maxSteps", "timeout", "resultSchema", "evidenceTools", "maxRepairs","requiredToolCalls");
   private final SubAgentToolPolicy policy;
   private final Predicate<String> modelResolver;
   public SubAgentDefinitionLoader(SubAgentToolPolicy policy, Predicate<String> modelResolver) {
@@ -55,6 +56,17 @@ public final class SubAgentDefinitionLoader {
           evidenceTools.add(tool);
         }
       }
+      var requiredCalls=new ArrayList<SubAgentRequiredCall>();
+      if(values.containsKey("requiredToolCalls")) {
+        if(!(values.get("requiredToolCalls") instanceof List<?> calls)||calls.size()>16)
+          throw new IllegalArgumentException("requiredToolCalls: expected list of at most 16 calls");
+        for(var call:calls) {
+          if(!(call instanceof Map<?,?> entry)||!entry.keySet().equals(Set.of("tool","arguments"))
+              ||!(entry.get("tool") instanceof String tool)||!(entry.get("arguments") instanceof Map<?,?> arguments)||!jsonValue(arguments,0))
+            throw new IllegalArgumentException("requiredToolCalls: expected tool and JSON arguments object");
+          requiredCalls.add(new SubAgentRequiredCall(tool,JsonMapper.builder().build().writeValueAsString(arguments)));
+        }
+      }
       String model = values.containsKey("model") ? text(values, "model") : null;
       if (model != null && !modelResolver.test(model)) throw new IllegalArgumentException("model: cannot resolve configured model");
       Object steps = values.get("maxSteps");
@@ -76,8 +88,16 @@ public final class SubAgentDefinitionLoader {
       } catch (Exception e) { throw new IllegalArgumentException("timeout: required positive duration (120s, 2m, 1h, 500ms)"); }
       return new SubAgentDefinition(text(values, "id"), text(values, "name"), text(values, "description"),
           text(values, "systemPrompt"), tools, model, count, timeout, file,
-          values.containsKey("resultSchema") ? SubAgentResultSchema.load(file, text(values, "resultSchema")) : null, evidenceTools, repairs == null ? 0 : (Integer) repairs);
+          values.containsKey("resultSchema") ? SubAgentResultSchema.load(file, text(values, "resultSchema")) : null, evidenceTools, repairs == null ? 0 : (Integer) repairs,requiredCalls);
     } catch (IllegalArgumentException error) { throw invalid(file, error.getMessage()); }
+  }
+  private static boolean jsonValue(Object value,int depth) {
+    if(depth>8)return false;
+    if(value==null||value instanceof String||value instanceof Boolean)return true;
+    if(value instanceof Number number)return Double.isFinite(number.doubleValue());
+    if(value instanceof List<?> list)return list.stream().allMatch(item->jsonValue(item,depth+1));
+    if(value instanceof Map<?,?> map)return map.entrySet().stream().allMatch(entry->entry.getKey() instanceof String&&jsonValue(entry.getValue(),depth+1));
+    return false;
   }
   private String text(Map<?, ?> values, String key) {
     if (!(values.get(key) instanceof String value) || value.isBlank()) throw new IllegalArgumentException(key + ": required nonblank string");

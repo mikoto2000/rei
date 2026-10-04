@@ -41,6 +41,7 @@ class SubAgentRunnerTest {
   final AtomicInteger toolCalls = new AtomicInteger();
   String schema;
   boolean evidenceValidation;
+  String requiredCallsConfiguration="";
   int maxRepairs;
   int maxSteps = 2;
   final SubAgentToolPolicy policy = new SubAgentToolPolicy(Set.of("readMultiFile", "runCommand", "delegateTask"));
@@ -59,6 +60,7 @@ class SubAgentRunnerTest {
     yaml = yaml.replace("maxSteps: 2", "maxSteps: " + maxSteps);
     if (maxRepairs > 0) yaml += "maxRepairs: " + maxRepairs + "\n";
     if (evidenceValidation) yaml += "evidenceTools: [readMultiFile]\n";
+    yaml+=requiredCallsConfiguration;
     if (schema != null) {
       Files.writeString(directory.resolve("result.schema.json"), schema);
       yaml += "resultSchema: result.schema.json\n";
@@ -178,6 +180,27 @@ class SubAgentRunnerTest {
     assertThat(result.status()).isEqualTo(SubAgentResult.Status.COMPLETED);
     assertThat(result.validationErrors()).isEmpty();
     assertThat(toolCalls).hasValue(1); assertThat(calls).hasValue(2);
+  }
+  @Test void exactArgumentContractsAreValidatedOnActualRunnerCalls() throws Exception {
+    evidenceValidation=true;
+    for(String arguments:List.of("{}","{paths: [missing.md]}")) {
+      requiredCallsConfiguration="requiredToolCalls:\n  - tool: readMultiFile\n    arguments: "+arguments+"\n";
+      var calls=new AtomicInteger();
+      var runner=runner(prompt->{
+        assertThat(prompt.getInstructions().getFirst().getText()).contains("Required exact JSON Tool calls");
+        if(calls.incrementAndGet()==1)return Flux.just(tool("readMultiFile"));
+        var response=prompt.getInstructions().stream().filter(ToolResponseMessage.class::isInstance)
+            .map(ToolResponseMessage.class::cast).findFirst().orElseThrow().getResponses().getFirst().responseData();
+        var receipt=new SubAgentResultParser().parse(response);
+        var claim=Map.of("evidenceId",receipt.get("evidenceId").asString(),"tool","readMultiFile",
+            "outputSha256",receipt.get("outputSha256").asString(),"quote","private intermediate result");
+        return Flux.just(answer(tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(Map.of(
+            "status","SUCCESS","summary","reviewed","result",Map.of("evidence",List.of(claim)),"warnings",List.of()))));
+      },"2s");
+      var result=runner.run("reviewer","review",null);
+      assertThat(result.status()).isEqualTo(arguments.equals("{}")?SubAgentResult.Status.COMPLETED:SubAgentResult.Status.FAILED);
+      assertThat(result.validationErrors().toString()).doesNotContain("private intermediate result","missing.md");
+    }
   }
   @Test void invalidJsonAndInvalidEnvelopeFailWithoutRetryOrRawOutput() throws Exception {
     for (String raw : List.of("private-secret", "```json\n{}\n```", "{}",
