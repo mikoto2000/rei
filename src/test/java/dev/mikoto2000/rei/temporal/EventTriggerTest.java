@@ -147,4 +147,16 @@ class EventTriggerTest {
       assertEquals("WAITING_EVENT",later.get(project,id).status());assertEquals("WAITING_EVENT",later.get(other,otherId).status());
     }
   }
+  @Test void dependencyEventMustHaveMatchingTypedTerminalStateWithoutPretendingToBeARun() {
+    var scheduler=scheduler(now.plusSeconds(2));String id;
+    try(var scope=AgentRunScope.open(new AgentRunContext("parent","session",dir,project))) {
+      id=scheduler.scheduleOnEvent("dependency",AgentEventType.DEPENDENCY_COMPLETED,Duration.ofHours(1),"Continue","session").id();
+    }scheduler.activate(project,id);
+    var inconsistent=new AgentEvent(UUID.randomUUID().toString(),0,now.plusSeconds(2),AgentEventType.DEPENDENCY_COMPLETED,1,"session",null,null,"dependency",null,
+        new DependencyStatusPayload("dependency","FILE_EXISTS","FAILED","failure",1),project);
+    scheduler.signalEvent(inconsistent);assertTrue(scheduler.claimDue().isEmpty());
+    var valid=new AgentEvent(UUID.randomUUID().toString(),0,now.plusSeconds(2),AgentEventType.DEPENDENCY_COMPLETED,1,"session",null,null,"dependency",null,
+        new DependencyStatusPayload("dependency","FILE_EXISTS","COMPLETED","file_exists",2),project);
+    scheduler.signalEvent(valid);assertEquals(id,scheduler.claimDue().orElseThrow().task().id());
+  }
 }

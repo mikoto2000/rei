@@ -21,31 +21,39 @@ public class FileGoalVerifier {
     }
     return new Verification(true,"file_digest_verified");
   }
+  public record Fingerprint(boolean available,String sha256,String reason) {}
+  public Fingerprint fingerprint(Path root,String relativeFile){return fingerprint(root,relativeFile,true);}
   public Verification verify(Path root,GoalRepository.FileCriterion criterion) {
+    var observed=fingerprint(root,criterion.relativeFile(),criterion.sha256()!=null);
+    if(!observed.available())return new Verification(false,observed.reason());
+    if(criterion.sha256()==null)return new Verification(true,"file_exists");
+    boolean matches=criterion.sha256().equals(observed.sha256());
+    return new Verification(matches,matches?"file_digest_verified":"digest_mismatch");
+  }
+  private Fingerprint fingerprint(Path root,String relativeFile,boolean digestRequired) {
     try {
-      GoalRepository.validateFile(criterion.relativeFile());
-      if(!Files.isDirectory(root)||!root.toRealPath().equals(root))return new Verification(false,"project_path_changed");
+      GoalRepository.validateFile(relativeFile);
+      if(!Files.isDirectory(root)||!root.toRealPath().equals(root))return new Fingerprint(false,null,"project_path_changed");
       Path current=root;
-      for(var part:Path.of(criterion.relativeFile())) {
+      for(var part:Path.of(relativeFile)) {
         current=current.resolve(part);
-        if(Files.isSymbolicLink(current))return new Verification(false,"symbolic_link_rejected");
+        if(Files.isSymbolicLink(current))return new Fingerprint(false,null,"symbolic_link_rejected");
       }
-      if(!Files.isRegularFile(current,LinkOption.NOFOLLOW_LINKS))return new Verification(false,"file_missing_or_not_regular");
-      if(!current.toRealPath().startsWith(root))return new Verification(false,"outside_project");
-      if(Files.size(current)>1_048_576)return new Verification(false,"file_too_large");
-      if(criterion.sha256()==null)return new Verification(true,"file_exists");
+      if(!Files.isRegularFile(current,LinkOption.NOFOLLOW_LINKS))return new Fingerprint(false,null,"file_missing_or_not_regular");
+      if(!current.toRealPath().startsWith(root))return new Fingerprint(false,null,"outside_project");
+      if(Files.size(current)>1_048_576)return new Fingerprint(false,null,"file_too_large");
+      if(!digestRequired)return new Fingerprint(true,null,"file_exists");
       var digest=MessageDigest.getInstance("SHA-256");long count=0;
       try(var channel=FileChannel.open(current,StandardOpenOption.READ,LinkOption.NOFOLLOW_LINKS)) {
         var buffer=ByteBuffer.allocate(8192);
         while(channel.read(buffer)>=0) {
-          if(Thread.currentThread().isInterrupted())return new Verification(false,"verification_cancelled");
-          buffer.flip();count+=buffer.remaining();if(count>1_048_576)return new Verification(false,"file_too_large");
+          if(Thread.currentThread().isInterrupted())return new Fingerprint(false,null,"verification_cancelled");
+          buffer.flip();count+=buffer.remaining();if(count>1_048_576)return new Fingerprint(false,null,"file_too_large");
           digest.update(buffer);buffer.clear();
         }
       }
-      boolean match=HexFormat.of().formatHex(digest.digest()).equals(criterion.sha256());
-      return new Verification(match,match?"file_digest_verified":"digest_mismatch");
-    } catch(java.io.IOException|IllegalArgumentException error) {return new Verification(false,"verification_unavailable");}
+      return new Fingerprint(true,HexFormat.of().formatHex(digest.digest()),"file_digest_observed");
+    } catch(java.io.IOException|IllegalArgumentException error) {return new Fingerprint(false,null,"verification_unavailable");}
     catch(NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}
   }
 }
