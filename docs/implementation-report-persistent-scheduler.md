@@ -31,6 +31,6 @@ Result: PASS
 
 Remaining:
 - cron/反復、ファイル/Git/API trigger、Native UI・Web予約管理API。
-- 不確定 RUNNING の副作用照合・復旧操作、複数アプリ間の Project FIFO、履歴 retention。
+- 不確定RUNNINGのShell復旧は後続scheduler-uncertain-run-recoveryで対応。自動副作用照合、複数アプリ間のProject FIFO、履歴retentionは未対応。
 - 予約 Run の専用介入 mailbox。既存 operation FIFO と Chat cancellation/checkpoint は利用する。
 - 新しい外部接続・サービスは不要。自動実行の設定は既定無効のまま。

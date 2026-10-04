@@ -79,6 +79,19 @@ public class PersistentAgentScheduler implements AgentScheduler {
       result.ifPresent(entry->history(entry.task().id(),"RUNNING",entry.runId()));return result;
     });
   }
+  public boolean activeClaim(Entry claim) {
+    return db.sql("SELECT COUNT(*) FROM agent_schedules WHERE project=? AND id=? AND run=? AND status='RUNNING'")
+        .params(claim.projectId(),claim.task().id(),claim.runId()).query(Integer.class).single()==1;
+  }
+  /** Explicit human reconciliation; unknown effects are never reported as successful or replayed. */
+  public Entry reconcile(String project,String id,String expectedRunId) {
+    transaction.executeWithoutResult(status->{
+      get(project,id);
+      if(db.sql("UPDATE agent_schedules SET status='FAILED',outcome='uncertain_run_reconciled' WHERE project=? AND id=? AND run=? AND status='RUNNING'")
+          .params(project,id,expectedRunId).update()!=1)throw new IllegalStateException("Schedule is no longer running with the specified Run ID");
+      history(id,"FAILED","uncertain_run_reconciled");
+    });return get(project,id);
+  }
   public void finish(Entry claim,String state,String detail) {
     if(!Set.of("COMPLETED","FAILED","CANCELLED").contains(state))throw new IllegalArgumentException("Invalid terminal status");
     transaction.executeWithoutResult(status->{

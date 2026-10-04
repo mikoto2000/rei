@@ -23,6 +23,8 @@ public class AgentScheduleDispatcher {
   private final AgentSchedulerProperties properties;
   private final ToolPermissionProperties permissions;
   private final Gateway gateway;
+  private final java.util.function.Predicate<PersistentAgentScheduler.Entry> inFlight;
+  private final java.util.concurrent.atomic.AtomicReference<PersistentAgentScheduler.Entry> currentClaim=new java.util.concurrent.atomic.AtomicReference<>();
   private final AtomicBoolean busy=new AtomicBoolean();
   @Autowired
   public AgentScheduleDispatcher(PersistentAgentScheduler schedules,AgentSchedulerProperties properties,
@@ -38,6 +40,7 @@ public class AgentScheduleDispatcher {
       router.submitOperation(owner,()->{
         ChatExecutionResult result;
         try {
+          if(!schedules.activeClaim(entry)) {completed.accept(ChatExecutionResult.cancelled());return;}
           if(!validProject(entry,projects))throw new IllegalStateException("Scheduled project was relocated while queued");
           var current=sessions.findById(owner.conversationId()).orElseThrow(()->new IllegalStateException("Scheduled session no longer exists"));
           if(!current.projectId().equals(owner.projectId()))throw new IllegalStateException("Scheduled session ownership changed");
@@ -46,10 +49,14 @@ public class AgentScheduleDispatcher {
         catch(RuntimeException error){result=ChatExecutionResult.failed(error.getClass().getSimpleName());}
         completed.accept(result);
       },work->{try {work.run();}catch(RuntimeException error){completed.accept(ChatExecutionResult.failed(error.getClass().getSimpleName()));}});
-    });
+    },entry->router.containsRun(entry.projectId(),entry.runId()));
   }
   AgentScheduleDispatcher(PersistentAgentScheduler schedules,AgentSchedulerProperties properties,ToolPermissionProperties permissions,Gateway gateway) {
-    this.schedules=schedules;this.properties=properties;this.permissions=permissions;this.gateway=gateway;
+    this(schedules,properties,permissions,gateway,entry->true);
+  }
+  AgentScheduleDispatcher(PersistentAgentScheduler schedules,AgentSchedulerProperties properties,ToolPermissionProperties permissions,
+      Gateway gateway,java.util.function.Predicate<PersistentAgentScheduler.Entry> inFlight) {
+    this.schedules=schedules;this.properties=properties;this.permissions=permissions;this.gateway=gateway;this.inFlight=inFlight;
   }
   private static boolean validProject(PersistentAgentScheduler.Entry entry,ProjectService projects) {
     var root=Path.of(entry.projectRoot());
@@ -59,22 +66,33 @@ public class AgentScheduleDispatcher {
     } catch(java.io.IOException error){return false;}
   }
   @Scheduled(fixedDelayString="${rei.agent-scheduler.check-interval-ms:5000}")
-  public void tick() {
+  public synchronized void tick() {
     if(!properties.enabled()||!permissions.enabled()||!busy.compareAndSet(false,true))return;
     PersistentAgentScheduler.Entry claim=null;
     try {
-      var next=schedules.claimDue();if(next.isEmpty()){busy.set(false);return;}claim=next.get();
+      var next=schedules.claimDue();if(next.isEmpty()){busy.set(false);return;}claim=next.get();currentClaim.set(claim);
       var owned=claim;
       gateway.dispatch(owned,result->{
-        try {schedules.finish(owned,switch(result.status()) {
+        try {if(schedules.activeClaim(owned))schedules.finish(owned,switch(result.status()) {
           case SUCCESS -> "COMPLETED";case FAILED -> "FAILED";case CANCELLED -> "CANCELLED";
         },result.success()?result.text():result.errorMessage());}
-        finally {busy.set(false);}
+        finally {release(owned);}
       });
     } catch(RuntimeException error) {
-      try {if(claim!=null)schedules.finish(claim,"FAILED",error.getMessage());}
-      finally {busy.set(false);}
+      try {if(claim!=null&&schedules.activeClaim(claim))schedules.finish(claim,"FAILED",error.getMessage());}
+      finally {if(claim==null)busy.set(false);else release(claim);}
       org.slf4j.LoggerFactory.getLogger(getClass()).warn("Schedule dispatch failed: {}",error.getClass().getSimpleName());
     }
+  }
+  public synchronized PersistentAgentScheduler.Entry reconcile(String project,String id,String expectedRunId) {
+    var entry=schedules.get(project,id);
+    if(inFlight.test(entry))throw new IllegalStateException("Schedule Run is queued or executing; stop it through normal Run controls");
+    var result=schedules.reconcile(project,id,expectedRunId);
+    var owned=currentClaim.get();
+    if(owned!=null&&owned.task().id().equals(id)&&owned.projectId().equals(project)&&java.util.Objects.equals(owned.runId(),expectedRunId))release(owned);
+    return result;
+  }
+  private synchronized void release(PersistentAgentScheduler.Entry owned) {
+    if(currentClaim.compareAndSet(owned,null))busy.set(false);
   }
 }
