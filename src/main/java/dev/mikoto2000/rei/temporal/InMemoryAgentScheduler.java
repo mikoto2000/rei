@@ -8,9 +8,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import org.springframework.stereotype.Component;
-
-@Component
+/** Compatibility fixture; production uses PersistentAgentScheduler. */
 public class InMemoryAgentScheduler implements AgentScheduler {
   private final Clock clock;
   private final List<ScheduledAgentTask> tasks = new CopyOnWriteArrayList<>();

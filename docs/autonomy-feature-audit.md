@@ -7,7 +7,7 @@
 |---|---|---|---|
 | A1 | Auto Sleep | Not implemented | 本作業で実装。SleepService、AutoSleepService。起動時全 Session 走査は未対応 |
 | A2 | Autonomous Planning Loop | Partially implemented | Deferred。core/actionplan、taskstate、stagnation、BoundedToolLoop はあるが、Goal の永続 lifecycle と独立した完了判定ループはない |
-| A3 | Trigger / Scheduler | Partially implemented | Deferred。temporal/InMemoryAgentScheduler は予約をメモリ保存するだけ。汎用 dispatch・永続 schedule・history はない。Feed/Reminder/Topic の個別 timer は存在 |
+| A3 | Trigger / Scheduler | Partially implemented | Implemented in this task（一回限り continuation）。SQLite 永続化、明示 activation、Project/Session 固定、atomic claim、既存 FIFO 経由の bounded dispatch・結果履歴。cron/汎用 trigger/不確定 Run 復旧UI は Deferred |
 | A4 | Waiting / Dependency | Partially implemented | Implemented in this task（管理プロセスの待機）。状態6種、bounded wait、キャンセル、停滞との区別、Shell 表示。汎用 watcher/依存 graph/復元は Deferred |
 | A5 | Policy / Permission | Partially implemented | Implemented in this task。能力7種・Chat/SubAgent 境界に加え、永続一回限り承認、Shell/Web の明示決定、Checkpoint の明示 Resume に対応。Native 専用ボタン・SubAgent 承認継承は Deferred |
 | A6 | Notification / Escalation | Partially implemented | Deferred。Agent Event、Shell projection、Sound、SSE、Behavior 通知は存在。汎用判断待ち・permission・長時間待機 escalation はない |
