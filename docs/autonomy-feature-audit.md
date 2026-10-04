@@ -11,7 +11,7 @@
 | A4 | Waiting / Dependency | Partially implemented | Implemented in this task（管理プロセスの待機）。状態6種、bounded wait、キャンセル、停滞との区別、Shell 表示。汎用 watcher/依存 graph/復元は Deferred |
 | A5 | Policy / Permission | Partially implemented | Implemented in this task。能力7種・Chat/SubAgent 境界に加え、永続一回限り承認、Shell/Web の明示決定、Checkpoint の明示 Resume に対応。Native 専用ボタン・SubAgent 承認継承は Deferred |
 | A6 | Notification / Escalation | Partially implemented | Implemented in this task（アプリ内確認待ち）。承認要求/Policy拒否/停滞停止/確認済み長時間待機の永続 inbox、重複抑制、Shell/Web の表示・ack。Native専用UI/外部配送/汎用判断待ちは Deferred |
-| A7 | Reflection | Partially implemented | Deferred。Sleep の LESSON/PROCEDURE、Work Context の決定・障害整理は存在。全 Task の期待差分/改善案を保存する独立した仕組みはない |
+| A7 | Reflection | Partially implemented | Implemented in this task（Goal事実ベース）。期待ファイル条件/保存検証/差分/固定レビュー提案、永続 source 参照、重複抑制、Shell backfill。全Task/意味分析/Memory昇格は Deferred |
 | B8 | Activity 週次・月次 | Not implemented | Deferred。ActivityTimeline/DailySummaryService/TrendSummaryPolicy は日次または指定範囲。週月比較 API はない |
 | B9 | Adaptive Coaching | Partially implemented | Deferred。activity/behavior は基準・通知 cooldown・disable 対応。週月分析との統合はない |
 | B10 | Activity × Work Context | Partially implemented | Deferred。Activity の foreground/project と Work Context の Git/Turn metadata は存在。共通 ID での相関はない |
@@ -39,7 +39,7 @@ Agent Event/UI projection、Topic、Core/UI 分離も既存の各パッケージ
 ## 優先順位と残作業
 
 Auto Sleep、共通 Policy/永続承認、管理プロセス Waiting、永続一回限り Scheduler、アプリ内 escalation は独立実装済み。
-ファイルGoalの永続 lifecycle と bounded Planning Loop も実装済み。次は Reflection、Activity 週月分析を優先する。
+ファイルGoalの永続 lifecycle と bounded Planning Loop、Goal事実ベースのReflectionも実装済み。次はActivity週月分析を優先する。
 並行して、不確定 Scheduled Run の復旧、汎用依存監視、Native の承認・確認待ち UI を既存基盤へ統合する。
 週月分析は既存の観測事実を集計し、推測や未観測時間を分離する。SubAgent 修復は bounded retry と元 error 保持を先に整備する。
 

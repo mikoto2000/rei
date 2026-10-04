@@ -296,6 +296,8 @@ public class ReiApplication {
     var timer=cmd.getSubcommands().get("timer");
     var attention=cmd.getSubcommands().get("attention");
     var goal=cmd.getSubcommands().get("goal");
+    var reflection=cmd.getSubcommands().get("reflection");
+    if(reflection!=null && reflection.getCommand() instanceof dev.mikoto2000.rei.reflection.ReflectionCommand command) command.setShellOutput(writer);
     if(goal!=null && goal.getCommand() instanceof dev.mikoto2000.rei.goal.GoalCommand command) command.setShellOutput(writer);
     if(attention!=null && attention.getCommand() instanceof dev.mikoto2000.rei.attention.AttentionCommand command) command.setShellOutput(writer);
     if(timer!=null && timer.getCommand() instanceof dev.mikoto2000.rei.temporal.TimerCommand command) command.setShellOutput(writer);
