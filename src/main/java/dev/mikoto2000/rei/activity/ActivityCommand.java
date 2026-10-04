@@ -4,7 +4,7 @@ import org.springframework.stereotype.Component;
 import picocli.CommandLine.*;
 
 @Component
-@Command(name="activity",description="Activity timeline and classification",subcommands={ActivityCommand.SummaryCommand.class,ActivityCommand.BehaviorCommand.class,ActivityCommand.ClassificationCommand.class,ActivityCommand.WeeklyCommand.class,ActivityCommand.MonthlyCommand.class,ActivityCommand.CoachingCommand.class})
+@Command(name="activity",description="Activity timeline and classification",subcommands={ActivityCommand.SummaryCommand.class,ActivityCommand.BehaviorCommand.class,ActivityCommand.ClassificationCommand.class,ActivityCommand.WeeklyCommand.class,ActivityCommand.MonthlyCommand.class,ActivityCommand.CoachingCommand.class,ActivityCommand.ContextCommand.class})
 public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   private final ActivityTimeline timeline;
   private final ActivityCapture capture;
@@ -16,6 +16,10 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   private PeriodCoachingService coaching;
   @org.springframework.beans.factory.annotation.Autowired
   void periodCoaching(PeriodCoachingService coaching){this.coaching=coaching;}
+  private ActivityWorkContextService workLinks;
+  private dev.mikoto2000.rei.core.project.ProjectService projects;
+  @org.springframework.beans.factory.annotation.Autowired
+  void workContextLinks(ActivityWorkContextService workLinks,dev.mikoto2000.rei.core.project.ProjectService projects){this.workLinks=workLinks;this.projects=projects;}
   @org.springframework.beans.factory.annotation.Autowired
   void timelinePresentation(ActivityTimelinePresentationService presentation){this.presentation=presentation;}
   @Option(names="--verbose",description="Show saved evidence, Vision, rule and Behavior diagnostics") private boolean verbose;
@@ -105,6 +109,21 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
         spec.commandLine().getOut().println(dev.mikoto2000.rei.event.CredentialRedactor.redact(result));return 0;
       } catch(java.time.DateTimeException | IllegalArgumentException e){spec.commandLine().getErr().println("Coachingの引数・基準を確認してください。未来日付は指定できません。");return 2;}
       catch(Exception e){spec.commandLine().getErr().println("Coachingの操作に失敗しました。ログを確認してください。");return 1;}
+    }
+  }
+  @Command(name="context",description="Read-only saved Activity/Work Context references in the selected Project")
+  public static class ContextCommand implements java.util.concurrent.Callable<Integer> {
+    @ParentCommand private ActivityCommand parent;
+    @Spec private picocli.CommandLine.Model.CommandSpec spec;
+    @Parameters(index="0",arity="0..1",defaultValue="today",completionCandidates=SummaryCommand.DateCandidates.class) private String date;
+    @Override public Integer call() {
+      try {
+        var project=parent.projects.currentContext();
+        if(project==null)throw new IllegalArgumentException("Select a Project");
+        var links=parent.workLinks.links(project.id(),date);
+        spec.commandLine().getOut().println(dev.mikoto2000.rei.event.CredentialRedactor.redact(parent.workLinks.format(links)));return 0;
+      }catch(java.time.DateTimeException | IllegalArgumentException e){spec.commandLine().getErr().println("Projectを選択し、日付を today|yesterday|YYYY-MM-DD で指定してください（未来は不可）。");return 2;}
+      catch(Exception e){spec.commandLine().getErr().println("Activityの保存参照を取得できませんでした。ログを確認してください。");return 1;}
     }
   }
   @Command(name="behavior",description="Behavior evaluation: on, off, status, evaluate (manual, no notification)")
