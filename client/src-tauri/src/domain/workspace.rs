@@ -25,6 +25,21 @@ pub struct BackgroundReceipt {
     deny_unknown_fields
 )]
 pub enum WorkspaceOperation {
+    Checkpoints {
+        project_id: String,
+    },
+    Checkpoint {
+        project_id: String,
+        task_id: String,
+    },
+    CheckpointInspect {
+        project_id: String,
+        task_id: String,
+    },
+    CheckpointAbandon {
+        project_id: String,
+        task_id: String,
+    },
     Attention {
         project_id: String,
     },
@@ -128,4 +143,11 @@ pub struct WorkspaceItem {
 pub struct WorkspaceResult {
     pub title: String,
     pub items: Vec<WorkspaceItem>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CheckpointReceipt {
+    pub task_id: String,
+    pub checkpoint_revision: u64,
+    pub snapshot: super::RunSnapshot,
 }

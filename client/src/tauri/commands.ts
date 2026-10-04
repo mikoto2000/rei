@@ -17,6 +17,14 @@ import type {
   WorkspaceResult,
 } from "../entities/workspace";
 interface Commands {
+  checkpoint_resume: [
+    { serverId: string; projectId: string; taskId: string },
+    Run,
+  ];
+  checkpoint_track: [
+    { serverId: string; projectId: string; taskId: string },
+    Run,
+  ];
   workspace_execute: [
     { serverId: string; operation: WorkspaceOperation },
     WorkspaceResult,

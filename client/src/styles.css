@@ -882,3 +882,14 @@ main {
 .attention-pane p {
   overflow-wrap: anywhere;
 }
+@media (max-width: 700px) {
+  html {
+    scroll-padding-bottom: calc(200px + env(safe-area-inset-bottom));
+  }
+  .app-shell {
+    padding-bottom: calc(200px + env(safe-area-inset-bottom));
+  }
+  .attention-pane button {
+    scroll-margin-bottom: calc(200px + env(safe-area-inset-bottom));
+  }
+}

@@ -6,6 +6,7 @@ use serde::de::DeserializeOwned;
 use std::time::Duration;
 mod attention;
 mod background;
+mod checkpoints;
 mod history;
 mod stateful;
 mod workspace;
@@ -96,6 +97,12 @@ impl HttpReiClient {
 }
 #[async_trait]
 impl ReiClient for HttpReiClient {
+    async fn resume_checkpoint(&self, project: &str, task: &str) -> Result<CheckpointReceipt> {
+        self.saved_checkpoint_run(project, task, true).await
+    }
+    async fn checkpoint_run(&self, project: &str, task: &str) -> Result<CheckpointReceipt> {
+        self.saved_checkpoint_run(project, task, false).await
+    }
     async fn background(
         &self,
         project: &str,
