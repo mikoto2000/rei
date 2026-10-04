@@ -1,6 +1,5 @@
 package dev.mikoto2000.rei.feed;
 
-import java.io.StringReader;
 import java.net.URI;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -23,7 +22,13 @@ public class FeedFetcher {
   }
 
   public FetchedFeed fetch(String feedUrl) {
-    FeedHttpResponse response = httpFetcher.fetch(URI.create(feedUrl));
+    URI uri;
+    try {
+      uri = FeedUrlSafety.parse(feedUrl);
+    } catch (IllegalArgumentException e) {
+      throw new FeedFetchException("フィード URL が不正です。認証情報を URL に含めないでください", null);
+    }
+    FeedHttpResponse response = httpFetcher.fetch(uri);
     if (response.statusCode() < 200 || response.statusCode() >= 300) {
       throw new FeedFetchException("フィードの取得に失敗しました", response.statusCode());
     }
@@ -45,7 +50,7 @@ public class FeedFetcher {
     } catch (FeedFetchException e) {
       throw e;
     } catch (Exception e) {
-      throw new FeedFetchException("フィードの解析に失敗しました", response.statusCode(), e);
+      throw new FeedFetchException("フィードの解析に失敗しました", response.statusCode());
     }
   }
 
@@ -121,7 +126,7 @@ public class FeedFetcher {
     try {
       return OffsetDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME);
     } catch (DateTimeParseException e) {
-      throw new FeedFetchException("日時の解析に失敗しました: " + value, null, e);
+      throw new FeedFetchException("日時の解析に失敗しました", null);
     }
   }
 

@@ -39,6 +39,23 @@ class FeedToolsTest {
   }
 
   @Test
+  void rejectedFeedUrlIsNotPrintedByTool() {
+    FeedService feeds = Mockito.mock(FeedService.class);
+    String url = "https://user:must-not-print@example.com/feed";
+    when(feeds.add(url, null)).thenThrow(new IllegalArgumentException("invalid feed URL"));
+    var output = new java.io.ByteArrayOutputStream();
+    var original = System.out;
+    try {
+      System.setOut(new java.io.PrintStream(output));
+      org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+          () -> new FeedTools(feeds, null, null).feedAdd(url, null));
+    } finally {
+      System.setOut(original);
+    }
+    assertTrue(!output.toString().contains("must-not-print"));
+  }
+
+  @Test
   void summaryToolDescriptionsExplainArticleFetchAndFallback() throws Exception {
     Tool item = FeedTools.class.getDeclaredMethod("feedSummarizeItem", Long.class).getAnnotation(Tool.class);
     Tool briefing = FeedTools.class.getDeclaredMethod("feedSummarizeBriefing").getAnnotation(Tool.class);
