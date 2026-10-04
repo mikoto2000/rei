@@ -1,4 +1,12 @@
 export type WorkspaceOperation =
+  | { operation: "dependencies"; projectId: string }
+  | {
+      operation: "dependencyAnswer";
+      projectId: string;
+      id: string;
+      expectedVersion: number;
+      answer: string;
+    }
   | { operation: "checkpoints"; projectId: string }
   | {
       operation: "checkpoint" | "checkpointInspect" | "checkpointAbandon";
