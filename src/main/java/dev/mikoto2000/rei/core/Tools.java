@@ -71,7 +71,7 @@ public class Tools {
   @Autowired
   void setRepositoryMaps(RepositoryMapService service) { this.repositoryMaps = service; }
 
-  @Tool(description = "Git管理下の構造索引を取得します。Javaの型・method・import・mainとテスト候補。queryで絞り込み、limitは1〜100、既定20。partialとwarningsを確認してください。")
+  @Tool(description = "Git管理下の構造索引を取得します。Javaの型・method・import・mainとテスト候補。summaryは絞り込み前の走査範囲のmodule/package/入口/関連件数です。queryで表示を絞り込み、limitは1〜100、既定20。partialとwarnings、summary.partialを確認してください。")
   RepositoryMapService.View repositoryMap(
       @org.springframework.ai.tool.annotation.ToolParam(required = false) String query,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) throws IOException {

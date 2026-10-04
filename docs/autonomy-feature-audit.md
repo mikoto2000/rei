@@ -76,3 +76,7 @@ A3の保存Schedulerに認証済みProject限定HTTP一覧・詳細・履歴・�
 ## Scheduler Run lifecycle follow-up
 
 A3の実Scheduler RunをWeb RunRegistry/RunServiceへ接続し、保存Project/Session・実Run IDのQUEUED/RUNNING/終端を共通状態とイベントへ統合。通常Run取消は未実行の保存claimをCANCELLEDへ移し、dispatcherを解放する。ワーカー開始前の取消でもChatを実行せず、取消Runを成功へ変えない。既存失敗/取消時のrepeat停止・opt-in・FIFO・不確定Runの明示照合を維持し、再起動時に不明Runを再登録/再実行しない。Native Scheduler復旧画面とその他のDeferred項目は引き続き未完了。詳細はimplementation-report-scheduler-run-lifecycle.md。
+
+## Repository summary follow-up
+
+C18の不足していたrepository summaryを既存Repository Mapへ追加。検索/表示limitに依存せず、走査済み全体のmodule/package・Java解析成否・inventory-only・入口・import/テスト名候補件数を集計する。既存のProject境界・秘密除外・内容更新を共有し、要約出力上限や解析不足をsummary.partialで明示する。構造上の観測事実を返し、目的や意味的依存を推測しない。完全意味解析/多言語ASTや他の未完了項目は引き続き残る。詳細はimplementation-report-repository-summary.md。
