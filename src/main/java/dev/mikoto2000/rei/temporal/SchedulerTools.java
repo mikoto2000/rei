@@ -53,6 +53,12 @@ public class SchedulerTools {
     return persistent.scheduleInterval(parseDuration(interval),occurrences,action,conversationId);
   }
 
+  @Tool(name="scheduleCron",description="Register a bounded cron continuation as PENDING. Six cron fields, seconds fixed to 0, explicit IANA time zone, occurrences 2..100. Review /timer show ID and activate explicitly. Missed times coalesce; failure stops repetitions.")
+  public ScheduledAgentTask scheduleCron(String expression,String zone,int occurrences,String action,String conversationId) {
+    if(!(scheduler instanceof PersistentAgentScheduler persistent))throw new IllegalStateException("Persistent scheduler required");
+    return persistent.scheduleCron(expression,zone,occurrences,action,conversationId);
+  }
+
   Duration parseDuration(String value) {
     if (value == null || value.isBlank()) {
       throw new IllegalArgumentException("duration は空にできません");
