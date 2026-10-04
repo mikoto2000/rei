@@ -45,11 +45,11 @@ public class ActivityConfiguration {
         ()->provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get()),Duration.ofSeconds(p.getSummary().getTimeoutSeconds())):null;
     return new DailySummaryService(aliases,writer);
   }
-  @Bean ActivityTimeline activityTimeline(ActivityStore store,ActivityProperties p,DailySummaryService dailySummary) {
+  @Bean ActivityTimeline activityTimeline(ActivityStore store,ActivityProperties p,DailySummaryService dailySummary,PeriodCoachingStore scoreCriteria) {
     var zone=ZoneId.of(p.getZone());
     return new ActivityTimeline(store,Clock.system(zone),new SemanticSessionPolicy(
         Duration.ofSeconds(p.effectiveNormalGapSeconds()),Duration.ofSeconds(p.effectiveMaximumGapSeconds()),
-        Duration.ofSeconds(p.getSummaryBriefSwitchSeconds()),p.getPrimaryConfidenceThreshold(),zone),dailySummary);
+        Duration.ofSeconds(p.getSummaryBriefSwitchSeconds()),p.getPrimaryConfidenceThreshold(),zone),dailySummary,scoreCriteria);
   }
   @Bean ActivityTools activityTools(ActivityTimeline timeline) {return new ActivityTools(timeline);}
   @Bean PeriodCoachingStore periodCoachingStore(javax.sql.DataSource ds){return new SqlitePeriodCoachingStore(ds);}

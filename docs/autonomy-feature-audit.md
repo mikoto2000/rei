@@ -12,7 +12,7 @@
 | A5 | Policy / Permission | Partially implemented | Implemented in this task。能力7種・Chat/SubAgent 境界に加え、永続一回限り承認、Shell/Web の明示決定、Checkpoint の明示 Resume に対応。Native 専用ボタン・SubAgent 承認継承は Deferred |
 | A6 | Notification / Escalation | Partially implemented | Implemented in this task（アプリ内確認待ち）。承認要求/Policy拒否/停滞停止/確認済み長時間待機/Run完了・失敗/依存完了・失敗/人間回答待ちの永続 inbox、重複抑制、Shell/Web の表示・ack。依存IDはRunIDと区別し、ackに同意・起動効果なし。Native専用UI/外部配送は Deferred |
 | A7 | Reflection / 自己評価 | Partially implemented | Goalの独立検証に加え、Task完了・失敗／Run終端と実Tool結果の構造化自己評価をSQLite保存。期待値・差・観測失敗種別・次回改善／再利用候補、所有者境界、重複抑制、記録上限と不完全性、Shell確認・保存Eventから手動backfillに対応。追加LLMなし。意味的比較／検証済み長期知識への昇格はDeferred |
-| B8 | Activity 週次・月次 | Not implemented | Implemented in this task（保存観測の算術分析）。暦週/月、前期間比較、観測推定/未観測、分類/Project候補/時間帯/日別、Shell。実測生産性・集中/中断・意味的テーマ・専用UIは Deferred |
+| B8 | Activity weekly/monthly | Partially implemented | 週次/月次の観測・未観測・分類/Project候補・時間帯・日別・前期間差に対応。保存したユーザー分類基準の0〜100適合指数・日別推移・前期間ポイント差、同一Project/分類の25分以上連続観測候補・近接切替候補を追加。未知・空白・系列変更を区別し、推定と成果/集中の実測を分離。既存期間集計/Coaching基準を再利用。Native専用UIはDeferred |
 | B9 | Adaptive Coaching | Partially implemented | Implemented in this task（手動期間分析統合）。ユーザー分類比率基準・観測品質gate・完了期間限定、永続opt-in設定/期間重複抑制/共通cooldown、Shell。既存Behavior通知を維持。自動週月通知/意味的個人化/専用UIは Deferred |
 | B10 | Activity × Work Context | Partially implemented | Implemented in this task（保存Event参照）。ActivityのEvent/Session/Turn/Run ID、Work ContextのTOOL出典へのexact project-scoped join、revision/Item/Git snapshot時刻付きShell表示。観測時Git/ファイル/command・意味的task帰属・専用UIは Deferred |
 | B11 | Hybrid RAG | Partially implemented | Implemented in this task（opt-in dense/lexical/RRF）。独立候補port、bounded RRF、source/docId境界、既存文書集約/rerank再利用とreranker port、legacy既定維持。元から汎用HTTP rerankは存在。FTS/BM25/学習sparse・評価は Deferred |
