@@ -5,7 +5,7 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import picocli.CommandLine.*;
 
 @Component
-@Command(name="timer",description="Review, activate and inspect persistent one-shot continuations")
+@Command(name="timer",description="Review, activate and inspect persistent continuations")
 public class TimerCommand implements java.util.concurrent.Callable<Integer> {
   private final PersistentAgentScheduler scheduler;
   private final ProjectService projects;
@@ -27,7 +27,7 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
       String project=projects.currentContext().id();
       Object result=switch(action) {
         case "list" -> scheduler.list(project);
-        case "show" -> scheduler.get(project,requiredId())+" interval="+scheduler.interval(project,requiredId());
+        case "show" -> scheduler.get(project,requiredId())+" interval="+scheduler.interval(project,requiredId())+" cron="+scheduler.cron(project,requiredId());
         case "history" -> scheduler.history(project,requiredId());
         case "reconcile" -> {
           if(dispatcher==null||!acknowledgeUncertain||expectedRunId==null||expectedRunId.isBlank())throw new IllegalArgumentException("Reconcile requires Run controls, --run-id and --acknowledge-uncertain-side-effects; inspect effects before creating another schedule");

@@ -65,7 +65,7 @@ class PersistentAgentSchedulerTest {
     assertTrue(late.claimDue().isEmpty());
     var next=scheduler(now.plusSeconds(660));next.finish(next.claimDue().orElseThrow(),"COMPLETED","two");
     var last=scheduler(now.plusSeconds(720));last.finish(last.claimDue().orElseThrow(),"COMPLETED","three");
-    assertEquals("COMPLETED",last.get("project",id).status());assertTrue(last.claimDue().isEmpty());
+    assertEquals("COMPLETED",last.get("project",id).status());assertEquals(0,last.interval("project",id).orElseThrow().remaining());assertTrue(last.claimDue().isEmpty());
   }
   @Test void intervalFailureAndCancellationDoNotRepeat() {
     var first=scheduler(now);String id;

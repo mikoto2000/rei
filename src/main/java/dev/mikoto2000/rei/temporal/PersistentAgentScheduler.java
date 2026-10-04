@@ -12,7 +12,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 
-/** One-shot continuations. A claimed action is never automatically retried after uncertain execution. */
+/** Persistent bounded continuations. A claimed action is never automatically retried after uncertain execution. */
 @Component
 public class PersistentAgentScheduler implements AgentScheduler {
   public record Entry(ScheduledAgentTask task,String projectId,String projectRoot,String status,String runId,String outcome) {}
@@ -25,6 +25,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
     db.sql("CREATE TABLE IF NOT EXISTS agent_schedules(id TEXT PRIMARY KEY,created INTEGER NOT NULL,due INTEGER NOT NULL,action TEXT NOT NULL,session TEXT NOT NULL,project TEXT NOT NULL,root TEXT NOT NULL,status TEXT NOT NULL,run TEXT,outcome TEXT NOT NULL DEFAULT '')").update();
     db.sql("CREATE INDEX IF NOT EXISTS agent_schedules_due ON agent_schedules(status,due)").update();
     db.sql("CREATE UNIQUE INDEX IF NOT EXISTS agent_schedules_session_running ON agent_schedules(project,session) WHERE status='RUNNING'").update();
+    db.sql("CREATE TABLE IF NOT EXISTS agent_schedule_crons(id TEXT PRIMARY KEY,expression TEXT NOT NULL,zone TEXT NOT NULL,remaining INTEGER NOT NULL)").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_schedule_intervals(id TEXT PRIMARY KEY,interval_ms INTEGER NOT NULL,remaining INTEGER NOT NULL)").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_schedule_history(sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL,status TEXT NOT NULL,timestamp INTEGER NOT NULL,detail TEXT NOT NULL)").update();
   }
@@ -65,6 +66,37 @@ public class PersistentAgentScheduler implements AgentScheduler {
       db.sql("INSERT INTO agent_schedule_intervals(id,interval_ms,remaining) VALUES(?,?,?)")
           .params(task.id(),interval.toMillis(),occurrences).update();return task;
     });
+  }
+  public record Cron(String expression,String zone,int remaining) {}
+  public Optional<Cron> cron(String project,String id) {
+    get(project,id);
+    return db.sql("SELECT expression,zone,remaining FROM agent_schedule_crons WHERE id=?").param(id)
+        .query((rs,n)->new Cron(rs.getString(1),rs.getString(2),rs.getInt(3))).optional();
+  }
+  /** Six-field cron at minute granularity; wall clock evaluated in the explicit zone. */
+  public ScheduledAgentTask scheduleCron(String expression,String zone,int occurrences,String action,String conversationId) {
+    if(expression==null||expression.length()>256||!expression.trim().matches("0\\s+.*"))
+      throw new IllegalArgumentException("Cron must have six fields and seconds fixed to 0");
+    if(zone==null||zone.length()>128)throw new IllegalArgumentException("Explicit time zone is required");
+    if(occurrences<2||occurrences>100)throw new IllegalArgumentException("Occurrences must be 2..100");
+    final Instant due;
+    try {due=nextCron(expression,zone,clock.instant());}
+    catch(java.time.DateTimeException error){throw new IllegalArgumentException("Invalid cron time zone",error);}
+    if(due==null)throw new IllegalArgumentException("Cron has no future occurrence");
+    return transaction.execute(status->{
+      var task=scheduleAt(due,action,conversationId);
+      db.sql("INSERT INTO agent_schedule_crons(id,expression,zone,remaining) VALUES(?,?,?,?)")
+          .params(task.id(),expression.trim(),zone,occurrences).update();return task;
+    });
+  }
+  private static Instant nextCron(String expression,String zone,Instant after) {
+    var next=org.springframework.scheduling.support.CronExpression.parse(expression).next(after.atZone(ZoneId.of(zone)));
+    return next==null?null:next.toInstant();
+  }
+  private void scheduleNext(String id,Instant due,String reason) {
+    db.sql("UPDATE agent_schedules SET status='SCHEDULED',due=?,run=NULL WHERE id=?")
+        .params(due.toEpochMilli(),id).update();
+    history(id,"SCHEDULED",reason);
   }
   @Override public List<ScheduledAgentTask> list() {
     var owner=AgentRunScope.current();if(owner==null||owner.projectId()==null)throw new IllegalArgumentException("Owning project is required");
@@ -120,12 +152,20 @@ public class PersistentAgentScheduler implements AgentScheduler {
       if(state.equals("COMPLETED")) {
         var interval=db.sql("SELECT interval_ms,remaining FROM agent_schedule_intervals WHERE id=?")
             .param(claim.task().id()).query((rs,n)->new long[]{rs.getLong(1),rs.getLong(2)}).optional();
-        if(interval.isPresent()&&interval.get()[1]>1) {
+        if(interval.isPresent()) {
           long[] repeat=interval.get();
           db.sql("UPDATE agent_schedule_intervals SET remaining=remaining-1 WHERE id=?").param(claim.task().id()).update();
-          db.sql("UPDATE agent_schedules SET status='SCHEDULED',due=?,run=NULL WHERE id=?")
-              .params(clock.instant().plusMillis(repeat[0]).toEpochMilli(),claim.task().id()).update();
-          history(claim.task().id(),"SCHEDULED","interval continuation; missed occurrences coalesced");
+          if(repeat[1]>1)scheduleNext(claim.task().id(),clock.instant().plusMillis(repeat[0]),"interval continuation; missed occurrences coalesced");
+        }
+        var cron=cron(claim.projectId(),claim.task().id());
+        if(cron.isPresent()) {
+          var repeat=cron.get();
+          db.sql("UPDATE agent_schedule_crons SET remaining=remaining-1 WHERE id=?").param(claim.task().id()).update();
+          if(repeat.remaining()>1) {
+            Instant due=nextCron(repeat.expression(),repeat.zone(),clock.instant());
+            if(due!=null&&due.isAfter(clock.instant())&&!due.isAfter(clock.instant().plus(Duration.ofDays(366))))
+              scheduleNext(claim.task().id(),due,"cron continuation; missed occurrences coalesced");
+          }
         }
       }
     });
