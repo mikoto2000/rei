@@ -28,6 +28,10 @@ public final class RepositoryMapService {
   public RepositoryMapService(){this(RepositoryMapService::gitFiles);}
   RepositoryMapService(Inventory inventory){this.inventory=inventory;}
   public synchronized View map(Path directory,String query,int limit)throws IOException {
+    return build(directory,query,limit,false);
+  }
+  synchronized View snapshot(Path directory)throws IOException { return build(directory,"",100,true); }
+  private View build(Path directory,String query,int limit,boolean complete)throws IOException {
     RunCancellation.propagate(null);
     if(limit<1 || limit>100 || (query!=null && query.length()>256))throw new IllegalArgumentException("Map limit must be 1 to 100 and query at most 256 characters");
     Path root=directory.toRealPath();long deadline=System.nanoTime()+Duration.ofSeconds(10).toNanos();
@@ -72,9 +76,9 @@ public final class RepositoryMapService {
     String fingerprint=hash(files.stream().map(f->f.path()+":"+f.sha256()+":"+f.status()).reduce("",(a,b)->a+"\n"+b).getBytes(StandardCharsets.UTF_8));
     String filter=Objects.toString(query,"").toLowerCase(Locale.ROOT);
     var selected=files.stream().filter(f->(f.path()+" "+f.packageName()+" "+f.module()).toLowerCase(Locale.ROOT).contains(filter)
-        || f.symbols().stream().anyMatch(s->s.name().toLowerCase(Locale.ROOT).contains(filter))).limit(limit).toList();
+        || f.symbols().stream().anyMatch(s->s.name().toLowerCase(Locale.ROOT).contains(filter))).limit(complete?1024:limit).toList();
     Set<String> visible=new HashSet<>();selected.forEach(f->visible.add(f.path()));
-    var relations=relations(files).stream().filter(r->visible.contains(r.source()) || visible.contains(r.target())).limit(200).toList();
+    var relations=relations(files).stream().filter(r->visible.contains(r.source()) || visible.contains(r.target())).limit(complete?Long.MAX_VALUE:200).toList();
     return new View(root.toString(),Instant.now(),fingerprint,files.size(),!warnings.isEmpty(),List.copyOf(warnings),selected,relations);
   }
   private static Parsed parse(JavaCompiler compiler,StandardJavaFileManager manager,Path path,String text) {

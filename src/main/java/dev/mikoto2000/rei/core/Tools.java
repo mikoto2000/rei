@@ -58,6 +58,12 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 public class Tools {
   private RepositoryMapService repositoryMaps = new RepositoryMapService();
 
+  @Tool(description = "変更pathからJavaの逆importとテスト命名候補を探索します。changedFilesはProject相対pathを1〜64件、limitは1〜100（既定20）。完全なcoverageではなく、warningsを確認して広い回帰テストも実施してください。")
+  ChangeTestImpactService.Result changeTestImpact(List<String> changedFiles,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) throws IOException {
+    return new ChangeTestImpactService(repositoryMaps).analyze(currentWorkingDirectory(), changedFiles, limit == null ? 20 : limit);
+  }
+
   @Autowired
   void setRepositoryMaps(RepositoryMapService service) { this.repositoryMaps = service; }
 
