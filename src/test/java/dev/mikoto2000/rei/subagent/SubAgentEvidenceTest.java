@@ -39,4 +39,22 @@ class SubAgentEvidenceTest {
     assertTrue(receipt.get("truncated").asBoolean());assertEquals(16384,receipt.get("output").asString().length());
     assertFalse(ledger.validate(List.of("readMultiFile"),new SubAgentResultParser().parse(answer("SUCCESS",Map.of()))).valid());
   }
+  @Test void successRequiresTheSpecifiedArgumentsOnCitedActualCalls() {
+    var ledger=new SubAgentEvidence();
+    var required=List.of(new SubAgentRequiredCall("readMultiFile","{\"paths\":[\"README.md\"],\"limit\":10}"));
+    var wrong=claim(ledger.capture("readMultiFile","{\"paths\":[\"OTHER.md\"],\"limit\":10}","actual content"),"actual content");
+    assertFalse(ledger.validate(List.of("readMultiFile"),required,new SubAgentResultParser().parse(answer("SUCCESS",List.of(wrong)))).valid());
+    var right=claim(ledger.capture("readMultiFile","{ \"limit\":10, \"paths\":[\"README.md\"] }","actual content"),"actual content");
+    assertFalse(ledger.validate(List.of("readMultiFile"),required,new SubAgentResultParser().parse(answer("SUCCESS",List.of(wrong)))).valid());
+    assertTrue(ledger.validate(List.of("readMultiFile"),required,new SubAgentResultParser().parse(answer("SUCCESS",List.of(right)))).valid());
+    assertTrue(ledger.validate(List.of("readMultiFile"),required,new SubAgentResultParser().parse(answer("PARTIAL",List.of(wrong)))).valid());
+  }
+  @Test void requiredArgumentsMustBeBoundedJsonObjects() {
+    assertThrows(IllegalArgumentException.class,()->new SubAgentRequiredCall("readMultiFile","[]"));
+    assertThrows(IllegalArgumentException.class,()->new SubAgentRequiredCall("readMultiFile","not-json"));
+    assertThrows(IllegalArgumentException.class,()->new SubAgentRequiredCall("readMultiFile","{} {}"));
+    assertThrows(IllegalArgumentException.class,()->new SubAgentRequiredCall("readMultiFile","{\"path\":1,\"path\":2}"));
+    assertThrows(IllegalArgumentException.class,()->new SubAgentRequiredCall("bad tool","{}"));
+    assertThrows(IllegalArgumentException.class,()->new SubAgentRequiredCall("readMultiFile","{\"value\":\""+"x".repeat(4096)+"\"}"));
+  }
 }

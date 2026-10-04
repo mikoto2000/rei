@@ -150,7 +150,7 @@ public final class SubAgentRunner {
         var validation = validator.validate(definition, json);
         if (!validation.valid()) throw new SubAgentValidationException(validation.errors());
         if (evidence != null) {
-          var observed = evidence.validate(definition.evidenceTools(), json);
+          var observed = evidence.validate(definition.evidenceTools(),definition.requiredToolCalls(), json);
           if (!observed.valid()) throw new SubAgentValidationException(observed.errors());
         }
         check.run();

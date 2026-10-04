@@ -41,6 +41,17 @@ class SubAgentConfigurationTest {
       assertThatThrownBy(()->loader.load(file)).hasMessageContaining("evidenceTools");
     }
   }
+  @Test void requiredCallsLoadExactJsonArgumentsAndRejectUnobservedToolsAndUnsafeValues() throws Exception {
+    String extra="evidenceTools: [readMultiFile]\nrequiredToolCalls:\n  - tool: readMultiFile\n    arguments: {paths: [README.md]}\n";
+    var definition=loader.load(write("calls.yaml",yaml("reviewer")+extra));
+    assertThat(definition.requiredToolCalls()).hasSize(1);
+    assertThat(definition.requiredToolCalls().getFirst().argumentsJson()).isEqualTo("{\"paths\":[\"README.md\"]}");
+    assertThat(loader.load(write("default.yaml",yaml("reviewer"))).requiredToolCalls()).isEmpty();
+    for(String bad:List.of(extra.replace("tool: readMultiFile","tool: missing"),extra.replace("arguments: {paths: [README.md]}","arguments: []"),extra.replace("arguments: {paths: [README.md]}","arguments: {date: 2026-01-01}"),extra.replace("evidenceTools: [readMultiFile]\n",""))) {
+      var file=write("bad-calls.yaml",yaml("reviewer")+bad);
+      assertThatThrownBy(()->loader.load(file)).hasMessageContaining("requiredToolCalls");
+    }
+  }
   @Test void repairLimitDefaultsToDisabledAndRejectsInvalidValues() throws Exception {
     assertThat(loader.load(write("a.yaml",yaml("reviewer"))).maxRepairs()).isZero();
     assertThat(loader.load(write("a.yaml",yaml("reviewer")+"maxRepairs: 3\n")).maxRepairs()).isEqualTo(3);
