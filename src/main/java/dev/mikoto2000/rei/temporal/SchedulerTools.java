@@ -22,7 +22,9 @@ public class SchedulerTools {
   }
 
   @Tool(name = "scheduleAfter", description = """
-      指定時間後に再開するための continuation を登録します。Thread.sleep で長時間待たず、この Tool を使用してください。
+      指定時間後の一回限り continuation を PENDING として永続登録します。登録だけでは実行しません。
+      ユーザーが /timer show ID で確認し /timer activate ID で有効化する必要があります。
+      自動 dispatch は rei.agent-scheduler.enabled と Tool permission が有効な場合だけです。
       duration は 10s, 10m, 2h, 1d または ISO-8601 Duration で指定します。
       action には再開時に行う内容、conversationId には現在の会話/タスク識別子を指定します。
       """)
@@ -31,7 +33,8 @@ public class SchedulerTools {
   }
 
   @Tool(name = "scheduleAt", description = """
-      指定日時に再開するための continuation を登録します。Thread.sleep で長時間待たず、この Tool を使用してください。
+      指定日時の一回限り continuation を PENDING として永続登録します。登録だけでは実行しません。
+      ユーザーが /timer show ID で確認し /timer activate ID で有効化する必要があります。
       timestamp は ISO-8601 形式で指定します。
       action には再開時に行う内容、conversationId には現在の会話/タスク識別子を指定します。
       """)
@@ -39,7 +42,7 @@ public class SchedulerTools {
     return scheduler.scheduleAt(OffsetDateTime.parse(timestamp).toInstant(), action, conversationId);
   }
 
-  @Tool(name = "listScheduledActions", description = "登録済み continuation の一覧を取得します。")
+  @Tool(name = "listScheduledActions", description = "現在の Project/Session の未終了 continuation を取得します。状態は /timer show ID で確認します。")
   public List<ScheduledAgentTask> listScheduledActions() {
     return scheduler.list();
   }

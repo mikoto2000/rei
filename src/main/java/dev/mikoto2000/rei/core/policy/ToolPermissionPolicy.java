@@ -9,9 +9,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @EnableConfigurationProperties(ToolPermissionProperties.class)
 public class ToolPermissionPolicy {
   private static final Set<String> READ=Set.of("readFile","readMultiFile","grepMultiQuery","readPdfFile",
-      "searchAndRead","today","now","findFile","listFile","getShellProcessStatus","waitForShellProcess");
+      "searchAndRead","today","now","findFile","listFile","getShellProcessStatus","waitForShellProcess","listScheduledActions");
   private static final Set<String> NETWORK_READ=Set.of("webSearch","webSearchAndRead","fetchUrlContent");
-  private static final Set<String> LOCAL_WRITE=Set.of("applyTextDiff","writeMultiFile","createDirectory","copyFile");
+  private static final Set<String> LOCAL_WRITE=Set.of("applyTextDiff","writeMultiFile","createDirectory","copyFile","scheduleAfter","scheduleAt");
   private final ToolPermissionProperties properties;
   public ToolPermissionPolicy(ToolPermissionProperties properties) {this.properties=properties;}
   public Set<ActionCapability> capabilities(String tool) {
