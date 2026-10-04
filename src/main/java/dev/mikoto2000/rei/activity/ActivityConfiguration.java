@@ -54,6 +54,11 @@ public class ActivityConfiguration {
   @Bean ActivityTools activityTools(ActivityTimeline timeline) {return new ActivityTools(timeline);}
   @Bean PeriodCoachingStore periodCoachingStore(javax.sql.DataSource ds){return new SqlitePeriodCoachingStore(ds);}
   @Bean PeriodCoachingService periodCoachingService(ActivityTimeline timeline,PeriodCoachingStore store){return new PeriodCoachingService(timeline,store,Clock.systemUTC());}
+  @Bean ActivityWorkContextService activityWorkContextService(ActivityStore store,org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextRepository> contexts,ActivityProperties properties) {
+    return new ActivityWorkContextService(store,project->{
+      var repository=contexts.getIfAvailable();return repository==null?java.util.List.of():repository.history(project,100);
+    },Clock.system(ZoneId.of(properties.getZone())));
+  }
   @Bean ActivityTimelinePresentationService activityTimelinePresentation(ActivityTimeline timeline,org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.activity.behavior.BehaviorStateStore> behavior) {
     return new ActivityTimelinePresentationService(timeline,behavior.getIfAvailable());
   }
