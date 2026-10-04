@@ -20,6 +20,7 @@ public final class DependencyAwaiter {
       if(Thread.currentThread().isInterrupted())throw new CancellationException("Dependency wait cancelled");
       var observation=probe.get();
       check.run();
+      if(Thread.currentThread().isInterrupted())throw new CancellationException("Dependency wait cancelled");
       if(observation.state()!=DependencyState.RUNNING && observation.state()!=DependencyState.WAITING)return observation;
       long remaining=limit-(time.nanoTime()-started);
       if(remaining<=0)return new DependencyObservation(observation.id(),DependencyState.WAITING,observation.detail());

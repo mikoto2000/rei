@@ -14,13 +14,16 @@ public class FileGoalVerifier {
   public Verification verify(GoalRepository.Goal goal) {
     if(goal.criteria().isEmpty()||goal.criteria().size()>16)return new Verification(false,"verification_unavailable");
     for(var criterion:goal.criteria()) {
-      var result=verifyFile(goal,criterion);if(!result.satisfied())return result;
+      if(criterion.sha256()==null||!criterion.sha256().matches("[a-f0-9]{64}")||goal.projectRoot()==null)
+        return new Verification(false,"verification_unavailable");
+      try {var result=verify(Path.of(goal.projectRoot()),criterion);if(!result.satisfied())return result;}
+      catch(IllegalArgumentException error){return new Verification(false,"verification_unavailable");}
     }
     return new Verification(true,"file_digest_verified");
   }
-  private Verification verifyFile(GoalRepository.Goal goal,GoalRepository.FileCriterion criterion) {
+  public Verification verify(Path root,GoalRepository.FileCriterion criterion) {
     try {
-      GoalRepository.validateFile(criterion.relativeFile());var root=Path.of(goal.projectRoot());
+      GoalRepository.validateFile(criterion.relativeFile());
       if(!Files.isDirectory(root)||!root.toRealPath().equals(root))return new Verification(false,"project_path_changed");
       Path current=root;
       for(var part:Path.of(criterion.relativeFile())) {
@@ -30,6 +33,7 @@ public class FileGoalVerifier {
       if(!Files.isRegularFile(current,LinkOption.NOFOLLOW_LINKS))return new Verification(false,"file_missing_or_not_regular");
       if(!current.toRealPath().startsWith(root))return new Verification(false,"outside_project");
       if(Files.size(current)>1_048_576)return new Verification(false,"file_too_large");
+      if(criterion.sha256()==null)return new Verification(true,"file_exists");
       var digest=MessageDigest.getInstance("SHA-256");long count=0;
       try(var channel=FileChannel.open(current,StandardOpenOption.READ,LinkOption.NOFOLLOW_LINKS)) {
         var buffer=ByteBuffer.allocate(8192);
