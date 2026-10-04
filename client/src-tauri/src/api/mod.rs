@@ -8,6 +8,7 @@ mod attention;
 mod background;
 mod checkpoints;
 mod dependencies;
+mod goals;
 mod history;
 mod stateful;
 mod workspace;
@@ -100,6 +101,9 @@ impl HttpReiClient {
 impl ReiClient for HttpReiClient {
     async fn resume_checkpoint(&self, project: &str, task: &str) -> Result<CheckpointReceipt> {
         self.saved_checkpoint_run(project, task, true).await
+    }
+    async fn goal_snapshot(&self, project: &str, goal: &str) -> Result<RunSnapshot> {
+        self.saved_goal_snapshot(project, goal).await
     }
     async fn checkpoint_run(&self, project: &str, task: &str) -> Result<CheckpointReceipt> {
         self.saved_checkpoint_run(project, task, false).await

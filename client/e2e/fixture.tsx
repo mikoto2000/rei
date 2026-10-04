@@ -135,6 +135,11 @@ let onRun: (run: Run) => void = () => {};
 let checkpointResumed = false;
 let checkpointAbandoned = false;
 let humanAnswer: string | null = null;
+let goalStatus =
+  new URLSearchParams(location.search).get("goal") === "uncertain"
+    ? "RUNNING"
+    : "READY";
+let goalCurrentRun = goalStatus === "RUNNING" ? "old-goal-run" : "";
 let acknowledged = false;
 let decided = false;
 const call = (async (
@@ -142,6 +147,33 @@ const call = (async (
   args: Record<string, unknown> | undefined,
 ) => {
   if (name === "app_snapshot") return structuredClone(data);
+  if (name === "goal_track") {
+    if (
+      args?.serverId !== "s" ||
+      args?.projectId !== "p" ||
+      args?.goalId !== "g"
+    )
+      throw "InvalidInput";
+    if (goalCurrentRun !== "goal-run") throw "RunNotFound";
+    const accepted: Run = {
+      ...run,
+      conversationId: "",
+      runId: "goal-run",
+      sessionId: "session",
+      turnId: null,
+      prompt: "Goal g",
+      status: "QUEUED",
+      revision: 1,
+      assistantText: "",
+      tools: [],
+      activities: [],
+      timeline: [],
+      messages: [],
+      workingSet: [],
+    };
+    onRun(accepted);
+    return accepted;
+  }
   if (name === "checkpoint_resume" || name === "checkpoint_track") {
     if (
       args?.serverId !== "s" ||
@@ -181,7 +213,61 @@ const call = (async (
       approved?: boolean;
       expectedVersion?: number;
       answer?: string;
+      expectedRunId?: string;
+      acknowledgeUncertainSideEffects?: boolean;
     };
+    if (
+      [
+        "goals",
+        "goal",
+        "goalHistory",
+        "goalVerify",
+        "goalRun",
+        "goalCancel",
+        "goalReconcile",
+      ].includes(op.operation)
+    ) {
+      if (op.projectId !== "p" || (op.operation !== "goals" && op.id !== "g"))
+        throw "ProjectNotFound";
+      if (op.operation === "goalRun") {
+        goalStatus = "RUNNING";
+        goalCurrentRun = "goal-run";
+      }
+      if (op.operation === "goalCancel") goalStatus = "CANCELLED";
+      if (op.operation === "goalVerify") goalStatus = "COMPLETED";
+      if (op.operation === "goalReconcile") {
+        if (
+          op.expectedRunId !== goalCurrentRun ||
+          !op.acknowledgeUncertainSideEffects
+        )
+          throw "ResourceConflict";
+        goalStatus = "PAUSED";
+      }
+      const fields = [
+        ["Project", "p"],
+        ["Session", "session"],
+        ["Status", goalStatus],
+        ["Run", goalCurrentRun],
+        ["Runs", "1 / 3"],
+        ["LLM calls", "2 / 20"],
+        ["Criteria", "out.txt must match saved SHA-256"],
+        ["Reason", goalStatus === "PAUSED" ? "uncertain_run_reconciled" : ""],
+      ];
+      if (op.operation === "goalHistory")
+        fields.push(
+          ["History", "saved_goal_history"],
+          ["Attempts", "saved_attempt_history"],
+        );
+      if (op.operation === "goalVerify")
+        fields.push(
+          ["Satisfied", "true"],
+          ["Verification", "file_digest_verified"],
+        );
+      return {
+        title: "Goal",
+        items: [{ id: "g", title: "Fixture Goal outcome", fields }],
+      };
+    }
     if (
       op.operation === "dependencies" ||
       op.operation === "dependencyAnswer"

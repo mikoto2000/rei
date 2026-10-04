@@ -44,6 +44,15 @@ impl NotificationPort for NativeNotifications {
 }
 type App<'a> = State<'a, Arc<Application>>;
 #[tauri::command]
+async fn goal_track(
+    app: App<'_>,
+    server_id: String,
+    project_id: String,
+    goal_id: String,
+) -> Result<RunView> {
+    app.goal_track(&server_id, &project_id, &goal_id).await
+}
+#[tauri::command]
 async fn checkpoint_resume(
     app: App<'_>,
     server_id: String,
@@ -355,6 +364,7 @@ pub fn run() {
             workspace_execute,
             checkpoint_resume,
             checkpoint_track,
+            goal_track,
             background_submit,
             app_snapshot,
             vault_unlock,

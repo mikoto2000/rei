@@ -1,4 +1,18 @@
 export type WorkspaceOperation =
+  | { operation: "goals"; projectId: string }
+  | {
+      operation:
+        "goal" | "goalHistory" | "goalVerify" | "goalRun" | "goalCancel";
+      projectId: string;
+      id: string;
+    }
+  | {
+      operation: "goalReconcile";
+      projectId: string;
+      id: string;
+      expectedRunId: string;
+      acknowledgeUncertainSideEffects: boolean;
+    }
   | { operation: "dependencies"; projectId: string }
   | {
       operation: "dependencyAnswer";

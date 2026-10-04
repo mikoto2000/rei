@@ -64,3 +64,7 @@ A2の既存GoalRepository/GoalLoopServiceへProject限定HTTP一覧・詳細・�
 ## Goal Run lifecycle follow-up
 
 A2の実Goal AttemptをWeb RunRegistry/RunServiceへ接続し、受付QUEUED・実行・終端・通常のRun取消を既存管理へ統合。保存Session/Projectを保持し、未実行の取消はGoalをPAUSED、AttemptをCANCELLEDへ移す。実行開始直前の取消競合でも処理を実行せず一度だけ通知し、通知はbus monitor外で行う。再起動した不明Runを自動再登録/再実行しない。Native Goal画面、Scheduler API/UI等は引き続き未対応。詳細はimplementation-report-goal-run-lifecycle.md。
+
+## Native Goal controls follow-up
+
+A2の保存GoalにProject限定のNative一覧・状態/履歴確認・実行/Verify/Cancel/Reconcileの明示確認画面を追加。結果不明副作用の確認チェックと実Run IDを要求し、既存予算/Sessionを保持する。受け付けた現在RunをGETで検証し実行一覧/SSEへ接続、同じRunを重複登録せず、追跡失敗時に実行POSTを再送しない。Checkpointと既存追跡経路を共有し回帰検証した。Goal作成は既存入口を使用。Scheduler API/UIおよびその他のDeferred項目は引き続き未完了。詳細はimplementation-report-native-goal-controls.md。
