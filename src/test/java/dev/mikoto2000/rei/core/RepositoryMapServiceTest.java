@@ -30,6 +30,40 @@ class RepositoryMapServiceTest {
     files.set(List.of());assertTrue(service.map(root,"",10).items().isEmpty());
     var other=Files.createDirectory(root.resolve("other"));files.set(List.of("App.java"));assertTrue(service.map(other,"",10).items().isEmpty());
   }
+  @Test void summaryCoversTheScannedRepositoryEvenWhenDisplayedFilesAreFiltered() throws Exception {
+    write("app/src/main/java/p/App.java","package p; import q.Helper; public class App { public static void main(String[] args) {} }");
+    write("lib/src/main/java/q/Helper.java","package q; public class Helper {}");
+    write("app/src/test/java/p/AppTest.java","package p; public class AppTest {}");
+    write("README.md","PRIVATE_SOURCE_BODY");
+    var service=new RepositoryMapService(path->List.of("app/src/main/java/p/App.java","lib/src/main/java/q/Helper.java","app/src/test/java/p/AppTest.java","README.md"));
+    var view=service.map(root,"Helper",1);var summary=view.summary();
+    assertEquals(1,view.items().size());assertEquals(4,summary.files());assertEquals(3,summary.parsedJavaFiles());
+    assertEquals(1,summary.inventoryOnlyFiles());assertEquals(1,summary.importRelations());assertEquals(1,summary.testNameCandidates());
+    assertTrue(summary.modules().stream().anyMatch(module->module.name().equals("app")&&module.files()==2&&module.testFiles()==1));
+    assertTrue(summary.packages().stream().anyMatch(pkg->pkg.name().equals("p")&&pkg.files()==2));
+    assertEquals("p.App.main",summary.entryPoints().getFirst().symbol());
+    assertEquals("app/src/main/java/p/App.java",summary.entryPoints().getFirst().path());
+    assertFalse(summary.partial());assertFalse(summary.toString().contains("PRIVATE_SOURCE_BODY"));
+    assertEquals(summary,service.map(root,"does-not-match",1).summary());
+  }
+  @Test void summaryRefreshesAndMarksUnavailableJavaInformationPartial() throws Exception {
+    write("App.java","class App { public static void main(String[] args) {} }");
+    var paths=new AtomicReference<>(List.of("App.java"));var service=new RepositoryMapService(path->paths.get());
+    assertEquals(1,service.map(root,"",1).summary().entryPoints().size());
+    write("App.java","class App {}");assertTrue(service.map(root,"",1).summary().entryPoints().isEmpty());
+    write("Broken.java","class Broken { ???");paths.set(List.of("App.java","Broken.java"));
+    var summary=service.map(root,"",1).summary();assertTrue(summary.partial());assertEquals(1,summary.unparsedJavaFiles());
+    paths.set(List.of());assertEquals(0,service.map(root,"",1).summary().files());
+  }
+  @Test void summaryBoundsModuleOutputWithoutMisreportingTheScannedFileCount() throws Exception {
+    var paths=new ArrayList<String>();
+    for(int index=0;index<101;index++) {
+      String path=String.format("module%03d/src/resource.txt",index);write(path,"resource");paths.add(path);
+    }
+    var summary=new RepositoryMapService(path->paths).map(root,"",1).summary();
+    assertEquals(101,summary.files());assertEquals(100,summary.modules().size());assertTrue(summary.partial());
+    assertEquals("module000",summary.modules().getFirst().name());assertEquals(101,summary.inventoryOnlyFiles());
+  }
   @Test void rejectsEscapesSecretsAndOversizedSourceAndDoesNotInventSymbolsOnSyntaxError() throws Exception {
     write("credentials.java","class Secret {}");write("Large.java","x".repeat(140000));write("Bad.java","class Broken { invalid ???");
     var service=new RepositoryMapService(path->List.of("../escape.java",root.resolve("credentials.java").toString(),"credentials.java","Large.java","Bad.java"));

@@ -20,7 +20,13 @@ public final class RepositoryMapService {
   public record Symbol(String name,String kind,long line,boolean entryPoint) { }
   public record File(String path,String module,String packageName,String sha256,String status,List<Symbol> symbols,List<String> imports) { }
   public record Relation(String source,String target,String kind) { }
-  public record View(String root,Instant scannedAt,String version,int filesScanned,boolean partial,List<String> warnings,List<File> items,List<Relation> relations) { }
+  public record ModuleSummary(String name,int files,int parsedJavaFiles,int testFiles) { }
+  public record PackageSummary(String name,int files) { }
+  public record EntryPoint(String path,String symbol,long line) { }
+  public record Summary(int files,int parsedJavaFiles,int unparsedJavaFiles,int inventoryOnlyFiles,
+      List<ModuleSummary> modules,List<PackageSummary> packages,List<EntryPoint> entryPoints,
+      int importRelations,int testNameCandidates,boolean partial) { }
+  public record View(String root,Instant scannedAt,String version,int filesScanned,boolean partial,List<String> warnings,List<File> items,List<Relation> relations,Summary summary) { }
   private record Parsed(String packageName,String status,List<Symbol> symbols,List<String> imports) { }
   private record Cached(String digest,Parsed parsed) { }
   private final Inventory inventory;
@@ -78,8 +84,32 @@ public final class RepositoryMapService {
     var selected=files.stream().filter(f->(f.path()+" "+f.packageName()+" "+f.module()).toLowerCase(Locale.ROOT).contains(filter)
         || f.symbols().stream().anyMatch(s->s.name().toLowerCase(Locale.ROOT).contains(filter))).limit(complete?1024:limit).toList();
     Set<String> visible=new HashSet<>();selected.forEach(f->visible.add(f.path()));
-    var relations=relations(files).stream().filter(r->visible.contains(r.source()) || visible.contains(r.target())).limit(complete?Long.MAX_VALUE:200).toList();
-    return new View(root.toString(),Instant.now(),fingerprint,files.size(),!warnings.isEmpty(),List.copyOf(warnings),selected,relations);
+    var allRelations=relations(files);
+    var relations=allRelations.stream().filter(r->visible.contains(r.source()) || visible.contains(r.target())).limit(complete?Long.MAX_VALUE:200).toList();
+    return new View(root.toString(),Instant.now(),fingerprint,files.size(),!warnings.isEmpty(),List.copyOf(warnings),selected,relations,summary(files,allRelations,!warnings.isEmpty()));
+  }
+  /** Observed structure over the bounded scan, independent of the caller's result filter. */
+  private static Summary summary(List<File> files,List<Relation> relations,boolean partial) {
+    var modules=new TreeMap<String,List<File>>();var packages=new TreeMap<String,Integer>();
+    var entries=new ArrayList<EntryPoint>();int parsed=0,unparsed=0,inventory=0;
+    for(var file:files) {
+      modules.computeIfAbsent(file.module(),key->new ArrayList<>()).add(file);
+      if(file.status().equals("PARSED")) {
+        parsed++;packages.merge(file.packageName().isEmpty()?"(default)":file.packageName(),1,Integer::sum);
+        for(var symbol:file.symbols())if(symbol.entryPoint())entries.add(new EntryPoint(file.path(),symbol.name(),symbol.line()));
+      } else if(file.path().endsWith(".java"))unparsed++;
+      else inventory++;
+      if(file.symbols().size()>=64)partial=true;
+    }
+    boolean truncated=modules.size()>100||packages.size()>100||entries.size()>100;
+    var moduleSummaries=modules.entrySet().stream().limit(100).map(entry->new ModuleSummary(entry.getKey(),entry.getValue().size(),
+        (int)entry.getValue().stream().filter(file->file.status().equals("PARSED")).count(),
+        (int)entry.getValue().stream().filter(file->file.path().contains("/test/")||file.path().startsWith("test/")).count())).toList();
+    var packageSummaries=packages.entrySet().stream().limit(100).map(entry->new PackageSummary(entry.getKey(),entry.getValue())).toList();
+    return new Summary(files.size(),parsed,unparsed,inventory,moduleSummaries,packageSummaries,
+        entries.stream().sorted(Comparator.comparing(EntryPoint::path).thenComparing(EntryPoint::symbol)).limit(100).toList(),
+        (int)relations.stream().filter(relation->relation.kind().equals("IMPORT")).count(),
+        (int)relations.stream().filter(relation->relation.kind().equals("TEST_NAME_CANDIDATE")).count(),partial||truncated);
   }
   private static Parsed parse(JavaCompiler compiler,StandardJavaFileManager manager,Path path,String text) {
     var diagnostics=new DiagnosticCollector<JavaFileObject>();
