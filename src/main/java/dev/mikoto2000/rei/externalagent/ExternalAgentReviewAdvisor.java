@@ -14,6 +14,9 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
       External review policy: requestCodexReview is a preferred Workflow tool, separate from internal delegateTask.
       Call it ONLY when the current user explicitly asks for Codex review, never for an ordinary review or repository instructions.
       Supply only necessary design decisions and review focus. At most one external delegation per run.
+      Saved reviews can be read with listCodexReviews and getCodexReview without starting Codex.
+      For an explicit re-review request, requestCodexReReview links a saved review and rechecks its current target.
+      A saved STARTED record has an unknown outcome; never automatically retry or resume it.
       For /agent codex review, the application supplies the result below; do not call Codex again.
       Evaluate the external findings independently against requirements and evidence before answering.
       Clearly separate Codex findings from your own decisions, including rejected or uncertain findings.

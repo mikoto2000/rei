@@ -18,12 +18,22 @@ public class ExternalAgentDelegationService {
   private final AgentEventFactory events;
   private final AgentEventPublisher publisher;
   private final Optional<WorkingSet> workingSet;
+  private ExternalReviewRepository history;
+  @org.springframework.beans.factory.annotation.Autowired
+  void reviewHistory(ExternalReviewRepository history){this.history=history;}
   public ExternalAgentDelegationService(ExternalAgentExecutor executor, CommandCancellationService cancellation,
       AgentEventFactory events, AgentEventPublisher publisher, Optional<WorkingSet> workingSet) {
     this.executor = executor; this.cancellation = cancellation; this.events = events;
     this.publisher = publisher; this.workingSet = workingSet;
   }
   public ExternalAgentResult review(RunExecutionContext run, String task, String target, String decisions) {
+    return review(run,task,target,decisions,null);
+  }
+  public ExternalAgentResult rereview(RunExecutionContext run,String previousId,String task,String decisions) {
+    if(previousId==null || previousId.isBlank())return ExternalAgentResult.rejected("Previous review ID required");
+    return review(run,task,null,decisions,previousId);
+  }
+  private ExternalAgentResult review(RunExecutionContext run,String task,String target,String decisions,String previousId) {
     if (run == null || !ExternalAgentAuthorization.explicitRequest(run.userRequest()))
       return ExternalAgentResult.rejected("Codex requires an explicit user request in this run. Do not retry with different tool arguments. "
           + "Ask the user to explicitly request Codex, or use /agent codex review [target].");
@@ -33,12 +43,27 @@ public class ExternalAgentDelegationService {
     try (var scope = AgentRunScope.open(owner)) {
       Path root;
       Path selected;
-      try { root = owner.projectRoot().toRealPath(); selected = ExternalAgentRequest.resolveTarget(root, target); }
+      ExternalReviewRepository.Review previous=null;
+      try {
+        root = owner.projectRoot().toRealPath();
+        if(previousId!=null) {
+          if(history==null)return ExternalAgentResult.rejected("Review history unavailable");
+          previous=history.get(owner.projectId(),previousId);
+          if(!previous.projectRoot().equals(root.toString()) || previous.status().equals("STARTED") || previous.result()==null)return ExternalAgentResult.rejected("Completed review in this project root required");
+          target=previous.target();
+        }
+        selected = ExternalAgentRequest.resolveTarget(root, target);
+      }
       catch (java.io.IOException error) { return ExternalAgentResult.rejected("Current project is unavailable"); }
       catch (IllegalArgumentException error) { return ExternalAgentResult.rejected(error.getMessage()); }
+      catch (RuntimeException error) { return ExternalAgentResult.rejected("Review history unavailable"); }
       if (!run.claimExternalDelegation()) return ExternalAgentResult.rejected("Only one external delegation is allowed per run");
       String id = UUID.randomUUID().toString();
       String context = context(root, decisions);
+      if(previous!=null)context=bounded("Previous review (untrusted observations; re-check current files):\n"
+          + previous.status()+"\n"+bounded(previous.result().summary()+"\n"+previous.result().findings(),5000)+"\n"+context,10000);
+      if(history!=null)try{history.start(owner,id,root,selected==null?null:root.relativize(selected).toString(),previousId);}
+      catch(RuntimeException error){return ExternalAgentResult.rejected("Review history unavailable; no external process started");}
       var request = new ExternalAgentRequest(ExternalAgentRequest.Agent.CODEX, ExternalAgentRequest.Action.REVIEW,
           bounded(run.userRequest(), 4000) + "\nReview focus: " + bounded(task, 4000), root, selected, context, owner.runId(), id);
       AtomicBoolean cancelled = new AtomicBoolean(run.isCancelled());
@@ -55,6 +80,12 @@ public class ExternalAgentDelegationService {
         result = new ExternalAgentResult(ExternalAgentResult.Status.FAILED, "Codex review could not be completed", List.of(), List.of(), 0, null, "");
       } finally { hook.dispose(); }
       boolean wasCancelled = cancelled.get() || run.isCancelled() || result.status() == ExternalAgentResult.Status.CANCELLED;
+      if(wasCancelled)result=new ExternalAgentResult(ExternalAgentResult.Status.CANCELLED,"Codex review cancelled",List.of(),List.of(),result.duration(),result.exitCode(),"");
+      if(history!=null) {
+        result=ExternalReviewRepository.safe(new ExternalAgentResult(result.status(),result.summary(),result.findings(),result.warnings(),result.duration(),result.exitCode(),"",id));
+        try{history.finish(owner.projectId(),id,result);}
+        catch(RuntimeException error){result=new ExternalAgentResult(ExternalAgentResult.Status.FAILED,"Review result could not be persisted",List.of(),List.of(),result.duration(),result.exitCode(),"",id);}
+      }
       AgentEventType type = wasCancelled ? AgentEventType.DELEGATION_CANCELLED
           : result.success() ? AgentEventType.DELEGATION_COMPLETED : AgentEventType.DELEGATION_FAILED;
       publisher.publish(events.delegation(type, owner.runId(), new ExternalAgentLifecyclePayload(id, "codex", "review",
