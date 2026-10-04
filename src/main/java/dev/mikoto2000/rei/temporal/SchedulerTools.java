@@ -47,6 +47,12 @@ public class SchedulerTools {
     return scheduler.list();
   }
 
+  @Tool(name="scheduleInterval",description="Register a bounded interval continuation as PENDING. Interval 1m..366d, occurrences 2..100. Review /timer show ID and explicitly activate. Missed times coalesce; failure stops repetitions.")
+  public ScheduledAgentTask scheduleInterval(String interval,int occurrences,String action,String conversationId) {
+    if(!(scheduler instanceof PersistentAgentScheduler persistent))throw new IllegalStateException("Persistent scheduler required");
+    return persistent.scheduleInterval(parseDuration(interval),occurrences,action,conversationId);
+  }
+
   Duration parseDuration(String value) {
     if (value == null || value.isBlank()) {
       throw new IllegalArgumentException("duration は空にできません");

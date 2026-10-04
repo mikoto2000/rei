@@ -51,4 +51,33 @@ class PersistentAgentSchedulerTest {
     var later=scheduler(now.plusSeconds(86400));assertEquals("RUNNING",later.get("project",id).status());
     assertTrue(later.claimDue().isEmpty());
   }
+  @Test void intervalPersistsCoalescesAndStopsAtBound() {
+    var first=scheduler(now);String id;
+    try(var scope=AgentRunScope.open(owner())) {id=first.scheduleInterval(Duration.ofMinutes(1),3,"Check","session").id();}
+    first.activate("project",id);
+    var late=scheduler(now.plusSeconds(600));var claim=late.claimDue().orElseThrow();
+    assertTrue(late.claimDue().isEmpty());late.finish(claim,"COMPLETED","one");
+    assertEquals("SCHEDULED",late.get("project",id).status());
+    assertEquals(2,late.interval("project",id).orElseThrow().remaining());
+    assertThrows(IllegalArgumentException.class,()->late.interval("other",id));
+    assertEquals(now.plusSeconds(660),late.get("project",id).task().executeAt());
+    assertThrows(IllegalStateException.class,()->late.finish(claim,"COMPLETED","stale"));
+    assertTrue(late.claimDue().isEmpty());
+    var next=scheduler(now.plusSeconds(660));next.finish(next.claimDue().orElseThrow(),"COMPLETED","two");
+    var last=scheduler(now.plusSeconds(720));last.finish(last.claimDue().orElseThrow(),"COMPLETED","three");
+    assertEquals("COMPLETED",last.get("project",id).status());assertTrue(last.claimDue().isEmpty());
+  }
+  @Test void intervalFailureAndCancellationDoNotRepeat() {
+    var first=scheduler(now);String id;
+    try(var scope=AgentRunScope.open(owner())) {
+      assertThrows(IllegalArgumentException.class,()->first.scheduleInterval(Duration.ofSeconds(1),3,"x","session"));
+      assertThrows(IllegalArgumentException.class,()->first.scheduleInterval(Duration.ofMinutes(1),101,"x","session"));
+      id=first.scheduleInterval(Duration.ofMinutes(1),3,"x","session").id();
+    }
+    first.activate("project",id);var later=scheduler(now.plusSeconds(60));
+    later.finish(later.claimDue().orElseThrow(),"FAILED","failure");
+    assertEquals("FAILED",later.get("project",id).status());assertTrue(scheduler(now.plusSeconds(1000)).claimDue().isEmpty());
+    try(var scope=AgentRunScope.open(owner())) {id=first.scheduleInterval(Duration.ofMinutes(1),3,"x","session").id();}
+    first.activate("project",id);first.cancel("project",id);assertTrue(later.claimDue().isEmpty());
+  }
 }

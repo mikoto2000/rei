@@ -25,6 +25,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
     db.sql("CREATE TABLE IF NOT EXISTS agent_schedules(id TEXT PRIMARY KEY,created INTEGER NOT NULL,due INTEGER NOT NULL,action TEXT NOT NULL,session TEXT NOT NULL,project TEXT NOT NULL,root TEXT NOT NULL,status TEXT NOT NULL,run TEXT,outcome TEXT NOT NULL DEFAULT '')").update();
     db.sql("CREATE INDEX IF NOT EXISTS agent_schedules_due ON agent_schedules(status,due)").update();
     db.sql("CREATE UNIQUE INDEX IF NOT EXISTS agent_schedules_session_running ON agent_schedules(project,session) WHERE status='RUNNING'").update();
+    db.sql("CREATE TABLE IF NOT EXISTS agent_schedule_intervals(id TEXT PRIMARY KEY,interval_ms INTEGER NOT NULL,remaining INTEGER NOT NULL)").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_schedule_history(sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL,status TEXT NOT NULL,timestamp INTEGER NOT NULL,detail TEXT NOT NULL)").update();
   }
   private static final RowMapper<Entry> ROW=(rs,n)->new Entry(new ScheduledAgentTask(rs.getString("id"),Instant.ofEpochMilli(rs.getLong("created")),
@@ -47,6 +48,23 @@ public class PersistentAgentScheduler implements AgentScheduler {
       if(count!=1)throw new IllegalStateException("Project schedule limit reached (256)");
       history(task.id(),"PENDING","");
     });return task;
+  }
+  public record Interval(Duration interval,int remaining) {}
+  public Optional<Interval> interval(String project,String id) {
+    get(project,id);
+    return db.sql("SELECT interval_ms,remaining FROM agent_schedule_intervals WHERE id=?").param(id)
+        .query((rs,n)->new Interval(Duration.ofMillis(rs.getLong(1)),rs.getInt(2))).optional();
+  }
+  /** Bounded repeat; successful occurrences coalesce missed time from completion. */
+  public ScheduledAgentTask scheduleInterval(Duration interval,int occurrences,String action,String conversationId) {
+    if(interval==null||interval.compareTo(Duration.ofMinutes(1))<0||interval.compareTo(Duration.ofDays(366))>0)
+      throw new IllegalArgumentException("Interval must be 1 minute..366 days");
+    if(occurrences<2||occurrences>100)throw new IllegalArgumentException("Occurrences must be 2..100");
+    return transaction.execute(status->{
+      var task=scheduleAfter(interval,action,conversationId);
+      db.sql("INSERT INTO agent_schedule_intervals(id,interval_ms,remaining) VALUES(?,?,?)")
+          .params(task.id(),interval.toMillis(),occurrences).update();return task;
+    });
   }
   @Override public List<ScheduledAgentTask> list() {
     var owner=AgentRunScope.current();if(owner==null||owner.projectId()==null)throw new IllegalArgumentException("Owning project is required");
@@ -99,6 +117,17 @@ public class PersistentAgentScheduler implements AgentScheduler {
       if(db.sql("UPDATE agent_schedules SET status=?,outcome=? WHERE id=? AND project=? AND run=? AND status='RUNNING'")
           .params(state,outcome,claim.task().id(),claim.projectId(),claim.runId()).update()!=1)throw new IllegalStateException("Claim no longer active");
       history(claim.task().id(),state,outcome);
+      if(state.equals("COMPLETED")) {
+        var interval=db.sql("SELECT interval_ms,remaining FROM agent_schedule_intervals WHERE id=?")
+            .param(claim.task().id()).query((rs,n)->new long[]{rs.getLong(1),rs.getLong(2)}).optional();
+        if(interval.isPresent()&&interval.get()[1]>1) {
+          long[] repeat=interval.get();
+          db.sql("UPDATE agent_schedule_intervals SET remaining=remaining-1 WHERE id=?").param(claim.task().id()).update();
+          db.sql("UPDATE agent_schedules SET status='SCHEDULED',due=?,run=NULL WHERE id=?")
+              .params(clock.instant().plusMillis(repeat[0]).toEpochMilli(),claim.task().id()).update();
+          history(claim.task().id(),"SCHEDULED","interval continuation; missed occurrences coalesced");
+        }
+      }
     });
   }
   public List<History> history(String project,String id) {
