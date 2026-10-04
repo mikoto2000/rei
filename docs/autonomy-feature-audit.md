@@ -14,7 +14,7 @@
 | A7 | Reflection / 自己評価 | Partially implemented | Goalの独立検証に加え、Task完了・失敗／Run終端と実Tool結果の構造化自己評価をSQLite保存。期待値・差・観測失敗種別・次回改善／再利用候補、所有者境界、重複抑制、記録上限と不完全性、Shell確認・保存Eventから手動backfillに対応。追加LLMなし。意味的比較／検証済み長期知識への昇格はDeferred |
 | B8 | Activity weekly/monthly | Partially implemented | 週次/月次の観測・未観測・分類/Project候補・時間帯・日別・前期間差に対応。保存したユーザー分類基準の0〜100適合指数・日別推移・前期間ポイント差、同一Project/分類の25分以上連続観測候補・近接切替候補を追加。未知・空白・系列変更を区別し、推定と成果/集中の実測を分離。既存期間集計/Coaching基準を再利用。Native専用UIはDeferred |
 | B9 | Adaptive Coaching | Partially implemented | Implemented in this task（手動期間分析統合）。ユーザー分類比率基準・観測品質gate・完了期間限定、永続opt-in設定/期間重複抑制/共通cooldown、Shell。既存Behavior通知を維持。自動週月通知/意味的個人化/専用UIは Deferred |
-| B10 | Activity × Work Context | Partially implemented | Implemented in this task（保存Event参照）。ActivityのEvent/Session/Turn/Run ID、Work ContextのTOOL出典へのexact project-scoped join、revision/Item/Git snapshot時刻付きShell表示。観測時Git/ファイル/command・意味的task帰属・専用UIは Deferred |
+| B10 | Activity × Work Context | Partially implemented | 保存Event exact joinに加え、opt-inで観測時の選択Project・Git・現在Work Context revision/ItemとTOOL由来のファイル/command ID/Session/Run参照を標本JSONへ保存。foregroundと出典時刻をShell表示し、旧記録/Project切替/上限/履歴欠落を区別。command本文は複製しない。意味的task帰属/専用UIは追加候補 |
 | B11 | Hybrid RAG | Partially implemented | Implemented in this task（opt-in dense/lexical/RRF）。独立候補port、bounded RRF、source/docId境界、既存文書集約/rerank再利用とreranker port、legacy既定維持。元から汎用HTTP rerankは存在。FTS/BM25/学習sparse・評価は Deferred |
 | B12 | Semantic Skill Search | Partially implemented | Implemented (opt-in slice)。 name/description/keywords の embedding、keywordとのRRF、既存rerankerを候補絞り込みに統合。既定無効、明示指定優先、障害時keyword fallback。永続index・学習評価はDeferred |
 | B13 | Document RAG | Already implemented | Already implemented。VectorDocumentService、SqliteVectorStore、SearchKnowledgeService、CHAT の retrieval が存在。二重実装しない |
@@ -88,3 +88,7 @@ C19の不足していたaffected module・integration test候補・regression ri
 ## Native Scheduler controls follow-up
 
 A3のNative復旧画面へ保存予約のProject限定一覧・日時/action/Session・interval/cron/event・履歴と、明示Activate/Cancel/Reconcileを追加。照合は実Run IDと副作用確認を要求し、再実行しない。保存予約と実RunのProject/SessionをGETで検証して共通実行一覧/SSEへ接続し、重複projectionや実行POSTの再送を行わない。所有者変更/遅延応答/処理中の重複操作を隔離する。Scheduler HTTP・実Run管理・Native復旧の一連を対応済みとし、他の未完了項目は引き続き残る。詳細はimplementation-report-native-schedule-controls.md。
+
+## Activity observation context follow-up
+
+B10の不足していた観測時文脈保存を追加。既存Activityのopt-in観測にGit・選択Project・Work Context revisionと最大20 Item/各8 TOOL出典を保存し、foreground・ファイル・コマンド参照・Session/Runを同じ標本から読めるようにした。保存文脈は後からWork Context履歴が欠落しても維持し、Project変更/未来情報/旧JSON/出力上限と不完全性を区別する。本文を複製せず、ユーザーのtask従事や成果を推測しない。意味的判定等の残件は未完了。詳細はimplementation-report-activity-observation-context.md。
