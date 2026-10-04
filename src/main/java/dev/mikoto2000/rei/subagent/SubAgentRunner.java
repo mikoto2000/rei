@@ -86,9 +86,10 @@ public final class SubAgentRunner {
           var d = definition.get();
           policy.validate(d.requestedTools());
           var effective = policy.effectiveTools(d.requestedTools());
+          var evidence = d.evidenceTools().isEmpty() ? null : new SubAgentEvidence();
           List<ToolCallback> callbacks = toolFactory.get().stream()
               .filter(callback -> effective.contains(callback.getToolDefinition().name()))
-              .map(callback -> guarded(callback, owner, check)).toList();
+              .map(callback -> guarded(callback, owner, check, evidence)).toList();
           if (callbacks.size() != effective.size()) throw new IllegalStateException("Tool unavailable");
           ToolCallingChatOptions runOptions = options.apply(d.model()).copy();
           runOptions.setInternalToolExecutionEnabled(false);
@@ -105,6 +106,10 @@ public final class SubAgentRunner {
                 var json = parser.parse(output);
                 var validation = validator.validate(d, json);
                 if (!validation.valid()) throw new SubAgentValidationException(validation.errors());
+                if (evidence != null) {
+                  var evidenceValidation = evidence.validate(d.evidenceTools(), json);
+                  if (!evidenceValidation.valid()) throw new SubAgentValidationException(evidenceValidation.errors());
+                }
                 check.run();
                 return new SubAgentResult(agent, runId, SubAgentResult.Status.COMPLETED, output, started,
                     clock.instant(), SubAgentOutput.fromValidated(json), List.of());
@@ -112,9 +117,9 @@ public final class SubAgentRunner {
               .subscribeOn(Schedulers.boundedElastic()).timeout(d.timeout())
               .subscribe(complete, error -> {
                 if (error instanceof SubAgentValidationException invalid) {
-                  log.warn("SubAgent {} structural validation failed: {} errors", d.id(), invalid.errors().size());
+                  log.warn("SubAgent {} result validation failed: {} errors", d.id(), invalid.errors().size());
                   complete.accept(new SubAgentResult(agent, runId, SubAgentResult.Status.FAILED,
-                      "SubAgent structural validation failed", started, clock.instant(), null, invalid.errors()));
+                      "SubAgent result validation failed", started, clock.instant(), null, invalid.errors()));
                   return;
                 }
                 var status = error instanceof TimeoutException ? SubAgentResult.Status.TIMEOUT
@@ -135,7 +140,7 @@ public final class SubAgentRunner {
       return result;
     } finally { subscriptions.dispose(); active.remove(runId); }
   }
-  private ToolCallback guarded(ToolCallback callback, AgentRunContext owner, Runnable check) {
+  private ToolCallback guarded(ToolCallback callback, AgentRunContext owner, Runnable check, SubAgentEvidence evidence) {
     // Child tool events use the existing API; lifecycle envelopes provide parent correlation.
     ToolCallback observed = new ToolEventCallbackDecorator(callback, events, publisher);
     return new ToolCallback() {
@@ -148,7 +153,7 @@ public final class SubAgentRunner {
           if(permissions!=null)permissions.check(callback.getToolDefinition().name(),input,owner);
           String result = observed.call(input, context);
           check.run();
-          return result;
+          return evidence == null ? result : evidence.capture(callback.getToolDefinition().name(), input, result);
         }
       }
     };

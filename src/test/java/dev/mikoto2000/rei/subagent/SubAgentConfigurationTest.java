@@ -33,6 +33,14 @@ class SubAgentConfigurationTest {
     assertThat(definition.timeout()).isEqualTo(java.time.Duration.ofSeconds(120));
     assertThat(loader.load(write("b.yaml", yaml("reviewer") + "model: known\n")).model()).isEqualTo("known");
   }
+  @Test void evidenceToolsAreOptInAndMustBeUniqueRequestedTools() throws Exception {
+    assertThat(loader.load(write("a.yaml",yaml("reviewer"))).evidenceTools()).isEmpty();
+    assertThat(loader.load(write("a.yaml",yaml("reviewer")+"evidenceTools: [readMultiFile]\n")).evidenceTools()).containsExactly("readMultiFile");
+    for (String value : List.of("[missing]","[readMultiFile, readMultiFile]","wrong","[true]")) {
+      var file=write("invalid.yaml",yaml("reviewer")+"evidenceTools: "+value+"\n");
+      assertThatThrownBy(()->loader.load(file)).hasMessageContaining("evidenceTools");
+    }
+  }
   @Test void rejectsInvalidFieldsWithFileAndField() throws Exception {
     for (String field : List.of("id", "name", "description", "systemPrompt", "maxSteps", "timeout")) {
       String bad = yaml("reviewer").replaceAll("(?m)^" + field + ":.*\\n(?:  .*\\n)*", "");

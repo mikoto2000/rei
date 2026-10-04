@@ -179,3 +179,7 @@ Runner が共通 JSON 契約を system prompt の末尾へ追加するため、�
 既存の networknt `json-schema-validator:3.0.0`（Spring AI / MCP の推移依存）を再利用し、直接依存として明示しました。
 別の validator は追加していません。computer-use では OpenAI の `response_format` が使われていますが、
 SubAgent は provider 共通の Tool loop と fallback を使うため、それを強制せず prompt と必須ローカル検証で実装しています。
+
+## 実行証跡の検証
+
+任意のevidenceTools設定でRunnerの実応答と引用を照合できます。設定と保証範囲は [実行証跡検証](subagent-evidence-validation.md) を参照してください。

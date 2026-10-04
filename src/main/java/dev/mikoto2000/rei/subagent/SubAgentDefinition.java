@@ -6,7 +6,12 @@ import java.util.List;
 
 /** Provider-independent, immutable configuration for an ephemeral execution. */
 public record SubAgentDefinition(String id, String name, String description, String systemPrompt,
-    List<String> requestedTools, String model, int maxSteps, Duration timeout, Path source, SubAgentResultSchema resultSchema) {
+    List<String> requestedTools, String model, int maxSteps, Duration timeout, Path source, SubAgentResultSchema resultSchema,
+    List<String> evidenceTools) {
+  public SubAgentDefinition(String id, String name, String description, String systemPrompt,
+      List<String> requestedTools, String model, int maxSteps, Duration timeout, Path source, SubAgentResultSchema resultSchema) {
+    this(id,name,description,systemPrompt,requestedTools,model,maxSteps,timeout,source,resultSchema,List.of());
+  }
   public SubAgentDefinition(String id, String name, String description, String systemPrompt,
       List<String> requestedTools, String model, int maxSteps, Duration timeout, Path source) {
     this(id, name, description, systemPrompt, requestedTools, model, maxSteps, timeout, source, null);
@@ -20,6 +25,9 @@ public record SubAgentDefinition(String id, String name, String description, Str
     if (timeout == null || timeout.isNegative() || timeout.isZero()) throw new IllegalArgumentException("timeout: must be positive");
     try { timeout.toNanos(); } catch (ArithmeticException e) { throw new IllegalArgumentException("timeout: too large"); }
     requestedTools = List.copyOf(requestedTools);
+    evidenceTools = List.copyOf(evidenceTools);
+    if (evidenceTools.size()>16 || new java.util.HashSet<>(evidenceTools).size()!=evidenceTools.size()
+        || !requestedTools.containsAll(evidenceTools)) throw new IllegalArgumentException("evidenceTools: expected unique subset of tools, at most 16");
     source = source.toAbsolutePath().normalize();
   }
 }

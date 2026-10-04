@@ -18,7 +18,7 @@
 | B11 | Hybrid RAG | Partially implemented | Implemented in this task（opt-in dense/lexical/RRF）。独立候補port、bounded RRF、source/docId境界、既存文書集約/rerank再利用とreranker port、legacy既定維持。元から汎用HTTP rerankは存在。FTS/BM25/学習sparse・評価は Deferred |
 | B12 | Semantic Skill Search | Partially implemented | Implemented (opt-in slice)。 name/description/keywords の embedding、keywordとのRRF、既存rerankerを候補絞り込みに統合。既定無効、明示指定優先、障害時keyword fallback。永続index・学習評価はDeferred |
 | B13 | Document RAG | Already implemented | Already implemented。VectorDocumentService、SqliteVectorStore、SearchKnowledgeService、CHAT の retrieval が存在。二重実装しない |
-| C14 | SubAgent semantic validation | Not implemented | Deferred。SubAgentResultValidator は JSON Schema。実行証跡と回答の意味整合性は検証しない |
+| C14 | SubAgent semantic validation | Not implemented | Implemented (evidence-contract slice)。opt-inで実際のTool応答・Run内ID・ハッシュ・引用・SUCCESS required Toolを独立照合。自由文の意味判断/特定引数のrequired taskはDeferred |
 | C15 | SubAgent repair/retry | Not implemented | Deferred。SubAgentRunner は validation failure を FAILED として返す。repair loop はない |
 | C16 | Parallel SubAgent Delegation | Not implemented | Deferred。単一 delegateTask が境界。単一呼び出しの信頼性改善後に検討 |
 | C17 | External Delegation Phase 2+ | Partially implemented | Deferred。read-only Codex review は存在。fix/re-review/persisted session/複数実装はない |
