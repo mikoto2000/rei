@@ -107,6 +107,7 @@ public class RunExecutionContext {
     this.factory = factory; this.publisher = publisher;
   }
 
+  public OutputLimitRunBudget.LlmCallReservation sharedLlmReservation() {return budget.sharedLlmReservation();}
   public StagnationDetector detector() { return detector; }
   public ProgressEvaluator evaluator() { return evaluator; }
   public long progressVersion() { return progressVersion; }

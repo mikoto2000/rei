@@ -30,7 +30,8 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
   ParallelSubAgentDelegator(SubAgentRunner runner,SubAgentRegistry registry,CommandCancellationService cancellation,Duration timeout) {
     this.runner=runner;this.registry=registry;this.cancellation=cancellation;this.timeout=timeout;
   }
-  public Batch delegate(List<Request> input) {
+  public Batch delegate(List<Request> input) {return delegate(input,null);}
+  public Batch delegate(List<Request> input,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
     var parent=AgentRunScope.current();
     if(parent!=null && parent.conversationId().startsWith("subagent:"))throw new IllegalArgumentException("Recursive delegation is prohibited");
     if(input==null || input.isEmpty() || input.size()>8)throw new IllegalArgumentException("Expected 1 to 8 delegation requests");
@@ -54,7 +55,7 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
           if(stopped.get() || Thread.currentThread().isInterrupted())return item(request,Status.CANCELLED,null);
           if(System.nanoTime()-deadline>=0){deadlineReached.set(true);return item(request,Status.TIMEOUT,null);}
           try(var scope=AgentRunScope.open(parent)) {
-            var result=runner.run(request.agent(),request.task(),request.context());
+            var result=reservation==null?runner.run(request.agent(),request.task(),request.context()):runner.run(request.agent(),request.task(),request.context(),reservation);
             var state=switch(result.status()) {
               case COMPLETED -> Status.COMPLETED;case CANCELLED -> Status.CANCELLED;case TIMEOUT -> Status.TIMEOUT;default -> Status.FAILED;
             };

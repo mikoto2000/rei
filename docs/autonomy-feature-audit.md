@@ -6,7 +6,7 @@
 | Priority | Feature | Initial status | Final status / 根拠 |
 |---|---|---|---|
 | A1 | Auto Sleep | Not implemented | 本作業で実装。SleepService、AutoSleepService。起動時保存metadataからのbounded候補発見・idle時継続走査に対応。任意cron/日次・zone指定に対応。終了trigger/外部metadata監視はDeferred |
-| A2 | Autonomous Planning Loop | Partially implemented | Implemented in this task（最大16ファイルGoal、全件SHA-256一致）。永続 lifecycle/試行/予算、明示起動、既存 Chat/ActionPlan/FIFO の再利用、独立 SHA-256 判定と bounded 継続。Shellの不確定Run手動reconcile・予算保持・in-flight除外に対応。汎用検証条件/独立LLM予算継承/Native復旧UIはDeferred |
+| A2 | Autonomous Planning Loop | Partially implemented | Implemented in this task（最大16ファイルGoal、全件SHA-256一致）。永続 lifecycle/試行/予算、明示起動、既存 Chat/ActionPlan/FIFO の再利用、独立 SHA-256 判定と bounded 継続。Shellの不確定Run手動reconcile・予算保持・in-flight除外に対応。SubAgentのTool cycle/修復/並列の共有LLM予算継承に対応。汎用検証条件/Skill selector等の予算継承/共通token上限/Native復旧UIはDeferred |
 | A3 | Trigger / Scheduler | Partially implemented | Implemented in this task（一回限り continuation）。SQLite 永続化、明示 activation、Project/Session 固定、atomic claim、既存 FIFO 経由の bounded dispatch・結果履歴。Shellの不確定Run手動reconcile・元予約非再実行・in-flight除外に対応。cron/汎用trigger/Native復旧UIはDeferred |
 | A4 | Waiting / Dependency | Partially implemented | Implemented in this task（管理プロセスの待機）。状態6種、bounded wait、キャンセル、停滞との区別、Shell 表示。汎用 watcher/依存 graph/復元は Deferred |
 | A5 | Policy / Permission | Partially implemented | Implemented in this task。能力7種・Chat/SubAgent 境界に加え、永続一回限り承認、Shell/Web の明示決定、Checkpoint の明示 Resume に対応。Native 専用ボタン・SubAgent 承認継承は Deferred |

@@ -14,6 +14,7 @@ import reactor.core.scheduler.Schedulers;
 /** Ephemeral explicit loop: no advisors, persistence, planner, or ambient tool resolution. */
 public final class BoundedToolLoop {
   private final ToolLoopSupport tools = new ToolLoopSupport();
+  public static final class SharedBudgetExceeded extends RuntimeException { }
   public static final class MaxStepsExceeded extends RuntimeException { }
   public record Outcome(String output, List<Message> history) {
     public Outcome { history = List.copyOf(history); }
@@ -22,12 +23,18 @@ public final class BoundedToolLoop {
     return Mono.defer(() -> runWithHistory(model, prompt, new AtomicInteger(maxSteps), owner, checkActive)).map(Outcome::output);
   }
   public Mono<Outcome> runWithHistory(ChatModel model, Prompt prompt, AtomicInteger remaining, AgentRunContext owner, Runnable checkActive) {
-    return iteration(model, prompt, remaining, owner, checkActive);
+    return runWithHistory(model,prompt,remaining,owner,checkActive,null);
   }
-  private Mono<Outcome> iteration(ChatModel model, Prompt prompt, AtomicInteger remaining, AgentRunContext owner, Runnable checkActive) {
+  public Mono<Outcome> runWithHistory(ChatModel model,Prompt prompt,AtomicInteger remaining,AgentRunContext owner,Runnable checkActive,
+      dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
+    return iteration(model,prompt,remaining,owner,checkActive,reservation);
+  }
+  private Mono<Outcome> iteration(ChatModel model, Prompt prompt, AtomicInteger remaining, AgentRunContext owner, Runnable checkActive,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
     return Mono.defer(() -> {
       checkActive.run();
       if (remaining.getAndDecrement() <= 0) return Mono.error(new MaxStepsExceeded());
+      if(reservation!=null&&!reservation.tryReserve())return Mono.error(new SharedBudgetExceeded());
+      checkActive.run();
       AtomicReference<ChatResponse> aggregated = new AtomicReference<>();
       return new MessageAggregator().aggregate(model.stream(prompt), aggregated::set).then(Mono.defer(() -> {
         checkActive.run();
@@ -58,7 +65,7 @@ public final class BoundedToolLoop {
             var history = new ArrayList<Message>(result.conversationHistory()); history.add(output);
             return Mono.just(new Outcome(output.getText(), history));
           }
-          return iteration(model, new Prompt(result.conversationHistory(), prompt.getOptions()), remaining, owner, checkActive);
+          return iteration(model, new Prompt(result.conversationHistory(), prompt.getOptions()), remaining, owner, checkActive,reservation);
         });
       }));
     });

@@ -21,4 +21,4 @@ idは1〜64文字の英数字・ハイフン・underscore、バッチ内で一�
 
 返却値は `status` と `items`。各itemはid、agent、status、任意のSubAgentResultを含む。全子の実行がCOMPLETEDならバッチCOMPLETED、一部だけならPARTIAL、完了なしならFAILED。バッチ自体の期限切れはTIMEOUT、停止はCANCELLED、受付拒否はREJECTED。子の実行状態と内側のSUCCESS/FAILURE/PARTIALは別であり、バッチCOMPLETEDはタスク全体の成功を保証しない。親は各structuredOutputを確認する。
 
-停止前に完了した結果は保持する。futureがcancelされた依頼や予期しない例外ではresultはnullで、Run IDや診断を捏造しない。例外本文を返さず、他の子の結果を失わない。独立LLMでの要約・多数決・合意形成、DAG、永続バッチ復旧、全子共通のLLM/token予算は未実装。
+停止前に完了した結果は保持する。futureがcancelされた依頼や予期しない例外ではresultはnullで、Run IDや診断を捏造しない。例外本文を返さず、他の子の結果を失わない。独立LLMでの要約・多数決・合意形成、DAG、永続バッチ復旧、Goalから委譲する場合の全子共通LLM呼び出し予算はgoal-subagent-budget-inheritanceで対応。Goal外での共通予算・token上限は未実装。
