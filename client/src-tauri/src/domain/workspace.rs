@@ -25,6 +25,15 @@ pub struct BackgroundReceipt {
     deny_unknown_fields
 )]
 pub enum WorkspaceOperation {
+    Dependencies {
+        project_id: String,
+    },
+    DependencyAnswer {
+        project_id: String,
+        id: String,
+        expected_version: u64,
+        answer: String,
+    },
     Checkpoints {
         project_id: String,
     },

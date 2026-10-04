@@ -52,3 +52,7 @@ NativeのProject限定Checkpoint一覧・明示照合・差分/結果不明操�
 ## Human dependency HTTP answer follow-up
 
 A4/A6の人間回答待ちにProject限定の一覧・詳細・保存履歴・明示回答HTTP APIを追加。必須expectedVersionとSQLiteの原子的比較により古い確認/再送で回答を上書きしない。回答は保存された事実であり承認・実行・Run再開・依存完了を直接行わず、既存の監視と前提条件判定を維持する。Native回答画面およびGoal/Scheduler API/UIは引き続き未対応。検証はimplementation-report-dependency-human-controls.mdを参照。
+
+## Native human answers follow-up
+
+A4/A6のNative人間回答待ちUIを復旧・再開画面へ追加。質問・依存/Session・状態・期限・前提条件・保存済み回答を表示し、回答文とversionを確認した後だけ保存する。所有者切替/遅延応答/重複クリックを隔離し、通信失敗後は自動再送せず一覧を更新して再確認する。Tool承認・Run再開・依存完了を直接行わない。Goal/Scheduler復旧およびその他のDeferred項目は引き続き未完了。詳細はimplementation-report-native-human-answers.md。

@@ -7,6 +7,7 @@ use std::time::Duration;
 mod attention;
 mod background;
 mod checkpoints;
+mod dependencies;
 mod history;
 mod stateful;
 mod workspace;

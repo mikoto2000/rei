@@ -134,6 +134,7 @@ if (new URLSearchParams(location.search).has("timeline")) {
 let onRun: (run: Run) => void = () => {};
 let checkpointResumed = false;
 let checkpointAbandoned = false;
+let humanAnswer: string | null = null;
 let acknowledged = false;
 let decided = false;
 const call = (async (
@@ -178,7 +179,44 @@ const call = (async (
       taskId?: string;
       id?: string;
       approved?: boolean;
+      expectedVersion?: number;
+      answer?: string;
     };
+    if (
+      op.operation === "dependencies" ||
+      op.operation === "dependencyAnswer"
+    ) {
+      if (op.projectId !== "p") throw "ProjectNotFound";
+      if (op.operation === "dependencyAnswer") {
+        if (
+          op.id !== "dep" ||
+          op.expectedVersion !== (humanAnswer === null ? 3 : 4) ||
+          !op.answer
+        )
+          throw "ResourceConflict";
+        humanAnswer = op.answer;
+      }
+      return {
+        title: "Dependencies",
+        items: [
+          {
+            id: "dep",
+            title: "Fixture question: choose A or B",
+            fields: [
+              ["Project", "p"],
+              ["Session", "session"],
+              ["Kind", "USER_ANSWER"],
+              ["State", "WAITING"],
+              ["Version", humanAnswer === null ? "3" : "4"],
+              ["Answer", humanAnswer ?? ""],
+              ["Deadline", "2026-10-05T00:00:00Z"],
+              ["Reason", "user_answer_waiting"],
+              ["Prerequisites", ""],
+            ],
+          },
+        ],
+      };
+    }
     if (
       ["attention", "approvals", "attentionAck", "approvalDecision"].includes(
         op.operation,
