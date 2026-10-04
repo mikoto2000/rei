@@ -26,7 +26,7 @@
 | C19 | Change/Test Impact | Partially implemented | Implemented (Java structural candidate slice)。Repository Map再利用、逆import/テスト名候補の推移探索・根拠/不完全性・READ Tool。Git差分自動取得/coverage/完全意味解析はDeferred |
 | C20 | Build/Test Failure Diagnosis | Partially implemented | Implemented (deterministic process-log slice)。既存command/snapshotにreported test/cause/source・分類・固定確認手順、認証情報除去・上限・context圧縮保持。完全原因特定/report読取/自動repairはDeferred |
 | C21 | Self Patch Review Loop | Partially implemented | Implemented (explicit bounded static verification cycle)。初回test→同一patch確認/静的diff review→最終test、Fix要求・変更/不完全/失敗の完了拒否。意味review/自動fix/全Goal強制統合はDeferred |
-| D | Diagram edit / Change Set / Document Agent / Paper E2E | Deferred | Deferred。A〜C の依存基盤と検証を優先 |
+| D | Diagram edit / Change Set / Document Agent / Paper E2E | Deferred | AI Change Setの共通基盤を単一既存UTF-8ファイルのSQLite保存・完全baseline・差分確認・明示Apply/Discardとして追加。自己修正/外部修正の前提として先行。diagram自然言語編集/Document Agent/Paper Provider E2Eと複数ファイル適用は未完了 |
 
 ## 重複実装を避ける項目
 
@@ -92,3 +92,7 @@ A3のNative復旧画面へ保存予約のProject限定一覧・日時/action/Ses
 ## Activity observation context follow-up
 
 B10の不足していた観測時文脈保存を追加。既存Activityのopt-in観測にGit・選択Project・Work Context revisionと最大20 Item/各8 TOOL出典を保存し、foreground・ファイル・コマンド参照・Session/Runを同じ標本から読めるようにした。保存文脈は後からWork Context履歴が欠落しても維持し、Project変更/未来情報/旧JSON/出力上限と不完全性を区別する。本文を複製せず、ユーザーのtask従事や成果を推測しない。意味的判定等の残件は未完了。詳細はimplementation-report-activity-observation-context.md。
+
+## Text Change Set foundation follow-up
+
+C17/C21の修正実行に必要な共通基盤として、DのAI Change Set / Diff / Applyを単一ファイルから追加。exact UTF-8 baseline・Project/root・保存提案hash・原子的claimを確認して明示Applyし、不確定状態は再実行しない。既存Policy、編集Event、cache更新を維持し、追加LLMは呼ばない。既存非空テキストの提案からreceiptまでを対応済みとし、意味的review・外部fix/continuation・複数ファイルtransaction等は未完了。詳細はtext-change-set.mdとimplementation-report-text-change-set.md。
