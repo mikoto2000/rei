@@ -83,4 +83,16 @@ class SleepServiceTest {
     assertThrows(IllegalArgumentException.class,()->service.sleep("s","p",true));
     assertTrue(repository.history("p",10).isEmpty());
   }
+  @Test void activityDuringExtractionDoesNotAdvanceCursorOrPersistMemory() {
+    turn("turn1",ConversationTurnStore.Status.COMPLETED);
+    var active=new java.util.concurrent.atomic.AtomicBoolean();
+    when(extractor.extract(anyList())).thenAnswer(a -> {
+      active.set(true);
+      return List.of(LongTermMemoryTest.candidate("Vision first",MemoryScope.PROJECT));
+    });
+    assertThrows(java.util.concurrent.CancellationException.class,()->service.sleep("s","p",false,active::get));
+    assertEquals(0,repository.lastProcessed("s"));
+    assertTrue(repository.list("p",10,0).isEmpty());
+    assertEquals("CANCELLED",repository.history("p",10).getFirst().status());
+  }
 }

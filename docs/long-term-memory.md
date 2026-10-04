@@ -1,4 +1,4 @@
-# Long-term Memory / Manual Sleep
+# Long-term Memory / Sleep
 
 長期記憶は、別 Session でも役立つ情報を会話から抽出した知識です。Conversation History が原典、Working Set が現在の作業対象、Rolling Summary が会話継続のための圧縮情報です。Sleep はこれらを削除・更新しません。
 
@@ -101,9 +101,35 @@ rei:
 
 イベントは `memory.sleep.started` / `memory.sleep.completed` / `memory.sleep.failed` / `memory.retrieval.completed`。記憶本文を送らず、所有 Project / Session と件数を送ります。CLI は開始と終了のレポートも表示します。
 
+## Auto Sleep
+
+`rei.memory.auto-sleep.enabled=true` で有効化します。既定では無効です。
+
+```yaml
+rei:
+  memory:
+    auto-sleep:
+      enabled: true
+      minimum-idle: 5m
+      minimum-turns: 5
+      retry-interval: 10m
+      check-interval: 5s
+```
+
+会話の terminal metadata 保存後に対象 Session を登録し、ユーザー・Agent の最終活動から idle 時間を計算します。
+他の Agent / background execution がある場合は開始しません。1 回につき既存 Sleep の 1 batch を専用 worker で処理し、
+成功・失敗どちらも同じ Session の次の試行まで retry-interval を空けます。未処理件数は永続 Sleep cursor から算出します。
+新しい入力・Agent 活動は cancellation guard で検出し、抽出後と transaction 内でもチェックして rollback します。
+check-interval ごとの監視で実行スレッドも interrupt します。既存 memory.sleep.* イベントと sleep history で結果を確認できます。
+
+対象登録はプロセス内の直近 256 Session です。再起動後は新たに会話が終わった Session が対象となり、
+保存済み cursor から続けます。全 Session の起動時走査、cron、Session 終了時の強制 Sleep は行いません。
+idle は Rei が観測した入力・実行を意味し、OS 全体の操作や入力途中のキー操作は観測しません。
+手動 Sleep の重複実行制限、件数・入力上限、timeout、永続化と再実行の保証を共有します。
+
 ## 制約と拡張
 
-- **Auto Sleep は未実装**。idle、Session 終了、cron、日次、バックグラウンドの起動機構はありません。
+- Session 終了、cron、日次の起動機構はありません。
 - 外部 Vector DB、Cross-project 自動検索、自動 archive / forgetting はありません。
 - 類似照合の候補は有界です。遠い言い換えや非常に古い記憶を完全に照合する保証はありません。
 - LLM の根拠判断の正しさは schema だけでは保証できません。preview と source 追跡で検証してください。
