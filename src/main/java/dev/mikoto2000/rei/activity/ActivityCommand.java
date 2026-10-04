@@ -4,7 +4,7 @@ import org.springframework.stereotype.Component;
 import picocli.CommandLine.*;
 
 @Component
-@Command(name="activity",description="Activity timeline and classification",subcommands={ActivityCommand.SummaryCommand.class,ActivityCommand.BehaviorCommand.class,ActivityCommand.ClassificationCommand.class,ActivityCommand.WeeklyCommand.class,ActivityCommand.MonthlyCommand.class})
+@Command(name="activity",description="Activity timeline and classification",subcommands={ActivityCommand.SummaryCommand.class,ActivityCommand.BehaviorCommand.class,ActivityCommand.ClassificationCommand.class,ActivityCommand.WeeklyCommand.class,ActivityCommand.MonthlyCommand.class,ActivityCommand.CoachingCommand.class})
 public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   private final ActivityTimeline timeline;
   private final ActivityCapture capture;
@@ -13,6 +13,9 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   private ClassificationToolkit toolkit;
   private ClassificationRuleSuggestions suggestions;
   private ActivityTimelinePresentationService presentation;
+  private PeriodCoachingService coaching;
+  @org.springframework.beans.factory.annotation.Autowired
+  void periodCoaching(PeriodCoachingService coaching){this.coaching=coaching;}
   @org.springframework.beans.factory.annotation.Autowired
   void timelinePresentation(ActivityTimelinePresentationService presentation){this.presentation=presentation;}
   @Option(names="--verbose",description="Show saved evidence, Vision, rule and Behavior diagnostics") private boolean verbose;
@@ -68,6 +71,41 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   @Command(name="monthly",description="Read-only calendar month analysis and previous-month comparison")
   public static class MonthlyCommand extends PeriodCommand {
     protected ActivityPeriodAnalysis.Period period(){return ActivityPeriodAnalysis.Period.MONTH;}
+  }
+  @Command(name="coaching",description="Manual period coaching: status, configure, on, off, weekly, monthly")
+  public static class CoachingCommand implements java.util.concurrent.Callable<Integer> {
+    @ParentCommand private ActivityCommand parent;
+    @Spec private picocli.CommandLine.Model.CommandSpec spec;
+    @Parameters(index="0",arity="0..1",defaultValue="status",completionCandidates=CoachingCandidates.class) private String action;
+    @Parameters(index="1",arity="0..1",paramLabel="YYYY-MM-DD") private String date;
+    @Option(names="--categories",split=",",defaultValue="development,research,documentation") private java.util.Set<String> categories;
+    @Option(names="--target-share",defaultValue="0.6") private double targetShare;
+    @Option(names="--min-observed-minutes",defaultValue="120") private int observedMinutes;
+    @Option(names="--min-coverage",defaultValue="0.1") private double coverage;
+    @Option(names="--max-unknown-share",defaultValue="0.25") private double unknownShare;
+    @Option(names="--cooldown-days",defaultValue="7") private int cooldownDays;
+    public static class CoachingCandidates implements Iterable<String> {
+      public java.util.Iterator<String> iterator(){return java.util.List.of("status","configure","on","off","weekly","monthly").iterator();}
+    }
+    @Override public Integer call() {
+      try {
+        boolean period=action.equals("weekly") || action.equals("monthly");
+        if(date!=null && !period)throw new IllegalArgumentException("date is only supported for weekly/monthly");
+        if(!action.equals("configure") && java.util.List.of("--categories","--target-share","--min-observed-minutes","--min-coverage","--max-unknown-share","--cooldown-days").stream()
+            .anyMatch(name->spec.commandLine().getParseResult().hasMatchedOption(name)))throw new IllegalArgumentException("criteria options require configure");
+        var service=parent.coaching;String result;
+        switch(action) {
+          case "status" -> result=service.status().toString();
+          case "on" -> result="手動Coachingを有効にしました（通知なし）。"+service.setEnabled(true);
+          case "off" -> result="Coachingを無効にしました。"+service.setEnabled(false);
+          case "configure" -> result="基準を保存しました。適用するには coaching on を実行してください。"+service.configure(new PeriodCoaching.Settings(false,categories,targetShare,observedMinutes,coverage,unknownShare,cooldownDays));
+          case "weekly","monthly" -> result=service.evaluate(action.equals("weekly")?ActivityPeriodAnalysis.Period.WEEK:ActivityPeriodAnalysis.Period.MONTH,date);
+          default -> throw new IllegalArgumentException("coaching: status | configure | on | off | weekly | monthly");
+        }
+        spec.commandLine().getOut().println(dev.mikoto2000.rei.event.CredentialRedactor.redact(result));return 0;
+      } catch(java.time.DateTimeException | IllegalArgumentException e){spec.commandLine().getErr().println("Coachingの引数・基準を確認してください。未来日付は指定できません。");return 2;}
+      catch(Exception e){spec.commandLine().getErr().println("Coachingの操作に失敗しました。ログを確認してください。");return 1;}
+    }
   }
   @Command(name="behavior",description="Behavior evaluation: on, off, status, evaluate (manual, no notification)")
   public static class BehaviorCommand implements java.util.concurrent.Callable<Integer> {

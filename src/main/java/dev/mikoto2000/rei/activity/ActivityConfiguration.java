@@ -52,6 +52,8 @@ public class ActivityConfiguration {
         Duration.ofSeconds(p.getSummaryBriefSwitchSeconds()),p.getPrimaryConfidenceThreshold(),zone),dailySummary);
   }
   @Bean ActivityTools activityTools(ActivityTimeline timeline) {return new ActivityTools(timeline);}
+  @Bean PeriodCoachingStore periodCoachingStore(javax.sql.DataSource ds){return new SqlitePeriodCoachingStore(ds);}
+  @Bean PeriodCoachingService periodCoachingService(ActivityTimeline timeline,PeriodCoachingStore store){return new PeriodCoachingService(timeline,store,Clock.systemUTC());}
   @Bean ActivityTimelinePresentationService activityTimelinePresentation(ActivityTimeline timeline,org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.activity.behavior.BehaviorStateStore> behavior) {
     return new ActivityTimelinePresentationService(timeline,behavior.getIfAvailable());
   }

@@ -73,11 +73,19 @@ public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPo
     return dailySummaries.summarize(date,range,clock.getZone(),summaryPolicy.minimumConfidence(),segments);
   }
   public String periodAnalysis(ActivityPeriodAnalysis.Period period,String day) {
+    var comparison=periodComparison(period,day);
+    return new ActivityPeriodAnalysis(Clock.fixed(clock.instant(),comparison.zone()),summaryPolicy.minimumConfidence()).format(comparison.current(),comparison.previous());
+  }
+  public record PeriodComparison(ActivityPeriodAnalysis.Aggregate current,ActivityPeriodAnalysis.Aggregate previous,ZoneId zone) {}
+  /** Null date selects the most recent completed calendar period for manual coaching. */
+  public PeriodComparison periodComparison(ActivityPeriodAnalysis.Period period,String day) {
     var snapshot=Clock.fixed(clock.instant(),clock.getZone());
     var analysis=new ActivityPeriodAnalysis(snapshot,summaryPolicy.minimumConfidence(),dailySummaries.projectNames());
-    var range=analysis.range(period,new ActivityDateArgumentResolver(snapshot).resolve(day));
+    var anchor=day==null?(period==ActivityPeriodAnalysis.Period.WEEK?LocalDate.now(snapshot).minusWeeks(1):LocalDate.now(snapshot).minusMonths(1))
+        :new ActivityDateArgumentResolver(snapshot).resolve(day);
+    var range=analysis.range(period,anchor);
     var previous=analysis.previous(range);
     var currentRecords=range.fromInclusive().equals(range.toExclusive())?List.<ActivityRecord>of():store.findRecordsBetween(range.fromInclusive(),range.toExclusive());
-    return analysis.format(analysis.aggregate(range,currentRecords),analysis.aggregate(previous,store.findRecordsBetween(previous.fromInclusive(),previous.toExclusive())));
+    return new PeriodComparison(analysis.aggregate(range,currentRecords),analysis.aggregate(previous,store.findRecordsBetween(previous.fromInclusive(),previous.toExclusive())),snapshot.getZone());
   }
 }
