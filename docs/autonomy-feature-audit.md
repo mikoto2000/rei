@@ -84,3 +84,7 @@ C18の不足していたrepository summaryを既存Repository Mapへ追加。検
 ## Change impact integration/regression follow-up
 
 C19の不足していたaffected module・integration test候補・regression risk根拠を既存Change/Test Impactへ追加。全構造探索のmoduleと、配置/名前/テストcontext importから候補を返し、根拠を明記する。build設定・索引外変更・モジュール間参照・不完全出力では広い回帰検証を要求する。情報が少ない場合も低リスク/coverage保証/テスト省略可とは判定しない。独立出力上限とpartialを付け、実テスト実行や意味的依存の捏造を行わない。詳細はimplementation-report-change-regression-assessment.md。他の未完了項目は引き続き残る。
+
+## Native Scheduler controls follow-up
+
+A3のNative復旧画面へ保存予約のProject限定一覧・日時/action/Session・interval/cron/event・履歴と、明示Activate/Cancel/Reconcileを追加。照合は実Run IDと副作用確認を要求し、再実行しない。保存予約と実RunのProject/SessionをGETで検証して共通実行一覧/SSEへ接続し、重複projectionや実行POSTの再送を行わない。所有者変更/遅延応答/処理中の重複操作を隔離する。Scheduler HTTP・実Run管理・Native復旧の一連を対応済みとし、他の未完了項目は引き続き残る。詳細はimplementation-report-native-schedule-controls.md。

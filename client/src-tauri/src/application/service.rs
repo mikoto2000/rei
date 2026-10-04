@@ -125,6 +125,40 @@ impl Application {
         self.track_saved_snapshot(server, project, &format!("Goal {goal}"), snapshot, api)
             .await
     }
+    pub async fn schedule_track(
+        &self,
+        server: &str,
+        project: &str,
+        schedule: &str,
+    ) -> Result<RunView> {
+        let key = format!("schedule:{server}:{project}:{schedule}");
+        if !self.submitting.lock().unwrap().insert(key.clone()) {
+            return Err(AppError::Busy);
+        }
+        let _reservation = Submission {
+            ids: &self.submitting,
+            id: key,
+        };
+        let api = self.api(server, true)?;
+        if !api.projects().await?.iter().any(|p| p.id == project) {
+            return Err(AppError::ProjectNotFound);
+        }
+        let snapshot = api.schedule_snapshot(project, schedule).await?;
+        if snapshot.project_id != project
+            || snapshot.session_id.is_empty()
+            || snapshot.run_id.is_empty()
+        {
+            return Err(AppError::InvalidResponse);
+        }
+        self.track_saved_snapshot(
+            server,
+            project,
+            &format!("Schedule {schedule}"),
+            snapshot,
+            api,
+        )
+        .await
+    }
     async fn track_saved_snapshot(
         &self,
         server: &str,

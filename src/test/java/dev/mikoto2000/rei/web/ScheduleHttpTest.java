@@ -38,6 +38,8 @@ class ScheduleHttpTest {
    assertEquals(200,ReadHttpTest.send(client,port,"/projects/p/schedules","GET",null,true).statusCode());
    var shown=ReadHttpTest.send(client,port,path,"GET",null,true);
    assertEquals(200,shown.statusCode());assertTrue(shown.body().contains("intervalMillis"));assertTrue(shown.body().contains("60000"));
+   var wireTask=new com.fasterxml.jackson.databind.ObjectMapper().readTree(shown.body()).path("schedule").path("task");
+   assertTrue(wireTask.path("createdAt").isTextual());assertTrue(wireTask.path("executeAt").isTextual());
    assertEquals(200,ReadHttpTest.send(client,port,path+"/history","GET",null,true).statusCode());
    assertEquals("PENDING",repo.get("p",id).status());verify(dispatcher,never()).reconcile(anyString(),anyString(),anyString());
    assertEquals(400,ReadHttpTest.send(client,port,"/projects/other/schedules/"+id,"GET",null,true).statusCode());
@@ -71,4 +73,3 @@ class ScheduleHttpTest {
   }
  }
 }
-

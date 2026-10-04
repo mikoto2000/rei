@@ -10,6 +10,7 @@ mod checkpoints;
 mod dependencies;
 mod goals;
 mod history;
+mod schedules;
 mod stateful;
 mod workspace;
 use history::*;
@@ -104,6 +105,9 @@ impl ReiClient for HttpReiClient {
     }
     async fn goal_snapshot(&self, project: &str, goal: &str) -> Result<RunSnapshot> {
         self.saved_goal_snapshot(project, goal).await
+    }
+    async fn schedule_snapshot(&self, project: &str, schedule: &str) -> Result<RunSnapshot> {
+        self.saved_schedule_snapshot(project, schedule).await
     }
     async fn checkpoint_run(&self, project: &str, task: &str) -> Result<CheckpointReceipt> {
         self.saved_checkpoint_run(project, task, false).await

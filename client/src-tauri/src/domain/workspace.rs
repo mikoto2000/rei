@@ -25,6 +25,31 @@ pub struct BackgroundReceipt {
     deny_unknown_fields
 )]
 pub enum WorkspaceOperation {
+    Schedules {
+        project_id: String,
+    },
+    Schedule {
+        project_id: String,
+        id: String,
+    },
+    ScheduleHistory {
+        project_id: String,
+        id: String,
+    },
+    ScheduleActivate {
+        project_id: String,
+        id: String,
+    },
+    ScheduleCancel {
+        project_id: String,
+        id: String,
+    },
+    ScheduleReconcile {
+        project_id: String,
+        id: String,
+        expected_run_id: String,
+        acknowledge_uncertain_side_effects: bool,
+    },
     Goals {
         project_id: String,
     },
