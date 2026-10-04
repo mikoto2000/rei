@@ -210,6 +210,13 @@ impl HttpReiClient {
         op: WorkspaceOperation,
     ) -> Result<WorkspaceResult> {
         match op {
+            op @ (WorkspaceOperation::Goals { .. }
+            | WorkspaceOperation::Goal { .. }
+            | WorkspaceOperation::GoalHistory { .. }
+            | WorkspaceOperation::GoalVerify { .. }
+            | WorkspaceOperation::GoalRun { .. }
+            | WorkspaceOperation::GoalCancel { .. }
+            | WorkspaceOperation::GoalReconcile { .. }) => self.goal_operation(op).await,
             op @ (WorkspaceOperation::Dependencies { .. }
             | WorkspaceOperation::DependencyAnswer { .. }) => self.dependency_operation(op).await,
             op @ (WorkspaceOperation::Checkpoints { .. }
