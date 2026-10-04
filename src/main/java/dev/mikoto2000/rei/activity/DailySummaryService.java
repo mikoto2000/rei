@@ -11,6 +11,7 @@ public final class DailySummaryService {
   }
   public DailySummaryService(ProjectAliasStore store,DailySummaryWriter writer){this.configuration=store::snapshot;this.writer=writer;}
   public static DailySummaryService local(){return new DailySummaryService(()->new ProjectNameNormalizer(Map.of()),null);}
+  ProjectNameNormalizer projectNames(){return configuration.get().projects();}
   public String summarize(LocalDate date,ActivityQueryRange range,ZoneId zone,double minimumConfidence,List<SummarySegment> segments) {
     if(segments.isEmpty())return date+" の Activity は記録されていません。";
     log.debug("[summary-trace] source-segments date={} count={}",date,segments.size());
