@@ -27,7 +27,10 @@ public class AttentionService {
   @PostConstruct public synchronized void start(){if(subscription==null)subscription=bus.subscribe(this::observe);}
   @PreDestroy public synchronized void close(){if(subscription!=null){subscription.unsubscribe();subscription=null;}waiting.clear();finished.clear();}
   private synchronized void observe(AgentEvent event) {
-    if(event.projectId()==null||event.sessionId()==null||event.runId()==null)return;
+    if(event.projectId()==null||event.sessionId()==null)return;
+    if(event.type()==AgentEventType.DEPENDENCY_UPDATED||event.type()==AgentEventType.DEPENDENCY_COMPLETED
+        ||event.type()==AgentEventType.DEPENDENCY_FAILED||event.type()==AgentEventType.DEPENDENCY_CANCELLED){dependency(event);return;}
+    if(event.runId()==null)return;
     var run=new Run(event.projectId(),event.sessionId(),event.runId());
     switch(event.type()) {
       case GOAL_UPDATED -> {
@@ -56,15 +59,37 @@ public class AttentionService {
         waiting.remove(run);notify(event,"STAGNATION_STOPPED","stagnation","The run stopped after repeated stagnation. Inspect its result and checkpoint before resuming.");
       }
       case AGENT_RUN_COMPLETED,AGENT_RUN_FAILED,AGENT_RUN_CANCELLED -> {
+        if(event.type()==AgentEventType.AGENT_RUN_COMPLETED&&event.payload() instanceof AgentRunCompletedPayload payload&&run.run().equals(payload.runId()))
+          notify(event,"RUN_COMPLETED","terminal","The Agent Run ended normally. Inspect its result; declared Goal criteria still require independent verification.");
+        else if(event.type()==AgentEventType.AGENT_RUN_FAILED&&event.payload() instanceof AgentRunFailedPayload payload&&run.run().equals(payload.runId()))
+          notify(event,"RUN_FAILED","terminal","The Agent Run failed. Inspect its result and checkpoint before retrying; acknowledgement does not resume it.");
         waiting.remove(run);finished.add(run);if(finished.size()>1024)finished.remove(finished.iterator().next());
       }
       default -> { }
     }
   }
+  private void dependency(AgentEvent event) {
+    if(!(event.payload() instanceof DependencyStatusPayload payload)||event.runId()!=null||payload.revision()<0
+        ||payload.dependencyId()==null||payload.dependencyId().isBlank()||payload.dependencyId().length()>128
+        ||!payload.dependencyId().equals(event.correlationId()))return;
+    String kind=null,message=null;
+    if(event.type()==AgentEventType.DEPENDENCY_COMPLETED&&"COMPLETED".equals(payload.state())) {
+      kind="DEPENDENCY_COMPLETED";message="The declared dependency condition was observed. Inspect /dependency show and history before continuing the task.";
+    }else if(event.type()==AgentEventType.DEPENDENCY_FAILED&&"FAILED".equals(payload.state())) {
+      kind="DEPENDENCY_FAILED";message="A dependency failed or its deadline expired. Inspect /dependency show and history before retrying.";
+    }else if(event.type()==AgentEventType.DEPENDENCY_UPDATED&&"USER_ANSWER".equals(payload.kind())
+        &&"WAITING".equals(payload.state())&&("user_answer_waiting".equals(payload.reason())||"watch_pending".equals(payload.reason()))) {
+      kind="DECISION_REQUIRED";message="A task is waiting for a human answer. Review /dependency show and use /dependency answer explicitly; acknowledgement does not answer or grant consent.";
+    }
+    if(kind!=null)publishAttention(event,inbox.createDependency(event,kind,payload.dependencyId(),message),kind,message);
+  }
+  private void publishAttention(AgentEvent source,Optional<AttentionRepository.Item> item,String kind,String message) {
+    item.ifPresent(saved->publisher.publish(new AgentEvent(UUID.randomUUID().toString(),0,clock.instant(),
+        AgentEventType.ATTENTION_REQUIRED,1,source.sessionId(),source.turnId(),source.runId(),saved.id(),source.id(),
+        new AttentionRequiredPayload(saved.id(),kind,message),source.projectId())));
+  }
   private void notify(AgentEvent source,String kind,String reference,String message) {
-    inbox.create(source,kind,reference,message).ifPresent(item->publisher.publish(new AgentEvent(UUID.randomUUID().toString(),0,clock.instant(),
-        AgentEventType.ATTENTION_REQUIRED,1,source.sessionId(),source.turnId(),source.runId(),item.id(),source.id(),
-        new AttentionRequiredPayload(item.id(),kind,message),source.projectId())));
+    publishAttention(source,inbox.create(source,kind,reference,message),kind,message);
   }
   private static String bounded(String value){String safe=CredentialRedactor.redact(value==null?"unknown":value);return safe.substring(0,Math.min(128,safe.length()));}
 }

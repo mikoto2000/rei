@@ -47,6 +47,7 @@ class AttentionServiceTest {
   }
   @Test void terminalAndUnownedEventsDoNotCreateStaleWaitsOrGlobalItems() {
     bus.publish(waiting("run"));bus.publish(factory().runCompleted("run",1).withOwnership(owner("run")));
+    var completed=repository.list("project").getFirst();assertEquals("RUN_COMPLETED",completed.kind());repository.acknowledge("project",completed.id());
     time.set(Duration.ofHours(1).toNanos());bus.publish(waiting("run"));assertTrue(repository.list("project").isEmpty());
     bus.publish(factory().toolFailed("call","x",new ErrorInformation("PermissionRequired","x",null)));assertTrue(repository.list("project").isEmpty());
     bus.publish(factory().executionProgress(AgentEventType.STAGNATION_STOPPED,"stopped",new ExecutionProgressPayload(null,3,3,1,1,"stopped")).withOwnership(owner("stopped")));
@@ -79,4 +80,39 @@ class AttentionServiceTest {
     assertThrows(IllegalArgumentException.class,()->api.acknowledge("other",item.id()));assertEquals(1,api.list("project").size());
     assertEquals(0,cli.execute("ack",item.id()));assertEquals("ACKNOWLEDGED",api.show("project",item.id()).status());assertTrue(api.list("project").isEmpty());
   }
+  @Test void terminalRunsProduceDistinctDeduplicatedFactsWithoutErrorDetails() {
+    var complete=factory().runCompleted("complete",1).withOwnership(owner("complete"));
+    var failed=factory().runFailed("failed",new ErrorInformation("Failure","secret token=private",null)).withOwnership(owner("failed"));
+    bus.publish(complete);bus.publish(complete);bus.publish(failed);bus.publish(failed);
+    assertEquals(2,repository.list("project").size());
+    assertEquals(java.util.Set.of("RUN_COMPLETED","RUN_FAILED"),repository.list("project").stream().map(AttentionRepository.Item::kind).collect(java.util.stream.Collectors.toSet()));
+    assertTrue(repository.list("project").stream().noneMatch(i->i.message().contains("private")));
+    var item=repository.list("project").stream().filter(i->i.kind().equals("RUN_COMPLETED")).findFirst().orElseThrow();
+    repository.acknowledge("project",item.id());bus.publish(complete);assertEquals(1,repository.list("project").size());
+  }
+  AgentEvent dependency(String id,AgentEventType type,String kind,String state,String reason) {
+    return new AgentEvent("event-"+id,0,Instant.EPOCH,type,1,"session",null,null,id,null,
+        new DependencyStatusPayload(id,kind,state,reason,0),"project");
+  }
+  @Test void humanDecisionAndDependencyTerminalEventsKeepTheirOwnIdentity() {
+    var events=new java.util.ArrayList<AgentEvent>();bus.subscribe(events::add);
+    var question=dependency("question",AgentEventType.DEPENDENCY_UPDATED,"USER_ANSWER","WAITING","user_answer_waiting");
+    var failed=dependency("failed",AgentEventType.DEPENDENCY_FAILED,"HTTP_STATUS","FAILED","dependency_deadline_expired");
+    var completed=dependency("complete",AgentEventType.DEPENDENCY_COMPLETED,"FILE_EXISTS","COMPLETED","file_exists");
+    bus.publish(question);bus.publish(question);bus.publish(failed);bus.publish(completed);
+    assertEquals(java.util.Set.of("DECISION_REQUIRED","DEPENDENCY_FAILED","DEPENDENCY_COMPLETED"),repository.list("project").stream().map(AttentionRepository.Item::kind).collect(java.util.stream.Collectors.toSet()));
+    assertTrue(repository.list("project").stream().allMatch(i->i.runId()==null));
+    assertEquals(3,events.stream().filter(e->e.type()==AgentEventType.ATTENTION_REQUIRED&&e.runId()==null).count());
+    assertTrue(repository.list("other").isEmpty());
+    var restored=new AttentionRepository(new DriverManagerDataSource("jdbc:sqlite:"+dir.resolve("attention.db")),clock);
+    assertEquals(3,restored.list("project").size());assertTrue(restored.list("project").stream().allMatch(i->i.runId()==null));
+  }
+  @Test void inconsistentDependencyEventsDoNotCreateAttention() {
+    bus.publish(dependency("bad",AgentEventType.DEPENDENCY_COMPLETED,"FILE_EXISTS","FAILED","failure"));
+    var valid=dependency("valid",AgentEventType.DEPENDENCY_COMPLETED,"FILE_EXISTS","COMPLETED","file_exists");
+    bus.publish(new AgentEvent(valid.id(),0,valid.timestamp(),valid.type(),1,valid.sessionId(),null,null,"different",null,valid.payload(),valid.projectId()));
+    bus.publish(new AgentEvent(valid.id(),0,valid.timestamp(),valid.type(),1,null,null,null,"valid",null,valid.payload(),valid.projectId()));
+    assertTrue(repository.list("project").isEmpty());
+  }
+
 }
