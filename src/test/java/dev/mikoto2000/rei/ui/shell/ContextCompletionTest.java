@@ -46,7 +46,7 @@ class ContextCompletionTest {
   }
   @Test void activityActionsCompleteWithoutExecutingCaptureOrTimeline() {
     var cmd = command();
-    assertThat(values(cmd, "/activity ")).containsExactlyInAnyOrder("today", "yesterday", "summary", "pause", "resume", "behavior", "classification");
+    assertThat(values(cmd, "/activity ")).containsExactlyInAnyOrder("today", "yesterday", "summary", "pause", "resume", "behavior", "classification", "weekly", "monthly");
     assertThat(values(cmd, "/activity y")).containsExactly("yesterday");
     assertThat(values(cmd, "/activity re")).containsExactly("resume");
     assertThat(values(cmd, "/activity today ")).isEmpty();
@@ -60,6 +60,8 @@ class ContextCompletionTest {
     assertThat(values(command(), "/activity summary ")).containsExactlyInAnyOrder("today","yesterday");
     assertThat(values(command(), "/activity summary y")).containsExactly("yesterday");
     assertThat(values(command(), "/activity summary today ")).isEmpty();
+    assertThat(values(command(), "/activity weekly ")).containsExactlyInAnyOrder("today","yesterday");
+    assertThat(values(command(), "/activity monthly y")).containsExactly("yesterday");
   }
   @Test void classificationActionsCompleteFromSubcommandDefinition() {
     assertThat(values(command(), "/activity classification ")).containsExactlyInAnyOrder("status","reload","unknowns","rules","suggest-rules");

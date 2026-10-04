@@ -4,7 +4,7 @@ import org.springframework.stereotype.Component;
 import picocli.CommandLine.*;
 
 @Component
-@Command(name="activity",description="Activity timeline and classification",subcommands={ActivityCommand.SummaryCommand.class,ActivityCommand.BehaviorCommand.class,ActivityCommand.ClassificationCommand.class})
+@Command(name="activity",description="Activity timeline and classification",subcommands={ActivityCommand.SummaryCommand.class,ActivityCommand.BehaviorCommand.class,ActivityCommand.ClassificationCommand.class,ActivityCommand.WeeklyCommand.class,ActivityCommand.MonthlyCommand.class})
 public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   private final ActivityTimeline timeline;
   private final ActivityCapture capture;
@@ -49,6 +49,25 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
       }
       catch(Exception e) {spec.commandLine().getErr().println("Activity の操作に失敗しました。ログを確認してください。");return 1;}
     }
+  }
+  public abstract static class PeriodCommand implements java.util.concurrent.Callable<Integer> {
+    @ParentCommand private ActivityCommand parent;
+    @Spec private picocli.CommandLine.Model.CommandSpec spec;
+    @Parameters(index="0",arity="0..1",defaultValue="today",paramLabel="today|yesterday|YYYY-MM-DD",completionCandidates=SummaryCommand.DateCandidates.class) private String date;
+    protected abstract ActivityPeriodAnalysis.Period period();
+    @Override public Integer call() {
+      try {spec.commandLine().getOut().println(parent.timeline.periodAnalysis(period(),date));return 0;}
+      catch(java.time.DateTimeException | IllegalArgumentException e) {spec.commandLine().getErr().println("日付を today|yesterday|YYYY-MM-DD で指定してください（未来は不可）。");return 2;}
+      catch(Exception e) {spec.commandLine().getErr().println("Activity 分析に失敗しました。ログを確認してください。");return 1;}
+    }
+  }
+  @Command(name="weekly",description="Read-only calendar week analysis and previous-week comparison")
+  public static class WeeklyCommand extends PeriodCommand {
+    protected ActivityPeriodAnalysis.Period period(){return ActivityPeriodAnalysis.Period.WEEK;}
+  }
+  @Command(name="monthly",description="Read-only calendar month analysis and previous-month comparison")
+  public static class MonthlyCommand extends PeriodCommand {
+    protected ActivityPeriodAnalysis.Period period(){return ActivityPeriodAnalysis.Period.MONTH;}
   }
   @Command(name="behavior",description="Behavior evaluation: on, off, status, evaluate (manual, no notification)")
   public static class BehaviorCommand implements java.util.concurrent.Callable<Integer> {

@@ -72,4 +72,12 @@ public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPo
     var segments=range.fromInclusive().equals(range.toExclusive())?List.<SummarySegment>of():summaryBetween(range.fromInclusive(),range.toExclusive());
     return dailySummaries.summarize(date,range,clock.getZone(),summaryPolicy.minimumConfidence(),segments);
   }
+  public String periodAnalysis(ActivityPeriodAnalysis.Period period,String day) {
+    var snapshot=Clock.fixed(clock.instant(),clock.getZone());
+    var analysis=new ActivityPeriodAnalysis(snapshot,summaryPolicy.minimumConfidence(),dailySummaries.projectNames());
+    var range=analysis.range(period,new ActivityDateArgumentResolver(snapshot).resolve(day));
+    var previous=analysis.previous(range);
+    var currentRecords=range.fromInclusive().equals(range.toExclusive())?List.<ActivityRecord>of():store.findRecordsBetween(range.fromInclusive(),range.toExclusive());
+    return analysis.format(analysis.aggregate(range,currentRecords),analysis.aggregate(previous,store.findRecordsBetween(previous.fromInclusive(),previous.toExclusive())));
+  }
 }
