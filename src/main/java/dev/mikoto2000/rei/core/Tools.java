@@ -56,6 +56,10 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 
 @Component
 public class Tools {
+  @Tool(description = "明示されたtestCommandを最大2回実行し、初回test→Git作業ツリーの静的diffチェック→最終testを検証します。request={testCommand,timeoutSeconds}、timeoutは各1〜60秒（既定30）、全体180秒予算。VERIFIED_CHECKSは同じpatchと成功exit・静的チェックの確認であり、意味的正しさの保証ではありません。FIX_REQUIREDなら既存Toolで修正して全サイクルを再実行してください。任意commandを実行するためrunCommandと同等の権限が必要です。")
+  SelfPatchReviewService.Result selfReviewPatch(SelfPatchReviewService.Request request) throws IOException {
+    return new SelfPatchReviewService(systemShellService).verify(currentWorkingDirectory(), request);
+  }
   private RepositoryMapService repositoryMaps = new RepositoryMapService();
 
   @Tool(description = "変更pathからJavaの逆importとテスト命名候補を探索します。changedFilesはProject相対pathを1〜64件、limitは1〜100（既定20）。完全なcoverageではなく、warningsを確認して広い回帰テストも実施してください。")
