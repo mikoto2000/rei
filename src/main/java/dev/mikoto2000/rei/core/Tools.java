@@ -56,6 +56,41 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 
 @Component
 public class Tools {
+  private TextChangeSetService textChangeSets;
+  @Autowired(required=false) void setTextChangeSets(TextChangeSetService service){this.textChangeSets=service;}
+
+  @Tool(description="Change Set用に現在Project内の既存UTF-8ファイルを最大64KiB読み、BOM/CRLF/末尾改行を保持した正確なtextとSHA-256を返します。readMultiFileの行表示で失われる改行情報も保持します。返されたtextをproposeTextChangeSetのexpectedTextに使います。提案保存・ファイル変更は行いません。")
+  TextChangeSetService.Baseline readTextChangeSetBase(String path)throws IOException {
+    var project=changeSetProject();var baseline=changeSets().readBase(project,path);
+    workingSet.recordRead(project.root().resolve(baseline.path()));return baseline;
+  }
+
+  @Tool(description="保存済みの単一UTF-8ファイルについて、完全なexpectedTextとreplacementからChange Setを提案・SQLite保存します。各64KiB以内。対象ファイルは変更しません。返されたdiffとproposalSha256を確認し、明示applyTextChangeSetで適用します。Modelの自然言語編集結果もこの提案として確認できます。")
+  TextChangeSetService.View proposeTextChangeSet(TextChangeSetService.Request request)throws IOException {
+    return changeSets().propose(changeSetProject(),request);
+  }
+  @Tool(description="現在Projectに保存したChange SetをIDで読み、差分・状態・元/提案/現在のSHA-256を確認します。ファイルを変更せず、APPLYING/FAILED_UNCERTAINは自動再実行しません。")
+  TextChangeSetService.View inspectTextChangeSet(String id)throws IOException {
+    return changeSets().inspect(changeSetProject(),id);
+  }
+  @Tool(description="保存Change Setの正確なID/proposalSha256を確認して、未claimの提案だけを破棄します。ファイルは変更せず、適用中や結果不明の操作を破棄・再実行しません。")
+  TextChangeSetService.View discardTextChangeSet(String id,String proposalSha256)throws IOException {
+    return changeSets().discard(changeSetProject(),id,proposalSha256);
+  }
+  @Tool(description="確認したChange Set IDと正確なproposalSha256を指定し、元ファイルhashが一致する保存提案だけを一回適用します。古い内容はSTALE、結果不明は再送拒否。APPLIEDは保存receiptで現在hashも確認してください。LOCAL_WRITE権限を必要とします。")
+  TextChangeSetService.View applyTextChangeSet(String id,String proposalSha256)throws IOException {
+    return changeSets().apply(changeSetProject(),id,proposalSha256,(path,oldText,newText)->{
+      Files.writeString(path,newText,StandardCharsets.UTF_8,StandardOpenOption.TRUNCATE_EXISTING,java.nio.file.LinkOption.NOFOLLOW_LINKS);
+      recordTextEdit(path);
+    });
+  }
+  private TextChangeSetService changeSets(){if(textChangeSets==null)throw new IllegalStateException("Change Set service unavailable");return textChangeSets;}
+  private dev.mikoto2000.rei.core.project.ProjectContext changeSetProject() {
+    var owner=dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    if(owner!=null)return new dev.mikoto2000.rei.core.project.ProjectContext(owner.projectId(),"",owner.projectRoot());
+    var project=projectService==null?null:projectService.currentContext();
+    if(project==null)throw new IllegalArgumentException("Select a Project before editing");return project;
+  }
   @Tool(description = "明示されたtestCommandを最大2回実行し、初回test→Git作業ツリーの静的diffチェック→最終testを検証します。request={testCommand,timeoutSeconds}、timeoutは各1〜60秒（既定30）、全体180秒予算。VERIFIED_CHECKSは同じpatchと成功exit・静的チェックの確認であり、意味的正しさの保証ではありません。FIX_REQUIREDなら既存Toolで修正して全サイクルを再実行してください。任意commandを実行するためrunCommandと同等の権限が必要です。")
   SelfPatchReviewService.Result selfReviewPatch(SelfPatchReviewService.Request request) throws IOException {
     return new SelfPatchReviewService(systemShellService).verify(currentWorkingDirectory(), request);
@@ -1380,13 +1415,17 @@ public class Tools {
       }
 
       Files.writeString(path, updatedContent, original.charset(), StandardOpenOption.TRUNCATE_EXISTING);
+      recordTextEdit(path);
+      return new TextDiffApplyResult(true, true, "差分を適用しました");
+    }
+
+    private void recordTextEdit(java.nio.file.Path path) {
       workingSet.recordEdit(path);
       recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
       fileSummaryCache.invalidate(path.toString());
       publishFileModified(path, null, null);
       relatedFileGraph.removeRelationsFor(path.toString());
       searchResultCache.clear();
-      return new TextDiffApplyResult(true, true, "差分を適用しました");
     }
 
   public record TextDiffApplyResult(
