@@ -79,11 +79,12 @@ public class Tools {
   }
   @Tool(description="確認したChange Set IDと正確なproposalSha256を指定し、元ファイルhashが一致する保存提案だけを一回適用します。古い内容はSTALE、結果不明は再送拒否。APPLIEDは保存receiptで現在hashも確認してください。LOCAL_WRITE権限を必要とします。")
   TextChangeSetService.View applyTextChangeSet(String id,String proposalSha256)throws IOException {
-    return changeSets().apply(changeSetProject(),id,proposalSha256,(path,oldText,newText)->{
+    return changeSets().apply(changeSetProject(),id,proposalSha256,changeSetWriter());
+  }
+  private TextChangeSetService.Writer changeSetWriter(){return (path,oldText,newText)->{
       Files.writeString(path,newText,StandardCharsets.UTF_8,StandardOpenOption.TRUNCATE_EXISTING,java.nio.file.LinkOption.NOFOLLOW_LINKS);
       recordTextEdit(path);
-    });
-  }
+    };}
   private TextChangeSetService changeSets(){if(textChangeSets==null)throw new IllegalStateException("Change Set service unavailable");return textChangeSets;}
   private dev.mikoto2000.rei.core.project.ProjectContext changeSetProject() {
     var owner=dev.mikoto2000.rei.core.chat.AgentRunScope.current();
@@ -94,6 +95,17 @@ public class Tools {
   @Tool(description = "明示されたtestCommandを最大2回実行し、初回test→Git作業ツリーの静的diffチェック→最終testを検証します。request={testCommand,timeoutSeconds}、timeoutは各1〜60秒（既定30）、全体180秒予算。VERIFIED_CHECKSは同じpatchと成功exit・静的チェックの確認であり、意味的正しさの保証ではありません。FIX_REQUIREDなら既存Toolで修正して全サイクルを再実行してください。任意commandを実行するためrunCommandと同等の権限が必要です。")
   SelfPatchReviewService.Result selfReviewPatch(SelfPatchReviewService.Request request) throws IOException {
     return new SelfPatchReviewService(systemShellService).verify(currentWorkingDirectory(), request);
+  }
+  @Tool(description="test→静的diff review→保存済み修正案Apply→全サイクル再検証を、明示された1〜3件のChange Setで行います。request={testCommand,timeoutSeconds,repairs:[{id,proposalSha256}]}。各test1〜60秒/共有180秒、最大3修正・8回test。元の失敗・全round・receiptを保持し、patch変更/不完全/timeout/結果不明/進展なしは停止します。追加LLMなし。任意commandと編集を含むためselfReviewPatchと同等の全能力Policyを維持し、意味的正しさは保証しません。")
+  SelfPatchRepairService.Result selfRepairPatch(SelfPatchRepairService.Request request)throws IOException {
+    var project=changeSetProject();var saved=changeSets();var verification=new SelfPatchReviewService(systemShellService);
+    var inspector=new GitPatchInspector(new dev.mikoto2000.rei.externalagent.ExternalAgentProcessRunner());
+    return new SelfPatchRepairService(verification::verify,inspector::capture,(root,repair,deadline)->{
+      SelfPatchReviewService.remaining(deadline,1);
+      if(!project.root().toRealPath().equals(root))throw new IllegalArgumentException("Repair Project root changed");
+      var receipt=saved.apply(project,repair.id(),repair.proposalSha256(),changeSetWriter());
+      return new SelfPatchRepairService.Receipt(receipt.id(),receipt.status(),receipt.proposedSha256(),receipt.currentSha256());
+    }).verify(project.root(),request);
   }
   private RepositoryMapService repositoryMaps = new RepositoryMapService();
 

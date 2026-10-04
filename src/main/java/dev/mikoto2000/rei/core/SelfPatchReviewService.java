@@ -41,12 +41,15 @@ public final class SelfPatchReviewService {
     };
   }
   public Result verify(Path directory,Request request)throws IOException {
+    return verify(directory,request,System.nanoTime()+Duration.ofSeconds(180).toNanos());
+  }
+  Result verify(Path directory,Request request,long deadline)throws IOException {
     RunCancellation.propagate(null);
     if(request==null || request.testCommand()==null || request.testCommand().isBlank() || request.testCommand().length()>4096)
       throw new IllegalArgumentException("An explicit test command of 1 to 4096 characters is required");
     int seconds=request.timeoutSeconds()==null?30:request.timeoutSeconds();
     if(seconds<1 || seconds>60)throw new IllegalArgumentException("Each test timeout must be 1 to 60 seconds");
-    Path root=directory.toRealPath();long deadline=System.nanoTime()+Duration.ofSeconds(180).toNanos();
+    Path root=directory.toRealPath();remaining(deadline,1);
     Snapshot first=null,current=null;TestObservation initial=null,last=null;Review review=null;
     var warnings=new LinkedHashSet<String>();
     warnings.add("Static patch checks and explicit command exit only; semantic review and test selection remain the caller's responsibility");
