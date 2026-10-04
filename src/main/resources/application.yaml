@@ -221,6 +221,10 @@ rei:
   vector-document:
     chunk-size: ${REI_VECTOR_DOCUMENT_CHUNK_SIZE:512}
     chunk-overlap: ${REI_VECTOR_DOCUMENT_CHUNK_OVERLAP:64}
+    retrieval:
+      enabled: ${REI_VECTOR_DOCUMENT_RETRIEVAL_ENABLED:false}
+      candidate-limit: ${REI_VECTOR_DOCUMENT_RETRIEVAL_CANDIDATE_LIMIT:40}
+      rank-constant: ${REI_VECTOR_DOCUMENT_RETRIEVAL_RANK_CONSTANT:60}
   sqlite-vec:
     version: ${REI_SQLITE_VEC_VERSION:0.1.9}
     auto-download: ${REI_SQLITE_VEC_AUTO_DOWNLOAD:true}

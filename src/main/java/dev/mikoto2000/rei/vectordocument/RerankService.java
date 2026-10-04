@@ -18,7 +18,7 @@ import tools.jackson.databind.JsonNode;
 
 @Service
 @EnableConfigurationProperties(RerankProperties.class)
-public class RerankService {
+public class RerankService implements CandidateReranker {
   private static final Logger logger = LoggerFactory.getLogger(RerankService.class);
   private final RerankProperties properties;
   private final RestClient client;
@@ -43,7 +43,7 @@ public class RerankService {
   }
 
   /** Reorders all candidates; preserves their original retrieval scores and metadata. */
-  public <T> List<T> rerank(String query, List<T> candidates, Function<T, String> text) {
+  @Override public <T> List<T> rerank(String query, List<T> candidates, Function<T, String> text) {
     if (client == null || candidates.isEmpty()) return candidates;
     try {
       JsonNode response = client.post().uri(properties.path()).contentType(MediaType.APPLICATION_JSON)

@@ -23,7 +23,7 @@ import dev.mikoto2000.rei.vectordocument.VectorDocumentRepository;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
-public class SqliteVectorStore implements VectorStore, VectorDocumentRepository {
+public class SqliteVectorStore implements VectorStore, VectorDocumentRepository, RetrievalCandidates {
 
   private final DataSource dataSource;
   private final EmbeddingModel embeddingModel;
@@ -114,11 +114,26 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
 
   @Override
   public List<Document> similaritySearch(SearchRequest request) {
+    return rankedSearch(request,false);
+  }
+
+  @Override
+  public List<Document> denseSearch(SearchRequest request) {
+    return rankedSearch(request,true);
+  }
+
+  @Override
+  public List<Document> lexicalSearch(SearchRequest request) {
+    FilterCriteria criteria=request.hasFilterExpression()?parseFilter(request.getFilterExpression()):FilterCriteria.empty();
+    return lexicalOnlySearch(request,criteria,lexicalQueryTerms(request.getQuery()));
+  }
+
+  private List<Document> rankedSearch(SearchRequest request,boolean denseOnly) {
     float[] queryEmbedding = normalizeEmbedding(embeddingModel.embed(new Document(request.getQuery())));
     FilterCriteria criteria = request.hasFilterExpression() ? parseFilter(request.getFilterExpression()) : FilterCriteria.empty();
-    List<String> queryTerms = lexicalQueryTerms(request.getQuery());
+    List<String> queryTerms = denseOnly?List.of():lexicalQueryTerms(request.getQuery());
     if (isZeroEmbedding(queryEmbedding)) {
-      return lexicalOnlySearch(request, criteria, queryTerms);
+      return denseOnly?List.of():lexicalOnlySearch(request, criteria, queryTerms);
     }
     int candidateLimit = queryTerms.isEmpty() ? request.getTopK() : Math.max(request.getTopK() * 4, 20);
 
@@ -154,7 +169,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
           double vectorScore = 1.0d - ((Number) distanceValue).doubleValue();
           double lexicalScore = lexicalScore(queryTerms, rs.getString("chunk_text"));
           if (lexicalScore == 0.0d && !queryTerms.isEmpty()) {
-            lexicalScore = adjacentLexicalScore(adjacentStatement, queryTerms, rs.getString("doc_id"), rs.getInt("chunk_index"));
+            lexicalScore = adjacentLexicalScore(adjacentStatement, queryTerms, rs.getString("doc_id"), rs.getString("source"), rs.getInt("chunk_index"));
           }
           if (!queryTerms.isEmpty() && lexicalScore == 0.0d) {
             continue;
@@ -204,6 +219,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
           SELECT 1
           FROM document_chunks_vec cx
           WHERE cx.doc_id = document_chunks_vec.doc_id
+            AND cx.source = document_chunks_vec.source
             AND ABS(cx.chunk_index - document_chunks_vec.chunk_index) <= 1
             AND (
         """);
@@ -227,7 +243,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
         while (rs.next()) {
           double lexicalScore = lexicalScore(queryTerms, rs.getString("chunk_text"));
           if (lexicalScore == 0.0d) {
-            lexicalScore = adjacentLexicalScore(adjacentStatement, queryTerms, rs.getString("doc_id"), rs.getInt("chunk_index"));
+            lexicalScore = adjacentLexicalScore(adjacentStatement, queryTerms, rs.getString("doc_id"), rs.getString("source"), rs.getInt("chunk_index"));
           }
           if (lexicalScore == 0.0d || lexicalScore < request.getSimilarityThreshold()) {
             continue;
@@ -493,7 +509,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
       lexicalMatches.add("CASE WHEN LOWER(chunk_text) LIKE ? THEN 1 ELSE 0 END");
     }
     return "SELECT MAX((" + String.join(" + ", lexicalMatches) + ") * 1.0 / " + queryTerms.size() + ") "
-        + "FROM document_chunks_vec WHERE doc_id = ? AND ABS(chunk_index - ?) <= 1";
+        + "FROM document_chunks_vec WHERE doc_id = ? AND source = ? AND ABS(chunk_index - ?) <= 1";
   }
 
   private void bindParams(java.sql.PreparedStatement statement, List<Object> params) throws SQLException {
@@ -506,6 +522,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
       java.sql.PreparedStatement statement,
       List<String> queryTerms,
       String docId,
+      String source,
       int chunkIndex) throws SQLException {
     if (queryTerms.isEmpty()) {
       return 0.0d;
@@ -515,6 +532,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository 
       statement.setString(parameterIndex++, "%" + queryTerm + "%");
     }
     statement.setString(parameterIndex++, docId);
+    statement.setString(parameterIndex++, source);
     statement.setInt(parameterIndex, chunkIndex);
     try (var rs = statement.executeQuery()) {
       if (!rs.next()) {
