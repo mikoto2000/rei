@@ -292,6 +292,8 @@ public class ReiApplication {
     if(checkpoint!=null && checkpoint.getCommand() instanceof dev.mikoto2000.rei.checkpoint.CheckpointCommand command) command.setShellOutput(writer);
     var resume=cmd.getSubcommands().get("resume");
     if(resume!=null && resume.getCommand() instanceof dev.mikoto2000.rei.checkpoint.ResumeCommand command) command.setShellOutput(writer);
+    var approval=cmd.getSubcommands().get("approval");
+    if(approval!=null && approval.getCommand() instanceof dev.mikoto2000.rei.core.policy.ApprovalCommand command) command.setShellOutput(writer);
     if (work != null && work.getCommand() instanceof dev.mikoto2000.rei.workcontext.WorkCommand command)
       command.setShellOutput(writer);
     if (sleep != null && sleep.getCommand() instanceof dev.mikoto2000.rei.memory.command.SleepCommand command)
