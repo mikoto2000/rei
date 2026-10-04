@@ -56,6 +56,30 @@ class FeedServiceTest {
     assertEquals("同じフィード URL は登録できません", error.getMessage());
   }
 
+  @Test
+  void rejectsCredentialUrlsBeforeDatabaseStorage() {
+    FeedService service = newService();
+    for (String url : List.of("https://user:secret@example.com/feed.xml", "https://example.com/feed.xml?token=secret")) {
+      var error = assertThrows(IllegalArgumentException.class, () -> service.add(url, "Private"));
+      assertTrue(!error.toString().contains("secret"));
+    }
+    assertTrue(service.list().isEmpty());
+  }
+
+  @Test
+  void legacyCredentialUrlsAreRedactedOnReadAndCannotBeFetched() {
+    FeedService service = newService();
+    Feed feed = service.add("https://example.com/feed.xml", null);
+    var jdbc = org.springframework.jdbc.core.simple.JdbcClient.create(
+        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feed.db")));
+    jdbc.sql("UPDATE feeds SET url = ?, display_name = ? WHERE id = ?")
+        .params("https://user:legacy-secret@example.com/feed.xml", "https://user:legacy-secret@example.com/feed.xml", feed.id()).update();
+    assertTrue(!service.findById(feed.id()).toString().contains("legacy-secret"));
+    assertTrue(!service.list().toString().contains("legacy-secret"));
+    var updater = new FeedUpdateService(service, new FeedFetcher(uri -> { throw new AssertionError("must not send"); }));
+    assertTrue(!updater.update(feed.id()).toString().contains("legacy-secret"));
+  }
+
   private FeedService newService() {
     return new FeedService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feed.db")));
   }

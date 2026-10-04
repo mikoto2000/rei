@@ -105,6 +105,15 @@ class FeedOpmlImportServiceTest {
     }
   }
 
+  @Test
+  void rejectsAndRedactsCredentialUrlsInImportResults() throws Exception {
+    FeedService feeds = newService();
+    var result = importer(feeds).importFile(file("<outline title='secret' text='secret' htmlUrl='https://secret@example.com' xmlUrl='https://user:secret@example.com/feed'/><outline xmlUrl='https://example.com/feed?token=secret'/>"));
+    assertEquals(2, result.failed().size());
+    assertTrue(feeds.list().isEmpty());
+    assertFalse(result.toString().contains("secret"));
+  }
+
   private Path file(String outlines) throws Exception {
     Path path = tempDir.resolve("feeds.opml");
     return Files.writeString(path, "<opml version='2.0'><body>" + outlines + "</body></opml>");

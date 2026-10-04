@@ -57,7 +57,18 @@ class FeedCommandTest {
     assertTrue(out.toString().contains("Skipped: 1"));
     assertTrue(out.toString().contains("Failed: 1"));
     assertTrue(out.toString().contains("https://example.com/existing (already registered)"));
-    assertTrue(out.toString().contains("not a url (invalid feed URL)"));
+    assertTrue(out.toString().contains("[invalid feed URL] (invalid feed URL)"));
+  }
+
+  @Test
+  void importOpmlNeverPrintsCredentialUrls() throws Exception {
+    Path path = Files.writeString(tempDir.resolve("private.opml"), "<opml><body><outline xmlUrl='https://user:must-not-print@example.com/feed'/><outline xmlUrl='https://example.com/feed?token=must-not-print'/></body></opml>");
+    CommandLine command = newCommand(newService());
+    StringWriter out = new StringWriter();
+    command.setOut(new PrintWriter(out));
+    assertEquals(0, command.execute("import-opml", path.toString()));
+    assertTrue(out.toString().contains("Failed: 2"));
+    assertTrue(!out.toString().contains("must-not-print"));
   }
 
   @Test
@@ -123,7 +134,7 @@ class FeedCommandTest {
     assertEquals(0, command.execute("import-opml", path.toString()));
     assertTrue(out.toString().contains("Failed: 22"));
     assertTrue(out.toString().contains("... and 2 more"));
-    assertEquals(20, out.toString().lines().filter(line -> line.equals("- invalid url (invalid feed URL)")).count());
+    assertEquals(20, out.toString().lines().filter(line -> line.equals("- [invalid feed URL] (invalid feed URL)")).count());
   }
 
   @Test

@@ -449,3 +449,7 @@ rei:
 `rei.context-compression` でモデル上限、圧縮閾値、最近の会話・要約・Tool Result の予算を調整できます。
 
 `REI_MEMORY_CONFLICT_TIMEOUT_SECONDS`（既定: `60`）は、記憶候補を保存する前の競合確認の制限時間です。タイムアウトした候補は保存されず、警告が表示されます。
+
+## 非公開 RSS / Atom
+
+読み取り専用 Bearer token を環境変数で参照できます。[設定・CLI / API・安全境界](private-feeds.md)を参照してください。
