@@ -122,8 +122,9 @@ rei:
 新しい入力・Agent 活動は cancellation guard で検出し、抽出後と transaction 内でもチェックして rollback します。
 check-interval ごとの監視で実行スレッドも interrupt します。既存 memory.sleep.* イベントと sleep history で結果を確認できます。
 
-対象登録はプロセス内の直近 256 Session です。再起動後は新たに会話が終わった Session が対象となり、
-保存済み cursor から続けます。全 Session の起動時走査、cron、Session 終了時の強制 Sleep は行いません。
+対象候補はプロセス内で最大256 Sessionです。最初にidle条件を満たした時点で、起動時に読み込み済みのSessionメタデータを一度取得し、最大256件ずつ候補へ取り込みます。登録Projectに属し、Session IDに含まれるProjectと矛盾しないSessionだけが対象です。未処理件数が閾値未満の候補を除いて空きを作り、次回tickで残りのメタデータへ進みます。保存済みSleep cursorから続けるため、再起動後の新しい会話は必須ではありません。
+
+metadata取得では追加のディスク走査やLLM呼び出しを行いません。履歴読み取り・Sleepは既存のidle/busy/未処理件数/試行間隔に従います。候補が256件の処理待ち・再試行待ちで埋まっている間は、追加の取り込みを待機します。起動後に外部で追加されたmetadataの継続監視、cron、Session終了時の強制Sleepは行いません。
 idle は Rei が観測した入力・実行を意味し、OS 全体の操作や入力途中のキー操作は観測しません。
 手動 Sleep の重複実行制限、件数・入力上限、timeout、永続化と再実行の保証を共有します。
 
