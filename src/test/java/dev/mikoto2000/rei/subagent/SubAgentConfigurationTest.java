@@ -41,6 +41,14 @@ class SubAgentConfigurationTest {
       assertThatThrownBy(()->loader.load(file)).hasMessageContaining("evidenceTools");
     }
   }
+  @Test void repairLimitDefaultsToDisabledAndRejectsInvalidValues() throws Exception {
+    assertThat(loader.load(write("a.yaml",yaml("reviewer"))).maxRepairs()).isZero();
+    assertThat(loader.load(write("a.yaml",yaml("reviewer")+"maxRepairs: 3\n")).maxRepairs()).isEqualTo(3);
+    for (String value : List.of("-1","4","true","null","1.5","wrong")) {
+      var file=write("invalid.yaml",yaml("reviewer")+"maxRepairs: "+value+"\n");
+      assertThatThrownBy(()->loader.load(file)).hasMessageContaining("maxRepairs");
+    }
+  }
   @Test void rejectsInvalidFieldsWithFileAndField() throws Exception {
     for (String field : List.of("id", "name", "description", "systemPrompt", "maxSteps", "timeout")) {
       String bad = yaml("reviewer").replaceAll("(?m)^" + field + ":.*\\n(?:  .*\\n)*", "");

@@ -7,7 +7,12 @@ import java.util.List;
 /** Provider-independent, immutable configuration for an ephemeral execution. */
 public record SubAgentDefinition(String id, String name, String description, String systemPrompt,
     List<String> requestedTools, String model, int maxSteps, Duration timeout, Path source, SubAgentResultSchema resultSchema,
-    List<String> evidenceTools) {
+    List<String> evidenceTools, int maxRepairs) {
+  public SubAgentDefinition(String id, String name, String description, String systemPrompt,
+      List<String> requestedTools, String model, int maxSteps, Duration timeout, Path source, SubAgentResultSchema resultSchema,
+      List<String> evidenceTools) {
+    this(id,name,description,systemPrompt,requestedTools,model,maxSteps,timeout,source,resultSchema,evidenceTools,0);
+  }
   public SubAgentDefinition(String id, String name, String description, String systemPrompt,
       List<String> requestedTools, String model, int maxSteps, Duration timeout, Path source, SubAgentResultSchema resultSchema) {
     this(id,name,description,systemPrompt,requestedTools,model,maxSteps,timeout,source,resultSchema,List.of());
@@ -17,6 +22,7 @@ public record SubAgentDefinition(String id, String name, String description, Str
     this(id, name, description, systemPrompt, requestedTools, model, maxSteps, timeout, source, null);
   }
   public SubAgentDefinition {
+    if (maxRepairs < 0 || maxRepairs > 3) throw new IllegalArgumentException("maxRepairs: expected integer from 0 to 3");
     if (id == null || !id.matches("[a-z][a-z0-9-]{0,63}")) throw new IllegalArgumentException("id: expected [a-z][a-z0-9-]{0,63}");
     if (name == null || name.isBlank()) throw new IllegalArgumentException("name: required");
     if (description == null || description.isBlank()) throw new IllegalArgumentException("description: required");

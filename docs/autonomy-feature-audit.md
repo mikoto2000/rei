@@ -19,7 +19,7 @@
 | B12 | Semantic Skill Search | Partially implemented | Implemented (opt-in slice)。 name/description/keywords の embedding、keywordとのRRF、既存rerankerを候補絞り込みに統合。既定無効、明示指定優先、障害時keyword fallback。永続index・学習評価はDeferred |
 | B13 | Document RAG | Already implemented | Already implemented。VectorDocumentService、SqliteVectorStore、SearchKnowledgeService、CHAT の retrieval が存在。二重実装しない |
 | C14 | SubAgent semantic validation | Not implemented | Implemented (evidence-contract slice)。opt-inで実際のTool応答・Run内ID・ハッシュ・引用・SUCCESS required Toolを独立照合。自由文の意味判断/特定引数のrequired taskはDeferred |
-| C15 | SubAgent repair/retry | Not implemented | Deferred。SubAgentRunner は validation failure を FAILED として返す。repair loop はない |
+| C15 | SubAgent repair/retry | Not implemented | Implemented (opt-in validation repair)。最大3回・共有maxSteps・単一timeout・cancel・元の診断履歴保持。モデル/Tool障害のretry・永続resumeはDeferred |
 | C16 | Parallel SubAgent Delegation | Not implemented | Deferred。単一 delegateTask が境界。単一呼び出しの信頼性改善後に検討 |
 | C17 | External Delegation Phase 2+ | Partially implemented | Deferred。read-only Codex review は存在。fix/re-review/persisted session/複数実装はない |
 | C18 | Repository Map | Partially implemented | Deferred。RelatedFileGraph、FileSummary、Working Set は存在。リポジトリ全体の symbol/module index はない |

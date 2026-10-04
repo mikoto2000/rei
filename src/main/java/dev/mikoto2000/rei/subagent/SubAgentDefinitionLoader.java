@@ -10,7 +10,7 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 /** Safe scalar/map YAML only. Diagnostics never echo arbitrary YAML or prompts. */
 public final class SubAgentDefinitionLoader {
-  private static final Set<String> FIELDS = Set.of("id", "name", "description", "systemPrompt", "tools", "model", "maxSteps", "timeout", "resultSchema", "evidenceTools");
+  private static final Set<String> FIELDS = Set.of("id", "name", "description", "systemPrompt", "tools", "model", "maxSteps", "timeout", "resultSchema", "evidenceTools", "maxRepairs");
   private final SubAgentToolPolicy policy;
   private final Predicate<String> modelResolver;
   public SubAgentDefinitionLoader(SubAgentToolPolicy policy, Predicate<String> modelResolver) {
@@ -58,6 +58,8 @@ public final class SubAgentDefinitionLoader {
       String model = values.containsKey("model") ? text(values, "model") : null;
       if (model != null && !modelResolver.test(model)) throw new IllegalArgumentException("model: cannot resolve configured model");
       Object steps = values.get("maxSteps");
+      Object repairs = values.getOrDefault("maxRepairs", null);
+      if (values.containsKey("maxRepairs") && !(repairs instanceof Integer)) throw new IllegalArgumentException("maxRepairs: expected integer from 0 to 3");
       if (!(steps instanceof Integer count)) throw new IllegalArgumentException("maxSteps: required positive integer");
       Duration timeout;
       try {
@@ -74,7 +76,7 @@ public final class SubAgentDefinitionLoader {
       } catch (Exception e) { throw new IllegalArgumentException("timeout: required positive duration (120s, 2m, 1h, 500ms)"); }
       return new SubAgentDefinition(text(values, "id"), text(values, "name"), text(values, "description"),
           text(values, "systemPrompt"), tools, model, count, timeout, file,
-          values.containsKey("resultSchema") ? SubAgentResultSchema.load(file, text(values, "resultSchema")) : null, evidenceTools);
+          values.containsKey("resultSchema") ? SubAgentResultSchema.load(file, text(values, "resultSchema")) : null, evidenceTools, repairs == null ? 0 : (Integer) repairs);
     } catch (IllegalArgumentException error) { throw invalid(file, error.getMessage()); }
   }
   private String text(Map<?, ?> values, String key) {
