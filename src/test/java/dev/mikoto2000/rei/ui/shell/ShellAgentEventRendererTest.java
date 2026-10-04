@@ -19,6 +19,12 @@ import dev.mikoto2000.rei.topic.TopicScoreBreakdown;
 import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
 
 class ShellAgentEventRendererTest {
+  @Test void rendersDependencyWaitingSeparatelyFromStagnation() {
+    var output=new RecordingOutput();
+    new ShellAgentEventRenderer(output).onEvent(events.executionProgress(dev.mikoto2000.rei.event.AgentEventType.STAGNATION_UPDATED,"run",
+        new dev.mikoto2000.rei.event.ExecutionProgressPayload(null,1,4,0,2,"waiting_for_dependency")));
+    assertEquals("[waiting] awaiting dependency\n",output.text());
+  }
   @Test void rendersShutdownNotification() {
     var output = new RecordingOutput();
     new ShellAgentEventRenderer(output).onEvent(events.applicationShutdownStarted("shell_exit"));
