@@ -68,3 +68,7 @@ A2の実Goal AttemptをWeb RunRegistry/RunServiceへ接続し、受付QUEUED・�
 ## Native Goal controls follow-up
 
 A2の保存GoalにProject限定のNative一覧・状態/履歴確認・実行/Verify/Cancel/Reconcileの明示確認画面を追加。結果不明副作用の確認チェックと実Run IDを要求し、既存予算/Sessionを保持する。受け付けた現在RunをGETで検証し実行一覧/SSEへ接続、同じRunを重複登録せず、追跡失敗時に実行POSTを再送しない。Checkpointと既存追跡経路を共有し回帰検証した。Goal作成は既存入口を使用。Scheduler API/UIおよびその他のDeferred項目は引き続き未完了。詳細はimplementation-report-native-goal-controls.md。
+
+## Scheduler HTTP controls follow-up
+
+A3の保存Schedulerに認証済みProject限定HTTP一覧・詳細・履歴・明示Activate/Cancel/Reconcileを追加。詳細はinterval/cron/event情報を含み、GETは実行や有効化を行わない。既存opt-in dispatch gateと未claim取消規則を維持し、不確定Run照合は実Run IDと副作用確認を要求する。既存dispatcherのin-flight判定と原子的照合を再利用してFAILEDへ移し、再実行・成功の捏造・予算復元を行わない。SchedulerのRun管理/SSEとNative画面およびその他のDeferred項目は引き続き未完了。詳細はimplementation-report-scheduler-http-controls.md。
