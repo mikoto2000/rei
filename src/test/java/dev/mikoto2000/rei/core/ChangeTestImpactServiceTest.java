@@ -25,6 +25,41 @@ class ChangeTestImpactServiceTest {
     Files.delete(root.resolve("A.java"));assertTrue(service.analyze(root,List.of("A.java"),1).candidates().isEmpty());
     assertThrows(IllegalArgumentException.class,()->service.analyze(root,List.of(),20));
   }
+  @Test void assessesCrossModuleImpactAndIncludesIntegrationCandidatesOutsideImportGraph() throws Exception {
+    var paths=List.of("lib/src/main/java/p/A.java","app/src/main/java/q/B.java","app/src/test/java/q/AppIntegrationTest.java","other/src/test/java/x/OtherIT.java");
+    var sources=List.of("package p; public class A {}","package q; import p.A; class B {}","package q; class AppIntegrationTest {}","package x; class OtherIT {}");
+    for(int index=0;index<paths.size();index++){Files.createDirectories(root.resolve(paths.get(index)).getParent());Files.writeString(root.resolve(paths.get(index)),sources.get(index));}
+    var result=new ChangeTestImpactService(new RepositoryMapService(path->paths)).analyze(root,List.of(paths.getFirst()),1);
+    var assessment=result.regressionAssessment();
+    assertEquals(List.of("app","lib"),assessment.affectedModules());
+    assertTrue(assessment.reasons().contains("CROSS_MODULE_REFERENCES"));
+    assertEquals("BROAD_REGRESSION_REQUIRED",assessment.scope());
+    assertEquals(List.of(paths.get(2)),assessment.integrationCandidates().stream().map(candidate->candidate.path()).toList());
+    assertEquals("AFFECTED_MODULE_NAME_CONVENTION",assessment.integrationCandidates().getFirst().reason());
+    assertEquals(1,result.candidates().size());
+  }
+  @Test void buildChangesRequireBroadRegressionAndDoNotClaimCoverage() throws Exception {
+    String path="module/src/it/java/SmokeIT.java";Files.createDirectories(root.resolve(path).getParent());Files.writeString(root.resolve(path),"class SmokeIT {}");
+    var service=new ChangeTestImpactService(new RepositoryMapService(directory->List.of(path)));
+    var result=service.analyze(root,List.of("pom.xml"),5);
+    assertEquals("BROAD_REGRESSION_REQUIRED",result.regressionAssessment().scope());
+    assertTrue(result.regressionAssessment().reasons().contains("BUILD_CONFIGURATION_CHANGED"));
+    assertTrue(result.regressionAssessment().reasons().contains("UNINDEXED_CHANGES"));
+    assertFalse(result.regressionAssessment().reasons().contains("CROSS_MODULE_REFERENCES"));
+    assertEquals(path,result.regressionAssessment().integrationCandidates().getFirst().path());
+    assertTrue(service.analyze(root,List.of(path),5).candidates().getFirst().testCandidate());
+  }
+  @Test void integrationAssessmentHasIndependentBoundsAndExplicitPartialOutput() throws Exception {
+    var paths=new ArrayList<String>();
+    for(int index=0;index<101;index++) {
+      String path="src/test/java/Test"+index+"IT.java";Files.createDirectories(root.resolve(path).getParent());
+      Files.writeString(root.resolve(path),"class Test"+index+"IT {}");paths.add(path);
+    }
+    var result=new ChangeTestImpactService(new RepositoryMapService(directory->paths)).analyze(root,List.of(paths.getFirst()),1);
+    assertEquals(100,result.regressionAssessment().integrationCandidates().size());
+    assertTrue(result.regressionAssessment().partial());assertTrue(result.partial());
+    assertTrue(result.regressionAssessment().reasons().contains("ASSESSMENT_OUTPUT_LIMITED"));
+  }
   @Test void internalSnapshotIsNotRestrictedByMapDisplayLimitAndCyclesTerminate() throws Exception {
     var paths=new ArrayList<String>();
     for(int i=0;i<110;i++){String name="F"+i+".java";paths.add(name);Files.writeString(root.resolve(name),"class F"+i+" {}");}

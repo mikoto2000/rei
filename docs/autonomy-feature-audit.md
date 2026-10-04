@@ -80,3 +80,7 @@ A3の実Scheduler RunをWeb RunRegistry/RunServiceへ接続し、保存Project/S
 ## Repository summary follow-up
 
 C18の不足していたrepository summaryを既存Repository Mapへ追加。検索/表示limitに依存せず、走査済み全体のmodule/package・Java解析成否・inventory-only・入口・import/テスト名候補件数を集計する。既存のProject境界・秘密除外・内容更新を共有し、要約出力上限や解析不足をsummary.partialで明示する。構造上の観測事実を返し、目的や意味的依存を推測しない。完全意味解析/多言語ASTや他の未完了項目は引き続き残る。詳細はimplementation-report-repository-summary.md。
+
+## Change impact integration/regression follow-up
+
+C19の不足していたaffected module・integration test候補・regression risk根拠を既存Change/Test Impactへ追加。全構造探索のmoduleと、配置/名前/テストcontext importから候補を返し、根拠を明記する。build設定・索引外変更・モジュール間参照・不完全出力では広い回帰検証を要求する。情報が少ない場合も低リスク/coverage保証/テスト省略可とは判定しない。独立出力上限とpartialを付け、実テスト実行や意味的依存の捏造を行わない。詳細はimplementation-report-change-regression-assessment.md。他の未完了項目は引き続き残る。
