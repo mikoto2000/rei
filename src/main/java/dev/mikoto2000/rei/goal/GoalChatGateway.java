@@ -23,6 +23,12 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
   private final CommandCancellationService cancellation;
   private final AgentEventFactory events;
   private final AgentEventPublisher publisher;
+  private dev.mikoto2000.rei.application.run.RunRegistry runRegistry;
+  private dev.mikoto2000.rei.application.run.RunService runLifecycle;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void configureRunTracking(dev.mikoto2000.rei.application.run.RunRegistry registry,dev.mikoto2000.rei.application.run.RunService lifecycle) {
+    this.runRegistry=registry;this.runLifecycle=lifecycle;
+  }
   public GoalChatGateway(GoalRepository goals,FileGoalVerifier verifier,ProjectService projects,SessionRepository sessions,
       ConversationInputRouter router,ChatExecutionService chat,CommandCancellationService cancellation,AgentEventFactory events,AgentEventPublisher publisher) {
     this.goals=goals;this.verifier=verifier;this.projects=projects;this.sessions=sessions;this.router=router;this.chat=chat;
@@ -44,6 +50,12 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
       public boolean tryReserve(){return goals.reserveLlm(claim);}
       public int remaining(){return goals.remainingLlm(claim);}
     };
+    boolean registered=false;
+    try {if(runRegistry!=null) {
+      runRegistry.register(owner);
+      registered=true;
+      runLifecycle.onQueuedCancellation(run,()->completed.accept(new GoalLoopService.Outcome(ChatExecutionResult.cancelled())));
+    }
     router.submitOperation(owner,()->{
       GoalLoopService.Outcome outcome;
       try {
@@ -71,14 +83,25 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
         publisher.publish(events.runFailed(run,new ErrorInformation(error.getClass().getSimpleName(),"Goal Run failed",null)).withOwnership(owner));
         outcome=new GoalLoopService.Outcome(ChatExecutionResult.failed("Goal Run failed"),reason);
       }
+      if(runLifecycle!=null) {
+        var terminal=outcome.result().status()==ChatExecutionResult.Status.CANCELLED?dev.mikoto2000.rei.application.run.RunStatus.CANCELLED
+            :outcome.result().success()?dev.mikoto2000.rei.application.run.RunStatus.COMPLETED:dev.mikoto2000.rei.application.run.RunStatus.FAILED;
+        runLifecycle.finishMissingTerminal(owner,terminal);
+        if(runRegistry.get(run).status()==dev.mikoto2000.rei.application.run.RunStatus.CANCELLED)outcome=new GoalLoopService.Outcome(ChatExecutionResult.cancelled());
+      }
       completed.accept(outcome);
-    },work->{try {work.run();}catch(RuntimeException error){completed.accept(new GoalLoopService.Outcome(ChatExecutionResult.failed("Goal admission failed")));}});
+    },work->{
+      Runnable execute=()->{try {work.run();}catch(RuntimeException error){completed.accept(new GoalLoopService.Outcome(ChatExecutionResult.failed("Goal admission failed")));}};
+      if(runLifecycle!=null)runLifecycle.execute(owner,execute);else execute.run();
+    });}catch(RuntimeException|Error error){if(registered){runLifecycle.forgetQueuedCancellation(run);runRegistry.forget(run);}throw error;}
   }
   @Override public boolean isInFlight(GoalRepository.Goal goal) {
     return goal.currentRunId()!=null&&router.containsRun(goal.projectId(),goal.currentRunId());
   }
   @Override public void cancel(GoalRepository.Goal goal) {
     if(goal.currentRunId()==null)return;
+    if(runLifecycle!=null)try {runLifecycle.cancel(goal.currentRunId());return;}
+    catch(dev.mikoto2000.rei.application.run.RunNotFoundException missing) { /* Restored/expired Run has no live registry entry. */ }
     if(router.cancelQueued(goal.currentRunId())) {
       cancellation.forgetPendingCancellation(goal.currentRunId());
       // Queued operations never enter ChatExecutionService; the durable Goal is already CANCELLED.
