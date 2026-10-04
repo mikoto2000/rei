@@ -3,6 +3,7 @@ import type { Command } from "../../tauri/commands";
 import { errorText, type Project, type Run } from "../../entities/models";
 import type { WorkspaceResult } from "../../entities/workspace";
 import { HumanAnswers } from "./HumanAnswers";
+import { ScheduleControls } from "./ScheduleControls";
 import { GoalControls } from "./GoalControls";
 type Item = WorkspaceResult["items"][number];
 const field = (item: Item, key: string) =>
@@ -295,6 +296,12 @@ export function Recovery({
         projectId={projects.some((p) => p.id === project) ? project : ""}
       />
       <GoalControls
+        call={call}
+        serverId={serverId}
+        projectId={projects.some((p) => p.id === project) ? project : ""}
+        onAccepted={onAccepted}
+      />
+      <ScheduleControls
         call={call}
         serverId={serverId}
         projectId={projects.some((p) => p.id === project) ? project : ""}

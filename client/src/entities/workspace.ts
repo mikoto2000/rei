@@ -13,6 +13,20 @@ export type WorkspaceOperation =
       expectedRunId: string;
       acknowledgeUncertainSideEffects: boolean;
     }
+  | { operation: "schedules"; projectId: string }
+  | {
+      operation:
+        "schedule" | "scheduleHistory" | "scheduleActivate" | "scheduleCancel";
+      projectId: string;
+      id: string;
+    }
+  | {
+      operation: "scheduleReconcile";
+      projectId: string;
+      id: string;
+      expectedRunId: string;
+      acknowledgeUncertainSideEffects: boolean;
+    }
   | { operation: "dependencies"; projectId: string }
   | {
       operation: "dependencyAnswer";

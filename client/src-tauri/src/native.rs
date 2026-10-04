@@ -53,6 +53,16 @@ async fn goal_track(
     app.goal_track(&server_id, &project_id, &goal_id).await
 }
 #[tauri::command]
+async fn schedule_track(
+    app: App<'_>,
+    server_id: String,
+    project_id: String,
+    schedule_id: String,
+) -> Result<RunView> {
+    app.schedule_track(&server_id, &project_id, &schedule_id)
+        .await
+}
+#[tauri::command]
 async fn checkpoint_resume(
     app: App<'_>,
     server_id: String,
@@ -365,6 +375,7 @@ pub fn run() {
             checkpoint_resume,
             checkpoint_track,
             goal_track,
+            schedule_track,
             background_submit,
             app_snapshot,
             vault_unlock,

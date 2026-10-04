@@ -140,6 +140,11 @@ let goalStatus =
     ? "RUNNING"
     : "READY";
 let goalCurrentRun = goalStatus === "RUNNING" ? "old-goal-run" : "";
+let scheduleStatus =
+  new URLSearchParams(location.search).get("schedule") === "uncertain"
+    ? "RUNNING"
+    : "PENDING";
+let scheduleRun = scheduleStatus === "RUNNING" ? "old-schedule-run" : "";
 let acknowledged = false;
 let decided = false;
 const call = (async (
@@ -162,6 +167,33 @@ const call = (async (
       sessionId: "session",
       turnId: null,
       prompt: "Goal g",
+      status: "QUEUED",
+      revision: 1,
+      assistantText: "",
+      tools: [],
+      activities: [],
+      timeline: [],
+      messages: [],
+      workingSet: [],
+    };
+    onRun(accepted);
+    return accepted;
+  }
+  if (name === "schedule_track") {
+    if (
+      args?.serverId !== "s" ||
+      args?.projectId !== "p" ||
+      args?.scheduleId !== "timer"
+    )
+      throw "InvalidInput";
+    if (scheduleRun !== "schedule-run") throw "RunNotFound";
+    const accepted: Run = {
+      ...run,
+      conversationId: "",
+      runId: "schedule-run",
+      sessionId: "session",
+      turnId: null,
+      prompt: "Schedule g",
       status: "QUEUED",
       revision: 1,
       assistantText: "",
@@ -216,6 +248,53 @@ const call = (async (
       expectedRunId?: string;
       acknowledgeUncertainSideEffects?: boolean;
     };
+    if (
+      [
+        "schedules",
+        "schedule",
+        "scheduleHistory",
+        "scheduleActivate",
+        "scheduleCancel",
+        "scheduleReconcile",
+      ].includes(op.operation)
+    ) {
+      if (
+        op.projectId !== "p" ||
+        (op.operation !== "schedules" && op.id !== "timer")
+      )
+        throw "ProjectNotFound";
+      if (op.operation === "scheduleActivate") {
+        scheduleStatus = "RUNNING";
+        scheduleRun = "schedule-run";
+      }
+      if (op.operation === "scheduleCancel") scheduleStatus = "CANCELLED";
+      if (op.operation === "scheduleReconcile") {
+        if (
+          op.expectedRunId !== scheduleRun ||
+          !op.acknowledgeUncertainSideEffects
+        )
+          throw "ResourceConflict";
+        scheduleStatus = "FAILED";
+      }
+      const fields = [
+        ["Project", "p"],
+        ["Session", "session"],
+        ["Status", scheduleStatus],
+        ["Run", scheduleRun],
+        ["Due", "2026-10-05T01:00:00Z"],
+        ["Interval", "60000ms / remaining: 2"],
+        [
+          "Outcome",
+          scheduleStatus === "FAILED" ? "uncertain_run_reconciled" : "",
+        ],
+      ];
+      if (op.operation === "scheduleHistory")
+        fields.push(["History", "saved_schedule_history"]);
+      return {
+        title: "Schedules",
+        items: [{ id: "timer", title: "Inspect scheduled result", fields }],
+      };
+    }
     if (
       [
         "goals",

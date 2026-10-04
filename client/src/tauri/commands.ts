@@ -18,6 +18,10 @@ import type {
 } from "../entities/workspace";
 interface Commands {
   goal_track: [{ serverId: string; projectId: string; goalId: string }, Run];
+  schedule_track: [
+    { serverId: string; projectId: string; scheduleId: string },
+    Run,
+  ];
   checkpoint_resume: [
     { serverId: string; projectId: string; taskId: string },
     Run,
