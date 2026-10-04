@@ -148,7 +148,7 @@ Web では認証付き `GET /api/v1/sessions`、`GET /api/v1/sessions/{sessionId
 | 画像生成 | [生成・保存先の指定](docs/usage.md#画像生成) |
 | Google Calendar | [認証設定](docs/configuration.md#google-calendar-と-google-tasks) → [予定の一覧・追加](docs/usage.md#google-calendar) |
 | Google Tasks | [認証設定](docs/configuration.md#google-calendar-と-google-tasks) → [タスクの追加・完了・削除](docs/usage.md#タスク管理) |
-| RSS/Atom | [購読・OPML 取り込み・記事要約](docs/usage.md#rss-feed) |
+| RSS/Atom | [購読・OPML 取り込み・記事要約](docs/usage.md#rss-feed) / [認証付きフィード](docs/private-feeds.md) |
 | 日次ブリーフィング | [予定・タスク・新着記事の確認](docs/usage.md#日次ブリーフィング) |
 | リマインド | [日時指定・一覧・削除](docs/usage.md#リマインド) |
 | 文書検索 | [文書の登録・検索・削除](docs/usage.md#文書の埋め込み) |

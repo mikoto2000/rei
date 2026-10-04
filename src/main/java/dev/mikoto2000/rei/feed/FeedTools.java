@@ -23,7 +23,7 @@ public class FeedTools {
 
   @Tool(name = "feedAdd", description = "RSS/Atom フィードを登録します。")
   Feed feedAdd(String url, String displayName) {
-    IO.println(String.format("RSS/Atom フィードを追加するよ。url=%s、displayName=%s", url, displayName));
+    IO.println("RSS/Atom フィードを追加するよ");
     return feedService.add(url, displayName);
   }
 
