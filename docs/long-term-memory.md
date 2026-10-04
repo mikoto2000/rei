@@ -124,13 +124,18 @@ check-interval ごとの監視で実行スレッドも interrupt します。既
 
 対象候補はプロセス内で最大256 Sessionです。最初にidle条件を満たした時点で、起動時に読み込み済みのSessionメタデータを一度取得し、最大256件ずつ候補へ取り込みます。登録Projectに属し、Session IDに含まれるProjectと矛盾しないSessionだけが対象です。未処理件数が閾値未満の候補を除いて空きを作り、次回tickで残りのメタデータへ進みます。保存済みSleep cursorから続けるため、再起動後の新しい会話は必須ではありません。
 
-metadata取得では追加のディスク走査やLLM呼び出しを行いません。履歴読み取り・Sleepは既存のidle/busy/未処理件数/試行間隔に従います。候補が256件の処理待ち・再試行待ちで埋まっている間は、追加の取り込みを待機します。起動後に外部で追加されたmetadataの継続監視、cron、Session終了時の強制Sleepは行いません。
+metadata取得では追加のディスク走査やLLM呼び出しを行いません。履歴読み取り・Sleepは既存のidle/busy/未処理件数/試行間隔に従います。候補が256件の処理待ち・再試行待ちで埋まっている間は、追加の取り込みを待機します。起動後に外部で追加されたmetadataの継続監視、Session終了時の強制Sleepは行いません。
 idle は Rei が観測した入力・実行を意味し、OS 全体の操作や入力途中のキー操作は観測しません。
 手動 Sleep の重複実行制限、件数・入力上限、timeout、永続化と再実行の保証を共有します。
 
 ## 制約と拡張
 
-- Session 終了、cron、日次の起動機構はありません。
+- Session終了時の強制Sleepはありません。cron/日次は以下の任意設定で利用できます。
+
+`rei.memory.auto-sleep.cron` にSpringの6フィールドcron式、`rei.memory.auto-sleep.zone` にタイムゾーンを設定できます。例: `cron: "0 0 3 * * *"` / `zone: Asia/Tokyo` は毎日03:00です。省略時は従来のidle監視、zone省略時はOSの既定タイムゾーンを使います。不正な式・zoneは設定時に拒否します。
+
+cron指定時もenabled / memory.enabled / idle / busy / minimum-turns / retry-interval / キャンセルの条件は維持します。予定時刻が来ても活動中ならidleになるまで延期し、過去の発火を1回の機会にまとめます。各機会に候補を最大256件走査し、最大1 Sleepバッチを開始します。候補がなくてもその機会を消費します。cronの次回時刻はプロセス内管理で、停止中の発火は再起動時に再生しません。Sleepの永続cursorは維持します。
+
 - 外部 Vector DB、Cross-project 自動検索、自動 archive / forgetting はありません。
 - 類似照合の候補は有界です。遠い言い換えや非常に古い記憶を完全に照合する保証はありません。
 - LLM の根拠判断の正しさは schema だけでは保証できません。preview と source 追跡で検証してください。
