@@ -57,6 +57,9 @@ import lombok.RequiredArgsConstructor;
 @EnableConfigurationProperties({CoreProperties.class, GoogleCalendarProperties.class, WebSearchProperties.class, VectorDocumentProperties.class, SqliteVecProperties.class, InterestProperties.class, FeedProperties.class, BlueskyProperties.class, AgentSkillsProperties.class, LlmProperties.class, ImageProperties.class})
 @RequiredArgsConstructor
 public class AiConfiguration {
+  private dev.mikoto2000.rei.core.dependency.DependencyTools dependencyTools;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  void setDependencyTools(dev.mikoto2000.rei.core.dependency.DependencyTools tools){this.dependencyTools=tools;}
   private dev.mikoto2000.rei.core.FileDependencyTools fileDependencyTools;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   void setFileDependencyTools(dev.mikoto2000.rei.core.FileDependencyTools tools){this.fileDependencyTools=tools;}
@@ -176,6 +179,7 @@ public class AiConfiguration {
     if (rawResultTools != null) builder.defaultTools(rawResultTools);
     if (processDependencyTools != null) builder.defaultTools(processDependencyTools);
     if (fileDependencyTools != null) builder.defaultTools(fileDependencyTools);
+    if (dependencyTools != null) builder.defaultTools(dependencyTools);
     if(resumeContext!=null&&resumeContext.getIfAvailable()!=null)builder.defaultAdvisors(new dev.mikoto2000.rei.core.chat.RunScopedAdvisor(resumeContext.getObject()));
     if(checkpointTools!=null&&checkpointTools.getIfAvailable()!=null)builder.defaultToolCallbacks(new ToolEventCallbackProvider(
         org.springframework.ai.tool.method.MethodToolCallbackProvider.builder().toolObjects(checkpointTools.getObject()).build(),eventFactory,eventPublisher));

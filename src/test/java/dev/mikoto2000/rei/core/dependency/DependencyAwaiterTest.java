@@ -34,4 +34,10 @@ class DependencyAwaiterTest {
       },Duration.ZERO,()->{}));
     } finally {Thread.interrupted();}
   }
+  @Test void explicitPollIntervalBoundsNetworkRequestCadence() {
+    var time=new AtomicLong();var probes=new AtomicLong();
+    var awaiter=new DependencyAwaiter(time::get,d->time.addAndGet(d.toNanos()),Duration.ofSeconds(1));
+    var result=awaiter.await(()->{probes.incrementAndGet();return new DependencyObservation("http",DependencyState.WAITING,"");},Duration.ofSeconds(3),()->{});
+    assertEquals(DependencyState.WAITING,result.state());assertTrue(probes.get()<=4);assertEquals(3_000_000_000L,time.get());
+  }
 }

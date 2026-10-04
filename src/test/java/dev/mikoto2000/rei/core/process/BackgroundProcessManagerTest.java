@@ -204,4 +204,15 @@ class BackgroundProcessManagerTest {
   private boolean isWindows() {
     return System.getProperty("os.name").toLowerCase().contains("win");
   }
+  @Test void ownedObservationRejectsAnotherProjectSessionOrRoot() throws Exception {
+    BackgroundProcessSnapshot spawned;
+    try(var scope=dev.mikoto2000.rei.core.chat.AgentRunScope.open(new dev.mikoto2000.rei.core.chat.AgentRunContext("r","session",tempDir,"project"))) {
+      spawned=manager.spawnCommandLine(javaCommand("exit","0"),tempDir);
+    }
+    awaitStatus(spawned.processId(),BackgroundProcessStatus.EXITED);
+    assertTrue(manager.statusOwned(spawned.processId(),"project","session",tempDir).found());
+    org.junit.jupiter.api.Assertions.assertFalse(manager.statusOwned(spawned.processId(),"other","session",tempDir).found());
+    org.junit.jupiter.api.Assertions.assertFalse(manager.statusOwned(spawned.processId(),"project","other",tempDir).found());
+    org.junit.jupiter.api.Assertions.assertFalse(manager.statusOwned(spawned.processId(),"project","session",tempDir.resolve("other")).found());
+  }
 }

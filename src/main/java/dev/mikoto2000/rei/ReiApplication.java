@@ -294,6 +294,8 @@ public class ReiApplication {
     if(resume!=null && resume.getCommand() instanceof dev.mikoto2000.rei.checkpoint.ResumeCommand command) command.setShellOutput(writer);
     var approval=cmd.getSubcommands().get("approval");
     var timer=cmd.getSubcommands().get("timer");
+    var dependency=cmd.getSubcommands().get("dependency");
+    if(dependency!=null && dependency.getCommand() instanceof dev.mikoto2000.rei.core.dependency.DependencyCommand command) command.setShellOutput(writer);
     var attention=cmd.getSubcommands().get("attention");
     var goal=cmd.getSubcommands().get("goal");
     var reflection=cmd.getSubcommands().get("reflection");

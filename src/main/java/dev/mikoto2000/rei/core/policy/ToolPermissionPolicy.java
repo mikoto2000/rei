@@ -9,16 +9,18 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @EnableConfigurationProperties(ToolPermissionProperties.class)
 public class ToolPermissionPolicy {
   private static final Set<String> READ=Set.of("readFile","readMultiFile","grepMultiQuery","readPdfFile",
-      "searchAndRead","today","now","findFile","listFile","repositoryMap","changeTestImpact","getShellProcessStatus","waitForShellProcess","waitForFile","listScheduledActions","listCodexReviews","getCodexReview");
-  private static final Set<String> NETWORK_READ=Set.of("webSearch","webSearchAndRead","fetchUrlContent");
-  private static final Set<String> LOCAL_WRITE=Set.of("applyTextDiff","writeMultiFile","createDirectory","copyFile","scheduleAfter","scheduleAt","scheduleInterval","scheduleCron","scheduleOnEvent");
+      "searchAndRead","today","now","findFile","listFile","repositoryMap","changeTestImpact","getShellProcessStatus","waitForShellProcess","waitForFile","dependencyStatus","dependencyHistory","checkDependency","waitForDependency","listScheduledActions","listCodexReviews","getCodexReview");
+  private static final Set<String> NETWORK_READ=Set.of("webSearch","webSearchAndRead","fetchUrlContent","checkHttpDependency","waitForHttpDependency");
+  private static final Set<String> LOCAL_WRITE=Set.of("applyTextDiff","writeMultiFile","createDirectory","copyFile","scheduleAfter","scheduleAt","scheduleInterval","scheduleCron","scheduleOnEvent","registerDependency","cancelDependency");
   private final ToolPermissionProperties properties;
   public ToolPermissionPolicy(ToolPermissionProperties properties) {this.properties=properties;}
+  public boolean enforced(){return properties.enabled();}
   public Set<ActionCapability> capabilities(String tool) {
     var configured=properties.capabilities().get(tool);
     if(configured!=null) return configured;
     if(READ.contains(tool)) return Set.of(ActionCapability.READ);
     if(NETWORK_READ.contains(tool)) return Set.of(ActionCapability.NETWORK_READ);
+    if("registerDependency".equals(tool))return Set.of(ActionCapability.READ,ActionCapability.LOCAL_WRITE);
     if(LOCAL_WRITE.contains(tool)) return Set.of(ActionCapability.LOCAL_WRITE);
     if("searchKnowledge".equals(tool))return Set.of(ActionCapability.READ,ActionCapability.NETWORK_READ);
     if(Set.of("deleteFile","moveFile","killShellProcess").contains(tool))

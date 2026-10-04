@@ -135,6 +135,14 @@ public class BackgroundProcessManager {
     }
   }
 
+  public BackgroundProcessSnapshot statusOwned(String processId,String project,String session,Path root) {
+    var process=processes.get(processId);
+    if(process==null||process.owner==null||!java.util.Objects.equals(process.owner.projectId(),project)
+        ||!process.owner.conversationId().equals(session)||!process.owner.projectRoot().equals(root))
+      return new BackgroundProcessSnapshot(processId,-1,BackgroundProcessStatus.FAILED,null,null,null,0,List.of(),List.of(),false,"process ownership unavailable");
+    return status(processId,0);
+  }
+
   public BackgroundProcessSnapshot status(String processId, Integer tailLines) {
     ManagedBackgroundProcess managedProcess = processes.get(processId);
     if (managedProcess == null) {
