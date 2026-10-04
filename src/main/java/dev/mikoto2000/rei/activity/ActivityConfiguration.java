@@ -25,12 +25,12 @@ public class ActivityConfiguration {
   @Bean ActivityAgentEvidenceSource activityAgentEvidence(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.event.AgentEventBus> bus) {
     return new ActivityAgentEvidenceSource(bus.getIfAvailable());
   }
-  @Bean ActivityEvidenceSource activityProjectEvidence(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.project.ProjectService> projects) {
-    return at -> {
-      var service=projects.getIfAvailable();
-      var project=service==null?null:service.currentContext();
-      return new ActivityEvidenceSource.Contribution(project==null?"":project.name(),project==null?"":project.id(),java.util.List.of());
-    };
+  @Bean ActivityEvidenceSource activityProjectEvidence(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.project.ProjectService> projects,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextRepository> contexts,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextGit> git,ActivityProperties properties) {
+    return new ActivityObservationContextSource(properties,()->{var service=projects.getIfAvailable();return service==null?null:service.currentContext();},
+        project->{var repository=contexts.getIfAvailable();return repository==null?java.util.Optional.empty():repository.current(project);},
+        (root,at)->{var capture=git.getIfAvailable();return capture==null?null:capture.capture(root,at);});
   }
   @Bean ActivityCapture activityCapture(ActivityProperties p,DesktopActivityObserver observer,ActivityExtractor extractor,ActivityStore store,ScreenshotStore screenshots,
       @Qualifier("activityAnalysisExecutor") ThreadPoolTaskExecutor analysisExecutor,

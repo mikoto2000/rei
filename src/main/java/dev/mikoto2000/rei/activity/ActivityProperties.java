@@ -8,6 +8,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties("rei.activity")
 public class ActivityProperties {
   private boolean enabled = false;
+  /** Explicit opt-in to observation-time Git and saved Work Context references. */
+  private boolean workContextEnabled = false;
   private boolean extractionEnabled = true;
   private boolean keepScreenshots = false;
   private boolean keepOnExtractionFailure = false;
