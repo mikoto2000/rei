@@ -3,7 +3,10 @@ package dev.mikoto2000.rei.activity;
 import java.time.*;
 import java.util.*;
 
-public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPolicy summaryPolicy,DailySummaryService dailySummaries) {
+public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPolicy summaryPolicy,DailySummaryService dailySummaries,PeriodCoachingStore scoreCriteria) {
+  public ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPolicy summaryPolicy,DailySummaryService dailySummaries) {
+    this(store,clock,summaryPolicy,dailySummaries,null);
+  }
   public ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPolicy summaryPolicy) {
     this(store,clock,summaryPolicy,DailySummaryService.local());
   }
@@ -80,7 +83,9 @@ public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPo
   /** Null date selects the most recent completed calendar period for manual coaching. */
   public PeriodComparison periodComparison(ActivityPeriodAnalysis.Period period,String day) {
     var snapshot=Clock.fixed(clock.instant(),clock.getZone());
-    var analysis=new ActivityPeriodAnalysis(snapshot,summaryPolicy.minimumConfidence(),dailySummaries.projectNames());
+    var configured=scoreCriteria==null?null:scoreCriteria.load();
+    var selected=configured==null||configured.revision()==0?Set.<String>of():configured.settings().categories();
+    var analysis=new ActivityPeriodAnalysis(snapshot,summaryPolicy.minimumConfidence(),dailySummaries.projectNames(),selected);
     var anchor=day==null?(period==ActivityPeriodAnalysis.Period.WEEK?LocalDate.now(snapshot).minusWeeks(1):LocalDate.now(snapshot).minusMonths(1))
         :new ActivityDateArgumentResolver(snapshot).resolve(day);
     var range=analysis.range(period,anchor);
