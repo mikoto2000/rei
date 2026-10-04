@@ -22,6 +22,19 @@ import reactor.core.publisher.Flux;
 
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentRunnerTest {
+  @Test void commonPolicyBlocksChildToolBeforeInvocation() throws Exception {
+    var runner=runner(prompt -> Flux.just(new ChatResponse(List.of(new Generation(
+        AssistantMessage.builder().content("").toolCalls(List.of(
+            new AssistantMessage.ToolCall("call","function","readMultiFile","{}"))).build())))),"120s");
+    var common=new dev.mikoto2000.rei.core.policy.ToolPermissionPolicy(
+        new dev.mikoto2000.rei.core.policy.ToolPermissionProperties(true,Set.of(),Set.of(),Map.of()));
+    runner.setToolPermissionGuard(new dev.mikoto2000.rei.core.policy.ToolPermissionGuard(common,
+        new AgentEventFactory(Clock.systemUTC()),events::add));
+    assertThat(runner.run("reviewer","review","context").status()).isEqualTo(SubAgentResult.Status.FAILED);
+    assertThat(toolCalls.get()).isZero();
+    assertThat(events).anyMatch(e -> e.payload() instanceof ToolFailedPayload failed
+        && "PermissionRequired".equals(failed.error().errorType()));
+  }
   @TempDir Path directory;
   final List<AgentEvent> events = new CopyOnWriteArrayList<>();
   final CommandCancellationService cancellation = new CommandCancellationService();

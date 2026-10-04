@@ -21,6 +21,9 @@ import reactor.core.scheduler.Schedulers;
 
 /** Per-invocation state only. The sole inherited values are explicit task/context, model and project location. */
 public final class SubAgentRunner {
+  private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setToolPermissionGuard(dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {this.permissions=permissions;}
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SubAgentRunner.class);
   private final SubAgentResultParser parser = new SubAgentResultParser();
   private final SubAgentResultValidator validator = new SubAgentResultValidator();
@@ -142,6 +145,7 @@ public final class SubAgentRunner {
       public String call(String input, ToolContext context) {
         try (var scope = AgentRunScope.open(owner)) {
           check.run();
+          if(permissions!=null)permissions.check(callback.getToolDefinition().name(),owner);
           String result = observed.call(input, context);
           check.run();
           return result;

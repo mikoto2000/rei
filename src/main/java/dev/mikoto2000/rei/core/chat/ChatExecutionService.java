@@ -64,6 +64,9 @@ import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 
 @Component
 public class ChatExecutionService {
+  private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
+  @Autowired
+  void setToolPermissionGuard(dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {this.permissions=permissions;}
   private dev.mikoto2000.rei.checkpoint.PersistentCheckpointService checkpoints;
   @Autowired
   void setCheckpoints(dev.mikoto2000.rei.checkpoint.PersistentCheckpointService checkpoints) { this.checkpoints=checkpoints; }
@@ -204,6 +207,7 @@ public class ChatExecutionService {
         new ProgressEvaluator(context.projectRoot(),
             actionPlan), eventFactory, eventPublisher);
     execution.setRunContext(context);
+    execution.setToolPermissionGuard(permissions);
     if(checkpoints!=null)execution.setToolResultsCheckpoint(messages->checkpoints.preserveResults(context,messages));
     execution.setUserRequest(promptText);
     execution.setInterventions(interventions, text -> {
