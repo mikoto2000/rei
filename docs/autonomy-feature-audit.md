@@ -60,3 +60,7 @@ A4/A6のNative人間回答待ちUIを復旧・再開画面へ追加。質問・�
 ## Goal HTTP controls follow-up
 
 A2の既存GoalRepository/GoalLoopServiceへProject限定HTTP一覧・詳細・履歴/Attempt・明示Verify/Run/Cancel/Reconcileを追加。GETは保存状態を読み、Verifyは完了状態を更新し得るためPOSTにする。Reconcileは実Run IDと結果不明副作用の明示確認を要求し、queued/executingや古いRunを拒否、予算を回復せずPAUSEDへ移す。Native画面と汎用Run状態/SSE追跡の統合、Scheduler API/UI等は引き続き未対応。検証はimplementation-report-goal-http-controls.mdを参照。
+
+## Goal Run lifecycle follow-up
+
+A2の実Goal AttemptをWeb RunRegistry/RunServiceへ接続し、受付QUEUED・実行・終端・通常のRun取消を既存管理へ統合。保存Session/Projectを保持し、未実行の取消はGoalをPAUSED、AttemptをCANCELLEDへ移す。実行開始直前の取消競合でも処理を実行せず一度だけ通知し、通知はbus monitor外で行う。再起動した不明Runを自動再登録/再実行しない。Native Goal画面、Scheduler API/UI等は引き続き未対応。詳細はimplementation-report-goal-run-lifecycle.md。
