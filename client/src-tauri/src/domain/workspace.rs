@@ -25,6 +25,21 @@ pub struct BackgroundReceipt {
     deny_unknown_fields
 )]
 pub enum WorkspaceOperation {
+    Attention {
+        project_id: String,
+    },
+    AttentionAck {
+        project_id: String,
+        id: String,
+    },
+    Approvals {
+        project_id: String,
+    },
+    ApprovalDecision {
+        project_id: String,
+        id: String,
+        approved: bool,
+    },
     WorkContext {
         project_id: String,
     },
