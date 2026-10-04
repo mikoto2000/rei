@@ -1,13 +1,13 @@
-# 自律機能の実装状況（2026-10-04）
+# 自律機能の実装状況（初回2026-10-04、更新2026-10-05）
 
-基準: main `b37ac23`。コード・既存テスト・docs・merge 履歴を照合した。
+初回調査の基準: main `b37ac23`。コード・既存テスト・docs・merge 履歴を照合し、以下のfollow-upでMerge済み変更を反映した。
 「部分実装」は関連部品が存在することを意味し、候補全体の完成を意味しない。
 
 | Priority | Feature | Initial status | Final status / 根拠 |
 |---|---|---|---|
 | A1 | Auto Sleep | Not implemented | 本作業で実装。SleepService、AutoSleepService。起動時保存metadataからのbounded候補発見・idle時継続走査に対応。任意cron/日次・zone指定に対応。終了trigger/外部metadata監視はDeferred |
-| A2 | Autonomous Planning Loop | Partially implemented | Implemented in this task（最大16ファイルGoal、全件SHA-256一致）。永続 lifecycle/試行/予算、明示起動、既存 Chat/ActionPlan/FIFO の再利用、独立 SHA-256 判定と bounded 継続。Shellの不確定Run手動reconcile・予算保持・in-flight除外に対応。SubAgentのTool cycle/修復/並列の共有LLM予算継承に対応。汎用検証条件/Skill selector等の予算継承/共通token上限/Native復旧UIはDeferred |
-| A3 | Trigger / Scheduler | Partially implemented | Implemented in this task（一回限り continuation）。SQLite 永続化、2〜100回のbounded間隔予約（1分〜366日）・cron予約（明示zone、分単位）、明示 activation、Project/Session 固定、atomic claim、既存 FIFO 経由の bounded dispatch・結果履歴。Shellの不確定Run手動reconcile・元予約非再実行・in-flight除外に対応。対象Run終端イベントの一回限りtrigger、WAITING_EVENT/期限/重複抑制、保存履歴のbounded cursor復元に対応。永続dependency終端イベントからの起動も対応。Native復旧UIはDeferred |
+| A2 | Autonomous Planning Loop | Partially implemented | 最大16ファイルGoal、全件SHA-256一致。永続 lifecycle/試行/予算、明示起動、既存 Chat/ActionPlan/FIFO、独立検証とbounded継続。不確定Run手動reconcile・予算保持・in-flight除外、SubAgent共有LLM予算継承、HTTP/実Run/SSE・Native Goal/Checkpoint復旧に対応。汎用検証条件/Skill selector等の予算継承/共通token上限は追加候補 |
+| A3 | Trigger / Scheduler | Partially implemented | 一回限り continuation、SQLite永続化、2〜100回のbounded間隔（1分〜366日）/cron（明示zone、分単位）、明示activation、Project/Session固定、atomic claim、既存FIFO・結果履歴。不確定Run手動reconcile・元予約非再実行・in-flight除外、Run/永続dependency終端event trigger・期限・重複抑制・cursor復元に対応。認証済HTTP/実Run/SSE・Native予約確認/有効化/取消/照合/追跡も対応済み |
 | A4 | Waiting / Dependency | Partially implemented | Implemented in this task。状態6種、プロセス/ファイル存在・SHA・変更/Git branch・HEAD/HTTP status/人間回答の条件をSQLite永続化。最大16の同一Session既存依存によるDAG、期限、CAS、キャンセル、復元、opt-in/Policy制御、bounded wait、停滞との区別、Shell・Event API・Scheduler接続を実装。再起動後に不明なprocessはBLOCKED。HTTP body/任意code predicate等の拡張は対象外の追加候補 |
 | A5 | Policy / Permission | Partially implemented | Implemented in this task。能力7種・Chat/SubAgent 境界に加え、永続一回限り承認、Shell/Web の明示決定、Checkpoint の明示 Resume に対応。NativeのProject限定承認一覧・引数確認・一回承認/拒否ボタンに対応。SubAgent 承認継承は Deferred |
 | A6 | Notification / Escalation | Partially implemented | Implemented in this task（アプリ内確認待ち）。承認要求/Policy拒否/停滞停止/確認済み長時間待機/Run完了・失敗/依存完了・失敗/人間回答待ちの永続 inbox、重複抑制、Shell/Web の表示・ack。依存IDはRunIDと区別し、ackに同意・起動効果なし。Native InboxのProject限定表示・明示ack・所有者切替に対応。外部配送は Deferred |
@@ -25,7 +25,7 @@
 | C18 | Repository Map | Partially implemented | Implemented (bounded Git/Java AST slice)。package/型/method/import/main、module path・テスト名候補、内容ハッシュ更新、Project境界、読み取りTool。多言語/意味的依存解決/永続索引はDeferred |
 | C19 | Change/Test Impact | Partially implemented | Implemented (Java structural candidate slice)。Repository Map再利用、逆import/テスト名候補の推移探索・根拠/不完全性・READ Tool。Git差分自動取得/coverage/完全意味解析はDeferred |
 | C20 | Build/Test Failure Diagnosis | Partially implemented | Implemented (deterministic process-log slice)。既存command/snapshotにreported test/cause/source・分類・固定確認手順、認証情報除去・上限・context圧縮保持。完全原因特定/report読取/自動repairはDeferred |
-| C21 | Self Patch Review Loop | Partially implemented | Implemented (explicit bounded static verification cycle)。初回test→同一patch確認/静的diff review→最終test、Fix要求・変更/不完全/失敗の完了拒否。意味review/自動fix/全Goal強制統合はDeferred |
+| C21 | Self Patch Review Loop | Partially implemented | 初回test→同一patch/静的diff review→保存Change Setの実Fix→全サイクル再検証を追加。最大3修正/4round・180秒共有・元の失敗保持・結果不明/進展なし停止。明示testと保存修正案を用いる経路は対応済み。意味review/全Goal強制統合は追加候補 |
 | D | Diagram edit / Change Set / Document Agent / Paper E2E | Deferred | AI Change Setの共通基盤を単一既存UTF-8ファイルのSQLite保存・完全baseline・差分確認・明示Apply/Discardとして追加。自己修正/外部修正の前提として先行。diagram自然言語編集/Document Agent/Paper Provider E2Eと複数ファイル適用は未完了 |
 
 ## 重複実装を避ける項目
@@ -96,3 +96,7 @@ B10の不足していた観測時文脈保存を追加。既存Activityのopt-in
 ## Text Change Set foundation follow-up
 
 C17/C21の修正実行に必要な共通基盤として、DのAI Change Set / Diff / Applyを単一ファイルから追加。exact UTF-8 baseline・Project/root・保存提案hash・原子的claimを確認して明示Applyし、不確定状態は再実行しない。既存Policy、編集Event、cache更新を維持し、追加LLMは呼ばない。既存非空テキストの提案からreceiptまでを対応済みとし、意味的review・外部fix/continuation・複数ファイルtransaction等は未完了。詳細はtext-change-set.mdとimplementation-report-text-change-set.md。
+
+## Self patch repair follow-up
+
+C21の不足していた実Fixと回数制御を保存Change Setへ接続。まず既存検証サイクルを実施し、明確な失敗とpatch一致時だけ明示修正案を一回Apply、実内容/新patch確認後に全サイクルを再実行する。最大3案/4round、共有180秒を維持し、元の診断・全round・receiptを保持する。不完全/古いpatch/結果不明/変化なしを成功とせず、追加LLMや権限拡張を行わない。意味的レビューや他の未完了項目は残る。詳細はimplementation-report-self-patch-repair.md。

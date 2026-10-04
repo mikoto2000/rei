@@ -30,6 +30,24 @@ class SelfPatchReviewGitTest {
           BuildTestFailureDiagnosis.command("completed",0,false,"","",null));});
   }
   SelfPatchReviewService.Result verify()throws Exception{return service().verify(root,new SelfPatchReviewService.Request("controlled fixture",10));}
+  @Test void savedChangeSetRepairsRealGitFindingThenRunsFinalRealShellTest() throws Exception {
+    Files.createDirectories(root.resolve("build"));Files.writeString(root.resolve("A.txt"),"after \n");
+    var project=new dev.mikoto2000.rei.core.project.ProjectContext(UUID.randomUUID().toString(),"fixture",root);
+    var projects=org.mockito.Mockito.mock(dev.mikoto2000.rei.core.project.ProjectService.class);
+    org.mockito.Mockito.when(projects.currentContext()).thenReturn(project);org.mockito.Mockito.when(projects.currentProject()).thenReturn(root);
+    var tools=new Tools(projects,new dev.mikoto2000.rei.core.service.SystemShellService());
+    var ds=new org.springframework.jdbc.datasource.DriverManagerDataSource("jdbc:sqlite:"+root.resolve("build/changes.db"));
+    tools.setTextChangeSets(new TextChangeSetService(new TextChangeSetRepository(ds)));
+    var proposal=tools.proposeTextChangeSet(new TextChangeSetService.Request("A.txt","after \n","after\n"));
+    byte[] index=Files.readAllBytes(root.resolve(".git/index"));
+    String command=System.getProperty("os.name").toLowerCase().contains("win")?
+        "Add-Content build/runs.txt 'run'; exit 0":"printf '%s\\n' run >> build/runs.txt";
+    var result=tools.selfRepairPatch(new SelfPatchRepairService.Request(command,10,List.of(new SelfPatchRepairService.Repair(proposal.id(),proposal.proposalSha256()))));
+    assertEquals("VERIFIED_CHECKS",result.status(),result.toString());assertEquals(2,result.rounds().size());
+    assertEquals("FIX_REQUIRED",result.rounds().getFirst().status());assertEquals("APPLIED",result.repairs().getFirst().status());
+    assertEquals("after\n",Files.readString(root.resolve("A.txt")));assertEquals(3,Files.readAllLines(root.resolve("build/runs.txt")).size());
+    assertArrayEquals(index,Files.readAllBytes(root.resolve(".git/index")));
+  }
   @Test void realCommandsRunTwiceOnTheSamePatchAndIgnoredOutputsDoNotInvalidateIt() throws Exception {
     Files.writeString(root.resolve("A.txt"),"after\n");byte[] index=Files.readAllBytes(root.resolve(".git/index"));
     String command=System.getProperty("os.name").toLowerCase().contains("win")?
