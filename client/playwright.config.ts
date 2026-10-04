@@ -1,6 +1,7 @@
 import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
+  workers: 2,
   use: { baseURL: "http://127.0.0.1:1420", channel: "chrome", headless: true },
   webServer: {
     command: "node node_modules/vite/bin/vite.js --host 127.0.0.1",

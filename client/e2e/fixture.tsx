@@ -132,6 +132,8 @@ if (new URLSearchParams(location.search).has("timeline")) {
   ];
 }
 let onRun: (run: Run) => void = () => {};
+let acknowledged = false;
+let decided = false;
 const call = (async (
   name: string,
   args: Record<string, unknown> | undefined,
@@ -142,7 +144,63 @@ const call = (async (
       operation: string;
       url?: string;
       displayName?: string;
+      projectId?: string;
+      id?: string;
+      approved?: boolean;
     };
+    if (
+      ["attention", "approvals", "attentionAck", "approvalDecision"].includes(
+        op.operation,
+      )
+    ) {
+      if (op.projectId !== "p") throw "ProjectNotFound";
+      if (op.operation === "attentionAck") {
+        if (op.id !== "notice") throw "InvalidInput";
+        acknowledged = true;
+        return { title: "ack", items: [] };
+      }
+      if (op.operation === "approvalDecision") {
+        if (op.id !== "request" || typeof op.approved !== "boolean")
+          throw "InvalidInput";
+        decided = true;
+        return { title: "decided", items: [] };
+      }
+      return {
+        title: "Inbox",
+        items:
+          op.operation === "attention"
+            ? acknowledged
+              ? []
+              : [
+                  {
+                    id: "notice",
+                    title: "RUN_FAILED",
+                    fields: [
+                      ["Project", "p"],
+                      ["Session", "session"],
+                      ["Status", "OPEN"],
+                      ["Message", "Fixture failure requires review"],
+                    ],
+                  },
+                ]
+            : decided
+              ? []
+              : [
+                  {
+                    id: "request",
+                    title: "writeFile",
+                    fields: [
+                      ["Project", "p"],
+                      ["Session", "session"],
+                      ["Run", "r"],
+                      ["Status", "PENDING"],
+                      ["Arguments", "Fixture redacted arguments"],
+                      ["Expires", "2026-10-04T12:00:00Z"],
+                    ],
+                  },
+                ],
+      };
+    }
     if (op.operation !== "feeds" && op.operation !== "createFeed")
       throw "InvalidInput";
     return {

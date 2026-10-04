@@ -874,3 +874,11 @@ main {
 .tool-event-line {
   padding-inline-start: 1rem;
 }
+
+.attention-pane pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.attention-pane p {
+  overflow-wrap: anywhere;
+}

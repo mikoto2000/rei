@@ -4,6 +4,7 @@ use futures_util::StreamExt;
 use reqwest::{Client, Method, Response};
 use serde::de::DeserializeOwned;
 use std::time::Duration;
+mod attention;
 mod background;
 mod history;
 mod stateful;
