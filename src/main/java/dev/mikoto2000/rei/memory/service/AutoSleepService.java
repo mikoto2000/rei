@@ -51,11 +51,15 @@ public class AutoSleepService implements AutoCloseable {
     }
     if(!startup.hasNext())startup=Collections.emptyIterator();
   }
+  private final org.springframework.scheduling.support.CronExpression cron;
+  private Instant nextCron;
   private long runningVersion;
   private boolean closed;
   public AutoSleepService(SleepService sleep, MemoryProperties memory, AutoSleepProperties properties,
       AgentActivityTracker activity, Clock clock) {
     this.sleep=sleep; this.memory=memory; this.properties=properties; this.activity=activity; this.clock=clock;
+    cron=properties.cron()==null?null:org.springframework.scheduling.support.CronExpression.parse(properties.cron());
+    if(cron!=null)advanceCron(clock.instant());
   }
   /** Called only after durable terminal turn metadata. Never invokes the LLM on the user thread. */
   public synchronized void afterTerminal(AgentRunContext owner) {
@@ -79,6 +83,9 @@ public class AutoSleepService implements AutoCloseable {
     Instant latest=java.util.stream.Stream.of(activity.applicationStartedAt(),activity.lastUserActivityAt(),activity.lastAgentActivityAt())
         .filter(Objects::nonNull).max(Instant::compareTo).orElse(now);
     if(Duration.between(latest,now).compareTo(properties.minimumIdle())<0) return;
+    if(cron!=null&&(nextCron==null||now.isBefore(nextCron)))return;
+    // Coalesce missed occurrences into one idle opportunity; never replay a backlog.
+    if(cron!=null)advanceCron(now);
     try {discoverStartup();}
     catch(RuntimeException error) {org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep discovery unavailable ({})",error.getClass().getSimpleName());}
     var candidates=sessions.entrySet().iterator();
@@ -107,6 +114,10 @@ public class AutoSleepService implements AutoCloseable {
         org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep check unavailable ({})",error.getClass().getSimpleName());
       }
     }
+  }
+  private void advanceCron(Instant after) {
+    var next=cron.next(after.atZone(ZoneId.of(properties.zone())));
+    nextCron=next==null?null:next.toInstant();
   }
   @jakarta.annotation.PreDestroy @Override public void close() {
     synchronized(this) {if(closed)return; closed=true; worker.shutdown();}

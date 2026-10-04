@@ -5,7 +5,7 @@
 
 | Priority | Feature | Initial status | Final status / 根拠 |
 |---|---|---|---|
-| A1 | Auto Sleep | Not implemented | 本作業で実装。SleepService、AutoSleepService。起動時保存metadataからのbounded候補発見・idle時継続走査に対応。cron/終了trigger/外部metadata監視はDeferred |
+| A1 | Auto Sleep | Not implemented | 本作業で実装。SleepService、AutoSleepService。起動時保存metadataからのbounded候補発見・idle時継続走査に対応。任意cron/日次・zone指定に対応。終了trigger/外部metadata監視はDeferred |
 | A2 | Autonomous Planning Loop | Partially implemented | Implemented in this task（最大16ファイルGoal、全件SHA-256一致）。永続 lifecycle/試行/予算、明示起動、既存 Chat/ActionPlan/FIFO の再利用、独立 SHA-256 判定と bounded 継続。汎用検証条件/独立LLM予算継承/不確定Run復旧UIは Deferred |
 | A3 | Trigger / Scheduler | Partially implemented | Implemented in this task（一回限り continuation）。SQLite 永続化、明示 activation、Project/Session 固定、atomic claim、既存 FIFO 経由の bounded dispatch・結果履歴。cron/汎用 trigger/不確定 Run 復旧UI は Deferred |
 | A4 | Waiting / Dependency | Partially implemented | Implemented in this task（管理プロセスの待機）。状態6種、bounded wait、キャンセル、停滞との区別、Shell 表示。汎用 watcher/依存 graph/復元は Deferred |
