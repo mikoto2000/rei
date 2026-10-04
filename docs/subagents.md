@@ -131,13 +131,13 @@ Shell は開始・終了に加え、子の LLM リクエスト・応答・失敗
 4 項目は必須で、未知の envelope 項目は拒否します。`status` は `SUCCESS` / `FAILURE` / `PARTIAL`、
 `summary` は長さ 1 以上の文字列、`result` は object、`warnings` は文字列配列です。
 Schema 未指定の場合は `result` 内の任意のプロパティを許可します。
-内容の正しさ、根拠、URL の実在性は検証しません。自動修復・再生成・reviewer による検証も行いません。
+自由文の結論やURLの実在性は検証しません。任意のevidenceToolsで実際のTool応答と引用を照合し、maxRepairsで検証失敗時の回答修復を有効にできます。設定と保証範囲は後述の専用ドキュメントを参照してください。
 
 Runner は最終出力を厳密に parse し、共通 envelope → 個別 `result` Schema の順でローカル検証します。
 検証済み JSON のみ `output` に保持し、型付き envelope を `structuredOutput` に格納します。
-構造が正しければ外側の実行状態は `COMPLETED` です。内側の `FAILURE` は子が報告するタスク失敗、
+有効なすべての検証に通れば外側の実行状態は `COMPLETED` です。内側の `FAILURE` は子が報告するタスク失敗、
 `PARTIAL` は部分結果であり、外側の実行状態とは別です。
-parse／Schema 違反時は `FAILED`、`structuredOutput: null`、安全な固定メッセージと
+parse／Schema 違反が修復されず残った場合は `FAILED`、`structuredOutput: null`、安全な固定メッセージと
 `validationErrors: [{"path":"/result/findings/0/severity","message":"Schema constraint violated: enum"}]`
 を返します。不正 raw output やライブラリ例外本文は含めません。path は JSON Pointer（root は空文字）です。
 既存 `subagent.failed` イベントを発行し、新規イベントは追加しません。
@@ -183,3 +183,7 @@ SubAgent は provider 共通の Tool loop と fallback を使うため、それ�
 ## 実行証跡の検証
 
 任意のevidenceTools設定でRunnerの実応答と引用を照合できます。設定と保証範囲は [実行証跡検証](subagent-evidence-validation.md) を参照してください。
+
+## 検証エラーの修復
+
+任意のmaxRepairs設定で、共通の呼び出し予算とtimeoutの範囲内で最終JSONを修復できます。設定と結果履歴は [検証エラーの修復](subagent-validation-repair.md) を参照してください。

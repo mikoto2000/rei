@@ -41,6 +41,8 @@ class SubAgentRunnerTest {
   final AtomicInteger toolCalls = new AtomicInteger();
   String schema;
   boolean evidenceValidation;
+  int maxRepairs;
+  int maxSteps = 2;
   final SubAgentToolPolicy policy = new SubAgentToolPolicy(Set.of("readMultiFile", "runCommand", "delegateTask"));
   ToolCallback callback() {
     return new ToolCallback() {
@@ -54,6 +56,8 @@ class SubAgentRunnerTest {
   SubAgentRunner runner(Function<Prompt, Flux<ChatResponse>> response, String timeout,
       java.util.function.Supplier<List<ToolCallback>> toolFactory) throws Exception {
     String yaml = SubAgentConfigurationTest.yaml("reviewer").replace("120s", timeout);
+    yaml = yaml.replace("maxSteps: 2", "maxSteps: " + maxSteps);
+    if (maxRepairs > 0) yaml += "maxRepairs: " + maxRepairs + "\n";
     if (evidenceValidation) yaml += "evidenceTools: [readMultiFile]\n";
     if (schema != null) {
       Files.writeString(directory.resolve("result.schema.json"), schema);
@@ -71,6 +75,46 @@ class SubAgentRunnerTest {
         toolFactory, cancellation, new AgentEventFactory(Clock.systemUTC()), events::add, Clock.systemUTC());
   }
   ChatResponse answer(String text) { return new ChatResponse(List.of(new Generation(new AssistantMessage(text)))); }
+  @Test void repairRetainsOriginalValidationErrorAndStopsAtConfiguredLimit() throws Exception {
+    maxRepairs = 1; maxSteps = 4;
+    var calls = new AtomicInteger();
+    var result = runner(p -> { calls.incrementAndGet(); return Flux.just(answer("{}")); }, "2s").run("reviewer", "task", null);
+    assertThat(result.status()).isEqualTo(SubAgentResult.Status.FAILED);
+    assertThat(calls).hasValue(2);
+    assertThat(result.repairAttempts()).isEqualTo(1);
+    assertThat(result.validationHistory()).hasSize(2);
+    assertThat(result.validationHistory().getFirst()).isNotEmpty();
+    assertThat(result.validationErrors()).isEqualTo(result.validationHistory().getLast());
+  }
+  @Test void repairedResultKeepsHistoryAndSharesOriginalStepBudget() throws Exception {
+    maxRepairs = 3;
+    var calls = new AtomicInteger();
+    var success = runner(p -> {
+      if (calls.incrementAndGet()==1) return Flux.just(answer("{}"));
+      assertThat(p.getInstructions().getLast().getText()).contains("Repair", "validation diagnostics");
+      return Flux.just(answer(SubAgentResultParserTest.VALID));
+    }, "2s").run("reviewer", "task", null);
+    assertThat(success.status()).isEqualTo(SubAgentResult.Status.COMPLETED);
+    assertThat(success.validationErrors()).isEmpty();
+    assertThat(success.validationHistory()).hasSize(1);
+    assertThat(success.repairAttempts()).isEqualTo(1);
+    maxSteps = 1; calls.set(0);
+    var exhausted = runner(p -> { calls.incrementAndGet(); return Flux.just(answer("{}")); }, "2s").run("reviewer", "task", null);
+    assertThat(exhausted.status()).isEqualTo(SubAgentResult.Status.MAX_STEPS_EXCEEDED);
+    assertThat(calls).hasValue(1); assertThat(exhausted.validationHistory()).hasSize(1);
+    assertThat(exhausted.repairAttempts()).isZero();
+  }
+  @Test void repairDoesNotRetryProviderFailureAndTimeoutPreservesOriginalError() throws Exception {
+    maxRepairs = 1;
+    var calls = new AtomicInteger();
+    var failed = runner(p -> { calls.incrementAndGet(); return Flux.error(new IllegalStateException("private failure")); }, "2s").run("reviewer", "task", null);
+    assertThat(failed.status()).isEqualTo(SubAgentResult.Status.FAILED); assertThat(calls).hasValue(1);
+    assertThat(failed.validationHistory()).isEmpty();
+    calls.set(0);
+    var timed = runner(p -> calls.incrementAndGet()==1 ? Flux.just(answer("{}")) : Flux.never(), "300ms").run("reviewer", "task", null);
+    assertThat(timed.status()).isEqualTo(SubAgentResult.Status.TIMEOUT);
+    assertThat(calls).hasValue(2); assertThat(timed.validationHistory()).hasSize(1);
+  }
   @Test void evidenceValidationRejectsUnperformedWorkWithoutReturningRawAnswer() throws Exception {
     evidenceValidation = true;
     String raw = "{\"status\":\"SUCCESS\",\"summary\":\"private fabricated result\",\"result\":{\"evidence\":[]},\"warnings\":[]}";
@@ -80,6 +124,40 @@ class SubAgentRunnerTest {
     assertThat(result.validationErrors()).anyMatch(e -> e.path().equals("/status"));
     assertThat(toolCalls).hasValue(0);
     assertThat(events.getLast().type()).isEqualTo(AgentEventType.SUBAGENT_FAILED);
+  }
+  @Test void repairPreservesToolReceiptsWithoutReplayingCompletedCalls() throws Exception {
+    maxRepairs = 1; maxSteps = 3; evidenceValidation = true;
+    var calls = new AtomicInteger();
+    var runner = runner(p -> {
+      int step = calls.incrementAndGet();
+      if (step==1) return Flux.just(tool("readMultiFile"));
+      if (step==2) return Flux.just(answer("{\"status\":\"SUCCESS\",\"summary\":\"done\",\"result\":{\"evidence\":[]},\"warnings\":[]}"));
+      var response=p.getInstructions().stream().filter(ToolResponseMessage.class::isInstance)
+          .map(ToolResponseMessage.class::cast).findFirst().orElseThrow().getResponses().getFirst().responseData();
+      var receipt=new SubAgentResultParser().parse(response);
+      var claim=Map.of("evidenceId",receipt.get("evidenceId").asString(),"tool","readMultiFile",
+          "outputSha256",receipt.get("outputSha256").asString(),"quote","private intermediate result");
+      return Flux.just(answer(tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(Map.of(
+          "status","SUCCESS","summary","reviewed","result",Map.of("evidence",List.of(claim)),"warnings",List.of()))));
+    }, "2s");
+    var result=runner.run("reviewer","review",null);
+    assertThat(result.status()).isEqualTo(SubAgentResult.Status.COMPLETED);
+    assertThat(result.repairAttempts()).isEqualTo(1); assertThat(result.validationHistory()).hasSize(1);
+    assertThat(toolCalls).hasValue(1); assertThat(calls).hasValue(3);
+  }
+  @Test void cancellingDuringRepairDisposesUpstreamAndKeepsOriginalDiagnostics() throws Exception {
+    maxRepairs = 1;
+    var calls=new AtomicInteger();var started=new CountDownLatch(1);var disposed=new CountDownLatch(1);
+    var runner=runner(p -> calls.incrementAndGet()==1 ? Flux.just(answer("{}"))
+        : Flux.<ChatResponse>never().doOnSubscribe(s->started.countDown()).doOnCancel(disposed::countDown),"5s");
+    var result=new AtomicReference<SubAgentResult>();
+    Thread child=Thread.ofVirtual().start(()->result.set(runner.run("reviewer","task",null)));
+    assertThat(started.await(2,TimeUnit.SECONDS)).isTrue();
+    String id=events.stream().filter(e->e.type()==AgentEventType.SUBAGENT_STARTED).findFirst().orElseThrow().runId();
+    assertThat(runner.cancel(id)).isTrue();child.join(2000);
+    assertThat(child.isAlive()).isFalse();assertThat(disposed.await(1,TimeUnit.SECONDS)).isTrue();
+    assertThat(result.get().status()).isEqualTo(SubAgentResult.Status.CANCELLED);
+    assertThat(result.get().validationHistory()).hasSize(1);assertThat(calls).hasValue(2);
   }
   @Test void evidenceReceiptsAreCapturedAfterActualToolAndValidatedBeforeCompletion() throws Exception {
     evidenceValidation = true;
