@@ -196,8 +196,8 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         String text = switch (event.type()) {
           case PROGRESS_DETECTED -> "[progress] " + payload.evidence().kind() + ": "
               + payload.evidence().description() + " (" + payload.evidence().source() + ")";
-          case STAGNATION_UPDATED -> "[stagnation] no progress: " + payload.consecutiveNoProgressIterations()
-              + "/" + payload.threshold();
+          case STAGNATION_UPDATED -> "waiting_for_dependency".equals(payload.reason())?"[waiting] awaiting dependency":
+              "[stagnation] no progress: " + payload.consecutiveNoProgressIterations() + "/" + payload.threshold();
           case STAGNATION_DETECTED -> "[stagnation] threshold reached";
           case STAGNATION_REPLAN_REQUESTED -> "[stagnation] replanning (" + payload.stagnationReplanCount()
               + "/" + payload.maxStagnationReplans() + ")";

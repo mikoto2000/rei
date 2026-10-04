@@ -9,6 +9,32 @@ import dev.mikoto2000.rei.event.*;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 
 class RunExecutionContextTest {
+  @Test void mixedNoProgressActionsStillCountAndTerminalObservationIsProgressOnce() {
+    var context=new RunExecutionContext("run",new OutputLimitRunBudget(1,10),new ProgressEvaluator(Path.of(".")),new AgentEventFactory(Clock.systemUTC()),event->{});
+    context.beginIteration();
+    context.observeDependency(new dev.mikoto2000.rei.core.dependency.DependencyObservation("p",dev.mikoto2000.rei.core.dependency.DependencyState.WAITING,""));
+    context.recordTool("waitForShellProcess","{}","waiting",context.evaluator().beforeTool("waitForShellProcess","{}"));
+    context.recordTool("noop","{}","same",context.evaluator().beforeTool("noop","{}"));context.endIteration();
+    assertThat(context.detector().stagnationCount()).isEqualTo(1);
+    context.beginIteration();context.observeDependency(new dev.mikoto2000.rei.core.dependency.DependencyObservation("p",dev.mikoto2000.rei.core.dependency.DependencyState.COMPLETED,""));context.endIteration();
+    assertThat(context.detector().stagnationCount()).isZero();assertThat(context.progressVersion()).isEqualTo(1);
+    context.beginIteration();context.observeDependency(new dev.mikoto2000.rei.core.dependency.DependencyObservation("p",dev.mikoto2000.rei.core.dependency.DependencyState.COMPLETED,""));context.endIteration();
+    assertThat(context.detector().stagnationCount()).isEqualTo(1);assertThat(context.progressVersion()).isEqualTo(1);
+  }
+  @Test void verifiedWaitingDoesNotCountAsStagnationOrReplenishBudget() {
+    var budget=new OutputLimitRunBudget(1,3);budget.tryConsumeLlmCall();
+    var events=new ArrayList<AgentEvent>();
+    var context=new RunExecutionContext("run",budget,new ProgressEvaluator(Path.of(".")),new AgentEventFactory(Clock.systemUTC()),events::add);
+    for(int i=0;i<6;i++) {
+      context.beginIteration();
+      context.observeDependency(new dev.mikoto2000.rei.core.dependency.DependencyObservation("p",dev.mikoto2000.rei.core.dependency.DependencyState.WAITING,"running"));
+      context.recordTool("waitForShellProcess","{}","waiting",context.evaluator().beforeTool("waitForShellProcess","{}"));context.endIteration();
+    }
+    assertThat(context.detector().stagnationCount()).isZero();assertThat(context.progressVersion()).isZero();
+    context.consumeNextLlmCall();context.consumeNextLlmCall();
+    assertThatThrownBy(context::consumeNextLlmCall).hasMessageContaining("LLM_CALL_BUDGET_EXCEEDED");
+    assertThat(events).anyMatch(e->e.payload() instanceof ExecutionProgressPayload p && "waiting_for_dependency".equals(p.reason()));
+  }
   @Test
   void completedSubgoalRecoversOnceButDoesNotReplenishHardBudget() {
     var budget = new OutputLimitRunBudget(1, 30);

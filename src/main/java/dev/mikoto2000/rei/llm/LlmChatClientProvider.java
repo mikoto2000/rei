@@ -40,6 +40,9 @@ import dev.mikoto2000.rei.websearch.WebSearchTools;
 
 @Component
 public class LlmChatClientProvider {
+  private dev.mikoto2000.rei.core.ProcessDependencyTools processDependencyTools;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  void setProcessDependencyTools(dev.mikoto2000.rei.core.ProcessDependencyTools tools){this.processDependencyTools=tools;}
   private ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> paperTools;
   @org.springframework.beans.factory.annotation.Autowired
   void setPaperTools(ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> tools) { this.paperTools = tools; }
@@ -223,6 +226,7 @@ public class LlmChatClientProvider {
     if (taskStateToolsInstance != null) {
       toolObjects.add(taskStateToolsInstance);
     }
+    if(LlmFeature.CHAT.equals(feature) && processDependencyTools!=null)toolObjects.add(processDependencyTools);
     if (!toolObjects.isEmpty()) {
       MethodToolCallbackProvider methodTools = MethodToolCallbackProvider.builder()
           .toolObjects(toolObjects.toArray())

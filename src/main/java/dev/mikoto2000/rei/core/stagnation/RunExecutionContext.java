@@ -43,6 +43,16 @@ public class RunExecutionContext {
     publisher.publishBoundary(factory.toolFailed(call,name,new ErrorInformation(error.getClass().getSimpleName(),"Tool failed",null)).withOwnership(runContext));
   }
   private final List<ProgressEvidence> pending = new ArrayList<>();
+  private final Map<String,dev.mikoto2000.rei.core.dependency.DependencyState> dependencies=new LinkedHashMap<>();
+  private int toolCalls,waitingObservations;
+  private boolean iterationFailed;
+  public synchronized void observeDependency(dev.mikoto2000.rei.core.dependency.DependencyObservation observation) {
+    checkActive();
+    var previous=dependencies.put(observation.id(),observation.state());
+    if(dependencies.size()>64)dependencies.remove(dependencies.keySet().iterator().next());
+    if(observation.state()==dev.mikoto2000.rei.core.dependency.DependencyState.WAITING)waitingObservations++;
+    else if(previous!=observation.state())pending.add(new ProgressEvidence(ProgressEvent.NEW_INFORMATION,"Dependency state: "+observation.state(),observation.id()));
+  }
   private final Deque<String> recentActions = new ArrayDeque<>();
   private final Set<String> completedSubgoals = new HashSet<>();
   private String lastError = "none";
@@ -130,8 +140,9 @@ public class RunExecutionContext {
   public synchronized void checkActive() {
     if (closed || Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
   }
-  public synchronized void beginIteration() { checkActive(); pending.clear(); iterationOpen = true; }
+  public synchronized void beginIteration() { checkActive(); pending.clear(); toolCalls=0;waitingObservations=0;iterationFailed=false;iterationOpen = true; }
   public synchronized void recordTool(String name, String arguments, String result, ProgressEvaluator.Snapshot before) {
+    toolCalls++;
     if (closed) return;
     String action = ProgressEvaluator.actionKey(name, arguments);
     detector.recordToolCall(name, action);
@@ -140,6 +151,7 @@ public class RunExecutionContext {
     pending.addAll(evaluator.afterTool(name, arguments, result, before));
   }
   public synchronized void recordFailure(String name, String arguments, RuntimeException error) {
+    iterationFailed=true;
     if (closed) return;
     evaluator.recordFailure(name, arguments);
     lastError = name + ":" + error.getClass().getSimpleName();
@@ -148,6 +160,9 @@ public class RunExecutionContext {
   public synchronized void endIteration() {
     if (closed || !iterationOpen) return;
     iterationOpen = false;
+    if(pending.isEmpty() && toolCalls>0 && toolCalls==waitingObservations && !iterationFailed) {
+      emit(AgentEventType.STAGNATION_UPDATED,null,"waiting_for_dependency");return;
+    }
     boolean recovering = detector.replanCount() > 0 || detector.isReplanRequested();
     detector.recordIteration(!pending.isEmpty());
     for (ProgressEvidence evidence : pending) {
