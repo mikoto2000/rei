@@ -40,6 +40,7 @@ class SubAgentRunnerTest {
   final CommandCancellationService cancellation = new CommandCancellationService();
   final AtomicInteger toolCalls = new AtomicInteger();
   String schema;
+  boolean evidenceValidation;
   final SubAgentToolPolicy policy = new SubAgentToolPolicy(Set.of("readMultiFile", "runCommand", "delegateTask"));
   ToolCallback callback() {
     return new ToolCallback() {
@@ -53,6 +54,7 @@ class SubAgentRunnerTest {
   SubAgentRunner runner(Function<Prompt, Flux<ChatResponse>> response, String timeout,
       java.util.function.Supplier<List<ToolCallback>> toolFactory) throws Exception {
     String yaml = SubAgentConfigurationTest.yaml("reviewer").replace("120s", timeout);
+    if (evidenceValidation) yaml += "evidenceTools: [readMultiFile]\n";
     if (schema != null) {
       Files.writeString(directory.resolve("result.schema.json"), schema);
       yaml += "resultSchema: result.schema.json\n";
@@ -69,6 +71,36 @@ class SubAgentRunnerTest {
         toolFactory, cancellation, new AgentEventFactory(Clock.systemUTC()), events::add, Clock.systemUTC());
   }
   ChatResponse answer(String text) { return new ChatResponse(List.of(new Generation(new AssistantMessage(text)))); }
+  @Test void evidenceValidationRejectsUnperformedWorkWithoutReturningRawAnswer() throws Exception {
+    evidenceValidation = true;
+    String raw = "{\"status\":\"SUCCESS\",\"summary\":\"private fabricated result\",\"result\":{\"evidence\":[]},\"warnings\":[]}";
+    var result = runner(p -> Flux.just(answer(raw)), "2s").run("reviewer", "review", null);
+    assertThat(result.status()).isEqualTo(SubAgentResult.Status.FAILED);
+    assertThat(result.output()).doesNotContain("private fabricated");
+    assertThat(result.validationErrors()).anyMatch(e -> e.path().equals("/status"));
+    assertThat(toolCalls).hasValue(0);
+    assertThat(events.getLast().type()).isEqualTo(AgentEventType.SUBAGENT_FAILED);
+  }
+  @Test void evidenceReceiptsAreCapturedAfterActualToolAndValidatedBeforeCompletion() throws Exception {
+    evidenceValidation = true;
+    var calls = new AtomicInteger();
+    var runner = runner(p -> {
+      assertThat(p.getInstructions().getFirst().getText()).contains("result.evidence", "readMultiFile");
+      if (calls.incrementAndGet()==1) return Flux.just(tool("readMultiFile"));
+      var response = p.getInstructions().stream().filter(ToolResponseMessage.class::isInstance)
+          .map(ToolResponseMessage.class::cast).findFirst().orElseThrow().getResponses().getFirst().responseData();
+      var receipt = new SubAgentResultParser().parse(response);
+      var claim = Map.of("evidenceId",receipt.get("evidenceId").asString(),"tool","readMultiFile",
+          "outputSha256",receipt.get("outputSha256").asString(),"quote","private intermediate result");
+      String raw = tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(Map.of(
+          "status","SUCCESS","summary","reviewed","result",Map.of("evidence",List.of(claim)),"warnings",List.of()));
+      return Flux.just(answer(raw));
+    }, "2s");
+    var result = runner.run("reviewer", "review", null);
+    assertThat(result.status()).isEqualTo(SubAgentResult.Status.COMPLETED);
+    assertThat(result.validationErrors()).isEmpty();
+    assertThat(toolCalls).hasValue(1); assertThat(calls).hasValue(2);
+  }
   @Test void invalidJsonAndInvalidEnvelopeFailWithoutRetryOrRawOutput() throws Exception {
     for (String raw : List.of("private-secret", "```json\n{}\n```", "{}",
         "{\"status\":\"DONE\",\"summary\":\"private-secret\",\"result\":{},\"warnings\":[]}")) {
