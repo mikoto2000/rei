@@ -10,6 +10,7 @@ public final class WebApiEventMapper {
       .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
   private static Set<String> fields(AgentEventType type) {
     String names = switch (type) {
+      case ATTENTION_REQUIRED -> "attentionId kind message";
       case MEMORY_SLEEP_STARTED, MEMORY_SLEEP_COMPLETED, MEMORY_SLEEP_FAILED, MEMORY_RETRIEVAL_COMPLETED ->
           "sleepRunId preview processedTurns candidateCount memoryCount status";
       case APPLICATION_SHUTDOWN_STARTED -> "reason";
@@ -50,6 +51,9 @@ public final class WebApiEventMapper {
     Map<String, Object> source = event.payload() == null ? Map.of()
         : MAPPER.convertValue(event.payload(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
     Map<String, Object> payload = new LinkedHashMap<>();
+    // Public state marker only; arbitrary internal reasons remain private.
+    if(event.type()==AgentEventType.STAGNATION_UPDATED && event.payload() instanceof ExecutionProgressPayload progress
+        && "waiting_for_dependency".equals(progress.reason()))payload.put("reason","waiting_for_dependency");
     source.forEach((name, value) -> {
       if (fields(event.type()).contains(name) && name.equals("error") && value != null) {
         // Internal exception messages may contain arbitrary credentials, paths or stack traces.

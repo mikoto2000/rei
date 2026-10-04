@@ -10,7 +10,7 @@
 | A3 | Trigger / Scheduler | Partially implemented | Implemented in this task（一回限り continuation）。SQLite 永続化、明示 activation、Project/Session 固定、atomic claim、既存 FIFO 経由の bounded dispatch・結果履歴。cron/汎用 trigger/不確定 Run 復旧UI は Deferred |
 | A4 | Waiting / Dependency | Partially implemented | Implemented in this task（管理プロセスの待機）。状態6種、bounded wait、キャンセル、停滞との区別、Shell 表示。汎用 watcher/依存 graph/復元は Deferred |
 | A5 | Policy / Permission | Partially implemented | Implemented in this task。能力7種・Chat/SubAgent 境界に加え、永続一回限り承認、Shell/Web の明示決定、Checkpoint の明示 Resume に対応。Native 専用ボタン・SubAgent 承認継承は Deferred |
-| A6 | Notification / Escalation | Partially implemented | Deferred。Agent Event、Shell projection、Sound、SSE、Behavior 通知は存在。汎用判断待ち・permission・長時間待機 escalation はない |
+| A6 | Notification / Escalation | Partially implemented | Implemented in this task（アプリ内確認待ち）。承認要求/Policy拒否/停滞停止/確認済み長時間待機の永続 inbox、重複抑制、Shell/Web の表示・ack。Native専用UI/外部配送/汎用判断待ちは Deferred |
 | A7 | Reflection | Partially implemented | Deferred。Sleep の LESSON/PROCEDURE、Work Context の決定・障害整理は存在。全 Task の期待差分/改善案を保存する独立した仕組みはない |
 | B8 | Activity 週次・月次 | Not implemented | Deferred。ActivityTimeline/DailySummaryService/TrendSummaryPolicy は日次または指定範囲。週月比較 API はない |
 | B9 | Adaptive Coaching | Partially implemented | Deferred。activity/behavior は基準・通知 cooldown・disable 対応。週月分析との統合はない |
@@ -38,9 +38,9 @@ Agent Event/UI projection、Topic、Core/UI 分離も既存の各パッケージ
 
 ## 優先順位と残作業
 
-最初に既存 Sleep を再利用できる Auto Sleep を独立実装する。
-その後は共通 Policy → Waiting と stagnation の統合 → 永続 Scheduler/dispatch → escalation → Planning Loop の順が妥当。
-Policy の approval UI と永続 Schedule の所有 Project/Session 境界を整えてから自律的な Tool 実行を増やす。
+Auto Sleep、共通 Policy/永続承認、管理プロセス Waiting、永続一回限り Scheduler、アプリ内 escalation は独立実装済み。
+次は Goal の永続 lifecycle と bounded Planning Loop、その後は Reflection、Activity 週月分析を優先する。
+並行して、不確定 Scheduled Run の復旧、汎用依存監視、Native の承認・確認待ち UI を既存基盤へ統合する。
 週月分析は既存の観測事実を集計し、推測や未観測時間を分離する。SubAgent 修復は bounded retry と元 error 保持を先に整備する。
 
 本表の Deferred は実装完了を意味しない。実装を行った機能の検証・Git 結果は別途実装レポートへ記録する。
