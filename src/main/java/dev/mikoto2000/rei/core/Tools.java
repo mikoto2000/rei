@@ -56,6 +56,17 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 
 @Component
 public class Tools {
+  private RepositoryMapService repositoryMaps = new RepositoryMapService();
+
+  @Autowired
+  void setRepositoryMaps(RepositoryMapService service) { this.repositoryMaps = service; }
+
+  @Tool(description = "Git管理下の構造索引を取得します。Javaの型・method・import・mainとテスト候補。queryで絞り込み、limitは1〜100、既定20。partialとwarningsを確認してください。")
+  RepositoryMapService.View repositoryMap(
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String query,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) throws IOException {
+    return repositoryMaps.map(currentWorkingDirectory(), query, limit == null ? 20 : limit);
+  }
   private static final int DEFAULT_SHELL_TIMEOUT_SECONDS = 30;
   private static final int MAX_SHELL_TIMEOUT_SECONDS = 600;
   private static final Charset CP932 = Charset.forName("windows-31j");

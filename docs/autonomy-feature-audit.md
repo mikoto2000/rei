@@ -22,7 +22,7 @@
 | C15 | SubAgent repair/retry | Not implemented | Implemented (opt-in validation repair)。最大3回・共有maxSteps・単一timeout・cancel・元の診断履歴保持。モデル/Tool障害のretry・永続resumeはDeferred |
 | C16 | Parallel SubAgent Delegation | Not implemented | Implemented (bounded independent batch)。最大8依頼/worker2/受付1/120秒、事前検査・入力順結果・部分失敗・親cancel・既存Runner再利用。DAG/合意形成/永続復旧/全子token予算はDeferred |
 | C17 | External Delegation Phase 2+ | Partially implemented | Implemented (durable review metadata / explicit re-review)。SQLite結果/前回参照、Project/root境界・明示認可・共通予算・結果不明扱い。fix/書込/CLI session resume/複数agentはDeferred |
-| C18 | Repository Map | Partially implemented | Deferred。RelatedFileGraph、FileSummary、Working Set は存在。リポジトリ全体の symbol/module index はない |
+| C18 | Repository Map | Partially implemented | Implemented (bounded Git/Java AST slice)。package/型/method/import/main、module path・テスト名候補、内容ハッシュ更新、Project境界、読み取りTool。多言語/意味的依存解決/永続索引はDeferred |
 | C19 | Change/Test Impact | Partially implemented | Deferred。RelatedFileGraph、テスト分類・性能改善は存在。変更から affected test を返す仕組みはない |
 | C20 | Build/Test Failure Diagnosis | Partially implemented | Deferred。process の exit/status/log と Tool failure event は存在。failed test/exception/cause/next action の診断モデルはない |
 | C21 | Self Patch Review Loop | Partially implemented | Deferred。reviewer SubAgent、External review は存在。実装→test→自身の diff review を強制するループはない |
