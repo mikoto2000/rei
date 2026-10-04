@@ -72,3 +72,7 @@ A2の保存GoalにProject限定のNative一覧・状態/履歴確認・実行/Ve
 ## Scheduler HTTP controls follow-up
 
 A3の保存Schedulerに認証済みProject限定HTTP一覧・詳細・履歴・明示Activate/Cancel/Reconcileを追加。詳細はinterval/cron/event情報を含み、GETは実行や有効化を行わない。既存opt-in dispatch gateと未claim取消規則を維持し、不確定Run照合は実Run IDと副作用確認を要求する。既存dispatcherのin-flight判定と原子的照合を再利用してFAILEDへ移し、再実行・成功の捏造・予算復元を行わない。SchedulerのRun管理/SSEとNative画面およびその他のDeferred項目は引き続き未完了。詳細はimplementation-report-scheduler-http-controls.md。
+
+## Scheduler Run lifecycle follow-up
+
+A3の実Scheduler RunをWeb RunRegistry/RunServiceへ接続し、保存Project/Session・実Run IDのQUEUED/RUNNING/終端を共通状態とイベントへ統合。通常Run取消は未実行の保存claimをCANCELLEDへ移し、dispatcherを解放する。ワーカー開始前の取消でもChatを実行せず、取消Runを成功へ変えない。既存失敗/取消時のrepeat停止・opt-in・FIFO・不確定Runの明示照合を維持し、再起動時に不明Runを再登録/再実行しない。Native Scheduler復旧画面とその他のDeferred項目は引き続き未完了。詳細はimplementation-report-scheduler-run-lifecycle.md。
