@@ -20,13 +20,23 @@ public class AttentionRepository {
     db.sql("CREATE INDEX IF NOT EXISTS agent_attention_open ON agent_attention(project,status,created)").update();
   }
   private static final org.springframework.jdbc.core.RowMapper<Item> ROW=(rs,n)->new Item(rs.getString("id"),rs.getString("project"),rs.getString("session"),
-      rs.getString("run"),rs.getString("kind"),rs.getString("reference"),rs.getString("message"),rs.getString("status"),Instant.ofEpochMilli(rs.getLong("created")));
+      rs.getString("run").isEmpty()?null:rs.getString("run"),rs.getString("kind"),rs.getString("reference"),rs.getString("message"),rs.getString("status"),Instant.ofEpochMilli(rs.getLong("created")));
   public Optional<Item> create(AgentEvent source,String kind,String reference,String message) {
-    if(source.projectId()==null||source.projectId().isBlank()||source.sessionId()==null||source.sessionId().isBlank()||source.runId()==null||source.runId().isBlank())
+    return create(source,kind,reference,message,false);
+  }
+  /** Empty stored run denotes an owned dependency fact; the public/API Run ID stays null. */
+  public Optional<Item> createDependency(AgentEvent source,String kind,String reference,String message) {
+    if(!(source.payload() instanceof dev.mikoto2000.rei.event.DependencyStatusPayload payload)
+        ||payload.dependencyId()==null||!payload.dependencyId().equals(reference)
+        ||!reference.equals(source.correlationId())||source.runId()!=null)return Optional.empty();
+    return create(source,kind,reference,message,true);
+  }
+  private Optional<Item> create(AgentEvent source,String kind,String reference,String message,boolean dependency) {
+    if(source.projectId()==null||source.projectId().isBlank()||source.sessionId()==null||source.sessionId().isBlank()||(!dependency&&(source.runId()==null||source.runId().isBlank())))
       return Optional.empty();
     String id=UUID.randomUUID().toString();
     int inserted=db.sql("INSERT OR IGNORE INTO agent_attention VALUES(?,?,?,?,?,?,?,'OPEN',?)")
-        .params(id,source.projectId(),source.sessionId(),source.runId(),kind,reference,message,clock.millis()).update();
+        .params(id,source.projectId(),source.sessionId(),dependency?"":source.runId(),kind,reference,message,clock.millis()).update();
     return inserted==1?Optional.of(get(source.projectId(),id)):Optional.empty();
   }
   public List<Item> list(String project) {return db.sql("SELECT * FROM agent_attention WHERE project=? AND status='OPEN' ORDER BY created,id LIMIT 256").param(project).query(ROW).list();}
