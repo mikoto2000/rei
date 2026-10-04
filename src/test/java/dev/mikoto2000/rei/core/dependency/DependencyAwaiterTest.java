@@ -26,4 +26,12 @@ class DependencyAwaiterTest {
     assertTrue(time.get()<=200_000_000L);
     assertThrows(IllegalArgumentException.class,()->awaiter.await(()->null,Duration.ofSeconds(61),()->{}));
   }
+  @Test void interruptionDuringProbeCannotClaimCompletion() {
+    var awaiter=new DependencyAwaiter(()->0,d->{});
+    try {
+      assertThrows(java.util.concurrent.CancellationException.class,()->awaiter.await(()->{
+        Thread.currentThread().interrupt();return new DependencyObservation("file",DependencyState.COMPLETED,"");
+      },Duration.ZERO,()->{}));
+    } finally {Thread.interrupted();}
+  }
 }
