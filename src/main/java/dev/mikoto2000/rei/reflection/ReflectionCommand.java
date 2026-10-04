@@ -5,13 +5,19 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import picocli.CommandLine.*;
 
 @Component
-@Command(name="reflection",description="Inspect saved Goal evidence and conservative review suggestions")
+@Command(name="reflection",description="Inspect saved Goal, Task and Run evidence and review suggestions")
 public class ReflectionCommand implements java.util.concurrent.Callable<Integer> {
   private final GoalReflectionRepository repository;
   private final GoalReflectionService service;
   private final ProjectService projects;
+  private RunReflectionRepository runReflections;
+  private RunReflectionService runService;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setRunService(RunReflectionService runService){this.runService=runService;}
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setRunReflections(RunReflectionRepository runReflections){this.runReflections=runReflections;}
   @Spec picocli.CommandLine.Model.CommandSpec spec;
-  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|show|collect") String action;
+  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|show|collect|runs|run|collect-run") String action;
   @Parameters(index="1",arity="0..1",paramLabel="reflectionId|goalId") String id;
   private java.io.PrintWriter output;
   public ReflectionCommand(){this(null,null,null);}
@@ -25,7 +31,10 @@ public class ReflectionCommand implements java.util.concurrent.Callable<Integer>
         case "list" -> repository.list(project);
         case "show" -> repository.get(project,requiredId());
         case "collect" -> service.collect(project,requiredId());
-        default -> throw new IllegalArgumentException("Use /reflection list|show|collect [id]");
+        case "runs" -> runReflections.list(project);
+        case "run" -> runReflections.get(project,requiredId());
+        case "collect-run" -> runService.collect(project,projects.currentSessionId(),requiredId());
+        default -> throw new IllegalArgumentException("Use /reflection list|show|collect|runs|run|collect-run [id]");
       };
       writer.println(dev.mikoto2000.rei.event.CredentialRedactor.redact(String.valueOf(result)));return 0;
     } catch(RuntimeException error){writer.println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));return 2;}

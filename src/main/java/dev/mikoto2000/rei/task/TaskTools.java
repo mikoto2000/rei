@@ -13,6 +13,14 @@ import lombok.RequiredArgsConstructor;
 public class TaskTools {
 
   private final TaskService taskService;
+  private dev.mikoto2000.rei.event.AgentEventPublisher publisher;
+  private dev.mikoto2000.rei.event.AgentEventFactory events;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setEvents(dev.mikoto2000.rei.event.AgentEventPublisher publisher,dev.mikoto2000.rei.event.AgentEventFactory events){this.publisher=publisher;this.events=events;}
+  private void publish(java.util.function.Supplier<dev.mikoto2000.rei.event.AgentEvent> event) {
+    if(publisher!=null&&events!=null)try{publisher.publish(event.get());}
+    catch(RuntimeException failure){org.slf4j.LoggerFactory.getLogger(getClass()).warn("Task lifecycle delivery failed: {}",failure.getClass().getSimpleName());}
+  }
 
   @Tool(name = "taskList", description = "未完了タスクを一覧します")
   List<Task> taskList() {
@@ -28,11 +36,13 @@ public class TaskTools {
         priority,
         tags == null ? List.of() : tags));
     try {
-      return taskService.add(
+      Task created=taskService.add(
           title,
           dueDate == null || dueDate.isBlank() ? null : LocalDate.parse(dueDate),
           priority,
           tags == null ? List.of() : tags);
+      publish(()->events.taskCreated(Long.toString(created.id()),null,created.title(),created.status().name()));
+      return created;
     } catch (RuntimeException e) {
       IO.println("[error] " + userFacingMessage(e, "Google Tasks へのタスク追加に失敗しました"));
       throw e;
@@ -54,7 +64,15 @@ public class TaskTools {
   @Tool(name = "taskComplete", description = "タスクを完了にします")
   Task taskComplete(long id) {
     IO.println(String.format("タスク %d を完了にするよ", id));
-    return taskService.complete(id);
+    publish(()->events.taskStarted(Long.toString(id)));
+    try {
+      Task completed=taskService.complete(id);
+      if(completed==null||completed.id()!=id||completed.status()!=TaskStatus.DONE)throw new IllegalStateException("Task completion was not confirmed");
+      publish(()->events.taskCompleted(Long.toString(id),null));return completed;
+    }catch(RuntimeException failure) {
+      publish(()->events.taskFailed(Long.toString(id),new dev.mikoto2000.rei.event.ErrorInformation(failure.getClass().getSimpleName(),"Task completion operation failed",null)));
+      throw failure;
+    }
   }
 
   @Tool(name = "taskUpdateDeadline", description = "タスクの期限を更新します。dueDate は yyyy-MM-dd 形式です。null または空文字で期限をクリアします。")
