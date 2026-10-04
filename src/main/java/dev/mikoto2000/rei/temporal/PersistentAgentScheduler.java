@@ -11,6 +11,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.event.CredentialRedactor;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventType;
 
 /** Persistent bounded continuations. A claimed action is never automatically retried after uncertain execution. */
 @Component
@@ -25,6 +27,9 @@ public class PersistentAgentScheduler implements AgentScheduler {
     db.sql("CREATE TABLE IF NOT EXISTS agent_schedules(id TEXT PRIMARY KEY,created INTEGER NOT NULL,due INTEGER NOT NULL,action TEXT NOT NULL,session TEXT NOT NULL,project TEXT NOT NULL,root TEXT NOT NULL,status TEXT NOT NULL,run TEXT,outcome TEXT NOT NULL DEFAULT '')").update();
     db.sql("CREATE INDEX IF NOT EXISTS agent_schedules_due ON agent_schedules(status,due)").update();
     db.sql("CREATE UNIQUE INDEX IF NOT EXISTS agent_schedules_session_running ON agent_schedules(project,session) WHERE status='RUNNING'").update();
+    db.sql("CREATE TABLE IF NOT EXISTS agent_schedule_events(id TEXT PRIMARY KEY,source_run TEXT NOT NULL,type TEXT NOT NULL,expires INTEGER NOT NULL,activated INTEGER,matched_event TEXT)").update();
+    db.sql("CREATE INDEX IF NOT EXISTS agent_schedule_events_source ON agent_schedule_events(source_run,type)").update();
+    db.sql("CREATE TABLE IF NOT EXISTS agent_schedule_event_cursors(project TEXT PRIMARY KEY,offset INTEGER NOT NULL,discard INTEGER NOT NULL,generation INTEGER NOT NULL)").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_schedule_crons(id TEXT PRIMARY KEY,expression TEXT NOT NULL,zone TEXT NOT NULL,remaining INTEGER NOT NULL)").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_schedule_intervals(id TEXT PRIMARY KEY,interval_ms INTEGER NOT NULL,remaining INTEGER NOT NULL)").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_schedule_history(sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT NOT NULL,status TEXT NOT NULL,timestamp INTEGER NOT NULL,detail TEXT NOT NULL)").update();
@@ -44,7 +49,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
       throw new IllegalArgumentException("Execute time must be now..366 days in the future");
     var task=new ScheduledAgentTask("timer-"+UUID.randomUUID(),clock.instant(),executeAt,action,conversationId);
     transaction.executeWithoutResult(status->{
-      int count=db.sql("INSERT INTO agent_schedules(id,created,due,action,session,project,root,status) SELECT ?,?,?,?,?,?,?,'PENDING' WHERE (SELECT COUNT(*) FROM agent_schedules WHERE project=? AND status IN ('PENDING','SCHEDULED','RUNNING'))<256")
+      int count=db.sql("INSERT INTO agent_schedules(id,created,due,action,session,project,root,status) SELECT ?,?,?,?,?,?,?,'PENDING' WHERE (SELECT COUNT(*) FROM agent_schedules WHERE project=? AND status IN ('PENDING','SCHEDULED','RUNNING','WAITING_EVENT'))<256")
           .params(task.id(),task.createdAt().toEpochMilli(),executeAt.toEpochMilli(),action,conversationId,owner.projectId(),owner.projectRoot().toString(),owner.projectId()).update();
       if(count!=1)throw new IllegalStateException("Project schedule limit reached (256)");
       history(task.id(),"PENDING","");
@@ -98,19 +103,86 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .params(due.toEpochMilli(),id).update();
     history(id,"SCHEDULED",reason);
   }
+  private static final Set<AgentEventType> TERMINAL_EVENTS=Set.of(
+      AgentEventType.AGENT_RUN_COMPLETED,AgentEventType.AGENT_RUN_FAILED,AgentEventType.AGENT_RUN_CANCELLED,
+      AgentEventType.EXECUTION_COMPLETED,AgentEventType.EXECUTION_FAILED,AgentEventType.EXECUTION_CANCELLED);
+  public record EventTrigger(String sourceRunId,AgentEventType type,Instant expiresAt,Long activatedAt,String matchedEventId) {}
+  public Optional<EventTrigger> eventTrigger(String project,String id) {
+    get(project,id);
+    return db.sql("SELECT * FROM agent_schedule_events WHERE id=?").param(id).query((rs,n)->{
+      long activated=rs.getLong("activated");boolean absent=rs.wasNull();
+      return new EventTrigger(rs.getString("source_run"),AgentEventType.valueOf(rs.getString("type")),
+          Instant.ofEpochMilli(rs.getLong("expires")),absent?null:activated,rs.getString("matched_event"));
+    }).optional();
+  }
+  public ScheduledAgentTask scheduleOnEvent(String sourceRun,AgentEventType type,Duration expiresAfter,String action,String conversationId) {
+    if(sourceRun==null||sourceRun.isBlank()||sourceRun.length()>128||type==null||!TERMINAL_EVENTS.contains(type))
+      throw new IllegalArgumentException("An exact source Run ID and supported terminal event are required");
+    if(expiresAfter==null||expiresAfter.compareTo(Duration.ofSeconds(1))<0||expiresAfter.compareTo(Duration.ofDays(366))>0)
+      throw new IllegalArgumentException("Event wait expiry must be 1 second..366 days");
+    return transaction.execute(status->{
+      var task=scheduleAfter(expiresAfter,action,conversationId);
+      db.sql("INSERT INTO agent_schedule_events(id,source_run,type,expires) VALUES(?,?,?,?)")
+          .params(task.id(),sourceRun,type.name(),task.executeAt().toEpochMilli()).update();return task;
+    });
+  }
+  /** Event facts make an activated wait due; no model or external action executes here. */
+  public void signalEvent(AgentEvent event) {
+    if(event==null||!TERMINAL_EVENTS.contains(event.type())||event.projectId()==null||event.sessionId()==null||event.runId()==null
+        ||event.id().length()>128||event.timestamp().isAfter(clock.instant()))return;
+    transaction.executeWithoutResult(status->{
+      var entries=db.sql("UPDATE agent_schedules SET status='SCHEDULED',due=? WHERE project=? AND session=? AND status='WAITING_EVENT' AND id IN (SELECT id FROM agent_schedule_events WHERE source_run=? AND type=? AND activated<=? AND expires>? AND expires>=?) RETURNING *")
+          .params(clock.millis(),event.projectId(),event.sessionId(),event.runId(),event.type().name(),event.timestamp().toEpochMilli(),clock.millis(),event.timestamp().toEpochMilli())
+          .query(ROW).list();
+      for(var entry:entries) {
+        db.sql("UPDATE agent_schedule_events SET matched_event=? WHERE id=?").params(event.id(),entry.task().id()).update();
+        history(entry.task().id(),"SCHEDULED","event:"+event.id());
+      }
+    });
+  }
+  public void expireEventWaits() {
+    transaction.executeWithoutResult(status->{
+      var expired=db.sql("UPDATE agent_schedules SET status='FAILED',outcome='event_wait_expired' WHERE id IN (SELECT id FROM agent_schedules WHERE status='WAITING_EVENT' AND due<=? ORDER BY due,id LIMIT 256) RETURNING *")
+          .param(clock.millis()).query(ROW).list();
+      expired.forEach(entry->history(entry.task().id(),"FAILED","event_wait_expired"));
+    });
+  }
+  public record ReplayCursor(long offset,boolean discardingLine,long generation) {}
+  ReplayCursor replayCursor(String project) {
+    return db.sql("SELECT * FROM agent_schedule_event_cursors WHERE project=?").param(project)
+        .query((rs,n)->new ReplayCursor(rs.getLong("offset"),rs.getInt("discard")!=0,rs.getLong("generation"))).single();
+  }
+  void saveReplayCursor(String project,ReplayCursor expected,long offset,boolean discard) {
+    db.sql("UPDATE agent_schedule_event_cursors SET offset=?,discard=? WHERE project=? AND offset=? AND generation=?")
+        .params(offset,discard?1:0,project,expected.offset(),expected.generation()).update();
+  }
+  List<String> waitingEventProjects(String after) {
+    return db.sql("SELECT DISTINCT project FROM agent_schedules WHERE status='WAITING_EVENT' AND project>? ORDER BY project LIMIT 8")
+        .param(after).query(String.class).list();
+  }
   @Override public List<ScheduledAgentTask> list() {
     var owner=AgentRunScope.current();if(owner==null||owner.projectId()==null)throw new IllegalArgumentException("Owning project is required");
-    return db.sql("SELECT * FROM agent_schedules WHERE project=? AND session=? AND status IN ('PENDING','SCHEDULED','RUNNING') ORDER BY due,id LIMIT 256")
+    return db.sql("SELECT * FROM agent_schedules WHERE project=? AND session=? AND status IN ('PENDING','SCHEDULED','RUNNING','WAITING_EVENT') ORDER BY due,id LIMIT 256")
         .params(owner.projectId(),owner.conversationId()).query(ROW).list().stream().map(Entry::task).toList();
   }
   public List<Entry> list(String project) {return db.sql("SELECT * FROM agent_schedules WHERE project=? ORDER BY created DESC,id LIMIT 256").param(project).query(ROW).list();}
   public Entry get(String project,String id) {return db.sql("SELECT * FROM agent_schedules WHERE project=? AND id=?").params(project,id).query(ROW).optional()
       .orElseThrow(()->new IllegalArgumentException("Schedule not found in this project"));}
   /** Human-facing control only; no Tool exposes activation. */
-  public void activate(String project,String id) {transition(project,id,"PENDING","SCHEDULED");}
+  public void activate(String project,String id) {
+    transaction.executeWithoutResult(status->{
+      var trigger=eventTrigger(project,id);
+      if(trigger.isEmpty()) {transition(project,id,"PENDING","SCHEDULED");return;}
+      if(!trigger.get().expiresAt().isAfter(clock.instant()))throw new IllegalStateException("Event wait already expired");
+      transition(project,id,"PENDING","WAITING_EVENT");
+      db.sql("UPDATE agent_schedule_events SET activated=? WHERE id=?").params(clock.millis(),id).update();
+      db.sql("INSERT INTO agent_schedule_event_cursors(project,offset,discard,generation) VALUES(?,0,0,0) ON CONFLICT(project) DO UPDATE SET offset=0,discard=0,generation=generation+1")
+          .param(project).update();
+    });
+  }
   public void cancel(String project,String id) {
     transaction.executeWithoutResult(status->{get(project,id);
-      if(db.sql("UPDATE agent_schedules SET status='CANCELLED' WHERE project=? AND id=? AND status IN ('PENDING','SCHEDULED')").params(project,id).update()!=1)
+      if(db.sql("UPDATE agent_schedules SET status='CANCELLED' WHERE project=? AND id=? AND status IN ('PENDING','SCHEDULED','WAITING_EVENT')").params(project,id).update()!=1)
         throw new IllegalStateException("Only unclaimed schedules can be cancelled; stop a running Run separately");
       history(id,"CANCELLED","");
     });
@@ -123,6 +195,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
     });
   }
   public Optional<Entry> claimDue() {
+    expireEventWaits();
     return transaction.execute(status->{
       var result=db.sql("UPDATE agent_schedules SET status='RUNNING',run=? WHERE id=(SELECT candidate.id FROM agent_schedules candidate WHERE candidate.status='SCHEDULED' AND candidate.due<=? AND NOT EXISTS(SELECT 1 FROM agent_schedules active WHERE active.project=candidate.project AND active.session=candidate.session AND active.status='RUNNING') ORDER BY candidate.due,candidate.id LIMIT 1) AND status='SCHEDULED' RETURNING *")
           .params(UUID.randomUUID().toString(),clock.millis()).query(ROW).optional();

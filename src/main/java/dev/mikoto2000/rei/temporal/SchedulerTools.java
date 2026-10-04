@@ -59,6 +59,12 @@ public class SchedulerTools {
     return persistent.scheduleCron(expression,zone,occurrences,action,conversationId);
   }
 
+  @Tool(name="scheduleOnEvent",description="Register a PENDING one-shot continuation for an exact source Run in the current Project/Session. eventType is AGENT_RUN_COMPLETED/FAILED/CANCELLED or EXECUTION_COMPLETED/FAILED/CANCELLED. expiresAfter 1s..366d. Review /timer show ID and activate before the event; only events after activation match. No automatic retry after uncertain execution.")
+  public ScheduledAgentTask scheduleOnEvent(String sourceRunId,String eventType,String expiresAfter,String action,String conversationId) {
+    if(!(scheduler instanceof PersistentAgentScheduler persistent))throw new IllegalStateException("Persistent scheduler required");
+    return persistent.scheduleOnEvent(sourceRunId,dev.mikoto2000.rei.event.AgentEventType.valueOf(eventType),parseDuration(expiresAfter),action,conversationId);
+  }
+
   Duration parseDuration(String value) {
     if (value == null || value.isBlank()) {
       throw new IllegalArgumentException("duration は空にできません");

@@ -27,7 +27,7 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
       String project=projects.currentContext().id();
       Object result=switch(action) {
         case "list" -> scheduler.list(project);
-        case "show" -> scheduler.get(project,requiredId())+" interval="+scheduler.interval(project,requiredId())+" cron="+scheduler.cron(project,requiredId());
+        case "show" -> scheduler.get(project,requiredId())+" interval="+scheduler.interval(project,requiredId())+" cron="+scheduler.cron(project,requiredId())+" event="+scheduler.eventTrigger(project,requiredId());
         case "history" -> scheduler.history(project,requiredId());
         case "reconcile" -> {
           if(dispatcher==null||!acknowledgeUncertain||expectedRunId==null||expectedRunId.isBlank())throw new IllegalArgumentException("Reconcile requires Run controls, --run-id and --acknowledge-uncertain-side-effects; inspect effects before creating another schedule");

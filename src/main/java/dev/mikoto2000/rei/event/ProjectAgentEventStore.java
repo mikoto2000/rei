@@ -76,6 +76,33 @@ public class ProjectAgentEventStore implements AgentEventListener {
     return List.copyOf(result);
   }
 
+  public record Page(List<AgentEvent> events,long nextOffset,boolean discardingLine) {}
+  /** Append-only replay: at most 256 KiB / 128 lines per call, with a 64 KiB line cap. */
+  public synchronized Page readPage(String projectId,long offset,boolean discardingLine) {
+    if(offset<0)throw new IllegalArgumentException("Negative event cursor");
+    Path file=file(projectId);
+    if(!Files.exists(file))return new Page(List.of(),0,false);
+    try(var input=new RandomAccessFile(file.toFile(),"r")) {
+      if(offset>input.length()){offset=0;discardingLine=false;}
+      input.seek(offset);
+      byte[] bytes=new byte[(int)Math.min(256*1024,input.length()-offset)];input.readFully(bytes);
+      var events=new ArrayList<AgentEvent>();int lineStart=0,lines=0;
+      for(int i=0;i<bytes.length;i++) {
+        if(i-lineStart>=64*1024)discardingLine=true;
+        if(bytes[i]=='\n') {
+          if(!discardingLine) {
+            var event=decode(new String(bytes,lineStart,i-lineStart,StandardCharsets.UTF_8),file);
+            if(event!=null)events.add(event);
+          }
+          discardingLine=false;lineStart=i+1;
+          if(++lines>=128)return new Page(List.copyOf(events),offset+lineStart,false);
+        }
+      }
+      // Preserve an incomplete normal line; oversized lines are skipped across page boundaries.
+      return new Page(List.copyOf(events),offset+(discardingLine?bytes.length:lineStart),discardingLine);
+    } catch(IOException error){throw new IllegalStateException("Cannot page persisted agent events",error);}
+  }
+
   /** Forward pagination is separate from normal Shell restoration. */
   public Map<String,String> referenceStatus(String project,Set<String> ids) {
     var result=new HashMap<String,String>();ids.forEach(id->result.put(id,"not-found"));
@@ -117,7 +144,7 @@ public class ProjectAgentEventStore implements AgentEventListener {
   private AgentEvent decode(String line, Path file) {
     if (line.isBlank()) return null;
     try { return mapper.readValue(line, AgentEvent.class); }
-    catch (IOException error) { log.warn("Skipping malformed or unsupported agent event in {}: {}", file, error.getMessage()); return null; }
+    catch (IOException error) { log.warn("Skipping malformed or unsupported agent event in {} ({})", file, error.getClass().getSimpleName()); return null; }
   }
   private Path file(String id) {
     UUID.fromString(id);
