@@ -8,6 +8,7 @@
 | APPROVAL_REQUIRED | PermissionGuard の PermissionRequired | /approval list で確認し、必要なら承認後に明示 Resume |
 | POLICY_DENIED | PermissionGuard の PermissionDenied | Task と Policy を確認 |
 | STAGNATION_STOPPED | Run の停滞停止 | 結果と checkpoint を確認 |
+| GOAL_STOPPED | 永続GoalのBLOCKED / FAILED | /goal show と /goal history で条件・予算・試行を確認 |
 | LONG_WAIT | 確認済み待機が観測上2分以上継続 | 管理プロセスと Task を確認 |
 
 待機時間は monotonic clock を使います。確認済みの waiting_for_dependency を繰り返し観測した場合だけ通知し、

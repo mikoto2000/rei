@@ -30,6 +30,11 @@ public class AttentionService {
     if(event.projectId()==null||event.sessionId()==null||event.runId()==null)return;
     var run=new Run(event.projectId(),event.sessionId(),event.runId());
     switch(event.type()) {
+      case GOAL_UPDATED -> {
+        var payload=(GoalLifecyclePayload)event.payload();
+        if(payload.status().equals("BLOCKED")||payload.status().equals("FAILED"))
+          notify(event,"GOAL_STOPPED",payload.goalId(),"A Goal stopped before its criterion was verified. Inspect /goal show and /goal history before retrying.");
+      }
       case TOOL_FAILED -> {
         var payload=(ToolFailedPayload)event.payload();if(payload.error()==null)return;
         switch(payload.error().errorType()) {

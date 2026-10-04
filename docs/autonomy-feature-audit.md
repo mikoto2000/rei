@@ -6,7 +6,7 @@
 | Priority | Feature | Initial status | Final status / 根拠 |
 |---|---|---|---|
 | A1 | Auto Sleep | Not implemented | 本作業で実装。SleepService、AutoSleepService。起動時全 Session 走査は未対応 |
-| A2 | Autonomous Planning Loop | Partially implemented | Deferred。core/actionplan、taskstate、stagnation、BoundedToolLoop はあるが、Goal の永続 lifecycle と独立した完了判定ループはない |
+| A2 | Autonomous Planning Loop | Partially implemented | Implemented in this task（ファイルGoal）。永続 lifecycle/試行/予算、明示起動、既存 Chat/ActionPlan/FIFO の再利用、独立 SHA-256 判定と bounded 継続。汎用検証条件/独立LLM予算継承/不確定Run復旧UIは Deferred |
 | A3 | Trigger / Scheduler | Partially implemented | Implemented in this task（一回限り continuation）。SQLite 永続化、明示 activation、Project/Session 固定、atomic claim、既存 FIFO 経由の bounded dispatch・結果履歴。cron/汎用 trigger/不確定 Run 復旧UI は Deferred |
 | A4 | Waiting / Dependency | Partially implemented | Implemented in this task（管理プロセスの待機）。状態6種、bounded wait、キャンセル、停滞との区別、Shell 表示。汎用 watcher/依存 graph/復元は Deferred |
 | A5 | Policy / Permission | Partially implemented | Implemented in this task。能力7種・Chat/SubAgent 境界に加え、永続一回限り承認、Shell/Web の明示決定、Checkpoint の明示 Resume に対応。Native 専用ボタン・SubAgent 承認継承は Deferred |
@@ -39,7 +39,7 @@ Agent Event/UI projection、Topic、Core/UI 分離も既存の各パッケージ
 ## 優先順位と残作業
 
 Auto Sleep、共通 Policy/永続承認、管理プロセス Waiting、永続一回限り Scheduler、アプリ内 escalation は独立実装済み。
-次は Goal の永続 lifecycle と bounded Planning Loop、その後は Reflection、Activity 週月分析を優先する。
+ファイルGoalの永続 lifecycle と bounded Planning Loop も実装済み。次は Reflection、Activity 週月分析を優先する。
 並行して、不確定 Scheduled Run の復旧、汎用依存監視、Native の承認・確認待ち UI を既存基盤へ統合する。
 週月分析は既存の観測事実を集計し、推測や未観測時間を分離する。SubAgent 修復は bounded retry と元 error 保持を先に整備する。
 

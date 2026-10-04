@@ -61,6 +61,12 @@ class AttentionServiceTest {
     assertThrows(dev.mikoto2000.rei.core.policy.ToolPermissionException.class,()->guard.check("writeMultiFile","{}",owner("guard-run")));
     assertEquals("PENDING",approvals.list("project").getFirst().status());assertTrue(repository.list("project").isEmpty());
   }
+  @Test void stoppedGoalProducesOneOwnedAttentionItem() {
+    var event=new AgentEvent("goal-event",0,Instant.EPOCH,AgentEventType.GOAL_UPDATED,1,"session",null,"run",null,null,
+        new GoalLifecyclePayload("goal","BLOCKED",3,3,20,20,"budget_exhausted"),"project");
+    bus.publish(event);bus.publish(event);assertEquals(1,repository.list("project").size());
+    assertEquals("GOAL_STOPPED",repository.list("project").getFirst().kind());
+  }
   @Test void shellAndWebControlsAcknowledgeOnlyInsideTheOwningProject() {
     bus.publish(factory().toolFailed("call","tool",new ErrorInformation("PermissionDenied","unsafe message",null)).withOwnership(owner("denied")));
     var item=repository.list("project").getFirst();

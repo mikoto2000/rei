@@ -49,6 +49,8 @@ public class CommandCancellationService {
     return cancel(state);
   }
   public synchronized void forgetPendingCancellation(String runId) { pendingCancellations.remove(runId); }
+  /** Stop only an existing child; a terminal Goal must not leave an orphan future cancellation. */
+  public boolean cancelRegisteredRun(String runId) {var existing=runs.get(runId);return existing!=null&&cancel(existing);}
 
   public void register(Disposable disposable) {
     if (disposable == null) {

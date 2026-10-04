@@ -10,6 +10,7 @@ public final class WebApiEventMapper {
       .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
   private static Set<String> fields(AgentEventType type) {
     String names = switch (type) {
+      case GOAL_UPDATED -> "goalId status attempts maxRuns llmCallsUsed maxLlmCalls";
       case ATTENTION_REQUIRED -> "attentionId kind message";
       case MEMORY_SLEEP_STARTED, MEMORY_SLEEP_COMPLETED, MEMORY_SLEEP_FAILED, MEMORY_RETRIEVAL_COMPLETED ->
           "sleepRunId preview processedTurns candidateCount memoryCount status";

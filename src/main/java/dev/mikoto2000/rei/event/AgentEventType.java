@@ -6,6 +6,7 @@ package dev.mikoto2000.rei.event;
  * <p>文字列の直書きを各所に散らさず、型安全に扱えるようにするための enum。</p>
  */
 public enum AgentEventType {
+  GOAL_UPDATED("goal.updated"),
   ATTENTION_REQUIRED("attention.required"),
   MEMORY_SLEEP_STARTED("memory.sleep.started"),
   MEMORY_SLEEP_COMPLETED("memory.sleep.completed"),

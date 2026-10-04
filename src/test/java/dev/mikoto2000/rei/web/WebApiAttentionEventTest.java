@@ -6,6 +6,13 @@ import org.junit.jupiter.api.Test;
 import dev.mikoto2000.rei.event.*;
 
 class WebApiAttentionEventTest {
+  @Test void goalProjectionIncludesStateAndBudgetsWithoutInternalReason() {
+    var event=new AgentEvent("id",0,Instant.EPOCH,AgentEventType.GOAL_UPDATED,1,"session",null,"run",null,null,
+        new GoalLifecyclePayload("goal","BLOCKED",3,3,5,20,"private reason"),"project");
+    var dto=WebApiEventMapper.from(event,false,"api-secret");assertEquals("goal.updated",dto.type());
+    assertEquals("goal",dto.payload().get("goalId"));assertEquals("BLOCKED",dto.payload().get("status"));assertEquals(5,dto.payload().get("llmCallsUsed"));
+    assertFalse(dto.payload().containsKey("reason"));
+  }
   @Test void attentionAndVerifiedWaitingHaveExplicitPublicFields() {
     var event=new AgentEvent("id",0,Instant.EPOCH,AgentEventType.ATTENTION_REQUIRED,1,"session",null,"run",null,null,
         new AttentionRequiredPayload("attention","APPROVAL_REQUIRED","Review approval"),"project");
