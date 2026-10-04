@@ -246,6 +246,8 @@ public class LlmChatClientProvider {
     if (LlmFeature.CHAT.equals(feature) && subAgentTools != null && subAgentTools.getIfAvailable() != null) {
       builder.defaultToolCallbacks(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
           subAgentTools.getObject().callback(), eventFactory, eventPublisher));
+      builder.defaultToolCallbacks(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
+          subAgentTools.getObject().callback("delegateTasks"), eventFactory, eventPublisher));
     }
     if (LlmFeature.CHAT.equals(feature) && computerUseTools != null) {
       var computer = computerUseTools.getIfAvailable();

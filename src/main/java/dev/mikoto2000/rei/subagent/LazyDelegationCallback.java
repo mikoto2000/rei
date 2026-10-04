@@ -8,8 +8,10 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 /** Keeps default ChatClient construction independent of the application runner dependency graph. */
 public final class LazyDelegationCallback implements ToolCallback {
   private final ObjectProvider<SubAgentTools> tools;
-  public LazyDelegationCallback(ObjectProvider<SubAgentTools> tools) { this.tools = tools; }
-  public ToolDefinition getToolDefinition() { return tools.getObject().callback().getToolDefinition(); }
-  public String call(String input) { return tools.getObject().callback().call(input); }
-  public String call(String input, ToolContext context) { return tools.getObject().callback().call(input, context); }
+  private final String name;
+  public LazyDelegationCallback(ObjectProvider<SubAgentTools> tools) { this(tools,"delegateTask"); }
+  public LazyDelegationCallback(ObjectProvider<SubAgentTools> tools,String name) { this.tools=tools;this.name=name; }
+  public ToolDefinition getToolDefinition() { return tools.getObject().callback(name).getToolDefinition(); }
+  public String call(String input) { return tools.getObject().callback(name).call(input); }
+  public String call(String input, ToolContext context) { return tools.getObject().callback(name).call(input, context); }
 }

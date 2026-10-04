@@ -11,6 +11,21 @@ import org.junit.jupiter.api.io.TempDir;
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentToolsTest {
   @TempDir Path directory;
+  @Test void parallelCallbackMapsRequestsAndSerializesOrderedIndividualResults() {
+    var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(new SubAgentToolPolicy(Set.of()),m->true));
+    var parallel=mock(ParallelSubAgentDelegator.class);
+    var tools=new SubAgentTools(mock(SubAgentRunner.class),registry);tools.parallelDelegator(parallel);
+    var request=new ParallelSubAgentDelegator.Request("first","reviewer","review",null);
+    var child=new SubAgentResult("reviewer","run",SubAgentResult.Status.COMPLETED,"done",Instant.now(),Instant.now());
+    when(parallel.delegate(java.util.List.of(request))).thenReturn(new ParallelSubAgentDelegator.Batch(ParallelSubAgentDelegator.Status.COMPLETED,
+        java.util.List.of(new ParallelSubAgentDelegator.Item("first","reviewer",ParallelSubAgentDelegator.Status.COMPLETED,child))));
+    var callback=tools.callback("delegateTasks");
+    assertThat(callback.getToolDefinition().inputSchema()).contains("requests","task","agent");
+    var json=new SubAgentResultParser().parse(callback.call("{\"requests\":[{\"id\":\"first\",\"agent\":\"reviewer\",\"task\":\"review\"}]}"));
+    assertThat(json.at("/items/0/id").asString()).isEqualTo("first");
+    assertThat(json.at("/items/0/result/subAgentRunId").asString()).isEqualTo("run");
+    verify(parallel).delegate(java.util.List.of(request));
+  }
   @Test void delegateReturnsTypedStatusesAndDynamicCatalogWithoutPrompts() throws Exception {
     var loader = new SubAgentDefinitionLoader(new SubAgentToolPolicy(Set.of("readMultiFile")), m -> true);
     var registry = new SubAgentRegistry(directory, loader);
