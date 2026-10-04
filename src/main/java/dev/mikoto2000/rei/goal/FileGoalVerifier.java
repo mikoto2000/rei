@@ -12,11 +12,18 @@ import org.springframework.stereotype.Component;
 public class FileGoalVerifier {
   public record Verification(boolean satisfied,String reason) {}
   public Verification verify(GoalRepository.Goal goal) {
+    if(goal.criteria().isEmpty()||goal.criteria().size()>16)return new Verification(false,"verification_unavailable");
+    for(var criterion:goal.criteria()) {
+      var result=verifyFile(goal,criterion);if(!result.satisfied())return result;
+    }
+    return new Verification(true,"file_digest_verified");
+  }
+  private Verification verifyFile(GoalRepository.Goal goal,GoalRepository.FileCriterion criterion) {
     try {
-      GoalRepository.validateFile(goal.relativeFile());var root=Path.of(goal.projectRoot());
+      GoalRepository.validateFile(criterion.relativeFile());var root=Path.of(goal.projectRoot());
       if(!Files.isDirectory(root)||!root.toRealPath().equals(root))return new Verification(false,"project_path_changed");
       Path current=root;
-      for(var part:Path.of(goal.relativeFile())) {
+      for(var part:Path.of(criterion.relativeFile())) {
         current=current.resolve(part);
         if(Files.isSymbolicLink(current))return new Verification(false,"symbolic_link_rejected");
       }
@@ -32,7 +39,7 @@ public class FileGoalVerifier {
           digest.update(buffer);buffer.clear();
         }
       }
-      boolean match=HexFormat.of().formatHex(digest.digest()).equals(goal.sha256());
+      boolean match=HexFormat.of().formatHex(digest.digest()).equals(criterion.sha256());
       return new Verification(match,match?"file_digest_verified":"digest_mismatch");
     } catch(java.io.IOException|IllegalArgumentException error) {return new Verification(false,"verification_unavailable");}
     catch(NoSuchAlgorithmException impossible){throw new IllegalStateException(impossible);}

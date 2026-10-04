@@ -6,7 +6,7 @@
 | Priority | Feature | Initial status | Final status / 根拠 |
 |---|---|---|---|
 | A1 | Auto Sleep | Not implemented | 本作業で実装。SleepService、AutoSleepService。起動時全 Session 走査は未対応 |
-| A2 | Autonomous Planning Loop | Partially implemented | Implemented in this task（ファイルGoal）。永続 lifecycle/試行/予算、明示起動、既存 Chat/ActionPlan/FIFO の再利用、独立 SHA-256 判定と bounded 継続。汎用検証条件/独立LLM予算継承/不確定Run復旧UIは Deferred |
+| A2 | Autonomous Planning Loop | Partially implemented | Implemented in this task（最大16ファイルGoal、全件SHA-256一致）。永続 lifecycle/試行/予算、明示起動、既存 Chat/ActionPlan/FIFO の再利用、独立 SHA-256 判定と bounded 継続。汎用検証条件/独立LLM予算継承/不確定Run復旧UIは Deferred |
 | A3 | Trigger / Scheduler | Partially implemented | Implemented in this task（一回限り continuation）。SQLite 永続化、明示 activation、Project/Session 固定、atomic claim、既存 FIFO 経由の bounded dispatch・結果履歴。cron/汎用 trigger/不確定 Run 復旧UI は Deferred |
 | A4 | Waiting / Dependency | Partially implemented | Implemented in this task（管理プロセスの待機）。状態6種、bounded wait、キャンセル、停滞との区別、Shell 表示。汎用 watcher/依存 graph/復元は Deferred |
 | A5 | Policy / Permission | Partially implemented | Implemented in this task。能力7種・Chat/SubAgent 境界に加え、永続一回限り承認、Shell/Web の明示決定、Checkpoint の明示 Resume に対応。Native 専用ボタン・SubAgent 承認継承は Deferred |

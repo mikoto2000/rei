@@ -17,6 +17,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
   @Parameters(index="1",arity="0..1",paramLabel="goalId|objective") String value;
   @Option(names="--file",description="Project-relative completion file") String file;
   @Option(names="--sha256",description="Exact expected file SHA-256") String digest;
+  @Option(names="--criteria-json",description="JSON array of 1..16 {relativeFile,sha256} criteria; all must match") String criteriaJson;
   @Option(names="--max-runs",defaultValue="3") int maxRuns;
   @Option(names="--max-llm-calls",defaultValue="20") int maxCalls;
   private java.io.PrintWriter output;
@@ -37,13 +38,23 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
         case "create" -> {
           String session=projects.currentSessionId();
           if(session==null||session.isBlank())throw new IllegalArgumentException("Create or select a Session before creating a Goal");
-          yield loop.create(new AgentRunContext(UUID.randomUUID().toString(),session,project.root(),project.id()),requiredValue(),file,digest,maxRuns,maxCalls);
+          var owner=new AgentRunContext(UUID.randomUUID().toString(),session,project.root(),project.id());
+          yield criteriaJson==null?loop.create(owner,requiredValue(),file,digest,maxRuns,maxCalls):loop.create(owner,requiredValue(),parseCriteria(),maxRuns,maxCalls);
         }
         default -> throw new IllegalArgumentException("Use /goal list|create|show|run|verify|cancel|history");
       };
       writer.println(dev.mikoto2000.rei.event.CredentialRedactor.redact(String.valueOf(result)));return 0;
     } catch(RuntimeException error){writer.println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));return 2;}
     finally {writer.flush();}
+  }
+  private java.util.List<GoalRepository.FileCriterion> parseCriteria() {
+    if(file!=null||digest!=null||criteriaJson.length()>32768)throw new IllegalArgumentException("Use either --criteria-json (up to 32768 characters) or --file and --sha256");
+    try {
+      var items=new com.fasterxml.jackson.databind.ObjectMapper().readerFor(GoalRepository.FileCriterion[].class)
+          .with(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).<GoalRepository.FileCriterion[]>readValue(criteriaJson);
+      if(items==null)throw new IllegalArgumentException("File criteria array is required");
+      return java.util.Arrays.asList(items);
+    } catch(com.fasterxml.jackson.core.JsonProcessingException error) {throw new IllegalArgumentException("Invalid file criteria JSON");}
   }
   private String requiredValue(){if(value==null||value.isBlank())throw new IllegalArgumentException("Goal ID or objective is required");return value;}
 }

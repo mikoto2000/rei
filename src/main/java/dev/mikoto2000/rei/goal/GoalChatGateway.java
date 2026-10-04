@@ -52,7 +52,7 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
           validate(goal);
           if(verifier.verify(goal).satisfied())outcome=new GoalLoopService.Outcome(ChatExecutionResult.success("Criterion already satisfied",false));
           else {
-            String prompt="Goal: "+goal.objective()+"\nCompletion criterion: Project-relative file "+goal.relativeFile()+" must have SHA-256 "+goal.sha256()
+            String prompt="Goal: "+goal.objective()+"\nCompletion criteria: ALL Project-relative files must match their expected SHA-256: "+goal.criteria()
                 +". Use the existing action plan and task state to choose and execute the next bounded step. "
                 +"The host verifies the file independently; a completion statement is insufficient. "
                 +"Previous attempts remain in this conversation. Do not repeat an already completed side effect.";

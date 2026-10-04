@@ -28,6 +28,12 @@ public class GoalLoopService {
     gateway.validate(new GoalRepository.Goal("pending",owner.projectId(),owner.projectRoot().toString(),owner.conversationId(),objective,file,digest,runs,calls,0,0,"READY",null,""));
     var goal=goals.create(owner,objective,file,digest,runs,calls);events.publish(goal);return goal;
   }
+  public GoalRepository.Goal create(AgentRunContext owner,String objective,java.util.List<GoalRepository.FileCriterion> criteria,int runs,int calls) {
+    if(criteria==null||criteria.isEmpty())throw new IllegalArgumentException("Goal requires file criteria");
+    var first=criteria.getFirst();
+    gateway.validate(new GoalRepository.Goal("pending",owner.projectId(),owner.projectRoot().toString(),owner.conversationId(),objective,first.relativeFile(),first.sha256(),runs,calls,0,0,"READY",null,"",criteria));
+    var goal=goals.create(owner,objective,criteria,runs,calls);events.publish(goal);return goal;
+  }
   /** Human-facing dispatch only, never a model Tool or automatic startup restoration. */
   public GoalRepository.Goal run(String project,String id) {
     if(!permissions.enabled())throw new IllegalStateException("Enable rei.tool-permission.enabled before running a Goal");
