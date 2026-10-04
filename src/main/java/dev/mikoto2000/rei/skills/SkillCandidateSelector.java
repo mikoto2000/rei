@@ -17,19 +17,24 @@ public class SkillCandidateSelector {
   static final int KEYWORD_EXACT_SCORE = 5;
   static final int KEYWORD_PARTIAL_SCORE = 2;
   static final int DESCRIPTION_SCORE = 1;
+  private SemanticSkillSearch semantic;
+  @org.springframework.beans.factory.annotation.Autowired
+  void semanticSearch(SemanticSkillSearch semantic){this.semantic=semantic;}
 
   public List<SkillCandidate> selectCandidates(String userRequest, List<AgentSkill> skills, int limit) {
     if (limit <= 0 || skills == null || skills.isEmpty()) return List.of();
     String request = normalize(userRequest);
     if (request.isEmpty()) return List.of();
 
-    return skills.stream()
+    var eligible=skills.stream().filter(java.util.Objects::nonNull).filter(AgentSkill::enabled).toList();
+    var lexical=eligible.stream()
         .map(skill -> score(request, skill))
         .filter(candidate -> candidate.score() > 0)
         .sorted(Comparator.comparingInt(SkillCandidate::score).reversed()
             .thenComparing(candidate -> normalize(candidate.skill().name())))
-        .limit(limit)
+        .limit(semantic!=null && semantic.enabled()?Math.min(256,Math.max(10,limit)):limit)
         .toList();
+    return semantic!=null && semantic.enabled()?semantic.select(request,eligible,lexical,limit):lexical;
   }
 
   private SkillCandidate score(String request, AgentSkill skill) {

@@ -1,0 +1,13 @@
+# Semantic Skill Search
+
+`REI_SKILLS_SEMANTIC_ENABLED=true` で既存のSkill候補検索にsemantic検索を追加する。既定は無効。明示指定されたSkillは従来どおり優先され、残りの有効Skillのみが候補検索対象になる。候補検索の後は既存のLLM selectorが選択する。Skillの実行権限やTool承認は変更しない。
+
+既存EmbeddingModelにname/description/keywordsのみを渡す。Skill本文やファイルパスは送らない。keyword候補とcosine類似度候補を既存のRRF（定数60）で統合し、既存CandidateRerankerが設定されていれば候補数を絞る前に適用する。semantic時の整数scoreはRRF scoreを1000倍した値であり、従来のkeyword scoreとは単位が異なる。
+
+設定は `rei.skills.semantic` 配下のenabled、max-skills（既定64、上限256）、minimum-similarity（既定0.55）、failure-backoff-seconds（既定30）。対応する環境変数はapplication.yamlと生成設定に記載している。
+
+各メタデータは2048文字、問い合わせは8192文字まで。カタログがmax-skillsを超える場合や問い合わせが長い場合はkeyword検索へ戻る。長いメタデータのSkillはkeyword検索のみ対象。Embeddingは冷キャッシュでメタデータと問い合わせの2バッチ、温キャッシュで問い合わせの1バッチ。各バッチ15秒で打ち切り、workerは1、待機queueは1に制限する。providerが割り込みを無視した場合もworkerを増殖させない。キャンセルは呼び出し元に伝播する。
+
+不正なvector・モデル障害・timeoutではkeyword候補へ戻り、失敗後はbackoff期間中の再呼び出しを抑制する。reranker障害や不正な候補集合ではRRF順に戻る。ログには例外クラスのみを記録する。
+
+メタデータvectorだけをメモリに保持する。変更・削除・無効化したSkillは次回カタログに合わせて更新する。本文だけが変更された場合も現在のSkillオブジェクトを返す。問い合わせvectorは保存しない。Embeddingモデルを変更した場合は再起動してキャッシュを更新する。永続indexや検索品質の学習評価は今後の範囲。
