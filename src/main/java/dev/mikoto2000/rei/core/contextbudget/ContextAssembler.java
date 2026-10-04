@@ -189,7 +189,8 @@ public class ContextAssembler {
     if (prompt.getOptions() != null && prompt.getOptions().getMaxTokens() != null)
       completion = Math.max(completion, prompt.getOptions().getMaxTokens());
     int schema = 0;
-    if (prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options)
+    if (prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
+        && options.getToolCallbacks() != null)
       for (var callback : options.getToolCallbacks()) schema += estimator.text(callback.getToolDefinition().inputSchema())
           + estimator.text(callback.getToolDefinition().description()) + 16;
     var budget = new ContextBudgetManager(properties.contextLimit(prompt.getOptions() == null ? null : prompt.getOptions().getModel()), completion,

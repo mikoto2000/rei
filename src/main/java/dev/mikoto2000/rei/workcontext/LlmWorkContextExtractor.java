@@ -48,8 +48,9 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
     if(TokenEstimator.conservative().text(data)+TokenEstimator.conservative().text(system)>properties.maxInputTokens())
       throw new IllegalArgumentException("Work Context input exceeds budget; reduce max-turns");
     var model=models.memoryChatModel(); ToolLoopSupport.requireNoDefaultTools(model);
-    var options=models.chatOptions(LlmFeature.MEMORY,null);
-    options.setInternalToolExecutionEnabled(false);options.setToolCallbacks(List.of());options.setToolNames(Set.of());
+    var options=models.chatOptions(LlmFeature.MEMORY,null).mutate()
+        .toolCallbacks(List.of()).toolChoice("none").build();
+    ToolLoopSupport.requireNoRawTools(options);
     var result=new StringBuilder();
     try {
       WorkContextRepository.checkCancellation();

@@ -20,6 +20,47 @@ import org.springframework.ai.openai.OpenAiImageOptions;
 class FallbackImageModelTest {
 
   @Test
+  void portableRequestOptionsUseTheConfiguredFallbackModel() {
+    var primary = Mockito.mock(ImageModel.class);
+    var fallback = Mockito.mock(org.springframework.ai.openai.OpenAiImageModel.class);
+    when(fallback.getOptions()).thenReturn(OpenAiImageOptions.builder().model("local-image-fallback").build());
+    var prompt = new ImagePrompt("cat", org.springframework.ai.image.ImageOptionsBuilder.builder()
+        .model("feature-model").width(512).height(512).responseFormat("b64_json").build());
+    when(primary.call(prompt)).thenThrow(new RuntimeException("unavailable"));
+    when(fallback.call(Mockito.any(ImagePrompt.class))).thenReturn(response("image"));
+
+    new FallbackImageModel("image-generation", primary, fallback, "feature-model").call(prompt);
+
+    var captor = ArgumentCaptor.forClass(ImagePrompt.class);
+    verify(fallback).call(captor.capture());
+    assertThat(captor.getValue().getOptions().getModel()).isEqualTo("local-image-fallback");
+    assertThat(captor.getValue().getOptions().getWidth()).isEqualTo(512);
+    assertThat(captor.getValue().getOptions().getResponseFormat()).isEqualTo("b64_json");
+  }
+
+  @Test
+  void fallbackUsesConfiguredModelAndPreservesImageOptions() {
+    var primary = Mockito.mock(ImageModel.class);
+    var fallback = Mockito.mock(org.springframework.ai.openai.OpenAiImageModel.class);
+    when(fallback.getOptions()).thenReturn(OpenAiImageOptions.builder().model("local-image-fallback").build());
+    var prompt = new ImagePrompt("cat", OpenAiImageOptions.builder().model("feature-model")
+        .width(512).height(512).quality("high").responseFormat("b64_json").build());
+    when(primary.call(prompt)).thenThrow(new RuntimeException("unavailable"));
+    when(fallback.call(Mockito.any(ImagePrompt.class))).thenReturn(response("image"));
+
+    new FallbackImageModel("image-generation", primary, fallback, "feature-model").call(prompt);
+
+    var captor = ArgumentCaptor.forClass(ImagePrompt.class);
+    verify(fallback).call(captor.capture());
+    var options = (OpenAiImageOptions) captor.getValue().getOptions();
+    assertThat(options.getModel()).isEqualTo("local-image-fallback");
+    assertThat(options.getQuality()).isEqualTo("high");
+    assertThat(options.getWidth()).isEqualTo(512);
+    assertThat(options.getResponseFormat()).isEqualTo("b64_json");
+    assertThat(prompt.getOptions().getModel()).isEqualTo("feature-model");
+  }
+
+  @Test
   void usesPrimaryWhenPrimarySucceeds() {
     ImageModel primary = Mockito.mock(ImageModel.class);
     ImageModel fallback = Mockito.mock(ImageModel.class);

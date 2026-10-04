@@ -24,7 +24,7 @@ public class StagnationChatModel implements ChatModel {
   public StagnationChatModel(ChatModel delegate, dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler) {
     this.delegate = delegate; this.assembler = assembler;
   }
-  @Override public ChatOptions getDefaultOptions() { return delegate.getDefaultOptions(); }
+  @Override public ChatOptions getOptions() { return delegate.getOptions(); }
   @Override public ChatResponse call(Prompt prompt) {
     if (context(prompt) == null) return delegate.call(prompt);
     AtomicReference<ChatResponse> result = new AtomicReference<>();
@@ -115,15 +115,16 @@ public class StagnationChatModel implements ChatModel {
   }
 
   private Prompt prepare(Prompt prompt, RunExecutionContext context) {
-    ToolCallingChatOptions options = (ToolCallingChatOptions) prompt.getOptions().copy();
-    var toolContext = new HashMap<String, Object>(options.getToolContext());
+    ToolCallingChatOptions options = (ToolCallingChatOptions) prompt.getOptions();
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
+    var toolContext = new HashMap<String, Object>();
+    if (options.getToolContext() != null) toolContext.putAll(options.getToolContext());
     toolContext.put("rei.contextSequenceOffset", context.nextContextSegment());
-    options.setToolContext(toolContext);
-    options.setInternalToolExecutionEnabled(false);
     List<ToolCallback> callbacks = new ArrayList<>();
-    for (ToolCallback callback : options.getToolCallbacks()) callbacks.add(observe(callback, context));
-    options.setToolCallbacks(callbacks);
-    return new Prompt(prompt.getInstructions(), options);
+    if (options.getToolCallbacks() != null)
+      for (ToolCallback callback : options.getToolCallbacks()) callbacks.add(observe(callback, context));
+    return new Prompt(prompt.getInstructions(), options.mutate()
+        .toolContext(toolContext).toolCallbacks(callbacks).build());
   }
 
   private ToolCallback observe(ToolCallback delegateTool, RunExecutionContext context) {

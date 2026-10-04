@@ -198,15 +198,20 @@ class AiConfigurationTest {
     assertSame(agentSkillAdvisor, ((dev.mikoto2000.rei.core.chat.RunScopedAdvisor) advisors.getLast()).delegate());
   }
 
-  @Test
-  void chatClientUsesConfiguredMaxOutputTokensAsDefaultOption() throws Exception {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void chatClientUsesConfiguredMaxOutputTokensAsDefaultOption(boolean completionTokens) throws Exception {
     LlmProperties llmProperties = new LlmProperties();
     llmProperties.setMaxOutputTokens(4096);
+    ChatModel model = Mockito.mock(ChatModel.class);
+    when(model.getOptions()).thenReturn(completionTokens
+        ? org.springframework.ai.openai.OpenAiChatOptions.builder().model("configured").maxCompletionTokens(8192).build()
+        : org.springframework.ai.openai.OpenAiChatOptions.builder().model("configured").maxTokens(8192).build());
 
     AiConfiguration configuration = new AiConfiguration(
         new CoreProperties("system prompt", 100),
         systemPromptService(),
-        Mockito.mock(ChatModel.class),
+        model,
         Mockito.mock(ChatMemory.class),
         new Tools(),
         Mockito.mock(GoogleCalendarTools.class),
@@ -240,7 +245,11 @@ class AiConfigurationTest {
 
     ChatOptions options = getDefaultChatOptions(configuration.chatClient());
 
-    assertEquals(4096, options.getMaxTokens());
+    assertEquals(completionTokens ? null : 4096, options.getMaxTokens());
+    assertEquals(completionTokens ? 4096 : null,
+        ((org.springframework.ai.openai.OpenAiChatOptions) options).getMaxCompletionTokens());
+    assertEquals(1, getDefaultAdvisors(configuration.chatClient()).stream()
+        .filter(dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor.class::isInstance).count());
   }
 
   @SuppressWarnings("unchecked")
@@ -263,9 +272,9 @@ class AiConfigurationTest {
 
   private ChatOptions getDefaultChatOptions(ChatClient chatClient) throws Exception {
     Object defaultRequest = getDefaultChatClientRequest(chatClient);
-    Field chatOptionsField = defaultRequest.getClass().getDeclaredField("chatOptions");
+    Field chatOptionsField = defaultRequest.getClass().getDeclaredField("optionsCustomizer");
     chatOptionsField.setAccessible(true);
-    return (ChatOptions) chatOptionsField.get(defaultRequest);
+    return ((ChatOptions.Builder<?>) chatOptionsField.get(defaultRequest)).build();
   }
 
   private Object getDefaultChatClientRequest(ChatClient chatClient) throws Exception {

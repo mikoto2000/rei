@@ -106,9 +106,11 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
     if (!ImageIO.write(image, "png", bytes)) throw new IllegalStateException("PNG encoder unavailable");
     var user = UserMessage.builder().text(protocol.prompt(target.description()))
         .media(new Media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(bytes.toByteArray()))).build();
-    var requestOptions = options.get().maxTokens(128).responseFormat(null).toolChoice(null).tools(null)
-        .toolCallbacks(List.of()).toolNames(Set.of()).internalToolExecutionEnabled(false).build();
-    if (protocol == GroundingProtocol.UITARS) requestOptions.setFrequencyPenalty(1.0);
+    var requestBuilder = options.get().maxCompletionTokens(null).maxTokens(128).responseFormat(null).toolChoice(null)
+        .toolCallbacks(List.of());
+    if (protocol == GroundingProtocol.UITARS) requestBuilder.frequencyPenalty(1.0);
+    var requestOptions = requestBuilder.build();
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(requestOptions);
     saveDiagnostics(observation, directory -> {
       java.nio.file.Files.write(directory.resolve(prefix + "-input.png"), bytes.toByteArray());
       var details = new java.util.LinkedHashMap<String,Object>();

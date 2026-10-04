@@ -77,7 +77,7 @@ class ComputerUseIntegrationTest {
 
   @Test void featureProviderRejectsToolsOnFallbackToo() {
     var model = mock(ChatModel.class);
-    when(model.getDefaultOptions()).thenReturn(OpenAiChatOptions.builder().toolNames("shell").build());
+    when(model.getOptions()).thenReturn(OpenAiChatOptions.builder().toolCallbacks(mock(org.springframework.ai.tool.ToolCallback.class)).build());
     var properties = new LlmProperties();
     var server = new LlmProperties.Server();
     server.setBaseUrl("https://example.invalid"); server.setModel("vision");

@@ -6,7 +6,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.ResponseFormat;
+import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
 import com.fasterxml.jackson.databind.*;
 public final class LlmDailySummaryWriter implements DailySummaryWriter {
   private static final ObjectMapper JSON=new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
@@ -93,10 +93,11 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
   }
   private DailySummary request(DailySummaryAggregate aggregate,String input) throws Exception {
     var format=new ResponseFormat();format.setType(ResponseFormat.Type.JSON_SCHEMA);
-    format.setJsonSchema(ResponseFormat.JsonSchema.builder().name("activity_daily_summary").strict(true).schema(SCHEMA).build());
-    var request=new OpenAiChatOptions.Builder(options.get().copy()).responseFormat(format)
-        .tools(null).toolChoice(null).toolCallbacks(List.of()).toolNames(Set.of()).internalToolExecutionEnabled(false)
+    format.setJsonSchema(SCHEMA);format.setStrict(true);
+    var request=options.get().mutate().responseFormat(format)
+        .toolChoice(null).toolCallbacks(List.of())
         .maxTokens(null).maxCompletionTokens(2048).build();
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(request);
     var chat=model.get();dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(chat);
     var result=new StringBuilder();
     // Same cancellation-aware streaming timeout pattern as LlmConversationCompressor; no capture worker is used.

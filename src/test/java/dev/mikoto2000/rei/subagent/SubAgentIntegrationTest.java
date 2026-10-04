@@ -43,6 +43,7 @@ class SubAgentIntegrationTest {
     properties.add("rei.subagents.directory", () -> directory.toString());
   }
   @Test void realCallbacksLeaveMainHistoryAndWorkingSetUntouchedAndParentSeesDelegation() throws Exception {
+    when(model.getOptions()).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().model("test-model").build());
     Files.writeString(directory.resolve("reviewer.yaml"), SubAgentConfigurationTest.yaml("reviewer"));
     Files.writeString(directory.resolve("note.txt"), "independent evidence");
     assertThat(registry.reload()).isEmpty();

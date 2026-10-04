@@ -21,13 +21,17 @@ public class LlmConversationCompressor implements ConversationCompressor {
     // Same model/server as the parent makes the configured input window applicable to summarization too.
     var model = provider.chatModel(LlmFeature.CHAT);
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
-    var options = provider.chatOptions(LlmFeature.CHAT, owner.getOptions() == null ? null : owner.getOptions().getModel());
-    options.setMaxTokens(maxTokens);
-    options.setInternalToolExecutionEnabled(false);
-    options.setToolCallbacks(List.of());
-    options.setToolNames(Set.of());
+    var baseOptions = provider.chatOptions(LlmFeature.CHAT,
+        owner.getOptions() == null ? null : owner.getOptions().getModel());
+    var optionsBuilder = baseOptions.mutate().toolCallbacks(List.of()).toolChoice("none");
+    // Keep the provider's supported token parameter while enforcing the summary budget.
+    if (baseOptions.getMaxCompletionTokens() != null)
+      optionsBuilder.maxCompletionTokens(null).maxTokens(null).maxCompletionTokens(maxTokens);
+    else optionsBuilder.maxTokens(maxTokens);
     if (owner.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions original)
-      options.setToolContext(original.getToolContext());
+      optionsBuilder.toolContext(original.getToolContext());
+    var options = optionsBuilder.build();
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
     StringBuilder data = new StringBuilder("Previous summary:\n").append(previous).append("\nNew history:\n");
     for (var message : messages) {
       data.append(message.getMessageType()).append(": ").append(Objects.toString(message.getText(), "")).append('\n');

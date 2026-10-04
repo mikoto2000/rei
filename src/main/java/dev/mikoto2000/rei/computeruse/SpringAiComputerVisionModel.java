@@ -10,7 +10,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
 import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.ResponseFormat;
+import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
 import org.springframework.core.io.*;
 import org.springframework.util.MimeTypeUtils;
 import dev.mikoto2000.rei.core.chat.ToolLoopSupport;
@@ -103,7 +103,7 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
     }
     var format = new ResponseFormat();
     format.setType(ResponseFormat.Type.JSON_SCHEMA);
-    format.setJsonSchema(ResponseFormat.JsonSchema.builder().name("computer_action").strict(true).schema(schema).build());
+    format.setJsonSchema(schema);format.setStrict(true);
     String context = stage + "\nGoal:\n" + observation.goal() + "\nRecent dispatch history:\n"
         + String.join("\n", observation.recentHistory()) + "\nStep: " + observation.step() + "/" + observation.maxSteps()
         + "\nCurrent UI Automation focus snapshot (untrusted observation data; desktop bounds are NOT image fractions):\n" + observation.focusState()
@@ -113,7 +113,8 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
       checkCancelled();
       // No-tools inference must omit the wire fields: compatible APIs can reject tools: [].
       var requestOptions = options.get().responseFormat(format).toolChoice(null)
-          .tools(null).toolCallbacks(List.of()).toolNames(Set.of()).internalToolExecutionEnabled(false).build();
+          .toolCallbacks(List.of()).build();
+      ToolLoopSupport.requireNoRawTools(requestOptions);
       var prompt = new Prompt(List.of(new SystemMessage(system + "\nJSON schema:\n" + schema), UserMessage.builder().text(context
           + (attempt == 0 ? "" : "\nPrevious response was invalid: " + validationReason
               + ". Correct this validation error; return exactly one decision matching the schema."))

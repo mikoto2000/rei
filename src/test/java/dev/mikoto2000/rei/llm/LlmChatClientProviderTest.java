@@ -19,6 +19,50 @@ import dev.mikoto2000.rei.summarize.SummaryTools;
 
 class LlmChatClientProviderTest {
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"chat", "search", "feed-summary", "memory"})
+  void requestsWithoutAnApplicationRunRetainToolCalling(String feature) {
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    var toolCalls = new java.util.concurrent.atomic.AtomicInteger();
+    ChatModel model = new ChatModel() {
+      @Override public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
+        return org.springframework.ai.openai.OpenAiChatOptions.builder().model("local").build();
+      }
+      @Override public org.springframework.ai.chat.model.ChatResponse call(org.springframework.ai.chat.prompt.Prompt prompt) {
+      if (calls.incrementAndGet() > 1) return new org.springframework.ai.chat.model.ChatResponse(List.of(
+          new org.springframework.ai.chat.model.Generation(new org.springframework.ai.chat.messages.AssistantMessage("done"))));
+      return new org.springframework.ai.chat.model.ChatResponse(List.of(new org.springframework.ai.chat.model.Generation(
+          org.springframework.ai.chat.messages.AssistantMessage.builder().content("").toolCalls(List.of(
+              new org.springframework.ai.chat.messages.AssistantMessage.ToolCall("call-1", "function", "test", "{}"))).build())));
+      }
+    };
+    var models = mock(LlmModelProvider.class);
+    when(models.chatModel(feature)).thenReturn(model);
+    when(models.chatOptions(feature, null)).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder()
+        .model("local").build());
+    var system = mock(SystemPromptService.class); when(system.systemPrompt()).thenReturn("system");
+    var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), system,
+        org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build(),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), null, null);
+    var callback = new org.springframework.ai.tool.ToolCallback() {
+      @Override public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
+        return org.springframework.ai.tool.definition.ToolDefinition.builder().name("test").description("test")
+            .inputSchema("{\"type\":\"object\",\"properties\":{}}").build();
+      }
+      @Override public String call(String input) { toolCalls.incrementAndGet(); return "ok"; }
+    };
+
+    var response = provider.chatClient(feature).prompt().user("test").toolCallbacks(callback).call().chatResponse();
+
+    assertThat(response.hasToolCalls()).isFalse();
+    assertThat(calls).hasValue(2);
+    assertThat(toolCalls).hasValue(1);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
   void persistedSessionHistoryIsAvailableRegardlessOfCompression(boolean compression,
       @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) {

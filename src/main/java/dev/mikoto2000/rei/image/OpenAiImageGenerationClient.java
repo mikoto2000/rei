@@ -5,7 +5,7 @@ import org.springframework.ai.image.ImageGeneration;
 import org.springframework.ai.image.ImageModel;
 import org.springframework.ai.image.ImagePrompt;
 import org.springframework.ai.image.ImageResponse;
-import org.springframework.ai.openai.OpenAiImageOptions;
+import org.springframework.ai.image.ImageOptionsBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -42,8 +42,8 @@ public class OpenAiImageGenerationClient implements ImageGenerationClient {
   }
 
   ImagePrompt buildPrompt(ImageGenerationRequest request) {
-    OpenAiImageOptions.Builder options = OpenAiImageOptions.builder()
-        .N(1)
+    ImageOptionsBuilder options = ImageOptionsBuilder.builder()
+        .n(1)
         .width(request.size().width())
         .height(request.size().height());
     String model = imageModelProvider.model(request.model());
@@ -53,6 +53,8 @@ public class OpenAiImageGenerationClient implements ImageGenerationClient {
     if (shouldSendResponseFormat(model)) {
       options.responseFormat("b64_json");
     }
+    // Portable options carry only requested overrides. SDK-specific immutable options also
+    // inject model and timeout defaults, which would replace the configured model defaults.
     return new ImagePrompt(request.prompt(), options.build());
   }
 

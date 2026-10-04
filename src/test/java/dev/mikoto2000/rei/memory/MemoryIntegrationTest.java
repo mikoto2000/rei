@@ -57,10 +57,12 @@ class MemoryIntegrationTest {
     execution.setRunContext(owner);
     var sent=new AtomicReference<Prompt>();
     var model=mock(ChatModel.class);
+    when(model.getOptions()).thenReturn(OpenAiChatOptions.builder().model("test").build());
     when(model.stream(any(Prompt.class))).thenAnswer(a -> { sent.set(a.getArgument(0)); return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("done"))))); });
     var history=MessageWindowChatMemory.builder().maxMessages(100).build();
     var retriever=spy(new MemoryRetriever(repository,properties));
-    var client=ChatClient.builder(new StagnationChatModel(model,assembler)).defaultSystem("System rules")
+    var client=ChatClient.builder(new StagnationChatModel(model,assembler))
+        .defaultAdvisors(new dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor()).defaultSystem("System rules")
         .defaultAdvisors(RunScopedAdvisor.wrap(List.of(new ContextHistoryAdvisor(turns,history,summaries),
             new dev.mikoto2000.rei.temporal.RuntimeContextAdvisor(Clock.systemUTC()),
             new MemoryContextAdvisor(retriever),new WorkingSetAdvisor(working)))).build();
@@ -78,13 +80,13 @@ class MemoryIntegrationTest {
   }
   @Test void llmUsesMemoryFeatureWithoutToolsAndValidatesStructuredResult() {
     var models=mock(LlmModelProvider.class); var model=mock(ChatModel.class);
+    when(model.getOptions()).thenReturn(OpenAiChatOptions.builder().model("test").build());
     when(models.memoryChatModel()).thenReturn(model);
     when(models.chatOptions(LlmFeature.MEMORY,null)).thenReturn(OpenAiChatOptions.builder().build());
     when(model.stream(any(Prompt.class))).thenAnswer(a -> {
       Prompt prompt=a.getArgument(0);
-      var options=(org.springframework.ai.model.tool.ToolCallingChatOptions)prompt.getOptions();
-      assertEquals(false,options.getInternalToolExecutionEnabled());
-      assertTrue(options.getToolCallbacks().isEmpty()); assertTrue(options.getToolNames().isEmpty());
+      var options=(OpenAiChatOptions)prompt.getOptions();
+      assertTrue(options.getToolCallbacks().isEmpty()); assertEquals("none",options.getToolChoice());
       assertTrue(prompt.getSystemMessage().getText().contains("LESSON"));
       assertTrue(prompt.getSystemMessage().getText().contains("PROCEDURE"));
       return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage(MemoryOutputTest.VALID)))));

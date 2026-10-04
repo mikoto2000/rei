@@ -26,7 +26,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
   }
   @Override public int getOrder() { return -1000; }
   @Override public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
-    String id = getConversationId(request.context(), "default");
+    String id = java.util.Objects.toString(request.context().get(ChatMemory.CONVERSATION_ID), "default");
     var owner = (AgentRunContext) request.context().get(AgentRunContext.class.getName());
     List<Message> messages = new ArrayList<>();
     request.prompt().getInstructions().stream().filter(m -> m instanceof SystemMessage).forEach(messages::add);
@@ -87,18 +87,18 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
     context.put("rei.contextProjection", true);
     // Logs and legacy turns have different sequence domains. Never apply one cursor to the other.
     if (!logEntries.isEmpty() && request.prompt().getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options) {
-      var copy = (org.springframework.ai.model.tool.ToolCallingChatOptions) options.copy();
+      var copy = options;
       var toolContext = new HashMap<String, Object>();
       if (copy.getToolContext() != null) toolContext.putAll(copy.getToolContext());
       toolContext.put("rei.historySource", "log");
-      copy.setToolContext(toolContext);
+      copy = options.mutate().toolContext(toolContext).build();
       return request.mutate().context(context).prompt(new Prompt(messages, copy)).build();
     }
     return request.mutate().context(context).prompt(new Prompt(messages, request.prompt().getOptions())).build();
   }
   @Override public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
     if (response.chatResponse() != null && response.chatResponse().getResult() != null)
-      memory.add(getConversationId(response.context(), "default"), response.chatResponse().getResult().getOutput());
+      memory.add(java.util.Objects.toString(response.context().get(ChatMemory.CONVERSATION_ID), "default"), response.chatResponse().getResult().getOutput());
     return response;
   }
   public static Message historical(Message message, long sequence) {

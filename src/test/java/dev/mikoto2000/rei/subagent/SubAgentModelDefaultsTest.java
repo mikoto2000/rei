@@ -9,10 +9,12 @@ import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import dev.mikoto2000.rei.core.chat.ToolLoopSupport;
 
 class SubAgentModelDefaultsTest {
-  @Test void ambientToolsAreRejectedBeforeProviderOptionMerging() {
+  @Test void ambientCallbackAuthorityIsRejectedBeforeCallingTheModel() {
     ChatModel unsafe = new ChatModel() {
       public ChatResponse call(Prompt prompt) { throw new AssertionError(); }
-      public ChatOptions getDefaultOptions() { return ToolCallingChatOptions.builder().toolNames("runCommand").build(); }
+      public ChatOptions getOptions() { return ToolCallingChatOptions.builder().toolCallbacks(List.of(
+          org.springframework.ai.tool.function.FunctionToolCallback.builder("runCommand", (String command) -> command)
+              .description("ambient command execution").inputType(String.class).build())).build(); }
     };
     assertThatThrownBy(() -> ToolLoopSupport.requireNoDefaultTools(unsafe)).isInstanceOf(IllegalArgumentException.class);
   }

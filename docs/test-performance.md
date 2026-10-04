@@ -4,7 +4,7 @@
 
 ## 1. 現状と測定条件
 
-実リポジトリは **JDK 25 / Spring Boot 4.0.4 / Maven Wrapper 3.9.14 / Surefire 3.5.5**。
+このレポートの計測時点の基盤は **JDK 25 / Spring Boot 4.0.4 / Maven Wrapper 3.9.14 / Surefire 3.5.5**。現在の依存バージョンは `pom.xml` と [更新ガイド](spring-ai-2-upgrade.md) を参照してください。
 依頼の Java 17 / Boot 3.x へは変更していない。Windows 11、同じチェックアウト、同じ
 `C:\Java\jdk-25`、同じローカル依存キャッシュ `.m2/repository`、オフライン Maven で測定した。
 `-o` は Maven の依存解決だけを制限し、テスト内部の HTTP は制限しない。

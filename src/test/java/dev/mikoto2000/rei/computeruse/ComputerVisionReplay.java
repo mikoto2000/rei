@@ -5,7 +5,6 @@ import java.nio.file.*;
 import java.util.*;
 import javax.imageio.ImageIO;
 import org.springframework.ai.openai.*;
-import org.springframework.ai.openai.api.OpenAiApi;
 
 /** Manual frozen-image inference only: never constructs Robot or dispatches input. */
 public final class ComputerVisionReplay {
@@ -24,17 +23,17 @@ public final class ComputerVisionReplay {
       displays.add(new DisplayCapture(geometry,ImageIO.read(source.resolve(item.get("image").asText()).toFile())));
     }
     String key = System.getenv("REI_OPENAI_API_KEY");
-    var factory = new org.springframework.http.client.JdkClientHttpRequestFactory(java.net.http.HttpClient.newBuilder()
-        .version(java.net.http.HttpClient.Version.HTTP_1_1).connectTimeout(java.time.Duration.ofSeconds(15)).build());
-    factory.setReadTimeout(java.time.Duration.ofMinutes(4));
-    var api = OpenAiApi.builder().baseUrl(args[0]).apiKey(key == null || key.isBlank() ? "dummy-key" : key)
-        .restClientBuilder(org.springframework.web.client.RestClient.builder().requestFactory(factory)).build();
-    var model = OpenAiChatModel.builder().openAiApi(api).defaultOptions(OpenAiChatOptions.builder().model(args[1]).build()).build();
+    String baseUrl=args[0].replaceAll("/+$","");
+    if(!baseUrl.endsWith("/v1"))baseUrl+="/v1";
+    var options=OpenAiChatOptions.builder().baseUrl(baseUrl).apiKey(key == null || key.isBlank() ? "dummy-key" : key)
+        .model(args[1]).timeout(java.time.Duration.ofMinutes(4)).build();
+    var model = OpenAiChatModel.builder().options(options).httpClientBuilderCustomizer(builder -> builder.timeout(
+        com.openai.core.Timeout.builder().connect(java.time.Duration.ofSeconds(15)).read(java.time.Duration.ofMinutes(4)).build())).build();
     var diagnostics = new ComputerDiagnostics(Path.of(args[3]));
     var run = diagnostics.begin(); var screen = new CapturedScreen(displays);
     diagnostics.observed(run,1,screen);
     System.out.println("Replay diagnostics: " + run);
-    var vision = new SpringAiComputerVisionModel(model,()->OpenAiChatOptions.builder().model(args[1]).maxTokens(4096),()->false,0);
+    var vision = new SpringAiComputerVisionModel(model,()->options.mutate().maxTokens(4096),()->false,0);
     var action = vision.decide(new ComputerObservation(args[4],screen,List.of(),1,20,run));
     diagnostics.action(run,1,screen,action,"decided");
     System.out.println(json.writeValueAsString(action));

@@ -55,6 +55,12 @@ class SubAgentRunnerTest {
   }
   SubAgentRunner runner(Function<Prompt, Flux<ChatResponse>> response, String timeout,
       java.util.function.Supplier<List<ToolCallback>> toolFactory) throws Exception {
+    return runner(response, timeout, toolFactory,
+        ignored -> ToolCallingChatOptions.builder().model("inherited-model").build());
+  }
+  SubAgentRunner runner(Function<Prompt, Flux<ChatResponse>> response, String timeout,
+      java.util.function.Supplier<List<ToolCallback>> toolFactory,
+      Function<String, ToolCallingChatOptions> options) throws Exception {
     String yaml = SubAgentConfigurationTest.yaml("reviewer").replace("120s", timeout);
     yaml = yaml.replace("maxSteps: 2", "maxSteps: " + maxSteps);
     if (maxRepairs > 0) yaml += "maxRepairs: " + maxRepairs + "\n";
@@ -71,8 +77,7 @@ class SubAgentRunnerTest {
       public Flux<ChatResponse> stream(Prompt prompt) { return response.apply(prompt); }
     };
     return new SubAgentRunner(registry, policy, ignored -> model,
-        ignored -> ToolCallingChatOptions.builder().model("inherited-model").build(),
-        toolFactory, cancellation, new AgentEventFactory(Clock.systemUTC()), events::add, Clock.systemUTC());
+        options, toolFactory, cancellation, new AgentEventFactory(Clock.systemUTC()), events::add, Clock.systemUTC());
   }
   ChatResponse answer(String text) { return new ChatResponse(List.of(new Generation(new AssistantMessage(text)))); }
   @Test void repairRetainsOriginalValidationErrorAndStopsAtConfiguredLimit() throws Exception {
@@ -265,12 +270,49 @@ class SubAgentRunnerTest {
     assertThat(requests.get(1).getInstructions()).anyMatch(m -> m instanceof ToolResponseMessage);
     var options = (ToolCallingChatOptions) requests.getFirst().getOptions();
     assertThat(options.getToolCallbacks()).extracting(c -> c.getToolDefinition().name()).containsExactly("readMultiFile");
-    assertThat(options.getInternalToolExecutionEnabled()).isFalse();
+    assertThat(toolCalls).hasValue(1); // The application-owned loop executes the single requested tool.
+    assertThat(options.getModel()).isEqualTo("inherited-model");
     assertThat(events).noneMatch(e -> e.type() == AgentEventType.MESSAGE_DELTA || e.type() == AgentEventType.MESSAGE_COMPLETED);
     var lifecycle = events.stream().filter(e -> e.payload() instanceof SubAgentLifecyclePayload).toList();
     assertThat(lifecycle).extracting(AgentEvent::type).containsExactly(AgentEventType.SUBAGENT_STARTED, AgentEventType.SUBAGENT_COMPLETED);
     assertThat(lifecycle).allMatch(e -> ((SubAgentLifecyclePayload)e.payload()).parentRunId().equals("parent"));
     assertThat(lifecycle.getFirst().runId()).isEqualTo(lifecycle.getLast().runId()).isNotEqualTo("parent");
+  }
+  @Test void childOptionsReplaceAmbientToolsAndContextWithoutChangingProviderOptions() throws Exception {
+    ToolCallback ambient = new ToolCallback() {
+      public ToolDefinition getToolDefinition() { return ToolDefinition.builder().name("runCommand").description("ambient").inputSchema("{}").build(); }
+      public String call(String input) { throw new AssertionError("ambient tool must never execute"); }
+    };
+    var configured = org.springframework.ai.openai.OpenAiChatOptions.builder()
+        .model("configured-model").temperature(0.25).maxTokens(321)
+        .toolCallbacks(List.of(ambient)).toolContext(Map.of("ambient-owner", "parent")).build();
+    var requests = new CopyOnWriteArrayList<Prompt>();
+    var runner = runner(p -> { requests.add(p); return Flux.just(answer(SubAgentResultParserTest.VALID)); },
+        "2s", () -> List.of(callback()), ignored -> configured);
+
+    assertThat(runner.run("reviewer", "task", null).status()).isEqualTo(SubAgentResult.Status.COMPLETED);
+
+    var actual = (org.springframework.ai.openai.OpenAiChatOptions) requests.getFirst().getOptions();
+    assertThat(actual).isNotSameAs(configured);
+    assertThat(actual.getModel()).isEqualTo("configured-model");
+    assertThat(actual.getTemperature()).isEqualTo(0.25);
+    assertThat(actual.getMaxTokens()).isEqualTo(321);
+    assertThat(actual.getToolCallbacks()).extracting(c -> c.getToolDefinition().name()).containsExactly("readMultiFile");
+    assertThat(actual.getToolContext()).containsOnlyKeys(AgentRunContext.class.getName());
+    assertThat(configured.getToolCallbacks()).containsExactly(ambient);
+    assertThat(configured.getToolContext()).containsExactlyEntriesOf(Map.of("ambient-owner", "parent"));
+    assertThat(toolCalls).hasValue(0);
+  }
+  @Test void rawToolsCannotBypassTheChildToolAllowlist() throws Exception {
+    var configured = org.springframework.ai.openai.OpenAiChatOptions.builder()
+        .extraBody(Map.of("tools", List.of(Map.of("type", "function")))).build();
+    var requests = new CopyOnWriteArrayList<Prompt>();
+    var runner = runner(p -> { requests.add(p); return Flux.just(answer(SubAgentResultParserTest.VALID)); },
+        "2s", () -> List.of(callback()), ignored -> configured);
+
+    assertThat(runner.run("reviewer", "task", null).status()).isEqualTo(SubAgentResult.Status.FAILED);
+    assertThat(requests).isEmpty();
+    assertThat(toolCalls).hasValue(0);
   }
   @Test void maxStepsBoundsLlmCalls() throws Exception {
     AtomicInteger calls = new AtomicInteger();

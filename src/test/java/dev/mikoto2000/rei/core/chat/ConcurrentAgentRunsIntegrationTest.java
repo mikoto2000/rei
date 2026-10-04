@@ -23,6 +23,7 @@ class ConcurrentAgentRunsIntegrationTest extends dev.mikoto2000.rei.core.project
   @Test void timeoutAndProviderFailureLeaveNoActiveRun() {
     for (var error : List.of(new TimeoutException("timeout"), new IllegalStateException("provider failed"))) {
       ChatModel model = new ChatModel() {
+      public org.springframework.ai.chat.prompt.ChatOptions getOptions() { return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build(); }
         public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
         public Flux<ChatResponse> stream(Prompt p) { return Flux.error(error); }
       };
@@ -45,6 +46,7 @@ class ConcurrentAgentRunsIntegrationTest extends dev.mikoto2000.rei.core.project
     var streams = new ConcurrentHashMap<String, FluxSink<ChatResponse>>();
     var entered = new CountDownLatch(2);
     ChatModel model = new ChatModel() {
+      public org.springframework.ai.chat.prompt.ChatOptions getOptions() { return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build(); }
       public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
       public Flux<ChatResponse> stream(Prompt p) { return Flux.create(sink -> { streams.put(p.getUserMessage().getText(), sink); entered.countDown(); }); }
     };

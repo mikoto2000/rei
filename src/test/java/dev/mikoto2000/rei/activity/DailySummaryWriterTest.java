@@ -25,8 +25,9 @@ class DailySummaryWriterTest {
     var prompt=org.mockito.ArgumentCaptor.forClass(Prompt.class);verify(model).stream(prompt.capture());verify(model,never()).call(any(Prompt.class));
     var sent=(OpenAiChatOptions)prompt.getValue().getOptions();
     assertThat(sent.getMaxCompletionTokens()).isEqualTo(2048);assertThat(sent.getMaxTokens()).isNull();
-    assertThat(sent.getInternalToolExecutionEnabled()).isFalse();assertThat(options.getMaxTokens()).isEqualTo(99);
-    assertThat(sent.getResponseFormat().getJsonSchema().getName()).isEqualTo("activity_daily_summary");
+    assertThat(sent.getToolCallbacks()).isEmpty();assertThat(sent.getToolChoice()).isNull();assertThat(options.getMaxTokens()).isEqualTo(99);
+    assertThat(sent.getResponseFormat().getJsonSchema()).isEqualTo(LlmDailySummaryWriter.SCHEMA);
+    assertThat(sent.getResponseFormat().getStrict()).isTrue();assertThat(sent.getModel()).isEqualTo("model");
     assertThat(prompt.getValue().getUserMessage().getText()).doesNotContain("GitHub","screenshot","observations","fineSessionIds","contentTitle");
     assertThat(prompt.getValue().getUserMessage().getText().length()).isLessThan(16000);
   }

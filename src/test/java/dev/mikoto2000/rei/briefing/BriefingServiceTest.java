@@ -47,7 +47,7 @@ class BriefingServiceTest {
     when(calendarService.listEventsForDate(date)).thenReturn(List.of(event));
     when(taskService.listOpen()).thenReturn(List.of());
     when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class)))
-        .thenThrow(new org.springframework.ai.retry.NonTransientAiException("HTTP 404 - {\"detail\":\"Not Found\"}"));
+        .thenThrow(com.openai.errors.NotFoundException.builder().headers(com.openai.core.http.Headers.builder().build()).build());
     when(interests.listRecent(24)).thenReturn(List.of());
     when(feeds.listBriefingItems(any(), any(), org.mockito.ArgumentMatchers.eq(20))).thenReturn(List.of());
     when(narrator.narrate(any())).thenReturn(new BriefingNarration(

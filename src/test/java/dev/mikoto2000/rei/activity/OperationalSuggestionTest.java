@@ -69,7 +69,7 @@ class OperationalSuggestionTest {
     new LlmClassificationRuleModel(()->model,()->org.springframework.ai.openai.OpenAiChatOptions.builder().build()).propose("untrusted metadata",ClassificationRuleSuggestions.SCHEMA);
     var argument=org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);org.mockito.Mockito.verify(model).call(argument.capture());
     var options=(org.springframework.ai.openai.OpenAiChatOptions)argument.getValue().getOptions();
-    assertNotNull(options.getResponseFormat());assertFalse(options.getInternalToolExecutionEnabled());assertEquals(8192,options.getMaxCompletionTokens());
+    assertNotNull(options.getResponseFormat());assertNull(options.getToolChoice());assertTrue(options.getToolCallbacks().isEmpty());assertEquals(8192,options.getMaxCompletionTokens());
   }
   @Test void configuredOutputBudgetIsBoundAndSentToModel() {
     var source=new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(

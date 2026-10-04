@@ -56,8 +56,9 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
   private String call(String system,String data) {
     var model=models.memoryChatModel();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
-    var options=models.chatOptions(LlmFeature.MEMORY,null);
-    options.setInternalToolExecutionEnabled(false); options.setToolCallbacks(List.of()); options.setToolNames(Set.of());
+    var options=models.chatOptions(LlmFeature.MEMORY,null).mutate()
+        .toolCallbacks(List.of()).toolChoice("none").build();
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
     var prompt=new Prompt(List.of(new SystemMessage(system),new UserMessage(data)),options);
     if(dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative().text(data)>properties.sleep().maxInputTokens())
       throw new IllegalArgumentException("Memory model input exceeds configured budget");

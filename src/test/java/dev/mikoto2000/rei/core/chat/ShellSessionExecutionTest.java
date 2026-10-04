@@ -38,6 +38,7 @@ class ShellSessionExecutionTest {
     var memory = MessageWindowChatMemory.builder().build();
     List<Prompt> prompts = new ArrayList<>();
     ChatModel model = new ChatModel() {
+      public org.springframework.ai.chat.prompt.ChatOptions getOptions() { return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build(); }
       public ChatResponse call(Prompt prompt) { throw new UnsupportedOperationException(); }
       public Flux<ChatResponse> stream(Prompt prompt) {
         prompts.add(prompt);
@@ -69,6 +70,7 @@ class ShellSessionExecutionTest {
     var memory = MessageWindowChatMemory.builder().build();
     List<Prompt> prompts = new ArrayList<>();
     ChatModel model = new ChatModel() {
+      public org.springframework.ai.chat.prompt.ChatOptions getOptions() { return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build(); }
       public ChatResponse call(Prompt prompt) { throw new UnsupportedOperationException(); }
       public Flux<ChatResponse> stream(Prompt prompt) {
         prompts.add(prompt);
@@ -76,7 +78,7 @@ class ShellSessionExecutionTest {
       }
     };
     var client = ChatClient.builder(model).defaultAdvisors(RunScopedAdvisor.wrap(List.of(
-        org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor.builder(memory).build()))).build();
+        org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor.builder(memory).build()))).build();
     var holder = mock(ModelHolderService.class); when(holder.get()).thenReturn("test");
     var execution = new ChatExecutionService(client, holder, new CommandCancellationService(), Optional.empty());
     execution.setChatMemory(memory);

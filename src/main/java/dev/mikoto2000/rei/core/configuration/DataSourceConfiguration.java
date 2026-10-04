@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Primary;
 import org.sqlite.SQLiteDataSource;
 
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
+import dev.mikoto2000.rei.core.datasource.SqliteChatMemorySchemaMigration;
 import dev.mikoto2000.rei.core.sqlitevec.SqliteVecDataSource;
 import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
 
@@ -43,6 +44,7 @@ public class DataSourceConfiguration {
 
     SQLiteDataSource dataSource = new SQLiteDataSource();
     dataSource.setUrl("jdbc:sqlite:" + dbPath.toString());
+    SqliteChatMemorySchemaMigration.migrate(dataSource);
     return dataSource;
   }
 

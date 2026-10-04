@@ -2,7 +2,6 @@ package dev.mikoto2000.rei.bluesky;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -152,10 +151,10 @@ public class BlueskyReplyTextGenerator {
   }
 
   private OpenAiChatOptions replyOptions() {
-    return new OpenAiChatOptions.Builder(
-        modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, modelHolderService.get()))
-        .tools(null).toolChoice("none").toolCallbacks(List.of()).toolNames(Set.of())
-        .internalToolExecutionEnabled(false).build();
+    var options = modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, modelHolderService.get()).mutate()
+        .toolChoice("none").toolCallbacks(List.of()).build();
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
+    return options;
   }
 
   private String generateContent(Prompt prompt, String conversationId) {

@@ -10,6 +10,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.*;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import dev.mikoto2000.rei.core.service.*;
@@ -21,6 +22,7 @@ import reactor.core.publisher.Flux;
 class ChatExecutionStagnationTest {
   @Test void cancellationAtOutputLimitDoesNotStartPlanner() {
     ChatModel model = new ChatModel() {
+      @Override public ToolCallingChatOptions getOptions() { return ToolCallingChatOptions.builder().build(); }
       public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
       public Flux<ChatResponse> stream(Prompt p) {
         var options = (org.springframework.ai.model.tool.ToolCallingChatOptions) p.getOptions();
@@ -41,6 +43,7 @@ class ChatExecutionStagnationTest {
   void recoveredOutputLimitIsNotReportedAsTerminalFailure() {
     AtomicInteger calls = new AtomicInteger();
     ChatModel model = new ChatModel() {
+      @Override public ToolCallingChatOptions getOptions() { return ToolCallingChatOptions.builder().build(); }
       public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
       public Flux<ChatResponse> stream(Prompt p) {
         int n = calls.incrementAndGet();
@@ -60,7 +63,8 @@ class ChatExecutionStagnationTest {
       }
       public String call(String input) { return "new information"; }
     };
-    ChatClient client = ChatClient.builder(new StagnationChatModel(model)).defaultToolCallbacks(read).build();
+    ChatClient client = ChatClient.builder(new StagnationChatModel(model))
+        .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultToolCallbacks(read).build();
     List<AgentEvent> events = new ArrayList<>();
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenReturn("test");
@@ -82,6 +86,7 @@ class ChatExecutionStagnationTest {
   void actualChatClientStopsAndPublishesTypedFailureAndResetsNextRun() {
     AtomicInteger calls = new AtomicInteger();
     ChatModel model = new ChatModel() {
+      @Override public ToolCallingChatOptions getOptions() { return ToolCallingChatOptions.builder().build(); }
       public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
       public Flux<ChatResponse> stream(Prompt p) {
         int n = calls.incrementAndGet();
@@ -96,7 +101,8 @@ class ChatExecutionStagnationTest {
       }
       public String call(String input) { return "unchanged"; }
     };
-    ChatClient client = ChatClient.builder(new StagnationChatModel(model)).defaultToolCallbacks(read).build();
+    ChatClient client = ChatClient.builder(new StagnationChatModel(model))
+        .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultToolCallbacks(read).build();
     List<AgentEvent> events = new ArrayList<>();
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenReturn("test");
