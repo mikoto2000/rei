@@ -145,7 +145,7 @@ public final class SubAgentRunner {
       public String call(String input, ToolContext context) {
         try (var scope = AgentRunScope.open(owner)) {
           check.run();
-          if(permissions!=null)permissions.check(callback.getToolDefinition().name(),owner);
+          if(permissions!=null)permissions.check(callback.getToolDefinition().name(),input,owner);
           String result = observed.call(input, context);
           check.run();
           return result;

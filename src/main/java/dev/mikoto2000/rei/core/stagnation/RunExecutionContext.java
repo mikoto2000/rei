@@ -10,7 +10,7 @@ public class RunExecutionContext {
   public static final String KEY = RunExecutionContext.class.getName();
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
   public void setToolPermissionGuard(dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {this.permissions=permissions;}
-  public void checkToolPermission(String name) {if(permissions!=null)permissions.check(name,runContext);}
+  public void checkToolPermission(String name,String input) {if(permissions!=null)permissions.check(name,input,runContext);}
   private final String runId;
   private final OutputLimitRunBudget budget;
   private final StagnationDetector detector = new StagnationDetector();

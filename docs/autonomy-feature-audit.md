@@ -9,7 +9,7 @@
 | A2 | Autonomous Planning Loop | Partially implemented | Deferred。core/actionplan、taskstate、stagnation、BoundedToolLoop はあるが、Goal の永続 lifecycle と独立した完了判定ループはない |
 | A3 | Trigger / Scheduler | Partially implemented | Deferred。temporal/InMemoryAgentScheduler は予約をメモリ保存するだけ。汎用 dispatch・永続 schedule・history はない。Feed/Reminder/Topic の個別 timer は存在 |
 | A4 | Waiting / Dependency | Partially implemented | Deferred。BackgroundProcessManager と TaskState.BLOCKED は存在。汎用 WAITING/依存 graph/待機と停滞の統合はない |
-| A5 | Policy / Permission | Partially implemented | Implemented in this task（第一段階）。core/policy が能力7種・自動許可/確認必要/禁止を Chat/SubAgent 実行境界へ統合。対話中 approval/resume UI は Deferred |
+| A5 | Policy / Permission | Partially implemented | Implemented in this task。能力7種・Chat/SubAgent 境界に加え、永続一回限り承認、Shell/Web の明示決定、Checkpoint の明示 Resume に対応。Native 専用ボタン・SubAgent 承認継承は Deferred |
 | A6 | Notification / Escalation | Partially implemented | Deferred。Agent Event、Shell projection、Sound、SSE、Behavior 通知は存在。汎用判断待ち・permission・長時間待機 escalation はない |
 | A7 | Reflection | Partially implemented | Deferred。Sleep の LESSON/PROCEDURE、Work Context の決定・障害整理は存在。全 Task の期待差分/改善案を保存する独立した仕組みはない |
 | B8 | Activity 週次・月次 | Not implemented | Deferred。ActivityTimeline/DailySummaryService/TrendSummaryPolicy は日次または指定範囲。週月比較 API はない |

@@ -33,6 +33,7 @@ version = "v1.0.0",
 name = "",
 description = "AI shell",
 subcommands = {
+  dev.mikoto2000.rei.core.policy.ApprovalCommand.class,
   dev.mikoto2000.rei.checkpoint.CheckpointCommand.class,
   dev.mikoto2000.rei.checkpoint.ResumeCommand.class,
   dev.mikoto2000.rei.workcontext.WorkCommand.class,
