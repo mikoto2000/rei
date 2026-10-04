@@ -15,7 +15,7 @@
 | B8 | Activity 週次・月次 | Not implemented | Implemented in this task（保存観測の算術分析）。暦週/月、前期間比較、観測推定/未観測、分類/Project候補/時間帯/日別、Shell。実測生産性・集中/中断・意味的テーマ・専用UIは Deferred |
 | B9 | Adaptive Coaching | Partially implemented | Implemented in this task（手動期間分析統合）。ユーザー分類比率基準・観測品質gate・完了期間限定、永続opt-in設定/期間重複抑制/共通cooldown、Shell。既存Behavior通知を維持。自動週月通知/意味的個人化/専用UIは Deferred |
 | B10 | Activity × Work Context | Partially implemented | Implemented in this task（保存Event参照）。ActivityのEvent/Session/Turn/Run ID、Work ContextのTOOL出典へのexact project-scoped join、revision/Item/Git snapshot時刻付きShell表示。観測時Git/ファイル/command・意味的task帰属・専用UIは Deferred |
-| B11 | Hybrid RAG | Partially implemented | Deferred。SqliteVectorStore は dense/lexical/adjacent chunk/加重 hybridScore 対応。独立 dense+sparse の merge/RRF/reranker interface はない |
+| B11 | Hybrid RAG | Partially implemented | Implemented in this task（opt-in dense/lexical/RRF）。独立候補port、bounded RRF、source/docId境界、既存文書集約/rerank再利用とreranker port、legacy既定維持。元から汎用HTTP rerankは存在。FTS/BM25/学習sparse・評価は Deferred |
 | B12 | Semantic Skill Search | Partially implemented | Deferred。SkillCandidateSelector は keyword/name/description の文字列 scoring。embedding 検索はない |
 | B13 | Document RAG | Already implemented | Already implemented。VectorDocumentService、SqliteVectorStore、SearchKnowledgeService、CHAT の retrieval が存在。二重実装しない |
 | C14 | SubAgent semantic validation | Not implemented | Deferred。SubAgentResultValidator は JSON Schema。実行証跡と回答の意味整合性は検証しない |
@@ -39,7 +39,7 @@ Agent Event/UI projection、Topic、Core/UI 分離も既存の各パッケージ
 ## 優先順位と残作業
 
 Auto Sleep、共通 Policy/永続承認、管理プロセス Waiting、永続一回限り Scheduler、アプリ内 escalation は独立実装済み。
-ファイルGoalの永続 lifecycle と bounded Planning Loop、Goal事実ベースのReflection、Activity週月の保存観測分析、手動Coachingの期間分析統合、Activity/Work Context保存Event参照も実装済み。次はHybrid RAGの検索責務分離とSemantic Skill Searchを調査する。
+ファイルGoalの永続 lifecycle と bounded Planning Loop、Goal事実ベースのReflection、Activity週月の保存観測分析、手動Coachingの期間分析統合、Activity/Work Context保存Event参照、opt-in文書Hybrid RRFも実装済み。次はSemantic Skill Searchを調査する。
 並行して、不確定 Scheduled Run の復旧、汎用依存監視、Native の承認・確認待ち UI を既存基盤へ統合する。
 週月分析は既存の観測事実を集計し、推測や未観測時間を分離する。SubAgent 修復は bounded retry と元 error 保持を先に整備する。
 

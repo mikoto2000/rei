@@ -175,6 +175,11 @@ public class ExternalConfigFileService {
             api-key: ${REI_RERANK_API_KEY:}
             model: ${REI_RERANK_MODEL:}
             path: ${REI_RERANK_PATH:/v1/rerank}
+          vector-document:
+            retrieval:
+              enabled: ${REI_VECTOR_DOCUMENT_RETRIEVAL_ENABLED:false}
+              candidate-limit: ${REI_VECTOR_DOCUMENT_RETRIEVAL_CANDIDATE_LIMIT:40}
+              rank-constant: ${REI_VECTOR_DOCUMENT_RETRIEVAL_RANK_CONSTANT:60}
           llm:
             max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}
             output-limit:

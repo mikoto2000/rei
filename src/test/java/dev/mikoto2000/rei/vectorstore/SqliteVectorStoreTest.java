@@ -372,6 +372,38 @@ class SqliteVectorStoreTest {
   private SqliteVectorStore newStore(Path dbPath) {
     return new SqliteVectorStore(newVecDataSource(dbPath), new FakeEmbeddingModel(), new JsonMapper());
   }
+  @Test void independentRetrievalRecoversLexicalMatchOutsideDenseNearestNeighbors() {
+    var model=new FakeEmbeddingModel(){@Override protected float[] embedText(String text){return text.equals("needle is here")?new float[]{0,1,0,0}:new float[]{1,0,0,0};}};
+    var store=new SqliteVectorStore(newVecDataSource(tempDir.resolve("hybrid.db")),model,new JsonMapper());
+    var documents=new java.util.ArrayList<Document>();
+    for(int i=0;i<25;i++)documents.add(new Document("dense-"+i,"paraphrase "+i,Map.of("docId","d"+i,"source","allowed","chunkIndex",0,"ingestedAt","2026-10-04")));
+    documents.add(new Document("lexical","needle is here",Map.of("docId","lex","source","allowed","chunkIndex",0,"ingestedAt","2026-10-04")));
+    store.add(documents);
+    var request=SearchRequest.builder().query("needle").topK(1).similarityThresholdAll().filterExpression(new FilterExpressionBuilder().eq("source","allowed").build()).build();
+    assertTrue(store.similaritySearch(request).isEmpty());
+    assertEquals(1,store.denseSearch(request).size());assertEquals("lexical",store.lexicalSearch(request).getFirst().getId());
+    var result=new HybridRetriever(store,new HybridRetrievalProperties(true,20,60)).search(SearchRequest.builder().query("needle").topK(21).similarityThresholdAll().build());
+    assertTrue(result.stream().anyMatch(d->d.getId().equals("lexical")));
+    var filtered=SearchRequest.builder().query("needle").topK(1).similarityThresholdAll().filterExpression(new FilterExpressionBuilder().eq("docId","lex").build()).build();
+    assertTrue(store.denseSearch(filtered).isEmpty());assertEquals(List.of("lexical"),store.lexicalSearch(filtered).stream().map(Document::getId).toList());
+  }
+  @Test void lexicalCandidatesRequireNoQueryEmbeddingAndRetainSourceBoundary() {
+    var model=org.mockito.Mockito.spy(new FakeEmbeddingModel());
+    var store=new SqliteVectorStore(newVecDataSource(tempDir.resolve("lexical.db")),model,new JsonMapper());
+    store.add(List.of(new Document("a","alpha note",Map.of("docId","a","source","allowed","chunkIndex",0,"ingestedAt","2026-10-04")),new Document("b","alpha beta",Map.of("docId","b","source","other","chunkIndex",0,"ingestedAt","2026-10-04"))));
+    org.mockito.Mockito.clearInvocations(model);
+    var request=SearchRequest.builder().query("alpha").topK(1).similarityThresholdAll().filterExpression(new FilterExpressionBuilder().eq("source","allowed").build()).build();
+    assertEquals("a",store.lexicalSearch(request).getFirst().getId());
+    org.mockito.Mockito.verify(model,org.mockito.Mockito.never()).embed(org.mockito.ArgumentMatchers.any(Document.class));
+    assertTrue(store.denseSearch(request).isEmpty());
+    assertEquals("a",new HybridRetriever(store,new HybridRetrievalProperties(true,20,60)).search(request).getFirst().getId());
+  }
+  @Test void adjacentLexicalEvidenceCannotCrossSourceEvenWhenDocIdWasReused() {
+    var store=new SqliteVectorStore(newVecDataSource(tempDir.resolve("adjacent-scope.db")),new ConstantEmbeddingModel(),new JsonMapper());
+    store.add(List.of(new Document("a","unrelated",Map.of("docId","same","source","allowed","chunkIndex",0,"ingestedAt","2026-10-04")),new Document("b","needle",Map.of("docId","same","source","other","chunkIndex",1,"ingestedAt","2026-10-04"))));
+    var request=SearchRequest.builder().query("needle").topK(1).similarityThresholdAll().filterExpression(new FilterExpressionBuilder().eq("source","allowed").build()).build();
+    assertTrue(store.lexicalSearch(request).isEmpty());
+  }
 
   private SQLiteDataSource newDataSource(Path dbPath) {
     SQLiteDataSource dataSource = new SQLiteDataSource();

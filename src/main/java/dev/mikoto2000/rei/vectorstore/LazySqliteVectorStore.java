@@ -15,7 +15,7 @@ import dev.mikoto2000.rei.vectordocument.VectorDocumentEntry;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentRepository;
 import tools.jackson.databind.json.JsonMapper;
 
-public class LazySqliteVectorStore implements VectorStore, VectorDocumentRepository {
+public class LazySqliteVectorStore implements VectorStore, VectorDocumentRepository, RetrievalCandidates {
 
   private final DataSource dataSource;
   private final EmbeddingModel embeddingModel;
@@ -47,6 +47,8 @@ public class LazySqliteVectorStore implements VectorStore, VectorDocumentReposit
   public List<Document> similaritySearch(SearchRequest request) {
     return delegate().similaritySearch(request);
   }
+  @Override public List<Document> denseSearch(SearchRequest request){return delegate().denseSearch(request);}
+  @Override public List<Document> lexicalSearch(SearchRequest request){return delegate().lexicalSearch(request);}
 
   @Override
   public <T> Optional<T> getNativeClient() {

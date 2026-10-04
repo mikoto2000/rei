@@ -23,16 +23,20 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
 
 @Service
+@org.springframework.boot.context.properties.EnableConfigurationProperties(dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties.class)
 public class VectorDocumentService {
 
   private final VectorStore vectorStore;
   private final VectorDocumentRepository vectorDocumentRepository;
   private final Clock clock;
   private final VectorDocumentProperties properties;
-  private RerankService rerankService;
+  private CandidateReranker rerankService;
+  private dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties retrieval=new dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties(false,40,60);
+  @Autowired
+  void setRetrieval(dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties retrieval){this.retrieval=retrieval;}
 
   @Autowired
-  void setRerankService(RerankService rerankService) {
+  void setRerankService(CandidateReranker rerankService) {
     this.rerankService = rerankService;
   }
 
@@ -87,6 +91,7 @@ public class VectorDocumentService {
 
   public List<VectorDocumentSearchResult> search(String query, Integer topK, Double similarityThreshold, String source) {
     int requestedTopK = topK == null ? 5 : topK;
+    if(retrieval.enabled() && (requestedTopK<1 || requestedTopK>64))throw new IllegalArgumentException("RRF document topK must be 1..64");
     SearchRequest.Builder builder = SearchRequest.builder()
         .query(query)
         .topK(expandedTopK(requestedTopK));
@@ -99,7 +104,13 @@ public class VectorDocumentService {
       builder.filterExpression(new FilterExpressionBuilder().eq("source", normalizeSource(source)).build());
     }
 
-    List<AggregatedSearchResult> candidates = vectorStore.similaritySearch(builder.build()).stream()
+    var request=builder.build();
+    List<Document> chunks;
+    if(retrieval.enabled()) {
+      if(!(vectorStore instanceof dev.mikoto2000.rei.vectorstore.RetrievalCandidates backend))throw new IllegalStateException("Vector store does not support independent retrieval candidates");
+      chunks=new dev.mikoto2000.rei.vectorstore.HybridRetriever(backend,retrieval).search(request);
+    }else chunks=vectorStore.similaritySearch(request);
+    List<AggregatedSearchResult> candidates = chunks.stream()
         .collect(java.util.stream.Collectors.groupingBy(
             document -> asString(document.getMetadata().get("docId")),
             LinkedHashMap::new,
@@ -162,7 +173,7 @@ public class VectorDocumentService {
         .max(Comparator.comparing(this::documentScore).thenComparing(Document::getId))
         .orElseThrow();
 
-    double score = compositeScore(query, sortedByChunkIndex);
+    double score = retrieval.enabled()?documentScore(best):compositeScore(query, sortedByChunkIndex);
     return new AggregatedSearchResult(
         query,
         asString(best.getMetadata().get("docId")),
