@@ -83,6 +83,64 @@ class AgentScheduleDispatcherTest {
     var chat=mock(ChatExecutionService.class);var jobs=new ArrayDeque<Runnable>();var router=new ConversationInputRouter(jobs::add,(owner,prompt,queue)->{});
     return new Harness(projects,chat,router,jobs,new AgentScheduleDispatcher(schedules,new AgentSchedulerProperties(true),new ToolPermissionProperties(true,null,null,null),projects,sessions,router,chat));
   }
+  @Test void trackedScheduleUsesActualRunLifecycleAndSavedSession() {
+    var h=harness();String project="00000000-0000-0000-0000-000000000001";
+    var bus=new dev.mikoto2000.rei.event.InMemoryAgentEventBus();
+    var registry=new dev.mikoto2000.rei.application.run.RunRegistry(Clock.systemUTC());
+    try(var lifecycle=new dev.mikoto2000.rei.application.run.RunService(registry,bus,new dev.mikoto2000.rei.event.AgentEventFactory(Clock.systemUTC()),new dev.mikoto2000.rei.core.service.CommandCancellationService(),h.router()::cancelQueued)) {
+      h.dispatcher().configureRunTracking(registry,lifecycle);
+      when(h.chat().execute(any(),anyString(),any())).thenAnswer(invocation->{
+        var owner=invocation.getArgument(0,AgentRunContext.class);
+        assertEquals(dev.mikoto2000.rei.application.run.RunStatus.RUNNING,lifecycle.get(owner.runId()).status());
+        return ChatExecutionResult.success("done",false);
+      });
+      h.dispatcher().tick();String run=schedules.get(project,id).runId();
+      assertEquals(dev.mikoto2000.rei.application.run.RunStatus.QUEUED,lifecycle.get(run).status());
+      assertEquals("s",lifecycle.get(run).context().conversationId());assertEquals(project,lifecycle.get(run).context().projectId());
+      h.jobs().remove().run();assertEquals("COMPLETED",schedules.get(project,id).status());
+      assertEquals(dev.mikoto2000.rei.application.run.RunStatus.COMPLETED,lifecycle.get(run).status());
+      verify(h.chat(),times(1)).execute(any(),anyString(),any());
+    }
+  }
+  @Test void normalRunCancellationReleasesQueuedScheduleWithoutExecutingChat() {
+    var h=harness();String project="00000000-0000-0000-0000-000000000001";
+    var bus=new dev.mikoto2000.rei.event.InMemoryAgentEventBus();
+    var registry=new dev.mikoto2000.rei.application.run.RunRegistry(Clock.systemUTC());
+    try(var lifecycle=new dev.mikoto2000.rei.application.run.RunService(registry,bus,new dev.mikoto2000.rei.event.AgentEventFactory(Clock.systemUTC()),new dev.mikoto2000.rei.core.service.CommandCancellationService(),h.router()::cancelQueued)) {
+      h.dispatcher().configureRunTracking(registry,lifecycle);
+      h.router().submitOperation(new AgentRunContext("block","other",dir,project),()->{},Runnable::run);
+      h.dispatcher().tick();String run=schedules.get(project,id).runId();
+      assertTrue(lifecycle.cancel(run).accepted());assertFalse(lifecycle.cancel(run).accepted());
+      assertEquals("CANCELLED",schedules.get(project,id).status());
+      h.jobs().remove().run();verifyNoInteractions(h.chat());assertTrue(h.jobs().isEmpty());
+      String next;try(var scope=AgentRunScope.open(new AgentRunContext("source","s",dir,project))){next=schedules.scheduleAfter(Duration.ZERO,"next","s").id();}
+      schedules.activate(project,next);h.dispatcher().tick();assertEquals("RUNNING",schedules.get(project,next).status());
+    }
+  }
+  @Test void cancellationBeforeWorkerStartsSkipsChatAndFinishesSavedSchedule() {
+    var h=harness();String project="00000000-0000-0000-0000-000000000001";
+    var bus=new dev.mikoto2000.rei.event.InMemoryAgentEventBus();
+    var registry=new dev.mikoto2000.rei.application.run.RunRegistry(Clock.systemUTC());
+    try(var lifecycle=new dev.mikoto2000.rei.application.run.RunService(registry,bus,new dev.mikoto2000.rei.event.AgentEventFactory(Clock.systemUTC()),new dev.mikoto2000.rei.core.service.CommandCancellationService(),h.router()::cancelQueued)) {
+      h.dispatcher().configureRunTracking(registry,lifecycle);h.dispatcher().tick();String run=schedules.get(project,id).runId();
+      assertTrue(lifecycle.cancel(run).accepted());
+      h.jobs().remove().run();assertEquals("CANCELLED",schedules.get(project,id).status());verifyNoInteractions(h.chat());
+      assertEquals(dev.mikoto2000.rei.application.run.RunStatus.CANCELLED,lifecycle.get(run).status());
+    }
+  }
+  @Test void failedTrackedChatHasOneTerminalEventAndNoSuccessfulSchedule() {
+    var h=harness();String project="00000000-0000-0000-0000-000000000001";
+    var bus=new dev.mikoto2000.rei.event.InMemoryAgentEventBus();var events=new ArrayList<dev.mikoto2000.rei.event.AgentEvent>();bus.subscribe(events::add);
+    var registry=new dev.mikoto2000.rei.application.run.RunRegistry(Clock.systemUTC());
+    try(var lifecycle=new dev.mikoto2000.rei.application.run.RunService(registry,bus,new dev.mikoto2000.rei.event.AgentEventFactory(Clock.systemUTC()),new dev.mikoto2000.rei.core.service.CommandCancellationService(),h.router()::cancelQueued)) {
+      h.dispatcher().configureRunTracking(registry,lifecycle);
+      when(h.chat().execute(any(),anyString(),any())).thenReturn(ChatExecutionResult.failed("failed"));
+      h.dispatcher().tick();String run=schedules.get(project,id).runId();h.jobs().remove().run();
+      assertEquals("FAILED",schedules.get(project,id).status());assertEquals(dev.mikoto2000.rei.application.run.RunStatus.FAILED,lifecycle.get(run).status());
+      assertEquals(1,events.stream().filter(event->run.equals(event.runId())&&event.type()==dev.mikoto2000.rei.event.AgentEventType.AGENT_RUN_FAILED).count());
+      h.dispatcher().tick();verify(h.chat(),times(1)).execute(any(),anyString(),any());
+    }
+  }
   @Test void currentQueuedAndExecutingSchedulesCannotBeReconciled() {
     var h=harness();String project="00000000-0000-0000-0000-000000000001";h.dispatcher().tick();String run=schedules.get(project,id).runId();
     assertThrows(IllegalStateException.class,()->h.dispatcher().reconcile(project,id,run));
