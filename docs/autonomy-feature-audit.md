@@ -56,3 +56,7 @@ A4/A6の人間回答待ちにProject限定の一覧・詳細・保存履歴・�
 ## Native human answers follow-up
 
 A4/A6のNative人間回答待ちUIを復旧・再開画面へ追加。質問・依存/Session・状態・期限・前提条件・保存済み回答を表示し、回答文とversionを確認した後だけ保存する。所有者切替/遅延応答/重複クリックを隔離し、通信失敗後は自動再送せず一覧を更新して再確認する。Tool承認・Run再開・依存完了を直接行わない。Goal/Scheduler復旧およびその他のDeferred項目は引き続き未完了。詳細はimplementation-report-native-human-answers.md。
+
+## Goal HTTP controls follow-up
+
+A2の既存GoalRepository/GoalLoopServiceへProject限定HTTP一覧・詳細・履歴/Attempt・明示Verify/Run/Cancel/Reconcileを追加。GETは保存状態を読み、Verifyは完了状態を更新し得るためPOSTにする。Reconcileは実Run IDと結果不明副作用の明示確認を要求し、queued/executingや古いRunを拒否、予算を回復せずPAUSEDへ移す。Native画面と汎用Run状態/SSE追跡の統合、Scheduler API/UI等は引き続き未対応。検証はimplementation-report-goal-http-controls.mdを参照。
