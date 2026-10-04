@@ -154,6 +154,12 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       return;
     }
     switch (event.type()) {
+      case GOAL_UPDATED -> {
+        closeAssistantLine();closeThinkingLine();
+        var payload=(dev.mikoto2000.rei.event.GoalLifecyclePayload)event.payload();
+        output.println("[goal] "+payload.goalId()+" "+payload.status()+" runs="+payload.attempts()+"/"+payload.maxRuns()
+            +" llm="+payload.llmCallsUsed()+"/"+payload.maxLlmCalls());
+      }
       case ATTENTION_REQUIRED -> {
         closeAssistantLine();closeThinkingLine();
         var payload=(dev.mikoto2000.rei.event.AttentionRequiredPayload)event.payload();

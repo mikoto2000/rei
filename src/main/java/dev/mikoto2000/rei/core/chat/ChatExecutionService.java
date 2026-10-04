@@ -182,8 +182,12 @@ public class ChatExecutionService {
   }
 
   public ChatExecutionResult execute(AgentRunContext context, String promptText, UserInterventionQueue interventions) {
+    return execute(context,promptText,interventions,null);
+  }
+  public ChatExecutionResult execute(AgentRunContext context,String promptText,UserInterventionQueue interventions,
+      OutputLimitRunBudget.LlmCallReservation reservation) {
     try (var scope = AgentRunScope.open(context)) {
-      try { return executeInScope(context, promptText, interventions); }
+      try { return executeInScope(context, promptText, interventions,reservation); }
       finally {
         cancellationService.clear();
         activityTracker.ifPresent(tracker -> tracker.recordAgentCompleted(java.time.Instant.now(clock)));
@@ -191,7 +195,8 @@ public class ChatExecutionService {
     }
   }
 
-  private ChatExecutionResult executeInScope(AgentRunContext context, String promptText, UserInterventionQueue interventions) {
+  private ChatExecutionResult executeInScope(AgentRunContext context, String promptText, UserInterventionQueue interventions,
+      OutputLimitRunBudget.LlmCallReservation reservation) {
     long startedAtNanos = System.nanoTime();
     cancellationService.begin(Thread.currentThread());
     if (cancellationService.isCancellationRequested()) return ChatExecutionResult.cancelled();
@@ -202,7 +207,7 @@ public class ChatExecutionService {
     AtomicReference<GenerationMetrics> lastGenerationMetrics = new AtomicReference<>();
     OutputLimitRunBudget budget = new OutputLimitRunBudget(
         llmProperties.getOutputLimit().getMaxReplansPerGoal(),
-        llmProperties.getOutputLimit().getMaxLlmCallsPerRun());
+        llmProperties.getOutputLimit().getMaxLlmCallsPerRun(),reservation);
     RunExecutionContext execution = new RunExecutionContext(runId, budget,
         new ProgressEvaluator(context.projectRoot(),
             actionPlan), eventFactory, eventPublisher);

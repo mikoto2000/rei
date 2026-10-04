@@ -295,6 +295,8 @@ public class ReiApplication {
     var approval=cmd.getSubcommands().get("approval");
     var timer=cmd.getSubcommands().get("timer");
     var attention=cmd.getSubcommands().get("attention");
+    var goal=cmd.getSubcommands().get("goal");
+    if(goal!=null && goal.getCommand() instanceof dev.mikoto2000.rei.goal.GoalCommand command) command.setShellOutput(writer);
     if(attention!=null && attention.getCommand() instanceof dev.mikoto2000.rei.attention.AttentionCommand command) command.setShellOutput(writer);
     if(timer!=null && timer.getCommand() instanceof dev.mikoto2000.rei.temporal.TimerCommand command) command.setShellOutput(writer);
     if(approval!=null && approval.getCommand() instanceof dev.mikoto2000.rei.core.policy.ApprovalCommand command) command.setShellOutput(writer);

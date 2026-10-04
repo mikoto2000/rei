@@ -19,6 +19,13 @@ import dev.mikoto2000.rei.topic.TopicScoreBreakdown;
 import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
 
 class ShellAgentEventRendererTest {
+  @Test void rendersVerifiedGoalStateAndBudgets() {
+    var output=new RecordingOutput();
+    new ShellAgentEventRenderer(output).onEvent(new dev.mikoto2000.rei.event.AgentEvent("event",0,Instant.EPOCH,
+        dev.mikoto2000.rei.event.AgentEventType.GOAL_UPDATED,1,"session",null,"run",null,null,
+        new dev.mikoto2000.rei.event.GoalLifecyclePayload("goal","COMPLETED",2,3,4,20,"file_digest_verified"),"project"));
+    assertEquals("[goal] goal COMPLETED runs=2/3 llm=4/20\n",output.text());
+  }
   @Test void rendersPersistentAttentionWithReviewCommand() {
     var output=new RecordingOutput();
     new ShellAgentEventRenderer(output).onEvent(new dev.mikoto2000.rei.event.AgentEvent("event",0,Instant.EPOCH,

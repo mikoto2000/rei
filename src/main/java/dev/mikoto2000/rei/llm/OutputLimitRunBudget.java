@@ -6,6 +6,12 @@ package dev.mikoto2000.rei.llm;
  * the controlled model loop reserves every additional LLM/tool cycle before invoking the model.
  */
 public class OutputLimitRunBudget {
+  /** Optional durable parent budget. Reservations precede every model call. */
+  public interface LlmCallReservation {
+    boolean tryReserve();
+    int remaining();
+  }
+  private final LlmCallReservation reservation;
 
   private final int maxReplans;
   private final int maxLlmCalls;
@@ -13,14 +19,19 @@ public class OutputLimitRunBudget {
   private int llmCalls;
 
   public OutputLimitRunBudget(int maxReplans, int maxLlmCalls) {
+    this(maxReplans,maxLlmCalls,null);
+  }
+  public OutputLimitRunBudget(int maxReplans,int maxLlmCalls,LlmCallReservation reservation) {
     this.maxReplans = Math.max(0, maxReplans);
     this.maxLlmCalls = Math.max(0, maxLlmCalls);
+    this.reservation=reservation;
   }
 
   public boolean tryConsumeLlmCall() {
     if (llmCalls >= maxLlmCalls) {
       return false;
     }
+    if(reservation!=null&&!reservation.tryReserve())return false;
     llmCalls++;
     return true;
   }
@@ -38,7 +49,8 @@ public class OutputLimitRunBudget {
   }
 
   public int remainingLlmCalls() {
-    return Math.max(0, maxLlmCalls - llmCalls);
+    int local=Math.max(0,maxLlmCalls-llmCalls);
+    return reservation==null?local:Math.min(local,Math.max(0,reservation.remaining()));
   }
 
   public boolean hasRemainingLlmCalls() {
