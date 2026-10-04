@@ -68,6 +68,9 @@ public class ChatExecutionService {
   @Autowired
   void setCheckpoints(dev.mikoto2000.rei.checkpoint.PersistentCheckpointService checkpoints) { this.checkpoints=checkpoints; }
   private dev.mikoto2000.rei.workcontext.WorkContextAutomation workContext;
+  private dev.mikoto2000.rei.memory.service.AutoSleepService autoSleep;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setAutoSleep(dev.mikoto2000.rei.memory.service.AutoSleepService autoSleep) { this.autoSleep=autoSleep; }
   @Autowired
   void setWorkContext(dev.mikoto2000.rei.workcontext.WorkContextAutomation workContext) { this.workContext=workContext; }
   private dev.mikoto2000.rei.paper.PaperCommandExecutor paperCommands;
@@ -302,6 +305,7 @@ public class ChatExecutionService {
           try {turns.finish(context, execution.isCancelled() ? ConversationTurnStore.Status.CANCELLED : turnStatus, assistantMessage);}
           finally {if (checkpoints != null) checkpoints.finish(context, execution.isCancelled() ? "CANCELLED" : turnStatus.name());}
           if (workContext != null) workContext.afterTerminal(context);
+          if (autoSleep != null) autoSleep.afterTerminal(context);
         } finally { if (interrupted) Thread.currentThread().interrupt(); }
       }
     }

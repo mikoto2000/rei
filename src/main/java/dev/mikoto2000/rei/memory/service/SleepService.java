@@ -9,7 +9,7 @@ import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
 
-/** Manual trigger only. No CLI, timers or history writes. */
+/** Trigger-independent consolidation. No CLI, timers or history writes. */
 @Service
 public class SleepService {
   private static final Set<String> RUNNING=ConcurrentHashMap.newKeySet();
@@ -32,6 +32,10 @@ public class SleepService {
     this.repository=repository; this.turns=turns; this.extractor=extractor; this.resolver=resolver; this.properties=properties;
   }
   public Report sleep(String session, String project, boolean preview) {
+    return sleep(session,project,preview,()->false);
+  }
+  public Report sleep(String session, String project, boolean preview, java.util.function.BooleanSupplier cancellation) {
+    Runnable check=()-> {check(); if(cancellation.getAsBoolean()) throw new CancellationException("Sleep cancelled by activity");};
     if (!properties.enabled()) throw new IllegalStateException("Memory is disabled (rei.memory.enabled=false)");
     if (session==null || session.isBlank() || project==null || project.isBlank()) throw new IllegalArgumentException("Select a session and project first");
     String sessionProject=dev.mikoto2000.rei.core.project.ProjectStorage.projectId(session);
@@ -41,7 +45,7 @@ public class SleepService {
     long from=0, to=0;
     int processed=0;
     try {
-      check();
+      check.run();
       if(events!=null) events.publish(dev.mikoto2000.rei.event.AgentEventType.MEMORY_SLEEP_STARTED,project,session,id,preview,0,0,0,"STARTED");
       from=repository.lastProcessed(session); to=from;
       var snapshot=turns.read(session);
@@ -62,13 +66,13 @@ public class SleepService {
       }
       processed=(int)(to-from);
       var candidates=batch.isEmpty()?List.<MemoryCandidate>of():extractor.extract(List.copyOf(batch));
-      check();
+      check.run();
       var sourceIds=batch.stream().map(ConversationTurnStore.Turn::runId).collect(java.util.stream.Collectors.toSet());
       var plans=new ArrayList<Plan>();
       var seen=new HashSet<String>();
       var usedTargets=new HashSet<String>();
       for (var candidate:candidates) {
-        check();
+        check.run();
         if (!sourceIds.containsAll(candidate.sourceTurnIds())) throw new IllegalArgumentException("Candidate references a turn outside the selected range");
         var pool=new LinkedHashMap<String,LongTermMemory>();
         repository.exact(candidate,project).ifPresent(m -> pool.put(m.id(),m));
@@ -95,15 +99,15 @@ public class SleepService {
       if (!preview && processed>0) {
         final long checkpoint=from;
         repository.transaction(() -> {
-          check();
+          check.run();
           if (repository.lastProcessed(session)!=checkpoint) throw new IllegalStateException("Sleep checkpoint changed; retry");
           for (var plan:plans) {
-            check();
+            check.run();
             for (var target:plan.targets()) if (!repository.find(target.id()).orElseThrow().equals(target))
               throw new IllegalStateException("Memory changed during Sleep; retry");
             apply(plan,project,session);
           }
-          check(); repository.saveRun(run); check(); return null;
+          check.run(); repository.saveRun(run); check.run(); return null;
         });
       }
       if(events!=null) events.publish(dev.mikoto2000.rei.event.AgentEventType.MEMORY_SLEEP_COMPLETED,project,session,id,preview,processed,plans.size(),run.added(),run.status());
