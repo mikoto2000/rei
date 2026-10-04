@@ -247,6 +247,11 @@ public class ExternalConfigFileService {
             directories:
               - ${rei.data-dir}/skills
             max-selected: 3
+            semantic:
+              enabled: ${REI_SKILLS_SEMANTIC_ENABLED:false}
+              max-skills: ${REI_SKILLS_SEMANTIC_MAX_SKILLS:64}
+              minimum-similarity: ${REI_SKILLS_SEMANTIC_MINIMUM_SIMILARITY:0.55}
+              failure-backoff-seconds: ${REI_SKILLS_SEMANTIC_FAILURE_BACKOFF_SECONDS:30}
           web-search:
             enabled: true
             providers:
