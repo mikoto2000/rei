@@ -52,10 +52,12 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
           validate(goal);
           if(verifier.verify(goal).satisfied())outcome=new GoalLoopService.Outcome(ChatExecutionResult.success("Criterion already satisfied",false));
           else {
+            boolean uncertain=goals.attempts(goal.projectId(),goal.id()).stream().anyMatch(a->a.reason().equals("uncertain_run_reconciled"));
             String prompt="Goal: "+goal.objective()+"\nCompletion criteria: ALL Project-relative files must match their expected SHA-256: "+goal.criteria()
                 +". Use the existing action plan and task state to choose and execute the next bounded step. "
                 +"The host verifies the file independently; a completion statement is insufficient. "
-                +"Previous attempts remain in this conversation. Do not repeat an already completed side effect.";
+                +"Previous attempts remain in this conversation. Do not repeat an already completed side effect."
+                +(uncertain?" An earlier Run has unknown side effects. Inspect current artifacts and saved history before deciding whether any action needs to be repeated.":"");
             outcome=new GoalLoopService.Outcome(chat.execute(owner,prompt,new UserInterventionQueue(),reservation));
           }
         }
@@ -71,6 +73,9 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
       }
       completed.accept(outcome);
     },work->{try {work.run();}catch(RuntimeException error){completed.accept(new GoalLoopService.Outcome(ChatExecutionResult.failed("Goal admission failed")));}});
+  }
+  @Override public boolean isInFlight(GoalRepository.Goal goal) {
+    return goal.currentRunId()!=null&&router.containsRun(goal.projectId(),goal.currentRunId());
   }
   @Override public void cancel(GoalRepository.Goal goal) {
     if(goal.currentRunId()==null)return;

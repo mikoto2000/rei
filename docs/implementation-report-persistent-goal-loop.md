@@ -35,6 +35,6 @@ Result: PASS
 Remaining:
 - ファイル条件以外のbuild/test/API条件、任意の目的の意味的な完了判定。
 - SubAgent / Skill selector / Sleep等の独立LLM処理への予算継承。
-- 不確定RUNNINGの専用復旧、Goal専用Web管理API・Native UI・介入mailbox。
+- 不確定RUNNINGのShell復旧は後続goal-uncertain-run-recoveryで対応。Goal専用Web管理API・Native UI・介入mailboxは未対応。
 - Goalとcheckpointの自動関連付け、複数アプリ間FIFO。
 - 外部サービスは不要。実行は人間の明示操作と有効なTool permissionに限定する。
