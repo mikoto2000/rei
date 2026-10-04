@@ -26,6 +26,31 @@ public class AutoSleepService implements AutoCloseable {
   });
   private volatile Thread runningThread;
   private final java.util.concurrent.atomic.AtomicBoolean executing=new java.util.concurrent.atomic.AtomicBoolean();
+  private dev.mikoto2000.rei.application.session.SessionRepository savedSessions;
+  private dev.mikoto2000.rei.core.project.ProjectService projects;
+  private Iterator<dev.mikoto2000.rei.application.session.SessionMetadata> startup;
+  private boolean startupCaptured;
+  @org.springframework.beans.factory.annotation.Autowired
+  public synchronized void setStartupSources(dev.mikoto2000.rei.application.session.SessionRepository savedSessions,
+      dev.mikoto2000.rei.core.project.ProjectService projects) {
+    this.savedSessions=savedSessions;this.projects=projects;
+  }
+  /** Metadata only: no history reads or model calls until the usual idle gates pass. */
+  private void discoverStartup() {
+    if(savedSessions==null||projects==null)return;
+    if(!startupCaptured) {startup=savedSessions.completionSnapshot().iterator();startupCaptured=true;}
+    var registered=projects.completionProjects();
+    for(int scanned=0;scanned<256&&sessions.size()<256&&startup.hasNext();scanned++) {
+      var item=startup.next();
+      if(item.sessionId().isBlank()||item.projectId().isBlank()||registered.stream().noneMatch(p->p.id().equals(item.projectId())))continue;
+      try {
+        String encoded=dev.mikoto2000.rei.core.project.ProjectStorage.projectId(item.sessionId());
+        if(encoded!=null&&!encoded.equals(item.projectId()))continue;
+        sessions.putIfAbsent(item.sessionId(),item.projectId());
+      } catch(IllegalArgumentException invalidIdentity) { /* Unusable metadata is never a Sleep candidate. */ }
+    }
+    if(!startup.hasNext())startup=Collections.emptyIterator();
+  }
   private long runningVersion;
   private boolean closed;
   public AutoSleepService(SleepService sleep, MemoryProperties memory, AutoSleepProperties properties,
@@ -54,11 +79,15 @@ public class AutoSleepService implements AutoCloseable {
     Instant latest=java.util.stream.Stream.of(activity.applicationStartedAt(),activity.lastUserActivityAt(),activity.lastAgentActivityAt())
         .filter(Objects::nonNull).max(Instant::compareTo).orElse(now);
     if(Duration.between(latest,now).compareTo(properties.minimumIdle())<0) return;
-    for(var session:sessions.entrySet()) {
+    try {discoverStartup();}
+    catch(RuntimeException error) {org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep discovery unavailable ({})",error.getClass().getSimpleName());}
+    var candidates=sessions.entrySet().iterator();
+    while(candidates.hasNext()) {
+      var session=candidates.next();
       Instant previous=attempts.get(session.getKey());
       if(previous!=null && now.isBefore(previous.plus(properties.retryInterval()))) continue;
       try {
-        if(sleep.unsleptTurns(session.getKey())<properties.minimumTurns()) continue;
+        if(sleep.unsleptTurns(session.getKey())<properties.minimumTurns()) {attempts.remove(session.getKey());candidates.remove();continue;}
         String id=session.getKey(), project=session.getValue();
         runningVersion=version;
         attempts.put(id,now);
