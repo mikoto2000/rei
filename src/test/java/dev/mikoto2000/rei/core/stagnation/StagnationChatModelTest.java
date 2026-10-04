@@ -18,6 +18,20 @@ import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import reactor.core.publisher.Flux;
 
 class StagnationChatModelTest {
+  @Test void policyBlocksAChatToolBeforeTheCallbackIsInvoked() {
+    var events=new ArrayList<AgentEvent>();
+    var context=context(3,events);
+    var p=new dev.mikoto2000.rei.core.policy.ToolPermissionPolicy(
+        new dev.mikoto2000.rei.core.policy.ToolPermissionProperties(true,Set.of(),Set.of(),Map.of()));
+    context.setToolPermissionGuard(new dev.mikoto2000.rei.core.policy.ToolPermissionGuard(p,
+        new AgentEventFactory(Clock.systemUTC()),events::add));
+    var effects=new AtomicInteger();
+    assertThatThrownBy(()->model(new ArrayList<>(),new AtomicInteger(),false)
+        .stream(prompt(context,()->{effects.incrementAndGet(); return "content";})).blockLast())
+        .hasMessageContaining("REQUIRE_APPROVAL");
+    assertThat(effects.get()).isZero();
+    assertThat(events).anyMatch(e->e.type()==AgentEventType.TOOL_FAILED);
+  }
   @Test
   void modelFailureStillEndsTheIteration() {
     var context = context(3, new ArrayList<>());
