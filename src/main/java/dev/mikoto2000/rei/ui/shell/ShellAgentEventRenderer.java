@@ -154,6 +154,11 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       return;
     }
     switch (event.type()) {
+      case ATTENTION_REQUIRED -> {
+        closeAssistantLine();closeThinkingLine();
+        var payload=(dev.mikoto2000.rei.event.AttentionRequiredPayload)event.payload();
+        output.println("[attention] "+payload.kind()+": "+payload.message()+" (/attention show "+payload.attentionId()+")");
+      }
       case WORK_CONTEXT_UPDATED, WORK_CONTEXT_UPDATE_FAILED -> {
         closeAssistantLine(); closeThinkingLine();
         var payload=(dev.mikoto2000.rei.event.WorkContextPayload)event.payload();
