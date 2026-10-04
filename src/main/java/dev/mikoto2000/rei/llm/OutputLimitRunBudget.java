@@ -27,6 +27,8 @@ public class OutputLimitRunBudget {
     this.reservation=reservation;
   }
 
+  public LlmCallReservation sharedLlmReservation() {return reservation;}
+
   public boolean tryConsumeLlmCall() {
     if (llmCalls >= maxLlmCalls) {
       return false;

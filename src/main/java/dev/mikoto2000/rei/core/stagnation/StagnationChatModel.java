@@ -142,6 +142,7 @@ public class StagnationChatModel implements ChatModel {
         boolean decorated=delegateTool instanceof dev.mikoto2000.rei.event.ToolEventCallbackDecorator;
         String actualId=context.claimToolId(name,input);
         var capturedToolContext=new HashMap<String,Object>();if(toolContext!=null)capturedToolContext.putAll(toolContext.getContext());
+        capturedToolContext.put(RunExecutionContext.KEY,context);
         capturedToolContext.put("toolCallId",actualId);
         var invocationContext=new ToolContext(capturedToolContext);
         String durableCall=decorated?null:context.beginDurableTool(actualId,name,input);

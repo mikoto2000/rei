@@ -352,4 +352,67 @@ class SubAgentRunnerTest {
     assertThat(results).hasSize(2).allMatch(result -> result.status() == SubAgentResult.Status.CANCELLED);
     assertThat(runner.cancel(ids.getFirst())).isFalse();
   }
+  dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation(int limit,AtomicInteger used) {
+    return new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation() {
+      public boolean tryReserve(){for(;;){int value=used.get();if(value>=limit)return false;if(used.compareAndSet(value,value+1))return true;}}
+      public int remaining(){return Math.max(0,limit-used.get());}
+    };
+  }
+  @Test void inheritedBudgetRejectsChildModelBeforeAnyInvocation() throws Exception {
+    var calls=new AtomicInteger();var used=new AtomicInteger();
+    var result=runner(p->{calls.incrementAndGet();return Flux.just(answer(SubAgentResultParserTest.VALID));},"2s").run("reviewer","task",null,reservation(0,used));
+    assertThat(result.status()).isEqualTo(SubAgentResult.Status.FAILED);assertThat(result.output()).contains("SHARED_LLM_BUDGET_EXHAUSTED");assertThat(calls).hasValue(0);assertThat(used).hasValue(0);
+  }
+  @Test void inheritedBudgetChargesRepairAndRetainsOriginalDiagnostics() throws Exception {
+    maxRepairs=1;maxSteps=4;var calls=new AtomicInteger();var used=new AtomicInteger();
+    var result=runner(p->{calls.incrementAndGet();return Flux.just(answer("{}"));},"2s").run("reviewer","task",null,reservation(1,used));
+    assertThat(result.status()).isEqualTo(SubAgentResult.Status.FAILED);assertThat(result.output()).contains("SHARED_LLM_BUDGET_EXHAUSTED");assertThat(calls).hasValue(1);assertThat(used).hasValue(1);assertThat(result.validationHistory()).hasSize(1);
+  }
+  @Test void actualParentChatDelegationChargesBothModelsToDurableGoalBudget() throws Exception {
+    var childCalls=new AtomicInteger();var parentCalls=new AtomicInteger();
+    var child=runner(p->{childCalls.incrementAndGet();return Flux.just(answer(SubAgentResultParserTest.VALID));},"2s");
+    var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(policy,model->true));registry.reload();
+    var delegate=new SubAgentTools(child,registry).callback();assertThat(delegate.getToolDefinition().inputSchema()).doesNotContain("toolContext","reservation");
+    ChatModel parentModel=new ChatModel(){
+      public ChatResponse call(Prompt prompt){throw new UnsupportedOperationException();}
+      public Flux<ChatResponse> stream(Prompt prompt){parentCalls.incrementAndGet();return Flux.just(new ChatResponse(List.of(new Generation(AssistantMessage.builder().content("")
+          .toolCalls(List.of(new AssistantMessage.ToolCall("delegate","function","delegateTask","{\"agent\":\"reviewer\",\"task\":\"review\"}"))).build()))));}
+    };
+    var holder=org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);org.mockito.Mockito.when(holder.get()).thenReturn("test");
+    var client=org.springframework.ai.chat.client.ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(parentModel)).defaultToolCallbacks(delegate).build();
+    var chat=new ChatExecutionService(new dev.mikoto2000.rei.llm.FixedLlmChatClientProvider(client),holder,new dev.mikoto2000.rei.llm.FixedLlmModelProvider(),new dev.mikoto2000.rei.llm.LlmProperties(),cancellation,Optional.empty(),Optional.empty());
+    var goals=new dev.mikoto2000.rei.goal.GoalRepository(new org.springframework.jdbc.datasource.DriverManagerDataSource("jdbc:sqlite:"+directory.resolve("goals.db")),Clock.systemUTC());
+    var goal=goals.create(new AgentRunContext("source","session",directory,"project"),"artifact","out.txt","a".repeat(64),3,2);var claim=goals.claim("project",goal.id());String run=goals.beginAttempt(claim);
+    var reservation=new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation(){public boolean tryReserve(){return goals.reserveLlm(claim);}public int remaining(){return goals.remainingLlm(claim);}};
+    var result=chat.execute(new AgentRunContext(run,"session",directory,"project"),"review",new UserInterventionQueue(),reservation);
+    assertThat(result.success()).isFalse();assertThat(parentCalls).hasValue(1);assertThat(childCalls).hasValue(1);assertThat(goals.get("project",goal.id()).llmCallsUsed()).isEqualTo(2);assertThat(goals.reserveLlm(claim)).isFalse();
+  }
+  @Test void parallelChildrenAtomicallyShareOneRemainingCall() throws Exception {
+    var calls=new AtomicInteger();var used=new AtomicInteger();var child=runner(p->{calls.incrementAndGet();return Flux.just(answer(SubAgentResultParserTest.VALID));},"2s");
+    var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(policy,model->true));registry.reload();
+    try(var parallel=new ParallelSubAgentDelegator(child,registry,cancellation)) {
+      var result=parallel.delegate(List.of(new ParallelSubAgentDelegator.Request("one","reviewer","one",null),new ParallelSubAgentDelegator.Request("two","reviewer","two",null)),reservation(1,used));
+      assertThat(result.status()).isEqualTo(ParallelSubAgentDelegator.Status.PARTIAL);assertThat(calls).hasValue(1);assertThat(used).hasValue(1);
+      assertThat(result.items().stream().filter(item->item.result().status()==SubAgentResult.Status.COMPLETED).count()).isEqualTo(1);
+    }
+  }
+  @Test void inheritedBudgetChargesEveryChildToolCycleBeforeCallingModel() throws Exception {
+    var calls=new AtomicInteger();var used=new AtomicInteger();
+    var result=runner(p->{calls.incrementAndGet();return Flux.just(new ChatResponse(List.of(new Generation(AssistantMessage.builder().content("").toolCalls(List.of(new AssistantMessage.ToolCall("call","function","readMultiFile","{}"))).build()))));},"2s").run("reviewer","task",null,reservation(1,used));
+    assertThat(result.output()).contains("SHARED_LLM_BUDGET_EXHAUSTED");assertThat(calls).hasValue(1);assertThat(toolCalls).hasValue(1);assertThat(used).hasValue(1);
+  }
+  @Test void parallelToolContextUsesTheSameDurableGoalReservationAcrossWorkers() throws Exception {
+    var calls=new AtomicInteger();var child=runner(p->{calls.incrementAndGet();return Flux.just(answer(SubAgentResultParserTest.VALID));},"2s");
+    var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(policy,model->true));registry.reload();
+    var goals=new dev.mikoto2000.rei.goal.GoalRepository(new org.springframework.jdbc.datasource.DriverManagerDataSource("jdbc:sqlite:"+directory.resolve("goals.db")),Clock.systemUTC());
+    var goal=goals.create(new AgentRunContext("source","session",directory,"project"),"artifact","out.txt","a".repeat(64),3,1);var claim=goals.claim("project",goal.id());goals.beginAttempt(claim);
+    var reservation=new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation(){public boolean tryReserve(){return goals.reserveLlm(claim);}public int remaining(){return goals.remainingLlm(claim);}};
+    var execution=new dev.mikoto2000.rei.core.stagnation.RunExecutionContext("parent",new dev.mikoto2000.rei.llm.OutputLimitRunBudget(2,5,reservation),null,new AgentEventFactory(Clock.systemUTC()),events::add);
+    try(var parallel=new ParallelSubAgentDelegator(child,registry,cancellation)) {
+      var tools=new SubAgentTools(child,registry);tools.parallelDelegator(parallel);
+      assertThat(tools.callback("delegateTasks").getToolDefinition().inputSchema()).doesNotContain("toolContext","reservation");
+      var result=tools.delegateTasks(List.of(new ParallelSubAgentDelegator.Request("one","reviewer","one",null),new ParallelSubAgentDelegator.Request("two","reviewer","two",null)),new ToolContext(Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY,execution)));
+      assertThat(result.status()).isEqualTo(ParallelSubAgentDelegator.Status.PARTIAL);assertThat(calls).hasValue(1);assertThat(goals.get("project",goal.id()).llmCallsUsed()).isEqualTo(1);
+    }
+  }
 }
