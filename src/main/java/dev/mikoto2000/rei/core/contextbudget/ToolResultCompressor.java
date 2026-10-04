@@ -42,9 +42,9 @@ public class ToolResultCompressor {
       var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(raw);
       if (node != null && node.isObject()) {
         var text = new StringBuilder();
-        for (String key : List.of("command", "status", "exitCode", "exit_code", "error", "stderr", "stdout", "output")) {
+        for (String key : List.of("command", "status", "exitCode", "exit_code", "error", "diagnosis", "stderr", "stdout", "output")) {
           var value = node.get(key);
-          if (value != null) text.append(key).append(": ").append(value.asText()).append('\n');
+          if (value != null) text.append(key).append(": ").append(value.isContainerNode() ? value.toString() : value.asText()).append('\n');
         }
         if (!text.isEmpty()) raw = text.toString();
       }

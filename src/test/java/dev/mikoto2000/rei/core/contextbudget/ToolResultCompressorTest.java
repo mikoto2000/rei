@@ -18,6 +18,13 @@ class ToolResultCompressorTest {
     assertThat(new ToolResultCompressor(new RawToolResultStore(dir), tokens, 100, 70)
         .compact(message, "chat", "run")).isSameAs(message);
   }
+  @Test void commandJsonKeepsStructuredDiagnosisBeforeVerboseProgressLogs() {
+    var command=new dev.mikoto2000.rei.core.process.RunCommandResult("failed","foreground","foreground",1,
+        "progress\\n".repeat(3000),"[ERROR] demo.AppTest.fail -- Time elapsed: 0.1 s <<< FAILURE!",null,null,false,null);
+    String raw=new org.springframework.ai.tool.execution.DefaultToolCallResultConverter().convert(command,null);
+    var compact=(ToolResponseMessage)new ToolResultCompressor(new RawToolResultStore(dir),tokens,100,600).compact(result(raw),"chat","run");
+    assertThat(compact.getResponses().getFirst().responseData()).contains("TEST_FAILURE","demo.AppTest.fail");
+  }
   @Test void largeResultsKeepDiagnosticsAndRetrievableRawBody() {
     String raw = "command: ./mvnw test\nstatus: FAILED\nexitCode: 1\n" + "progress\n".repeat(500)
         + "NativeSessionClientTest failed\nexpected 42 but was 41\nBUILD FAILURE\n";
