@@ -5,7 +5,7 @@ import java.util.*;
 /** YAML requests capabilities; only this audited allowlist grants them. No MCP or delegation. */
 public final class SubAgentToolPolicy {
   private static final Set<String> ALLOWED = Set.of("readMultiFile", "grepMultiQuery", "searchAndRead",
-      "readPdfFile", "webSearch", "webSearchAndRead", "searchKnowledge");
+      "readPdfFile", "webSearch", "webSearchAndRead", "searchKnowledge", "repositoryMap");
   private final Set<String> known;
   public SubAgentToolPolicy(Set<String> known) { this.known = Set.copyOf(known); }
   public List<String> effectiveTools(List<String> requested) {

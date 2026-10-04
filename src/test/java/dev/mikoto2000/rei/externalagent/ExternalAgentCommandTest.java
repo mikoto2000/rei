@@ -39,7 +39,9 @@ class ExternalAgentCommandTest {
   @Test void semanticToolUsesSharedServiceAndHasNoAgentOrWorkingDirectoryArgument() {
     var service = mock(ExternalAgentDelegationService.class);
     var tools = new ExternalAgentTools(service);
-    var callback = org.springframework.ai.tool.method.MethodToolCallbackProvider.builder().toolObjects(tools).build().getToolCallbacks()[0];
+    var callback = java.util.Arrays.stream(org.springframework.ai.tool.method.MethodToolCallbackProvider.builder()
+        .toolObjects(tools).build().getToolCallbacks())
+        .filter(candidate -> candidate.getToolDefinition().name().equals("requestCodexReview")).findFirst().orElseThrow();
     assertEquals("requestCodexReview", callback.getToolDefinition().name());
     assertTrue(callback.getToolDefinition().description().contains("explicitly"));
     String schema = callback.getToolDefinition().inputSchema();
