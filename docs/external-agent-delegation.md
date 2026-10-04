@@ -109,3 +109,7 @@ Shell は `[delegation] codex completed: N findings` 等を表示し、stdout �
 ## Phase 2
 
 実装・修正・commit/push の委譲、他社 agent、registry、複数 agent の並列実行、resume、自動委譲、自動再レビューは対象外です。
+
+## 保存レビューと再レビュー
+
+通常レビューはSQLiteへ結果を保存します。履歴Toolと明示的な再レビューの動作・保証範囲は [保存レビュー仕様](external-review-history.md) を参照してください。
