@@ -15,6 +15,7 @@ public class GoalLoopService {
     void dispatch(GoalRepository.Claim claim,String run,Consumer<Outcome> completed);
     default void validate(GoalRepository.Goal goal) {}
     default void cancel(GoalRepository.Goal goal) {}
+    default boolean isInFlight(GoalRepository.Goal goal) {return true;}
   }
   private final GoalRepository goals;
   private final FileGoalVerifier verifier;
@@ -35,7 +36,7 @@ public class GoalLoopService {
     var goal=goals.create(owner,objective,criteria,runs,calls);events.publish(goal);return goal;
   }
   /** Human-facing dispatch only, never a model Tool or automatic startup restoration. */
-  public GoalRepository.Goal run(String project,String id) {
+  public synchronized GoalRepository.Goal run(String project,String id) {
     if(!permissions.enabled())throw new IllegalStateException("Enable rei.tool-permission.enabled before running a Goal");
     var goal=goals.get(project,id);gateway.validate(goal);
     if(!goal.status().equals("RUNNING")&&!goal.status().equals("CANCELLED")&&verifier.verify(goal).satisfied())return verify(project,id).goal();
@@ -49,12 +50,17 @@ public class GoalLoopService {
     }
     return new Inspection(goal,verification);
   }
+  public synchronized GoalRepository.Goal reconcile(String project,String id,String expectedRunId) {
+    var goal=goals.get(project,id);gateway.validate(goal);
+    if(gateway.isInFlight(goal))throw new IllegalStateException("Goal Run is queued or executing; stop it through the normal Run controls");
+    var result=goals.reconcile(project,id,expectedRunId);events.publish(result);return result;
+  }
   public GoalRepository.Goal cancel(String project,String id) {
     var before=goals.get(project,id);var goal=goals.cancel(project,id);
     if(before.status().equals("RUNNING"))gateway.cancel(goal);
     events.publish(goal);return goal;
   }
-  private void next(GoalRepository.Claim claim) {
+  private synchronized void next(GoalRepository.Claim claim) {
     if(!goals.active(claim))return;
     var goal=goals.get(claim.goal().projectId(),claim.goal().id());
     if(goal.attempts()>=goal.maxRuns()||goal.llmCallsUsed()>=goal.maxLlmCalls()) {stop(claim,"BLOCKED","budget_exhausted");return;}

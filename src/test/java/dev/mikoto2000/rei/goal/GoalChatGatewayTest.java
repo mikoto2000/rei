@@ -94,4 +94,22 @@ class GoalChatGatewayTest {
     assertEquals(2,new picocli.CommandLine(command).execute("create","bad","--criteria-json","[]","--file","x","--sha256",goal.sha256()));
     assertEquals(1,goals.list(project).size());
   }
+  @Test void reconciliationCannotReleaseQueuedOrExecutingGoalRun() {
+    loop.run(project,goal.id());String run=goals.get(project,goal.id()).currentRunId();
+    assertThrows(IllegalStateException.class,()->loop.reconcile(project,goal.id(),run));assertEquals("RUNNING",goals.get(project,goal.id()).status());
+    when(chat.execute(any(),anyString(),any(),any())).thenAnswer(invocation->{
+      assertThrows(IllegalStateException.class,()->loop.reconcile(project,goal.id(),run));return ChatExecutionResult.failed("stop");
+    });
+    jobs.remove().run();assertEquals("FAILED",goals.get(project,goal.id()).status());
+  }
+  @Test void shellRequiresAcknowledgementAndResumesUncertainGoalOnlyExplicitly() {
+    var claim=goals.claim(project,goal.id());String run=goals.beginAttempt(claim);assertTrue(goals.reserveLlm(claim));
+    var command=new GoalCommand(goals,loop,projects);command.setShellOutput(new java.io.PrintWriter(new java.io.StringWriter()));var cli=new picocli.CommandLine(command);
+    assertEquals(2,cli.execute("reconcile",goal.id(),"--run-id",run));assertEquals("RUNNING",goals.get(project,goal.id()).status());
+    command=new GoalCommand(goals,loop,projects);command.setShellOutput(new java.io.PrintWriter(new java.io.StringWriter()));cli=new picocli.CommandLine(command);
+    assertEquals(0,cli.execute("reconcile",goal.id(),"--run-id",run,"--acknowledge-uncertain-side-effects"));
+    assertEquals("PAUSED",goals.get(project,goal.id()).status());verifyNoInteractions(chat);assertTrue(jobs.isEmpty());
+    when(chat.execute(any(),anyString(),any(),any())).thenAnswer(invocation->{assertTrue(invocation.getArgument(1,String.class).contains("unknown side effects"));return ChatExecutionResult.failed("stop");});
+    loop.run(project,goal.id());jobs.remove().run();assertEquals(2,goals.get(project,goal.id()).attempts());assertEquals(1,goals.get(project,goal.id()).llmCallsUsed());
+  }
 }

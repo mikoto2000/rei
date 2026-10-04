@@ -68,6 +68,6 @@ SQLiteにGoal、試行、状態履歴、累積予算を保存します。モデ�
 公開event mapperは状態と予算だけを投影し、内部reasonを公開しません。
 
 再起動時の自動Run開始やRUNNINGの自動再試行は行いません。RUNNINGは副作用の成否が不明なので、
-保存状態と実行証跡を確認する必要があります。不確定Runの専用復旧操作は未実装です。
+保存状態と実行証跡を確認したうえで、Shellの `/goal reconcile` を利用できます。詳細は goal-uncertain-run-recovery.md を参照してください。
 汎用のbuild/test/API条件、独立LLMへの予算継承、Goal専用Web管理API・Native UI・介入mailbox、
 複数アプリ間のProject FIFO、Goalとcheckpointの自動関連付けも残作業です。

@@ -145,6 +145,16 @@ public class GoalRepository {
       history(id,"COMPLETED","file_digest_verified");
     });return get(project,id);
   }
+  /** Human reconciliation only: unknown side effects remain unknown; no budget or evidence is restored. */
+  public Goal reconcile(String project,String id,String expectedRunId) {
+    transaction.executeWithoutResult(status->{
+      get(project,id);
+      if(db.sql("UPDATE agent_goals SET status='PAUSED',reason='uncertain_run_reconciled',token=NULL WHERE project=? AND id=? AND status='RUNNING' AND run IS ?")
+          .params(project,id,expectedRunId).update()!=1)throw new IllegalStateException("Goal is no longer running with the specified Run ID");
+      db.sql("UPDATE agent_goal_attempts SET status='BLOCKED',reason='uncertain_run_reconciled' WHERE goal=? AND status='RUNNING'").param(id).update();
+      history(id,"PAUSED","uncertain_run_reconciled");
+    });return get(project,id);
+  }
   public Goal cancel(String project,String id) {
     transaction.executeWithoutResult(status->{
       get(project,id);

@@ -64,4 +64,16 @@ class ProjectRunQueueTest {
       assertThat(successor.await(5, TimeUnit.SECONDS)).isTrue();
     }
   }
+  @Test void presenceTracksQueuedAndRunningOperationsUntilSlotRelease() {
+    var tasks=new ArrayList<Runnable>();var queue=new ProjectRunQueue(tasks::add);
+    queue.enqueue("project","first",()->{
+      assertThat(queue.containsRun("project","first")).isTrue();
+      assertThat(queue.containsRun("project","second")).isTrue();
+    });
+    queue.enqueue("project","second",()->{});
+    assertThat(queue.containsRun("other","first")).isFalse();assertThat(queue.containsRun("project","first")).isTrue();
+    tasks.removeFirst().run();assertThat(queue.containsRun("project","first")).isFalse();assertThat(queue.containsRun("project","second")).isTrue();
+    assertThat(queue.cancelQueued("second")).isTrue();assertThat(queue.containsRun("project","second")).isFalse();
+    tasks.removeFirst().run();assertThat(queue.containsRun("project","second")).isFalse();
+  }
 }
