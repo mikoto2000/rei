@@ -15,9 +15,15 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 /** Durable goal identity, claims and pre-call reservations. Resume never replenishes a budget. */
 @Repository
 public class GoalRepository {
+  public record FileCriterion(String relativeFile,String sha256) {}
   public record Goal(String id,String projectId,String projectRoot,String sessionId,String objective,
       String relativeFile,String sha256,int maxRuns,int maxLlmCalls,int attempts,int llmCallsUsed,
-      String status,String currentRunId,String reason) {}
+      String status,String currentRunId,String reason,List<FileCriterion> criteria) {
+    public Goal { criteria=List.copyOf(criteria); }
+    public Goal(String id,String projectId,String projectRoot,String sessionId,String objective,String relativeFile,String sha256,int maxRuns,int maxLlmCalls,int attempts,int llmCallsUsed,String status,String currentRunId,String reason) {
+      this(id,projectId,projectRoot,sessionId,objective,relativeFile,sha256,maxRuns,maxLlmCalls,attempts,llmCallsUsed,status,currentRunId,reason,List.of(new FileCriterion(relativeFile,sha256)));
+    }
+  }
   public record Claim(Goal goal,String token) {}
   public record Attempt(String runId,int number,String status,String reason) {}
   private final JdbcClient db;
@@ -27,13 +33,14 @@ public class GoalRepository {
   public GoalRepository(@Qualifier("memoryConsolidationDataSource") DataSource source,Clock clock) {
     db=JdbcClient.create(source);transaction=new TransactionTemplate(new DataSourceTransactionManager(source));this.clock=clock;
     db.sql("CREATE TABLE IF NOT EXISTS agent_goals(id TEXT PRIMARY KEY,project TEXT NOT NULL,root TEXT NOT NULL,session TEXT NOT NULL,objective TEXT NOT NULL,file TEXT NOT NULL,digest TEXT NOT NULL,max_runs INTEGER NOT NULL,max_calls INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,used INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL,run TEXT,token TEXT,reason TEXT NOT NULL DEFAULT '')").update();
+    db.sql("CREATE TABLE IF NOT EXISTS agent_goal_criteria(goal TEXT NOT NULL,ordinal INTEGER NOT NULL,file TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(goal,ordinal))").update();
     db.sql("CREATE UNIQUE INDEX IF NOT EXISTS agent_goals_running_session ON agent_goals(project,session) WHERE status='RUNNING'").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_goal_attempts(goal TEXT NOT NULL,run TEXT PRIMARY KEY,number INTEGER NOT NULL,status TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',UNIQUE(goal,number))").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_goal_history(sequence INTEGER PRIMARY KEY AUTOINCREMENT,goal TEXT NOT NULL,status TEXT NOT NULL,reason TEXT NOT NULL,timestamp INTEGER NOT NULL)").update();
   }
-  private static final RowMapper<Goal> ROW=(rs,n)->new Goal(rs.getString("id"),rs.getString("project"),rs.getString("root"),rs.getString("session"),
+  private final RowMapper<Goal> ROW=(rs,n)->new Goal(rs.getString("id"),rs.getString("project"),rs.getString("root"),rs.getString("session"),
       rs.getString("objective"),rs.getString("file"),rs.getString("digest"),rs.getInt("max_runs"),rs.getInt("max_calls"),rs.getInt("attempts"),rs.getInt("used"),
-      rs.getString("status"),rs.getString("run"),rs.getString("reason"));
+      rs.getString("status"),rs.getString("run"),rs.getString("reason"),criteria(rs.getString("id"),rs.getString("file"),rs.getString("digest")));
 
   public Goal create(AgentRunContext owner,String objective,String relativeFile,String sha256,int maxRuns,int maxLlmCalls) {
     if(owner==null||owner.projectId()==null||owner.projectId().isBlank()||owner.conversationId().isBlank())throw new IllegalArgumentException("Goal requires an owning Project and Session");
@@ -48,6 +55,30 @@ public class GoalRepository {
         throw new IllegalStateException("Project goal limit reached (256)");
       history(id,"READY","created");
     });return get(owner.projectId(),id);
+  }
+  private List<FileCriterion> criteria(String id,String file,String digest) {
+    var items=db.sql("SELECT file,digest FROM agent_goal_criteria WHERE goal=? ORDER BY ordinal").param(id)
+        .query((rs,n)->new FileCriterion(rs.getString("file"),rs.getString("digest"))).list();
+    return items.isEmpty()?List.of(new FileCriterion(file,digest)):items;
+  }
+  public Goal create(AgentRunContext owner,String objective,List<FileCriterion> criteria,int maxRuns,int maxLlmCalls) {
+    if(criteria==null||criteria.isEmpty()||criteria.size()>16)throw new IllegalArgumentException("Goal requires 1..16 file criteria");
+    var normalized=new ArrayList<FileCriterion>();var paths=new HashSet<Path>();
+    for(var item:criteria) {
+      if(item==null)throw new IllegalArgumentException("File criterion is required");
+      validateFile(item.relativeFile());var path=Path.of(item.relativeFile()).normalize();
+      if(!paths.add(path))throw new IllegalArgumentException("Duplicate completion file");
+      if(item.sha256()==null||!item.sha256().matches("[a-fA-F0-9]{64}"))throw new IllegalArgumentException("Expected SHA-256 must contain 64 hexadecimal characters");
+      normalized.add(new FileCriterion(path.toString().replace('\\','/'),item.sha256().toLowerCase(Locale.ROOT)));
+    }
+    return transaction.execute(status->{
+      var first=normalized.getFirst();var goal=create(owner,objective,first.relativeFile(),first.sha256(),maxRuns,maxLlmCalls);
+      for(int i=0;i<normalized.size();i++) {
+        var item=normalized.get(i);
+        db.sql("INSERT INTO agent_goal_criteria(goal,ordinal,file,digest) VALUES(?,?,?,?)").params(goal.id(),i,item.relativeFile(),item.sha256()).update();
+      }
+      return get(owner.projectId(),goal.id());
+    });
   }
   static void validateFile(String file) {
     if(file==null||file.isBlank()||file.length()>1024)throw new IllegalArgumentException("Relative file is required (up to 1024 characters)");

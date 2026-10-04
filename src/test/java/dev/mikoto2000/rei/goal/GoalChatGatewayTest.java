@@ -66,4 +66,32 @@ class GoalChatGatewayTest {
     when(projects.currentContext()).thenReturn(new ProjectContext("00000000-0000-0000-0000-000000000002","other",dir));
     assertEquals(2,cli.execute("cancel",goal.id()));assertEquals("WAITING_APPROVAL",goals.get(project,goal.id()).status());
   }
+  @Test void shellCreatesMultipleCriteriaAndGatewayRequiresAllBeforeCompletion() throws Exception {
+    String hash=goal.sha256();
+    var command=new GoalCommand(goals,loop,projects);var cli=new picocli.CommandLine(command);
+    var text=new java.io.StringWriter();command.setShellOutput(new java.io.PrintWriter(text));
+    String json="[{\"relativeFile\":\"A.txt\",\"sha256\":\""+hash+"\"},{\"relativeFile\":\"B.txt\",\"sha256\":\""+hash+"\"}]";
+    assertEquals(0,cli.execute("create","two files","--criteria-json",json));
+    var multi=goals.list(project).stream().filter(g->g.objective().equals("two files")).findFirst().orElseThrow();
+    var calls=new java.util.concurrent.atomic.AtomicInteger();
+    when(chat.execute(any(),anyString(),any(),any())).thenAnswer(invocation->{
+      String prompt=invocation.getArgument(1);assertTrue(prompt.contains("ALL"));assertTrue(prompt.contains("A.txt"));assertTrue(prompt.contains("B.txt"));
+      var reservation=invocation.getArgument(3,OutputLimitRunBudget.LlmCallReservation.class);assertTrue(reservation.tryReserve());
+      Files.writeString(dir.resolve(calls.incrementAndGet()==1?"A.txt":"B.txt"),"correct");
+      return ChatExecutionResult.success("Complete",false);
+    });
+    loop.run(project,multi.id());jobs.remove().run();assertEquals("RUNNING",goals.get(project,multi.id()).status());
+    jobs.remove().run();var saved=goals.get(project,multi.id());assertEquals("COMPLETED",saved.status());assertEquals(2,saved.attempts());assertEquals(2,saved.llmCallsUsed());
+    assertEquals(List.of("UNVERIFIED","VERIFIED"),goals.attempts(project,multi.id()).stream().map(GoalRepository.Attempt::status).toList());
+  }
+  @Test void shellRejectsMixedMalformedAndTrailingCriteriaWithoutCreatingGoal() {
+    String[] values={"[]", "null", "{}", "[] []", "[{\"relativeFile\":\"../escape\",\"sha256\":\""+goal.sha256()+"\"}]"};
+    for(var value:values) {
+      var command=new GoalCommand(goals,loop,projects);command.setShellOutput(new java.io.PrintWriter(new java.io.StringWriter()));
+      assertEquals(2,new picocli.CommandLine(command).execute("create","bad","--criteria-json",value));
+    }
+    var command=new GoalCommand(goals,loop,projects);command.setShellOutput(new java.io.PrintWriter(new java.io.StringWriter()));
+    assertEquals(2,new picocli.CommandLine(command).execute("create","bad","--criteria-json","[]","--file","x","--sha256",goal.sha256()));
+    assertEquals(1,goals.list(project).size());
+  }
 }
