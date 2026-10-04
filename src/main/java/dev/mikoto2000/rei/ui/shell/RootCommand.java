@@ -33,6 +33,7 @@ version = "v1.0.0",
 name = "",
 description = "AI shell",
 subcommands = {
+  dev.mikoto2000.rei.reflection.ReflectionCommand.class,
   dev.mikoto2000.rei.goal.GoalCommand.class,
   dev.mikoto2000.rei.attention.AttentionCommand.class,
   dev.mikoto2000.rei.temporal.TimerCommand.class,
