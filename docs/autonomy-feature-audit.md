@@ -48,3 +48,7 @@ Auto Sleep、共通 Policy/永続承認、管理プロセス Waiting、永続一
 ## Native Checkpoint recovery follow-up
 
 NativeのProject限定Checkpoint一覧・明示照合・差分/結果不明操作/阻害要因確認・再開/放棄確認・既存Runの読み取り追跡を追加。再開Runは保存Sessionを保持し既存実行一覧/SSEへ統合し、結果不明時にresume POSTを自動再送しない。A2/A5のCheckpoint画面部分を対応済みとし、Goal/Scheduler復旧・依存への人間回答UIおよび他のDeferred項目は引き続き未完了。詳細と検証はimplementation-report-native-checkpoint-recovery.mdを参照。
+
+## Human dependency HTTP answer follow-up
+
+A4/A6の人間回答待ちにProject限定の一覧・詳細・保存履歴・明示回答HTTP APIを追加。必須expectedVersionとSQLiteの原子的比較により古い確認/再送で回答を上書きしない。回答は保存された事実であり承認・実行・Run再開・依存完了を直接行わず、既存の監視と前提条件判定を維持する。Native回答画面およびGoal/Scheduler API/UIは引き続き未対応。検証はimplementation-report-dependency-human-controls.mdを参照。

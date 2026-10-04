@@ -76,11 +76,18 @@ public class PersistentDependencyRepository {
   }
   public Entry cancel(String project,String id){var entry=get(project,id);if(terminal(entry.state()))throw new IllegalStateException("Dependency is terminal");return observe(entry,DependencyState.CANCELLED,"user_cancelled");}
   public Entry answer(String project,String id,String text) {
+    return answer(project,id,text,null);
+  }
+  public Entry answer(String project,String id,String text,Long expectedVersion) {
     var entry=prepare(project,id);
+    if(expectedVersion!=null&&entry.version()!=expectedVersion)throw new dev.mikoto2000.rei.application.state.OperationConflictException();
     if(entry.spec().kind()!=DependencySpec.Kind.USER_ANSWER||text==null||text.isBlank()||text.length()>4096)throw new IllegalArgumentException("User-answer dependency and 1..4096 character answer required");
     return transaction.execute(status->{
       if(db.sql("UPDATE agent_dependencies SET answer=?,version=version+1 WHERE project=? AND id=? AND version=? AND state IN ('RUNNING','WAITING','BLOCKED')")
-          .params(CredentialRedactor.redact(text),project,id,entry.version()).update()!=1)throw new IllegalStateException("Dependency is terminal or changed");
+          .params(CredentialRedactor.redact(text),project,id,entry.version()).update()!=1) {
+        if(expectedVersion!=null)throw new dev.mikoto2000.rei.application.state.OperationConflictException();
+        throw new IllegalStateException("Dependency is terminal or changed");
+      }
       var current=get(project,id);fact(current);return current;
     });
   }
