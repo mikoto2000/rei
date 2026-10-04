@@ -11,7 +11,7 @@
 | A4 | Waiting / Dependency | Partially implemented | Implemented in this task。状態6種、プロセス/ファイル存在・SHA・変更/Git branch・HEAD/HTTP status/人間回答の条件をSQLite永続化。最大16の同一Session既存依存によるDAG、期限、CAS、キャンセル、復元、opt-in/Policy制御、bounded wait、停滞との区別、Shell・Event API・Scheduler接続を実装。再起動後に不明なprocessはBLOCKED。HTTP body/任意code predicate等の拡張は対象外の追加候補 |
 | A5 | Policy / Permission | Partially implemented | Implemented in this task。能力7種・Chat/SubAgent 境界に加え、永続一回限り承認、Shell/Web の明示決定、Checkpoint の明示 Resume に対応。Native 専用ボタン・SubAgent 承認継承は Deferred |
 | A6 | Notification / Escalation | Partially implemented | Implemented in this task（アプリ内確認待ち）。承認要求/Policy拒否/停滞停止/確認済み長時間待機/Run完了・失敗/依存完了・失敗/人間回答待ちの永続 inbox、重複抑制、Shell/Web の表示・ack。依存IDはRunIDと区別し、ackに同意・起動効果なし。Native専用UI/外部配送は Deferred |
-| A7 | Reflection | Partially implemented | Implemented in this task（Goal事実ベース）。期待ファイル条件/保存検証/差分/固定レビュー提案、永続 source 参照、重複抑制、Shell backfill。全Task/意味分析/Memory昇格は Deferred |
+| A7 | Reflection / 自己評価 | Partially implemented | Goalの独立検証に加え、Task完了・失敗／Run終端と実Tool結果の構造化自己評価をSQLite保存。期待値・差・観測失敗種別・次回改善／再利用候補、所有者境界、重複抑制、記録上限と不完全性、Shell確認・保存Eventから手動backfillに対応。追加LLMなし。意味的比較／検証済み長期知識への昇格はDeferred |
 | B8 | Activity 週次・月次 | Not implemented | Implemented in this task（保存観測の算術分析）。暦週/月、前期間比較、観測推定/未観測、分類/Project候補/時間帯/日別、Shell。実測生産性・集中/中断・意味的テーマ・専用UIは Deferred |
 | B9 | Adaptive Coaching | Partially implemented | Implemented in this task（手動期間分析統合）。ユーザー分類比率基準・観測品質gate・完了期間限定、永続opt-in設定/期間重複抑制/共通cooldown、Shell。既存Behavior通知を維持。自動週月通知/意味的個人化/専用UIは Deferred |
 | B10 | Activity × Work Context | Partially implemented | Implemented in this task（保存Event参照）。ActivityのEvent/Session/Turn/Run ID、Work ContextのTOOL出典へのexact project-scoped join、revision/Item/Git snapshot時刻付きShell表示。観測時Git/ファイル/command・意味的task帰属・専用UIは Deferred |
