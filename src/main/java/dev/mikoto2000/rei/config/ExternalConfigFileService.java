@@ -259,6 +259,8 @@ public class ExternalConfigFileService {
               max-skills: ${REI_SKILLS_SEMANTIC_MAX_SKILLS:64}
               minimum-similarity: ${REI_SKILLS_SEMANTIC_MINIMUM_SIMILARITY:0.55}
               failure-backoff-seconds: ${REI_SKILLS_SEMANTIC_FAILURE_BACKOFF_SECONDS:30}
+              persistent-index-enabled: ${REI_SKILLS_SEMANTIC_PERSISTENT_INDEX_ENABLED:false}
+              index-namespace: ${REI_SKILLS_SEMANTIC_INDEX_NAMESPACE:}
           web-search:
             enabled: true
             providers:

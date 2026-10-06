@@ -11,3 +11,7 @@
 不正なvector・モデル障害・timeoutではkeyword候補へ戻り、失敗後はbackoff期間中の再呼び出しを抑制する。reranker障害や不正な候補集合ではRRF順に戻る。ログには例外クラスのみを記録する。
 
 メタデータvectorだけをメモリに保持する。変更・削除・無効化したSkillは次回カタログに合わせて更新する。本文だけが変更された場合も現在のSkillオブジェクトを返す。問い合わせvectorは保存しない。Embeddingモデルを変更した場合は再起動してキャッシュを更新する。永続indexや検索品質の学習評価は今後の範囲。
+
+## 永続索引 follow-up
+
+明示opt-inのmetadata vector永続snapshotを[persistent-skill-index.md](persistent-skill-index.md)として追加した。上記の永続index未実装は初期実装時点の記録である。既定は従来のメモリcache。永続化を使う場合はモデル変更時に明示namespaceも変更する。実データ品質の学習評価は引き続き残る。

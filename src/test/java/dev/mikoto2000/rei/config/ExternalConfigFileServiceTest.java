@@ -57,6 +57,8 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("skills:"));
     assertTrue(content.contains("${rei.data-dir}/skills"));
     assertTrue(content.contains("max-selected: 3"));
+    assertTrue(content.contains("persistent-index-enabled: ${REI_SKILLS_SEMANTIC_PERSISTENT_INDEX_ENABLED:false}"));
+    assertTrue(content.contains("index-namespace: ${REI_SKILLS_SEMANTIC_INDEX_NAMESPACE:}"));
     assertTrue(content.contains("REI_OPENAI_BASE_URL"));
     assertTrue(content.contains("base-url: ${REI_OPENAI_EMBEDDING_BASE_URL:}"));
     assertTrue(content.contains("api-key: ${REI_OPENAI_EMBEDDING_API_KEY:}"));
