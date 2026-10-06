@@ -23,7 +23,8 @@ evidenceはstdout/stderr/messageの出典・種別・引用を持つ。nextActio
 raw stdout/stderrと保存は既存の仕組みを使い、診断用の別DB/cacheは作らない。
 Tool結果のcontext圧縮ではdiagnosisをverbose stdoutより先に取り込む。
 
-対象外: XML等のtest report読取、多言語診断、完全な原因特定、診断専用UI、自動修復/retry。
+保存済みJUnit XMLの読取は後続の[JUnitレポート診断](junit-report-diagnosis.md)で対応した。
+対象外: その他のtest report形式、多言語診断、完全な原因特定、診断専用UI、自動修復/retry。
 TDDで未実装compile失敗を確認後、報告test/cause/source、compiler/dependency/unknown、
 timeout/run/cancel、認証情報除去・上限・負例ログ・JSON出力を検証する。
 実Java子processの終了ログ、Tool context圧縮での診断保持も検証する。
