@@ -26,7 +26,9 @@ public class ExternalAgentProcessRunner {
     ExecutorService readers = Executors.newFixedThreadPool(3, Thread.ofPlatform().daemon().name("external-agent-io-", 0).factory());
     try {
       if (cancelled.getAsBoolean()) return new Output(Status.CANCELLED, "", "", null, 0, false);
-      process = new ProcessBuilder(nativeArguments(command)).directory(root.toFile()).start();
+      var builder=new ProcessBuilder(nativeArguments(command)).directory(root.toFile());
+      configureEnvironment(builder.environment());
+      process = builder.start();
       Process running = process;
       Future<?> stdout = readers.submit(() -> drain(running.getInputStream(), capture, false, activity));
       Future<?> stderr = readers.submit(() -> drain(running.getErrorStream(), capture, true, activity));
@@ -70,6 +72,8 @@ public class ExternalAgentProcessRunner {
     return new Output(status, capture.text(false), capture.text(true), exit,
         Duration.ofNanos(System.nanoTime() - start).toMillis(), capture.truncated);
   }
+  /** Per-adapter child environment only; never changes the host process or saved credentials. */
+  protected void configureEnvironment(Map<String,String> environment) { }
   private static List<String> nativeArguments(List<String> command) {
     // JDK Windows legacy mode preserves shell-style quotes verbatim in the command line;
     // the native argv parser then consumes them. Encode literal quotes for the native parser.

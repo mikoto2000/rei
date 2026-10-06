@@ -12,6 +12,8 @@ public class ExternalAgentTools {
   @org.springframework.beans.factory.annotation.Autowired
   void reviewHistory(ExternalReviewRepository history){this.history=history;}
   public ExternalAgentTools(ExternalAgentDelegationService service) { this.service = service; }
+  @Tool(description="Workflow: Request a fresh Claude Code read-only review ONLY when the current user explicitly requests Claude or Claude Code. Requires administrator opt-in and native CLI login. Provide a bounded existing text file/directory target. Uses a Tool-free snapshot, shared Run/Goal budget and the same one external delegation as Codex. No automatic fix, apply, resume or retry of unknown outcomes. Independently evaluate findings and snapshot limitations.")
+  public ExternalAgentResult requestClaudeCodeReview(String task,@ToolParam(required=false) String target,@ToolParam(required=false) String context,ToolContext toolContext){var run=toolContext==null?null:(RunExecutionContext)toolContext.getContext().get(RunExecutionContext.KEY);return service.review(run,ExternalAgentRequest.Agent.CLAUDE,task,target,context);}
   @Tool(description="Workflow: Request up to four independent read-only Codex reviews ONLY when the current user explicitly requests parallel Codex review and administrator opt-in enables it. One batch consumes the Run's single external delegation; worker two, shared parent model budget, bounded deadline. No fix/apply/resume. Input IDs are unique labels. Independently evaluate each result; partial/unknown outcomes are not success and must not be automatically retried.")
   public ExternalAgentDelegationService.ParallelResult requestParallelCodexReviews(java.util.List<ExternalAgentDelegationService.ParallelRequest> requests,ToolContext toolContext){var run=toolContext==null?null:(RunExecutionContext)toolContext.getContext().get(RunExecutionContext.KEY);return service.reviewParallel(run,requests);}
   @Tool(description = "Workflow: Request a read-only Codex review ONLY when the current user explicitly requests Codex. Once per run. Supply a concise review task and relevant design decisions, never full history or source files. Independently evaluate findings before answering; do not automatically fix anything. External failure does not prevent your own evaluation.")
@@ -38,13 +40,17 @@ public class ExternalAgentTools {
   }
   @Tool(description="Read the latest 20 saved external reviews in the current Project. Does not start an external process or grant permission to delegate.")
   public java.util.List<ExternalReviewRepository.Review> listCodexReviews(ToolContext toolContext) {
-    var owner=owner(toolContext);String projectRoot=root(owner);return history.list(owner.projectId()).stream().filter(r->r.projectRoot().equals(projectRoot)).toList();
+    var owner=owner(toolContext);String projectRoot=root(owner);return history.list(owner.projectId(),"codex").stream().filter(r->r.projectRoot().equals(projectRoot)).toList();
   }
   @Tool(description="Read one saved external review by reviewId in the current Project. STARTED records have an unknown outcome; never automatically retry them.")
   public ExternalReviewRepository.Review getCodexReview(String reviewId,ToolContext toolContext) {
     var owner=owner(toolContext);var result=history.get(owner.projectId(),reviewId);
-    if(!result.projectRoot().equals(root(owner)))throw new IllegalArgumentException("Review not found in this Project root");return result;
+    if(!result.agent().equals("codex")||!result.projectRoot().equals(root(owner)))throw new IllegalArgumentException("Codex review not found in this Project root");return result;
   }
+  @Tool(description="Read the latest 20 saved Claude Code reviews in the current Project/root. Does not start Claude or authorize delegation.")
+  public java.util.List<ExternalReviewRepository.Review> listClaudeCodeReviews(ToolContext toolContext){var owner=owner(toolContext);String projectRoot=root(owner);return history.list(owner.projectId(),"claude").stream().filter(review->review.projectRoot().equals(projectRoot)).toList();}
+  @Tool(description="Read one saved Claude Code review by Rei reviewId in the current Project/root. STARTED means an unknown outcome; never automatically resend it.")
+  public ExternalReviewRepository.Review getClaudeCodeReview(String reviewId,ToolContext toolContext){var owner=owner(toolContext);var result=history.get(owner.projectId(),reviewId);if(!result.agent().equals("claude")||!result.projectRoot().equals(root(owner)))throw new IllegalArgumentException("Claude review not found in this Project root");return result;}
   private dev.mikoto2000.rei.core.chat.AgentRunContext owner(ToolContext context) {
     var run=context==null?null:(RunExecutionContext)context.getContext().get(RunExecutionContext.KEY);
     if(history==null || run==null || run.runContext()==null || run.runContext().projectId()==null)throw new IllegalArgumentException("Current Project required");

@@ -8,7 +8,7 @@
 | B8–B10 | 週月分析、分類基準/Coaching、自動通知・HTTP/Native設定、観測時Work Context保存/HTTP/Native閲覧 | bounded実装済み。観測からの意味的task帰属や個人化品質は未評価 |
 | B11–B13 | 文書RAG、FTS5/BM25/dense/RRF/rerank、Semantic Skill Search/永続索引 | 既存再利用＋opt-in実装済み。学習sparse・実データ品質評価は未対応 |
 | C14–C16 | evidence contract、独立意味検証、bounded修復、モデル/READ Tool一時障害retry、独立並列SubAgent | 実装済み。実モデル判定品質・別モデル合意・durable子resume/DAGは追加候補 |
-| C17 | 保存review/明示native継続/修正案→Change Set→Apply→別Run再レビュー、独立並列Codex | bounded実装済み。別vendor adapterはユーザー指示で保留。CLI直接書込は未実装 |
+| C17 | 保存review/明示native継続/修正案→Change Set→Apply→別Run再レビュー、独立並列Codex | bounded実装済み。Claude Codeのsubscription認証reviewを後続依頼で追加。他providerは追加候補。CLI直接書込は未実装 |
 | C18–C20 | Java/Git Map/永続索引/summary、構造的test/module/regression候補、ログ/JUnit単一/集合診断 | bounded実装済み。多言語完全意味解析・coverage完全性・その他report形式は未対応 |
 | C21 | 明示test→静的diff確認→保存修正案Apply→全サイクル再検証 | bounded実装済み。意味的自己reviewや全Goal強制gateは追加候補 |
 | D | 既存UTF-8文書/Mermaid/PlantUML自然言語編集案、保存差分/明示Apply、Paper Provider条件検査/保存/引用/再起動fixture | bounded実装済み。複数ファイル/binary編集・renderer・live provider E2Eは未対応 |
@@ -20,10 +20,9 @@
 | B | Activityの意味的個人化/帰属、RAG/Skillの学習・実データ評価 | 正解付き・利用許可のある評価データ、品質指標、採用モデル/学習方式。保存観測やmock成功だけで品質を保証しない |
 | C14 | 意味検証の実モデル品質/別モデル合意 | 評価用task/evidence/counterexampleと使用provider/予算。固定fixtureの制御フロー検証と区別する |
 | C15–C16 | durable SubAgent resume、DAG/合意形成 | 元候補のbounded repair/独立batchを超える追加仕様。未知Tool副作用のreconcileと再開ownershipを先に定義する |
-| C17 | 別vendor External Agent | 現環境でPATHに見つかったのはCodexのみ（Get-Commandの読取り確認）。2026-10-07にユーザーが「別 provider の追加は保留」と回答。再開時にproviderを選び、公式runtime制約・read-only/credential/tool隔離・usage/cancel対応を確認し、実adapterを別branchで実装する。名前だけのadapterを作らない |
+| C17 | 別vendor External Agent | 現環境でPATHに見つかったのはCodexのみ（Get-Commandの読取り確認）。2026-10-07に一度保留した後、Claude Code追加を依頼。Claude Codeのsubscription認証・bounded snapshot・Tool無効化・共通予算/履歴routerを追加した（claude-code-reviews.md）。CLI installation/loginは利用環境で必要。その他providerは追加候補 |
 | C18–C20 | 多言語の完全依存、coverage、他report形式 | 対象language/build/reportを選び、既存候補/partial表示を保持した独立parserから追加する。完全性を現実装の保証にしない |
 | C21 | 意味的自己review/全Goal強制統合 | 判定contract・対象patch/requirement/evidence・共有予算・失敗時の完了条件を追加仕様として定義する |
 | D | 複数ファイル/binary/renderer/live Paper E2E | 原子的適用/復旧方式、対象format/renderer/providerと評価環境。現在の単一テキスト適用やoffline Provider fixtureはこれらの完了ではない |
 
-元候補を超える拡張が存在することと、対応した基本機能の不具合・具体的な未統合を分ける。別provider追加の保留はユーザーの回答による。既に認可された並列Codexの検証・Push・Mergeを止めない。実装・Git・検証結果は[継続記録](autonomy-feature-progress-2026-10-06.md)と機能別reportに保存する。
-
+元候補を超える拡張が存在することと、対応した基本機能の不具合・具体的な未統合を分ける。別provider追加の保留は過去の回答時点の状態。その後のClaude Code追加依頼を反映した。実装・Git・検証結果は[継続記録](autonomy-feature-progress-2026-10-06.md)と機能別reportに保存する。
