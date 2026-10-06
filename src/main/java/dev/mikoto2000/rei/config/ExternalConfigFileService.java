@@ -177,6 +177,7 @@ public class ExternalConfigFileService {
               max-output-bytes: 4194304
           embedding:
             enabled: ${REI_EMBEDDING_ENABLED:true}
+            inherit-run-model-budget: ${REI_EMBEDDING_INHERIT_RUN_MODEL_BUDGET:false}
           rerank:
             enabled: ${REI_RERANK_ENABLED:true}
             base-url: ${REI_RERANK_BASE_URL:}

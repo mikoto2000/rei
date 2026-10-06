@@ -74,7 +74,9 @@ public final class SemanticSkillSearch {
           .filter(s->s.score()>=settings.minimumSimilarity()).sorted(Comparator.comparingDouble(Dense::score).reversed().thenComparing(s->identity(s.skill())))
           .map(s->new SkillCandidate(s.skill(),0,List.of("semantic"),List.of())).toList();
     }catch(RuntimeException error) {
-      RunCancellation.propagate(error);cache=Map.of();failureAt=nanos.getAsLong();
+      RunCancellation.propagate(error);
+      if(error instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException)throw error;
+      cache=Map.of();failureAt=nanos.getAsLong();
       log.warn("Semantic skill retrieval unavailable; using keyword candidates ({})",error.getClass().getSimpleName());
       return lexical.stream().limit(limit).toList();
     }

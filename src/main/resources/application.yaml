@@ -88,6 +88,7 @@ rei:
   data-dir: ${REI_DATA_DIR:${LOCALAPPDATA:${user.home}/.local/share}/Rei}
   embedding:
     enabled: ${REI_EMBEDDING_ENABLED:true}
+    inherit-run-model-budget: ${REI_EMBEDDING_INHERIT_RUN_MODEL_BUDGET:false}
   rerank:
     enabled: ${REI_RERANK_ENABLED:true}
     base-url: ${REI_RERANK_BASE_URL:}

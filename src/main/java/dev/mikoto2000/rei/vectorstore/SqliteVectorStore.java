@@ -665,6 +665,8 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository,
         return result;
       } catch (Exception e) {
         connection.rollback();
+        dev.mikoto2000.rei.core.chat.RunCancellation.propagate(e);
+        if(e instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)throw stopped;
         if (e instanceof IllegalStateException illegalStateException) {
           throw illegalStateException;
         }
