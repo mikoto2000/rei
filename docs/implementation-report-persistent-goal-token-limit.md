@@ -18,7 +18,7 @@ Goal repository/recovery/loop/gateway/HTTP、実Chat、Run上限、Skill、SubAg
 
 ## Git
 
-独立ブランチcodex/persistent-goal-token-limit。feature Commit/Push→main Merge→Merge後関連テスト→main Pushの順に進め、検証済みhashは後続の作業記録へ保存する。
+独立ブランチcodex/persistent-goal-token-limit。Feature Commit 76d3ef8e、main Merge 7dba0c53。feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。
 
 ## 適用範囲
 
