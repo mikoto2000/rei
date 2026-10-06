@@ -14,9 +14,10 @@ SubAgent は、目的・独立コンテキスト・制限された Tool 権限�
 相対パスは起動時の作業ディレクトリを基準に一度解決します。
 
 リポジトリの [researcher](../config/subagents/researcher.yaml) と
-[reviewer](../config/subagents/reviewer.yaml) を上記ディレクトリにコピーして利用してください。
+[reviewer](../config/subagents/reviewer.yaml)、[document-editor](../config/subagents/document-editor.yaml) を上記ディレクトリにコピーして利用してください。
 サンプルを自動インストールしてユーザー設定を書き換えることはありません。
 開発時は `rei.subagents.directory=config/subagents` でも利用できます。
+文書・Mermaid/PlantUMLの編集案から保存差分・明示適用へ進める手順は [document-draft-agent.md](document-draft-agent.md) を参照してください。
 
 ```text
 /subagent init java-expert

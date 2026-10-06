@@ -116,6 +116,6 @@ class SubAgentConfigurationTest {
     var samples = new SubAgentRegistry(Path.of("config/subagents"),
         new SubAgentDefinitionLoader(new SubAgentToolPolicy(catalog.knownNames()), m -> false));
     assertThat(samples.reload()).isEmpty();
-    assertThat(samples.list()).extracting(SubAgentDefinition::id).containsExactly("researcher", "reviewer");
+    assertThat(samples.list()).extracting(SubAgentDefinition::id).containsExactly("document-editor", "researcher", "reviewer");
   }
 }
