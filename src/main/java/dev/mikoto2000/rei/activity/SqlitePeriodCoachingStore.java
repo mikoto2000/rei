@@ -37,11 +37,17 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
     }}catch(Exception e){throw failure(e);}
   }
   private Snapshot write(Connection c,PeriodCoaching.Settings settings) throws Exception {
+    if(read(c).revision()==Long.MAX_VALUE)throw new java.util.ConcurrentModificationException("Coaching revision exhausted");
     try(var s=c.prepareStatement("UPDATE activity_period_coaching_settings SET revision=revision+1,payload=? WHERE id=1")){s.setString(1,mapper.writeValueAsString(settings));s.executeUpdate();}
     return read(c);
   }
   @Override public Snapshot configure(PeriodCoaching.Settings settings){return transaction(c->write(c,settings));}
   @Override public Snapshot setEnabled(boolean enabled){return transaction(c->write(c,read(c).settings().withEnabled(enabled)));}
+  private Snapshot expected(Connection c,long revision)throws Exception {
+    var snapshot=read(c);if(revision<0||snapshot.revision()!=revision||revision==Long.MAX_VALUE)throw new java.util.ConcurrentModificationException("Coaching settings changed");return snapshot;
+  }
+  @Override public Snapshot configureExpected(PeriodCoaching.Settings settings,long revision){return transaction(c->{expected(c,revision);return write(c,settings);});}
+  @Override public Snapshot setEnabledExpected(boolean enabled,long revision){return transaction(c->write(c,expected(c,revision).settings().withEnabled(enabled)));}
   @Override public String reserve(Snapshot expected,String key,String reason,Instant now) {
     if(key==null || key.isBlank() || key.length()>200 || !java.util.Set.of("BELOW_TARGET","BELOW_TARGET_DECLINING").contains(reason))throw new IllegalArgumentException("Invalid coaching reservation");
     return transaction(c->{
@@ -58,5 +64,5 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
       return "RESERVED";
     });
   }
-  private static IllegalStateException failure(Exception e){return new IllegalStateException("Coaching persistence unavailable",e);}
+  private static RuntimeException failure(Exception e){return e instanceof java.util.ConcurrentModificationException conflict?conflict:new IllegalStateException("Coaching persistence unavailable",e);}
 }

@@ -11,6 +11,8 @@ public final class PeriodCoachingService {
   public PeriodCoachingStore.Snapshot status(){return store.load();}
   public PeriodCoachingStore.Snapshot setEnabled(boolean enabled){return store.setEnabled(enabled);}
   public PeriodCoachingStore.Snapshot configure(PeriodCoaching.Settings settings){return store.configure(settings.withEnabled(false));}
+  public PeriodCoachingStore.Snapshot configureExpected(PeriodCoaching.Settings settings,long revision){return store.configureExpected(settings.withEnabled(false),revision);}
+  public PeriodCoachingStore.Snapshot setEnabledExpected(boolean enabled,long revision){return store.setEnabledExpected(enabled,revision);}
   public String evaluate(ActivityPeriodAnalysis.Period period,String day) {
     var prepared=prepare(period,day);
     if(!prepared.advice())return prepared.message();
