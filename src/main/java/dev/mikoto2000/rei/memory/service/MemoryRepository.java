@@ -78,7 +78,7 @@ public class MemoryRepository {
   }
   /** This accounting is separate from memory/checkpoint writes, also for previews. */
   public void recordSleepTokens(String project,Integer tokens) {
-    boolean valid=tokens!=null&&tokens>=0;
+    boolean valid=tokens!=null&&tokens>0;
     int changed=db.sql("""
         UPDATE sleep_model_usage SET pending=pending-1,
           tokens=CASE WHEN tokens>9223372036854775807-? THEN 9223372036854775807 ELSE tokens+? END,

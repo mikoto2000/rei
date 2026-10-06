@@ -23,7 +23,7 @@ final class PersistentSleepModelBudget implements ModelCallBudget {
   public void recordTotalTokens(Integer tokens) {
     if(properties.maxTotalTokensPerProject()>0) {
       repository.recordSleepTokens(project,tokens);
-      if(tokens==null||tokens<0)throw new ExecutionStoppedException(TOKEN_USAGE_UNKNOWN);
+      if(tokens==null||tokens<=0)throw new ExecutionStoppedException(TOKEN_USAGE_UNKNOWN);
       repository.checkSleepTokenBudget(project,properties.maxTotalTokensPerProject());
     }
     invocation.recordTotalTokens(tokens);

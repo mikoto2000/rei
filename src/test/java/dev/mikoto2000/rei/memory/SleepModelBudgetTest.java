@@ -148,6 +148,16 @@ class SleepModelBudgetTest {
     assertTrue(assertThrows(RuntimeException.class,()->restarted.sleep("s","p",false)).getMessage().contains("TOKEN_USAGE_UNKNOWN"));
     verify(model,never()).stream(any(Prompt.class));
   }
+  @Test void lifetimeZeroReportedUsageStopsBeforeMemorySaveAndCannotBecomeFreeRetry() {
+    var sleep=service(0,0,0,0,false,0,10);
+    assertTrue(assertThrows(RuntimeException.class,()->sleep.sleep("s","p",false)).getMessage().contains("TOKEN_USAGE_UNKNOWN"));
+    assertEquals(0,repository.lastProcessed("s"));assertTrue(repository.list("p",10,0).isEmpty());
+    var restarted=service(0,0,1,1,false,0,10);
+    assertTrue(assertThrows(RuntimeException.class,()->restarted.sleep("s","p",false)).getMessage().contains("TOKEN_USAGE_UNKNOWN"));
+    verify(model,never()).stream(any(Prompt.class));
+    var disabled=service(0,0,0,0,false);
+    assertEquals("COMPLETED",disabled.sleep("s","p",false).run().status());
+  }
   @Test void cancellationLeavesDurablePendingReservationWithoutAdvancingMemory() {
     var sleep=service(0,0,2,2,false,0,10);
     when(model.stream(any(Prompt.class))).thenReturn(Flux.error(new java.util.concurrent.CancellationException()));
