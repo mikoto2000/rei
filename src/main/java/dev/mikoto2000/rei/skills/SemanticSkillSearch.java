@@ -98,7 +98,11 @@ public final class SemanticSkillSearch {
         if(result.size()!=fused.size() || new HashSet<>(ids).size()!=ids.size() || !originals.keySet().equals(new HashSet<>(ids)))throw new IllegalStateException("Invalid skill rerank identities");
         ordered=ids.stream().map(originals::get).toList();
       }
-    }catch(RuntimeException error){RunCancellation.propagate(error);log.warn("Skill rerank unavailable; using fusion order ({})",error.getClass().getSimpleName());}
+    }catch(RuntimeException error){
+      RunCancellation.propagate(error);
+      if(error instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException)throw error;
+      log.warn("Skill rerank unavailable; using fusion order ({})",error.getClass().getSimpleName());
+    }
     return ordered.stream().limit(limit).toList();
   }
   static String profile(AgentSkill skill){return "name: "+SkillCandidateSelector.normalize(skill.name())+"\ndescription: "+SkillCandidateSelector.normalize(skill.description())+"\nkeywords: "+String.join(", ",skill.keywords().stream().map(SkillCandidateSelector::normalize).toList());}

@@ -22,6 +22,11 @@ public class RerankService implements CandidateReranker {
   private static final Logger logger = LoggerFactory.getLogger(RerankService.class);
   private final RerankProperties properties;
   private final RestClient client;
+  private static final tools.jackson.databind.json.JsonMapper BUDGET_JSON=tools.jackson.databind.json.JsonMapper.builder(
+      tools.jackson.core.json.JsonFactory.builder().streamReadConstraints(tools.jackson.core.StreamReadConstraints.builder()
+          .maxNestingDepth(32).maxNumberLength(32).maxStringLength(65536).build())
+          .enable(tools.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION).build())
+      .enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
 
   public RerankService(RerankProperties properties, RestClient.Builder builder) {
     this.properties = properties;
@@ -45,11 +50,25 @@ public class RerankService implements CandidateReranker {
   /** Reorders all candidates; preserves their original retrieval scores and metadata. */
   @Override public <T> List<T> rerank(String query, List<T> candidates, Function<T, String> text) {
     if (client == null || candidates.isEmpty()) return candidates;
+    var budget=properties.inheritRunModelBudget()?dev.mikoto2000.rei.llm.ModelCallBudgetScope.current():null;
+    boolean invoked=false,reported=false;
     try {
-      JsonNode response = client.post().uri(properties.path()).contentType(MediaType.APPLICATION_JSON)
+      var request = client.post().uri(properties.path()).contentType(MediaType.APPLICATION_JSON)
           .body(Map.of("model", properties.model(), "query", query,
-              "documents", candidates.stream().map(text).toList()))
-          .retrieve().body(JsonNode.class);
+              "documents", candidates.stream().map(text).toList()));
+      if(budget!=null)budget.run();
+      invoked=true;
+      JsonNode response=budget==null?request.retrieve().body(JsonNode.class):request.exchange((sent,received)->{
+        if(!received.getStatusCode().is2xxSuccessful())throw new IllegalStateException("Rerank HTTP request unsuccessful");
+        var body=received.getBody().readNBytes(65537);
+        if(body.length>65536)throw new IllegalStateException("Rerank response exceeds budget evidence limit");
+        return BUDGET_JSON.readTree(body);
+      });
+      if(budget!=null) {
+        var usage=response==null?null:response.get("usage");var total=usage==null?null:usage.get("total_tokens");
+        Integer tokens=total!=null&&total.isIntegralNumber()&&total.canConvertToInt()?total.intValue():null;
+        reported=true;budget.recordTotalTokens(tokens);
+      }
       JsonNode results = response == null ? null : response.get("results");
       if (results == null || !results.isArray() || results.size() != candidates.size()) {
         throw new IllegalStateException("Incomplete rerank response");
@@ -70,6 +89,11 @@ public class RerankService implements CandidateReranker {
       return ranked.stream().sorted(Comparator.comparingDouble(Rank::score).reversed()
           .thenComparingInt(Rank::index)).map(rank -> candidates.get(rank.index())).toList();
     } catch (RuntimeException exception) {
+      if(budget!=null) {
+        dev.mikoto2000.rei.core.chat.RunCancellation.propagate(exception);
+        if(invoked&&!reported)budget.recordTotalTokens(null);
+        if(exception instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException)throw exception;
+      }
       logger.warn("Rerank request failed; using original search order ({})", exception.getClass().getSimpleName());
       return candidates;
     }
