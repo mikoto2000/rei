@@ -114,6 +114,12 @@ public class Tools {
     return new TestReportDiagnosisService().read(currentWorkingDirectory(),path);
   }
 
+  @Tool(description="保存済みJUnit XMLをProject内で上限付き発見・複数診断するREAD Tool。directory省略時はMaven target/surefire-reports・failsafe-reportsとGradle build/test-resultsをmodule深さ6まで探します。明示directoryは直下のTEST*.xmlのみ。探索256folder/4096entry/32file、各1MiB/全体10秒、失敗証拠合計24件。各fileのSHA/時刻/報告count/観測countとpartialを返し、合計は解析済みfileのみ（重複実行を除去しません）。test実行や現在Run/Goal成功の判定は行いません。")
+  TestReportCollectionDiagnosisService.Result diagnoseTestReports(
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) String directory)throws IOException {
+    return new TestReportCollectionDiagnosisService().read(currentWorkingDirectory(),directory);
+  }
+
   @Tool(description = "変更pathからJavaの逆importとテスト命名候補を探索します。changedFiles省略時はProjectのGitステージ済み・未ステージ・未追跡変更を読み取り取得します（HEAD必須、最大64path）。明示時はProject相対pathを1〜64件、limitは1〜100（既定20）。完全なcoverageではなく、warningsを確認して広い回帰テストも実施してください。")
   ChangeTestImpactService.Result changeTestImpact(@org.springframework.ai.tool.annotation.ToolParam(required = false) List<String> changedFiles,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) throws IOException {
