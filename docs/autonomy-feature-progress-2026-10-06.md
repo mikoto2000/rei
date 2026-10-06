@@ -123,3 +123,12 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 初期Red・近接小数の誤一致を振る舞いRedで検出→修正Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。全体回帰は3116 tests / 594 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。
 
 固定JSON Pointerのscalarとstatusを検証する。型・nullと欠落・BigDecimal精度、strict JSONとbyte／depth上限、SQLite再生成、ネットワーク境界と許可済み自動監視、redirect・途中切断・受信中取消、terminal waitの再GETなしをloopbackで確認した。本文・実値・parser診断を保存せず、既存SHA/status条件も回帰確認した。任意code・正規表現・複合条件・外部サービス品質評価は残件。
+## 後続の文書BM25検索
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [文書BM25検索](implementation-report-document-bm25.md) | document-bm25 | aa1f38aa | 7aef5f4e | 3122 / 594 |
+
+初期Red・実DB検証・設定bindingの結合エラー検出→修正Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。全体回帰は3122 tests / 594 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。
+
+明示opt-inのSQLite FTS5/BM25を既存RRF・文書集約・rerankへ統合した。既存DBのbackfill、全更新経路のtransaction同期、無効設定時の既存索引維持、置換失敗rollback、source/docId・coverage閾値、literal query、取消と設定bindingを検証した。学習済みsparse、多言語tokenizer、実データ品質評価は残件。
