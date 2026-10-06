@@ -63,6 +63,8 @@ public class GoalLoopService {
   private synchronized void next(GoalRepository.Claim claim) {
     if(!goals.active(claim))return;
     var goal=goals.get(claim.goal().projectId(),claim.goal().id());
+    if(goal.maxTotalTokens()>0&&goal.pendingLlmCalls()>0) {stop(claim,"BLOCKED","token_usage_unknown");return;}
+    if(goals.tokenExhausted(claim)) {stop(claim,"BLOCKED",goal.tokenUsageUnknown()?"token_usage_unknown":"token_budget_exhausted");return;}
     if(goal.attempts()>=goal.maxRuns()||goal.llmCallsUsed()>=goal.maxLlmCalls()) {stop(claim,"BLOCKED","budget_exhausted");return;}
     String run=goals.beginAttempt(claim);events.publish(goals.get(goal.projectId(),goal.id()));
     try {gateway.dispatch(claim,run,outcome->completed(claim,run,outcome));}
@@ -75,6 +77,11 @@ public class GoalLoopService {
       goals.recordAttempt(claim,run,"CANCELLED","run_cancelled");stop(claim,"PAUSED","run_cancelled");return;
     }
     if(!result.success()) {
+      if(goals.tokenExhausted(claim)) {
+        var goal=goals.get(claim.goal().projectId(),claim.goal().id());
+        String reason=goal.tokenUsageUnknown()?"token_usage_unknown":"token_budget_exhausted";
+        goals.recordAttempt(claim,run,"BLOCKED",reason);stop(claim,"BLOCKED",reason);return;
+      }
       String state=switch(outcome.stopReason()) {case "permission_required" -> "WAITING_APPROVAL";case "policy_denied" -> "BLOCKED";default -> goals.remainingLlm(claim)==0?"BLOCKED":"FAILED";};
       goals.recordAttempt(claim,run,state,"execution_stopped");stop(claim,state,"execution_stopped");return;
     }
