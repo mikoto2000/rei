@@ -1,6 +1,6 @@
 # 自律機能の継続作業記録（2026-10-06）
 
-最初の継続7件に加え、後続の継続でSubAgent関連3件、共有Run報告token上限、Goal永続報告token上限、Run内context要約token計上、Sleep共有モデル予算、Git変更の自動収集によるテスト影響分析、保存済みJUnitレポート診断、HTTP本文SHA依存待機を完了した。後続分は末尾の表に記録する。
+最初の継続7件に加え、後続の継続でSubAgent関連3件、共有Run報告token上限、Goal永続報告token上限、Run内context要約token計上、Sleep共有モデル予算、Git変更の自動収集によるテスト影響分析、保存済みJUnitレポート診断、HTTP本文SHA依存待機、HTTP JSON値依存条件を完了した。後続分は末尾の表に記録する。
 
 この継続作業で次の7件を独立ブランチで実装し、Red→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後確認→main Pushを完了した。各実装の制限・追加候補を残し、全候補の完成とは区別する。初回からの一覧は[実装状況](autonomy-feature-audit.md)を参照。
 
@@ -114,3 +114,12 @@ changeTestImpactのchangedFiles省略時に、捕捉Projectのステージ済み
 初期Red・永続reason契約の結合エラー検出→修正Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。全体回帰は3110 tests / 593 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。
 
 status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64KiB・2秒・逐次hash・本文非保存を守る。SQLite再生成、旧port未対応拒否、ネットワークTool境界、標準Policyで自動通信なし・NETWORK_READ許可したwatcherの実GET、途中切断・本文受信中取消、terminal waitの追加requestなしをloopbackで検証した。任意code／JSON field／部分文字列条件や外部実サービス品質評価は引き続き残件。
+## 後続のHTTP JSON値依存条件
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [HTTP JSON値依存条件](implementation-report-http-json-dependency.md) | http-json-dependency | 933bcc87 | 706102f5 | 3116 / 594 |
+
+初期Red・近接小数の誤一致を振る舞いRedで検出→修正Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。全体回帰は3116 tests / 594 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。
+
+固定JSON Pointerのscalarとstatusを検証する。型・nullと欠落・BigDecimal精度、strict JSONとbyte／depth上限、SQLite再生成、ネットワーク境界と許可済み自動監視、redirect・途中切断・受信中取消、terminal waitの再GETなしをloopbackで確認した。本文・実値・parser診断を保存せず、既存SHA/status条件も回帰確認した。任意code・正規表現・複合条件・外部サービス品質評価は残件。
