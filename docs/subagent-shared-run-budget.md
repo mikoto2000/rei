@@ -1,0 +1,11 @@
+# SubAgentの共通Run呼出予算
+
+ChatのToolContextにRunExecutionContextがある場合、delegateTask／delegateTasksの子LLM呼出しも親Runの呼出回数上限を消費する。Goalがある場合は、その永続呼出予算も同時に消費する。Goalがない通常Chatでも子の呼出しを親上限の外に出さない。
+
+既存のRun共有予約portを親カウンタ経由にした。親LLM、Skill選択、子の初回呼出し・Tool cycle・修復・意味検証・再検証は、モデル呼出し前に同じRun回数へ計上する。子や並列workerは同じ親Runの同期された予約を使い、残り1回なら一つだけが取得できる。Goalには各実呼出しについて1回だけ予約し、二重消費しない。
+
+局所Run上限とGoal上限のいずれかで拒否された子は、モデルを開始せず既存SHARED_LLM_BUDGET_EXHAUSTEDで停止する。親Runが取消・終了済みなら追加予約をしない。予約後のモデル失敗や取消でも回数を返さない。既存の子maxSteps・timeout・Tool policyと親の停止経路を維持する。
+
+RunContextがない直接の手動委譲APIは、これまでどおり子自身のmaxSteps・timeoutで制限する。親Runを存在しない状態で作らず、ambient contextから予算を推測しない。
+
+この変更はLLM呼出回数の共有で、token数やembedding／rerankの課金量上限ではない。Runの回数は既存の実行中状態、Goalの回数は既存SQLite状態を使う。

@@ -107,7 +107,17 @@ public class RunExecutionContext {
     this.factory = factory; this.publisher = publisher;
   }
 
-  public OutputLimitRunBudget.LlmCallReservation sharedLlmReservation() {return budget.sharedLlmReservation();}
+  /** Children share the local Run counter as well as its optional durable Goal reservation. */
+  public OutputLimitRunBudget.LlmCallReservation sharedLlmReservation() {
+    return new OutputLimitRunBudget.LlmCallReservation() {
+      public boolean tryReserve() {
+        synchronized(RunExecutionContext.this) {checkActive();return budget.tryConsumeLlmCall();}
+      }
+      public int remaining() {
+        synchronized(RunExecutionContext.this) {return budget.remainingLlmCalls();}
+      }
+    };
+  }
   public StagnationDetector detector() { return detector; }
   public ProgressEvaluator evaluator() { return evaluator; }
   public long progressVersion() { return progressVersion; }
