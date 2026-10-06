@@ -163,6 +163,13 @@ rei:
   subagents:
     standalone-max-llm-calls: ${REI_SUBAGENTS_STANDALONE_MAX_LLM_CALLS:0}
     standalone-max-total-tokens: ${REI_SUBAGENTS_STANDALONE_MAX_TOTAL_TOKENS:0}
+  attention:
+    delivery:
+      enabled: ${REI_ATTENTION_DELIVERY_ENABLED:false}
+      automatic: ${REI_ATTENTION_DELIVERY_AUTOMATIC:false}
+      endpoint: ${REI_ATTENTION_DELIVERY_ENDPOINT:}
+      bearer-token: ${REI_ATTENTION_DELIVERY_BEARER_TOKEN:}
+      projects: ${REI_ATTENTION_DELIVERY_PROJECTS:}
   skills:
     enabled: ${REI_SKILLS_ENABLED:true}
     directories:
