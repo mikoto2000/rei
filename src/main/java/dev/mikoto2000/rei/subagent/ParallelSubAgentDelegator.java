@@ -11,6 +11,9 @@ import org.springframework.stereotype.Component;
 /** One admitted batch, bounded global workers and queue; each child uses the existing runner. */
 @Component
 public final class ParallelSubAgentDelegator implements AutoCloseable {
+  private SubAgentProperties standaloneBudgetProperties=new SubAgentProperties();
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setStandaloneBudgetProperties(SubAgentProperties properties){standaloneBudgetProperties=properties;}
   public record Request(String id, String agent, String task, String context) { }
   public enum Status { COMPLETED, PARTIAL, FAILED, CANCELLED, TIMEOUT, REJECTED }
   public record Item(String id, String agent, Status status, SubAgentResult result) { }
@@ -43,6 +46,7 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
         throw new IllegalArgumentException("Invalid delegation request or unavailable agent");
     }
     if(!admission.tryAcquire())return new Batch(Status.REJECTED,requests.stream().map(r->item(r,Status.REJECTED,null)).toList());
+    var effectiveReservation=reservation==null&&parent==null?StandaloneSubAgentBudget.create(standaloneBudgetProperties):reservation;
     var stopped=new AtomicBoolean(Thread.currentThread().isInterrupted());
     var deadlineReached=new AtomicBoolean();
     var futures=new CopyOnWriteArrayList<FutureTask<Item>>();
@@ -55,7 +59,7 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
           if(stopped.get() || Thread.currentThread().isInterrupted())return item(request,Status.CANCELLED,null);
           if(System.nanoTime()-deadline>=0){deadlineReached.set(true);return item(request,Status.TIMEOUT,null);}
           try(var scope=AgentRunScope.open(parent)) {
-            var result=reservation==null?runner.run(request.agent(),request.task(),request.context()):runner.run(request.agent(),request.task(),request.context(),reservation);
+            var result=effectiveReservation==null?runner.run(request.agent(),request.task(),request.context()):runner.run(request.agent(),request.task(),request.context(),effectiveReservation);
             var state=switch(result.status()) {
               case COMPLETED -> Status.COMPLETED;case CANCELLED -> Status.CANCELLED;case TIMEOUT -> Status.TIMEOUT;default -> Status.FAILED;
             };
