@@ -12,4 +12,4 @@
 
 追加で診断24件・clip・認証情報除去、output／properties非複製、1MiB／深さ64／tree8192／1024case上限、不正count/root、空レポート・SHA更新、取消、実Tool callbackと捕捉Project、target/surefire-reports配下の読取・既存READ権限／SubAgent明示指定を検証する。
 
-最終関連テスト（TestReportDiagnosisTest・BuildTestFailureDiagnosisTest・ToolPermissionPolicyTest・SubAgentConfigurationTest・ToolsTest）はPASS。全体回帰は3104 tests / 592 suites、failure/error/skip各0でPASS。Javaのみ変更し、Native/Reactは再実行していない。Git結果はMerge後に記録する。詳しい仕様・限界は[junit-report-diagnosis.md](junit-report-diagnosis.md)。
+最終関連テスト（TestReportDiagnosisTest・BuildTestFailureDiagnosisTest・ToolPermissionPolicyTest・SubAgentConfigurationTest・ToolsTest）はPASS。全体回帰は3104 tests / 592 suites、failure/error/skip各0でPASS。Javaのみ変更し、Native/Reactは再実行していない。feature 2ac395cdをPushし、main 9ab70cdbへMergeした。Merge後関連テストもPASS、main Push済み。詳しい仕様・限界は[junit-report-diagnosis.md](junit-report-diagnosis.md)。

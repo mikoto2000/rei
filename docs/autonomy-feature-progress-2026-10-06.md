@@ -1,6 +1,6 @@
 # 自律機能の継続作業記録（2026-10-06）
 
-最初の継続7件に加え、後続の継続でSubAgent関連3件、共有Run報告token上限、Goal永続報告token上限、Run内context要約token計上、Sleep共有モデル予算、Git変更の自動収集によるテスト影響分析を完了した。後続分は末尾の表に記録する。
+最初の継続7件に加え、後続の継続でSubAgent関連3件、共有Run報告token上限、Goal永続報告token上限、Run内context要約token計上、Sleep共有モデル予算、Git変更の自動収集によるテスト影響分析、保存済みJUnitレポート診断を完了した。後続分は末尾の表に記録する。
 
 この継続作業で次の7件を独立ブランチで実装し、Red→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後確認→main Pushを完了した。各実装の制限・追加候補を残し、全候補の完成とは区別する。初回からの一覧は[実装状況](autonomy-feature-audit.md)を参照。
 
@@ -96,3 +96,12 @@ Red→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge�
 初期Red→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。全体回帰は3096 tests / 591 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。
 
 changeTestImpactのchangedFiles省略時に、捕捉Projectのステージ済み・未ステージ・未追跡pathを収集する。削除／rename／空白・日本語path／ignore／ステージと作業ツリーの相殺／Tool callbackを実Gitで確認し、失敗・切り詰め・取消を隠さない。変更収集の上限・除外によるpartial・構造評価の限界を保持する。coverageや完全な意味的依存解析は引き続き残件。
+## 後続の保存済みJUnitレポート診断
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [JUnitレポート診断](implementation-report-junit-report-diagnosis.md) | junit-report-diagnosis | 2ac395cd | 9ab70cdb | 3104 / 592 |
+
+初期Red・擬似testcase混入の振る舞いRed→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。全体回帰は3104 tests / 592 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。
+
+保存済み単一JUnit XMLのfailure/error/skippedと診断文をREAD Toolで確認する。報告countと実観測count、SHA・時刻・partialを区別し、現在processやGoalの成功を断定しない。XML外部参照禁止・境界／上限・認証情報除去・実Tool callback・SubAgent明示要求を検証した。完全原因特定・その他形式・自動発見／修復は引き続き残件。
