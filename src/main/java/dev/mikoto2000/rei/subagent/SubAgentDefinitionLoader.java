@@ -11,7 +11,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** Safe scalar/map YAML only. Diagnostics never echo arbitrary YAML or prompts. */
 public final class SubAgentDefinitionLoader {
-  private static final Set<String> FIELDS = Set.of("id", "name", "description", "systemPrompt", "tools", "model", "maxSteps", "timeout", "resultSchema", "evidenceTools", "maxRepairs","requiredToolCalls","semanticValidation");
+  private static final Set<String> FIELDS = Set.of("id", "name", "description", "systemPrompt", "tools", "model", "maxSteps", "timeout", "resultSchema", "evidenceTools", "maxRepairs","requiredToolCalls","semanticValidation","inheritApprovals");
   private final SubAgentToolPolicy policy;
   private final Predicate<String> modelResolver;
   public SubAgentDefinitionLoader(SubAgentToolPolicy policy, Predicate<String> modelResolver) {
@@ -77,6 +77,8 @@ public final class SubAgentDefinitionLoader {
       String model = values.containsKey("model") ? text(values, "model") : null;
       if(values.containsKey("semanticValidation")&&!(values.get("semanticValidation") instanceof Boolean))
         throw new IllegalArgumentException("semanticValidation: expected boolean");
+      if(values.containsKey("inheritApprovals")&&!(values.get("inheritApprovals") instanceof Boolean))
+        throw new IllegalArgumentException("inheritApprovals: expected boolean");
       if (model != null && !modelResolver.test(model)) throw new IllegalArgumentException("model: cannot resolve configured model");
       Object steps = values.get("maxSteps");
       Object repairs = values.getOrDefault("maxRepairs", null);
@@ -97,7 +99,7 @@ public final class SubAgentDefinitionLoader {
       } catch (Exception e) { throw new IllegalArgumentException("timeout: required positive duration (120s, 2m, 1h, 500ms)"); }
       return new SubAgentDefinition(text(values, "id"), text(values, "name"), text(values, "description"),
           text(values, "systemPrompt"), tools, model, count, timeout, file,
-          values.containsKey("resultSchema") ? SubAgentResultSchema.load(file, text(values, "resultSchema")) : null, evidenceTools, repairs == null ? 0 : (Integer) repairs,requiredCalls,Boolean.TRUE.equals(values.get("semanticValidation")));
+          values.containsKey("resultSchema") ? SubAgentResultSchema.load(file, text(values, "resultSchema")) : null, evidenceTools, repairs == null ? 0 : (Integer) repairs,requiredCalls,Boolean.TRUE.equals(values.get("semanticValidation")),Boolean.TRUE.equals(values.get("inheritApprovals")));
     } catch (IllegalArgumentException error) { throw invalid(file, error.getMessage()); }
   }
   private static boolean jsonValue(Object value,int depth) {

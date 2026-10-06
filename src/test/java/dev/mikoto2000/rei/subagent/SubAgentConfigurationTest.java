@@ -41,6 +41,16 @@ class SubAgentConfigurationTest {
       assertThatThrownBy(()->loader.load(file)).hasMessageContaining("semanticValidation");
     }
   }
+  @Test void parentApprovalInheritanceIsAnExplicitBoolean() throws Exception {
+    assertThat(loader.load(write("default.yaml",yaml("reviewer"))).inheritApprovals()).isFalse();
+    assertThat(loader.load(write("enabled.yaml",yaml("reviewer")+"inheritApprovals: true\n")).inheritApprovals()).isTrue();
+    for(String value:List.of("null","1","wrong")) {
+      var file=write("bad-approval.yaml",yaml("reviewer")+"inheritApprovals: "+value+"\n");
+      assertThatThrownBy(()->loader.load(file)).hasMessageContaining("inheritApprovals");
+    }
+    var forbidden=write("forbidden.yaml",yaml("reviewer").replace("readMultiFile","runCommand")+"inheritApprovals: true\n");
+    assertThatThrownBy(()->loader.load(forbidden)).hasMessageContaining("not permitted");
+  }
   @Test void evidenceToolsAreOptInAndMustBeUniqueRequestedTools() throws Exception {
     assertThat(loader.load(write("a.yaml",yaml("reviewer"))).evidenceTools()).isEmpty();
     assertThat(loader.load(write("a.yaml",yaml("reviewer")+"evidenceTools: [readMultiFile]\n")).evidenceTools()).containsExactly("readMultiFile");
