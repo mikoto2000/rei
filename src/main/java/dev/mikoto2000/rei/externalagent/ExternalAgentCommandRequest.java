@@ -2,7 +2,7 @@ package dev.mikoto2000.rei.externalagent;
 
 /** UI grammar, deliberately restricted to Phase 1. The remaining text is one target. */
 public record ExternalAgentCommandRequest(String agent, String action, String target) {
-  public static final String USAGE = "Usage: /agent codex review [target]";
+  public static final String USAGE = "Usage: /agent <codex|claude> review [target]";
   public static ExternalAgentCommandRequest parse(String text) {
     String[] parts = text.strip().split("\\s+", 4);
     if (parts.length < 3 || !parts[0].equals("/agent")) throw new IllegalArgumentException(USAGE);

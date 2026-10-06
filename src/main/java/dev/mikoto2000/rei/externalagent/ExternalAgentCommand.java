@@ -6,7 +6,7 @@ import dev.mikoto2000.rei.application.session.ShellConversationService;
 
 /** Thin asynchronous shell adapter. ChatExecutionService dispatches the same domain service. */
 @Component
-@Command(name = "agent", description = "Request an external agent review: /agent codex review [target]")
+@Command(name = "agent", description = "Request an external agent review: /agent <codex|claude> review [target]")
 public class ExternalAgentCommand implements java.util.concurrent.Callable<Integer> {
   private final ShellConversationService conversations;
   @Parameters(arity = "0..*", paramLabel = "AGENT ACTION [TARGET]", completionCandidates = ExternalAgentCompletionCandidates.class) private String[] arguments;

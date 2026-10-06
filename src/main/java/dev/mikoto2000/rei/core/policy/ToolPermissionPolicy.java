@@ -16,6 +16,7 @@ public class ToolPermissionPolicy {
   public ToolPermissionPolicy(ToolPermissionProperties properties) {this.properties=properties;}
   public boolean enforced(){return properties.enabled();}
   public Set<ActionCapability> capabilities(String tool) {
+    if(Set.of("listClaudeCodeReviews","getClaudeCodeReview").contains(tool)&&!properties.capabilities().containsKey(tool))return Set.of(ActionCapability.READ);
     var configured=properties.capabilities().get(tool);
     if(configured!=null) return configured;
     if(READ.contains(tool)) return Set.of(ActionCapability.READ);

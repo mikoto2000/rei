@@ -453,3 +453,7 @@ rei:
 ## 非公開 RSS / Atom
 
 読み取り専用 Bearer token を環境変数で参照できます。[設定・CLI / API・安全境界](private-feeds.md)を参照してください。
+
+## Claude Code 外部レビュー
+
+`rei.external-agents.claude.enabled` / `REI_CLAUDE_ENABLED` は既定false。`command` / `REI_CLAUDE_COMMAND` はnative `claude`（Windowsは `claude.exe`）。既存外部設定へclaude節を追加すると有効化できる。CLIは2.1.286以上、claude.aiのサブスクリプションで事前ログインし、API/cloud fallbackを行わない。対象のUTF-8 snapshot上限、Tool無効化、Run/Goal予算・履歴・取消は[Claude Code reviews](claude-code-reviews.md)を参照。

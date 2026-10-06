@@ -87,8 +87,9 @@ class ContextCompletionTest {
     }
   }
   @Test void externalAgentAndActionUseDomainDefinitions() {
-    assertThat(values(command(), "/agent ")).containsExactly("codex");
+    assertThat(values(command(), "/agent ")).containsExactlyInAnyOrder("codex","claude");
     assertThat(values(command(), "/agent codex ")).containsExactly("review");
+    assertThat(values(command(), "/agent claude ")).containsExactly("review");
     assertThat(values(command(), "/agent unknown ")).isEmpty();
   }
   @Test void reviewCompletesFilesAndDirectories() throws Exception {

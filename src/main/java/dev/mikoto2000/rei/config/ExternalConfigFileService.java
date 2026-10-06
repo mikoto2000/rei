@@ -168,6 +168,12 @@ public class ExternalConfigFileService {
                 warning-minutes: 45
                 strong-warning-minutes: 30
           external-agents:
+            claude:
+              enabled: ${REI_CLAUDE_ENABLED:false}
+              command: ${REI_CLAUDE_COMMAND:claude}
+              total-timeout: 5m
+              inactivity-timeout: 2m
+              max-output-bytes: 1048576
             codex:
               inherit-run-model-budget: ${REI_CODEX_INHERIT_RUN_MODEL_BUDGET:false}
               parallel-review-enabled: ${REI_CODEX_PARALLEL_REVIEW_ENABLED:false}

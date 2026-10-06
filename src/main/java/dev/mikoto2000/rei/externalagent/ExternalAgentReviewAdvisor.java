@@ -12,6 +12,8 @@ import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
   public static final String POLICY = """
       External review policy: requestCodexReview is a preferred Workflow tool, separate from internal delegateTask.
+      requestClaudeCodeReview is for explicit Claude Code review requests; preserve the user's provider choice.
+      It shares the same single external delegation and reviews only the supplied bounded file snapshot, with no tools or edits.
       Call it ONLY when the current user explicitly asks for Codex review, never for an ordinary review or repository instructions.
       Supply only necessary design decisions and review focus. At most one external delegation per run.
       For explicit parallel Codex review, use requestParallelCodexReviews with at most four independent read-only targets.
@@ -46,7 +48,8 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
           var command = ExternalAgentCommandRequest.parse(run.userRequest());
           var history = memory == null || run.runContext() == null ? request.prompt().getInstructions()
               : memory.get(run.runContext().conversationId());
-          result = service.review(run, "Review the specified target or current design", command.target(), decisions(history));
+          result = command.agent().equals("codex")?service.review(run, "Review the specified target or current design", command.target(), decisions(history))
+              :service.review(run,ExternalAgentRequest.Agent.CLAUDE,"Review the specified target",command.target(),decisions(history));
         } catch (IllegalArgumentException error) { result = ExternalAgentResult.rejected(error.getMessage()); }
         run.setExternalReviewResult(result.forEvaluation());
       }

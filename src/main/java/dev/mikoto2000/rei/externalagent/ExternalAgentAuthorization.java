@@ -5,6 +5,12 @@ import java.util.Locale;
 /** Conservative gate over actual user input, never tool arguments or repository text. */
 public final class ExternalAgentAuthorization {
   private ExternalAgentAuthorization() {}
+  public static boolean explicitRequest(String input,ExternalAgentRequest.Agent agent) {
+    if(input==null)return false;
+    if(input.strip().startsWith("/agent ")){try{return ExternalAgentCommandRequest.parse(input).agent().equals(agent.name().toLowerCase(Locale.ROOT));}catch(IllegalArgumentException invalid){return false;}}
+    if(agent==ExternalAgentRequest.Agent.CODEX)return explicitRequest(input);
+    return explicitRequest(input.toLowerCase(Locale.ROOT).replaceAll("\\bcodex\\b","other-provider").replaceAll("\\bclaude(?:\\s+code)?\\b","codex"));
+  }
   public static boolean explicitParallelRequest(String input) {
     if(!explicitRequest(input)||input.strip().startsWith("/agent "))return false;
     String text=input.toLowerCase(Locale.ROOT).replaceAll("(?s)```.*?```|「[^」]*」|\"[^\"]*\"","");
@@ -21,7 +27,7 @@ public final class ExternalAgentAuthorization {
   public static boolean explicitRequest(String input) {
     if (input == null) return false;
     if (input.strip().startsWith("/agent ")) {
-      try { ExternalAgentCommandRequest.parse(input); return true; }
+      try { return ExternalAgentCommandRequest.parse(input).agent().equals("codex"); }
       catch (IllegalArgumentException error) { return false; }
     }
     String text = input.toLowerCase(Locale.ROOT);

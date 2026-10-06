@@ -13,7 +13,7 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 @Repository
 public class ExternalReviewRepository {
   public record Review(String id,String projectId,String projectRoot,String sessionId,String runId,String target,
-      String previousId,String status,Instant createdAt,Instant completedAt,ExternalAgentResult result) { }
+      String previousId,String status,Instant createdAt,Instant completedAt,ExternalAgentResult result,String agent) { }
   private final JdbcClient db;
   private final Clock clock;
   private final com.fasterxml.jackson.databind.ObjectMapper mapper=new com.fasterxml.jackson.databind.ObjectMapper();
@@ -21,12 +21,13 @@ public class ExternalReviewRepository {
     db=JdbcClient.create(source);this.clock=clock;
     db.sql("CREATE TABLE IF NOT EXISTS external_reviews(id TEXT PRIMARY KEY,project TEXT NOT NULL,root TEXT NOT NULL,session TEXT NOT NULL,run TEXT NOT NULL,target TEXT,previous TEXT,status TEXT NOT NULL,created INTEGER NOT NULL,completed INTEGER,result TEXT)").update();
     db.sql("CREATE INDEX IF NOT EXISTS external_reviews_project ON external_reviews(project,created)").update();
+    if(!db.sql("PRAGMA table_info(external_reviews)").query((rs,index)->rs.getString("name")).list().contains("agent"))db.sql("ALTER TABLE external_reviews ADD COLUMN agent TEXT NOT NULL DEFAULT 'codex'").update();
     db.sql("CREATE TABLE IF NOT EXISTS external_review_continuations(previous TEXT PRIMARY KEY,review TEXT NOT NULL)").update();
   }
   /** An attempted continuation consumes its parent even after failure or a crash. Never replay it. */
   public void startContinuation(AgentRunContext owner,String id,Path root,String target,String previous) {
     var parent=get(owner.projectId(),previous);
-    if(!parent.projectRoot().equals(root.toString()) || parent.result()==null || !parent.result().success()
+    if(!parent.agent().equals("codex")||!parent.projectRoot().equals(root.toString()) || parent.result()==null || !parent.result().success()
         || !ExternalAgentResult.validSessionId(parent.result().externalSessionId()))throw new IllegalArgumentException("Resumable completed review required");
     if(db.sql("INSERT OR IGNORE INTO external_review_continuations(previous,review) VALUES(?,?)").params(previous,id).update()!=1)
       throw new IllegalArgumentException("This review's continuation was already attempted; use its completed successor or request a fresh re-review");
@@ -36,13 +37,17 @@ public class ExternalReviewRepository {
     return db.sql("SELECT count(*) FROM external_review_continuations WHERE previous=?").param(previous).query(Integer.class).single()>0;
   }
   public void start(AgentRunContext owner,String id,Path root,String target,String previous) {
+    start(owner,id,root,target,previous,"codex");
+  }
+  public void start(AgentRunContext owner,String id,Path root,String target,String previous,String agent) {
+    if(!Set.of("codex","claude").contains(agent))throw new IllegalArgumentException("Unsupported review provider");
     if(owner.projectId()==null || owner.projectId().isBlank())throw new IllegalArgumentException("Project required");
     if(previous!=null) {
       var parent=get(owner.projectId(),previous);
-      if(!parent.projectRoot().equals(root.toString()) || parent.status().equals("STARTED"))throw new IllegalArgumentException("Completed review in the same project root required");
+      if(!parent.agent().equals(agent)||!parent.projectRoot().equals(root.toString()) || parent.status().equals("STARTED"))throw new IllegalArgumentException("Completed review in the same provider/project root required");
     }
-    db.sql("INSERT INTO external_reviews VALUES(?,?,?,?,?,?,?,'STARTED',?,NULL,NULL)")
-        .params(id,owner.projectId(),root.toString(),owner.conversationId(),owner.runId(),target,previous,clock.millis()).update();
+    db.sql("INSERT INTO external_reviews(id,project,root,session,run,target,previous,status,created,completed,result,agent) VALUES(?,?,?,?,?,?,?,'STARTED',?,NULL,NULL,?)")
+        .params(id,owner.projectId(),root.toString(),owner.conversationId(),owner.runId(),target,previous,clock.millis(),agent).update();
   }
   public void finish(String project,String id,ExternalAgentResult result) {
     var safe=safe(result);
@@ -56,12 +61,13 @@ public class ExternalReviewRepository {
         .orElseThrow(()->new IllegalArgumentException("Review not found in this Project"));
   }
   public List<Review> list(String project) {return db.sql("SELECT * FROM external_reviews WHERE project=? ORDER BY created DESC,id LIMIT 20").param(project).query(this::row).list();}
+  public List<Review> list(String project,String agent){if(!Set.of("codex","claude").contains(agent))throw new IllegalArgumentException("Unsupported review provider");return db.sql("SELECT * FROM external_reviews WHERE project=? AND agent=? ORDER BY created DESC,id LIMIT 20").params(project,agent).query(this::row).list();}
   private Review row(java.sql.ResultSet rs,int index)throws java.sql.SQLException {
     String json=rs.getString("result");ExternalAgentResult result=null;
     if(json!=null)try{result=mapper.readValue(json,ExternalAgentResult.class);}catch(Exception error){throw new IllegalStateException("Stored review is invalid");}
     Long completed=rs.getObject("completed")==null?null:rs.getLong("completed");
     return new Review(rs.getString("id"),rs.getString("project"),rs.getString("root"),rs.getString("session"),rs.getString("run"),rs.getString("target"),
-        rs.getString("previous"),rs.getString("status"),Instant.ofEpochMilli(rs.getLong("created")),completed==null?null:Instant.ofEpochMilli(completed),result);
+        rs.getString("previous"),rs.getString("status"),Instant.ofEpochMilli(rs.getLong("created")),completed==null?null:Instant.ofEpochMilli(completed),result,rs.getString("agent"));
   }
   static ExternalAgentResult safe(ExternalAgentResult result) {
     boolean truncated=result.findings().size()>24 || result.warnings().size()>12 || length(result.summary())>2048

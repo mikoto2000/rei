@@ -51,6 +51,10 @@ public class ExternalAgentDelegationService implements AutoCloseable {
   public ExternalAgentResult review(RunExecutionContext run, String task, String target, String decisions) {
     return review(run,task,target,decisions,null,false,false);
   }
+  public ExternalAgentResult review(RunExecutionContext run,ExternalAgentRequest.Agent agent,String task,String target,String decisions) {
+    if(agent==null)return ExternalAgentResult.rejected("External review provider required");
+    return review(run,task,target,decisions,null,false,false,null,null,agent);
+  }
   public ExternalAgentResult rereview(RunExecutionContext run,String previousId,String task,String decisions) {
     if(previousId==null || previousId.isBlank())return ExternalAgentResult.rejected("Previous review ID required");
     return review(run,task,null,decisions,previousId,false,false);
@@ -115,11 +119,15 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     return review(run,task,target,decisions,previousId,continuation,fixProposal,null,null);
   }
   private ExternalAgentResult review(RunExecutionContext run,String task,String target,String decisions,String previousId,boolean continuation,boolean fixProposal,ParallelPermit permit,String parallelRequestId) {
+    return review(run,task,target,decisions,previousId,continuation,fixProposal,permit,parallelRequestId,ExternalAgentRequest.Agent.CODEX);
+  }
+  private ExternalAgentResult review(RunExecutionContext run,String task,String target,String decisions,String previousId,boolean continuation,boolean fixProposal,ParallelPermit permit,String parallelRequestId,ExternalAgentRequest.Agent agent) {
+    String provider=agent.name().toLowerCase(Locale.ROOT);
+    String providerLabel=agent==ExternalAgentRequest.Agent.CODEX?"Codex":"Claude Code";
     if(permit!=null&&(permit.run!=run||permit.cancelled.get()||Thread.currentThread().isInterrupted()))return new ExternalAgentResult(ExternalAgentResult.Status.CANCELLED,"Parallel review cancelled before execution",List.of(),List.of(),0,null,"");
-    if (run == null || !(fixProposal?ExternalAgentAuthorization.explicitFixProposalRequest(run.userRequest()):ExternalAgentAuthorization.explicitRequest(run.userRequest())))
+    if (run == null || !(fixProposal?ExternalAgentAuthorization.explicitFixProposalRequest(run.userRequest()):ExternalAgentAuthorization.explicitRequest(run.userRequest(),agent)))
       return ExternalAgentResult.rejected(fixProposal?"Codex fix proposals require an explicit request for a Codex fix proposal in this Run; tool arguments and an ordinary review request cannot authorize it."
-          :"Codex requires an explicit user request in this run. Do not retry with different tool arguments. "
-          + "Ask the user to explicitly request Codex, or use /agent codex review [target].");
+          :provider+" requires an explicit user request in this Run. Tool arguments cannot authorize another provider.");
     var owner = run.runContext();
     if (owner == null || owner.projectId() == null || !Files.isDirectory(owner.projectRoot()))
       return ExternalAgentResult.rejected("No current project is available");
@@ -133,7 +141,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
         if(previousId!=null) {
           if(history==null)return ExternalAgentResult.rejected("Review history unavailable");
           previous=history.get(owner.projectId(),previousId);
-          if(!previous.projectRoot().equals(root.toString()) || previous.status().equals("STARTED") || previous.result()==null)return ExternalAgentResult.rejected("Completed review in this project root required");
+          if(!previous.agent().equals(provider)||!previous.projectRoot().equals(root.toString()) || previous.status().equals("STARTED") || previous.result()==null)return ExternalAgentResult.rejected("Completed review from this provider/project root required");
           if(fixProposal && !previous.result().success())return ExternalAgentResult.rejected("Successful completed review required for a fix proposal");
           if(continuation && (!executor.supportsContinuation() || !previous.result().success()
               || !ExternalAgentResult.validSessionId(previous.result().externalSessionId()) || history.continuationAttempted(previousId)))
@@ -153,38 +161,39 @@ public class ExternalAgentDelegationService implements AutoCloseable {
       if(history!=null)try{
         String relative=selected==null?null:root.relativize(selected).toString();
         if(continuation)history.startContinuation(owner,id,root,relative,previousId);
-        else history.start(owner,id,root,relative,previousId);
+        else if(agent==ExternalAgentRequest.Agent.CODEX)history.start(owner,id,root,relative,previousId);
+        else history.start(owner,id,root,relative,previousId,provider);
         if(permit!=null)permit.reviewIds.put(parallelRequestId,id);
       }
       catch(RuntimeException error){return ExternalAgentResult.rejected("Review history unavailable; no external process started");}
       var action=fixProposal?ExternalAgentRequest.Action.PROPOSE_FIX:ExternalAgentRequest.Action.REVIEW;
-      var request = new ExternalAgentRequest(ExternalAgentRequest.Agent.CODEX, action,
+      var request = new ExternalAgentRequest(agent, action,
           bounded(run.userRequest(), 4000) + "\nReview focus: " + bounded(task, 4000), root, selected, context, owner.runId(), id,
           continuation?previous.result().externalSessionId():null);
       AtomicBoolean cancelled = new AtomicBoolean(run.isCancelled());
       var hook = cancellation.onCancel(owner.runId(), () -> cancelled.set(true));
       publisher.publish(events.delegation(AgentEventType.DELEGATION_STARTED, owner.runId(),
-          new ExternalAgentLifecyclePayload(id, "codex", action.name().toLowerCase(Locale.ROOT), "STARTED", "review", 0, null)).withOwnership(owner));
+          new ExternalAgentLifecyclePayload(id, provider, action.name().toLowerCase(Locale.ROOT), "STARTED", "review", 0, null)).withOwnership(owner));
       ExternalAgentResult result;
       dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped=null;
       long start = System.nanoTime();
       try {
         result = permit!=null
             ?executor.execute(request,()->cancelled.get()||run.isCancelled()||permit.cancelled.get()||Thread.currentThread().isInterrupted(),permit.budget)
-            :modelBudgetProperties.isInheritRunModelBudget()
+            :agent==ExternalAgentRequest.Agent.CLAUDE||modelBudgetProperties.isInheritRunModelBudget()
             ?executor.execute(request,()->cancelled.get()||run.isCancelled(),run.modelCallBudget())
             :executor.execute(request, () -> cancelled.get() || run.isCancelled());
         if(fixProposal && result.success() && !cancelled.get() && !run.isCancelled())result=stageFix(owner,root,selected,result);
       } catch(dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException error) {
         stopped=error;
-        result=new ExternalAgentResult(ExternalAgentResult.Status.FAILED,"Codex review stopped by model budget",List.of(),List.of(),0,null,"");
+        result=new ExternalAgentResult(ExternalAgentResult.Status.FAILED,providerLabel+" review stopped by model budget",List.of(),List.of(),0,null,"");
       } catch (java.util.concurrent.CancellationException error) {
-        result = new ExternalAgentResult(ExternalAgentResult.Status.CANCELLED, "Codex review cancelled", List.of(), List.of(), 0, null, "");
+        result = new ExternalAgentResult(ExternalAgentResult.Status.CANCELLED, providerLabel+" review cancelled", List.of(), List.of(), 0, null, "");
       } catch (RuntimeException error) {
-        result = new ExternalAgentResult(ExternalAgentResult.Status.FAILED, "Codex review could not be completed", List.of(), List.of(), 0, null, "");
+        result = new ExternalAgentResult(ExternalAgentResult.Status.FAILED, providerLabel+" review could not be completed", List.of(), List.of(), 0, null, "");
       } finally { hook.dispose(); }
       boolean wasCancelled = cancelled.get() || run.isCancelled() || result.status() == ExternalAgentResult.Status.CANCELLED;
-      if(wasCancelled)result=new ExternalAgentResult(ExternalAgentResult.Status.CANCELLED,"Codex review cancelled",List.of(),List.of(),result.duration(),result.exitCode(),"",null,null,null,result.changeSetId());
+      if(wasCancelled)result=new ExternalAgentResult(ExternalAgentResult.Status.CANCELLED,providerLabel+" review cancelled",List.of(),List.of(),result.duration(),result.exitCode(),"",null,null,null,result.changeSetId());
       if(history!=null) {
         result=ExternalReviewRepository.safe(new ExternalAgentResult(result.status(),result.summary(),result.findings(),result.warnings(),result.duration(),result.exitCode(),"",id,result.externalSessionId(),null,result.changeSetId()));
         try{history.finish(owner.projectId(),id,result);}
@@ -192,7 +201,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
       }
       AgentEventType type = wasCancelled ? AgentEventType.DELEGATION_CANCELLED
           : result.success() ? AgentEventType.DELEGATION_COMPLETED : AgentEventType.DELEGATION_FAILED;
-      publisher.publish(events.delegation(type, owner.runId(), new ExternalAgentLifecyclePayload(id, "codex", action.name().toLowerCase(Locale.ROOT),
+      publisher.publish(events.delegation(type, owner.runId(), new ExternalAgentLifecyclePayload(id, provider, action.name().toLowerCase(Locale.ROOT),
           wasCancelled ? "CANCELLED" : result.status().name(), result.success() ? result.findings().size() + " findings" : result.status().name(),
           (System.nanoTime() - start) / 1_000_000, result.exitCode())).withOwnership(owner));
       if (wasCancelled) {if(permit!=null&&permit.cancelled.get()&&!cancelled.get()&&!run.isCancelled())return result.forEvaluation();run.cancel();throw new java.util.concurrent.CancellationException(); }
