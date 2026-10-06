@@ -46,6 +46,7 @@ public class MemoryRepository {
           """).update();
       db.sql("CREATE TABLE IF NOT EXISTS sleep_model_usage (project_id TEXT PRIMARY KEY, calls INTEGER NOT NULL DEFAULT 0, tokens INTEGER NOT NULL DEFAULT 0, pending INTEGER NOT NULL DEFAULT 0, unknown INTEGER NOT NULL DEFAULT 0)").update();
       db.sql("CREATE TABLE IF NOT EXISTS auto_sleep_requests(session_id TEXT PRIMARY KEY,project_id TEXT NOT NULL,revision INTEGER NOT NULL,cause TEXT NOT NULL)").update();
+      db.sql("CREATE TABLE IF NOT EXISTS verified_reflection_memories(project_id TEXT NOT NULL,reflection_id TEXT NOT NULL,goal_id TEXT NOT NULL,session_id TEXT NOT NULL,memory_id TEXT NOT NULL UNIQUE,criteria_sha256 TEXT NOT NULL,verified_at TEXT NOT NULL,PRIMARY KEY(project_id,reflection_id))").update();
       return null;
     });
   }
@@ -118,9 +119,11 @@ public class MemoryRepository {
         dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOKEN_BUDGET_EXCEEDED);
   }
   public LongTermMemory insert(MemoryCandidate c, String project, String session) {
+    return insert(c,project,session,"mem_"+UUID.randomUUID(),true);
+  }
+  private LongTermMemory insert(MemoryCandidate c,String project,String session,String id,boolean includeTurns) {
     if (c.scope() == MemoryScope.PROJECT && (project == null || project.isBlank())) throw new IllegalArgumentException("Project required");
     return transaction(() -> {
-      String id = "mem_" + UUID.randomUUID();
       String now = OffsetDateTime.now(java.time.ZoneOffset.UTC).toString();
       db.sql("""
           INSERT INTO memories(id,content,type,scope,status,confidence,created_at,updated_at,
@@ -128,7 +131,7 @@ public class MemoryRepository {
           VALUES(?,?,?,?,'ACTIVE',?,?,?,?,?,?,?,?,?)
           """).params(id,c.content(),c.type().name(),c.scope().name(),c.confidence(),now,now,now,
               c.scope()==MemoryScope.PROJECT ? project : null,c.summary(),c.importance(),now,MemoryResolver.normalize(c.content())).update();
-      enrich(id,c,session);
+      if(includeTurns)enrich(id,c,session);else enrichTags(id,c);
       index(id);
       return find(id).orElseThrow();
     });
@@ -138,11 +141,28 @@ public class MemoryRepository {
         INSERT INTO memory_sources(memory_id,source,session_id,turn_id)
         SELECT ?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM memory_sources WHERE memory_id=? AND session_id=? AND turn_id=?)
         """).params(id,session + "/" + turn,session,turn,id,session,turn).update();
+    enrichTags(id,c);
+  }
+  private void enrichTags(String id,MemoryCandidate c) {
     for (String tag : c.tags()) db.sql("""
         INSERT INTO memory_tags(memory_id,tag) SELECT ?,? WHERE NOT EXISTS(SELECT 1 FROM memory_tags WHERE memory_id=? AND tag=?)
         """).params(id,tag,id,tag).update();
     db.sql("UPDATE memories SET updated_at=? WHERE id=?").params(now(),id).update();
     index(id);
+  }
+  public record ReflectionProof(String projectId,String reflectionId,String goalId,String sessionId,String memoryId,String criteriaSha256,java.time.Instant verifiedAt) {}
+  private static final org.springframework.jdbc.core.RowMapper<ReflectionProof> PROOF=(r,n)->new ReflectionProof(r.getString("project_id"),r.getString("reflection_id"),r.getString("goal_id"),r.getString("session_id"),r.getString("memory_id"),r.getString("criteria_sha256"),java.time.Instant.parse(r.getString("verified_at")));
+  public Optional<ReflectionProof> verifiedReflectionProof(String project,String reflection) {return db.sql("SELECT * FROM verified_reflection_memories WHERE project_id=? AND reflection_id=?").params(project,reflection).query(PROOF).optional();}
+  public Optional<ReflectionProof> verifiedReflectionProofByMemory(String project,String memory) {return db.sql("SELECT * FROM verified_reflection_memories WHERE project_id=? AND memory_id=?").params(project,memory).query(PROOF).optional();}
+  /** Atomic publication of a fact and its explicit non-conversation proof. Called after independent verification. */
+  public LongTermMemory insertVerifiedReflection(MemoryCandidate candidate,String project,String session,String reflection,String goal,String criteriaSha256,java.time.Instant verifiedAt) {
+    if(candidate.scope()!=MemoryScope.PROJECT||candidate.type()!=MemoryType.PROJECT_STATE||project==null||project.isBlank()||session==null||session.isBlank()||reflection==null||reflection.isBlank()||goal==null||goal.isBlank()||criteriaSha256==null||!criteriaSha256.matches("[a-f0-9]{64}")||verifiedAt==null)throw new IllegalArgumentException("Invalid verified reflection fact");
+    return transaction(()->{
+      String memory="mem_"+UUID.randomUUID();
+      int inserted=db.sql("INSERT OR IGNORE INTO verified_reflection_memories VALUES(?,?,?,?,?,?,?)").params(project,reflection,goal,session,memory,criteriaSha256,verifiedAt.toString()).update();
+      if(inserted==0)return find(verifiedReflectionProof(project,reflection).orElseThrow().memoryId()).orElseThrow();
+      return insert(candidate,project,session,memory,false);
+    });
   }
   public void update(String id, MemoryCandidate c, String session) {
     db.sql("UPDATE memories SET content=?,summary=?,confidence=?,importance=?,updated_at=?,content_key=? WHERE id=? AND status='ACTIVE'")
