@@ -7,7 +7,7 @@ public record ExternalAgentCommandRequest(String agent, String action, String ta
     String[] parts = text.strip().split("\\s+", 4);
     if (parts.length < 3 || !parts[0].equals("/agent")) throw new IllegalArgumentException(USAGE);
     if (!known(parts[1], ExternalAgentRequest.Agent.values())) throw new IllegalArgumentException("Unsupported external agent: " + parts[1]);
-    if (!known(parts[2], ExternalAgentRequest.Action.values())) throw new IllegalArgumentException("Unsupported external action: " + parts[2]);
+    if (!parts[2].equals("review")) throw new IllegalArgumentException("Unsupported external action: " + parts[2]);
     return new ExternalAgentCommandRequest(parts[1], parts[2], parts.length == 4 ? parts[3] : null);
   }
   private static boolean known(String name, Enum<?>[] values) {

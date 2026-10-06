@@ -16,4 +16,4 @@ CHAT Tool:
 
 `/agent codex review [target]` の既存動作にも保存を適用する。新しい履歴・再レビューはCHAT Tool経由で利用でき、専用slash構文は追加していない。Codexのephemeral/read-only permission profileとtimeoutを維持する。CLIの安全capabilityが不足する場合の拒否も維持する。
 
-後続変更でopt-inのCLI session resumeを追加した。設定・保存境界・二重継続防止は [external-review-continuation.md](external-review-continuation.md) を参照。既定では引き続き一時レビューである。fix/implementationの書き込み委譲、commit/push、他agent、外部並列、比較結果の自動確定、履歴削除UIは未実装。
+後続でopt-inのCLI session resumeと、修正案→保存Change Set→明示Apply→新規再レビューを追加した。設定・保存境界・二重継続防止は [external-review-continuation.md](external-review-continuation.md)、修正案は [external-review-fix-proposals.md](external-review-fix-proposals.md) を参照。既定では引き続き一時レビューである。CLIへの直接書込/commit/push、他agent、外部並列、比較結果の自動確定、履歴削除UIは追加候補。

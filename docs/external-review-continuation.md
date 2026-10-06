@@ -10,4 +10,4 @@ CLIの新規実行とresume双方の隔離capabilityを事前確認する。igno
 
 同じ保存レビューからの継続はSQLiteの一意claimで一度だけ許可する。結果不明・失敗・結果保存障害でもclaimを解除せず、再起動後も再送しない。成功した子レビューから次の明示継続は可能。実行できなかった場合は、ユーザーの新しい依頼による `requestCodexReReview` で別のレビューを開始できる。CLIの履歴更新とReiのDB更新は分散transactionではないため、途中障害は成功とみなさない。
 
-継続は読み取り専用レビューに限定する。fix/implementationの書込委譲、他provider、並列外部委譲はこの変更の対象外。slash構文は従来どおりで、継続は既存CHAT Tool経路を利用する。
+継続は読み取り専用レビューに限定する。後続で [修正案→保存Change Set→明示Apply→新規再レビュー](external-review-fix-proposals.md) を追加した。CLIへの直接書込委譲、他provider、並列外部委譲は対象外。slash構文は従来どおりで、継続は既存CHAT Tool経路を利用する。

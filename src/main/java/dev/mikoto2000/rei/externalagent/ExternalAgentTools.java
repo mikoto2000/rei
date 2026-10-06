@@ -29,6 +29,11 @@ public class ExternalAgentTools {
     var run=toolContext==null?null:(RunExecutionContext)toolContext.getContext().get(RunExecutionContext.KEY);
     return service.continueReview(run,previousReviewId,task,context);
   }
+  @Tool(description="Workflow: Ask Codex for a read-only single-file fix PROPOSAL for a saved successful review ONLY when the current user explicitly requests a Codex fix proposal. Shares the once-per-run external budget. Save a validated exact-baseline Change Set without modifying the target. Return reviewId/changeSetId; inspect its diff, independently review it, and apply only on explicit user request through applyTextChangeSet. Do not claim it is applied or verified. Request a fresh re-review in a later Run after applying.")
+  public ExternalAgentResult requestCodexFixProposal(String previousReviewId,String task,@ToolParam(required=false) String context,ToolContext toolContext) {
+    var run=toolContext==null?null:(RunExecutionContext)toolContext.getContext().get(RunExecutionContext.KEY);
+    return service.proposeFix(run,previousReviewId,task,context);
+  }
   @Tool(description="Read the latest 20 saved external reviews in the current Project. Does not start an external process or grant permission to delegate.")
   public java.util.List<ExternalReviewRepository.Review> listCodexReviews(ToolContext toolContext) {
     var owner=owner(toolContext);String projectRoot=root(owner);return history.list(owner.projectId()).stream().filter(r->r.projectRoot().equals(projectRoot)).toList();
