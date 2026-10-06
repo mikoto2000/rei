@@ -131,3 +131,7 @@ TDD の最初の失敗は estimator/policy 未実装、assembler 未実装、loo
 
 残課題はモデル固有 tokenizer / media の精密な計測、raw result store の容量・保管期限ポリシー、圧縮状況専用 UI、大規模ログ読み取りの索引化。
 保存済み原文を削除する cleanup はこの変更では実装しない。
+
+## 後続の共有token予算
+
+RunContextを持つ要約LLMは、既存の呼出回数に加えて[Run／Goalの報告token予算](context-summary-token-budget.md)を消費する。上限超過・使用量不明を通常fallbackへ隠さず、要約後に上限へ達した親モデルを開始しない。不採用・lengthの要約も報告済み使用量を保持する。両上限が既定0なら従来のusage欠落を許容する。
