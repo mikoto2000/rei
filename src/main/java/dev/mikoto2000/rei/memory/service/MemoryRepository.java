@@ -44,6 +44,7 @@ public class MemoryRepository {
             merged INTEGER NOT NULL, superseded INTEGER NOT NULL, ignored INTEGER NOT NULL,
             conflicts INTEGER NOT NULL, failed INTEGER NOT NULL)
           """).update();
+      db.sql("CREATE TABLE IF NOT EXISTS sleep_model_usage (project_id TEXT PRIMARY KEY, calls INTEGER NOT NULL DEFAULT 0, tokens INTEGER NOT NULL DEFAULT 0, pending INTEGER NOT NULL DEFAULT 0, unknown INTEGER NOT NULL DEFAULT 0)").update();
       return null;
     });
   }
@@ -52,6 +53,45 @@ public class MemoryRepository {
       db.sql("ALTER TABLE " + table + " ADD COLUMN " + name + " " + definition).update();
   }
   public <T> T transaction(Supplier<T> action) { return transactions.execute(status -> action.get()); }
+  /** Reserve before the provider call; pending usage survives failure and restart. */
+  public void reserveSleepModelCall(String project,long maxCalls,long maxTokens) {
+    if(project==null||project.isBlank()||maxCalls<0||maxTokens<0)throw new IllegalArgumentException("Invalid Sleep budget");
+    transaction(()->{
+      db.sql("INSERT OR IGNORE INTO sleep_model_usage(project_id) VALUES(?)").param(project).update();
+      int changed=db.sql("""
+          UPDATE sleep_model_usage SET calls=calls+1,pending=pending+?
+          WHERE project_id=? AND calls<9223372036854775807
+            AND (?=0 OR calls<?) AND (?=0 OR (unknown=0 AND pending=0 AND tokens<?))
+          """).params(maxTokens>0?1:0,project,maxCalls,maxCalls,maxTokens,maxTokens).update();
+      if(changed==0) {
+        var usage=db.sql("SELECT calls,tokens,pending,unknown FROM sleep_model_usage WHERE project_id=?")
+            .param(project).query((r,n)->new long[]{r.getLong(1),r.getLong(2),r.getLong(3),r.getLong(4)}).single();
+        var reason=maxTokens>0&&(usage[2]>0||usage[3]>0)
+            ?dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOKEN_USAGE_UNKNOWN
+            :maxTokens>0&&usage[1]>=maxTokens
+                ?dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOKEN_BUDGET_EXCEEDED
+                :dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.LLM_CALL_BUDGET_EXCEEDED;
+        throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(reason);
+      }
+      return null;
+    });
+  }
+  /** This accounting is separate from memory/checkpoint writes, also for previews. */
+  public void recordSleepTokens(String project,Integer tokens) {
+    boolean valid=tokens!=null&&tokens>=0;
+    int changed=db.sql("""
+        UPDATE sleep_model_usage SET pending=pending-1,
+          tokens=CASE WHEN tokens>9223372036854775807-? THEN 9223372036854775807 ELSE tokens+? END,
+          unknown=CASE WHEN ?=1 THEN unknown ELSE 1 END
+        WHERE project_id=? AND pending>0
+        """).params(valid?tokens:0,valid?tokens:0,valid?1:0,project).update();
+    if(changed!=1)throw new IllegalStateException("No pending Sleep model call");
+  }
+  public void checkSleepTokenBudget(String project,long limit) {
+    long tokens=db.sql("SELECT tokens FROM sleep_model_usage WHERE project_id=?").param(project).query(Long.class).single();
+    if(tokens>limit)throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
+        dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOKEN_BUDGET_EXCEEDED);
+  }
   public LongTermMemory insert(MemoryCandidate c, String project, String session) {
     if (c.scope() == MemoryScope.PROJECT && (project == null || project.isBlank())) throw new IllegalArgumentException("Project required");
     return transaction(() -> {

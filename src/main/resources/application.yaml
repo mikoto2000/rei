@@ -269,6 +269,10 @@ rei:
       max-memories: ${REI_MEMORY_MAX_MEMORIES:5}
       max-tokens: ${REI_MEMORY_MAX_TOKENS:1500}
     sleep:
+      max-llm-calls: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS:0}
+      max-total-tokens: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS:0}
+      max-llm-calls-per-project: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS_PER_PROJECT:0}
+      max-total-tokens-per-project: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS_PER_PROJECT:0}
       min-confidence: ${REI_MEMORY_MIN_CONFIDENCE:0.70}
       min-importance: ${REI_MEMORY_MIN_IMPORTANCE:0.50}
       max-turns: ${REI_MEMORY_SLEEP_MAX_TURNS:50}

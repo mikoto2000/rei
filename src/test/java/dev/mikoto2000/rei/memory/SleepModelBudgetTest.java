@@ -27,8 +27,11 @@ class SleepModelBudgetTest {
   ChatModel model;
   ConversationTurnStore turns;
   SleepService service(int calls,long tokens,Integer extractionUsage,Integer resolutionUsage,boolean existing) {
+    return service(calls,tokens,extractionUsage,resolutionUsage,existing,0,0);
+  }
+  SleepService service(int calls,long tokens,Integer extractionUsage,Integer resolutionUsage,boolean existing,long projectCalls,long projectTokens) {
     var props=new MemoryProperties(true,20,80,10,3,2000,60,null,null,
-        new MemoryProperties.Sleep(.70,.50,50,12000,120,calls,tokens));
+        new MemoryProperties.Sleep(.70,.50,50,12000,120,calls,tokens,projectCalls,projectTokens));
     var source=new DriverManagerDataSource("jdbc:sqlite:"+dir.resolve("memory.db"));
     repository=new MemoryRepository(source,new MemoryService(source,props));
     if(existing)repository.insert(LongTermMemoryTest.candidate("Previous unrelated note",MemoryScope.PROJECT),"p","s");
@@ -118,5 +121,49 @@ class SleepModelBudgetTest {
     assertEquals(2,properties.sleep().maxLlmCalls());assertEquals(3000,properties.sleep().maxTotalTokens());
     assertEquals(.70,properties.sleep().minConfidence());assertEquals(.50,properties.sleep().minImportance());
     assertEquals(50,properties.sleep().maxTurns());assertEquals(12000,properties.sleep().maxInputTokens());
+  }
+  @Test void previewChargesProjectBudgetAndNewServiceCannotRetryForFree() {
+    var sleep=service(0,0,2,2,false,1,0);
+    assertEquals("PREVIEW",sleep.sleep("s","p",true).run().status());
+    assertTrue(repository.history("p",10).isEmpty());assertEquals(0,repository.lastProcessed("s"));
+    var restarted=service(0,0,2,2,false,1,0);
+    assertTrue(assertThrows(RuntimeException.class,()->restarted.sleep("s","p",false)).getMessage().contains("LLM_CALL_BUDGET_EXCEEDED"));
+    verify(model,never()).stream(any(Prompt.class));assertTrue(repository.list("p",10,0).isEmpty());
+  }
+  @Test void lifetimeTokensChargeFailedPlanAndBlockProviderAfterRestart() {
+    var sleep=service(0,0,2,2,true,0,3);
+    assertTrue(assertThrows(RuntimeException.class,()->sleep.sleep("s","p",false)).getMessage().contains("TOKEN_BUDGET_EXCEEDED"));
+    assertEquals(0,repository.lastProcessed("s"));assertEquals(1,repository.list("p",10,0).size());
+    var restarted=service(0,0,2,2,false,0,3);
+    assertTrue(assertThrows(RuntimeException.class,()->restarted.sleep("s","p",false)).getMessage().contains("TOKEN_BUDGET_EXCEEDED"));
+    verify(model,never()).stream(any(Prompt.class));
+  }
+  @Test void lifetimeUnknownUsageAndProviderFailureBlockLaterInvocations() {
+    var sleep=service(0,0,2,2,false,0,10);
+    when(model.stream(any(Prompt.class))).thenReturn(Flux.error(new IllegalStateException("offline")));
+    assertTrue(assertThrows(RuntimeException.class,()->sleep.sleep("s","p",false)).getMessage().contains("TOKEN_USAGE_UNKNOWN"));
+    assertTrue(assertThrows(RuntimeException.class,()->sleep.sleep("s","p",false)).getMessage().contains("TOKEN_USAGE_UNKNOWN"));
+    verify(model,times(1)).stream(any(Prompt.class));
+    var restarted=service(0,0,2,2,false,0,10);
+    assertTrue(assertThrows(RuntimeException.class,()->restarted.sleep("s","p",false)).getMessage().contains("TOKEN_USAGE_UNKNOWN"));
+    verify(model,never()).stream(any(Prompt.class));
+  }
+  @Test void cancellationLeavesDurablePendingReservationWithoutAdvancingMemory() {
+    var sleep=service(0,0,2,2,false,0,10);
+    when(model.stream(any(Prompt.class))).thenReturn(Flux.error(new java.util.concurrent.CancellationException()));
+    assertThrows(java.util.concurrent.CancellationException.class,()->sleep.sleep("s","p",false));
+    assertEquals(0,repository.lastProcessed("s"));
+    var restarted=service(0,0,2,2,false,0,10);
+    assertTrue(assertThrows(RuntimeException.class,()->restarted.sleep("s","p",false)).getMessage().contains("TOKEN_USAGE_UNKNOWN"));
+    verify(model,never()).stream(any(Prompt.class));
+  }
+  @Test void lifetimeBudgetBindingAndValidation() {
+    var source=new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(Map.of(
+        "rei.memory.sleep.max-llm-calls-per-project","12","rei.memory.sleep.max-total-tokens-per-project","3000"));
+    var properties=new org.springframework.boot.context.properties.bind.Binder(source).bind("rei.memory",
+        org.springframework.boot.context.properties.bind.Bindable.of(MemoryProperties.class)).get();
+    assertEquals(12,properties.sleep().maxLlmCallsPerProject());assertEquals(3000,properties.sleep().maxTotalTokensPerProject());
+    assertThrows(IllegalArgumentException.class,()->new MemoryProperties.Sleep(.70,.50,50,12000,120,0,0,-1,0));
+    assertThrows(IllegalArgumentException.class,()->new MemoryProperties.Sleep(.70,.50,50,12000,120,0,0,0,-1));
   }
 }

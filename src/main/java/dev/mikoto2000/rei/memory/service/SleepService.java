@@ -65,8 +65,10 @@ public class SleepService {
         if (turn.status()==ConversationTurnStore.Status.COMPLETED) batch.add(turn);
       }
       processed=(int)(to-from);
-      var budget=properties.sleep().maxLlmCalls()>0||properties.sleep().maxTotalTokens()>0
-          ?new SleepModelBudget(properties.sleep(),check):null;
+      dev.mikoto2000.rei.llm.ModelCallBudget budget=properties.sleep().maxLlmCallsPerProject()>0||properties.sleep().maxTotalTokensPerProject()>0
+          ?new PersistentSleepModelBudget(repository,properties.sleep(),project,check)
+          :properties.sleep().maxLlmCalls()>0||properties.sleep().maxTotalTokens()>0
+              ?new SleepModelBudget(properties.sleep(),check):null;
       var candidates=batch.isEmpty()?List.<MemoryCandidate>of():budget==null?extractor.extract(List.copyOf(batch)):extractor.extract(List.copyOf(batch),budget);
       check.run();
       var sourceIds=batch.stream().map(ConversationTurnStore.Turn::runId).collect(java.util.stream.Collectors.toSet());
