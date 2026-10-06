@@ -12,7 +12,7 @@ final class SubAgentOutputPrompt {
             + " Include result.evidence as an array of objects with exactly evidenceId, tool, outputSha256, quote."
             + " Copy receipt identifiers and hash exactly; quote must be a nonblank exact substring of output, at most 2048 characters."
             + " Cite each receipt at most once. SUCCESS requires cited completed calls for these tools: " + definition.evidenceTools()
-            + (definition.requiredToolCalls().isEmpty()?"":". Required exact JSON Tool calls: "+definition.requiredToolCalls()+". Object key order and whitespace do not matter; all argument values and array order must match")
+            + (definition.requiredToolCalls().isEmpty()?"":". Required exact JSON Tool calls: "+definition.requiredToolCalls()+". Object key order and whitespace do not matter; all argument values and array order must match. When expectedOutputJson is set, SUCCESS also requires each specified top-level output field to equal its expected JSON value on the same untruncated receipt")
             + ". If required work is missing, report PARTIAL or FAILURE; never invent evidence. A receipt proves observation, not task correctness.");
   }
 }

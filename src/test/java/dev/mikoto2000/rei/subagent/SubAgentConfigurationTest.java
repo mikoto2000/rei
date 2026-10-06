@@ -60,6 +60,17 @@ class SubAgentConfigurationTest {
       assertThatThrownBy(()->loader.load(file)).hasMessageContaining("maxRepairs");
     }
   }
+  @Test void expectedOutputLoadsTypedFieldsAndRejectsEmptyNullAndUnknownFields() throws Exception {
+    String extra="evidenceTools: [readMultiFile]\nrequiredToolCalls:\n  - tool: readMultiFile\n    arguments: {}\n    expectedOutput: {found: true, count: 0}\n";
+    var definition=loader.load(write("outcome.yaml",yaml("reviewer")+extra));
+    assertThat(definition.requiredToolCalls().getFirst().expectedOutputJson()).isEqualTo("{\"found\":true,\"count\":0}");
+    for(String value:List.of("{}","[]","null","{date: 2026-01-01}")) {
+      var file=write("bad-outcome.yaml",yaml("reviewer")+extra.replace("{found: true, count: 0}",value));
+      assertThatThrownBy(()->loader.load(file)).hasMessageContaining("requiredToolCalls");
+    }
+    var unknown=write("unknown-outcome.yaml",yaml("reviewer")+extra+"    unexpected: true\n");
+    assertThatThrownBy(()->loader.load(unknown)).hasMessageContaining("requiredToolCalls");
+  }
   @Test void rejectsInvalidFieldsWithFileAndField() throws Exception {
     for (String field : List.of("id", "name", "description", "systemPrompt", "maxSteps", "timeout")) {
       String bad = yaml("reviewer").replaceAll("(?m)^" + field + ":.*\\n(?:  .*\\n)*", "");

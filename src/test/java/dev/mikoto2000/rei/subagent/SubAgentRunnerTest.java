@@ -216,6 +216,36 @@ class SubAgentRunnerTest {
       assertThat(events.getLast().type()).isEqualTo(AgentEventType.SUBAGENT_FAILED);
     }
   }
+  @Test void outputContractRejectsContradictorySuccessAndUsesBoundedRepairHistory() throws Exception {
+    evidenceValidation=true;
+    maxRepairs=1;
+    maxSteps=3;
+    requiredCallsConfiguration="requiredToolCalls:\n  - tool: readMultiFile\n    arguments: {}\n    expectedOutput: {found: true}\n";
+    var calls=new AtomicInteger();
+    var runner=runner(prompt->{
+      int attempt=calls.incrementAndGet();
+      if(attempt==1)return Flux.just(tool("readMultiFile"));
+      var response=prompt.getInstructions().stream().filter(ToolResponseMessage.class::isInstance)
+          .map(ToolResponseMessage.class::cast).findFirst().orElseThrow().getResponses().getFirst().responseData();
+      var receipt=new SubAgentResultParser().parse(response);
+      var claim=Map.of("evidenceId",receipt.get("evidenceId").asString(),"tool","readMultiFile",
+          "outputSha256",receipt.get("outputSha256").asString(),"quote","false");
+      return Flux.just(answer(tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(Map.of(
+          "status",attempt==2?"SUCCESS":"PARTIAL","summary","reported observation",
+          "result",Map.of("evidence",List.of(claim)),"warnings",List.of()))));
+    },"2s",()->List.of(new ToolCallback() {
+      public ToolDefinition getToolDefinition(){return callback().getToolDefinition();}
+      public String call(String input){toolCalls.incrementAndGet();return "{\"found\":false}";}
+    }));
+    var result=runner.run("reviewer","read required file",null);
+    assertThat(result.status()).isEqualTo(SubAgentResult.Status.COMPLETED);
+    assertThat(result.structuredOutput().status()).isEqualTo(SubAgentOutput.Status.PARTIAL);
+    assertThat(result.repairAttempts()).isEqualTo(1);
+    assertThat(result.validationHistory()).hasSize(1);
+    assertThat(result.validationHistory().toString()).contains("requiredToolCalls[0]").doesNotContain("found");
+    assertThat(calls).hasValue(3);
+    assertThat(toolCalls).hasValue(1);
+  }
   @Test void validEnvelopeIsReturnedThroughDelegationWithJsonInstructions() throws Exception {
     var runner = runner(p -> {
       assertThat(p.getInstructions().getFirst().getText()).contains("Return exactly one JSON object", "Do not output Markdown");

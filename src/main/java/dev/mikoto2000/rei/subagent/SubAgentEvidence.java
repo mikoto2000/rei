@@ -8,7 +8,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** Per-run observations captured by the runner, never accepted from model claims. */
 final class SubAgentEvidence {
-  private record Observation(String tool, String hash, String output,JsonNode arguments) { }
+  private record Observation(String tool, String hash, String output,JsonNode arguments,boolean truncated) { }
   private final Map<String,Observation> observations = new LinkedHashMap<>();
   private final JsonMapper mapper = JsonMapper.builder().build();
   synchronized String capture(String tool, String input, String output) {
@@ -18,7 +18,7 @@ final class SubAgentEvidence {
     String hash = hash(output);
     JsonNode arguments=null;
     if(input!=null&&input.length()<=16384)try{arguments=new SubAgentResultParser().parse(input);}catch(RuntimeException invalid){/* Unparseable input cannot satisfy an exact call contract. */}
-    observations.put(id, new Observation(tool, hash, retained,arguments));
+    observations.put(id, new Observation(tool, hash, retained,arguments,retained.length()!=output.length()));
     return mapper.writeValueAsString(Map.of("evidenceId",id,"tool",tool,"inputSha256",hash(input),
         "outputSha256",hash,"output",retained,"truncated",retained.length()!=output.length()));
   }
@@ -52,7 +52,8 @@ final class SubAgentEvidence {
     }
     if("SUCCESS".equals(json.path("status").asString()))for(int index=0;index<requiredCalls.size();index++) {
       var required=requiredCalls.get(index);
-      if(cited.stream().noneMatch(actual->required.matches(actual.tool(),actual.arguments())))
+      if(cited.stream().noneMatch(actual->required.matches(actual.tool(),actual.arguments())
+          &&required.matchesOutput(actual.output(),actual.truncated())))
         errors.add(new ValidationError("/status","SUCCESS requires cited observation for requiredToolCalls["+index+"]"));
     }
     if ("SUCCESS".equals(json.path("status").asString()) && !supported.containsAll(requiredTools)) {
