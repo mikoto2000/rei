@@ -20,6 +20,7 @@ public class ToolPermissionPolicy {
     if(configured!=null) return configured;
     if(READ.contains(tool)) return Set.of(ActionCapability.READ);
     if(NETWORK_READ.contains(tool)) return Set.of(ActionCapability.NETWORK_READ);
+    if("deliverAttention".equals(tool))return Set.of(ActionCapability.NETWORK_WRITE,ActionCapability.EXTERNAL_SIDE_EFFECT);
     if("registerDependency".equals(tool))return Set.of(ActionCapability.READ,ActionCapability.LOCAL_WRITE);
     if(LOCAL_WRITE.contains(tool)) return Set.of(ActionCapability.LOCAL_WRITE);
     if("searchKnowledge".equals(tool))return Set.of(ActionCapability.READ,ActionCapability.NETWORK_READ);

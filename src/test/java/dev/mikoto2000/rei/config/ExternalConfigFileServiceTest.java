@@ -50,6 +50,8 @@ class ExternalConfigFileServiceTest {
     assertTrue(Files.exists(created));
     assertTrue(Files.exists(service.additionalSystemPromptFilePath()));
     String content = Files.readString(created);
+    assertTrue(content.contains("enabled: ${REI_ATTENTION_DELIVERY_ENABLED:false}"));
+    assertTrue(content.contains("automatic: ${REI_ATTENTION_DELIVERY_AUTOMATIC:false}"));
     assertTrue(content.contains("spring:"));
     assertTrue(content.contains("rei:"));
     assertTrue(content.contains("max-llm-calls: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS:0}"));
