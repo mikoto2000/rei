@@ -214,3 +214,10 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 | Implemented | [rerank親モデル予算](implementation-report-rerank-run-model-budget.md) | rerank-run-model-budget | 0175653f | 7d0c674f | 3200 / 601 |
 
 初期Red→Green→Semantic fallbackの停止吸収Red→修正→8テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。実HTTP／Goal永続化／usage証拠境界／送信前停止を検証した。汎用Goal検証条件などは残件。
+## 後続の親RunなしSubAgent共有モデル予算
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [親Runなし共有予算](implementation-report-standalone-subagent-budget.md) | standalone-subagent-budget | 6aa91130 | 267b70d1 | 3209 / 602 |
+
+初期Red→最小Green→9テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。直接／並列／修復／judge／timeout／親優先・既定互換を検証した。DAG／合意形成／永続復旧などは残件。
