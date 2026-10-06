@@ -46,13 +46,36 @@ public class LlmConversationCompressor implements ConversationCompressor {
     // The parent subscription runs this on an interruptible worker. Disposing it interrupts block(),
     // which cancels the HTTP stream instead of leaving an orphan summary request running.
     var result = new StringBuilder();
-    model.stream(prompt).doOnNext(response -> {
-      if (execution != null) execution.checkActive();
-      if (OutputLimitDetector.isOutputLimitReached(response)) throw new IllegalStateException("Summary output limit");
-      if (response.getResult() != null && response.getResult().getOutput().getText() != null)
-        result.append(response.getResult().getOutput().getText());
-    }).blockLast(Duration.ofSeconds(properties.getSummaryTimeoutSeconds()));
-    if (execution != null) execution.checkActive();
-    return result.toString();
+    var aggregate = new java.util.concurrent.atomic.AtomicReference<org.springframework.ai.chat.model.ChatResponse>();
+    var invoked = new java.util.concurrent.atomic.AtomicBoolean();
+    var outputLimited = new java.util.concurrent.atomic.AtomicBoolean();
+    boolean reported = false;
+    try {
+      var responses = reactor.core.publisher.Flux.defer(() -> {
+        if (execution != null) execution.checkModelTokenBudget();
+        invoked.set(true);
+        return model.stream(prompt);
+      }).doOnNext(response -> {
+        if (execution != null) execution.checkActive();
+        if (OutputLimitDetector.isOutputLimitReached(response)) outputLimited.set(true);
+        if (response.getResult() != null && response.getResult().getOutput().getText() != null)
+          result.append(response.getResult().getOutput().getText());
+      });
+      new org.springframework.ai.chat.model.MessageAggregator().aggregate(responses, aggregate::set)
+          .blockLast(Duration.ofSeconds(properties.getSummaryTimeoutSeconds()));
+      if (execution != null) {
+        reported = true;
+        var response = aggregate.get();
+        var usage = response == null ? null : response.getMetadata().getUsage();
+        execution.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+        execution.checkActive();
+      }
+      if (outputLimited.get()) throw new IllegalStateException("Summary output limit");
+      return result.toString();
+    } catch (RuntimeException error) {
+      dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
+      if (execution != null && invoked.get() && !reported) execution.recordTotalTokens(null);
+      throw error;
+    }
   }
 }

@@ -1,0 +1,13 @@
+# context要約のRun／Goal token計上
+
+親Runの`RunExecutionContext`を持つcontext圧縮の要約LLMは、既存の呼出回数予約に加えて、Provider報告totalTokensを同じRunへ計上する。Goal実行なら、同じ報告がGoalの永続使用量へも渡る。新しい予算DBや別Runは作らない。
+
+新しい設定キーは不要。[Run上限](shared-run-token-limit.md)または[Goal上限](persistent-goal-token-limit.md)を有効にすると適用される。既定0では従来の使用量欠落を許容する。
+
+streamを集約したusageを一度だけ計上する。要約が上限を超えた場合は保存しない。使用量が欠落・0・負、空応答、または報告前にProviderエラー／timeoutになった場合は、上限が有効なら使用量不明として止める。予算停止をcontext圧縮の通常fallbackへ隠さない。親の事前予約後に要約だけで上限へ達した場合も、親モデルを開始しない。
+
+ちょうど上限の要約は受け入れて保存できるが、追加モデル呼出しは拒否する。上限内でも品質不足で要約を採用できなかった場合や、lengthで切り詰められた場合は、報告済み使用量を残す。通常の要約品質fallbackは保持し、失敗した生成を無料扱いにしない。
+
+取消時のHTTP stream停止、summary保存前のRun確認、timeout、Toolなし・advisorsなしの独立Promptは既存の境界を維持する。停止したGoalに未報告の事前予約が残る場合の不明状態保持は、既存Goalの処理が行う。
+
+応答後の報告に基づく停止条件であり、請求上限や開始済み並列呼出しの費用を保証しない。RunContextを持たない直接要約、Sleep／記憶整理、External CLI、embedding/rerankは今回の範囲外。実Providerのusage報告品質は未評価。
