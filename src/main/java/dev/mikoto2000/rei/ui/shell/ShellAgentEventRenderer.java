@@ -292,7 +292,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         closeThinkingLine();
         renderLlmCompletion(event);
       }
-      case MESSAGE_STARTED -> messageStarted((MessageStartedPayload) event.payload());
+      case MESSAGE_STARTED -> messageStarted((MessageStartedPayload) event.payload(), event);
       case MESSAGE_DELTA -> messageDelta((MessageDeltaPayload) event.payload());
       case MESSAGE_COMPLETED -> messageCompleted((MessageCompletedPayload) event.payload());
       case MEMORY_CONSOLIDATION_SUGGESTED -> {
@@ -300,7 +300,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         closeThinkingLine();
         output.println("[memory] 記憶整理を実行することをお勧めします。/memory consolidate を実行してください。");
       }
-      case THINKING_STARTED -> thinkingStarted((ThinkingStartedPayload) event.payload());
+      case THINKING_STARTED -> thinkingStarted((ThinkingStartedPayload) event.payload(), event);
       case THINKING_DELTA -> thinkingDelta((ThinkingDeltaPayload) event.payload());
       case THINKING_COMPLETED -> thinkingCompleted((ThinkingCompletedPayload) event.payload());
       case TOOL_STARTED -> {
@@ -691,19 +691,24 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     return false;
   }
 
-  private void messageStarted(MessageStartedPayload payload) {
+  private String eventTime(AgentEvent event) {
+    return java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
+        .withZone(java.time.ZoneId.systemDefault()).format(event.timestamp());
+  }
+
+  private void messageStarted(MessageStartedPayload payload, AgentEvent event) {
     if ("assistant".equalsIgnoreCase(payload.role())) {
       closeThinkingLine();
       assistantMessageId = payload.messageId();
-      output.println("=== answer ===");
+      output.println("=== answer (" + eventTime(event) + ") ===");
     }
   }
 
-  private void thinkingStarted(ThinkingStartedPayload payload) {
+  private void thinkingStarted(ThinkingStartedPayload payload, AgentEvent event) {
     closeAssistantLine();
     thinkingId = payload.thinkingId();
     thinkingLineOpen = false;
-    output.println("=== thinking ===");
+    output.println("=== thinking (" + eventTime(event) + ") ===");
   }
 
   private void thinkingDelta(ThinkingDeltaPayload payload) {
