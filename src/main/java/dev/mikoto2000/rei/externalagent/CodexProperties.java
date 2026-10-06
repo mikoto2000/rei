@@ -10,6 +10,8 @@ public class CodexProperties {
   private boolean enabled = true;
   /** Opt-in: the native CLI retains its own session files; Rei stores only the opaque UUID. */
   private boolean persistSessions = false;
+  /** Opt-in accounting of native CLI turn usage in the parent Run/Goal budget. */
+  private boolean inheritRunModelBudget = false;
   private String command = "codex";
   private Duration totalTimeout = Duration.ofMinutes(20);
   private Duration inactivityTimeout = Duration.ofMinutes(5);
