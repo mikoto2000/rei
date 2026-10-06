@@ -16,7 +16,7 @@ class SessionCommandsTest {
     var root = new picocli.CommandLine(new RootCommand());
     assertThat(root.getSubcommands()).containsKeys("session","resume","checkpoint").doesNotContainKey("new");
     var session = root.getSubcommands().get("session");
-    assertThat(session.getSubcommands()).containsOnlyKeys("new", "resume", "switch", "show", "list");
+    assertThat(session.getSubcommands()).containsOnlyKeys("new", "resume", "switch", "show", "list", "end");
     assertThat(root.execute("session", "--help")).isZero();
     assertThat(root.execute("session")).isZero();
     assertThatThrownBy(() -> root.parseArgs("new")).isInstanceOf(picocli.CommandLine.UnmatchedArgumentException.class);

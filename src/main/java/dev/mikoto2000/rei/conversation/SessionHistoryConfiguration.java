@@ -9,9 +9,11 @@ import org.springframework.beans.factory.annotation.Value;
 @Configuration(proxyBeanMethods = false)
 public class SessionHistoryConfiguration {
   @Bean dev.mikoto2000.rei.application.session.SessionLifecycle sessionLifecycle(SessionRepository repository, java.time.Clock clock,
-      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.project.ProjectService> projects) {
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.project.ProjectService> projects,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.memory.service.AutoSleepService> autoSleep) {
     var lifecycle=new dev.mikoto2000.rei.application.session.SessionLifecycle(repository,clock);
-    lifecycle.onSelected(context->projects.ifAvailable(project->project.rememberConversation(context)));return lifecycle;
+    lifecycle.onSelected(context->projects.ifAvailable(project->project.rememberConversation(context)));
+    lifecycle.onEnded(session->autoSleep.ifAvailable(service->service.afterSessionEnd(session)));return lifecycle;
   }
   @Bean dev.mikoto2000.rei.application.session.SessionQueryService sessionQueryService(SessionRepository repository,
       ConversationTurnStore turns) {

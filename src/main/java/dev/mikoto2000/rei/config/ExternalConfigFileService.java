@@ -288,6 +288,15 @@ public class ExternalConfigFileService {
             discovery:
               enabled: ${REI_TOPIC_GENERATOR_DISCOVERY_ENABLED:true}
           memory:
+            auto-sleep:
+              enabled: ${REI_MEMORY_AUTO_SLEEP_ENABLED:false}
+              minimum-idle: ${REI_MEMORY_AUTO_SLEEP_MINIMUM_IDLE:5m}
+              minimum-turns: ${REI_MEMORY_AUTO_SLEEP_MINIMUM_TURNS:5}
+              retry-interval: ${REI_MEMORY_AUTO_SLEEP_RETRY_INTERVAL:10m}
+              cron: ${REI_MEMORY_AUTO_SLEEP_CRON:}
+              zone: ${REI_MEMORY_AUTO_SLEEP_ZONE:}
+              on-session-end: ${REI_MEMORY_AUTO_SLEEP_ON_SESSION_END:false}
+              on-shutdown: ${REI_MEMORY_AUTO_SLEEP_ON_SHUTDOWN:false}
             enabled: ${REI_MEMORY_ENABLED:true}
             consolidation:
               max-llm-calls: ${REI_MEMORY_CONSOLIDATION_MAX_LLM_CALLS:0}

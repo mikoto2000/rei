@@ -37,4 +37,10 @@ public final class ShellConversationService {
     }
   }
   public String currentSessionId() { return projects.currentSessionId(); }
+  public SessionMetadata end() {
+    synchronized(projects.currentClient()) {
+      String id=currentSessionId();if(id==null)return null;
+      var session=lifecycle.end(id,projects.currentContext().id());projects.selectSession(null);return session;
+    }
+  }
 }

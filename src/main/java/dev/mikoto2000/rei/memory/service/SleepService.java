@@ -159,5 +159,11 @@ public class SleepService {
         counts.getOrDefault(MemoryAction.CONFLICT,0),failed);
   }
   public long unsleptTurns(String session) { return session==null?0:Math.max(0,turns.read(session).size()-repository.lastProcessed(session)); }
+  public void requestAutoSleep(String session,String project,String cause) {
+    if(!properties.enabled())throw new IllegalStateException("Memory is disabled");
+    repository.requestAutoSleep(session,project,cause);
+  }
+  public List<MemoryRepository.AutoSleepRequest> pendingAutoSleepRequests(){return repository.pendingAutoSleepRequests();}
+  public boolean completeAutoSleepRequest(MemoryRepository.AutoSleepRequest request){return repository.completeAutoSleepRequest(request);}
   private static void check() { if(Thread.currentThread().isInterrupted()) throw new CancellationException("Sleep cancelled"); }
 }
