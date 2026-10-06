@@ -19,6 +19,9 @@ public class ExternalAgentDelegationService {
   private final AgentEventPublisher publisher;
   private final Optional<WorkingSet> workingSet;
   private ExternalReviewRepository history;
+  private CodexProperties modelBudgetProperties=new CodexProperties();
+  @org.springframework.beans.factory.annotation.Autowired
+  void modelBudgetProperties(CodexProperties properties){this.modelBudgetProperties=properties;}
   private dev.mikoto2000.rei.core.TextChangeSetService changes;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   void changeSets(dev.mikoto2000.rei.core.TextChangeSetService changes){this.changes=changes;}
@@ -94,10 +97,16 @@ public class ExternalAgentDelegationService {
       publisher.publish(events.delegation(AgentEventType.DELEGATION_STARTED, owner.runId(),
           new ExternalAgentLifecyclePayload(id, "codex", action.name().toLowerCase(Locale.ROOT), "STARTED", "review", 0, null)).withOwnership(owner));
       ExternalAgentResult result;
+      dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped=null;
       long start = System.nanoTime();
       try {
-        result = executor.execute(request, () -> cancelled.get() || run.isCancelled());
+        result = modelBudgetProperties.isInheritRunModelBudget()
+            ?executor.execute(request,()->cancelled.get()||run.isCancelled(),run.modelCallBudget())
+            :executor.execute(request, () -> cancelled.get() || run.isCancelled());
         if(fixProposal && result.success() && !cancelled.get() && !run.isCancelled())result=stageFix(owner,root,selected,result);
+      } catch(dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException error) {
+        stopped=error;
+        result=new ExternalAgentResult(ExternalAgentResult.Status.FAILED,"Codex review stopped by model budget",List.of(),List.of(),0,null,"");
       } catch (java.util.concurrent.CancellationException error) {
         result = new ExternalAgentResult(ExternalAgentResult.Status.CANCELLED, "Codex review cancelled", List.of(), List.of(), 0, null, "");
       } catch (RuntimeException error) {
@@ -116,6 +125,7 @@ public class ExternalAgentDelegationService {
           wasCancelled ? "CANCELLED" : result.status().name(), result.success() ? result.findings().size() + " findings" : result.status().name(),
           (System.nanoTime() - start) / 1_000_000, result.exitCode())).withOwnership(owner));
       if (wasCancelled) { run.cancel(); throw new java.util.concurrent.CancellationException(); }
+      if(stopped!=null)throw stopped;
       return result.forEvaluation();
     }
   }

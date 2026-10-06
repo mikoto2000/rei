@@ -18,6 +18,10 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
   }
   @Override public boolean supportsContinuation() { return properties.isEnabled() && properties.isPersistSessions(); }
   @Override public ExternalAgentResult execute(ExternalAgentRequest request, BooleanSupplier cancelled) {
+    return execute(request,cancelled,null);
+  }
+  @Override public ExternalAgentResult execute(ExternalAgentRequest request,BooleanSupplier cancelled,
+      dev.mikoto2000.rei.llm.ModelCallBudget budget) {
     if (!properties.isEnabled()) return ExternalAgentResult.rejected("Codex external reviews are disabled");
     if(request.externalSessionId()!=null && (!supportsContinuation() || !ExternalAgentResult.validSessionId(request.externalSessionId())))
       return ExternalAgentResult.rejected("An enabled, saved native session UUID is required");
@@ -43,6 +47,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
         return new ExternalAgentResult(Status.UNAVAILABLE,"Codex CLI lacks isolated resume capabilities",List.of(),List.of(),resume.duration(),null,"");
     }
     Path schema = null;
+    boolean invoked=false,reported=false;
     try {
       schema = Files.createTempFile("rei-codex-review-", ".json");
       boolean fix=request.action()==ExternalAgentRequest.Action.PROPOSE_FIX;
@@ -53,13 +58,22 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
       Duration remaining = properties.getTotalTimeout().minusNanos(System.nanoTime() - start);
       if (remaining.isNegative() || remaining.isZero()) return new ExternalAgentResult(Status.TOTAL_TIMEOUT,
           "Codex review total timeout", List.of(), List.of(), capability.duration(), null, "");
-      var result=parse(runner.run(command(request, schema), request.projectRoot(), prompt, remaining,
-          properties.getInactivityTimeout(), properties.getMaxOutputBytes(), cancelled),fix);
+      if(budget!=null)budget.run();
+      invoked=true;
+      var output=runner.run(command(request,schema),request.projectRoot(),prompt,remaining,
+          properties.getInactivityTimeout(),properties.getMaxOutputBytes(),cancelled);
+      if(budget!=null&&output.status()==Status.CANCELLED)throw new java.util.concurrent.CancellationException();
+      if(budget!=null) {reported=true;budget.recordTotalTokens(budget.tokenLimitEnabled()?CodexTokenUsage.total(output):null);}
+      var result=parse(output,fix);
       if(request.externalSessionId()!=null && result.success() && !request.externalSessionId().equals(result.externalSessionId()))
         return new ExternalAgentResult(Status.FAILED,"Continued review did not confirm the saved native session; request a fresh re-review",List.of(),List.of(),result.duration(),result.exitCode(),"");
       return result;
     } catch (java.io.IOException error) {
       return new ExternalAgentResult(Status.UNAVAILABLE, "Could not prepare Codex review", List.of(), List.of(), 0, null, "");
+    } catch(RuntimeException error) {
+      dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
+      if(budget!=null&&invoked&&!reported)budget.recordTotalTokens(null);
+      throw error;
     } finally {
       if (schema != null) try { Files.deleteIfExists(schema); } catch (java.io.IOException ignored) { }
     }

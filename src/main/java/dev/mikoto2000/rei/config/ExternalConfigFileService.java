@@ -169,6 +169,7 @@ public class ExternalConfigFileService {
                 strong-warning-minutes: 30
           external-agents:
             codex:
+              inherit-run-model-budget: ${REI_CODEX_INHERIT_RUN_MODEL_BUDGET:false}
               enabled: true
               command: codex
               total-timeout: 20m
