@@ -2,6 +2,17 @@ use super::*;
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::BTreeMap;
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ActivityAnalysisDto {
+    schema_version: u32,
+    scope: String,
+    period: String,
+    anchor_date: String,
+    zone: String,
+    partial: bool,
+    report: String,
+}
 #[derive(Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ProfileDto {
@@ -210,6 +221,56 @@ impl HttpReiClient {
         op: WorkspaceOperation,
     ) -> Result<WorkspaceResult> {
         match op {
+            WorkspaceOperation::ActivityAnalysis { period, date } => {
+                let valid_date = |value: &str| {
+                    value.len() == 10
+                        && value.bytes().enumerate().all(|(i, c)| {
+                            if i == 4 || i == 7 {
+                                c == b'-'
+                            } else {
+                                c.is_ascii_digit()
+                            }
+                        })
+                };
+                if !matches!(period.as_str(), "WEEK" | "MONTH")
+                    || date.as_deref().is_some_and(|d| !valid_date(d))
+                {
+                    return Err(AppError::InvalidInput);
+                }
+                let mut query = vec![("period", period.as_str())];
+                if let Some(day) = date.as_deref() {
+                    query.push(("date", day));
+                }
+                let dto: ActivityAnalysisDto = Self::json(
+                    self.request(Method::GET, "/api/v1/activity/period", true)?
+                        .query(&query),
+                    Operation::Resource,
+                )
+                .await?;
+                if dto.schema_version != 1
+                    || dto.scope != "LOCAL_DEVICE_OBSERVATIONS"
+                    || dto.period != period
+                    || !valid_date(&dto.anchor_date)
+                    || dto.zone.is_empty()
+                    || dto.zone.len() > 128
+                    || dto.report.len() > 131072
+                {
+                    return Err(AppError::InvalidResponse);
+                }
+                Ok(result(
+                    "Activity period analysis",
+                    vec![WorkspaceItem {
+                        id: None,
+                        title: format!("{} {}", dto.period, dto.anchor_date),
+                        fields: vec![
+                            ("Scope".into(), dto.scope),
+                            ("Zone".into(), dto.zone),
+                            ("Partial".into(), dto.partial.to_string()),
+                            ("Report".into(), dto.report),
+                        ],
+                    }],
+                ))
+            }
             op @ (WorkspaceOperation::Schedules { .. }
             | WorkspaceOperation::Schedule { .. }
             | WorkspaceOperation::ScheduleHistory { .. }

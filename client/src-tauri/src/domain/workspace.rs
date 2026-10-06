@@ -25,6 +25,10 @@ pub struct BackgroundReceipt {
     deny_unknown_fields
 )]
 pub enum WorkspaceOperation {
+    ActivityAnalysis {
+        period: String,
+        date: Option<String>,
+    },
     Schedules {
         project_id: String,
     },
