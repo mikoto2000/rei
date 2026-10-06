@@ -299,3 +299,11 @@ compile Red→2テストGreen→7新規テスト・関連・全体回帰→featu
 | Implemented | [Native Coaching設定](implementation-report-native-activity-coaching-settings.md) | native-activity-coaching-settings | 28707502 | 53d18fac | Native101 / React79 / typecheck PASS |
 
 Native/React Red→最小Green→Native5・React7新規テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後Native8/React17関連テスト→main Push済み。Javaコード変更なし。明示確認・設定/有効化の分離・SQLite revision再利用・保存echo・owner/lock・結果不明時再確認を維持した。Activity/Work Context詳細UIなどは引き続き対応対象。
+
+## 後続のActivity保存観測時文脈HTTP
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [保存観測時文脈HTTP](implementation-report-activity-observation-context-http.md) | activity-observation-context-http | b3ddbcba | 19285f0f | 3298 / 612 |
+
+compile Red→2テストGreen→8新規テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。保存観測時metadataのscope/owner/時刻・欠落/不完全性とbounded読取り・出力を確認し、現在文脈から補完しない。Native専用UIなどは引き続き対応対象。
