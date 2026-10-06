@@ -307,3 +307,11 @@ Native/React Red→最小Green→Native5・React7新規テスト・関連・全�
 | Implemented | [保存観測時文脈HTTP](implementation-report-activity-observation-context-http.md) | activity-observation-context-http | b3ddbcba | 19285f0f | 3298 / 612 |
 
 compile Red→2テストGreen→8新規テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。保存観測時metadataのscope/owner/時刻・欠落/不完全性とbounded読取り・出力を確認し、現在文脈から補完しない。Native専用UIなどは引き続き対応対象。
+
+## 後続のNative Activity保存観測時文脈
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 回帰 |
+|---|---|---|---|---|---|
+| Implemented | [Native保存観測時文脈](implementation-report-native-activity-observation-context.md) | native-activity-observation-context | bb50db99 | 378d0ac4 | Native105 / React85 / typecheck PASS |
+
+Native/React Red→最小Green→Native4・React6新規・関連・全体回帰→feature Commit/Push→main Merge→Merge後Native12/React23関連テスト→main Push済み。Java変更なし。保存出典のProject/date/scope・不完全性/欠落・読取り非実行・owner/lock/遅延隔離を維持した。外部Agent並列delegationなどは引き続き対応対象。
