@@ -228,3 +228,10 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 | Implemented | [JSON scalar完了条件](implementation-report-goal-json-scalar-criteria.md) | goal-json-scalar-criteria | 3dc90518 | 2d58f772 | 3219 / 603 |
 
 初期Red→SQLite／照合Green→Loop／Native表示の振る舞いRed→修正→取消境界Red→修正→Java10・Native1新規テスト→関連・全体回帰→feature Commit/Push→main Merge→Merge後Java／Native関連テスト→main Push済み。Java failure/error/skip各0、Native全93 tests・React Goal確認4 tests PASS。型付き照合・CLI・再起動・Planning／Reflection／Nativeを検証した。任意code／汎用外部条件などは追加候補。
+## 後続の終了時Auto Sleep要求
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [終了時Auto Sleep](implementation-report-auto-sleep-end-requests.md) | auto-sleep-end-requests | 4d3e7843 | c7f34136 | 3230 / 604 |
+
+初期Red→SQLite／再起動／実Shell・HTTP・取消境界Green→11新規テスト・関連→全体回帰のCLI一覧契約Red修正→再全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。終了操作ではモデルを呼ばず永続要求を保存し、idle gateと既存費用予算で処理する。外部通知配送などは引き続き対応対象。
