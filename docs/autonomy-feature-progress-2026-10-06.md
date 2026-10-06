@@ -327,3 +327,11 @@ compile Red→初期3テストGreen→開始済みreviewId欠落Red→修正→1
 ## 最終の残件照合
 
 [元候補と追加拡張の再評価](autonomy-feature-remaining-2026-10-07.md)。元依頼の基本範囲について具体的な実装・接続不足を対応し、既存Document RAG等の重複実装を避けた。保留provider、実データ品質評価、多言語完全意味解析、durable子resume/DAG、複数ファイル/binary/rendererなどの拡張は未実装として残す。候補を全部無条件に完成したとは宣言しない。全機能のbranch/feature/merge/test結果は本記録と各reportへ記載した。
+
+## 後続の Claude Code CLI レビュー
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [Claude Code CLI レビュー](implementation-report-claude-code-reviews.md) | claude-code-reviews | 1d90dfe2 | cc427165 | 3329 / 614 |
+
+別provider保留後、ユーザーがClaude Code追加とCLIサブスクリプション利用を依頼したため、CLAUDE providerを追加。compile/behavior Red→Green、18新規テスト・全体回帰、failure/error/skip各0。feature Commit/Push→main Merge→関連回帰PASS。Push時に先行remote mainのShell時刻表示PR #39を検出し、`0e276e3d` で取り込み、Claude/Codex関連と時刻表示回帰を再実行してPASS→main Push済み。共通Run/Goal予算・provider別履歴・一回claim・取消、subscription/OAuth認証とAPI fallback拒否、bounded snapshotレビューを確認した。既定無効でnative CLI installation/loginが必要。実CLI/有料モデルを使う検証は未実行。他providerやClaude直接編集/resume/並列は追加拡張として残す。
