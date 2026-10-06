@@ -180,6 +180,7 @@ public class ExternalConfigFileService {
             inherit-run-model-budget: ${REI_EMBEDDING_INHERIT_RUN_MODEL_BUDGET:false}
           rerank:
             enabled: ${REI_RERANK_ENABLED:true}
+            inherit-run-model-budget: ${REI_RERANK_INHERIT_RUN_MODEL_BUDGET:false}
             base-url: ${REI_RERANK_BASE_URL:}
             api-key: ${REI_RERANK_API_KEY:}
             model: ${REI_RERANK_MODEL:}
