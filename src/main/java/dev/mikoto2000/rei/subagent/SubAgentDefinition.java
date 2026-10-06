@@ -7,7 +7,12 @@ import java.util.List;
 /** Provider-independent, immutable configuration for an ephemeral execution. */
 public record SubAgentDefinition(String id, String name, String description, String systemPrompt,
     List<String> requestedTools, String model, int maxSteps, Duration timeout, Path source, SubAgentResultSchema resultSchema,
-    List<String> evidenceTools, int maxRepairs,List<SubAgentRequiredCall> requiredToolCalls,boolean semanticValidation) {
+    List<String> evidenceTools, int maxRepairs,List<SubAgentRequiredCall> requiredToolCalls,boolean semanticValidation,boolean inheritApprovals) {
+  public SubAgentDefinition(String id,String name,String description,String systemPrompt,List<String> requestedTools,
+      String model,int maxSteps,Duration timeout,Path source,SubAgentResultSchema resultSchema,List<String> evidenceTools,
+      int maxRepairs,List<SubAgentRequiredCall> requiredToolCalls,boolean semanticValidation) {
+    this(id,name,description,systemPrompt,requestedTools,model,maxSteps,timeout,source,resultSchema,evidenceTools,maxRepairs,requiredToolCalls,semanticValidation,false);
+  }
   public SubAgentDefinition(String id,String name,String description,String systemPrompt,List<String> requestedTools,
       String model,int maxSteps,Duration timeout,Path source,SubAgentResultSchema resultSchema,List<String> evidenceTools,
       int maxRepairs,List<SubAgentRequiredCall> requiredToolCalls) {

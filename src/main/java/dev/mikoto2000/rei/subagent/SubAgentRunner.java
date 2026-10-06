@@ -94,7 +94,7 @@ public final class SubAgentRunner {
           var evidence = d.evidenceTools().isEmpty() ? null : new SubAgentEvidence();
           List<ToolCallback> callbacks = toolFactory.get().stream()
               .filter(callback -> effective.contains(callback.getToolDefinition().name()))
-              .map(callback -> guarded(callback, owner, check, evidence)).toList();
+              .map(callback -> guarded(callback, owner, check, evidence,d.inheritApprovals()?parent:null)).toList();
           if (callbacks.size() != effective.size()) throw new IllegalStateException("Tool unavailable");
           ToolCallingChatOptions runOptions = options.apply(d.model()).copy();
           runOptions.setInternalToolExecutionEnabled(false);
@@ -174,7 +174,7 @@ public final class SubAgentRunner {
         return validatedRun(model, new Prompt(messages, prompt.getOptions()), definition, owner, check, evidence, remaining, repairs, history,reservation);
     }));
   }
-  private ToolCallback guarded(ToolCallback callback, AgentRunContext owner, Runnable check, SubAgentEvidence evidence) {
+  private ToolCallback guarded(ToolCallback callback, AgentRunContext owner, Runnable check, SubAgentEvidence evidence,AgentRunContext approvalParent) {
     // Child tool events use the existing API; lifecycle envelopes provide parent correlation.
     ToolCallback observed = new ToolEventCallbackDecorator(callback, events, publisher);
     return new ToolCallback() {
@@ -184,7 +184,10 @@ public final class SubAgentRunner {
       public String call(String input, ToolContext context) {
         try (var scope = AgentRunScope.open(owner)) {
           check.run();
-          if(permissions!=null)permissions.check(callback.getToolDefinition().name(),input,owner);
+          if(permissions!=null) {
+            if(approvalParent==null)permissions.check(callback.getToolDefinition().name(),input,owner);
+            else permissions.checkDelegated(callback.getToolDefinition().name(),input,owner,approvalParent);
+          }
           String result = observed.call(input, context);
           check.run();
           return evidence == null ? result : evidence.capture(callback.getToolDefinition().name(), input, result);

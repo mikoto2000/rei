@@ -200,3 +200,5 @@ Goal内のdelegateTask / delegateTasksでは、子の初回呼び出し・各Too
 予約はホストのToolContext経由で渡し、ToolのJSON入力には公開しません。親履歴・Working Setの共有は行いません。Goal予算のない通常のChat/手動委譲は従来のmaxSteps/timeoutを維持します。共通token上限やSkill selectorなど別経路への継承は対象外です。
 
 意味検証の任意設定は [SubAgentの意味検証](subagent-semantic-validation.md) を参照。
+
+読み取り系の一回限り承認を親から使用する設定は [親承認継承](subagent-parent-approval.md) を参照。

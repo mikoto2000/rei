@@ -21,13 +21,24 @@ public class ToolPermissionGuard {
     check(tool,"",owner);
   }
   public void check(String tool,String input,AgentRunContext owner) {
+    check(tool,input,owner,owner!=null&&!owner.conversationId().startsWith("subagent:")?owner:null);
+  }
+  /** Only the runner passes its captured parent; no model-supplied identity or wildcard grant. */
+  public void checkDelegated(String tool,String input,AgentRunContext child,AgentRunContext parent) {
+    boolean matching=child!=null&&parent!=null&&child.conversationId().startsWith("subagent:")
+        &&!parent.conversationId().startsWith("subagent:")&&parent.projectId()!=null
+        &&parent.projectId().equals(child.projectId())&&parent.projectRoot().equals(child.projectRoot())
+        &&parent.requestSource()==child.requestSource()
+        &&policy.capabilities(tool).stream().allMatch(capability->capability==ActionCapability.READ||capability==ActionCapability.NETWORK_READ);
+    check(tool,input,child,matching?parent:null);
+  }
+  private void check(String tool,String input,AgentRunContext owner,AgentRunContext approvalOwner) {
     var decision=policy.evaluate(tool);
     if(decision==PermissionDecision.AUTO_APPROVE)return;
     String request=null;
-    if(decision==PermissionDecision.REQUIRE_APPROVAL && approvals!=null && owner!=null && owner.projectId()!=null
-        && !owner.conversationId().startsWith("subagent:")) {
-      if(approvals.consume(tool,input,owner))return;
-      request=approvals.request(tool,input,owner).id();
+    if(decision==PermissionDecision.REQUIRE_APPROVAL && approvals!=null && approvalOwner!=null && approvalOwner.projectId()!=null) {
+      if(approvals.consume(tool,input,approvalOwner))return;
+      request=approvals.request(tool,input,approvalOwner).id();
     }
     var error=new ToolPermissionException(tool,decision);
     publisher.publishBoundary(events.toolFailed("permission-"+UUID.randomUUID(),tool,
