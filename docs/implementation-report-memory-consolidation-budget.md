@@ -1,0 +1,17 @@
+# 旧Memory統合・要約モデル予算 実装記録
+
+## 変更
+
+監査A2の旧consolidate/summarize費用予算不足へ対応した。rei.memory.consolidationの呼出回数／報告total token上限を追加し、既定0・既存constructor互換・生成／同梱設定を維持する。既存OutputLimitRunBudgetを使い、1回のsummarizeCandidatesで候補抽出と要約を共有する。直接サービス呼出やconsolidateはそれぞれ新しい操作予算で、SleepやGoalの上限と分離する。
+
+call前の予約・応答usage取得／計上を、候補解析／fallback／文字数切詰めより先に行う。未知usage・呼出後provider障害はtoken有効時に固定制御signalで停止し、取消・wrapped interruptionも保持する。--approveでも予算停止後に保存しない。既存MEMORY Toolなしclientと、token無効時のcontent経路・保存承認を再利用した。
+
+## 検証
+
+初期Redは共有操作API／設定未実装によるcompile失敗。実ChatClient＋mock ChatModelと実SQLite履歴で、抽出・要約の共有呼出回数制限と報告token合計による停止のGreenを確認した。
+
+追加テストで抽出だけの上限ちょうど→次呼出なし、invalid JSON fallback／長い要約切詰め前のusage停止、未知usage／provider障害、既定無制限fallback、抽出4＋要約4を上限8で完了、直接呼出の新予算と空入力、実Picocli --approveで呼出上限／未知usage後のMemoryService非接触、完了時のCANDIDATE保存、開始前取消・provider wrapped interruptionとinterrupt保持、独立設定binding・上限validation・生成設定を検証した。
+
+最終関連テスト（MemoryConsolidationBudgetTest・MemoryConsolidatorServiceTest・MemoryConsolidatorServicePropertyTest・MemorySummarizeCommandTest・MemoryConsolidateCommandTest・AutoTriggerPropertyTest・SleepModelBudgetTest・ExternalConfigFileServiceTest）はPASS。全体回帰は3149 tests / 597 suites、failure/error/skip各0。Java/configのみ変更し、Native/Reactは再実行していない。
+
+feature ba978fb3をPushし、main 0bc57970へMergeした。Merge後の同じ関連テストもPASS、main Push済み。予算の限界と適用範囲は[memory-consolidation-budget.md](memory-consolidation-budget.md)を参照。Sleep跨ぎ永続予算・RunContextなし要約・CLI／embedding／rerankの費用予算等は残件。

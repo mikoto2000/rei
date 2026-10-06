@@ -150,3 +150,12 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 初期Red・空catalog掃除／read-only旧次元の回復閉塞を振る舞いRedで検出→修正Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。全体回帰は3140 tests / 596 suites、failure/error/skip各0。Java/configのみ変更し、Native/Reactは再実行していない。
 
 明示opt-inのSQLite metadata vector snapshotを追加した。再起動cache、profile SHA・model/version namespace、現在Skill返却・変更／削除掃除、破損miss・transaction rollback・DB障害・次元変更回復・取消と生成設定を検証した。query・Skill本文・raw profileを保存しない。学習／実データ品質評価とembedding/rerank共有費用予算は引き続き残件。
+## 後続の旧Memory統合・要約モデル予算
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [旧Memory統合・要約モデル予算](implementation-report-memory-consolidation-budget.md) | memory-consolidation-budget | ba978fb3 | 0bc57970 | 3149 / 597 |
+
+初期Red→実ChatClient/SQLite最小Green→保存・usage・取消・境界の検証→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。全体回帰は3149 tests / 597 suites、failure/error/skip各0。Java/configのみ変更し、Native/Reactは再実行していない。
+
+1操作内の抽出と要約で呼出回数／報告token上限を共有し、未知／超過は解析・fallback・保存前に停止する。実Picocli --approveで停止後のMemoryService非接触、上限ちょうどの成功／次呼出抑制、正常保存、provider障害、取消、独立設定binding・既定互換を検証した。Sleep跨ぎ永続予算・CLI／embedding／rerank等の費用予算は引き続き残件。
