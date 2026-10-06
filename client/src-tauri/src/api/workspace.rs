@@ -4,6 +4,19 @@ use serde_json::json;
 use std::collections::BTreeMap;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct ObservationContextDto {
+    schema_version: u32,
+    scope: String,
+    project_id: String,
+    date: String,
+    zone: String,
+    partial: bool,
+    missing_context_records: u32,
+    linked_observations: u32,
+    report: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CoachingSettingsDto {
     schema_version: u32,
     scope: String,
@@ -303,6 +316,66 @@ impl HttpReiClient {
         op: WorkspaceOperation,
     ) -> Result<WorkspaceResult> {
         match op {
+            WorkspaceOperation::ActivityObservationContext { project_id, date } => {
+                let valid_date = |value: &str| {
+                    value.len() == 10
+                        && value.bytes().enumerate().all(|(i, c)| {
+                            if i == 4 || i == 7 {
+                                c == b'-'
+                            } else {
+                                c.is_ascii_digit()
+                            }
+                        })
+                };
+                if date.as_deref().is_some_and(|date| !valid_date(date)) {
+                    return Err(AppError::InvalidInput);
+                }
+                let path = format!(
+                    "/api/v1/projects/{}/activity/observation-context",
+                    segment(&project_id)?
+                );
+                let mut request = self.request(Method::GET, &path, true)?;
+                if let Some(date) = date.as_deref() {
+                    request = request.query(&[("date", date)]);
+                }
+                let dto: ObservationContextDto = Self::json(request, Operation::Resource).await?;
+                if dto.schema_version != 1
+                    || dto.scope != "PROJECT_OBSERVATION_CONTEXT"
+                    || dto.project_id != project_id
+                    || !valid_date(&dto.date)
+                    || date.as_deref().is_some_and(|date| date != dto.date)
+                    || dto.zone.is_empty()
+                    || dto.zone.len() > 128
+                    || dto.missing_context_records > 5000
+                    || dto.linked_observations > 128
+                    || dto.report.len() > 131072
+                {
+                    return Err(AppError::InvalidResponse);
+                }
+                Ok(result(
+                    "Activity observation context",
+                    vec![WorkspaceItem {
+                        id: None,
+                        title: format!("保存観測時文脈 {}", dto.date),
+                        fields: vec![
+                            ("Scope".into(), dto.scope),
+                            ("Project".into(), dto.project_id),
+                            ("Date".into(), dto.date),
+                            ("Zone".into(), dto.zone),
+                            ("Partial".into(), dto.partial.to_string()),
+                            (
+                                "MissingContextRecords".into(),
+                                dto.missing_context_records.to_string(),
+                            ),
+                            (
+                                "LinkedObservations".into(),
+                                dto.linked_observations.to_string(),
+                            ),
+                            ("Report".into(), dto.report),
+                        ],
+                    }],
+                ))
+            }
             op @ (WorkspaceOperation::ActivityCoachingSettings
             | WorkspaceOperation::ActivityCoachingConfigure { .. }
             | WorkspaceOperation::ActivityCoachingEnabled { .. }) => {

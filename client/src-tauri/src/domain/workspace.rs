@@ -25,6 +25,10 @@ pub struct BackgroundReceipt {
     deny_unknown_fields
 )]
 pub enum WorkspaceOperation {
+    ActivityObservationContext {
+        project_id: String,
+        date: Option<String>,
+    },
     ActivityCoachingSettings,
     ActivityCoachingConfigure {
         expected_revision: i64,

@@ -437,6 +437,7 @@ export function App({
               <ActivityAnalysis
                 call={call}
                 serverId={data.unlocked ? data.selectedServer : null}
+                projects={projects[data.selectedServer ?? ""] ?? noProjects}
               />
             )}
             {page === "workspace" && (

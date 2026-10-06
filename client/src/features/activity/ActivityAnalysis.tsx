@@ -3,12 +3,17 @@ import type { Command } from "../../tauri/commands";
 import type { WorkspaceResult } from "../../entities/workspace";
 import { errorText } from "../../entities/models";
 import { ActivityCoachingSettings } from "./ActivityCoachingSettings";
+import { ActivityObservationContext } from "./ActivityObservationContext";
+import type { Project } from "../../entities/models";
+const noProjects: Project[] = [];
 export function ActivityAnalysis({
   call,
   serverId,
+  projects = noProjects,
 }: {
   call: Command;
   serverId: string | null;
+  projects?: Project[];
 }) {
   const [period, setPeriod] = useState<"WEEK" | "MONTH">("WEEK");
   const [date, setDate] = useState("");
@@ -104,6 +109,11 @@ export function ActivityAnalysis({
       {pending && <p role="status">保存観測を読み取っています…</p>}
       {error && <p role="alert">{error}</p>}
       <ActivityCoachingSettings call={call} serverId={serverId} />
+      <ActivityObservationContext
+        call={call}
+        serverId={serverId}
+        projects={projects}
+      />
       {visible?.items.map((item, index) => (
         <article key={index}>
           <h3>{item.title}</h3>
