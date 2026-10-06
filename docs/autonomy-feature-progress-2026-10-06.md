@@ -243,3 +243,11 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 | Implemented | [Attention webhook配送](implementation-report-attention-webhook-delivery.md) | attention-webhook-delivery | ae83747b | f3618d35 | 3243 / 605 |
 
 初期Red→ローカルHTTP／SQLite Green→実HTTP request fixture修正→13新規テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。検証で実サービスへの通知なし。Project／Policy／再起動／結果不明／重複リスク再送の境界を維持した。Reflection知識昇格などは引き続き対応対象。
+
+## 後続の検証済みReflection長期記憶
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [検証済みReflection記憶](implementation-report-verified-reflection-memory.md) | verified-reflection-memory | 652aeada | 6d0925bb | 3253 / 606 |
+
+初期Red→5テストGreen→10新規テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。観測事実と教訓・会話turnを区別し、追加LLMなしでowner／snapshot／現在ファイル条件・atomic出典保存を確認した。Activity専用分析UIなどは引き続き対応対象。
