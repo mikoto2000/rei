@@ -221,3 +221,10 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 | Implemented | [親Runなし共有予算](implementation-report-standalone-subagent-budget.md) | standalone-subagent-budget | 6aa91130 | 267b70d1 | 3209 / 602 |
 
 初期Red→最小Green→9テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。直接／並列／修復／judge／timeout／親優先・既定互換を検証した。DAG／合意形成／永続復旧などは残件。
+## 後続のGoal JSON scalar完了条件
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [JSON scalar完了条件](implementation-report-goal-json-scalar-criteria.md) | goal-json-scalar-criteria | 3dc90518 | 2d58f772 | 3219 / 603 |
+
+初期Red→SQLite／照合Green→Loop／Native表示の振る舞いRed→修正→取消境界Red→修正→Java10・Native1新規テスト→関連・全体回帰→feature Commit/Push→main Merge→Merge後Java／Native関連テスト→main Push済み。Java failure/error/skip各0、Native全93 tests・React Goal確認4 tests PASS。型付き照合・CLI・再起動・Planning／Reflection／Nativeを検証した。任意code／汎用外部条件などは追加候補。
