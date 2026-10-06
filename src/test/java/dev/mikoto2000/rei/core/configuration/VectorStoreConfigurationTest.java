@@ -20,6 +20,20 @@ import dev.mikoto2000.rei.vectorstore.SqliteVectorStore;
 import tools.jackson.databind.json.JsonMapper;
 
 class VectorStoreConfigurationTest {
+  @Test
+  void bm25ConfigurationBindsAndStillInitializesLazily() {
+    var properties = new org.springframework.boot.context.properties.bind.Binder(
+        new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(java.util.Map.of(
+            "rei.vector-document.retrieval.enabled", "true", "rei.vector-document.retrieval.bm25-enabled", "true")))
+        .bind("rei.vector-document.retrieval", dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties.class).get();
+    assertTrue(properties.enabled());
+    assertTrue(properties.bm25Enabled());
+    org.junit.jupiter.api.Assertions.assertEquals(40, properties.candidateLimit());
+    var dataSource=Mockito.mock(DataSource.class);
+    var model=Mockito.mock(EmbeddingModel.class);
+    new VectorStoreConfiguration().vectorStore(dataSource, model, new JsonMapper(), properties);
+    Mockito.verifyNoInteractions(dataSource, model);
+  }
 
   @Test
   void vectorStoreDoesNotInitializeSqliteStoreAtBeanCreation() {
