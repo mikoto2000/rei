@@ -206,3 +206,11 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 | Implemented | [embedding親モデル予算](implementation-report-embedding-run-model-budget.md) | embedding-run-model-budget | 934880b4 | efedc73a | 3192 / 601 |
 
 初期Red→Green→実ストアのtyped停止変換Red→修正→9テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。Tool／Skill／worker／Goal永続化・vector保存抑止を検証した。rerank費用予算などは残件。
+
+## 後続のrerank親モデル予算
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [rerank親モデル予算](implementation-report-rerank-run-model-budget.md) | rerank-run-model-budget | 0175653f | 7d0c674f | 3200 / 601 |
+
+初期Red→Green→Semantic fallbackの停止吸収Red→修正→8テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。実HTTP／Goal永続化／usage証拠境界／送信前停止を検証した。汎用Goal検証条件などは残件。
