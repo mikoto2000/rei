@@ -109,6 +109,11 @@ public class Tools {
   }
   private RepositoryMapService repositoryMaps = new RepositoryMapService();
 
+  @Tool(description="Project相対pathの保存済みJUnit XMLを読み、実testcaseの失敗/error/skippedと報告count・SHA・更新時刻を返します。pathは単一XML、1MiB/1024case/24診断上限。test実行や現在Run/Goalの成功判定は行いません。partial/warningsとレポートの鮮度を確認してください。")
+  TestReportDiagnosisService.Result diagnoseTestReport(String path)throws IOException {
+    return new TestReportDiagnosisService().read(currentWorkingDirectory(),path);
+  }
+
   @Tool(description = "変更pathからJavaの逆importとテスト命名候補を探索します。changedFiles省略時はProjectのGitステージ済み・未ステージ・未追跡変更を読み取り取得します（HEAD必須、最大64path）。明示時はProject相対pathを1〜64件、limitは1〜100（既定20）。完全なcoverageではなく、warningsを確認して広い回帰テストも実施してください。")
   ChangeTestImpactService.Result changeTestImpact(@org.springframework.ai.tool.annotation.ToolParam(required = false) List<String> changedFiles,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) throws IOException {
