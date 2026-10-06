@@ -174,3 +174,11 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 | Implemented | [metadata定期再検出](implementation-report-auto-sleep-metadata-refresh.md) | auto-sleep-metadata-refresh | 944cdb6d | 6b5e54a3 | 3165 / 599 |
 
 実ファイルでの外部追加未検出Red→Green→6テストでページ／復旧／idle／project境界→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。終了triggerは残件。
+
+## 後続のRunContextなし会話要約予算
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [RunContextなし要約予算](implementation-report-standalone-context-summary-budget.md) | standalone-context-summary-budget | f25a564e | 87d892d5 | 3172 / 599 |
+
+初期Red→Green→7テストで履歴／実行ログ共有・未知usage・timeout・保存・親予算優先・設定→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。CLI／embedding／rerankの費用予算は残件。
