@@ -53,6 +53,8 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("spring:"));
     assertTrue(content.contains("rei:"));
     assertTrue(content.contains("max-llm-calls: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS:0}"));
+    assertTrue(content.contains("max-llm-calls: ${REI_MEMORY_CONSOLIDATION_MAX_LLM_CALLS:0}"));
+    assertTrue(content.contains("max-total-tokens: ${REI_MEMORY_CONSOLIDATION_MAX_TOTAL_TOKENS:0}"));
     assertTrue(content.contains("max-total-tokens: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS:0}"));
     assertTrue(content.contains("skills:"));
     assertTrue(content.contains("${rei.data-dir}/skills"));

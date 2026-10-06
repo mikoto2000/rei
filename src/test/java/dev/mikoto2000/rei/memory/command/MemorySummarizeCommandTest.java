@@ -26,9 +26,7 @@ class MemorySummarizeCommandTest {
   void summarizeDoesNotSaveWithoutApproveOption() {
     MemoryConsolidatorService consolidator = Mockito.mock(MemoryConsolidatorService.class);
     MemoryService memoryService = Mockito.mock(MemoryService.class);
-    when(consolidator.extractCandidates()).thenReturn(List.of(new Memory("1", "msg", MemoryType.KNOWLEDGE,
-        MemoryScope.SHORT_TERM, MemoryStatus.CANDIDATE, 0.8d, null, null, null)));
-    when(consolidator.summarize(any())).thenReturn("summary");
+    when(consolidator.summarizeCandidates()).thenReturn(new MemoryConsolidatorService.Summary(true,"summary"));
 
     var cmd = new CommandLine(new MemoryCommand.SummarizeCommand(consolidator, memoryService));
     int exitCode = cmd.execute();
@@ -41,9 +39,7 @@ class MemorySummarizeCommandTest {
   void summarizeSavesWhenApproved() {
     MemoryConsolidatorService consolidator = Mockito.mock(MemoryConsolidatorService.class);
     MemoryService memoryService = Mockito.mock(MemoryService.class);
-    when(consolidator.extractCandidates()).thenReturn(List.of(new Memory("1", "msg", MemoryType.KNOWLEDGE,
-        MemoryScope.SHORT_TERM, MemoryStatus.CANDIDATE, 0.8d, null, null, null)));
-    when(consolidator.summarize(any())).thenReturn("summary");
+    when(consolidator.summarizeCandidates()).thenReturn(new MemoryConsolidatorService.Summary(true,"summary"));
 
     var cmd = new CommandLine(new MemoryCommand.SummarizeCommand(consolidator, memoryService));
     int exitCode = cmd.execute("--approve");

@@ -281,6 +281,9 @@ public class ExternalConfigFileService {
               enabled: ${REI_TOPIC_GENERATOR_DISCOVERY_ENABLED:true}
           memory:
             enabled: ${REI_MEMORY_ENABLED:true}
+            consolidation:
+              max-llm-calls: ${REI_MEMORY_CONSOLIDATION_MAX_LLM_CALLS:0}
+              max-total-tokens: ${REI_MEMORY_CONSOLIDATION_MAX_TOTAL_TOKENS:0}
             sleep:
               max-llm-calls: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS:0}
               max-total-tokens: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS:0}

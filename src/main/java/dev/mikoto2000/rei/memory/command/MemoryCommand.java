@@ -187,12 +187,12 @@ public class MemoryCommand {
     @Override
     public void run() {
       try {
-        List<Memory> candidates = consolidatorService.extractCandidates();
-        if (candidates.isEmpty()) {
+        var result = consolidatorService.summarizeCandidates();
+        if (!result.hasCandidates()) {
           System.out.println("要約対象の会話履歴がありません");
           return;
         }
-        String summary = consolidatorService.summarize(candidates.stream().map(Memory::content).toList());
+        String summary = result.summary();
         System.out.println(summary);
         if (!approve) {
           System.out.println("要約は未保存です。保存するには --approve を指定してください");
@@ -202,6 +202,8 @@ public class MemoryCommand {
             MemoryStatus.CANDIDATE, 0.8d, null, OffsetDateTime.now(), OffsetDateTime.now());
         memoryService.save(memory);
         System.out.println("要約を記憶として保存しました");
+      } catch (dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException e) {
+        System.out.println("[stopped] " + e.reason().name());
       } catch (IllegalStateException e) {
         System.out.println("[error] " + e.getMessage());
       }
@@ -260,6 +262,8 @@ public class MemoryCommand {
         ConsolidationReport report = ConsolidationReport.of(candidates.size(), saved, skipped);
         System.out.println(
             "統合結果 保存=" + report.savedCount() + " / スキップ=" + report.skippedCount() + " / 候補=" + report.totalCandidates());
+      } catch (dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException e) {
+        System.out.println("[stopped] " + e.reason().name());
       } catch (IllegalStateException e) {
         System.out.println("[error] " + e.getMessage());
       }
