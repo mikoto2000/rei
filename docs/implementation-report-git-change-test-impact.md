@@ -12,7 +12,7 @@ diff本文・外部diff/textconvを使わず、NUL区切り・重複除去・ren
 
 実Gitの一時リポジトリで、ステージ済み・未ステージ・削除・未追跡・rename・空白／日本語path、変更なし、秘密情報pathの除外、Gitignore、ステージ後に作業ツリーだけHEADへ戻した変更の保持、64path超過、非Git／Project root不一致を検証する。fixture portで失敗・timeout・出力切り詰め・不完全NUL出力・取消を検証する。実Tool callbackの省略引数、捕捉Project、明示空配列拒否と既存READ/SubAgent許可も検証する。
 
-関連テスト（GitChangeTestImpactTest・ChangeTestImpactServiceTest・RepositoryMapServiceTest・ToolsTest・ToolPermissionPolicyTest・SelfPatchReviewGitTest）はPASS。全体回帰は3096 tests / 591 suites、failure/error/skip各0。Native/Reactは再実行していない。Git結果はMerge後確認を完了して追記する。
+関連テスト（GitChangeTestImpactTest・ChangeTestImpactServiceTest・RepositoryMapServiceTest・ToolsTest・ToolPermissionPolicyTest・SelfPatchReviewGitTest）はPASS。全体回帰は3096 tests / 591 suites、failure/error/skip各0。Native/Reactは再実行していない。feature 61e27783をPushし、main 3b6c33ceへMergeした。Merge後関連テストもPASS、main Push済み。
 
 ## 制限
 

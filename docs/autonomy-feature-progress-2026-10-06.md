@@ -1,6 +1,6 @@
 # 自律機能の継続作業記録（2026-10-06）
 
-最初の継続7件に加え、後続の継続でSubAgent関連3件、共有Run報告token上限、Goal永続報告token上限、Run内context要約token計上、Sleep共有モデル予算を完了した。後続分は末尾の表に記録する。
+最初の継続7件に加え、後続の継続でSubAgent関連3件、共有Run報告token上限、Goal永続報告token上限、Run内context要約token計上、Sleep共有モデル予算、Git変更の自動収集によるテスト影響分析を完了した。後続分は末尾の表に記録する。
 
 この継続作業で次の7件を独立ブランチで実装し、Red→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後確認→main Pushを完了した。各実装の制限・追加候補を残し、全候補の完成とは区別する。初回からの一覧は[実装状況](autonomy-feature-audit.md)を参照。
 
@@ -87,3 +87,12 @@ Red→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge�
 初期Red→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。全体回帰は3089 tests / 590 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。
 
 既定0で無効。1回のSleep内の抽出・意味解決を同じ回数／報告token予算へ接続した。超過・不明usageでは記憶を部分保存せず、処理済み位置も進めない。完全一致などの決定的処理はモデルを消費しない。複数Sleepを跨ぐ永続上限や既存Auto Sleepの再試行禁止は今回の範囲外。詳しい設定と制限は[sleep-model-budget.md](sleep-model-budget.md)。
+## 後続のGit変更の自動収集
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [Git変更の自動収集](implementation-report-git-change-test-impact.md) | git-change-test-impact | 61e27783 | 3b6c33ce | 3096 / 591 |
+
+初期Red→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。全体回帰は3096 tests / 591 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。
+
+changeTestImpactのchangedFiles省略時に、捕捉Projectのステージ済み・未ステージ・未追跡pathを収集する。削除／rename／空白・日本語path／ignore／ステージと作業ツリーの相殺／Tool callbackを実Gitで確認し、失敗・切り詰め・取消を隠さない。変更収集の上限・除外によるpartial・構造評価の限界を保持する。coverageや完全な意味的依存解析は引き続き残件。
