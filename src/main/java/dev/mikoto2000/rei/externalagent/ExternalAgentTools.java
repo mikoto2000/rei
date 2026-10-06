@@ -12,6 +12,8 @@ public class ExternalAgentTools {
   @org.springframework.beans.factory.annotation.Autowired
   void reviewHistory(ExternalReviewRepository history){this.history=history;}
   public ExternalAgentTools(ExternalAgentDelegationService service) { this.service = service; }
+  @Tool(description="Workflow: Request up to four independent read-only Codex reviews ONLY when the current user explicitly requests parallel Codex review and administrator opt-in enables it. One batch consumes the Run's single external delegation; worker two, shared parent model budget, bounded deadline. No fix/apply/resume. Input IDs are unique labels. Independently evaluate each result; partial/unknown outcomes are not success and must not be automatically retried.")
+  public ExternalAgentDelegationService.ParallelResult requestParallelCodexReviews(java.util.List<ExternalAgentDelegationService.ParallelRequest> requests,ToolContext toolContext){var run=toolContext==null?null:(RunExecutionContext)toolContext.getContext().get(RunExecutionContext.KEY);return service.reviewParallel(run,requests);}
   @Tool(description = "Workflow: Request a read-only Codex review ONLY when the current user explicitly requests Codex. Once per run. Supply a concise review task and relevant design decisions, never full history or source files. Independently evaluate findings before answering; do not automatically fix anything. External failure does not prevent your own evaluation.")
   public ExternalAgentResult requestCodexReview(String task,
       @ToolParam(required = false, description = "Existing file or directory inside the current project. Accepts absolute paths or paths relative to the project root. Omit to review the whole project.") String target,

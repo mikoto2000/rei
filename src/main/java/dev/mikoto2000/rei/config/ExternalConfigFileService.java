@@ -170,6 +170,8 @@ public class ExternalConfigFileService {
           external-agents:
             codex:
               inherit-run-model-budget: ${REI_CODEX_INHERIT_RUN_MODEL_BUDGET:false}
+              parallel-review-enabled: ${REI_CODEX_PARALLEL_REVIEW_ENABLED:false}
+              parallel-review-timeout: ${REI_CODEX_PARALLEL_REVIEW_TIMEOUT:120s}
               enabled: true
               command: codex
               total-timeout: 20m

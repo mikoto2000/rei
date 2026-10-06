@@ -5,6 +5,12 @@ import java.util.Locale;
 /** Conservative gate over actual user input, never tool arguments or repository text. */
 public final class ExternalAgentAuthorization {
   private ExternalAgentAuthorization() {}
+  public static boolean explicitParallelRequest(String input) {
+    if(!explicitRequest(input)||input.strip().startsWith("/agent "))return false;
+    String text=input.toLowerCase(Locale.ROOT).replaceAll("(?s)```.*?```|「[^」]*」|\"[^\"]*\"","");
+    if(text.matches("(?s).*(並列.{0,8}(しない|せず|不要|禁止)|not.{0,12}parallel|no parallel|sequential).*"))return false;
+    return text.contains("並列")||text.matches("(?s).*\\bparallel\\b.*");
+  }
   public static boolean explicitFixProposalRequest(String input) {
     if(input==null)return false;
     String text=input.toLowerCase(Locale.ROOT);

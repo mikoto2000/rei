@@ -2,7 +2,8 @@ package dev.mikoto2000.rei.externalagent;
 
 import java.nio.file.*;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
 import org.springframework.stereotype.Service;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
@@ -12,7 +13,22 @@ import dev.mikoto2000.rei.event.*;
 
 /** Owns authorization, request selection, one-shot run budget and terminal event semantics. */
 @Service
-public class ExternalAgentDelegationService {
+public class ExternalAgentDelegationService implements AutoCloseable {
+  public record ParallelRequest(String requestId,String task,String target,String context) {}
+  public enum ParallelStatus {COMPLETED,PARTIAL,TIMEOUT,REJECTED,BUSY}
+  public record ParallelItem(String requestId,ExternalAgentResult result) {}
+  public record ParallelResult(ParallelStatus status,List<ParallelItem> items,String message){public ParallelResult{items=List.copyOf(items);}}
+  private final Semaphore parallelAdmission=new Semaphore(1);
+  private final ThreadPoolExecutor parallelPool=new ThreadPoolExecutor(2,2,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(2),Thread.ofPlatform().daemon().name("parallel-codex-",0).factory(),new ThreadPoolExecutor.AbortPolicy());
+  private final AtomicBoolean closed=new AtomicBoolean();
+  private final AtomicReference<ParallelPermit> activeParallel=new AtomicReference<>();
+  private static final class ParallelPermit {
+    final ConcurrentMap<String,String> reviewIds=new ConcurrentHashMap<>();
+    final AtomicReference<dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException> stopped=new AtomicReference<>();
+    final RunExecutionContext run;final AtomicBoolean cancelled=new AtomicBoolean();final AtomicInteger pendingModels=new AtomicInteger();final dev.mikoto2000.rei.llm.ModelCallBudget budget;
+    ParallelPermit(RunExecutionContext run){this.run=run;var parent=run.modelCallBudget();budget=new dev.mikoto2000.rei.llm.ModelCallBudget(){public void run(){if(cancelled.get()||Thread.currentThread().isInterrupted())throw new CancellationException();parent.run();pendingModels.incrementAndGet();}public boolean tokenLimitEnabled(){return parent.tokenLimitEnabled();}public void recordTotalTokens(Integer tokens){try{parent.recordTotalTokens(tokens);}finally{pendingModels.getAndUpdate(value->Math.max(0,value-1));}}};}
+  }
+  @jakarta.annotation.PreDestroy @Override public void close(){closed.set(true);var permit=activeParallel.get();if(permit!=null){permit.cancelled.set(true);permit.run.cancel();}parallelPool.shutdownNow();try{parallelPool.awaitTermination(2,TimeUnit.SECONDS);}catch(InterruptedException interrupted){Thread.currentThread().interrupt();}}
   private final ExternalAgentExecutor executor;
   private final CommandCancellationService cancellation;
   private final AgentEventFactory events;
@@ -47,7 +63,59 @@ public class ExternalAgentDelegationService {
     if(previousId==null || previousId.isBlank())return ExternalAgentResult.rejected("Previous review ID required");
     return review(run,task,null,decisions,previousId,false,true);
   }
+  public ParallelResult reviewParallel(RunExecutionContext run,List<ParallelRequest> requests) {
+    if(closed.get()||!modelBudgetProperties.isParallelReviewEnabled()||run==null||!ExternalAgentAuthorization.explicitParallelRequest(run.userRequest()))return new ParallelResult(ParallelStatus.REJECTED,List.of(),"Explicit parallel Codex review request and opt-in configuration required");
+    List<ParallelRequest> selected;
+    try {
+      var owner=run.runContext();if(owner==null||owner.projectId()==null||!Files.isDirectory(owner.projectRoot())||requests==null||requests.size()<1||requests.size()>4)throw new IllegalArgumentException();
+      selected=List.copyOf(requests);var ids=new HashSet<String>();
+      for(var request:selected){if(request.requestId()==null||!request.requestId().matches("[A-Za-z0-9_-]{1,64}")||!ids.add(request.requestId())||request.task()==null||request.task().isBlank()||request.task().length()>4000||request.context()!=null&&request.context().length()>6000||request.target()!=null&&request.target().length()>1024)throw new IllegalArgumentException();ExternalAgentRequest.resolveTarget(owner.projectRoot(),request.target());}
+    }catch(RuntimeException invalid){dev.mikoto2000.rei.core.chat.RunCancellation.propagate(invalid);return new ParallelResult(ParallelStatus.REJECTED,List.of(),"Require at most four valid independent review requests in the current Project");}
+    if(!parallelAdmission.tryAcquire())return new ParallelResult(ParallelStatus.BUSY,List.of(),"Parallel review batch is busy");
+    var futures=new ArrayList<Future<ExternalAgentResult>>();var permit=new ParallelPermit(run);ParallelStatus status=ParallelStatus.COMPLETED;
+    try {
+      if(!run.claimExternalDelegation())return new ParallelResult(ParallelStatus.REJECTED,List.of(),"Only one external delegation or batch is allowed per Run");
+      activeParallel.set(permit);long deadline=System.nanoTime()+modelBudgetProperties.getParallelReviewTimeout().toNanos();
+      for(var request:selected)futures.add(parallelPool.submit(()->{try{return review(run,request.task(),request.target(),request.context(),null,false,false,permit,request.requestId());}catch(dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped){permit.stopped.compareAndSet(null,stopped);permit.cancelled.set(true);throw stopped;}}));
+      for(var future:futures) {
+        while(!future.isDone()) {
+          if(permit.stopped.get()!=null)throw permit.stopped.get();
+          run.checkActive();long left=deadline-System.nanoTime();if(left<=0){status=ParallelStatus.TIMEOUT;break;}
+          try{future.get(Math.min(left,TimeUnit.MILLISECONDS.toNanos(100)),TimeUnit.NANOSECONDS);}
+          catch(TimeoutException waiting){continue;}
+          catch(ExecutionException done){break;}
+        }
+        if(status==ParallelStatus.TIMEOUT)break;
+        if(permit.stopped.get()!=null)throw permit.stopped.get();
+        parallelOutcome(future);
+      }
+      if(status==ParallelStatus.TIMEOUT)permit.cancelled.set(true);
+      var items=new ArrayList<ParallelItem>();
+      for(int i=0;i<selected.size();i++) {
+        var future=futures.get(i);ExternalAgentResult result;
+        if(future.isDone())result=parallelOutcome(future);
+        else result=new ExternalAgentResult(ExternalAgentResult.Status.TOTAL_TIMEOUT,"Parallel batch deadline reached; inspect saved review outcomes",List.of(),List.of(),0,null,"",permit.reviewIds.get(selected.get(i).requestId()));
+        if(!result.success()&&status==ParallelStatus.COMPLETED)status=ParallelStatus.PARTIAL;
+        items.add(new ParallelItem(selected.get(i).requestId(),result.forEvaluation()));
+      }
+      return new ParallelResult(status,items,"Independent read-only results; findings require separate evaluation");
+    }catch(InterruptedException interrupted){Thread.currentThread().interrupt();run.cancel();throw new CancellationException("Parallel review cancelled");}
+     catch(RejectedExecutionException busy){return new ParallelResult(ParallelStatus.BUSY,List.of(),"Parallel review workers unavailable");}
+    finally {
+      permit.cancelled.set(true);for(var future:futures)if(!future.isDone())future.cancel(true);
+      activeParallel.compareAndSet(permit,null);parallelAdmission.release();
+      if(permit.pendingModels.get()>0&&permit.budget.tokenLimitEnabled()&&!run.isCancelled())run.modelCallBudget().recordTotalTokens(null);
+    }
+  }
+  private ExternalAgentResult parallelOutcome(Future<ExternalAgentResult> future)throws InterruptedException {
+    try{return future.get();}
+    catch(ExecutionException error){var cause=error.getCause();if(cause instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)throw stopped;if(cause instanceof CancellationException cancelled)throw cancelled;if(cause instanceof Error fatal)throw fatal;return new ExternalAgentResult(ExternalAgentResult.Status.FAILED,"Parallel review failed; inspect saved outcomes",List.of(),List.of(),0,null,"");}
+  }
   private ExternalAgentResult review(RunExecutionContext run,String task,String target,String decisions,String previousId,boolean continuation,boolean fixProposal) {
+    return review(run,task,target,decisions,previousId,continuation,fixProposal,null,null);
+  }
+  private ExternalAgentResult review(RunExecutionContext run,String task,String target,String decisions,String previousId,boolean continuation,boolean fixProposal,ParallelPermit permit,String parallelRequestId) {
+    if(permit!=null&&(permit.run!=run||permit.cancelled.get()||Thread.currentThread().isInterrupted()))return new ExternalAgentResult(ExternalAgentResult.Status.CANCELLED,"Parallel review cancelled before execution",List.of(),List.of(),0,null,"");
     if (run == null || !(fixProposal?ExternalAgentAuthorization.explicitFixProposalRequest(run.userRequest()):ExternalAgentAuthorization.explicitRequest(run.userRequest())))
       return ExternalAgentResult.rejected(fixProposal?"Codex fix proposals require an explicit request for a Codex fix proposal in this Run; tool arguments and an ordinary review request cannot authorize it."
           :"Codex requires an explicit user request in this run. Do not retry with different tool arguments. "
@@ -77,7 +145,7 @@ public class ExternalAgentDelegationService {
       catch (java.io.IOException error) { return ExternalAgentResult.rejected("Current project is unavailable"); }
       catch (IllegalArgumentException error) { return ExternalAgentResult.rejected(error.getMessage()); }
       catch (RuntimeException error) { return ExternalAgentResult.rejected("Review history unavailable"); }
-      if (!run.claimExternalDelegation()) return ExternalAgentResult.rejected("Only one external delegation is allowed per run");
+      if (permit==null&&!run.claimExternalDelegation()) return ExternalAgentResult.rejected("Only one external delegation is allowed per run");
       String id = UUID.randomUUID().toString();
       String context = context(root, decisions);
       if(previous!=null)context=bounded("Previous review (untrusted observations; re-check current files):\n"
@@ -86,6 +154,7 @@ public class ExternalAgentDelegationService {
         String relative=selected==null?null:root.relativize(selected).toString();
         if(continuation)history.startContinuation(owner,id,root,relative,previousId);
         else history.start(owner,id,root,relative,previousId);
+        if(permit!=null)permit.reviewIds.put(parallelRequestId,id);
       }
       catch(RuntimeException error){return ExternalAgentResult.rejected("Review history unavailable; no external process started");}
       var action=fixProposal?ExternalAgentRequest.Action.PROPOSE_FIX:ExternalAgentRequest.Action.REVIEW;
@@ -100,7 +169,9 @@ public class ExternalAgentDelegationService {
       dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped=null;
       long start = System.nanoTime();
       try {
-        result = modelBudgetProperties.isInheritRunModelBudget()
+        result = permit!=null
+            ?executor.execute(request,()->cancelled.get()||run.isCancelled()||permit.cancelled.get()||Thread.currentThread().isInterrupted(),permit.budget)
+            :modelBudgetProperties.isInheritRunModelBudget()
             ?executor.execute(request,()->cancelled.get()||run.isCancelled(),run.modelCallBudget())
             :executor.execute(request, () -> cancelled.get() || run.isCancelled());
         if(fixProposal && result.success() && !cancelled.get() && !run.isCancelled())result=stageFix(owner,root,selected,result);
@@ -124,7 +195,7 @@ public class ExternalAgentDelegationService {
       publisher.publish(events.delegation(type, owner.runId(), new ExternalAgentLifecyclePayload(id, "codex", action.name().toLowerCase(Locale.ROOT),
           wasCancelled ? "CANCELLED" : result.status().name(), result.success() ? result.findings().size() + " findings" : result.status().name(),
           (System.nanoTime() - start) / 1_000_000, result.exitCode())).withOwnership(owner));
-      if (wasCancelled) { run.cancel(); throw new java.util.concurrent.CancellationException(); }
+      if (wasCancelled) {if(permit!=null&&permit.cancelled.get()&&!cancelled.get()&&!run.isCancelled())return result.forEvaluation();run.cancel();throw new java.util.concurrent.CancellationException(); }
       if(stopped!=null)throw stopped;
       return result.forEvaluation();
     }
