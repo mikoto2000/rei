@@ -9,7 +9,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 
-/** Durable review outcomes, never CLI sessions, prompts, source contents or process logs. */
+/** Durable review outcomes and opt-in provider UUIDs, never prompts, source contents or process logs. */
 @Repository
 public class ExternalReviewRepository {
   public record Review(String id,String projectId,String projectRoot,String sessionId,String runId,String target,
@@ -21,6 +21,19 @@ public class ExternalReviewRepository {
     db=JdbcClient.create(source);this.clock=clock;
     db.sql("CREATE TABLE IF NOT EXISTS external_reviews(id TEXT PRIMARY KEY,project TEXT NOT NULL,root TEXT NOT NULL,session TEXT NOT NULL,run TEXT NOT NULL,target TEXT,previous TEXT,status TEXT NOT NULL,created INTEGER NOT NULL,completed INTEGER,result TEXT)").update();
     db.sql("CREATE INDEX IF NOT EXISTS external_reviews_project ON external_reviews(project,created)").update();
+    db.sql("CREATE TABLE IF NOT EXISTS external_review_continuations(previous TEXT PRIMARY KEY,review TEXT NOT NULL)").update();
+  }
+  /** An attempted continuation consumes its parent even after failure or a crash. Never replay it. */
+  public void startContinuation(AgentRunContext owner,String id,Path root,String target,String previous) {
+    var parent=get(owner.projectId(),previous);
+    if(!parent.projectRoot().equals(root.toString()) || parent.result()==null || !parent.result().success()
+        || !ExternalAgentResult.validSessionId(parent.result().externalSessionId()))throw new IllegalArgumentException("Resumable completed review required");
+    if(db.sql("INSERT OR IGNORE INTO external_review_continuations(previous,review) VALUES(?,?)").params(previous,id).update()!=1)
+      throw new IllegalArgumentException("This review's continuation was already attempted; use its completed successor or request a fresh re-review");
+    start(owner,id,root,target,previous);
+  }
+  public boolean continuationAttempted(String previous) {
+    return db.sql("SELECT count(*) FROM external_review_continuations WHERE previous=?").param(previous).query(Integer.class).single()>0;
   }
   public void start(AgentRunContext owner,String id,Path root,String target,String previous) {
     if(owner.projectId()==null || owner.projectId().isBlank())throw new IllegalArgumentException("Project required");
@@ -59,7 +72,7 @@ public class ExternalReviewRepository {
     var warnings=new ArrayList<>(result.warnings().stream().limit(truncated?11:12).map(s->bounded(s,512)).toList());
     if(truncated)warnings.add("Saved review fields were truncated; inspect the review scope before drawing conclusions");
     var status=truncated && result.status()==ExternalAgentResult.Status.SUCCESS?ExternalAgentResult.Status.SUCCESS_WITH_WARNINGS:result.status();
-    return new ExternalAgentResult(status,bounded(result.summary(),2048),findings,warnings,result.duration(),result.exitCode(),"",result.reviewId());
+    return new ExternalAgentResult(status,bounded(result.summary(),2048),findings,warnings,result.duration(),result.exitCode(),"",result.reviewId(),result.externalSessionId());
   }
   private static int length(String text){return text==null?0:text.length();}
   private static String bounded(String text,int limit){return ExternalAgentDelegationService.bounded(text,limit);}

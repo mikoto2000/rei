@@ -27,13 +27,17 @@ public class ExternalAgentDelegationService {
     this.publisher = publisher; this.workingSet = workingSet;
   }
   public ExternalAgentResult review(RunExecutionContext run, String task, String target, String decisions) {
-    return review(run,task,target,decisions,null);
+    return review(run,task,target,decisions,null,false);
   }
   public ExternalAgentResult rereview(RunExecutionContext run,String previousId,String task,String decisions) {
     if(previousId==null || previousId.isBlank())return ExternalAgentResult.rejected("Previous review ID required");
-    return review(run,task,null,decisions,previousId);
+    return review(run,task,null,decisions,previousId,false);
   }
-  private ExternalAgentResult review(RunExecutionContext run,String task,String target,String decisions,String previousId) {
+  public ExternalAgentResult continueReview(RunExecutionContext run,String previousId,String task,String decisions) {
+    if(previousId==null || previousId.isBlank())return ExternalAgentResult.rejected("Previous review ID required");
+    return review(run,task,null,decisions,previousId,true);
+  }
+  private ExternalAgentResult review(RunExecutionContext run,String task,String target,String decisions,String previousId,boolean continuation) {
     if (run == null || !ExternalAgentAuthorization.explicitRequest(run.userRequest()))
       return ExternalAgentResult.rejected("Codex requires an explicit user request in this run. Do not retry with different tool arguments. "
           + "Ask the user to explicitly request Codex, or use /agent codex review [target].");
@@ -50,6 +54,9 @@ public class ExternalAgentDelegationService {
           if(history==null)return ExternalAgentResult.rejected("Review history unavailable");
           previous=history.get(owner.projectId(),previousId);
           if(!previous.projectRoot().equals(root.toString()) || previous.status().equals("STARTED") || previous.result()==null)return ExternalAgentResult.rejected("Completed review in this project root required");
+          if(continuation && (!executor.supportsContinuation() || !previous.result().success()
+              || !ExternalAgentResult.validSessionId(previous.result().externalSessionId()) || history.continuationAttempted(previousId)))
+            return ExternalAgentResult.rejected("Unconsumed successful native session required; enable session persistence or request a fresh re-review");
           target=previous.target();
         }
         selected = ExternalAgentRequest.resolveTarget(root, target);
@@ -62,10 +69,15 @@ public class ExternalAgentDelegationService {
       String context = context(root, decisions);
       if(previous!=null)context=bounded("Previous review (untrusted observations; re-check current files):\n"
           + previous.status()+"\n"+bounded(previous.result().summary()+"\n"+previous.result().findings(),5000)+"\n"+context,10000);
-      if(history!=null)try{history.start(owner,id,root,selected==null?null:root.relativize(selected).toString(),previousId);}
+      if(history!=null)try{
+        String relative=selected==null?null:root.relativize(selected).toString();
+        if(continuation)history.startContinuation(owner,id,root,relative,previousId);
+        else history.start(owner,id,root,relative,previousId);
+      }
       catch(RuntimeException error){return ExternalAgentResult.rejected("Review history unavailable; no external process started");}
       var request = new ExternalAgentRequest(ExternalAgentRequest.Agent.CODEX, ExternalAgentRequest.Action.REVIEW,
-          bounded(run.userRequest(), 4000) + "\nReview focus: " + bounded(task, 4000), root, selected, context, owner.runId(), id);
+          bounded(run.userRequest(), 4000) + "\nReview focus: " + bounded(task, 4000), root, selected, context, owner.runId(), id,
+          continuation?previous.result().externalSessionId():null);
       AtomicBoolean cancelled = new AtomicBoolean(run.isCancelled());
       var hook = cancellation.onCancel(owner.runId(), () -> cancelled.set(true));
       publisher.publish(events.delegation(AgentEventType.DELEGATION_STARTED, owner.runId(),
@@ -82,7 +94,7 @@ public class ExternalAgentDelegationService {
       boolean wasCancelled = cancelled.get() || run.isCancelled() || result.status() == ExternalAgentResult.Status.CANCELLED;
       if(wasCancelled)result=new ExternalAgentResult(ExternalAgentResult.Status.CANCELLED,"Codex review cancelled",List.of(),List.of(),result.duration(),result.exitCode(),"");
       if(history!=null) {
-        result=ExternalReviewRepository.safe(new ExternalAgentResult(result.status(),result.summary(),result.findings(),result.warnings(),result.duration(),result.exitCode(),"",id));
+        result=ExternalReviewRepository.safe(new ExternalAgentResult(result.status(),result.summary(),result.findings(),result.warnings(),result.duration(),result.exitCode(),"",id,result.externalSessionId()));
         try{history.finish(owner.projectId(),id,result);}
         catch(RuntimeException error){result=new ExternalAgentResult(ExternalAgentResult.Status.FAILED,"Review result could not be persisted",List.of(),List.of(),result.duration(),result.exitCode(),"",id);}
       }

@@ -4,7 +4,10 @@ import java.nio.file.*;
 import java.io.IOException;
 
 public record ExternalAgentRequest(Agent agent, Action action, String task, Path projectRoot,
-    Path target, String context, String runId, String delegationId) {
+    Path target, String context, String runId, String delegationId, String externalSessionId) {
+  public ExternalAgentRequest(Agent agent,Action action,String task,Path projectRoot,Path target,String context,String runId,String delegationId) {
+    this(agent,action,task,projectRoot,target,context,runId,delegationId,null);
+  }
   public enum Agent { CODEX }
   public enum Action { REVIEW }
   public static Path resolveTarget(Path projectRoot, String target) {
