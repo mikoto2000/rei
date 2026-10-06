@@ -16,8 +16,11 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
   public CodexExternalAgentExecutor(CodexProperties properties, ExternalAgentProcessRunner runner) {
     this.properties = properties; this.runner = runner;
   }
+  @Override public boolean supportsContinuation() { return properties.isEnabled() && properties.isPersistSessions(); }
   @Override public ExternalAgentResult execute(ExternalAgentRequest request, BooleanSupplier cancelled) {
     if (!properties.isEnabled()) return ExternalAgentResult.rejected("Codex external reviews are disabled");
+    if(request.externalSessionId()!=null && (!supportsContinuation() || !ExternalAgentResult.validSessionId(request.externalSessionId())))
+      return ExternalAgentResult.rejected("An enabled, saved native session UUID is required");
     if (properties.getTotalTimeout() == null || properties.getTotalTimeout().isNegative() || properties.getTotalTimeout().isZero()
         || properties.getInactivityTimeout() == null || properties.getInactivityTimeout().isNegative() || properties.getInactivityTimeout().isZero()
         || properties.getMaxOutputBytes() < 1) return ExternalAgentResult.rejected("Invalid Codex execution limits");
@@ -30,6 +33,15 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
         .stream().allMatch(capability.stdout()::contains))
       return new ExternalAgentResult(Status.UNAVAILABLE,
           "Codex CLI lacks required isolated configuration/permission capabilities; update Codex CLI", List.of(), List.of(), capability.duration(), null, "");
+    if(request.externalSessionId()!=null) {
+      Duration remaining=properties.getTotalTimeout().minusNanos(System.nanoTime()-start);
+      if(remaining.isNegative() || remaining.isZero())return new ExternalAgentResult(Status.TOTAL_TIMEOUT,"Codex review total timeout",List.of(),List.of(),capability.duration(),null,"");
+      var resume=runner.run(List.of(executable(),"exec","resume","--help"),request.projectRoot(),"",
+          min(remaining,Duration.ofSeconds(10)),min(properties.getInactivityTimeout(),Duration.ofSeconds(10)),65536,cancelled);
+      if(resume.status()!=Status.SUCCESS)return parse(resume);
+      if(!List.of("--ignore-user-config","--ignore-rules","--strict-config","--output-schema","--json").stream().allMatch(resume.stdout()::contains))
+        return new ExternalAgentResult(Status.UNAVAILABLE,"Codex CLI lacks isolated resume capabilities",List.of(),List.of(),resume.duration(),null,"");
+    }
     Path schema = null;
     try {
       schema = Files.createTempFile("rei-codex-review-", ".json");
@@ -40,8 +52,11 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
       Duration remaining = properties.getTotalTimeout().minusNanos(System.nanoTime() - start);
       if (remaining.isNegative() || remaining.isZero()) return new ExternalAgentResult(Status.TOTAL_TIMEOUT,
           "Codex review total timeout", List.of(), List.of(), capability.duration(), null, "");
-      return parse(runner.run(command(request, schema), request.projectRoot(), prompt, remaining,
+      var result=parse(runner.run(command(request, schema), request.projectRoot(), prompt, remaining,
           properties.getInactivityTimeout(), properties.getMaxOutputBytes(), cancelled));
+      if(request.externalSessionId()!=null && result.success() && !request.externalSessionId().equals(result.externalSessionId()))
+        return new ExternalAgentResult(Status.FAILED,"Continued review did not confirm the saved native session; request a fresh re-review",List.of(),List.of(),result.duration(),result.exitCode(),"");
+      return result;
     } catch (java.io.IOException error) {
       return new ExternalAgentResult(Status.UNAVAILABLE, "Could not prepare Codex review", List.of(), List.of(), 0, null, "");
     } finally {
@@ -94,6 +109,14 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
       command.add(command.size() - 1, "-c");
       command.add(command.size() - 1, "windows.sandbox=\"elevated\"");
     }
+    if(properties.isPersistSessions())command.remove("--ephemeral");
+    if(request.externalSessionId()!=null) {
+      int color=command.indexOf("--color");command.remove(color+1);command.remove(color);
+      int directory=command.indexOf("--cd");command.remove(directory);command.remove(directory);
+      command.addAll(command.indexOf("exec"),List.of("--cd",request.projectRoot().toString()));
+      command.add(command.indexOf("exec")+1,"resume");
+      command.add(command.size()-1,request.externalSessionId());
+    }
     return List.copyOf(command);
   }
   private String failureDiagnostic(ExternalAgentProcessRunner.Output output) {
@@ -128,10 +151,17 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
       return new ExternalAgentResult(output.status(), reason, List.of(), warnings, output.duration(), output.exitCode(), output.stdout());
     }
     String finalText = "";
+    String sessionId=null;
+    boolean invalidSession=false;
     try {
       for (String line : output.stdout().split("\\R")) {
         try {
           JsonNode event = mapper.readTree(line);
+          if(event.path("type").asText().equals("thread.started")) {
+            String candidate=event.path("thread_id").asText();
+            if(!ExternalAgentResult.validSessionId(candidate) || (sessionId!=null && !sessionId.equals(candidate)))invalidSession=true;
+            else sessionId=candidate;
+          }
           if (event.path("type").asText().equals("item.completed") && event.path("item").path("type").asText().equals("agent_message"))
             finalText = event.path("item").path("text").asText();
         } catch (Exception ignored) { }
@@ -151,7 +181,8 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
         warnings.add(ExternalAgentDelegationService.bounded(warning.asText(), 500));
       }
       return new ExternalAgentResult(warnings.isEmpty() ? Status.SUCCESS : Status.SUCCESS_WITH_WARNINGS,
-          text(review, "summary", 4000), findings, warnings, output.duration(), output.exitCode(), output.stdout());
+          text(review, "summary", 4000), findings, warnings, output.duration(), output.exitCode(), output.stdout(),null,
+          properties.isPersistSessions() && !invalidSession && !output.truncated()?sessionId:null);
     } catch (Exception error) {
       warnings.add("Could not parse structured findings; review text requires independent evaluation");
       return new ExternalAgentResult(Status.SUCCESS_WITH_WARNINGS,

@@ -24,6 +24,11 @@ public class ExternalAgentTools {
     var run=toolContext==null?null:(RunExecutionContext)toolContext.getContext().get(RunExecutionContext.KEY);
     return service.rereview(run,previousReviewId,task,context);
   }
+  @Tool(description="Workflow: Explicitly continue a saved read-only Codex review in its native CLI session when the current user requests Codex review continuation. Requires opt-in session persistence and an unconsumed successful review in this Project/root. Shares the once-per-run delegation budget. Never retry unknown outcomes or automatically fix findings. Pass the Rei review ID, never a native session UUID.")
+  public ExternalAgentResult requestCodexContinueReview(String previousReviewId,String task,@ToolParam(required=false) String context,ToolContext toolContext) {
+    var run=toolContext==null?null:(RunExecutionContext)toolContext.getContext().get(RunExecutionContext.KEY);
+    return service.continueReview(run,previousReviewId,task,context);
+  }
   @Tool(description="Read the latest 20 saved external reviews in the current Project. Does not start an external process or grant permission to delegate.")
   public java.util.List<ExternalReviewRepository.Review> listCodexReviews(ToolContext toolContext) {
     var owner=owner(toolContext);String projectRoot=root(owner);return history.list(owner.projectId()).stream().filter(r->r.projectRoot().equals(projectRoot)).toList();

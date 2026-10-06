@@ -8,6 +8,8 @@ import lombok.Data;
 @ConfigurationProperties("rei.external-agents.codex")
 public class CodexProperties {
   private boolean enabled = true;
+  /** Opt-in: the native CLI retains its own session files; Rei stores only the opaque UUID. */
+  private boolean persistSessions = false;
   private String command = "codex";
   private Duration totalTimeout = Duration.ofMinutes(20);
   private Duration inactivityTimeout = Duration.ofMinutes(5);
