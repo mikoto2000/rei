@@ -275,3 +275,11 @@ Java／Native／React Red→最小Green→未来日入力HTTP修正／fixture ma
 | Implemented | [SubAgent READ Tool retry](implementation-report-subagent-read-tool-retry.md) | subagent-read-tool-retry | c014b5dd | 3eca76c3 | 3275 / 609 |
 
 compile Red→3テストGreen→8新規テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。単発承認や書き込み分類を再利用せず、実embedding費用も共有Goal予算で止めることを確認した。永続resume・Repository Map永続索引などは引き続き対応対象。
+
+## 後続のRepository Map永続索引
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [Repository Map永続索引](implementation-report-persistent-repository-map-index.md) | persistent-repository-map-index | 3ecdb86c | d2216600 | 3283 / 610 |
+
+compile Red→2テストGreen→8新規テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。実compiler呼出の削減と現在ソース検証・root/profile隔離・破損/障害fallback・原子的置換を確認した。多言語/意味的依存やCoaching専用設定UIなどは引き続き対応対象。
