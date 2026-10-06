@@ -1,0 +1,11 @@
+# SubAgent 読み取り Tool の限定再試行
+
+`rei.subagents.max-transient-read-tool-retries` / `REI_SUBAGENTS_MAX_TRANSIENT_READ_TOOL_RETRIES` は既定0、最大3。1 invocationの通常cycle・repairを通して同じ allowanceを使う。既定0では再試行しない。
+
+PolicyがAUTO_APPROVEし、分類がREAD/NETWORK_READだけのToolを対象にする。単発承認・継承承認、書き込み能力・未知分類は対象外。各試行前に取消・timeout・Policyを確認する。対象例外はSpringのTransientDataAccessException、またはUncheckedIOException/ResourceAccessExceptionの限定cause chain内の接続失敗/timeout。返却されたエラー文字列、一般IOException、恒久障害、モデル障害をTool retryの対象にしない。
+
+100ms backoff後に失敗したcallbackだけを再呼出する。成功済みToolやモデルPromptを再生しない。実際の再試行開始数と最大4件の固定失敗コードをSubAgentResultへ保存し、生の例外情報を履歴へ追加しない。既定0でも対象の失敗事実は1件記録できる。成功した結果だけをevidence receiptとして採用する。
+
+Tool内のopt-in embedding/rerank等へ、親Run/Goalまたはownerless batch/invocationの同じモデル予算を渡す。補助モデルの各provider呼出を予約し、報告tokenを計上する。上限・未知usage停止を再試行で回避しない。Tool retryは子model maxStepsを増やさず、補助モデル呼出は共有費用予算で制限する。直接providerを呼ぶ独自callbackやSDK内部retryまでを計測する保証はない。
+
+READ分類は管理者の分類に依存する。読み取りでも外部システム内部の副作用や実際の障害の一時性を保証する機能ではない。永続resume、書き込みToolの自動再実行、長期backoffはこの機能の範囲外。
