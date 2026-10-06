@@ -283,3 +283,11 @@ compile Red→3テストGreen→8新規テスト・関連・全体回帰→featu
 | Implemented | [Repository Map永続索引](implementation-report-persistent-repository-map-index.md) | persistent-repository-map-index | 3ecdb86c | d2216600 | 3283 / 610 |
 
 compile Red→2テストGreen→8新規テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。実compiler呼出の削減と現在ソース検証・root/profile隔離・破損/障害fallback・原子的置換を確認した。多言語/意味的依存やCoaching専用設定UIなどは引き続き対応対象。
+
+## 後続のActivity Coaching設定HTTP
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [Coaching設定HTTP](implementation-report-activity-coaching-settings-http.md) | activity-coaching-settings-http | f6226a77 | 8ddb86ff | 3290 / 611 |
+
+compile Red→2テストGreen→7新規テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。閲覧/更新で助言を予約せず、原子的revision確認・明示enabled・設定保存時の無効化・旧port非fallbackを検証した。Native設定UIなどは引き続き対応対象。
