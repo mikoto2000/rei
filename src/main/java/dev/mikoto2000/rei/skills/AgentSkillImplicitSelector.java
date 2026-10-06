@@ -38,12 +38,20 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
 
   @Override
   public List<AgentSkill> select(String prompt, Set<String> excludedSkillNames, List<AgentSkill> providedCandidates) {
+    return select(prompt, excludedSkillNames, providedCandidates, null);
+  }
+
+  @Override
+  public List<AgentSkill> select(String prompt, Set<String> excludedSkillNames,
+      List<AgentSkill> providedCandidates, Runnable beforeModelCall) {
     List<AgentSkill> candidates = (providedCandidates == null ? repository.findEnabled() : providedCandidates).stream()
         .filter(skill -> excludedSkillNames == null || !excludedSkillNames.contains(skill.name()))
         .toList();
     if (candidates.isEmpty()) {
       return List.of();
     }
+    // Budget exhaustion must stop the run, rather than become a selection fallback.
+    if (beforeModelCall != null) beforeModelCall.run();
     try {
       String content = modelProvider.chatModel(LlmFeature.AGENT_SKILLS).call(buildSelectionPrompt(prompt, candidates));
       return resolveSelectedSkills(parseJsonStringArray(content), candidates);

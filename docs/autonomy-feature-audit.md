@@ -6,7 +6,7 @@
 | Priority | Feature | Initial status | Final status / 根拠 |
 |---|---|---|---|
 | A1 | Auto Sleep | Not implemented | 本作業で実装。SleepService、AutoSleepService。起動時保存metadataからのbounded候補発見・idle時継続走査に対応。任意cron/日次・zone指定に対応。終了trigger/外部metadata監視はDeferred |
-| A2 | Autonomous Planning Loop | Partially implemented | 最大16ファイルGoal、全件SHA-256一致。永続 lifecycle/試行/予算、明示起動、既存 Chat/ActionPlan/FIFO、独立検証とbounded継続。不確定Run手動reconcile・予算保持・in-flight除外、SubAgent共有LLM予算継承、HTTP/実Run/SSE・Native Goal/Checkpoint復旧に対応。汎用検証条件/Skill selector等の予算継承/共通token上限は追加候補 |
+| A2 | Autonomous Planning Loop | Partially implemented | 最大16ファイルGoal、全件SHA-256一致。永続 lifecycle/試行/予算、明示起動、既存 Chat/ActionPlan/FIFO、独立検証とbounded継続。不確定Run手動reconcile・予算保持・in-flight除外、SubAgent共有LLM予算継承、Skill selectorの実呼出直前予算・枯渇/取消伝播、HTTP/実Run/SSE・Native Goal/Checkpoint復旧に対応。汎用検証条件/embedding・rerankの予算/共通token上限は追加候補 |
 | A3 | Trigger / Scheduler | Partially implemented | 一回限り continuation、SQLite永続化、2〜100回のbounded間隔（1分〜366日）/cron（明示zone、分単位）、明示activation、Project/Session固定、atomic claim、既存FIFO・結果履歴。不確定Run手動reconcile・元予約非再実行・in-flight除外、Run/永続dependency終端event trigger・期限・重複抑制・cursor復元に対応。認証済HTTP/実Run/SSE・Native予約確認/有効化/取消/照合/追跡も対応済み |
 | A4 | Waiting / Dependency | Partially implemented | Implemented in this task。状態6種、プロセス/ファイル存在・SHA・変更/Git branch・HEAD/HTTP status/人間回答の条件をSQLite永続化。最大16の同一Session既存依存によるDAG、期限、CAS、キャンセル、復元、opt-in/Policy制御、bounded wait、停滞との区別、Shell・Event API・Scheduler接続を実装。再起動後に不明なprocessはBLOCKED。HTTP body/任意code predicate等の拡張は対象外の追加候補 |
 | A5 | Policy / Permission | Partially implemented | Implemented in this task。能力7種・Chat/SubAgent 境界に加え、永続一回限り承認、Shell/Web の明示決定、Checkpoint の明示 Resume に対応。NativeのProject限定承認一覧・引数確認・一回承認/拒否ボタンに対応。SubAgent 承認継承は Deferred |
@@ -39,8 +39,8 @@ Agent Event/UI projection、Topic、Core/UI 分離も既存の各パッケージ
 ## 優先順位と残作業
 
 Auto Sleep、共通 Policy/永続承認、管理プロセス Waiting、永続一回限り・間隔・cron・Run終端イベント Scheduler、アプリ内 escalation は独立実装済み。
-ファイルGoalの永続 lifecycle と bounded Planning Loop、Goal事実ベースのReflection、Activity週月の保存観測分析、手動Coachingの期間分析統合、Activity/Work Context保存Event参照、opt-in文書Hybrid RRF、Semantic Skill Searchも実装済み。残件は本表のDeferred項目を優先度順に再評価する。
-並行して、不確定 Scheduled Run の復旧、汎用依存監視、Native の承認・確認待ち UI を既存基盤へ統合する。
+ファイルGoalの永続 lifecycle と bounded Planning Loop、Goal事実ベースのReflection、Activity週月の保存観測分析、手動・明示有効化した自動Coachingの期間分析統合、Activity/Work Context保存Event参照、opt-in文書Hybrid RRF、Semantic Skill Searchも実装済み。残件は本表のDeferred項目を優先度順に再評価する。
+不確定 Scheduled Run の復旧、永続依存監視、Native の承認・確認待ち・人間回答・Goal/Scheduler/Checkpoint復旧UIは下記follow-upで統合済み。
 週月分析は既存の観測事実を集計し、推測や未観測時間を分離する。SubAgent 修復は bounded retry と元 error 保持を先に整備する。
 
 本表の Deferred は実装完了を意味しない。実装を行った機能の検証・Git 結果は別途実装レポートへ記録する。

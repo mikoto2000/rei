@@ -7,4 +7,10 @@ import java.util.Set;
 public interface AgentSkillImplicitSelection {
 
   List<AgentSkill> select(String prompt, Set<String> excludedSkillNames, List<AgentSkill> candidates);
+
+  default List<AgentSkill> select(String prompt, Set<String> excludedSkillNames,
+      List<AgentSkill> candidates, Runnable beforeModelCall) {
+    if (beforeModelCall != null) beforeModelCall.run();
+    return select(prompt, excludedSkillNames, candidates);
+  }
 }
