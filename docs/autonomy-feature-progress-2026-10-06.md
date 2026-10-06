@@ -132,3 +132,12 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 初期Red・実DB検証・設定bindingの結合エラー検出→修正Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。全体回帰は3122 tests / 594 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。
 
 明示opt-inのSQLite FTS5/BM25を既存RRF・文書集約・rerankへ統合した。既存DBのbackfill、全更新経路のtransaction同期、無効設定時の既存索引維持、置換失敗rollback、source/docId・coverage閾値、literal query、取消と設定bindingを検証した。学習済みsparse、多言語tokenizer、実データ品質評価は残件。
+## 後続のJUnitレポート自動発見・集合診断
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [JUnitレポート自動発見・集合診断](implementation-report-junit-report-discovery.md) | junit-report-discovery | d3f36e73 | a811ac66 | 3130 / 595 |
+
+初期Red→最小Green→上限／境界／実Tool検証→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。全体回帰は3130 tests / 595 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。
+
+標準Maven/Gradle配置のbounded自動発見と明示directoryの集合診断を追加した。各file identity、解析済みlong合計、missing／未読／重複／partial、共有の証拠上限、実Windows junctionのProject外拒否、Policy・SubAgent明示要求を検証した。現在process／Goalの成功を判定しない。その他形式・完全原因特定・自動repairは残件。
