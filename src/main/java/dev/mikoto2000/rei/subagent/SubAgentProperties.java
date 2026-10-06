@@ -12,6 +12,9 @@ public class SubAgentProperties {
   private int standaloneMaxLlmCalls;
   private long standaloneMaxTotalTokens;
   private int maxTransientModelRetries;
+  private int maxTransientReadToolRetries;
+  public int getMaxTransientReadToolRetries(){return maxTransientReadToolRetries;}
+  public void setMaxTransientReadToolRetries(int value){if(value<0||value>3)throw new IllegalArgumentException("Transient read Tool retries must be 0 to 3");maxTransientReadToolRetries=value;}
   public int getMaxTransientModelRetries(){return maxTransientModelRetries;}
   public void setMaxTransientModelRetries(int value){if(value<0||value>3)throw new IllegalArgumentException("Transient model retries must be 0 to 3");maxTransientModelRetries=value;}
   public int getStandaloneMaxLlmCalls(){return standaloneMaxLlmCalls;}

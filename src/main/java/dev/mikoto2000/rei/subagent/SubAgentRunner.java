@@ -56,6 +56,7 @@ public final class SubAgentRunner {
   public SubAgentResult run(String agent, String task, String context,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
     var effectiveReservation=reservation==null&&AgentRunScope.current()==null?
         StandaloneSubAgentBudget.create(standaloneBudgetProperties):reservation;
+    var auxiliaryBudget=auxiliaryBudget(effectiveReservation);
     String runId = UUID.randomUUID().toString();
     Instant started = clock.instant();
     long nanos = System.nanoTime();
@@ -69,11 +70,12 @@ public final class SubAgentRunner {
     CompletableFuture<SubAgentResult> completion = new CompletableFuture<>();
     var repairAttempts = new AtomicInteger();
     var modelRetries=new BoundedToolLoop.ModelRetries(standaloneBudgetProperties.getMaxTransientModelRetries());
+    var toolRetries=new SubAgentReadToolRetries(standaloneBudgetProperties.getMaxTransientReadToolRetries());
     List<List<ValidationError>> validationHistory = new CopyOnWriteArrayList<>();
     Consumer<SubAgentResult> complete = result -> {
       if (stopped.compareAndSet(false, true)) {
         subscriptions.dispose();
-        completion.complete(result.withModelRetries(modelRetries.attempts(),modelRetries.history()));
+        completion.complete(result.withModelRetries(modelRetries.attempts(),modelRetries.history()).withToolRetries(toolRetries.attempts(),toolRetries.history()));
       }
     };
     BiConsumer<SubAgentResult.Status, String> finish = (status, output) ->
@@ -100,7 +102,7 @@ public final class SubAgentRunner {
           var evidence = d.evidenceTools().isEmpty() ? null : new SubAgentEvidence();
           List<ToolCallback> callbacks = toolFactory.get().stream()
               .filter(callback -> effective.contains(callback.getToolDefinition().name()))
-              .map(callback -> guarded(callback, owner, check, evidence,d.inheritApprovals()?parent:null)).toList();
+              .map(callback -> guarded(callback, owner, check, evidence,d.inheritApprovals()?parent:null,toolRetries,auxiliaryBudget)).toList();
           if (callbacks.size() != effective.size()) throw new IllegalStateException("Tool unavailable");
           ToolCallingChatOptions runOptions = options.apply(d.model()).copy();
           runOptions.setInternalToolExecutionEnabled(false);
@@ -183,7 +185,15 @@ public final class SubAgentRunner {
         return validatedRun(model, new Prompt(messages, prompt.getOptions()), definition, owner, check, evidence, remaining, repairs, history,reservation,modelRetries);
     }));
   }
-  private ToolCallback guarded(ToolCallback callback, AgentRunContext owner, Runnable check, SubAgentEvidence evidence,AgentRunContext approvalParent) {
+  private dev.mikoto2000.rei.llm.ModelCallBudget auxiliaryBudget(dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
+    if(reservation==null)return dev.mikoto2000.rei.llm.ModelCallBudgetScope.current();
+    return new dev.mikoto2000.rei.llm.ModelCallBudget(){
+      public void run(){if(!reservation.tryReserve())throw new BoundedToolLoop.SharedBudgetExceeded();}
+      public boolean tokenLimitEnabled(){return reservation.tokenLimitEnabled();}
+      public void recordTotalTokens(Integer tokens){reservation.recordTotalTokens(tokens);}
+    };
+  }
+  private ToolCallback guarded(ToolCallback callback, AgentRunContext owner, Runnable check, SubAgentEvidence evidence,AgentRunContext approvalParent,SubAgentReadToolRetries retries,dev.mikoto2000.rei.llm.ModelCallBudget modelBudget) {
     // Child tool events use the existing API; lifecycle envelopes provide parent correlation.
     ToolCallback observed = new ToolEventCallbackDecorator(callback, events, publisher);
     return new ToolCallback() {
@@ -191,13 +201,13 @@ public final class SubAgentRunner {
       public ToolMetadata getToolMetadata() { return callback.getToolMetadata(); }
       public String call(String input) { return call(input, new ToolContext(Map.of())); }
       public String call(String input, ToolContext context) {
-        try (var scope = AgentRunScope.open(owner)) {
+        try (var scope = AgentRunScope.open(owner);var budgetScope=dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(modelBudget)) {
           check.run();
-          if(permissions!=null) {
+          Runnable authorize=()->{if(permissions!=null) {
             if(approvalParent==null)permissions.check(callback.getToolDefinition().name(),input,owner);
             else permissions.checkDelegated(callback.getToolDefinition().name(),input,owner,approvalParent);
-          }
-          String result = observed.call(input, context);
+          }};
+          String result = retries.call(()->observed.call(input,context),authorize,check,()->permissions!=null&&permissions.automaticallyApprovedRead(callback.getToolDefinition().name()));
           check.run();
           return evidence == null ? result : evidence.capture(callback.getToolDefinition().name(), input, result);
         }
