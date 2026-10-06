@@ -12,7 +12,7 @@ LlmMemoryProcessorは実呼出し直前に回数を予約し、集約usageを解
 
 Greenでは抽出の超過による記憶非保存／checkpoint非進行、抽出と解決の共通呼出回数、解決の超過による部分計画非保存、上限ちょうどで決定的NEWの保存、usage欠落・Provider障害、既定無効の旧動作、previewの監査非保存、完全一致重複の追加モデル非消費、次のSleepでの独立予算、未対応port拒否、負・過大設定の拒否とSpring bindingの既定値を確認した。複数chunkの最終usage計上も検証した。
 
-Sleep／Auto Sleep／cron／Memory境界／出力schema／記憶保存／設定テンプレートの関連テストはPASS。全体回帰は3089 tests / 590 suites、failure/error/skip各0でPASS。Javaのみ変更し、Native/Reactは再実行していない。Git結果はMerge後確認を完了して追記する。
+Sleep／Auto Sleep／cron／Memory境界／出力schema／記憶保存／設定テンプレートの関連テストはPASS。全体回帰は3089 tests / 590 suites、failure/error/skip各0でPASS。Javaのみ変更し、Native/Reactは再実行していない。feature 3cc0df7cをPushし、main b896f949へMergeした。Merge後関連テストもPASS、main Push済み。
 
 ## 制限
 
