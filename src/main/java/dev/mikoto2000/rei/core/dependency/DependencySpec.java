@@ -4,8 +4,8 @@ import java.net.URI;
 import java.util.*;
 
 public record DependencySpec(Kind kind,String target,String expected) {
-  public enum Kind { FILE_EXISTS, FILE_SHA256, FILE_CHANGED, GIT_STATE_CHANGED, PROCESS_EXIT, HTTP_STATUS, HTTP_BODY_SHA256, USER_ANSWER }
-  public boolean network(){return kind==Kind.HTTP_STATUS||kind==Kind.HTTP_BODY_SHA256;}
+  public enum Kind { FILE_EXISTS, FILE_SHA256, FILE_CHANGED, GIT_STATE_CHANGED, PROCESS_EXIT, HTTP_STATUS, HTTP_BODY_SHA256, HTTP_JSON_VALUE, USER_ANSWER }
+  public boolean network(){return kind==Kind.HTTP_STATUS||kind==Kind.HTTP_BODY_SHA256||kind==Kind.HTTP_JSON_VALUE;}
   public DependencySpec {
     if(kind==null||target==null||target.isBlank()||target.length()>2048||expected!=null&&expected.length()>4096)
       throw new IllegalArgumentException("Bounded dependency kind and target required");
@@ -17,16 +17,16 @@ public record DependencySpec(Kind kind,String target,String expected) {
         if(kind==Kind.FILE_CHANGED&&(expected==null||!expected.equals("missing")&&!expected.matches("[a-fA-F0-9]{64}")))throw new IllegalArgumentException("File fingerprint baseline required");
         expected=kind==Kind.FILE_EXISTS?null:expected.toLowerCase(Locale.ROOT);
       }
-      case HTTP_STATUS,HTTP_BODY_SHA256 -> {
+      case HTTP_STATUS,HTTP_BODY_SHA256,HTTP_JSON_VALUE -> {
         var uri=URI.create(target);
         if(uri.getScheme()==null||!Set.of("http","https").contains(uri.getScheme())||uri.getHost()==null||uri.getUserInfo()!=null||uri.getFragment()!=null)
           throw new IllegalArgumentException("HTTP URL without user info or fragment required");
         if(kind==Kind.HTTP_STATUS) {
           if(expected==null||!expected.matches("[1-5][0-9]{2}"))throw new IllegalArgumentException("HTTP status 100..599 required");
-        }else {
+        }else if(kind==Kind.HTTP_BODY_SHA256) {
           if(expected==null||!expected.matches("[1-5][0-9]{2}:[a-fA-F0-9]{64}"))throw new IllegalArgumentException("HTTP status:SHA-256 required");
           expected=expected.toLowerCase(Locale.ROOT);
-        }
+        }else HttpJsonCondition.parse(expected);
       }
       case PROCESS_EXIT -> {if(target.length()>128)throw new IllegalArgumentException("Process ID too long");if(expected==null)expected="0";if(!expected.matches("-?[0-9]{1,3}"))throw new IllegalArgumentException("Bounded exit code required");}
       case GIT_STATE_CHANGED -> {
