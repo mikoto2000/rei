@@ -94,7 +94,7 @@ public class AgentSkillAdvisor implements BaseAdvisor {
           && options.getToolContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
               instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext context ? context : null;
       selection = execution == null ? selectionService.select(userMessage.getText())
-          : selectionService.select(userMessage.getText(), execution::consumeNextLlmCall);
+          : selectionService.select(userMessage.getText(), execution.modelCallBudget());
       dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
       java.util.List<String> selectedNames = skillNames(selection.selectedSkills());
       publishCandidateEvaluation(selection, allSkills.size(),

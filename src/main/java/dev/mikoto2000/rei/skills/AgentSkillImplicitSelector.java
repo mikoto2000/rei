@@ -52,6 +52,24 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
     }
     // Budget exhaustion must stop the run, rather than become a selection fallback.
     if (beforeModelCall != null) beforeModelCall.run();
+    if(beforeModelCall instanceof dev.mikoto2000.rei.llm.ModelCallBudget budget&&budget.tokenLimitEnabled()) {
+      org.springframework.ai.chat.model.ChatResponse response;
+      try {
+        var model=modelProvider.chatModel(LlmFeature.AGENT_SKILLS);
+        dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+        response=model.call(new org.springframework.ai.chat.prompt.Prompt(buildSelectionPrompt(prompt,candidates),
+            org.springframework.ai.model.tool.ToolCallingChatOptions.builder().internalToolExecutionEnabled(false)
+                .toolNames(Set.of()).toolCallbacks(List.of()).build()));
+      }catch(Exception error) {
+        dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
+        budget.recordTotalTokens(null);
+        return List.of();
+      }
+      var usage=response==null?null:response.getMetadata().getUsage();
+      budget.recordTotalTokens(usage==null?null:usage.getTotalTokens());
+      String content=response.getResult()==null?"":response.getResult().getOutput().getText();
+      return resolveSelectedSkills(parseJsonStringArray(content),candidates);
+    }
     try {
       String content = modelProvider.chatModel(LlmFeature.AGENT_SKILLS).call(buildSelectionPrompt(prompt, candidates));
       return resolveSelectedSkills(parseJsonStringArray(content), candidates);
