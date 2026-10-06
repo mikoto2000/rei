@@ -14,4 +14,4 @@ JavaHttpDependencyProbeは既存client・no redirect・2秒・cancelを再利用
 
 追加の実HTTP fixtureでchunked日本語byte・64KiBちょうど／超過・空本文・redirect非追跡・途中切断／timeout・開始前／受信中の取消を確認した。SQLite再生成後の条件保持、非network Tool拒否、標準Policyで自動観測なし、NETWORK_READ許可したwatcherの実観測、terminal waitの追加request非実行、本文の監査非保存も検証した。
 
-関連テスト（HttpBodyDependencyTest・HttpDependencyProbeTest・DependencyToolsTest・DependencyObservationServiceTest・DependencySourceProbeTest・PersistentDependencyRepositoryTest・DependencyHttpTest）はPASS。全体回帰は3110 tests / 593 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。Git結果はMerge後確認を完了して追記する。範囲と制限は[http-body-dependency.md](http-body-dependency.md)。
+関連テスト（HttpBodyDependencyTest・HttpDependencyProbeTest・DependencyToolsTest・DependencyObservationServiceTest・DependencySourceProbeTest・PersistentDependencyRepositoryTest・DependencyHttpTest）はPASS。全体回帰は3110 tests / 593 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。feature bdc1b3cfをPushし、main 7eece12bへMergeした。Merge後関連テストもPASS、main Push済み。範囲と制限は[http-body-dependency.md](http-body-dependency.md)。
