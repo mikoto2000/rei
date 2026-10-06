@@ -4,6 +4,14 @@ use serde_json::json;
 use std::collections::BTreeMap;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct CoachingSettingsDto {
+    schema_version: u32,
+    scope: String,
+    revision: i64,
+    settings: ActivityCoachingSettings,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ActivityAnalysisDto {
     schema_version: u32,
     scope: String,
@@ -170,6 +178,80 @@ pub(super) fn result(title: &str, items: Vec<WorkspaceItem>) -> WorkspaceResult 
 }
 
 impl HttpReiClient {
+    async fn coaching_operation(&self, op: WorkspaceOperation) -> Result<WorkspaceResult> {
+        const MAX_SAFE: i64 = 9_007_199_254_740_991;
+        let (request, expected, criteria, enabled) = match op {
+            WorkspaceOperation::ActivityCoachingSettings => (
+                self.request(Method::GET, "/api/v1/activity/coaching", true)?,
+                None,
+                None,
+                None,
+            ),
+            WorkspaceOperation::ActivityCoachingConfigure {
+                expected_revision,
+                mut settings,
+            } => {
+                if !(0..MAX_SAFE).contains(&expected_revision)
+                    || settings.enabled
+                    || !settings.valid()
+                {
+                    return Err(AppError::InvalidInput);
+                }
+                settings.categories.sort();
+                (
+                    self.request(Method::POST, "/api/v1/activity/coaching/settings", true)?
+                        .json(&json!({"expectedRevision":expected_revision,"settings":settings})),
+                    Some(expected_revision + 1),
+                    Some(settings),
+                    None,
+                )
+            }
+            WorkspaceOperation::ActivityCoachingEnabled {
+                expected_revision,
+                enabled,
+            } => {
+                if !(0..MAX_SAFE).contains(&expected_revision) {
+                    return Err(AppError::InvalidInput);
+                }
+                (
+                    self.request(Method::POST, "/api/v1/activity/coaching/enabled", true)?
+                        .json(&json!({"expectedRevision":expected_revision,"enabled":enabled})),
+                    Some(expected_revision + 1),
+                    None,
+                    Some(enabled),
+                )
+            }
+            _ => return Err(AppError::InvalidInput),
+        };
+        let mut dto: CoachingSettingsDto = Self::json(request, Operation::Resource).await?;
+        dto.settings.categories.sort();
+        if dto.schema_version != 1
+            || dto.scope != "LOCAL_DEVICE_COACHING_SETTINGS"
+            || !(0..=MAX_SAFE).contains(&dto.revision)
+            || !dto.settings.valid()
+            || expected.is_some_and(|revision| dto.revision != revision)
+            || criteria.is_some_and(|settings| settings != dto.settings)
+            || enabled.is_some_and(|enabled| dto.settings.enabled != enabled)
+        {
+            return Err(AppError::InvalidResponse);
+        }
+        Ok(result(
+            "Activity coaching settings",
+            vec![WorkspaceItem {
+                id: None,
+                title: "Coaching settings".into(),
+                fields: vec![
+                    ("Scope".into(), dto.scope),
+                    ("Revision".into(), dto.revision.to_string()),
+                    (
+                        "Settings".into(),
+                        serde_json::to_string(&dto.settings)
+                            .map_err(|_| AppError::InvalidResponse)?,
+                    ),
+                ],
+            }],
+        ))
+    }
     async fn profile_view(&self) -> Result<WorkspaceResult> {
         let dto: ProfileDto = Self::json(
             self.request(Method::GET, "/api/v1/profile", true)?,
@@ -221,6 +303,11 @@ impl HttpReiClient {
         op: WorkspaceOperation,
     ) -> Result<WorkspaceResult> {
         match op {
+            op @ (WorkspaceOperation::ActivityCoachingSettings
+            | WorkspaceOperation::ActivityCoachingConfigure { .. }
+            | WorkspaceOperation::ActivityCoachingEnabled { .. }) => {
+                self.coaching_operation(op).await
+            }
             WorkspaceOperation::ActivityAnalysis { period, date } => {
                 let valid_date = |value: &str| {
                     value.len() == 10
