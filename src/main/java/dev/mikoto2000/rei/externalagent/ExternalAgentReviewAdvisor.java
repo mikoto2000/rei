@@ -16,6 +16,9 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
       Supply only necessary design decisions and review focus. At most one external delegation per run.
       Saved reviews can be read with listCodexReviews and getCodexReview without starting Codex.
       For an explicit re-review request, requestCodexReReview links a saved review and rechecks its current target.
+      For explicit native session continuation, requestCodexContinueReview requires an opt-in saved session and unconsumed successful parent.
+      For an explicit Codex fix proposal, requestCodexFixProposal saves a Change Set without applying it. Inspect the diff and independently review it.
+      Apply only on an explicit user request through the ordinary Change Set policy. Re-review in a later Run; do not bypass the delegation budget.
       A saved STARTED record has an unknown outcome; never automatically retry or resume it.
       For /agent codex review, the application supplies the result below; do not call Codex again.
       Evaluate the external findings independently against requirements and evidence before answering.

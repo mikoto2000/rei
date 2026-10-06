@@ -21,7 +21,7 @@
 | C14 | SubAgent semantic validation | Not implemented | Implemented (evidence-contract slice)。opt-inで実際のTool応答・Run内ID・ハッシュ・引用・SUCCESS required Toolを独立照合。requiredToolCallsで特定JSON引数の実施と引用を要求。自由文の意味判断はDeferred |
 | C15 | SubAgent repair/retry | Not implemented | Implemented (opt-in validation repair)。最大3回・共有maxSteps・単一timeout・cancel・元の診断履歴保持。モデル/Tool障害のretry・永続resumeはDeferred |
 | C16 | Parallel SubAgent Delegation | Not implemented | Implemented (bounded independent batch)。最大8依頼/worker2/受付1/120秒、事前検査・入力順結果・部分失敗・親cancel・既存Runner再利用。DAG/合意形成/永続復旧/全子token予算はDeferred |
-| C17 | External Delegation Phase 2+ | Partially implemented | SQLite結果/前回参照・明示新規再レビューに加え、opt-inでCLI UUID保存と明示resumeを追加。Project/root境界・当該Run認可・共通予算・read-only隔離・原子的一回claim・結果不明非再実行を維持。fix/書込/複数agent・並列は追加候補 |
+| C17 | External Delegation Phase 2+ | Partially implemented | SQLite結果/前回参照・明示新規再レビュー、opt-in CLI UUID保存/明示resumeに加え、Codexの単一ファイル修正案→共通Change Set保存→明示Apply→別Run再レビューを追加。Project/root/対象境界・当該Run認可・共通予算・read-only隔離・原子的一回claim・結果不明非再実行を維持。CLI直接書込/複数agent・並列は追加候補 |
 | C18 | Repository Map | Partially implemented | Implemented (bounded Git/Java AST slice)。package/型/method/import/main、module path・テスト名候補、内容ハッシュ更新、Project境界、読み取りTool。多言語/意味的依存解決/永続索引はDeferred |
 | C19 | Change/Test Impact | Partially implemented | Implemented (Java structural candidate slice)。Repository Map再利用、逆import/テスト名候補の推移探索・根拠/不完全性・READ Tool。Git差分自動取得/coverage/完全意味解析はDeferred |
 | C20 | Build/Test Failure Diagnosis | Partially implemented | Implemented (deterministic process-log slice)。既存command/snapshotにreported test/cause/source・分類・固定確認手順、認証情報除去・上限・context圧縮保持。完全原因特定/report読取/自動repairはDeferred |

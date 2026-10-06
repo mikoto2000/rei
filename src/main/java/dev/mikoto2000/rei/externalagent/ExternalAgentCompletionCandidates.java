@@ -3,16 +3,17 @@ package dev.mikoto2000.rei.externalagent;
 import java.util.*;
 import dev.mikoto2000.rei.core.completion.*;
 
-/** Metadata for the existing variadic /agent grammar, sourced from the domain enums. */
+/** Metadata for the existing variadic /agent grammar, limited to its supported domain actions. */
 public final class ExternalAgentCompletionCandidates implements CompletionMetadata {
+  private static final ExternalAgentRequest.Action[] COMMAND_ACTIONS={ExternalAgentRequest.Action.REVIEW};
   @Override public Set<String> types(CompletionContext context) {
     return context.argumentIndex() >= 2 && valid(context, 1, ExternalAgentRequest.Agent.values())
-        && valid(context, 2, ExternalAgentRequest.Action.values()) ? Set.of("file-or-directory") : Set.of("choices");
+        && valid(context, 2, COMMAND_ACTIONS) ? Set.of("file-or-directory") : Set.of("choices");
   }
   @Override public List<CompletionCandidate> choices(CompletionContext context) {
     if (context.argumentIndex() == 0) return candidates(ExternalAgentRequest.Agent.values(), "agent");
     if (context.argumentIndex() == 1 && valid(context, 1, ExternalAgentRequest.Agent.values()))
-      return candidates(ExternalAgentRequest.Action.values(), "action");
+      return candidates(COMMAND_ACTIONS, "action");
     return List.of();
   }
   private boolean valid(CompletionContext context, int index, Enum<?>[] values) {

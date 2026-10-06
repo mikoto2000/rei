@@ -45,15 +45,16 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     Path schema = null;
     try {
       schema = Files.createTempFile("rei-codex-review-", ".json");
-      Files.writeString(schema, resource("schema.json"));
-      String prompt = resource("review.txt") + "\nReview request data (JSON):\n" + mapper.writeValueAsString(Map.of(
+      boolean fix=request.action()==ExternalAgentRequest.Action.PROPOSE_FIX;
+      Files.writeString(schema, resource(fix?"fix-proposal-schema.json":"schema.json"));
+      String prompt = resource(fix?"fix-proposal.txt":"review.txt") + "\nReview request data (JSON):\n" + mapper.writeValueAsString(Map.of(
           "task", request.task(), "target", request.target() == null ? "current repository" : request.projectRoot().relativize(request.target()).toString(),
           "context", request.context()));
       Duration remaining = properties.getTotalTimeout().minusNanos(System.nanoTime() - start);
       if (remaining.isNegative() || remaining.isZero()) return new ExternalAgentResult(Status.TOTAL_TIMEOUT,
           "Codex review total timeout", List.of(), List.of(), capability.duration(), null, "");
       var result=parse(runner.run(command(request, schema), request.projectRoot(), prompt, remaining,
-          properties.getInactivityTimeout(), properties.getMaxOutputBytes(), cancelled));
+          properties.getInactivityTimeout(), properties.getMaxOutputBytes(), cancelled),fix);
       if(request.externalSessionId()!=null && result.success() && !request.externalSessionId().equals(result.externalSessionId()))
         return new ExternalAgentResult(Status.FAILED,"Continued review did not confirm the saved native session; request a fresh re-review",List.of(),List.of(),result.duration(),result.exitCode(),"");
       return result;
@@ -135,6 +136,9 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     return ExternalAgentDelegationService.bounded(dev.mikoto2000.rei.event.CredentialRedactor.redact(diagnostic), 800);
   }
   ExternalAgentResult parse(ExternalAgentProcessRunner.Output output) {
+    return parse(output,false);
+  }
+  private ExternalAgentResult parse(ExternalAgentProcessRunner.Output output,boolean fixProposal) {
     List<String> warnings = new ArrayList<>();
     if (output.truncated()) warnings.add("Process output was truncated at the configured byte limit");
     if (output.status() != Status.SUCCESS) {
@@ -154,6 +158,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     String sessionId=null;
     boolean invalidSession=false;
     try {
+      if(fixProposal && output.truncated())throw new IllegalArgumentException("Incomplete fix proposal output");
       for (String line : output.stdout().split("\\R")) {
         try {
           JsonNode event = mapper.readTree(line);
@@ -180,15 +185,33 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
         if (warnings.size() >= 32) break;
         warnings.add(ExternalAgentDelegationService.bounded(warning.asText(), 500));
       }
+      dev.mikoto2000.rei.core.TextChangeSetService.Request proposal=null;
+      if(fixProposal) {
+        var draft=review.get("proposal");
+        if(draft==null)throw new IllegalArgumentException("Missing fix proposal field");
+        if(!draft.isNull()) {
+          if(!draft.isObject() || draft.size()!=3)throw new IllegalArgumentException("Invalid fix proposal");
+          String path=proposalText(draft,"path",1024),before=proposalText(draft,"expectedText",65536),after=proposalText(draft,"replacement",65536);
+          if(path.isBlank() || before.isEmpty())throw new IllegalArgumentException("Nonempty path and baseline required");
+          proposal=new dev.mikoto2000.rei.core.TextChangeSetService.Request(path,before,after);
+        }
+      }
       return new ExternalAgentResult(warnings.isEmpty() ? Status.SUCCESS : Status.SUCCESS_WITH_WARNINGS,
           text(review, "summary", 4000), findings, warnings, output.duration(), output.exitCode(), output.stdout(),null,
-          properties.isPersistSessions() && !invalidSession && !output.truncated()?sessionId:null);
+          properties.isPersistSessions() && !invalidSession && !output.truncated()?sessionId:null,proposal,null);
     } catch (Exception error) {
+      if(fixProposal)return new ExternalAgentResult(Status.FAILED,"Could not parse a complete structured fix proposal; no Change Set created",List.of(),List.of(),output.duration(),output.exitCode(),"");
       warnings.add("Could not parse structured findings; review text requires independent evaluation");
       return new ExternalAgentResult(Status.SUCCESS_WITH_WARNINGS,
           finalText.isBlank() ? "No structured final review was available" : ExternalAgentDelegationService.bounded(finalText, 8000),
           List.of(), warnings, output.duration(), output.exitCode(), output.stdout());
     }
+  }
+  private String proposalText(JsonNode node,String key,int limit) {
+    if(!node.path(key).isTextual())throw new IllegalArgumentException("Missing proposal text");
+    String value=node.path(key).asText();
+    if(value.getBytes(StandardCharsets.UTF_8).length>limit)throw new IllegalArgumentException("Proposal text exceeds limit");
+    return value; // Never redact or truncate the exact baseline or replacement.
   }
   private String text(JsonNode node, String key, int limit) {
     if (!node.path(key).isTextual()) throw new IllegalArgumentException("Missing review field");
