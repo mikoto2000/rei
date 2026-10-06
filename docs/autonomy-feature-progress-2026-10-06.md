@@ -291,3 +291,11 @@ compile Red→2テストGreen→8新規テスト・関連・全体回帰→featu
 | Implemented | [Coaching設定HTTP](implementation-report-activity-coaching-settings-http.md) | activity-coaching-settings-http | f6226a77 | 8ddb86ff | 3290 / 611 |
 
 compile Red→2テストGreen→7新規テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。閲覧/更新で助言を予約せず、原子的revision確認・明示enabled・設定保存時の無効化・旧port非fallbackを検証した。Native設定UIなどは引き続き対応対象。
+
+## 後続のNative Activity Coaching設定
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 回帰 |
+|---|---|---|---|---|---|
+| Implemented | [Native Coaching設定](implementation-report-native-activity-coaching-settings.md) | native-activity-coaching-settings | 28707502 | 53d18fac | Native101 / React79 / typecheck PASS |
+
+Native/React Red→最小Green→Native5・React7新規テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後Native8/React17関連テスト→main Push済み。Javaコード変更なし。明示確認・設定/有効化の分離・SQLite revision再利用・保存echo・owner/lock・結果不明時再確認を維持した。Activity/Work Context詳細UIなどは引き続き対応対象。
