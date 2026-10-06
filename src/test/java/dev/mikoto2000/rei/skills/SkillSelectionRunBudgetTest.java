@@ -12,6 +12,26 @@ import dev.mikoto2000.rei.core.stagnation.*;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 
 class SkillSelectionRunBudgetTest {
+  @Test void semanticEmbeddingBudgetFlowsThroughSelectionAndCannotFallBackIntoSelector() {
+    var provider=mock(org.springframework.ai.embedding.EmbeddingModel.class);
+    when(provider.call(any(org.springframework.ai.embedding.EmbeddingRequest.class))).thenReturn(new org.springframework.ai.embedding.EmbeddingResponse(
+        List.of(new org.springframework.ai.embedding.Embedding(new float[]{1,0},0)),
+        new org.springframework.ai.embedding.EmbeddingResponseMetadata("test",new org.springframework.ai.chat.metadata.DefaultUsage(3,0))));
+    var model=new dev.mikoto2000.rei.llm.BudgetedEmbeddingModel(provider);
+    try(var client=new SkillEmbeddingClient(()->model::embed,java.time.Duration.ofSeconds(2))) {
+      var candidates=new SkillCandidateSelector();candidates.semanticSearch(new SemanticSkillSearch(new SemanticSkillProperties(true,64,.55,30),
+          ()->client,()->null,System::nanoTime));
+      var repository=new InMemoryAgentSkillRepository(List.of(skill));var implicit=mock(AgentSkillImplicitSelection.class);
+      var props=new AgentSkillsProperties();props.setEnabled(true);props.setMaxSelected(1);
+      var selection=new AgentSkillSelectionService(props,new AgentSkillExplicitSelector(repository),implicit,repository,candidates);
+      var budget=new OutputLimitRunBudget(0,10,null,5);var run=context(budget);
+      assertThatThrownBy(()->selection.select("sample",run.modelCallBudget())).hasMessageContaining("TOKEN_BUDGET_EXCEEDED");
+      assertThat(budget.totalTokens()).isEqualTo(6);verifyNoInteractions(implicit);
+      assertThatThrownBy(()->selection.select("sample",run.modelCallBudget())).hasMessageContaining("TOKEN_BUDGET_EXCEEDED");
+      verify(provider,times(2)).call(any(org.springframework.ai.embedding.EmbeddingRequest.class));
+      assertThat(dev.mikoto2000.rei.llm.ModelCallBudgetScope.current()).isNull();
+    }
+  }
   private final AgentSkill skill = new AgentSkill("sample", "description", true,
       Path.of("sample"), Path.of("sample/SKILL.md"), "instructions");
 

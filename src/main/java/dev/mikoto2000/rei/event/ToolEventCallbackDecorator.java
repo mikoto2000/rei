@@ -47,7 +47,11 @@ public class ToolEventCallbackDecorator implements ToolCallback {
     var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     if (toolContext != null && toolContext.getContext().get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName())
         instanceof dev.mikoto2000.rei.core.chat.AgentRunContext captured) owner = captured;
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+    var modelBudget=dev.mikoto2000.rei.llm.ModelCallBudgetScope.current();
+    if(toolContext!=null&&toolContext.getContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+        instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)modelBudget=execution.modelCallBudget();
+    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
+        var budgetScope=dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(modelBudget)) {
     String toolName = delegate.getToolDefinition().name();
     String toolCallId = resolveToolCallId(toolContext);
     long startedAtNanos = System.nanoTime();

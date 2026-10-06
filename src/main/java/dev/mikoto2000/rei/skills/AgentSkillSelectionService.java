@@ -51,6 +51,13 @@ public class AgentSkillSelectionService {
   }
 
   public AgentSkillSelection select(String prompt, Runnable beforeModelCall) {
+    var budget=beforeModelCall instanceof dev.mikoto2000.rei.llm.ModelCallBudget accounting?accounting:
+        dev.mikoto2000.rei.llm.ModelCallBudgetScope.current();
+    try(var scope=dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(budget)) {
+      return selectBudgeted(prompt,beforeModelCall);
+    }
+  }
+  private AgentSkillSelection selectBudgeted(String prompt,Runnable beforeModelCall) {
     if (!properties.isEnabled()) {
       return new AgentSkillSelection(List.of(), List.of(), List.of(), prompt == null ? "" : prompt, null,
           List.of(), null);

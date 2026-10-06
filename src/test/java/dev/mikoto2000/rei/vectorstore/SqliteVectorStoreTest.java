@@ -36,6 +36,24 @@ import tools.jackson.databind.json.JsonMapper;
 
 @org.junit.jupiter.api.Tag("integration")
 class SqliteVectorStoreTest {
+  @Test void embeddingBudgetOvershootRollsBackWholeChunkBatchButKeepsReportedCost() {
+    var provider=org.mockito.Mockito.mock(EmbeddingModel.class);
+    org.mockito.Mockito.when(provider.dimensions()).thenReturn(2);
+    org.mockito.Mockito.when(provider.getEmbeddingContent(org.mockito.ArgumentMatchers.any(Document.class)))
+        .thenAnswer(invocation->((Document)invocation.getArgument(0)).getText());
+    org.mockito.Mockito.when(provider.call(org.mockito.ArgumentMatchers.any(EmbeddingRequest.class)))
+        .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[]{1,0},0)),
+            new org.springframework.ai.embedding.EmbeddingResponseMetadata("test",new org.springframework.ai.chat.metadata.DefaultUsage(3,0))));
+    var store=new SqliteVectorStore(newVecDataSource(tempDir.resolve("budget.db")),new dev.mikoto2000.rei.llm.BudgetedEmbeddingModel(provider),new JsonMapper());
+    var budget=new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0,10,null,5);
+    var run=new dev.mikoto2000.rei.core.stagnation.RunExecutionContext("run",budget,null,null,null);
+    try(var scope=dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(run.modelCallBudget())) {
+      assertTrue(assertThrows(dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.class,()->store.add(List.of(chunk("a","text one","same"),chunk("b","text two","same"))))
+          .getMessage().contains("TOKEN_BUDGET_EXCEEDED"));
+    }
+    assertEquals(6,budget.totalTokens());assertTrue(store.lexicalSearch(SearchRequest.builder().query("text").topK(10).build()).isEmpty());
+    org.mockito.Mockito.verify(provider,org.mockito.Mockito.times(2)).call(org.mockito.ArgumentMatchers.any(EmbeddingRequest.class));
+  }
 
   @TempDir
   Path tempDir;
