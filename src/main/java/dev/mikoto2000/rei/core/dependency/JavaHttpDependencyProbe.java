@@ -22,4 +22,42 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe,AutoCloseabl
     finally {pending.cancel(true);}
   }
   @Override @jakarta.annotation.PreDestroy public void close(){client.shutdownNow();}
+  @Override public DependencyObservation probeBody(String id,String url,int expectedStatus,String sha256) {
+    var spec=new DependencySpec(DependencySpec.Kind.HTTP_BODY_SHA256,url,expectedStatus+":"+sha256);
+    if(Thread.currentThread().isInterrupted())throw new CancellationException("HTTP observation cancelled");
+    var request=HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(2)).GET().build();
+    var pending=client.sendAsync(request,response->new DigestSubscriber());
+    try {
+      var response=pending.get(2,TimeUnit.SECONDS);
+      if(response.statusCode()!=expectedStatus)return new DependencyObservation(id,DependencyState.WAITING,"http_status_mismatch");
+      boolean matches=response.body().equals(spec.expected().substring(4));
+      return new DependencyObservation(id,matches?DependencyState.COMPLETED:DependencyState.WAITING,matches?"http_body_digest_verified":"http_body_digest_mismatch");
+    }catch(InterruptedException error){Thread.currentThread().interrupt();throw new CancellationException("HTTP observation cancelled");}
+    catch(ExecutionException error){
+      for(Throwable cause=error;cause!=null;cause=cause.getCause())if(cause instanceof BodyLimitExceeded)
+        return new DependencyObservation(id,DependencyState.BLOCKED,"http_body_too_large");
+      return new DependencyObservation(id,DependencyState.WAITING,"http_unavailable");
+    }catch(TimeoutException error){return new DependencyObservation(id,DependencyState.WAITING,"http_unavailable");}
+    finally {pending.cancel(true);}
+  }
+  private static final class BodyLimitExceeded extends java.io.IOException {}
+  /** Hash streaming byte buffers; never retain or decode the response body. */
+  private static final class DigestSubscriber implements HttpResponse.BodySubscriber<String> {
+    private final CompletableFuture<String> result=new CompletableFuture<>();
+    private final java.security.MessageDigest digest;
+    private java.util.concurrent.Flow.Subscription subscription;private long count;
+    DigestSubscriber(){try{digest=java.security.MessageDigest.getInstance("SHA-256");}catch(java.security.NoSuchAlgorithmException error){throw new IllegalStateException(error);}}
+    public CompletionStage<String> getBody(){return result;}
+    public void onSubscribe(java.util.concurrent.Flow.Subscription incoming){if(subscription!=null){incoming.cancel();return;}subscription=incoming;incoming.request(1);}
+    public void onNext(java.util.List<java.nio.ByteBuffer> buffers){
+      if(result.isDone())return;
+      for(var buffer:buffers) {
+        count+=buffer.remaining();if(count>65536){result.completeExceptionally(new BodyLimitExceeded());subscription.cancel();return;}
+        digest.update(buffer.asReadOnlyBuffer());
+      }
+      subscription.request(1);
+    }
+    public void onError(Throwable error){result.completeExceptionally(error);}
+    public void onComplete(){result.complete(java.util.HexFormat.of().formatHex(digest.digest()));}
+  }
 }

@@ -29,7 +29,7 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
         var entry=repo.get(project.id(),id);var owner=new AgentRunContext(entry.id(),entry.sessionId(),project.root(),project.id());
         result=switch(action) {
           case "show"->entry;case "history"->repo.history(project.id(),id);
-          case "check"->{boolean network=entry.spec().kind()==DependencySpec.Kind.HTTP_STATUS;guard.check(network?"checkHttpDependency":"checkDependency","{\"dependencyId\":\""+entry.id()+"\"}",owner);yield service.inspect(project.id(),id,network);}
+          case "check"->{boolean network=entry.spec().network();guard.check(network?"checkHttpDependency":"checkDependency","{\"dependencyId\":\""+entry.id()+"\"}",owner);yield service.inspect(project.id(),id,network);}
           case "cancel"->{yield repo.cancel(project.id(),id);}
           case "answer"->{repo.answer(project.id(),id,value);yield service.inspect(project.id(),id,false);}
           default->throw new IllegalArgumentException("Use /dependency list|show|history|check|cancel|answer ID [--value answer]");
