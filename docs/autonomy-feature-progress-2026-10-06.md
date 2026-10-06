@@ -141,3 +141,12 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 初期Red→最小Green→上限／境界／実Tool検証→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。全体回帰は3130 tests / 595 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。
 
 標準Maven/Gradle配置のbounded自動発見と明示directoryの集合診断を追加した。各file identity、解析済みlong合計、missing／未読／重複／partial、共有の証拠上限、実Windows junctionのProject外拒否、Policy・SubAgent明示要求を検証した。現在process／Goalの成功を判定しない。その他形式・完全原因特定・自動repairは残件。
+## 後続のSemantic Skill永続索引
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [Semantic Skill永続索引](implementation-report-persistent-skill-index.md) | persistent-skill-index | ccfa7adf | 4a7c2740 | 3140 / 596 |
+
+初期Red・空catalog掃除／read-only旧次元の回復閉塞を振る舞いRedで検出→修正Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。全体回帰は3140 tests / 596 suites、failure/error/skip各0。Java/configのみ変更し、Native/Reactは再実行していない。
+
+明示opt-inのSQLite metadata vector snapshotを追加した。再起動cache、profile SHA・model/version namespace、現在Skill返却・変更／削除掃除、破損miss・transaction rollback・DB障害・次元変更回復・取消と生成設定を検証した。query・Skill本文・raw profileを保存しない。学習／実データ品質評価とembedding/rerank共有費用予算は引き続き残件。
