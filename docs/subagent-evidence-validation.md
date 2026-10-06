@@ -1,5 +1,7 @@
 # SubAgentの実行証跡検証
 
+必須Toolの実応答フィールドも照合する任意のexpectedOutputは、[Tool応答条件](subagent-tool-outcome-contract.md)を参照。
+
 定義YAMLに `evidenceTools: [readMultiFile]` を追加すると、実際のTool応答を根拠として要求する。省略または空なら従来のJSON Schema検証のみ。evidenceToolsはtoolsの重複なし部分集合で、最大16件。既存のread-only Tool許可・親子のPermission境界は維持する。
 
 有効時は、Runnerが正常に返ったTool応答にRun内の一意なevidenceId、tool名、inputSha256、outputSha256、output、truncatedを付けて子に渡す。ハッシュは実際の入力・応答全文から算出する。outputは先頭16,384文字に制限し、切り詰めを明示する。最大64応答まで保持し、超過時は実行失敗とする。証跡は実行ごとのメモリ内のみで、他Runや親の証跡を受け入れない。

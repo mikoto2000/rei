@@ -61,10 +61,17 @@ public final class SubAgentDefinitionLoader {
         if(!(values.get("requiredToolCalls") instanceof List<?> calls)||calls.size()>16)
           throw new IllegalArgumentException("requiredToolCalls: expected list of at most 16 calls");
         for(var call:calls) {
-          if(!(call instanceof Map<?,?> entry)||!entry.keySet().equals(Set.of("tool","arguments"))
+          if(!(call instanceof Map<?,?> entry)||!(entry.keySet().equals(Set.of("tool","arguments"))
+              ||entry.keySet().equals(Set.of("tool","arguments","expectedOutput")))
               ||!(entry.get("tool") instanceof String tool)||!(entry.get("arguments") instanceof Map<?,?> arguments)||!jsonValue(arguments,0))
             throw new IllegalArgumentException("requiredToolCalls: expected tool and JSON arguments object");
-          requiredCalls.add(new SubAgentRequiredCall(tool,JsonMapper.builder().build().writeValueAsString(arguments)));
+          String expectedOutput=null;
+          if(entry.containsKey("expectedOutput")) {
+            if(!(entry.get("expectedOutput") instanceof Map<?,?> expected)||expected.isEmpty()||!jsonValue(expected,0))
+              throw new IllegalArgumentException("requiredToolCalls: expectedOutput must be a nonempty JSON object");
+            expectedOutput=JsonMapper.builder().build().writeValueAsString(expected);
+          }
+          requiredCalls.add(new SubAgentRequiredCall(tool,JsonMapper.builder().build().writeValueAsString(arguments),expectedOutput));
         }
       }
       String model = values.containsKey("model") ? text(values, "model") : null;
