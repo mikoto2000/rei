@@ -30,6 +30,9 @@ public class AutoSleepService implements AutoCloseable {
   private dev.mikoto2000.rei.core.project.ProjectService projects;
   private Iterator<dev.mikoto2000.rei.application.session.SessionMetadata> startup;
   private boolean startupCaptured;
+  private Instant nextMetadataScan;
+  private dev.mikoto2000.rei.application.session.CursorKey metadataCursor;
+  private boolean metadataScanning;
   @org.springframework.beans.factory.annotation.Autowired
   public synchronized void setStartupSources(dev.mikoto2000.rei.application.session.SessionRepository savedSessions,
       dev.mikoto2000.rei.core.project.ProjectService projects) {
@@ -42,14 +45,46 @@ public class AutoSleepService implements AutoCloseable {
     var registered=projects.completionProjects();
     for(int scanned=0;scanned<256&&sessions.size()<256&&startup.hasNext();scanned++) {
       var item=startup.next();
-      if(item.sessionId().isBlank()||item.projectId().isBlank()||registered.stream().noneMatch(p->p.id().equals(item.projectId())))continue;
-      try {
-        String encoded=dev.mikoto2000.rei.core.project.ProjectStorage.projectId(item.sessionId());
-        if(encoded!=null&&!encoded.equals(item.projectId()))continue;
-        sessions.putIfAbsent(item.sessionId(),item.projectId());
-      } catch(IllegalArgumentException invalidIdentity) { /* Unusable metadata is never a Sleep candidate. */ }
+      registerMetadata(item,registered);
     }
     if(!startup.hasNext())startup=Collections.emptyIterator();
+  }
+  private void registerMetadata(dev.mikoto2000.rei.application.session.SessionMetadata item,
+      List<dev.mikoto2000.rei.core.project.ProjectContext> registered) {
+    if(item.sessionId().isBlank()||item.projectId().isBlank()||registered.stream().noneMatch(p->p.id().equals(item.projectId())))return;
+    try {
+      String encoded=dev.mikoto2000.rei.core.project.ProjectStorage.projectId(item.sessionId());
+      if(encoded!=null&&!encoded.equals(item.projectId()))return;
+      sessions.putIfAbsent(item.sessionId(),item.projectId());
+    } catch(IllegalArgumentException invalidIdentity) { /* Unusable metadata is never a Sleep candidate. */ }
+  }
+  /** Periodic persistent reads catch metadata added after startup, without an unbounded candidate queue. */
+  private void discoverSaved(Instant now) {
+    discoverStartup();
+    if(!startupCaptured||startup.hasNext()||sessions.size()>=256)return;
+    if(!metadataScanning) {
+      if(nextMetadataScan==null) {nextMetadataScan=now.plus(properties.retryInterval());return;}
+      if(now.isBefore(nextMetadataScan))return;
+      metadataScanning=true;metadataCursor=null;
+    }
+    try {
+      int limit=Math.min(100,256-sessions.size());
+      var rows=savedSessions.findPage(null,metadataCursor,limit);
+      if(rows.size()>limit)throw new IllegalStateException("Session metadata page exceeds limit");
+      var registered=projects.completionProjects();
+      for(var item:rows)registerMetadata(item,registered);
+      if(rows.size()<limit) {
+        metadataScanning=false;metadataCursor=null;nextMetadataScan=now.plus(properties.retryInterval());
+      } else {
+        var last=rows.getLast();
+        var next=new dev.mikoto2000.rei.application.session.CursorKey(last.updatedAt(),last.sessionId());
+        if(next.equals(metadataCursor))throw new IllegalStateException("Session metadata cursor did not advance");
+        metadataCursor=next;
+      }
+    } catch(RuntimeException error) {
+      metadataScanning=false;metadataCursor=null;nextMetadataScan=now.plus(properties.retryInterval());
+      throw error;
+    }
   }
   private final org.springframework.scheduling.support.CronExpression cron;
   private Instant nextCron;
@@ -86,7 +121,7 @@ public class AutoSleepService implements AutoCloseable {
     if(cron!=null&&(nextCron==null||now.isBefore(nextCron)))return;
     // Coalesce missed occurrences into one idle opportunity; never replay a backlog.
     if(cron!=null)advanceCron(now);
-    try {discoverStartup();}
+    try {discoverSaved(now);}
     catch(RuntimeException error) {org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep discovery unavailable ({})",error.getClass().getSimpleName());}
     var candidates=sessions.entrySet().iterator();
     while(candidates.hasNext()) {
