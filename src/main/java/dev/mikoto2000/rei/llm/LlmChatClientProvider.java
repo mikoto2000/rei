@@ -173,6 +173,16 @@ public class LlmChatClientProvider {
   }
 
   private ChatClient createChatClient(String feature) {
+    // Extraction and summarization process supplied evidence without conversation state or tools.
+    if (LlmFeature.MEMORY.equals(feature)) {
+      var options = modelProvider.chatOptions(feature, null);
+      options.setInternalToolExecutionEnabled(false);
+      options.setToolCallbacks(List.of());
+      options.setToolNames(java.util.Set.of());
+      return ChatClient.builder(modelProvider.memoryChatModel())
+          .defaultOptions(options)
+          .build();
+    }
     List<Advisor> advisors = new ArrayList<>();
     if(LlmFeature.CHAT.equals(feature)&&resumeContext!=null&&resumeContext.getIfAvailable()!=null)advisors.add(resumeContext.getObject());
     if (LlmFeature.CHAT.equals(feature) && workContext != null && workContext.getIfAvailable() != null)
