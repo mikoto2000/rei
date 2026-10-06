@@ -65,7 +65,9 @@ public class SleepService {
         if (turn.status()==ConversationTurnStore.Status.COMPLETED) batch.add(turn);
       }
       processed=(int)(to-from);
-      var candidates=batch.isEmpty()?List.<MemoryCandidate>of():extractor.extract(List.copyOf(batch));
+      var budget=properties.sleep().maxLlmCalls()>0||properties.sleep().maxTotalTokens()>0
+          ?new SleepModelBudget(properties.sleep(),check):null;
+      var candidates=batch.isEmpty()?List.<MemoryCandidate>of():budget==null?extractor.extract(List.copyOf(batch)):extractor.extract(List.copyOf(batch),budget);
       check.run();
       var sourceIds=batch.stream().map(ConversationTurnStore.Turn::runId).collect(java.util.stream.Collectors.toSet());
       var plans=new ArrayList<Plan>();
@@ -88,7 +90,7 @@ public class SleepService {
           existing.add(m); existingTokens+=size;
         }
         var resolution=!seen.add(candidate.scope()+":"+MemoryResolver.normalize(candidate.content()))
-            ?new MemoryResolution(MemoryAction.IGNORE,List.of()):resolver.resolve(candidate,existing,project);
+            ?new MemoryResolution(MemoryAction.IGNORE,List.of()):budget==null?resolver.resolve(candidate,existing,project):resolver.resolve(candidate,existing,project,budget);
         var targets=resolution.targetIds().stream().map(target -> repository.find(target).orElseThrow()).toList();
         if (resolution.targetIds().stream().anyMatch(usedTargets::contains))
           throw new IllegalArgumentException("Ambiguous batch: multiple changes to the same memory; retry with fewer turns");
