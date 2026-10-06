@@ -65,8 +65,9 @@ public class ContextAssembler {
     long before = estimate(project(raw, h, a));
     log.debug("Context estimated tokens={}, threshold={}, hardLimit={}", before, threshold, hard);
     if (before > threshold) {
-      compress(h, raw, check);
-      if (estimate(project(raw, h, a)) > threshold) compress(a, raw, check);
+      var budget=execution(raw)==null?StandaloneSummaryBudget.create(properties):null;
+      compress(h, raw, check,budget);
+      if (estimate(project(raw, h, a)) > threshold) compress(a, raw, check,budget);
     }
     // Bounded degraded behavior. Remove oldest complete groups only from this projection.
     // Retrieved memories are optional. Drop them before sacrificing more conversation at the hard limit.
@@ -92,7 +93,7 @@ public class ContextAssembler {
       this.key = key; this.summary = summary; this.entries = entries;
     }
   }
-  private void compress(Segment segment, Prompt raw, Runnable check) {
+  private void compress(Segment segment, Prompt raw, Runnable check,dev.mikoto2000.rei.llm.ModelCallBudget budget) {
     int count = new CompressionPolicy(estimator).prefixToCompress(
         segment.entries.stream().map(Entry::message).toList(), properties.getRecentTokens());
     if (count == 0) return;
@@ -114,8 +115,9 @@ public class ContextAssembler {
       }
       if (count == 0 || before > max) throw new IllegalStateException("summary_input_budget");
       through = prefix.getLast().sequence();
-      String text = compressor.summarize(segment.summary.summary(), prefix.stream().map(Entry::message).toList(),
-          properties.getSummaryTokens(), raw);
+      var messages=prefix.stream().map(Entry::message).toList();
+      String text = budget==null?compressor.summarize(segment.summary.summary(),messages,properties.getSummaryTokens(),raw)
+          :compressor.summarize(segment.summary.summary(),messages,properties.getSummaryTokens(),raw,budget);
       check.run();
       int after = estimator.text(text);
       if (text == null || text.isBlank() || after > properties.getSummaryTokens()

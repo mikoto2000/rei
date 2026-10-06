@@ -47,6 +47,15 @@ class ContextSummaryTokenBudgetTest {
         .hasMessageContaining("TOKEN_BUDGET_EXCEEDED");
     verifyNoInteractions(parent);
   }
+  @Test void standaloneSummaryRejectsOvershootAndUnknownUsageWithoutRunContext() {
+    var properties=new ContextCompressionProperties();properties.setStandaloneSummaryMaxTotalTokens(5);
+    var model=mock(ChatModel.class);
+    for(Integer tokens:Arrays.asList(6,null)) {
+      when(model.stream(any(Prompt.class))).thenReturn(Flux.just(response("summary",tokens)));
+      assertThatThrownBy(()->compressor(model,properties).summarize("",List.of(new UserMessage("history")),100,new Prompt("current")))
+          .hasMessageContaining(tokens==null?"TOKEN_USAGE_UNKNOWN":"TOKEN_BUDGET_EXCEEDED");
+    }
+  }
   @Test void unknownUsageAndProviderFailureStopInsteadOfBecomingFreeFallback() {
     for(Flux<ChatResponse> responses:List.of(Flux.just(response("summary",null)),
         Flux.<ChatResponse>error(new IllegalStateException("offline")),Flux.<ChatResponse>empty())) {
@@ -91,6 +100,81 @@ class ContextSummaryTokenBudgetTest {
     var props=new ContextCompressionProperties();
     props.setThreshold(300);props.setHardLimit(600);props.setRecentTokens(80);props.setSummaryTokens(100);
     return props;
+  }
+  Prompt standaloneHistorical() {
+    return new Prompt(List.of(ContextHistoryAdvisor.historical(new UserMessage("old ".repeat(500)),1),
+        ContextHistoryAdvisor.historical(new AssistantMessage("recent"),2),new UserMessage("current"),
+        new AssistantMessage("active ".repeat(500)),new AssistantMessage("recent active")),
+        ToolCallingChatOptions.builder().build());
+  }
+  ContextAssembler assembler(ContextCompressionProperties props,ConversationCompressor compressor,ConversationSummaryRepository summaries) {
+    var tokens=TokenEstimator.conservative();
+    return new ContextAssembler(props,tokens,summaries,new ToolResultCompressor(new RawToolResultStore(dir),tokens,100,70),
+        compressor,null,null);
+  }
+  @Test @org.junit.jupiter.api.Tag("integration")
+  void ownerlessHistoryAndActiveSummariesShareOneProjectionBudget() {
+    for(boolean callsOnly:List.of(true,false)) {
+      var props=compressionConfig();props.setStandaloneSummaryMaxLlmCalls(callsOnly?1:0);
+      props.setStandaloneSummaryMaxTotalTokens(callsOnly?0:5);
+      var model=mock(ChatModel.class);when(model.stream(any(Prompt.class))).thenReturn(Flux.just(response("compact",3)));
+      var summaries=new ConversationSummaryRepository(dir.resolve("shared-"+callsOnly));
+      assertThatThrownBy(()->assembler(props,compressor(model,props),summaries).assemble(standaloneHistorical(),"chat","run",()->{}))
+          .hasMessageContaining(callsOnly?"LLM_CALL_BUDGET_EXCEEDED":"TOKEN_BUDGET_EXCEEDED");
+      verify(model,times(callsOnly?1:2)).stream(any(Prompt.class));
+      assertThat(summaries.read("chat").throughSequence()).isEqualTo(1);
+      assertThat(summaries.read(ConversationSummaryRepository.runKey("chat","run")).throughSequence()).isZero();
+    }
+  }
+  @Test @org.junit.jupiter.api.Tag("integration")
+  void unknownStandaloneUsageCannotFallBackOrSaveSummary() {
+    var props=compressionConfig();props.setStandaloneSummaryMaxTotalTokens(5);
+    var model=mock(ChatModel.class);when(model.stream(any(Prompt.class))).thenReturn(Flux.just(response("compact",null)));
+    var summaries=new ConversationSummaryRepository(dir);
+    assertThatThrownBy(()->assembler(props,compressor(model,props),summaries).assemble(standaloneHistorical(),"chat","run",()->{}))
+        .hasMessageContaining("TOKEN_USAGE_UNKNOWN");
+    verify(model,times(1)).stream(any(Prompt.class));assertThat(summaries.read("chat").throughSequence()).isZero();
+  }
+  @Test void directStandaloneCallsHaveIndependentBudgetAndExactBoundarySucceeds() {
+    var props=new ContextCompressionProperties();props.setStandaloneSummaryMaxLlmCalls(1);props.setStandaloneSummaryMaxTotalTokens(5);
+    var model=mock(ChatModel.class);when(model.stream(any(Prompt.class))).thenReturn(Flux.just(response("compact",5)));
+    var compressor=compressor(model,props);
+    for(int i=0;i<2;i++)assertThat(compressor.summarize("",List.of(new UserMessage("history")),100,new Prompt("current"))).isEqualTo("compact");
+    verify(model,times(2)).stream(any(Prompt.class));
+  }
+  @Test void standaloneProviderFailureAndTimeoutFailClosedAndCancelStream() {
+    var props=new ContextCompressionProperties();props.setStandaloneSummaryMaxTotalTokens(5);props.setSummaryTimeoutSeconds(1);
+    var cancelled=new java.util.concurrent.atomic.AtomicBoolean();var model=mock(ChatModel.class);
+    when(model.stream(any(Prompt.class))).thenReturn(Flux.error(new IllegalStateException("offline")),
+        Flux.<ChatResponse>never().doOnCancel(()->cancelled.set(true)));
+    var compressor=compressor(model,props);
+    for(int i=0;i<2;i++)assertThatThrownBy(()->compressor.summarize("",List.of(new UserMessage("history")),100,new Prompt("current")))
+        .hasMessageContaining("TOKEN_USAGE_UNKNOWN");
+    assertThat(cancelled).isTrue();
+  }
+  @Test void standaloneLimitsDoNotReplaceExistingRunBudget() {
+    var props=new ContextCompressionProperties();props.setStandaloneSummaryMaxTotalTokens(1);
+    var model=mock(ChatModel.class);when(model.stream(any(Prompt.class))).thenReturn(Flux.just(response("compact",3)));
+    var budget=new OutputLimitRunBudget(0,10,null,5);var execution=new RunExecutionContext("run",budget,null,null,null);
+    assertThat(compressor(model,props).summarize("",List.of(new UserMessage("history")),100,owner(execution))).isEqualTo("compact");
+    assertThat(budget.totalTokens()).isEqualTo(3);
+  }
+  @Test void standaloneBindingValidationAndUnsupportedCompressorCannotBypassAccounting() {
+    var source=new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(Map.of(
+        "rei.context-compression.standalone-summary-max-llm-calls","2",
+        "rei.context-compression.standalone-summary-max-total-tokens","3000"));
+    var props=new org.springframework.boot.context.properties.bind.Binder(source).bind("rei.context-compression",
+        org.springframework.boot.context.properties.bind.Bindable.of(ContextCompressionProperties.class)).get();
+    props.validate();assertThat(props.getStandaloneSummaryMaxLlmCalls()).isEqualTo(2);
+    assertThat(props.getStandaloneSummaryMaxTotalTokens()).isEqualTo(3000);
+    props.setStandaloneSummaryMaxLlmCalls(1001);assertThatThrownBy(props::validate).isInstanceOf(IllegalArgumentException.class);
+    props.setStandaloneSummaryMaxLlmCalls(1);props.setStandaloneSummaryMaxTotalTokens(-1);
+    assertThatThrownBy(props::validate).isInstanceOf(IllegalArgumentException.class);
+    props.setStandaloneSummaryMaxTotalTokens(5);
+    var invoked=new java.util.concurrent.atomic.AtomicBoolean();
+    ConversationCompressor legacy=(previous,messages,max,owner)->{invoked.set(true);return "unaccounted";};
+    assertThatThrownBy(()->legacy.summarize("",List.of(),100,new Prompt("current"),StandaloneSummaryBudget.create(props)))
+        .hasMessageContaining("TOKEN_USAGE_UNKNOWN");assertThat(invoked).isFalse();
   }
   Prompt historical(RunExecutionContext execution) {
     return new Prompt(List.of(ContextHistoryAdvisor.historical(new UserMessage("old ".repeat(500)),1),
