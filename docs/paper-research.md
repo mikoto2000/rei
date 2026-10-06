@@ -153,6 +153,10 @@ LLM 接続は既存 chat model 設定を再利用します。OpenAlex API key �
 
 ## 既知の制約・将来拡張
 
+検索Providerの応答は、保存前に年範囲・author/venue・公開状態をローカルでも照合し、要求件数を上限とする。年条件がある場合の年不明、open-access-only指定時の公開状態不明は条件を満たすと推測しない。OpenAlex→Crossref fallbackでも同じ条件を使う。ネットワークAPIのsort/filter指定が成功したことだけでは、個々の結果の適合を保証したと扱わない。
+
+オフラインの結合テストは実Provider parser→検索条件検査→SQLite保存/Session参照→Library→Abstract-only要約/根拠照合→再起動/要約cacheを通す。HTTPとLLMの応答だけをfixtureに置き換え、条件外/過剰応答・不正primary応答/fallbackを再現する。ライブAPIの現在の稼働状態やLLMの学術的品質を検証するテストではない。
+
 - PDF の段組み、数式・表、画像のみのページは正確に抽出できない場合があります。OCR はありません。
 - heading は英語の代表的な見出しを検出します。未知の見出しやレイアウトは UNKNOWN / ページ単位になります。
 - Summary の入力は上限内の抜粋です。全ページの全テキストを逐語的に評価したという意味ではありません。
