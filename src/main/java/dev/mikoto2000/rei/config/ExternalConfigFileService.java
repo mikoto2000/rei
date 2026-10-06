@@ -255,6 +255,7 @@ public class ExternalConfigFileService {
             prompt-enhancement:
               enabled: ${REI_IMAGE_PROMPT_ENHANCEMENT_ENABLED:true}
           subagents:
+            max-transient-model-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_MODEL_RETRIES:0}
             standalone-max-llm-calls: ${REI_SUBAGENTS_STANDALONE_MAX_LLM_CALLS:0}
             standalone-max-total-tokens: ${REI_SUBAGENTS_STANDALONE_MAX_TOTAL_TOKENS:0}
           attention:

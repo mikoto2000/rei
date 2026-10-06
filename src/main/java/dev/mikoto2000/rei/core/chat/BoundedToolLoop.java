@@ -16,6 +16,17 @@ public final class BoundedToolLoop {
   private final ToolLoopSupport tools = new ToolLoopSupport();
   public static final class SharedBudgetExceeded extends RuntimeException { }
   public static final class MaxStepsExceeded extends RuntimeException { }
+  /** One invocation-wide retry allowance, also shared by repair cycles and the tool-free judge. */
+  public static final class ModelRetries {
+    private final AtomicInteger remaining;
+    private final AtomicInteger attempts=new AtomicInteger();
+    private final List<String> failures=new java.util.concurrent.CopyOnWriteArrayList<>();
+    public ModelRetries(int max){if(max<0||max>3)throw new IllegalArgumentException("Model retries must be 0 to 3");remaining=new AtomicInteger(max);}
+    private boolean reserve(){return remaining.getAndUpdate(value->Math.max(0,value-1))>0;}
+    private void failure(Throwable error,boolean received){if(error instanceof org.springframework.ai.retry.TransientAiException&&failures.size()<4)failures.add(received?"TRANSIENT_MODEL_FAILURE_AFTER_PARTIAL_RESPONSE":"TRANSIENT_MODEL_FAILURE_BEFORE_RESPONSE");}
+    public int attempts(){return attempts.get();}
+    public List<String> history(){return List.copyOf(failures);}
+  }
   public record Outcome(String output, List<Message> history) {
     public Outcome { history = List.copyOf(history); }
   }
@@ -27,9 +38,12 @@ public final class BoundedToolLoop {
   }
   public Mono<Outcome> runWithHistory(ChatModel model,Prompt prompt,AtomicInteger remaining,AgentRunContext owner,Runnable checkActive,
       dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
-    return iteration(model,prompt,remaining,owner,checkActive,reservation);
+    return runWithHistory(model,prompt,remaining,owner,checkActive,reservation,new ModelRetries(0));
   }
-  private Mono<Outcome> iteration(ChatModel model, Prompt prompt, AtomicInteger remaining, AgentRunContext owner, Runnable checkActive,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
+  public Mono<Outcome> runWithHistory(ChatModel model,Prompt prompt,AtomicInteger remaining,AgentRunContext owner,Runnable checkActive,
+      dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,ModelRetries retries){return iteration(model,prompt,remaining,owner,checkActive,reservation,retries);}
+  private Mono<ChatResponse> response(ChatModel model,Prompt prompt,AtomicInteger remaining,Runnable checkActive,
+      dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,ModelRetries retries,boolean retrying) {
     return Mono.defer(() -> {
       checkActive.run();
       if (remaining.getAndDecrement() <= 0) return Mono.error(new MaxStepsExceeded());
@@ -38,9 +52,10 @@ public final class BoundedToolLoop {
       AtomicReference<ChatResponse> aggregated = new AtomicReference<>();
       var started=new java.util.concurrent.atomic.AtomicBoolean();
       var reported=new java.util.concurrent.atomic.AtomicBoolean();
+      var received=new java.util.concurrent.atomic.AtomicBoolean();
       return new MessageAggregator().aggregate(reactor.core.publisher.Flux.defer(()->{
-        started.set(true);return model.stream(prompt);
-      }), aggregated::set).then(Mono.defer(() -> {
+        checkActive.run();started.set(true);if(retrying)retries.attempts.incrementAndGet();return model.stream(prompt);
+      }).doOnNext(chunk->received.set(true)).doOnError(error->retries.failure(error,received.get())), aggregated::set).then(Mono.defer(() -> {
         checkActive.run();
         var response = aggregated.get();
         if (response == null || response.getResult() == null) return Mono.error(new IllegalStateException("Empty response"));
@@ -50,6 +65,26 @@ public final class BoundedToolLoop {
           reservation.recordTotalTokens(usage==null?null:usage.getTotalTokens());
         }
         if (OutputLimitDetector.isOutputLimitReached(response)) return Mono.error(new IllegalStateException("Output limit"));
+        return Mono.just(response);
+      })).doOnError(error->{
+        if(reservation!=null&&reservation.tokenLimitEnabled()&&started.get()&&!reported.getAndSet(true))reservation.recordTotalTokens(null);
+      }).doFinally(signal->{
+        if(signal==reactor.core.publisher.SignalType.CANCEL&&reservation!=null&&reservation.tokenLimitEnabled()&&started.get()&&!reported.getAndSet(true)) {
+          try{reservation.recordTotalTokens(null);}catch(RuntimeException stopped){/* Accounting state prevents further calls. */}
+        }
+      }).onErrorResume(error->{
+        if(error instanceof org.springframework.ai.retry.TransientAiException&&!received.get()) {
+          checkActive.run();
+          if(retries.reserve())return Mono.delay(java.time.Duration.ofMillis(100)).then(response(model,prompt,remaining,checkActive,reservation,retries,true));
+        }
+        return Mono.error(error);
+      });
+    });
+  }
+  private Mono<Outcome> iteration(ChatModel model,Prompt prompt,AtomicInteger remaining,AgentRunContext owner,Runnable checkActive,
+      dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,ModelRetries retries) {
+    return response(model,prompt,remaining,checkActive,reservation,retries,false).flatMap(response->Mono.defer(()->{
+        checkActive.run();
         if (!response.hasToolCalls()) {
           var history = new ArrayList<Message>(prompt.getInstructions());
           history.add(response.getResult().getOutput());
@@ -74,15 +109,8 @@ public final class BoundedToolLoop {
             var history = new ArrayList<Message>(result.conversationHistory()); history.add(output);
             return Mono.just(new Outcome(output.getText(), history));
           }
-          return iteration(model, new Prompt(result.conversationHistory(), prompt.getOptions()), remaining, owner, checkActive,reservation);
+          return iteration(model, new Prompt(result.conversationHistory(), prompt.getOptions()), remaining, owner, checkActive,reservation,retries);
         });
-      })).doOnError(error->{
-        if(reservation!=null&&reservation.tokenLimitEnabled()&&started.get()&&!reported.getAndSet(true))reservation.recordTotalTokens(null);
-      }).doFinally(signal->{
-        if(signal==reactor.core.publisher.SignalType.CANCEL&&reservation!=null&&reservation.tokenLimitEnabled()&&started.get()&&!reported.getAndSet(true)) {
-          try{reservation.recordTotalTokens(null);}catch(RuntimeException stopped){/* The accounting state already prevents further calls. */}
-        }
-      });
-    });
+    }));
   }
 }

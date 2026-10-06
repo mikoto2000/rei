@@ -52,6 +52,7 @@ class ExternalConfigFileServiceTest {
     String content = Files.readString(created);
     assertTrue(content.contains("enabled: ${REI_ATTENTION_DELIVERY_ENABLED:false}"));
     assertTrue(content.contains("automatic: ${REI_ATTENTION_DELIVERY_AUTOMATIC:false}"));
+    assertTrue(content.contains("max-transient-model-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_MODEL_RETRIES:0}"));
     assertTrue(content.contains("spring:"));
     assertTrue(content.contains("rei:"));
     assertTrue(content.contains("max-llm-calls: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS:0}"));
