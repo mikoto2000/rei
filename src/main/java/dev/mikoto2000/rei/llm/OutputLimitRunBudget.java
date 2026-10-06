@@ -12,6 +12,8 @@ public class OutputLimitRunBudget {
     int remaining();
     default void recordTotalTokens(Integer tokens) { }
     default boolean tokenLimitEnabled() {return false;}
+    default boolean tokenExhausted() {return false;}
+    default boolean usageUnknown() {return false;}
   }
   private final LlmCallReservation reservation;
 
@@ -69,14 +71,15 @@ public class OutputLimitRunBudget {
   public synchronized boolean hasRemainingLlmCalls() {
     return remainingLlmCalls() > 0;
   }
-  public boolean tokenLimitEnabled(){return maxTotalTokens>0;}
+  public boolean tokenLimitEnabled(){return maxTotalTokens>0||(reservation!=null&&reservation.tokenLimitEnabled());}
   public synchronized long totalTokens(){return totalTokens;}
-  public synchronized boolean usageUnknown(){return usageUnknown;}
-  public synchronized boolean tokenExceeded(){return tokenLimitEnabled()&&totalTokens>maxTotalTokens;}
-  public synchronized boolean tokenExhausted(){return tokenLimitEnabled()&&(usageUnknown||totalTokens>=maxTotalTokens);}
+  public synchronized boolean usageUnknown(){return usageUnknown||(reservation!=null&&reservation.usageUnknown());}
+  public synchronized boolean tokenExceeded(){return maxTotalTokens>0&&totalTokens>maxTotalTokens;}
+  public synchronized boolean tokenExhausted(){return (maxTotalTokens>0&&(usageUnknown||totalTokens>=maxTotalTokens))||(reservation!=null&&reservation.tokenExhausted());}
   public synchronized void recordTotalTokens(Integer tokens) {
     if(!tokenLimitEnabled())return;
-    if(tokens==null||tokens<=0){usageUnknown=true;return;}
-    totalTokens=totalTokens>Long.MAX_VALUE-tokens?Long.MAX_VALUE:totalTokens+tokens;
+    if(tokens==null||tokens<=0)usageUnknown=true;
+    else totalTokens=totalTokens>Long.MAX_VALUE-tokens?Long.MAX_VALUE:totalTokens+tokens;
+    if(reservation!=null&&reservation.tokenLimitEnabled())reservation.recordTotalTokens(tokens);
   }
 }

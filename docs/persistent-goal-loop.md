@@ -39,7 +39,7 @@ Run上限は1..10、既定3。Goal配下の制御対象Chat LLM呼び出し上�
 各Chatの既存Run上限と出力分割・停滞再計画の上限も維持します。
 モデル呼び出し前にSQLiteの単一更新で予約し、進捗・再開・再起動で予算を補充しません。
 失敗した呼び出しや実行成否が不明な予約の予算も戻しません。
-Goal内のdelegateTask / delegateTasksは、子の初回呼び出し・Tool cycle・validation repairも同じ永続LLM予約から消費します。Goal予算がない通常の委譲は従来のmaxSteps/timeoutを維持します。Skill selectorや独立したSleepへの予算継承、共通token上限は未対応です。
+Goal内のdelegateTask / delegateTasksは、子の初回呼び出し・Tool cycle・validation repairも同じ永続LLM予約から消費します。後続作業でSkill selectorと通常Chatの子にも共通呼出回数を適用し、[Run報告token上限](shared-run-token-limit.md)と[Goal永続報告token上限](persistent-goal-token-limit.md)を追加しました。独立Sleep／要約／CLI／embedding/rerankへの予算継承は対象外です。
 
 承認要求はWAITING_APPROVAL、Policy拒否や予算・検証上の停止はBLOCKED、実行失敗はFAILED、
 RunキャンセルはPAUSEDです。ユーザーは原因を確認して明示的にrunできますが、累積上限は維持します。
@@ -69,5 +69,6 @@ SQLiteにGoal、試行、状態履歴、累積予算を保存します。モデ�
 
 再起動時の自動Run開始やRUNNINGの自動再試行は行いません。RUNNINGは副作用の成否が不明なので、
 保存状態と実行証跡を確認したうえで、Shellの `/goal reconcile` を利用できます。詳細は goal-uncertain-run-recovery.md を参照してください。
-汎用のbuild/test/API条件、独立LLMへの予算継承、Goal専用Web管理API・Native UI・介入mailbox、
-複数アプリ間のProject FIFO、Goalとcheckpointの自動関連付けも残作業です。
+Goal専用HTTP操作とNativeの確認／起動／取消／照合は、後続の[HTTP統合](implementation-report-goal-http-controls.md)・[Native統合](implementation-report-native-goal-controls.md)で対応しました。
+汎用のbuild/test/API条件、独立Sleep／要約／CLI／embedding/rerankへの予算継承、Goal専用介入mailbox、
+複数アプリ間のProject FIFO、Goalとcheckpointの自動関連付けは追加候補です。

@@ -18,3 +18,5 @@ rei:
 これは**報告後の停止条件**であり、APIの請求金額や送信済み呼出しの厳密な上限ではない。最初の応答や、使用量判明前に開始済みの並列呼出しで超過し得る。既存の1応答max-output-tokens、呼出回数・step・timeout・Policyも併用する。途中のstream表示を取り消せるとはしない。
 
 範囲は上記の明示Run経路。Goalが複数Runを跨ぐ総token量の永続上限、独立Sleep／記憶整理、context圧縮用の独立要約LLM、External Agent CLIの使用量、embedding／rerank、RunContextなしの直接手動委譲は対象外。これらを0tokenと証明したり、全機能の費用上限を保証したりする設定ではない。
+
+複数Runを跨ぐGoalの上限は、別設定の[Goal永続token上限](persistent-goal-token-limit.md)として追加した。Goal上限だけを有効にすることもでき、両方有効なら各上限を守る。独立Sleep／要約／CLI／embedding/rerankなどの計上範囲は、この追加でも拡張しない。

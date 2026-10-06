@@ -25,6 +25,32 @@ import dev.mikoto2000.rei.llm.*;
 @Tag("integration")
 class GoalBudgetChatIntegrationTest {
   @TempDir Path dir;
+  @Test void goalOnlyTokenLimitIsEnforcedAtActualChatBoundaryBeforeTools() {
+    var toolCalls=new AtomicInteger();
+    var model=mock(ChatModel.class);
+    when(model.stream(any(Prompt.class))).thenReturn(Flux.just(new ChatResponse(List.of(new Generation(
+        AssistantMessage.builder().content("").toolCalls(List.of(new AssistantMessage.ToolCall("call","function","readFile","{}"))).build())),
+        org.springframework.ai.chat.metadata.ChatResponseMetadata.builder().usage(new org.springframework.ai.chat.metadata.DefaultUsage(1,10)).build())));
+    ToolCallback read=new ToolCallback() {
+      public ToolDefinition getToolDefinition(){return ToolDefinition.builder().name("readFile").description("read").inputSchema("{}").build();}
+      public String call(String input){toolCalls.incrementAndGet();return "read";}
+    };
+    var properties=new LlmProperties();properties.getOutputLimit().setMaxTotalTokensPerGoal(10);
+    assertEquals(0,properties.getOutputLimit().getMaxTotalTokensPerRun());
+    var goals=new GoalRepository(new DriverManagerDataSource("jdbc:sqlite:"+dir.resolve("goals.db")),Clock.systemUTC(),properties);
+    var goal=goals.create(new AgentRunContext("source","session",dir,"project"),"Artifact","out.txt","a".repeat(64),3,10);
+    var holder=mock(ModelHolderService.class);when(holder.get()).thenReturn("test");
+    var chat=new ChatExecutionService(new FixedLlmChatClientProvider(ChatClient.builder(new StagnationChatModel(model)).defaultToolCallbacks(read).build()),
+        holder,new FixedLlmModelProvider(),properties,new CommandCancellationService(),Optional.empty(),Optional.empty());
+    var loop=new GoalLoopService(goals,new FileGoalVerifier(),(claim,run,done)->done.accept(new GoalLoopService.Outcome(
+        chat.execute(new AgentRunContext(run,"session",dir,"project"),"Artifact",new UserInterventionQueue(),goals.modelBudget(claim,run)))),
+        new ToolPermissionProperties(true,null,null,null),new GoalEvents(event->{},Clock.systemUTC()));
+    var stopped=loop.run("project",goal.id());
+    assertEquals("BLOCKED",stopped.status());assertEquals("token_budget_exhausted",stopped.reason());
+    assertEquals(11,stopped.totalTokens());assertEquals(0,stopped.pendingLlmCalls());assertEquals(0,toolCalls.get());
+    assertThrows(IllegalStateException.class,()->loop.run("project",goal.id()));
+    verify(model,times(1)).stream(any(Prompt.class));
+  }
   @Test void actualChatToolLoopReservesEveryCallAndStopsAtDurableGoalLimit() {
     var modelCalls=new AtomicInteger();
     ChatModel model=new ChatModel() {

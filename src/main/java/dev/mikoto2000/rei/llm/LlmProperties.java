@@ -109,6 +109,9 @@ public class LlmProperties {
     private Integer maxSubgoalsPerReplan = DEFAULT_MAX_SUBGOALS_PER_REPLAN;
     private Integer maxLlmCallsPerRun = DEFAULT_MAX_LLM_CALLS_PER_RUN;
     private long maxTotalTokensPerRun;
+    private long maxTotalTokensPerGoal;
+    public long getMaxTotalTokensPerGoal(){return maxTotalTokensPerGoal;}
+    public void setMaxTotalTokensPerGoal(long value){if(value<0)throw new IllegalArgumentException("max-total-tokens-per-goal must be nonnegative");maxTotalTokensPerGoal=value;}
     public long getMaxTotalTokensPerRun(){return maxTotalTokensPerRun;}
     public void setMaxTotalTokensPerRun(long value){if(value<0)throw new IllegalArgumentException("max-total-tokens-per-run must be nonnegative");maxTotalTokensPerRun=value;}
 

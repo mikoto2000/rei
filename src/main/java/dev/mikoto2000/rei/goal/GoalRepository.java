@@ -18,8 +18,12 @@ public class GoalRepository {
   public record FileCriterion(String relativeFile,String sha256) {}
   public record Goal(String id,String projectId,String projectRoot,String sessionId,String objective,
       String relativeFile,String sha256,int maxRuns,int maxLlmCalls,int attempts,int llmCallsUsed,
-      String status,String currentRunId,String reason,List<FileCriterion> criteria) {
+      String status,String currentRunId,String reason,List<FileCriterion> criteria,
+      long maxTotalTokens,long totalTokens,boolean tokenUsageUnknown,int pendingLlmCalls) {
     public Goal { criteria=List.copyOf(criteria); }
+    public Goal(String id,String projectId,String projectRoot,String sessionId,String objective,String relativeFile,String sha256,int maxRuns,int maxLlmCalls,int attempts,int llmCallsUsed,String status,String currentRunId,String reason,List<FileCriterion> criteria) {
+      this(id,projectId,projectRoot,sessionId,objective,relativeFile,sha256,maxRuns,maxLlmCalls,attempts,llmCallsUsed,status,currentRunId,reason,criteria,0,0,false,0);
+    }
     public Goal(String id,String projectId,String projectRoot,String sessionId,String objective,String relativeFile,String sha256,int maxRuns,int maxLlmCalls,int attempts,int llmCallsUsed,String status,String currentRunId,String reason) {
       this(id,projectId,projectRoot,sessionId,objective,relativeFile,sha256,maxRuns,maxLlmCalls,attempts,llmCallsUsed,status,currentRunId,reason,List.of(new FileCriterion(relativeFile,sha256)));
     }
@@ -29,10 +33,20 @@ public class GoalRepository {
   private final JdbcClient db;
   private final TransactionTemplate transaction;
   private final Clock clock;
+  private final dev.mikoto2000.rei.llm.LlmProperties properties;
 
   public GoalRepository(@Qualifier("memoryConsolidationDataSource") DataSource source,Clock clock) {
+    this(source,clock,new dev.mikoto2000.rei.llm.LlmProperties());
+  }
+  @org.springframework.beans.factory.annotation.Autowired
+  public GoalRepository(@Qualifier("memoryConsolidationDataSource") DataSource source,Clock clock,dev.mikoto2000.rei.llm.LlmProperties properties) {
+    this.properties=properties;
     db=JdbcClient.create(source);transaction=new TransactionTemplate(new DataSourceTransactionManager(source));this.clock=clock;
     db.sql("CREATE TABLE IF NOT EXISTS agent_goals(id TEXT PRIMARY KEY,project TEXT NOT NULL,root TEXT NOT NULL,session TEXT NOT NULL,objective TEXT NOT NULL,file TEXT NOT NULL,digest TEXT NOT NULL,max_runs INTEGER NOT NULL,max_calls INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,used INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL,run TEXT,token TEXT,reason TEXT NOT NULL DEFAULT '')").update();
+    var columns=new HashSet<>(db.sql("PRAGMA table_info(agent_goals)").query((rs,n)->rs.getString("name")).list());
+    for(String column:List.of("max_tokens","tokens_used","tokens_unknown","tokens_pending")) {
+      if(!columns.contains(column))db.sql("ALTER TABLE agent_goals ADD COLUMN "+column+" INTEGER NOT NULL DEFAULT 0").update();
+    }
     db.sql("CREATE TABLE IF NOT EXISTS agent_goal_criteria(goal TEXT NOT NULL,ordinal INTEGER NOT NULL,file TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(goal,ordinal))").update();
     db.sql("CREATE UNIQUE INDEX IF NOT EXISTS agent_goals_running_session ON agent_goals(project,session) WHERE status='RUNNING'").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_goal_attempts(goal TEXT NOT NULL,run TEXT PRIMARY KEY,number INTEGER NOT NULL,status TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',UNIQUE(goal,number))").update();
@@ -40,7 +54,8 @@ public class GoalRepository {
   }
   private final RowMapper<Goal> ROW=(rs,n)->new Goal(rs.getString("id"),rs.getString("project"),rs.getString("root"),rs.getString("session"),
       rs.getString("objective"),rs.getString("file"),rs.getString("digest"),rs.getInt("max_runs"),rs.getInt("max_calls"),rs.getInt("attempts"),rs.getInt("used"),
-      rs.getString("status"),rs.getString("run"),rs.getString("reason"),criteria(rs.getString("id"),rs.getString("file"),rs.getString("digest")));
+      rs.getString("status"),rs.getString("run"),rs.getString("reason"),criteria(rs.getString("id"),rs.getString("file"),rs.getString("digest")),
+      rs.getLong("max_tokens"),rs.getLong("tokens_used"),rs.getBoolean("tokens_unknown"),rs.getInt("tokens_pending"));
 
   public Goal create(AgentRunContext owner,String objective,String relativeFile,String sha256,int maxRuns,int maxLlmCalls) {
     if(owner==null||owner.projectId()==null||owner.projectId().isBlank()||owner.conversationId().isBlank())throw new IllegalArgumentException("Goal requires an owning Project and Session");
@@ -54,6 +69,7 @@ public class GoalRepository {
           .params(id,owner.projectId(),owner.projectRoot().toString(),owner.conversationId(),objective,relativeFile,sha256.toLowerCase(Locale.ROOT),maxRuns,maxLlmCalls,owner.projectId()).update()!=1)
         throw new IllegalStateException("Project goal limit reached (256)");
       history(id,"READY","created");
+      db.sql("UPDATE agent_goals SET max_tokens=? WHERE id=?").params(properties.getOutputLimit().getMaxTotalTokensPerGoal(),id).update();
     });return get(owner.projectId(),id);
   }
   private List<FileCriterion> criteria(String id,String file,String digest) {
@@ -87,14 +103,14 @@ public class GoalRepository {
     for(var part:path)if(part.toString().equals(".."))throw new IllegalArgumentException("Parent traversal is not permitted");
   }
   public Goal get(String project,String id) {
-    return db.sql("SELECT * FROM agent_goals WHERE project=? AND id=?").params(project,id).query(ROW).optional()
-        .orElseThrow(()->new IllegalArgumentException("Goal not found in this Project"));
+    return transaction.execute(status->db.sql("SELECT * FROM agent_goals WHERE project=? AND id=?").params(project,id).query(ROW).optional()
+        .orElseThrow(()->new IllegalArgumentException("Goal not found in this Project")));
   }
-  public List<Goal> list(String project) {return db.sql("SELECT * FROM agent_goals WHERE project=? ORDER BY id LIMIT 256").param(project).query(ROW).list();}
+  public List<Goal> list(String project) {return transaction.execute(status->db.sql("SELECT * FROM agent_goals WHERE project=? ORDER BY id LIMIT 256").param(project).query(ROW).list());}
   public Claim claim(String project,String id) {
     return transaction.execute(status->{
       get(project,id);String token=UUID.randomUUID().toString();
-      var goal=db.sql("UPDATE agent_goals SET status='RUNNING',token=?,reason='' WHERE project=? AND id=? AND status IN ('READY','PAUSED','WAITING_APPROVAL','FAILED','BLOCKED') AND attempts<max_runs AND used<max_calls RETURNING *")
+      var goal=db.sql("UPDATE agent_goals SET status='RUNNING',token=?,reason='' WHERE project=? AND id=? AND status IN ('READY','PAUSED','WAITING_APPROVAL','FAILED','BLOCKED') AND attempts<max_runs AND used<max_calls AND (max_tokens=0 OR (tokens_unknown=0 AND tokens_pending=0 AND tokens_used<max_tokens)) RETURNING *")
           .params(token,project,id).query(ROW).optional().orElseThrow(()->new IllegalStateException("Goal is running, terminal, or its budget is exhausted"));
       history(id,"RUNNING","explicit_run");return new Claim(goal,token);
     });
@@ -102,7 +118,7 @@ public class GoalRepository {
   public String beginAttempt(Claim claim) {
     return transaction.execute(status->{
       String run=UUID.randomUUID().toString();
-      int count=db.sql("UPDATE agent_goals SET attempts=attempts+1,run=? WHERE id=? AND project=? AND token=? AND status='RUNNING' AND attempts<max_runs AND used<max_calls")
+      int count=db.sql("UPDATE agent_goals SET attempts=attempts+1,run=? WHERE id=? AND project=? AND token=? AND status='RUNNING' AND attempts<max_runs AND used<max_calls AND (max_tokens=0 OR (tokens_unknown=0 AND tokens_pending=0 AND tokens_used<max_tokens))")
           .params(run,claim.goal().id(),claim.goal().projectId(),claim.token()).update();
       if(count!=1)throw new IllegalStateException("Goal claim inactive or budget exhausted");
       var goal=get(claim.goal().projectId(),claim.goal().id());
@@ -111,12 +127,40 @@ public class GoalRepository {
   }
   /** Charged before an LLM invocation; failed or uncertain calls never restore the reservation. */
   public boolean reserveLlm(Claim claim) {
-    return db.sql("UPDATE agent_goals SET used=used+1 WHERE id=? AND project=? AND token=? AND status='RUNNING' AND used<max_calls")
+    return db.sql("UPDATE agent_goals SET used=used+1,tokens_pending=tokens_pending+CASE WHEN max_tokens>0 THEN 1 ELSE 0 END WHERE id=? AND project=? AND token=? AND status='RUNNING' AND used<max_calls AND (max_tokens=0 OR (tokens_unknown=0 AND tokens_used<max_tokens))")
         .params(claim.goal().id(),claim.goal().projectId(),claim.token()).update()==1;
   }
   public int remainingLlm(Claim claim) {
-    return db.sql("SELECT max_calls-used FROM agent_goals WHERE id=? AND project=? AND token=? AND status='RUNNING'")
+    return db.sql("SELECT max_calls-used FROM agent_goals WHERE id=? AND project=? AND token=? AND status='RUNNING' AND (max_tokens=0 OR (tokens_unknown=0 AND tokens_used<max_tokens))")
         .params(claim.goal().id(),claim.goal().projectId(),claim.token()).query(Integer.class).optional().orElse(0);
+  }
+  /** One report for each reserved invocation; unknown usage is a durable, irreversible stop. */
+  public void recordTotalTokens(Claim claim,String run,Integer tokens) {
+    if(claim.goal().maxTotalTokens()==0)return;
+    boolean known=tokens!=null&&tokens>0;
+    int amount=known?tokens:0;
+    var goal=transaction.execute(status->{
+      int updated=db.sql("UPDATE agent_goals SET tokens_used=CASE WHEN tokens_used>9223372036854775807-? THEN 9223372036854775807 ELSE tokens_used+? END,tokens_unknown=CASE WHEN ? THEN tokens_unknown ELSE 1 END,tokens_pending=tokens_pending-1 WHERE id=? AND project=? AND token=? AND run=? AND status='RUNNING' AND tokens_pending>0")
+          .params(amount,amount,known,claim.goal().id(),claim.goal().projectId(),claim.token(),run).update();
+      if(updated!=1)throw new IllegalStateException("Goal usage report has no owned pending invocation");
+      return get(claim.goal().projectId(),claim.goal().id());
+    });
+    if(goal.tokenUsageUnknown())throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOKEN_USAGE_UNKNOWN);
+    if(goal.totalTokens()>goal.maxTotalTokens())throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOKEN_BUDGET_EXCEEDED);
+  }
+  public boolean tokenExhausted(Claim claim) {
+    var goal=get(claim.goal().projectId(),claim.goal().id());
+    return goal.maxTotalTokens()>0&&(goal.tokenUsageUnknown()||goal.totalTokens()>=goal.maxTotalTokens());
+  }
+  public dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation modelBudget(Claim claim,String run) {
+    return new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation() {
+      public boolean tryReserve(){return reserveLlm(claim);}
+      public int remaining(){return remainingLlm(claim);}
+      public boolean tokenLimitEnabled(){return claim.goal().maxTotalTokens()>0;}
+      public boolean tokenExhausted(){return tokenLimitEnabled()&&GoalRepository.this.tokenExhausted(claim);}
+      public boolean usageUnknown(){return tokenLimitEnabled()&&get(claim.goal().projectId(),claim.goal().id()).tokenUsageUnknown();}
+      public void recordTotalTokens(Integer tokens){GoalRepository.this.recordTotalTokens(claim,run,tokens);}
+    };
   }
   public boolean active(Claim claim) {return db.sql("SELECT COUNT(*) FROM agent_goals WHERE id=? AND project=? AND token=? AND status='RUNNING'")
       .params(claim.goal().id(),claim.goal().projectId(),claim.token()).query(Integer.class).single()==1;}
@@ -132,7 +176,7 @@ public class GoalRepository {
   public Goal stop(Claim claim,String state,String reason) {
     if(!Set.of("COMPLETED","FAILED","PAUSED","BLOCKED","WAITING_APPROVAL").contains(state))throw new IllegalArgumentException("Invalid Goal state");
     transaction.executeWithoutResult(status->{
-      if(db.sql("UPDATE agent_goals SET status=?,reason=?,token=NULL WHERE id=? AND project=? AND token=? AND status='RUNNING'")
+      if(db.sql("UPDATE agent_goals SET status=?,reason=?,token=NULL,tokens_unknown=CASE WHEN max_tokens>0 AND tokens_pending>0 THEN 1 ELSE tokens_unknown END WHERE id=? AND project=? AND token=? AND status='RUNNING'")
           .params(state,reason,claim.goal().id(),claim.goal().projectId(),claim.token()).update()!=1)throw new IllegalStateException("Goal claim inactive");
       history(claim.goal().id(),state,reason);
     });return get(claim.goal().projectId(),claim.goal().id());
@@ -149,7 +193,7 @@ public class GoalRepository {
   public Goal reconcile(String project,String id,String expectedRunId) {
     transaction.executeWithoutResult(status->{
       get(project,id);
-      if(db.sql("UPDATE agent_goals SET status='PAUSED',reason='uncertain_run_reconciled',token=NULL WHERE project=? AND id=? AND status='RUNNING' AND run IS ?")
+      if(db.sql("UPDATE agent_goals SET status='PAUSED',reason='uncertain_run_reconciled',token=NULL,tokens_unknown=CASE WHEN max_tokens>0 AND tokens_pending>0 THEN 1 ELSE tokens_unknown END WHERE project=? AND id=? AND status='RUNNING' AND run IS ?")
           .params(project,id,expectedRunId).update()!=1)throw new IllegalStateException("Goal is no longer running with the specified Run ID");
       db.sql("UPDATE agent_goal_attempts SET status='BLOCKED',reason='uncertain_run_reconciled' WHERE goal=? AND status='RUNNING'").param(id).update();
       history(id,"PAUSED","uncertain_run_reconciled");
@@ -158,7 +202,7 @@ public class GoalRepository {
   public Goal cancel(String project,String id) {
     transaction.executeWithoutResult(status->{
       get(project,id);
-      if(db.sql("UPDATE agent_goals SET status='CANCELLED',reason='human_cancelled',token=NULL WHERE project=? AND id=? AND status NOT IN ('COMPLETED','CANCELLED')")
+      if(db.sql("UPDATE agent_goals SET status='CANCELLED',reason='human_cancelled',token=NULL,tokens_unknown=CASE WHEN max_tokens>0 AND tokens_pending>0 THEN 1 ELSE tokens_unknown END WHERE project=? AND id=? AND status NOT IN ('COMPLETED','CANCELLED')")
           .params(project,id).update()!=1)throw new IllegalStateException("Goal is already terminal");
       db.sql("UPDATE agent_goal_attempts SET status='CANCELLED',reason='human_cancelled' WHERE goal=? AND status='RUNNING'").param(id).update();
       history(id,"CANCELLED","human_cancelled");

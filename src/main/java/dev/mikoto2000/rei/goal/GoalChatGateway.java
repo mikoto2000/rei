@@ -8,7 +8,6 @@ import dev.mikoto2000.rei.application.session.SessionRepository;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.policy.*;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
-import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import dev.mikoto2000.rei.event.*;
 
 /** Reuses the Project FIFO and Chat boundaries, capturing ownership before queue admission. */
@@ -46,10 +45,7 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
   @Override public void dispatch(GoalRepository.Claim claim,String run,Consumer<GoalLoopService.Outcome> completed) {
     var goal=claim.goal();validate(goal);
     var owner=new AgentRunContext(run,goal.sessionId(),Path.of(goal.projectRoot()),goal.projectId(),AgentRunContext.RequestSource.WEB);
-    var reservation=new OutputLimitRunBudget.LlmCallReservation() {
-      public boolean tryReserve(){return goals.reserveLlm(claim);}
-      public int remaining(){return goals.remainingLlm(claim);}
-    };
+    var reservation=goals.modelBudget(claim,run);
     boolean registered=false;
     try {if(runRegistry!=null) {
       runRegistry.register(owner);
