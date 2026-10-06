@@ -315,3 +315,15 @@ compile Red→2テストGreen→8新規テスト・関連・全体回帰→featu
 | Implemented | [Native保存観測時文脈](implementation-report-native-activity-observation-context.md) | native-activity-observation-context | bb50db99 | 378d0ac4 | Native105 / React85 / typecheck PASS |
 
 Native/React Red→最小Green→Native4・React6新規・関連・全体回帰→feature Commit/Push→main Merge→Merge後Native12/React23関連テスト→main Push済み。Java変更なし。保存出典のProject/date/scope・不完全性/欠落・読取り非実行・owner/lock/遅延隔離を維持した。外部Agent並列delegationなどは引き続き対応対象。
+
+## 後続の並列 Codex レビュー
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [並列 Codex レビュー](implementation-report-parallel-codex-reviews.md) | parallel-codex-reviews | 3e111dda | a7ec4e2c | 3311 / 613 |
+
+compile Red→初期3テストGreen→開始済みreviewId欠落Red→修正→13新規/関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。batch一回claim・2 worker・共有Run/Goal予算・別worker停止の伝播・保存履歴/部分結果/期限・取消/queued非実行・実Tool登録を確認した。Java/configのみ、Native/React変更なし。2026-10-07のユーザー回答で別providerの追加は保留。
+
+## 最終の残件照合
+
+[元候補と追加拡張の再評価](autonomy-feature-remaining-2026-10-07.md)。元依頼の基本範囲について具体的な実装・接続不足を対応し、既存Document RAG等の重複実装を避けた。保留provider、実データ品質評価、多言語完全意味解析、durable子resume/DAG、複数ファイル/binary/rendererなどの拡張は未実装として残す。候補を全部無条件に完成したとは宣言しない。全機能のbranch/feature/merge/test結果は本記録と各reportへ記載した。
