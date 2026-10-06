@@ -4,6 +4,25 @@ import { afterEach, it, expect, vi } from "vitest";
 import type { Command } from "../../tauri/commands";
 import { ActivityAnalysis } from "./ActivityAnalysis";
 afterEach(cleanup);
+it("passes registered projects into the observation context reader without an automatic read", async () => {
+  const call = vi.fn();
+  render(
+    <ActivityAnalysis
+      call={call as Command}
+      serverId="s"
+      projects={[{ id: "p", name: "registered", path: "private" }]}
+    />,
+  );
+  await userEvent.selectOptions(screen.getByLabelText("文脈のProject"), "p");
+  expect(
+    (
+      screen.getByRole("button", {
+        name: "保存観測時の文脈を取得",
+      }) as HTMLButtonElement
+    ).disabled,
+  ).toBe(false);
+  expect(call).not.toHaveBeenCalled();
+});
 it("includes explicit coaching controls without starting any settings request on navigation", () => {
   const call = vi.fn();
   render(<ActivityAnalysis call={call as Command} serverId="s" />);

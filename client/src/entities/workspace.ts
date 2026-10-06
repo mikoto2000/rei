@@ -8,6 +8,11 @@ export interface CoachingSettings {
   cooldownDays: number;
 }
 export type WorkspaceOperation =
+  | {
+      operation: "activityObservationContext";
+      projectId: string;
+      date: string | null;
+    }
   | { operation: "activityCoachingSettings" }
   | {
       operation: "activityCoachingConfigure";
