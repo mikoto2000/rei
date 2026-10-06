@@ -29,11 +29,17 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository,
   private final EmbeddingModel embeddingModel;
   private final JsonMapper objectMapper;
   private final int embeddingDimensions;
+  private final boolean bm25Enabled;
 
   public SqliteVectorStore(DataSource dataSource, EmbeddingModel embeddingModel, JsonMapper objectMapper) {
+    this(dataSource, embeddingModel, objectMapper, false);
+  }
+
+  public SqliteVectorStore(DataSource dataSource, EmbeddingModel embeddingModel, JsonMapper objectMapper, boolean bm25Enabled) {
     this.dataSource = dataSource;
     this.embeddingModel = embeddingModel;
     this.objectMapper = objectMapper;
+    this.bm25Enabled = bm25Enabled;
     this.embeddingDimensions = embeddingModel.dimensions();
     initializeSchema();
   }
@@ -126,6 +132,59 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository,
   public List<Document> lexicalSearch(SearchRequest request) {
     FilterCriteria criteria=request.hasFilterExpression()?parseFilter(request.getFilterExpression()):FilterCriteria.empty();
     return lexicalOnlySearch(request,criteria,lexicalQueryTerms(request.getQuery()));
+  }
+
+  @Override
+  public List<Document> bm25Search(SearchRequest request) {
+    if (!bm25Enabled) throw new UnsupportedOperationException("BM25 retrieval is disabled");
+    checkCancellation();
+    if (request.getTopK() < 1 || request.getTopK() > 256) throw new IllegalArgumentException("BM25 topK must be 1..256");
+    FilterCriteria criteria = request.hasFilterExpression() ? parseFilter(request.getFilterExpression()) : FilterCriteria.empty();
+    if (request.getQuery() != null && request.getQuery().length() > 4096) throw new IllegalArgumentException("BM25 query limit exceeded");
+    var terms = lexicalQueryTerms(request.getQuery());
+    if (terms.isEmpty()) return List.of();
+    if (terms.size() > 64) throw new IllegalArgumentException("BM25 query limit exceeded");
+    StringBuilder sql = new StringBuilder("""
+        SELECT v.chunk_id, v.doc_id, v.source, v.chunk_index, v.ingested_at, v.chunk_text, v.metadata_json,
+               -bm25(document_chunks_fts) AS score
+        FROM document_chunks_fts JOIN document_chunks_vec v ON v.chunk_id = document_chunks_fts.chunk_id
+        WHERE document_chunks_fts MATCH ?
+        """);
+    List<Object> params = new ArrayList<>();
+    // Terms contain letters/digits only, and quotes ensure OR/NOT are literal query terms.
+    params.add(terms.stream().map(term -> "\"" + term + "\"").collect(java.util.stream.Collectors.joining(" OR ")));
+    if (criteria.source() != null) { sql.append(" AND v.source = ?"); params.add(criteria.source()); }
+    if (criteria.docId() != null) { sql.append(" AND v.doc_id = ?"); params.add(criteria.docId()); }
+    sql.append(" ORDER BY score DESC, v.chunk_id ASC");
+    var results = new ArrayList<Document>();
+    try (var connection = dataSource.getConnection(); var statement = connection.prepareStatement(sql.toString())) {
+      statement.setQueryTimeout(5);
+      bindParams(statement, params);
+      try (var rs = statement.executeQuery()) {
+        while (rs.next()) {
+          checkCancellation();
+          // BM25 has no probability scale. Keep the existing term coverage eligibility threshold.
+          double coverage = lexicalScore(terms, rs.getString("chunk_text"));
+          if (coverage < request.getSimilarityThreshold()) continue;
+          var metadata = readMetadata(rs.getString("metadata_json"));
+          metadata.put("docId", rs.getString("doc_id"));
+          metadata.put("source", rs.getString("source"));
+          metadata.put("chunkIndex", rs.getInt("chunk_index"));
+          metadata.put("ingestedAt", rs.getString("ingested_at"));
+          metadata.put("lexicalMode", "bm25");
+          metadata.put("bm25Score", rs.getDouble("score"));
+          metadata.put("lexicalCoverage", coverage);
+          results.add(Document.builder().id(rs.getString("chunk_id")).text(rs.getString("chunk_text"))
+              .metadata(metadata).score(rs.getDouble("score")).build());
+          if (results.size() == request.getTopK()) break;
+        }
+      }
+    } catch (SQLException e) { throw sqliteException("BM25 文書検索に失敗しました", e); }
+    return List.copyOf(results);
+  }
+
+  private static void checkCancellation() {
+    if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException("BM25 retrieval cancelled");
   }
 
   private List<Document> rankedSearch(SearchRequest request,boolean denseOnly) {
@@ -305,9 +364,18 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository,
       }
       chunkStatement.executeBatch();
     }
+    if (hasFtsIndex(connection)) {
+      try (var statement = connection.prepareStatement("INSERT INTO document_chunks_fts(chunk_id, chunk_text) VALUES (?, ?)")) {
+        for (var document : documents) {
+          statement.setString(1, document.getId()); statement.setString(2, document.getText()); statement.addBatch();
+        }
+        statement.executeBatch();
+      }
+    }
   }
 
   private int deleteByDocId(Connection connection, String docId) throws SQLException {
+    deleteFtsMatching(connection, "doc_id = ?", List.of(docId));
     try (var deleteChunks = connection.prepareStatement("DELETE FROM document_chunks_vec WHERE doc_id = ?")) {
       deleteChunks.setString(1, docId);
       return deleteChunks.executeUpdate();
@@ -315,6 +383,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository,
   }
 
   private void deleteBySource(Connection connection, String source) throws SQLException {
+    deleteFtsMatching(connection, "source = ?", List.of(source));
     try (var deleteChunks = connection.prepareStatement("DELETE FROM document_chunks_vec WHERE source = ?")) {
       deleteChunks.setString(1, source);
       deleteChunks.executeUpdate();
@@ -323,6 +392,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository,
 
   private void deleteMatching(Connection connection, FilterCriteria criteria) throws SQLException {
     if (criteria.docId() != null && criteria.source() != null) {
+      deleteFtsMatching(connection, "doc_id = ? AND source = ?", List.of(criteria.docId(), criteria.source()));
       try (var deleteChunks = connection.prepareStatement("DELETE FROM document_chunks_vec WHERE doc_id = ? AND source = ?")) {
         deleteChunks.setString(1, criteria.docId());
         deleteChunks.setString(2, criteria.source());
@@ -351,6 +421,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository,
   }
 
   private void deleteChunks(Connection connection, List<String> ids) throws SQLException {
+    for (String id : ids) deleteFtsMatching(connection, "chunk_id = ?", List.of(id));
     try (var deleteChunks = connection.prepareStatement("DELETE FROM document_chunks_vec WHERE chunk_id = ?")) {
       for (String id : ids) {
         deleteChunks.setString(1, id);
@@ -366,6 +437,20 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository,
       case AND -> parseFilter((Filter.Expression) expression.left()).merge(parseFilter((Filter.Expression) expression.right()));
       default -> throw new UnsupportedOperationException("未対応の filter です: " + expression.type());
     };
+  }
+
+  private void deleteFtsMatching(Connection connection, String clause, List<Object> params) throws SQLException {
+    if (!hasFtsIndex(connection)) return;
+    try (var statement = connection.prepareStatement("DELETE FROM document_chunks_fts WHERE chunk_id IN (SELECT chunk_id FROM document_chunks_vec WHERE " + clause + ")")) {
+      bindParams(statement, params); statement.executeUpdate();
+    }
+  }
+
+  private boolean hasFtsIndex(Connection connection) throws SQLException {
+    if (bm25Enabled) return true;
+    // Preserve an existing index even when searches use the legacy configuration.
+    try (var statement = connection.prepareStatement("SELECT 1 FROM sqlite_master WHERE type='table' AND name='document_chunks_fts'");
+         var rs = statement.executeQuery()) { return rs.next(); }
   }
 
   private FilterCriteria eqCriteria(Filter.Expression expression) {
@@ -398,6 +483,17 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository,
           )
           """.formatted(embeddingDimensions));
       statement.executeUpdate("DROP TABLE IF EXISTS documents");
+      if (bm25Enabled) {
+        // Rebuild on activation, including mutations made while the opt-in was disabled.
+        connection.setAutoCommit(false);
+        try {
+          statement.executeUpdate("CREATE VIRTUAL TABLE IF NOT EXISTS document_chunks_fts USING fts5(chunk_id UNINDEXED, chunk_text, tokenize='unicode61')");
+          statement.executeUpdate("DELETE FROM document_chunks_fts");
+          statement.executeUpdate("INSERT INTO document_chunks_fts(chunk_id, chunk_text) SELECT chunk_id, chunk_text FROM document_chunks_vec");
+          connection.commit();
+        } catch (SQLException e) { connection.rollback(); throw e; }
+        finally { connection.setAutoCommit(true); }
+      }
     } catch (SQLException e) {
       throw sqliteException("vector store テーブルの初期化に失敗しました", e);
     }

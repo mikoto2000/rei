@@ -9,6 +9,18 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class HybridDocumentRetrievalTest {
+  @Test void bm25OptInFlowsThroughDocumentGroupingAndReranking() {
+    var store=mock(VectorStore.class,withSettings().extraInterfaces(RetrievalCandidates.class));
+    var backend=(RetrievalCandidates)store;
+    when(backend.bm25Search(any())).thenReturn(List.of(doc("bm25")));
+    when(backend.denseSearch(any())).thenReturn(List.of(doc("dense")));
+    var service=new VectorDocumentService(store,mock(VectorDocumentRepository.class),new VectorDocumentProperties(512,0));
+    service.setRetrieval(new HybridRetrievalProperties(true,40,60,true));
+    service.setRerankService(new CandidateReranker(){public <T> List<T> rerank(String q,List<T> candidates,java.util.function.Function<T,String> text){assertEquals(2,candidates.size());return candidates;}});
+    assertEquals(2,service.search("spring",2,null,null).size());
+    verify(backend).bm25Search(any());
+    verify(backend,never()).lexicalSearch(any());
+  }
   Document doc(String id){return Document.builder().id(id+"#0").text("body "+id).metadata(Map.of("docId",id,"source",id+".txt","chunkIndex",0)).score(.9).build();}
   @Test void optInUsesBothStreamsAndExistingRerankerBeforeFinalLimit() {
     var store=mock(VectorStore.class,withSettings().extraInterfaces(RetrievalCandidates.class));

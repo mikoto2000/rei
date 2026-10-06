@@ -20,12 +20,18 @@ public class LazySqliteVectorStore implements VectorStore, VectorDocumentReposit
   private final DataSource dataSource;
   private final EmbeddingModel embeddingModel;
   private final JsonMapper objectMapper;
+  private final boolean bm25Enabled;
   private volatile SqliteVectorStore delegate;
 
   public LazySqliteVectorStore(DataSource dataSource, EmbeddingModel embeddingModel, JsonMapper objectMapper) {
+    this(dataSource, embeddingModel, objectMapper, false);
+  }
+
+  public LazySqliteVectorStore(DataSource dataSource, EmbeddingModel embeddingModel, JsonMapper objectMapper, boolean bm25Enabled) {
     this.dataSource = dataSource;
     this.embeddingModel = embeddingModel;
     this.objectMapper = objectMapper;
+    this.bm25Enabled = bm25Enabled;
   }
 
   @Override
@@ -49,6 +55,7 @@ public class LazySqliteVectorStore implements VectorStore, VectorDocumentReposit
   }
   @Override public List<Document> denseSearch(SearchRequest request){return delegate().denseSearch(request);}
   @Override public List<Document> lexicalSearch(SearchRequest request){return delegate().lexicalSearch(request);}
+  @Override public List<Document> bm25Search(SearchRequest request){return delegate().bm25Search(request);}
 
   @Override
   public <T> Optional<T> getNativeClient() {
@@ -82,7 +89,7 @@ public class LazySqliteVectorStore implements VectorStore, VectorDocumentReposit
     }
     synchronized (this) {
       if (delegate == null) {
-        delegate = new SqliteVectorStore(dataSource, embeddingModel, objectMapper);
+        delegate = new SqliteVectorStore(dataSource, embeddingModel, objectMapper, bm25Enabled);
       }
       return delegate;
     }

@@ -9,6 +9,19 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class HybridRetrievalTest {
+  @Test void optInBm25UsesTheLexicalRankStreamAndPreservesItsEvidence() {
+    var backend=mock(RetrievalCandidates.class);
+    var lexical=Document.builder().id("both").text("spring").metadata(Map.of("lexicalMode","bm25","bm25Score",0.25)).score(.25).build();
+    when(backend.bm25Search(any())).thenReturn(List.of(lexical));
+    when(backend.denseSearch(any())).thenReturn(List.of(doc("dense",.99)));
+    var results=new HybridRetriever(backend,new HybridRetrievalProperties(true,40,60,true))
+        .search(SearchRequest.builder().query("spring").topK(2).build());
+    var result=results.stream().filter(d->d.getId().equals("both")).findFirst().orElseThrow();
+    assertEquals("bm25",result.getMetadata().get("lexicalMode"));
+    assertEquals(1,result.getMetadata().get("lexicalRank"));
+    assertEquals(.25,result.getMetadata().get("bm25Score"));
+    verify(backend,never()).lexicalSearch(any());
+  }
   Document doc(String id,double score){return Document.builder().id(id).text(id).metadata(Map.of("docId",id,"source","safe","chunkIndex",0)).score(score).build();}
   @Test void rankFusionKeepsCandidatesFromEitherRetrieverAndRewardsAgreement() {
     var fusion=new ReciprocalRankFusion(60);
