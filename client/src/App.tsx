@@ -18,6 +18,7 @@ import { Avatar } from "./shared/Avatar";
 import { SessionList } from "./features/history/SessionList";
 import { Recovery } from "./features/recovery/Recovery";
 import { Attention } from "./features/attention/Attention";
+import { ActivityAnalysis } from "./features/activity/ActivityAnalysis";
 import { Workspace } from "./features/workspace/Workspace";
 import { WorkContextNotice } from "./features/workspace/WorkContextNotice";
 import {
@@ -42,6 +43,7 @@ type Page =
   | "settings"
   | "workspace"
   | "attention"
+  | "activity"
   | "recovery";
 const noProjects: Project[] = [];
 export function App({
@@ -284,6 +286,12 @@ export function App({
         </button>
         <nav aria-label="メイン">
           <button
+            className={page === "activity" ? "selected" : ""}
+            onClick={() => navigate("activity")}
+          >
+            Activity分析
+          </button>
+          <button
             className={page === "recovery" ? "selected" : ""}
             onClick={() => navigate("recovery")}
           >
@@ -423,6 +431,12 @@ export function App({
                 call={call}
                 serverId={data.unlocked ? data.selectedServer : null}
                 projects={projects[data.selectedServer ?? ""] ?? noProjects}
+              />
+            )}
+            {page === "activity" && (
+              <ActivityAnalysis
+                call={call}
+                serverId={data.unlocked ? data.selectedServer : null}
               />
             )}
             {page === "workspace" && (

@@ -77,11 +77,18 @@ public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPo
   }
   public String periodAnalysis(ActivityPeriodAnalysis.Period period,String day) {
     var comparison=periodComparison(period,day);
+    return formatPeriodComparison(comparison);
+  }
+  public String formatPeriodComparison(PeriodComparison comparison) {
     return new ActivityPeriodAnalysis(Clock.fixed(clock.instant(),comparison.zone()),summaryPolicy.minimumConfidence()).format(comparison.current(),comparison.previous());
   }
   public record PeriodComparison(ActivityPeriodAnalysis.Aggregate current,ActivityPeriodAnalysis.Aggregate previous,ZoneId zone) {}
   /** Null date selects the most recent completed calendar period for manual coaching. */
   public PeriodComparison periodComparison(ActivityPeriodAnalysis.Period period,String day) {
+    return periodComparison(period,day,false);
+  }
+  public PeriodComparison periodComparisonBounded(ActivityPeriodAnalysis.Period period,String day){return periodComparison(period,day,true);}
+  private PeriodComparison periodComparison(ActivityPeriodAnalysis.Period period,String day,boolean bounded) {
     var snapshot=Clock.fixed(clock.instant(),clock.getZone());
     var configured=scoreCriteria==null?null:scoreCriteria.load();
     var selected=configured==null||configured.revision()==0?Set.<String>of():configured.settings().categories();
@@ -90,7 +97,8 @@ public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPo
         :new ActivityDateArgumentResolver(snapshot).resolve(day);
     var range=analysis.range(period,anchor);
     var previous=analysis.previous(range);
-    var currentRecords=range.fromInclusive().equals(range.toExclusive())?List.<ActivityRecord>of():store.findRecordsBetween(range.fromInclusive(),range.toExclusive());
-    return new PeriodComparison(analysis.aggregate(range,currentRecords),analysis.aggregate(previous,store.findRecordsBetween(previous.fromInclusive(),previous.toExclusive())),snapshot.getZone());
+    var currentRecords=range.fromInclusive().equals(range.toExclusive())?List.<ActivityRecord>of():periodRecords(range,bounded);
+    return new PeriodComparison(analysis.aggregate(range,currentRecords),analysis.aggregate(previous,periodRecords(previous,bounded)),snapshot.getZone());
   }
+  private List<ActivityRecord> periodRecords(ActivityPeriodAnalysis.Range range,boolean bounded){return bounded?store.findRecordsBetweenBounded(range.fromInclusive(),range.toExclusive(),50000):store.findRecordsBetween(range.fromInclusive(),range.toExclusive());}
 }

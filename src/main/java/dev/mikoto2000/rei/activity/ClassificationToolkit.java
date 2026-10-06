@@ -90,6 +90,7 @@ public final class ClassificationToolkit {
       public void replace(ActivityRecord r){var updated=decorate(r);delegate.replace(updated);observe(updated);}
       public List<ActivitySession> findBetween(Instant a,Instant b){return delegate.findBetween(a,b);}
       public List<ActivityRecord> findRecordsBetween(Instant a,Instant b){return delegate.findRecordsBetween(a,b);}
+      public List<ActivityRecord> findRecordsBetweenBounded(Instant a,Instant b,int max){return delegate.findRecordsBetweenBounded(a,b,max);}
     };
   }
 }

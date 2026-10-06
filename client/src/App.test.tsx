@@ -11,6 +11,49 @@ import type { Command } from "./tauri/commands";
 import type { Events } from "./tauri/events";
 import type { Snapshot } from "./entities/models";
 afterEach(cleanup);
+it("opens Activity analysis without starting a Run or an automatic observation query", async () => {
+  const call = vi.fn(async (name: string) => {
+    if (name === "app_snapshot")
+      return {
+        ...empty,
+        unlocked: true,
+        selectedServer: "s",
+        servers: [
+          {
+            id: "s",
+            name: "Home",
+            baseUrl: "http://localhost:8080",
+            hasCredential: true,
+          },
+        ],
+      };
+    if (name === "projects_list") return [];
+    if (name === "session_list") return { items: [], nextCursor: null };
+    if (name === "workspace_execute")
+      return {
+        title: "Activity",
+        items: [
+          { id: null, title: "週次", fields: [["Report", "保存観測の分析"]] },
+        ],
+      };
+  });
+  render(<App call={call as Command} subscriptions={events} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Activity分析" }));
+  expect(
+    call.mock.calls.filter(([name]) => name === "workspace_execute"),
+  ).toHaveLength(0);
+  fireEvent.click(screen.getByRole("button", { name: "保存観測を分析" }));
+  await screen.findByText("保存観測の分析");
+  expect(call).toHaveBeenCalledWith("workspace_execute", {
+    serverId: "s",
+    operation: { operation: "activityAnalysis", period: "WEEK", date: null },
+  });
+  expect(
+    call.mock.calls.some(
+      ([name]) => name === "chat_submit" || name === "background_submit",
+    ),
+  ).toBe(false);
+});
 it("opens a background run from Active Runs and retains cancellation-requested UI", async () => {
   const background = {
     serverId: "s",

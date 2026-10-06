@@ -1,4 +1,9 @@
 export type WorkspaceOperation =
+  | {
+      operation: "activityAnalysis";
+      period: "WEEK" | "MONTH";
+      date: string | null;
+    }
   | { operation: "goals"; projectId: string }
   | {
       operation:

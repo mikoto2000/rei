@@ -1,0 +1,13 @@
+# Native Activity週次・月次分析
+
+Nativeメニューの「Activity分析」から、接続先端末の保存観測に対して週次／月次と対象日を指定し、「保存観測を分析」を押す。空欄の日付は直近の完了した暦の期間。指定日はそれを含む暦の週／月と直前期間を比較し、現在期間なら途中期間であることを表示する。Project別所有データの画面ではなく、接続先端末全体の保存観測の表示である。
+
+既存ActivityTimeline／ActivityPeriodAnalysisの観測・未観測推定量、分類／Project候補、時間帯・日別・前期間差、保存した分類基準の適合指数・日別推移、集中／割込み候補をそのまま使う。推定と成果・集中の実測を区別する既存表現を維持する。閲覧はcapture・分類モデル・日次要約モデル・Coachingの通知予約やRunを開始しない。分類基準の変更は既存Shell入口で行う。
+
+認証済み`GET /api/v1/activity/period?period=WEEK|MONTH&date=YYYY-MM-DD`でschemaVersion=1、LOCAL_DEVICE_OBSERVATIONS scope、period、anchorDate、zone、partialと報告を返す。date省略可。無効period／calendar date／未来日は400。Activity機能またはbounded portがない場合503。Nativeは固定endpoint・認証・明示period/dateのみを許可し、schema/scope/period/date/長さを検査する。本文はReactのtextとして表示し、HTMLとして実行しない。
+
+新しいbounded ActivityStore portは旧adapterから無制限読取りへfallbackしない。SQLiteは各期間で最大50000候補rows、1payload最大128KiB、合計64MiBまでをSQL LIMITとdecode前の検査で制限し、超過した全体は拒否する。報告32768文字上限。超過時は422で、部分的な統計を完全な集計として表示しない。旧Shell集計の挙動は維持し、既存のoverlap／midnight処理を共用する。
+
+Nativeの初期表示で分析HTTPを自動送信しない。選択変更・接続先変更・vault lock・unmount後の遅い応答はgeneration／ownerで隔離する。失敗時の自動retryなし。再取得は利用者のボタン操作だけ。スクリーンショット・window title・raw observation・証拠file ID・Tool本文はAPIに含めず、報告は既存credential redactionを適用する。
+
+保存観測の範囲はActivity設定のzoneと期間による。観測がない時間は未観測、unknown分類を成果とみなさず、部分期間の差や候補を実測成功と扱わない。専用Coaching設定やWork Context詳細画面はこのsliceで追加しない。
