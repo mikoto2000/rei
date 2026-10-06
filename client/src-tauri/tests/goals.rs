@@ -9,6 +9,34 @@ fn saved_goal() -> serde_json::Value {
     json!({"id":"g","projectId":"p","sessionId":"session","objective":"Produce result","status":"RUNNING","currentRunId":"goal-run","reason":"","maxRuns":3,"maxLlmCalls":20,"attempts":1,"llmCallsUsed":2,"criteria":[{"relativeFile":"out.txt","sha256":"a".repeat(64)}]})
 }
 #[tokio::test]
+async fn json_scalar_goal_conditions_remain_visible_in_native_confirmation() {
+    let mut goal = saved_goal();
+    goal["criteria"] = json!([{"relativeFile":"result.json","sha256":"","jsonPointer":"/ready","expectedJson":"true"}]);
+    let app = Router::new().route(
+        "/api/v1/projects/p/goals",
+        get(move || async move { Json(vec![goal]) }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let api = HttpReiClient::new(&url, Some(Secret::new("secret".into()))).unwrap();
+    let result = api
+        .workspace(WorkspaceOperation::Goals {
+            project_id: "p".into(),
+        })
+        .await
+        .unwrap();
+    let criteria = &result.items[0]
+        .fields
+        .iter()
+        .find(|(key, _)| key == "Criteria")
+        .unwrap()
+        .1;
+    assert!(criteria.contains("/ready"));
+    assert!(criteria.contains("expectedJson"));
+    task.abort();
+}
+#[tokio::test]
 async fn goal_verification_cancellation_and_history_decode_the_existing_contracts() {
     let mut verified = saved_goal();
     verified["status"] = json!("COMPLETED");

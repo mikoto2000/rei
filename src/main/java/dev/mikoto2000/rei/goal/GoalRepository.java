@@ -15,7 +15,10 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 /** Durable goal identity, claims and pre-call reservations. Resume never replenishes a budget. */
 @Repository
 public class GoalRepository {
-  public record FileCriterion(String relativeFile,String sha256) {}
+  public record FileCriterion(String relativeFile,String sha256,String jsonPointer,String expectedJson) {
+    public FileCriterion(String relativeFile,String sha256){this(relativeFile,sha256,null,null);}
+    public boolean jsonCriterion(){return jsonPointer!=null||expectedJson!=null;}
+  }
   public record Goal(String id,String projectId,String projectRoot,String sessionId,String objective,
       String relativeFile,String sha256,int maxRuns,int maxLlmCalls,int attempts,int llmCallsUsed,
       String status,String currentRunId,String reason,List<FileCriterion> criteria,
@@ -29,6 +32,7 @@ public class GoalRepository {
     }
   }
   public record Claim(Goal goal,String token) {}
+  private record CriterionKey(Path file,String predicate) {}
   public record Attempt(String runId,int number,String status,String reason) {}
   private final JdbcClient db;
   private final TransactionTemplate transaction;
@@ -48,6 +52,10 @@ public class GoalRepository {
       if(!columns.contains(column))db.sql("ALTER TABLE agent_goals ADD COLUMN "+column+" INTEGER NOT NULL DEFAULT 0").update();
     }
     db.sql("CREATE TABLE IF NOT EXISTS agent_goal_criteria(goal TEXT NOT NULL,ordinal INTEGER NOT NULL,file TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(goal,ordinal))").update();
+    var criterionColumns=new HashSet<>(db.sql("PRAGMA table_info(agent_goal_criteria)").query((rs,n)->rs.getString("name")).list());
+    for(String column:List.of("json_pointer","expected_json")) {
+      if(!criterionColumns.contains(column))db.sql("ALTER TABLE agent_goal_criteria ADD COLUMN "+column+" TEXT").update();
+    }
     db.sql("CREATE UNIQUE INDEX IF NOT EXISTS agent_goals_running_session ON agent_goals(project,session) WHERE status='RUNNING'").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_goal_attempts(goal TEXT NOT NULL,run TEXT PRIMARY KEY,number INTEGER NOT NULL,status TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',UNIQUE(goal,number))").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_goal_history(sequence INTEGER PRIMARY KEY AUTOINCREMENT,goal TEXT NOT NULL,status TEXT NOT NULL,reason TEXT NOT NULL,timestamp INTEGER NOT NULL)").update();
@@ -58,10 +66,13 @@ public class GoalRepository {
       rs.getLong("max_tokens"),rs.getLong("tokens_used"),rs.getBoolean("tokens_unknown"),rs.getInt("tokens_pending"));
 
   public Goal create(AgentRunContext owner,String objective,String relativeFile,String sha256,int maxRuns,int maxLlmCalls) {
+    if(sha256==null||!sha256.matches("[a-fA-F0-9]{64}"))throw new IllegalArgumentException("Expected SHA-256 must contain 64 hexadecimal characters");
+    return createBase(owner,objective,relativeFile,sha256.toLowerCase(Locale.ROOT),maxRuns,maxLlmCalls);
+  }
+  private Goal createBase(AgentRunContext owner,String objective,String relativeFile,String sha256,int maxRuns,int maxLlmCalls) {
     if(owner==null||owner.projectId()==null||owner.projectId().isBlank()||owner.conversationId().isBlank())throw new IllegalArgumentException("Goal requires an owning Project and Session");
     if(objective==null||objective.isBlank()||objective.length()>4096)throw new IllegalArgumentException("Objective must contain 1..4096 characters");
     validateFile(relativeFile);
-    if(sha256==null||!sha256.matches("[a-fA-F0-9]{64}"))throw new IllegalArgumentException("Expected SHA-256 must contain 64 hexadecimal characters");
     if(maxRuns<1||maxRuns>10||maxLlmCalls<1||maxLlmCalls>100)throw new IllegalArgumentException("Goal budgets: 1..10 Runs and 1..100 LLM calls");
     String id="goal-"+UUID.randomUUID();
     transaction.executeWithoutResult(status->{
@@ -73,25 +84,33 @@ public class GoalRepository {
     });return get(owner.projectId(),id);
   }
   private List<FileCriterion> criteria(String id,String file,String digest) {
-    var items=db.sql("SELECT file,digest FROM agent_goal_criteria WHERE goal=? ORDER BY ordinal").param(id)
-        .query((rs,n)->new FileCriterion(rs.getString("file"),rs.getString("digest"))).list();
+    var items=db.sql("SELECT file,digest,json_pointer,expected_json FROM agent_goal_criteria WHERE goal=? ORDER BY ordinal").param(id)
+        .query((rs,n)->new FileCriterion(rs.getString("file"),rs.getString("digest"),rs.getString("json_pointer"),rs.getString("expected_json"))).list();
     return items.isEmpty()?List.of(new FileCriterion(file,digest)):items;
   }
   public Goal create(AgentRunContext owner,String objective,List<FileCriterion> criteria,int maxRuns,int maxLlmCalls) {
     if(criteria==null||criteria.isEmpty()||criteria.size()>16)throw new IllegalArgumentException("Goal requires 1..16 file criteria");
-    var normalized=new ArrayList<FileCriterion>();var paths=new HashSet<Path>();
+    var normalized=new ArrayList<FileCriterion>();var paths=new HashSet<CriterionKey>();
     for(var item:criteria) {
       if(item==null)throw new IllegalArgumentException("File criterion is required");
       validateFile(item.relativeFile());var path=Path.of(item.relativeFile()).normalize();
-      if(!paths.add(path))throw new IllegalArgumentException("Duplicate completion file");
-      if(item.sha256()==null||!item.sha256().matches("[a-fA-F0-9]{64}"))throw new IllegalArgumentException("Expected SHA-256 must contain 64 hexadecimal characters");
-      normalized.add(new FileCriterion(path.toString().replace('\\','/'),item.sha256().toLowerCase(Locale.ROOT)));
+      String relative=path.toString().replace('\\','/');
+      if(!paths.add(new CriterionKey(path,item.jsonCriterion()?"json:"+item.jsonPointer():"digest")))throw new IllegalArgumentException("Duplicate completion criterion");
+      if(item.jsonCriterion()) {
+        if(item.sha256()!=null&&!item.sha256().isEmpty())throw new IllegalArgumentException("Use SHA-256 or JSON scalar criteria");
+        var condition=JsonFileGoalCondition.parse(item.jsonPointer(),item.expectedJson());
+        normalized.add(new FileCriterion(relative,"",condition.pointer(),condition.expectedJson()));
+      } else {
+        if(item.sha256()==null||!item.sha256().matches("[a-fA-F0-9]{64}"))throw new IllegalArgumentException("Expected SHA-256 must contain 64 hexadecimal characters");
+        normalized.add(new FileCriterion(relative,item.sha256().toLowerCase(Locale.ROOT)));
+      }
     }
     return transaction.execute(status->{
-      var first=normalized.getFirst();var goal=create(owner,objective,first.relativeFile(),first.sha256(),maxRuns,maxLlmCalls);
+      var first=normalized.getFirst();var goal=createBase(owner,objective,first.relativeFile(),first.sha256(),maxRuns,maxLlmCalls);
       for(int i=0;i<normalized.size();i++) {
         var item=normalized.get(i);
-        db.sql("INSERT INTO agent_goal_criteria(goal,ordinal,file,digest) VALUES(?,?,?,?)").params(goal.id(),i,item.relativeFile(),item.sha256()).update();
+        db.sql("INSERT INTO agent_goal_criteria(goal,ordinal,file,digest,json_pointer,expected_json) VALUES(?,?,?,?,?,?)")
+            .params(goal.id(),i,item.relativeFile(),item.sha256(),item.jsonPointer(),item.expectedJson()).update();
       }
       return get(owner.projectId(),goal.id());
     });
@@ -183,10 +202,11 @@ public class GoalRepository {
   }
   public Goal verifiedWithoutRun(String project,String id) {
     transaction.executeWithoutResult(status->{
-      get(project,id);
-      if(db.sql("UPDATE agent_goals SET status='COMPLETED',reason='file_digest_verified' WHERE project=? AND id=? AND status NOT IN ('RUNNING','CANCELLED','COMPLETED')")
-          .params(project,id).update()!=1)throw new IllegalStateException("Goal is running or terminal");
-      history(id,"COMPLETED","file_digest_verified");
+      var goal=get(project,id);
+      String reason=goal.criteria().stream().anyMatch(FileCriterion::jsonCriterion)?"criteria_verified":"file_digest_verified";
+      if(db.sql("UPDATE agent_goals SET status='COMPLETED',reason=? WHERE project=? AND id=? AND status NOT IN ('RUNNING','CANCELLED','COMPLETED')")
+          .params(reason,project,id).update()!=1)throw new IllegalStateException("Goal is running or terminal");
+      history(id,"COMPLETED",reason);
     });return get(project,id);
   }
   /** Human reconciliation only: unknown side effects remain unknown; no budget or evidence is restored. */

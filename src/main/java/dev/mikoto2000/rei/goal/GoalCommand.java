@@ -17,7 +17,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
   @Parameters(index="1",arity="0..1",paramLabel="goalId|objective") String value;
   @Option(names="--file",description="Project-relative completion file") String file;
   @Option(names="--sha256",description="Exact expected file SHA-256") String digest;
-  @Option(names="--criteria-json",description="JSON array of 1..16 {relativeFile,sha256} criteria; all must match") String criteriaJson;
+  @Option(names="--criteria-json",description="JSON array of 1..16 {relativeFile,sha256} or {relativeFile,jsonPointer,expectedJson} scalar criteria; all must match") String criteriaJson;
   @Option(names="--run-id",description="Observed uncertain Run ID; use none for a claim without an attempt") String expectedRunId;
   @Option(names="--acknowledge-uncertain-side-effects",description="Acknowledge that previous effects must be inspected before explicit resume") boolean acknowledgeUncertain;
   @Option(names="--max-runs",defaultValue="3") int maxRuns;
@@ -55,12 +55,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
   }
   private java.util.List<GoalRepository.FileCriterion> parseCriteria() {
     if(file!=null||digest!=null||criteriaJson.length()>32768)throw new IllegalArgumentException("Use either --criteria-json (up to 32768 characters) or --file and --sha256");
-    try {
-      var items=new com.fasterxml.jackson.databind.ObjectMapper().readerFor(GoalRepository.FileCriterion[].class)
-          .with(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).<GoalRepository.FileCriterion[]>readValue(criteriaJson);
-      if(items==null)throw new IllegalArgumentException("File criteria array is required");
-      return java.util.Arrays.asList(items);
-    } catch(com.fasterxml.jackson.core.JsonProcessingException error) {throw new IllegalArgumentException("Invalid file criteria JSON");}
+    return JsonFileGoalCondition.parseCriteria(criteriaJson);
   }
   private String requiredValue(){if(value==null||value.isBlank())throw new IllegalArgumentException("Goal ID or objective is required");return value;}
 }

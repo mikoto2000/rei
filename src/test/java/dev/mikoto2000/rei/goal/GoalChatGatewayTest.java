@@ -31,6 +31,17 @@ class GoalChatGatewayTest {
   dev.mikoto2000.rei.application.run.RunService tracking;
   dev.mikoto2000.rei.application.run.RunRegistry registry;
   @AfterEach void closeTracking(){if(tracking!=null)tracking.close();}
+  @Test void jsonCompletionConditionsReachExistingChatPlanningPrompt() throws Exception {
+    var structured=loop.create(new AgentRunContext("source","session",dir,project),"ready",
+        List.of(new GoalRepository.FileCriterion("result.json",null,"/ready","true")),1,5);
+    when(chat.execute(any(),anyString(),any(),any())).thenAnswer(invocation->{
+      String prompt=invocation.getArgument(1);assertTrue(prompt.contains("JSON Pointer"));assertTrue(prompt.contains("/ready"));
+      assertTrue(prompt.contains("expectedJson=true"));return ChatExecutionResult.success("done",false);
+    });
+    loop.run(project,structured.id());jobs.removeFirst().run();
+    assertEquals("BLOCKED",goals.get(project,structured.id()).status());
+    verify(chat).execute(any(),anyString(),any(),any());
+  }
   void trackRuns() {
     bus=new InMemoryAgentEventBus();registry=new dev.mikoto2000.rei.application.run.RunRegistry(Clock.systemUTC());
     tracking=new dev.mikoto2000.rei.application.run.RunService(registry,bus,new AgentEventFactory(Clock.systemUTC()),new dev.mikoto2000.rei.core.service.CommandCancellationService(),router::cancelQueued);
