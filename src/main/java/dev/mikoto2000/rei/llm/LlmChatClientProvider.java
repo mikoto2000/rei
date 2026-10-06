@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -176,11 +176,9 @@ public class LlmChatClientProvider {
     // Extraction and summarization process supplied evidence without conversation state or tools.
     if (LlmFeature.MEMORY.equals(feature)) {
       var options = modelProvider.chatOptions(feature, null);
-      options.setInternalToolExecutionEnabled(false);
-      options.setToolCallbacks(List.of());
-      options.setToolNames(java.util.Set.of());
+      dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
       return ChatClient.builder(modelProvider.memoryChatModel())
-          .defaultOptions(options)
+          .defaultOptions(options.mutate().toolCallbacks(List.of()).toolChoice("none"))
           .build();
     }
     List<Advisor> advisors = new ArrayList<>();
@@ -192,7 +190,7 @@ public class LlmChatClientProvider {
     if (LlmFeature.CHAT.equals(feature) && externalDelegation != null)
       advisors.add(new dev.mikoto2000.rei.externalagent.ExternalAgentReviewAdvisor(externalDelegation, chatMemory));
     if (LlmFeature.CHAT.equals(feature) && contextHistory != null) advisors.add(contextHistory);
-    else advisors.add(PromptChatMemoryAdvisor.builder(chatMemory)
+    else advisors.add(MessageChatMemoryAdvisor.builder(chatMemory)
         .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
         .build());
     RuntimeContextAdvisor runtimeContextAdvisorInstance = runtimeContextAdvisor.getIfAvailable();
@@ -215,8 +213,9 @@ public class LlmChatClientProvider {
     }
     ChatClient.Builder builder = ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
         modelProvider.chatModel(feature), LlmFeature.CHAT.equals(feature) ? contextAssembler : null))
+        .defaultAdvisors(new RunAwareToolCallingAdvisor())
         .defaultSystem(systemPromptService.systemPrompt())
-        .defaultOptions(modelProvider.chatOptions(feature, null))
+        .defaultOptions(modelProvider.chatOptions(feature, null).mutate())
         .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors));
 
     // Reply generation returns text; only the caller may publish the reply.

@@ -27,6 +27,7 @@ class ComputerUseApplicationTest {
   @Autowired org.springframework.ai.chat.memory.ChatMemory history;
 
   @Test void actualChatRequestAdvertisesComputerUseExactlyOnceAndOtherFeaturesDoNot() {
+    when(chatModel.getOptions()).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().model("test-model").build());
     var captured = new java.util.concurrent.atomic.AtomicReference<org.springframework.ai.chat.prompt.Prompt>();
     when(chatModel.stream(any(org.springframework.ai.chat.prompt.Prompt.class))).thenAnswer(invocation -> {
       captured.set(invocation.getArgument(0));

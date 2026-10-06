@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.*;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.model.*;
@@ -46,6 +46,7 @@ class ExternalAgentEvaluationIntegrationTest {
     }, new CommandCancellationService(), factory, e -> {}, Optional.empty());
     var calls = new AtomicInteger();
     ChatModel model = new ChatModel() {
+      public org.springframework.ai.chat.prompt.ChatOptions getOptions() { return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build(); }
       public ChatResponse call(Prompt prompt) { throw new UnsupportedOperationException(); }
       public Flux<ChatResponse> stream(Prompt prompt) {
         if (!slash && calls.getAndIncrement() == 0) {
@@ -59,8 +60,9 @@ class ExternalAgentEvaluationIntegrationTest {
       }
     };
     var client = ChatClient.builder(new StagnationChatModel(model))
+        .defaultAdvisors(new dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor())
         .defaultTools(new ExternalAgentTools(service))
-        .defaultAdvisors(RunScopedAdvisor.wrap(List.of(PromptChatMemoryAdvisor.builder(memory).build(),
+        .defaultAdvisors(RunScopedAdvisor.wrap(List.of(MessageChatMemoryAdvisor.builder(memory).build(),
             new ExternalAgentReviewAdvisor(service, memory)))).build();
     try (var scope = AgentRunScope.open(owner)) {
       var options = OpenAiChatOptions.builder().toolContext(Map.of(RunExecutionContext.KEY, run)).build();

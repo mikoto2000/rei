@@ -435,8 +435,8 @@ public class ChatExecutionService {
       log.warn("Prompt attachment warning: {}", warning);
     }
 
-    var options = modelProvider.chatOptions(LlmFeature.CHAT, currentModelHolder.get(), true);
-    options.setToolContext(Map.of(RunExecutionContext.KEY, execution));
+    var options = modelProvider.chatOptions(LlmFeature.CHAT, currentModelHolder.get(), true).mutate()
+        .toolContext(Map.of(RunExecutionContext.KEY, execution)).build();
     ChatClientRequestSpec requestSpec = chatClientProvider.chatClient(LlmFeature.CHAT)
       .prompt(new Prompt(
           UserMessage.builder()

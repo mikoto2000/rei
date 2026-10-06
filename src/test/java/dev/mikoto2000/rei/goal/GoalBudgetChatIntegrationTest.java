@@ -13,6 +13,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.*;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
@@ -28,6 +29,7 @@ class GoalBudgetChatIntegrationTest {
   @Test void goalOnlyTokenLimitIsEnforcedAtActualChatBoundaryBeforeTools() {
     var toolCalls=new AtomicInteger();
     var model=mock(ChatModel.class);
+    when(model.getOptions()).thenReturn(ToolCallingChatOptions.builder().build());
     when(model.stream(any(Prompt.class))).thenReturn(Flux.just(new ChatResponse(List.of(new Generation(
         AssistantMessage.builder().content("").toolCalls(List.of(new AssistantMessage.ToolCall("call","function","readFile","{}"))).build())),
         org.springframework.ai.chat.metadata.ChatResponseMetadata.builder().usage(new org.springframework.ai.chat.metadata.DefaultUsage(1,10)).build())));
@@ -40,7 +42,8 @@ class GoalBudgetChatIntegrationTest {
     var goals=new GoalRepository(new DriverManagerDataSource("jdbc:sqlite:"+dir.resolve("goals.db")),Clock.systemUTC(),properties);
     var goal=goals.create(new AgentRunContext("source","session",dir,"project"),"Artifact","out.txt","a".repeat(64),3,10);
     var holder=mock(ModelHolderService.class);when(holder.get()).thenReturn("test");
-    var chat=new ChatExecutionService(new FixedLlmChatClientProvider(ChatClient.builder(new StagnationChatModel(model)).defaultToolCallbacks(read).build()),
+    var chat=new ChatExecutionService(new FixedLlmChatClientProvider(ChatClient.builder(new StagnationChatModel(model))
+        .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultToolCallbacks(read).build()),
         holder,new FixedLlmModelProvider(),properties,new CommandCancellationService(),Optional.empty(),Optional.empty());
     var loop=new GoalLoopService(goals,new FileGoalVerifier(),(claim,run,done)->done.accept(new GoalLoopService.Outcome(
         chat.execute(new AgentRunContext(run,"session",dir,"project"),"Artifact",new UserInterventionQueue(),goals.modelBudget(claim,run)))),
@@ -54,6 +57,7 @@ class GoalBudgetChatIntegrationTest {
   @Test void actualChatToolLoopReservesEveryCallAndStopsAtDurableGoalLimit() {
     var modelCalls=new AtomicInteger();
     ChatModel model=new ChatModel() {
+      @Override public ToolCallingChatOptions getOptions() { return ToolCallingChatOptions.builder().build(); }
       public ChatResponse call(Prompt prompt){throw new UnsupportedOperationException();}
       public Flux<ChatResponse> stream(Prompt prompt) {
         int call=modelCalls.incrementAndGet();
@@ -66,7 +70,8 @@ class GoalBudgetChatIntegrationTest {
       public String call(String input){return "unchanged";}
     };
     var holder=mock(ModelHolderService.class);when(holder.get()).thenReturn("test");
-    var client=ChatClient.builder(new StagnationChatModel(model)).defaultToolCallbacks(read).build();
+    var client=ChatClient.builder(new StagnationChatModel(model))
+        .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultToolCallbacks(read).build();
     var chat=new ChatExecutionService(new FixedLlmChatClientProvider(client),holder,new FixedLlmModelProvider(),new LlmProperties(),
         new CommandCancellationService(),Optional.empty(),Optional.empty());
     var goals=new GoalRepository(new DriverManagerDataSource("jdbc:sqlite:"+dir.resolve("goals.db")),Clock.systemUTC());

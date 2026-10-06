@@ -8,11 +8,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.model.*;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import dev.mikoto2000.rei.core.project.*;
@@ -20,6 +21,7 @@ import dev.mikoto2000.rei.core.service.*;
 import dev.mikoto2000.rei.core.stagnation.StagnationChatModel;
 import dev.mikoto2000.rei.conversation.*;
 import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor;
 import reactor.core.publisher.Flux;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -40,6 +42,7 @@ class ProjectRunSwitchIntegrationTest extends dev.mikoto2000.rei.core.project.Pr
       var store = new ProjectAgentEventStore(data); bus.subscribe(store);
       var calls = new AtomicInteger();
       ChatModel model = new ChatModel() {
+        @Override public ToolCallingChatOptions getOptions() { return ToolCallingChatOptions.builder().build(); }
         public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
         public Flux<ChatResponse> stream(Prompt p) {
           if (calls.incrementAndGet() == 1) return Flux.just(new ChatResponse(List.of(new Generation(
@@ -61,8 +64,9 @@ class ProjectRunSwitchIntegrationTest extends dev.mikoto2000.rei.core.project.Pr
       };
       var memory = MessageWindowChatMemory.builder().maxMessages(100).build();
       var client = ChatClient.builder(new StagnationChatModel(model))
+          .defaultAdvisors(new RunAwareToolCallingAdvisor())
           .defaultToolCallbacks(new ToolEventCallbackDecorator(tool, events, bus))
-          .defaultAdvisors(PromptChatMemoryAdvisor.builder(memory).build()).build();
+          .defaultAdvisors(RunScopedAdvisor.wrap(List.of(MessageChatMemoryAdvisor.builder(memory).build()))).build();
       var holder = mock(ModelHolderService.class); when(holder.get()).thenReturn("test");
       var service = new ChatExecutionService(client, holder, new CommandCancellationService(), Optional.empty(), events, bus);
       service.setChatMemory(memory); service.setConversationLogStore(new ConversationLogStore());

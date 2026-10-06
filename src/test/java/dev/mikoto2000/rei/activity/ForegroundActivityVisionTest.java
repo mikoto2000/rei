@@ -11,8 +11,8 @@ import static org.mockito.Mockito.*;
 
 class ForegroundActivityVisionTest {
   @Test void logsReportedReasoningTokensWithoutReasoningText() throws Exception {
-    var usage=new org.springframework.ai.openai.api.OpenAiApi.Usage(1800,100,1900,null,
-        new org.springframework.ai.openai.api.OpenAiApi.Usage.CompletionTokenDetails(1500,null,null,null));
+    var usage=com.openai.models.completions.CompletionUsage.builder().completionTokens(1800).promptTokens(100).totalTokens(1900)
+        .completionTokensDetails(com.openai.models.completions.CompletionUsage.CompletionTokensDetails.builder().reasoningTokens(1500).build()).build();
     var metadata=org.springframework.ai.chat.metadata.ChatResponseMetadata.builder().usage(new org.springframework.ai.chat.metadata.DefaultUsage(100,1800,1900,usage)).build();
     var model=mock(ChatModel.class);when(model.call(any(Prompt.class))).thenReturn(new ChatResponse(response(VALID,"stop").getResults(),metadata));
     var logger=(ch.qos.logback.classic.Logger)org.slf4j.LoggerFactory.getLogger(VisionActivityExtractor.class);
@@ -29,13 +29,14 @@ class ForegroundActivityVisionTest {
   @Test void foregroundUsesOneSmallClassificationWithoutModelGeneratedObservationsOrMonitorIds() throws Exception {
     var model=mock(ChatModel.class);when(model.call(any(Prompt.class))).thenReturn(response(VALID,"stop"));
     try(var scope=org.slf4j.MDC.putCloseable("activityScope","foreground")) {
-      var result=new VisionActivityExtractor(()->model,()->OpenAiChatOptions.builder().maxTokens(32768).build()).extract(ActivityCaptureTest.screen(20),new ForegroundWindow("Firefox",1,"ChatGPT","1"));
+      var result=new VisionActivityExtractor(()->model,()->OpenAiChatOptions.builder().model("local-activity").temperature(.15).maxTokens(32768).build()).extract(ActivityCaptureTest.screen(20),new ForegroundWindow("Firefox",1,"ChatGPT","1"));
       assertEquals(1,result.inference().activities().size());assertEquals("research",result.inference().activities().getFirst().type());
       assertEquals("",result.inference().activities().getFirst().projectCandidate());
     }
     var prompt=org.mockito.ArgumentCaptor.forClass(Prompt.class);verify(model).call(prompt.capture());
     var options=(OpenAiChatOptions)prompt.getValue().getOptions();assertEquals(2048,options.getMaxCompletionTokens());assertNull(options.getMaxTokens());
-    var schema=new tools.jackson.databind.json.JsonMapper().valueToTree(options.getResponseFormat().getJsonSchema().getSchema());
+    assertEquals("local-activity",options.getModel());assertEquals(.15,options.getTemperature());
+    var schema=new tools.jackson.databind.json.JsonMapper().readTree(options.getResponseFormat().getJsonSchema());
     assertEquals(7,schema.get("properties").size());assertFalse(schema.get("properties").has("observations"));assertFalse(schema.get("properties").has("activities"));assertFalse(schema.get("properties").has("monitor"));
     assertTrue(prompt.getValue().getSystemMessage().getText().length()<1200);assertTrue(options.getToolCallbacks().isEmpty());
   }

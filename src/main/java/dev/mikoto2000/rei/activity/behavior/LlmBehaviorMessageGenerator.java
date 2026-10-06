@@ -39,8 +39,9 @@ public final class LlmBehaviorMessageGenerator implements BehaviorMessageGenerat
         「予定が残っている」「仕事に遅れる」等を付け足さず、観測された娯楽傾向だけを根拠に区切りを促してください。
         ツールは使わず、JSONや内部ラベルや分析過程を出力しないでください。
         """;
-    var requestOptions=new OpenAiChatOptions.Builder(options.get()).tools(null).toolChoice(null).toolCallbacks(List.of()).toolNames(Set.of())
-        .internalToolExecutionEnabled(false).build();
+    var requestOptions=options.get().mutate().toolChoice(null).toolCallbacks(List.of())
+        .build();
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(requestOptions);
     var chat=model.get();dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(chat);
     var response=chat.call(new Prompt(List.of(new SystemMessage(character.get()+"\n\n"+instruction),new UserMessage(new ObjectMapper().writeValueAsString(data))),requestOptions));
     if(response==null || response.getResult()==null || response.getResult().getOutput()==null) throw new IllegalStateException("No behavior wording");

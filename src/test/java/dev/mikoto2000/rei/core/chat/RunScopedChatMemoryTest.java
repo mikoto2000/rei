@@ -6,14 +6,15 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.*;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.model.*;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.sqlite.SQLiteDataSource;
 import reactor.core.publisher.Flux;
 import static org.assertj.core.api.Assertions.*;
@@ -34,8 +35,8 @@ class RunScopedChatMemoryTest {
 
   private void checkStream(List<ChatResponse> chunks, String expected) {
     var ds = new SQLiteDataSource(); ds.setUrl("jdbc:sqlite:" + temp.resolve("memory.db"));
-    var jdbc = new JdbcTemplate(ds);
-    jdbc.execute("CREATE TABLE SPRING_AI_CHAT_MEMORY(conversation_id TEXT NOT NULL, content TEXT NOT NULL, type TEXT NOT NULL, timestamp INTEGER NOT NULL)");
+    new ResourceDatabasePopulator(new ClassPathResource(
+        "org/springframework/ai/chat/memory/repository/jdbc/schema-sqlite.sql")).execute(ds);
     var repository = JdbcChatMemoryRepository.builder().dataSource(ds).build();
     var memory = MessageWindowChatMemory.builder().chatMemoryRepository(repository).maxMessages(20).build();
     var run = new AgentRunContext("run-a", "project:" + UUID.randomUUID() + ":chat:main", temp);
@@ -47,7 +48,7 @@ class RunScopedChatMemoryTest {
       public Flux<ChatResponse> stream(Prompt prompt) { return Flux.fromIterable(chunks); }
     };
     var client = ChatClient.builder(model)
-        .defaultAdvisors(RunScopedAdvisor.wrap(List.of(PromptChatMemoryAdvisor.builder(memory).build())))
+        .defaultAdvisors(RunScopedAdvisor.wrap(List.of(MessageChatMemoryAdvisor.builder(memory).build())))
         .build();
     List<ChatResponse> delivered;
     try (var ignored = AgentRunScope.open(run)) {

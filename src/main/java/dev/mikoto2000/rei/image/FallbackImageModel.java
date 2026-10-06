@@ -39,14 +39,18 @@ class FallbackImageModel implements ImageModel {
 
   private ImagePrompt fallbackPrompt(ImagePrompt prompt) {
     ImageOptions options = prompt.getOptions();
-    if (!(options instanceof OpenAiImageOptions openAiOptions)
+    if (options == null
         || primaryModel == null
         || primaryModel.isBlank()
-        || !primaryModel.equals(openAiOptions.getModel())) {
+        || !primaryModel.equals(options.getModel())) {
       return prompt;
     }
-    OpenAiImageOptions fallbackOptions = openAiOptions.copy();
-    fallbackOptions.setModel(null);
+    String fallbackModel = ImageModelProvider.configuredModel(fallback);
+    ImageOptions fallbackOptions = options instanceof OpenAiImageOptions openAiOptions && fallbackModel != null
+        ? OpenAiImageOptions.builder().from(openAiOptions).model(fallbackModel).build()
+        : org.springframework.ai.image.ImageOptionsBuilder.builder().model(fallbackModel)
+            .n(options.getN()).width(options.getWidth()).height(options.getHeight())
+            .responseFormat(options.getResponseFormat()).style(options.getStyle()).build();
     List<ImageMessage> instructions = prompt.getInstructions();
     return new ImagePrompt(instructions, fallbackOptions);
   }

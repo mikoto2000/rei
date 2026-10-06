@@ -20,6 +20,37 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
 
 class FallbackChatModelTest {
+  @Test
+  void fallbackRetainsConfiguredFallbackModelAndRequestOptionsForCallAndStream() {
+    var primary = Mockito.mock(ChatModel.class);
+    var fallback = Mockito.mock(ChatModel.class);
+    when(fallback.getOptions()).thenReturn(OpenAiChatOptions.builder().model("local-fallback").build());
+    var options = OpenAiChatOptions.builder().model("feature-model").temperature(0.3)
+        .maxTokens(1234).streamUsage(true).toolContext(java.util.Map.of("run", "owner")).build();
+    var prompt = new Prompt("hello", options);
+    when(primary.call(prompt)).thenThrow(new RuntimeException("unavailable"));
+    when(primary.stream(prompt)).thenReturn(Flux.error(new RuntimeException("unavailable")));
+    when(fallback.call(Mockito.any(Prompt.class))).thenReturn(response("fallback"));
+    when(fallback.stream(Mockito.any(Prompt.class))).thenReturn(Flux.just(response("fallback")));
+    var model = new FallbackChatModel("chat", primary, fallback, "feature-model");
+
+    model.call(prompt);
+    model.stream(prompt).blockLast();
+
+    var calls = ArgumentCaptor.forClass(Prompt.class);
+    verify(fallback).call(calls.capture());
+    verify(fallback).stream(calls.capture());
+    for (var actual : calls.getAllValues()) {
+      var actualOptions = (OpenAiChatOptions) actual.getOptions();
+      assertThat(actualOptions.getModel()).isEqualTo("local-fallback");
+      assertThat(actualOptions.getMaxTokens()).isEqualTo(1234);
+      assertThat(actualOptions.getTemperature()).isEqualTo(0.3);
+      assertThat(actualOptions.getToolContext()).containsEntry("run", "owner");
+      assertThat(actualOptions.getStreamOptions().includeUsage()).isTrue();
+    }
+    assertThat(options.getModel()).isEqualTo("feature-model");
+  }
+
   @Test void ordinaryTransportErrorAfterRunCancellationDoesNotStartFallback() {
     var primary = Mockito.mock(ChatModel.class);
     var fallback = Mockito.mock(ChatModel.class);
@@ -189,8 +220,8 @@ class FallbackChatModelTest {
     }
 
     @Override
-    public ChatOptions copy() {
-      return this;
+    public ChatOptions.Builder<?> mutate() {
+      throw new UnsupportedOperationException();
     }
   }
 }

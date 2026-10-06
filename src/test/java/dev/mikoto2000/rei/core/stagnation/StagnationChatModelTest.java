@@ -18,6 +18,26 @@ import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import reactor.core.publisher.Flux;
 
 class StagnationChatModelTest {
+  @Test void acceptsUnsetCallbacksAndDoesNotMutateRequestContext() {
+    var context = context(3, new ArrayList<>());
+    var options = org.springframework.ai.openai.OpenAiChatOptions.builder()
+        .model("configured-model").toolContext(Map.of(RunExecutionContext.KEY, context)).build();
+    ChatModel delegate = new ChatModel() {
+      public ChatResponse call(Prompt prompt) { throw new UnsupportedOperationException(); }
+      public Flux<ChatResponse> stream(Prompt prompt) {
+        var actual = (org.springframework.ai.openai.OpenAiChatOptions) prompt.getOptions();
+        assertThat(actual.getModel()).isEqualTo("configured-model");
+        assertThat(actual.getToolCallbacks()).isEmpty();
+        assertThat(actual.getToolContext()).containsKey("rei.contextSequenceOffset");
+        return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("done")))));
+      }
+    };
+    assertThat(new StagnationChatModel(delegate).stream(new Prompt("work", options))
+        .blockLast().getResult().getOutput().getText()).isEqualTo("done");
+    assertThat(options.getToolContext()).doesNotContainKey("rei.contextSequenceOffset");
+    assertThat(options.getToolCallbacks()).isNull();
+  }
+
   @Test void policyBlocksAChatToolBeforeTheCallbackIsInvoked() {
     var events=new ArrayList<AgentEvent>();
     var context=context(3,events);
@@ -188,7 +208,7 @@ class StagnationChatModelTest {
     ChatModel delegate = new ChatModel() {
       public ChatResponse call(Prompt prompt) { throw new UnsupportedOperationException(); }
       public Flux<ChatResponse> stream(Prompt prompt) {
-        assertThat(((ToolCallingChatOptions) prompt.getOptions()).getInternalToolExecutionEnabled()).isFalse();
+        assertThat(((ToolCallingChatOptions) prompt.getOptions()).getToolCallbacks()).hasSize(1);
         prompts.add(prompt);
         int n = calls.incrementAndGet();
         AssistantMessage message = finish && n == 7 ? new AssistantMessage("done")

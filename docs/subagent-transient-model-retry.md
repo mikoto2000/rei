@@ -2,7 +2,7 @@
 
 `rei.subagents.max-transient-model-retries`（環境変数`REI_SUBAGENTS_MAX_TRANSIENT_MODEL_RETRIES`）は既定0、明示0〜3。子invocation全体で共用し、通常のTool cycle、検証修復、Toolなしsemantic judgeでresetしない。並列の別invocationには各々の上限があるが、既存の親／バッチ共有呼出予算がすべての再試行に優先する。
 
-再試行できるのはSpring AIの`TransientAiException`で、当該モデル呼出がChatResponse chunkを一つも受信していない場合だけ。単一失敗呼出の同じPromptを100ms後に再試行する。部分応答、空応答、形式不正、output limit、非transient障害、Tool実行障害ではこの再試行を行わない。以前に成功したToolとそのreceipt、実行済みcycleを再実行しない。Toolそのもののretryはこのsliceの範囲外。
+再試行できるのはOpenAI SDKのtransport / retryable error、またはHTTP 408 / 409 / 429 / 5xxで、当該モデル呼出がChatResponse chunkを一つも受信していない場合だけ。SDKの`X-Should-Retry`指示を尊重し、`CompletionException` / `ExecutionException`の非同期ラッパーだけを解除して判定する。単一失敗呼出の同じPromptを100ms後に再試行する。部分応答、空応答、形式不正、output limit、非transient障害、Tool実行障害ではこの再試行を行わない。以前に成功したToolとそのreceipt、実行済みcycleを再実行しない。Toolそのもののretryはこのsliceの範囲外。
 
 再試行する各model.streamの直前にも共有maxStepsとRun／Goal／ownerless共有呼出予算を予約する。最初の失敗呼出も非返金。報告token上限が有効でusage不明となった場合は、既存TOKEN_USAGE_UNKNOWN停止が再試行より優先する。したがって費用不明の呼出を自動で重ねない。既存のtoken計上は出力解析／Tool実行前に維持する。
 

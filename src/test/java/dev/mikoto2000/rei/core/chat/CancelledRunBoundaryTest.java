@@ -10,6 +10,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.*;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import dev.mikoto2000.rei.core.service.*;
@@ -116,7 +117,8 @@ class CancelledRunBoundaryTest {
         new AssistantMessage.ToolCall("a", "function", "work", "{}"),
         new AssistantMessage.ToolCall("b", "function", "work", "{}"))).build())));
     var calls = new AtomicInteger();
-    var client = ChatClient.builder(new StagnationChatModel(model(calls, Flux.just(response)))).defaultToolCallbacks(tool).build();
+    var client = ChatClient.builder(new StagnationChatModel(model(calls, Flux.just(response))))
+        .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultToolCallbacks(tool).build();
     var cancellation = new CommandCancellationService();
     var service = service(client, cancellation, new CopyOnWriteArrayList<>());
     try (var executor = Executors.newSingleThreadExecutor()) {
@@ -139,6 +141,8 @@ class CancelledRunBoundaryTest {
   }
   private static ChatModel model(AtomicInteger calls, Flux<ChatResponse> result) {
     return new ChatModel() {
+      // ChatClient derives the request options type from the model in Spring AI 2.
+      @Override public ToolCallingChatOptions getOptions() { return ToolCallingChatOptions.builder().build(); }
       public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
       public Flux<ChatResponse> stream(Prompt p) { calls.incrementAndGet(); return result; }
     };

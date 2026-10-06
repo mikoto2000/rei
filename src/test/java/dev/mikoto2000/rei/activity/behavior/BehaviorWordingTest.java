@@ -20,7 +20,7 @@ class BehaviorWordingTest {
     String system=request.getValue().getSystemMessage().getText(),user=request.getValue().getUserMessage().getText();
     assertTrue(system.contains("既存のれいのキャラクター"));assertTrue(system.contains("再判定・変更せず"));assertTrue(system.contains("締切"));
     assertTrue(user.contains("WARNING"));assertTrue(user.contains("60.0"));assertFalse(user.contains("observed context"));assertFalse(user.contains("foreground"));
-    var options=(OpenAiChatOptions)request.getValue().getOptions();assertFalse(options.getInternalToolExecutionEnabled());assertTrue(options.getToolCallbacks().isEmpty());
+    var options=(OpenAiChatOptions)request.getValue().getOptions();assertNull(options.getToolChoice());assertTrue(options.getToolCallbacks().isEmpty());assertEquals("test",options.getModel());
   }
   @Test void weakEvidenceOmitsSpecificServices() throws Exception {
     var model=mock(ChatModel.class);var a=assess(3600,record(0,3600,"social"));

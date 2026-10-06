@@ -20,6 +20,7 @@ import dev.mikoto2000.rei.core.stagnation.*;
 import dev.mikoto2000.rei.core.working.*;
 import dev.mikoto2000.rei.event.*;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
+import dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor;
 import reactor.core.publisher.Flux;
 
 @org.junit.jupiter.api.Tag("integration")
@@ -47,6 +48,7 @@ class ContextChatIntegrationTest {
     assembler.setWorkingSet(working::renderForPrompt);
     var sent = new AtomicReference<Prompt>();
     ChatModel model = new ChatModel() {
+      @Override public OpenAiChatOptions getOptions() { return OpenAiChatOptions.builder().build(); }
       public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
       public Flux<ChatResponse> stream(Prompt p) {
         sent.set(p);
@@ -55,6 +57,7 @@ class ContextChatIntegrationTest {
     };
     var memory = MessageWindowChatMemory.builder().maxMessages(100).build();
     var client = ChatClient.builder(new StagnationChatModel(model, assembler)).defaultSystem("system rules")
+        .defaultAdvisors(new RunAwareToolCallingAdvisor())
         .defaultAdvisors(RunScopedAdvisor.wrap(List.of(new ContextHistoryAdvisor(turns, memory, summaries),
             new WorkingSetAdvisor(working)))).build();
     var options = OpenAiChatOptions.builder().toolContext(Map.of(RunExecutionContext.KEY, execution)).build();

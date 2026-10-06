@@ -21,19 +21,21 @@ public class SpringPaperLanguageModel implements PaperLanguageModel {
     String name =
         provider.model(
             "chat",
-            model.getDefaultOptions() == null ? null : model.getDefaultOptions().getModel());
+            model.getOptions() == null ? null : model.getOptions().getModel());
     return name == null ? "configured-default" : name;
   }
 
   public String generate(String system, String input, PaperOperation op) {
     op.check();
-    var options = provider.chatOptions("chat", model());
-    options.setInternalToolExecutionEnabled(false);
-    options.setToolCallbacks(List.of());
+    var options = provider.chatOptions("chat", model()).mutate()
+        .toolCallbacks(List.of()).toolChoice("none").build();
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
+    var chatModel = provider.subAgentChatModel();
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(chatModel);
     var prompt = new Prompt(List.of(new SystemMessage(system), new UserMessage(input)), options);
     // Streaming allows disposal to reach the HTTP subscription when the owning run is cancelled.
     var future =
-        provider.subAgentChatModel().stream(prompt)
+        chatModel.stream(prompt)
             .map(
                 r ->
                     r.getResult() == null || r.getResult().getOutput() == null

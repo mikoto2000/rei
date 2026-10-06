@@ -86,7 +86,7 @@ class ShowUiComputerVisionModelTest {
     var options = (OpenAiChatOptions)prompt.getOptions();
     assertEquals(128,options.getMaxTokens());
     assertNull(options.getResponseFormat());
-    assertNull(options.getTools());
+    assertTrue(options.getToolCallbacks().isEmpty());
   }
   @Test void invalidGroundingFailsTaskWithoutExecutingPlannerCoordinates() {
     var grounding = mock(ChatModel.class);

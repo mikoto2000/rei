@@ -17,7 +17,31 @@ import org.springframework.ai.image.ImageResponse;
 class OpenAiImageGenerationClientTest {
 
   @Test
-  void buildsImagePromptWithOpenAiOptions() {
+  void requestOverridesDoNotReplaceConfiguredSdkTimeout() {
+    var timeout = new java.util.concurrent.atomic.AtomicInteger();
+    var model = org.springframework.ai.openai.OpenAiImageModel.builder()
+        .options(org.springframework.ai.openai.OpenAiImageOptions.builder()
+            .baseUrl("https://image.invalid/v1").apiKey("test").model("configured-image")
+            .timeout(java.time.Duration.ofSeconds(117)).maxRetries(0).build())
+        .httpClientBuilderCustomizer(builder -> builder.interceptor(chain -> {
+          timeout.set(chain.readTimeoutMillis());
+          return new okhttp3.Response.Builder().request(chain.request()).protocol(okhttp3.Protocol.HTTP_1_1)
+              .code(200).message("OK").body(okhttp3.ResponseBody.create(
+                  "{\"created\":0,\"data\":[{\"b64_json\":\"aW1hZ2U=\"}]}",
+                  okhttp3.MediaType.get("application/json"))).build();
+        })).build();
+    var provider = Mockito.mock(ImageModelProvider.class);
+    when(provider.imageModel()).thenReturn(model);
+    when(provider.model(null)).thenReturn("configured-image");
+    var client = new OpenAiImageGenerationClient(provider);
+
+    assertThat(client.generate(new ImageGenerationRequest("cat", null, null, new ImageSize(512, 512))))
+        .isEqualTo("aW1hZ2U=");
+    assertThat(timeout).hasValue(117000);
+  }
+
+  @Test
+  void buildsImagePromptWithOnlyRequestedOverrides() {
     ImageModel imageModel = Mockito.mock(ImageModel.class);
     ImageModelProvider provider = Mockito.mock(ImageModelProvider.class);
     when(provider.imageModel()).thenReturn(imageModel);
@@ -28,6 +52,7 @@ class OpenAiImageGenerationClientTest {
 
     assertThat(prompt.getInstructions().getFirst().getText()).isEqualTo("a cat");
     assertThat(prompt.getOptions().getModel()).isEqualTo("override-model");
+    assertThat(prompt.getOptions()).isNotInstanceOf(org.springframework.ai.openai.OpenAiImageOptions.class);
     assertThat(prompt.getOptions().getWidth()).isEqualTo(640);
     assertThat(prompt.getOptions().getHeight()).isEqualTo(480);
     assertThat(prompt.getOptions().getResponseFormat()).isEqualTo("b64_json");

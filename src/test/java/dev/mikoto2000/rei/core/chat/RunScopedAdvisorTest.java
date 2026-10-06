@@ -9,6 +9,24 @@ import org.springframework.ai.chat.prompt.Prompt;
 import static org.assertj.core.api.Assertions.*;
 
 class RunScopedAdvisorTest {
+  @Test void memoryAdvisorRetainsDefaultConversationWithoutRunOwner() {
+    var memory = org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build();
+    var model = new org.springframework.ai.chat.model.ChatModel() {
+      public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
+        return org.springframework.ai.model.tool.ToolCallingChatOptions.builder().build();
+      }
+      public org.springframework.ai.chat.model.ChatResponse call(Prompt prompt) {
+        return new org.springframework.ai.chat.model.ChatResponse(java.util.List.of(
+            new org.springframework.ai.chat.model.Generation(new org.springframework.ai.chat.messages.AssistantMessage("answer"))));
+      }
+    };
+    var client = ChatClient.builder(model).defaultAdvisors(new RunScopedAdvisor(
+        org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor.builder(memory).build())).build();
+    assertThat(client.prompt("question").call().content()).isEqualTo("answer");
+    assertThat(memory.get("default")).extracting(org.springframework.ai.chat.messages.Message::getText)
+        .containsExactly("question", "answer");
+  }
+
   @Test void nestedClientCapturesOwnerBeforeAdvisorScheduler() {
     var run = new AgentRunContext("run", "chat:main", Path.of("a"));
     BaseAdvisor delegate = new BaseAdvisor() {
@@ -20,6 +38,9 @@ class RunScopedAdvisorTest {
       public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) { return response; }
     };
     var model = new org.springframework.ai.chat.model.ChatModel() {
+      public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
+        return org.springframework.ai.model.tool.ToolCallingChatOptions.builder().build();
+      }
       public org.springframework.ai.chat.model.ChatResponse call(Prompt p) {
         return new org.springframework.ai.chat.model.ChatResponse(java.util.List.of(
             new org.springframework.ai.chat.model.Generation(new org.springframework.ai.chat.messages.AssistantMessage("ok"))));
@@ -30,7 +51,7 @@ class RunScopedAdvisorTest {
         return reactor.core.publisher.Flux.just(call(p));
       }
     };
-    var client = ChatClient.builder(model).defaultOptions(org.springframework.ai.model.tool.ToolCallingChatOptions.builder().build())
+    var client = ChatClient.builder(model).defaultOptions(org.springframework.ai.model.tool.ToolCallingChatOptions.builder())
         .defaultAdvisors(new RunScopedAdvisor(delegate)).build();
     try (var scope = AgentRunScope.open(run)) { assertThat(client.prompt("nested").stream().content().blockLast()).isEqualTo("ok"); }
   }

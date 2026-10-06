@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.core.configuration;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -143,12 +143,20 @@ public class AiConfiguration {
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
   private final ObjectProvider<ToolEventCallbackProvider> toolEventCallbackProvider;
 
+  private OpenAiChatOptions.Builder defaultChatOptions() {
+    var options = OpenAiChatOptions.builder();
+    if (chatModel.getOptions() instanceof OpenAiChatOptions defaults && defaults.getMaxCompletionTokens() != null)
+      options.maxCompletionTokens(llmProperties.getMaxOutputTokens());
+    else options.maxTokens(llmProperties.getMaxOutputTokens());
+    return options;
+  }
+
   @Bean
   public ChatClient chatClient() {
     List<Advisor> advisors = new ArrayList<>();
     if (workContext != null && workContext.getIfAvailable() != null) advisors.add(workContext.getObject());
     if (contextHistory != null) advisors.add(contextHistory);
-    else advisors.add(PromptChatMemoryAdvisor.builder(chatMemory)
+    else advisors.add(MessageChatMemoryAdvisor.builder(chatMemory)
         .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
         .build());
     advisors.add(runtimeContextAdvisor);
@@ -168,9 +176,9 @@ public class AiConfiguration {
 
     ChatClient.Builder builder = ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(chatModel, contextAssembler))
         .defaultSystem(systemPromptService.systemPrompt())
-        .defaultOptions(OpenAiChatOptions.builder()
-            .maxTokens(llmProperties.getMaxOutputTokens())
-            .build())
+        // Run-owned tools use Rei's loop; legacy non-run requests retain SDK tool handling.
+        .defaultAdvisors(new dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor())
+        .defaultOptions(defaultChatOptions())
         .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors))
         .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
             soundNotificationTools, blueskyPostTools, urlContentFetchTools, textTools, clockTools, schedulerTools, taskStateTools,

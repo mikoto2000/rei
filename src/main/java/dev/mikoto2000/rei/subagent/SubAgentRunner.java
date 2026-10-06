@@ -104,11 +104,11 @@ public final class SubAgentRunner {
               .filter(callback -> effective.contains(callback.getToolDefinition().name()))
               .map(callback -> guarded(callback, owner, check, evidence,d.inheritApprovals()?parent:null,toolRetries,auxiliaryBudget)).toList();
           if (callbacks.size() != effective.size()) throw new IllegalStateException("Tool unavailable");
-          ToolCallingChatOptions runOptions = options.apply(d.model()).copy();
-          runOptions.setInternalToolExecutionEnabled(false);
-          runOptions.setToolNames(Set.of());
-          runOptions.setToolCallbacks(callbacks);
-          runOptions.setToolContext(Map.of(AgentRunContext.class.getName(), owner));
+          ToolCallingChatOptions runOptions = options.apply(d.model()).mutate()
+              .toolCallbacks(callbacks)
+              // The builder merges maps, so discard inherited context before adding child ownership.
+              .toolContext(null).toolContext(Map.of(AgentRunContext.class.getName(), owner)).build();
+          ToolLoopSupport.requireNoRawTools(runOptions);
           String input = context == null || context.isBlank() ? task : task + "\n\nContext:\n" + context;
           var prompt = new Prompt(List.of(new SystemMessage(d.systemPrompt() + SubAgentOutputPrompt.instructions(d)), new UserMessage(input)), runOptions);
           ChatModel model = models.apply(d.model());

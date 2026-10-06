@@ -8,6 +8,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.*;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.*;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -25,7 +26,9 @@ class MemoryConsolidationBudgetTest {
     var jdbc=JdbcClient.create(data);
     jdbc.sql("CREATE TABLE SPRING_AI_CHAT_MEMORY(type TEXT,content TEXT,timestamp TEXT)").update();
     jdbc.sql("INSERT INTO SPRING_AI_CHAT_MEMORY VALUES('USER','use Java','2026-10-06')").update();
-    model=mock(ChatModel.class);when(model.call(any(Prompt.class))).thenReturn(responses[0],Arrays.copyOfRange(responses,1,responses.length));
+    model=mock(ChatModel.class);
+    when(model.getOptions()).thenReturn(ChatOptions.builder().build());
+    when(model.call(any(Prompt.class))).thenReturn(responses[0],Arrays.copyOfRange(responses,1,responses.length));
     var props=new MemoryProperties(true,20,80,10,3,2000,60,null);
     var service=new MemoryConsolidatorService(ChatClient.create(model),data,props);
     service.setConsolidationProperties(new MemoryConsolidationProperties(calls,tokens));return service;

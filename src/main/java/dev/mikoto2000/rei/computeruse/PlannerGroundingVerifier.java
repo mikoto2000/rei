@@ -162,8 +162,9 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
   }
 
   private String call(ComputerObservation observation, String stage, String text, byte[]... images) throws Exception {
-    var requestOptions=options.get().responseFormat(null).toolChoice(null).tools(null)
-        .toolCallbacks(List.of()).toolNames(Set.of()).internalToolExecutionEnabled(false).build();
+    var requestOptions=options.get().responseFormat(null).toolChoice(null)
+        .toolCallbacks(List.of()).build();
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(requestOptions);
     if(images.length>0) save(observation,stage,"input.png",images[0]);
     save(observation,stage,"request.txt",text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     checkCancelled();

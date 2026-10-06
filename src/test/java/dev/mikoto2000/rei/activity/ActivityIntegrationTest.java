@@ -50,10 +50,10 @@ class ActivityIntegrationTest {
     assertEquals(2,result.inference().activities().size());
     var prompt=org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);verify(model).call(prompt.capture());
     assertEquals(2,prompt.getValue().getUserMessage().getMedia().size());
-    var options=(OpenAiChatOptions)prompt.getValue().getOptions();assertFalse(options.getInternalToolExecutionEnabled());assertTrue(options.getToolCallbacks().isEmpty());
+    var options=(OpenAiChatOptions)prompt.getValue().getOptions();assertNull(options.getToolChoice());assertTrue(options.getToolCallbacks().isEmpty());
     var schema=ActivityOutputParser.schemaForMonitors(List.of("m1","m2"));
     var mapper=new tools.jackson.databind.json.JsonMapper();
-    assertEquals(mapper.readTree(schema),mapper.valueToTree(options.getResponseFormat().getJsonSchema().getSchema()));
+    assertEquals(mapper.readTree(schema),mapper.readTree(options.getResponseFormat().getJsonSchema()));
     assertTrue(prompt.getValue().getSystemMessage().getText().contains(schema));
   }
   @Test void slashCommandsAndDateDispatch() {

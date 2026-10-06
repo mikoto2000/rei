@@ -27,8 +27,7 @@ public class SubAgentConfiguration {
       AgentEventFactory events, AgentEventPublisher publisher, Clock clock) {
     return new SubAgentRunner(registry, policy, model -> provider.subAgentChatModel(), model -> {
       var options = provider.chatOptions(LlmFeature.CHAT, current.get());
-      if (model != null) options.setModel(model);
-      return options;
+      return model == null ? options : options.mutate().model(model).build();
     }, catalog::createTools, cancellation, events, publisher, clock);
   }
 }

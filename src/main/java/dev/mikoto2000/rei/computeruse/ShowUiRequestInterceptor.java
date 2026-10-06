@@ -16,6 +16,13 @@ public final class ShowUiRequestInterceptor implements ClientHttpRequestIntercep
   @Override public ClientHttpResponse intercept(HttpRequest request, byte[] body,
       ClientHttpRequestExecution execution) throws IOException {
     if (!request.getURI().getPath().endsWith("/chat/completions")) return execution.execute(request, body);
+    var rewritten = rewriteBody(body);
+    if (rewritten != body) request.getHeaders().setContentLength(rewritten.length);
+    return execution.execute(request, rewritten);
+  }
+
+  /** Shared JSON transformation for Spring HTTP and the OpenAI SDK transport. */
+  public static byte[] rewriteBody(byte[] body) throws IOException {
     var root = JSON.readTree(body);
     var messages = root.path("messages");
     // Only the isolated ShowUI grounding request has this exact single-message shape.
@@ -32,10 +39,9 @@ public final class ShowUiRequestInterceptor implements ClientHttpRequestIntercep
           ordered.addObject().put("type", "text").put("text", text.substring(INSTRUCTION.length() + 1));
           ((ObjectNode) messages.get(0)).set("content", ordered);
           body = JSON.writeValueAsBytes(root);
-          request.getHeaders().setContentLength(body.length);
         }
       }
     }
-    return execution.execute(request, body);
+    return body;
   }
 }

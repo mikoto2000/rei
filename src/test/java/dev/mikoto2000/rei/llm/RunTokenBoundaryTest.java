@@ -61,9 +61,11 @@ class RunTokenBoundaryTest {
   }
   @Test void actualChatBoundaryReportsTokenStopInsteadOfSuccess() {
     var model=mock(ChatModel.class);when(model.stream(any(Prompt.class))).thenReturn(Flux.just(response(11,List.of())));
+    when(model.getOptions()).thenReturn(ToolCallingChatOptions.builder().build());
     var holder=mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);when(holder.get()).thenReturn("test");
     var properties=new LlmProperties();properties.getOutputLimit().setMaxTotalTokensPerRun(10);
-    var client=org.springframework.ai.chat.client.ChatClient.builder(new StagnationChatModel(model)).build();
+    var client=org.springframework.ai.chat.client.ChatClient.builder(new StagnationChatModel(model))
+        .defaultAdvisors(new RunAwareToolCallingAdvisor()).build();
     var service=new ChatExecutionService(new FixedLlmChatClientProvider(client),holder,new FixedLlmModelProvider(),properties,
         new dev.mikoto2000.rei.core.service.CommandCancellationService(),Optional.empty(),Optional.empty());
     var result=service.execute("answer");

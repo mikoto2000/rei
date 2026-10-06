@@ -57,9 +57,11 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
       try {
         var model=modelProvider.chatModel(LlmFeature.AGENT_SKILLS);
         dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
-        response=model.call(new org.springframework.ai.chat.prompt.Prompt(buildSelectionPrompt(prompt,candidates),
-            org.springframework.ai.model.tool.ToolCallingChatOptions.builder().internalToolExecutionEnabled(false)
-                .toolNames(Set.of()).toolCallbacks(List.of()).build()));
+        // AI 2 uses provider-specific request options without merging model defaults.
+        var options=modelProvider.chatOptions(LlmFeature.AGENT_SKILLS,null).mutate()
+            .toolCallbacks(List.of()).toolChoice("none").build();
+        dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
+        response=model.call(new org.springframework.ai.chat.prompt.Prompt(buildSelectionPrompt(prompt,candidates),options));
       }catch(Exception error) {
         dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
         budget.recordTotalTokens(null);

@@ -55,8 +55,8 @@ class FallbackChatModel implements ChatModel {
   }
 
   @Override
-  public ChatOptions getDefaultOptions() {
-    return primary.getDefaultOptions();
+  public ChatOptions getOptions() {
+    return primary.getOptions();
   }
 
   private Prompt fallbackPrompt(Prompt prompt) {
@@ -75,13 +75,16 @@ class FallbackChatModel implements ChatModel {
   }
 
   private ChatOptions fallbackOptionsWithoutPrimaryModel(ChatOptions options) {
-    if (options instanceof OpenAiChatOptions openAiOptions) {
-      OpenAiChatOptions fallbackOptions = openAiOptions.copy();
-      fallbackOptions.setModel(null);
-      return fallbackOptions;
+    String fallbackModel = fallback.getOptions() == null ? null : fallback.getOptions().getModel();
+    if (options instanceof OpenAiChatOptions openAiOptions && fallbackModel != null) {
+      return openAiOptions.mutate().model(fallbackModel).build();
+    }
+    if (options instanceof org.springframework.ai.model.tool.ToolCallingChatOptions toolOptions) {
+      return org.springframework.ai.model.tool.ToolCallingChatOptions.builder()
+          .combineWith(toolOptions.mutate()).model(fallbackModel).build();
     }
     return ChatOptions.builder()
-        .model(null)
+        .model(fallbackModel)
         .frequencyPenalty(options.getFrequencyPenalty())
         .maxTokens(options.getMaxTokens())
         .presencePenalty(options.getPresencePenalty())

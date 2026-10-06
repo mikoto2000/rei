@@ -36,6 +36,35 @@ class ContextAssemblerTest {
     assertThat(result.getInstructions()).containsExactlyElementsOf(p.getInstructions());
     assertThat(calls).hasValue(0);
   }
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void reservesTheConfiguredOutputCapForEitherOpenAiTokenParameter(boolean completionTokens) {
+    var properties = config();
+    properties.setModelContextLimit(1000);
+    properties.setCompletionReserve(100);
+    properties.setToolReserve(0);
+    properties.setSafetyMargin(0);
+    var a = new ContextAssembler(properties, estimator, new ConversationSummaryRepository(dir),
+        new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70),
+        (previous, messages, budget, request) -> { calls.incrementAndGet(); return "summary"; }, null, null);
+    var builder = org.springframework.ai.openai.OpenAiChatOptions.builder().model("configured-model");
+    if (completionTokens) builder.maxCompletionTokens(800);
+    else builder.maxTokens(800);
+    var options = builder.build();
+    // One user message has eight tokens of overhead: 768 ASCII characters are 192 tokens.
+    var atLimit = new Prompt(List.of(new UserMessage("x".repeat(768))), options);
+    assertThat(estimator.message(atLimit.getUserMessage())).isEqualTo(200);
+
+    var assembled = a.assemble(atLimit, "conversation", "run", () -> {});
+    assertThat(assembled.getInstructions()).containsExactlyElementsOf(atLimit.getInstructions());
+    assertThat(assembled.getOptions()).isSameAs(options);
+    var overLimit = new Prompt(List.of(new UserMessage("x".repeat(772))), options);
+    assertThatThrownBy(() -> a.assemble(overLimit, "conversation", "next", () -> {}))
+        .hasMessageContaining("CONTEXT_HARD_LIMIT");
+    assertThat(calls).hasValue(0);
+    assertThat(options.getMaxCompletionTokens()).isEqualTo(completionTokens ? 800 : null);
+    assertThat(options.getMaxTokens()).isEqualTo(completionTokens ? null : 800);
+  }
   @Test void compressesOnlyOldHistoryAndPersistsCursorAcrossRestart() {
     var p = prompt("old ".repeat(500));
     var result = assembler((previous, messages, budget, request) -> { calls.incrementAndGet(); return "decided API X"; })

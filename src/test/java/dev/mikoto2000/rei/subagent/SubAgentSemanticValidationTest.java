@@ -18,6 +18,41 @@ class SubAgentSemanticValidationTest {
     fixture.requiredCallsConfiguration="semanticValidation: true\n";
     return fixture;
   }
+  @Test void judgePreservesModelOptionsAndIsolatesToolsWithoutMutatingOriginal() {
+    var owner = new dev.mikoto2000.rei.core.chat.AgentRunContext("judge", "session", directory);
+    var callback = org.mockito.Mockito.mock(org.springframework.ai.tool.ToolCallback.class);
+    var originalOptions = org.springframework.ai.openai.OpenAiChatOptions.builder()
+        .model("judge-model").temperature(0.1).maxCompletionTokens(234)
+        .toolChoice("auto")
+        .toolCallbacks(List.of(callback)).toolContext(Map.of("parent-private", "value")).build();
+    var original = new org.springframework.ai.chat.prompt.Prompt("inspect evidence", originalOptions);
+    var definition = new SubAgentDefinition("reviewer", "Reviewer", "Review", "Inspect", List.of(),
+        null, 3, java.time.Duration.ofSeconds(2), directory);
+    var captured = new java.util.concurrent.atomic.AtomicReference<org.springframework.ai.chat.prompt.Prompt>();
+    ChatModel model = new ChatModel() {
+      @Override public ChatResponse call(org.springframework.ai.chat.prompt.Prompt prompt) {
+        throw new AssertionError("Expected streaming");
+      }
+      @Override public Flux<ChatResponse> stream(org.springframework.ai.chat.prompt.Prompt prompt) {
+        captured.set(prompt);
+        return Flux.just(new ChatResponse(List.of(new Generation(new org.springframework.ai.chat.messages.AssistantMessage(
+            "{\"valid\":true,\"issues\":[]}")))));
+      }
+    };
+    new SubAgentSemanticValidator().validate(model, original, definition, "answer", new SubAgentEvidence(),
+        new AtomicInteger(2), owner, () -> {}, null).block();
+    var options = (org.springframework.ai.openai.OpenAiChatOptions) captured.get().getOptions();
+    assertThat(options.getModel()).isEqualTo("judge-model");
+    assertThat(options.getTemperature()).isEqualTo(0.1);
+    assertThat(options.getMaxCompletionTokens()).isEqualTo(234);
+    assertThat(((org.springframework.ai.openai.OpenAiChatOptions) options).getToolChoice()).isEqualTo("none");
+    assertThat(options.getToolCallbacks()).isEmpty();
+    assertThat(options.getToolContext()).containsOnlyKeys(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName());
+    assertThat(options.getToolContext().get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName())).isSameAs(owner);
+    assertThat(originalOptions.getToolChoice()).isEqualTo("auto");
+    assertThat(originalOptions.getToolCallbacks()).containsExactly(callback);
+    assertThat(originalOptions.getToolContext()).containsOnlyKeys("parent-private");
+  }
   @Test void independentJudgeRejectsUnsupportedAnswerAndRepairRetainsDiagnosis() throws Exception {
     var fixture=fixture(4);fixture.maxRepairs=1;
     var calls=new AtomicInteger();

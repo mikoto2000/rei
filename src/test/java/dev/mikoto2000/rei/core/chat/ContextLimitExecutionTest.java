@@ -14,6 +14,7 @@ import reactor.core.publisher.Flux;
 class ContextLimitExecutionTest {
   @Test void hardContextLimitIsAnExplicitUserFacingFailure() {
     var model = mock(ChatModel.class);
+    when(model.getOptions()).thenReturn(org.springframework.ai.model.tool.ToolCallingChatOptions.builder().build());
     when(model.stream(any(Prompt.class))).thenReturn(Flux.error(
         new ExecutionStoppedException(ExecutionStoppedException.Reason.CONTEXT_HARD_LIMIT)));
     var service = new ChatExecutionService(ChatClient.builder(model).build(), new ModelHolderService("test"),

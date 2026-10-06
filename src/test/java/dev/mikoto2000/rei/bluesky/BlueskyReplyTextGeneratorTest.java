@@ -62,8 +62,63 @@ class BlueskyReplyTextGeneratorTest {
     var options = (org.springframework.ai.openai.OpenAiChatOptions) promptCaptor.getValue().getOptions();
     assertThat(options.getToolChoice()).isEqualTo("none");
     assertThat(options.getToolCallbacks()).isEmpty();
-    assertThat(options.getToolNames()).isEmpty();
-    assertThat(options.getInternalToolExecutionEnabled()).isFalse();
+    assertThat(options.getExtraBody()).isNullOrEmpty();
+  }
+
+  @Test
+  void replyOptionsPreserveConfiguredModelWithoutMutatingProviderCallbacks() {
+    var client = Mockito.mock(ChatClient.class);
+    var clients = Mockito.mock(LlmChatClientProvider.class);
+    var models = Mockito.mock(LlmModelProvider.class);
+    var holder = Mockito.mock(ModelHolderService.class);
+    var request = Mockito.mock(ChatClientRequestSpec.class);
+    var stream = Mockito.mock(StreamResponseSpec.class);
+    var callback = org.springframework.ai.tool.function.FunctionToolCallback.builder("unexpected", (String input) -> input)
+        .description("must not be exposed").inputType(String.class).build();
+    var configured = org.springframework.ai.openai.OpenAiChatOptions.builder()
+        .model("reply-model").temperature(0.4).maxTokens(123)
+        .extraBody(java.util.Map.of("custom_parameter", 7))
+        .toolCallbacks(List.of(callback)).toolChoice("required").build();
+    when(holder.get()).thenReturn("current-model");
+    when(models.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.BLUESKY_REPLY, "current-model")).thenReturn(configured);
+    when(clients.chatClient(dev.mikoto2000.rei.llm.LlmFeature.BLUESKY_REPLY)).thenReturn(client);
+    when(client.prompt(any(Prompt.class))).thenReturn(request);
+    when(request.advisors(any(Consumer.class))).thenReturn(request);
+    when(request.stream()).thenReturn(stream);
+    when(stream.chatResponse()).thenReturn(Flux.just(response("返信")));
+    var generator = new BlueskyReplyTextGenerator(clients, holder, models, new BlueskyProperties());
+
+    assertThat(generator.generate("alice.bsky.social", "本文", List.of())).isEqualTo("返信");
+
+    var prompt = ArgumentCaptor.forClass(Prompt.class);
+    verify(client).prompt(prompt.capture());
+    var actual = (org.springframework.ai.openai.OpenAiChatOptions) prompt.getValue().getOptions();
+    assertThat(actual).isNotSameAs(configured);
+    assertThat(actual.getModel()).isEqualTo("reply-model");
+    assertThat(actual.getTemperature()).isEqualTo(0.4);
+    assertThat(actual.getMaxTokens()).isEqualTo(123);
+    assertThat(actual.getExtraBody()).containsExactlyEntriesOf(java.util.Map.of("custom_parameter", 7));
+    assertThat(actual.getToolCallbacks()).isEmpty();
+    assertThat(actual.getToolChoice()).isEqualTo("none");
+    assertThat(configured.getToolCallbacks()).containsExactly(callback);
+    assertThat(configured.getToolChoice()).isEqualTo("required");
+  }
+
+  @Test
+  void rawToolDefinitionsAreRejectedBeforeSendingThePrompt() {
+    var clients = Mockito.mock(LlmChatClientProvider.class);
+    var models = Mockito.mock(LlmModelProvider.class);
+    var holder = Mockito.mock(ModelHolderService.class);
+    when(holder.get()).thenReturn("current-model");
+    when(models.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.BLUESKY_REPLY, "current-model"))
+        .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder()
+            .extraBody(java.util.Map.of("tools", List.of(java.util.Map.of("type", "function")))).build());
+    var generator = new BlueskyReplyTextGenerator(clients, holder, models, new BlueskyProperties());
+
+    assertThatThrownBy(() -> generator.generate("alice.bsky.social", "本文", List.of()))
+        .isInstanceOf(IllegalArgumentException.class);
+
+    Mockito.verifyNoInteractions(clients);
   }
 
   @Test

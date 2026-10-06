@@ -9,7 +9,7 @@ import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.model.*;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.ResponseFormat;
+import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
 
 class SpringAiComputerVisionModelTest {
   @Test void outputLimitStopsWithoutRepeatingTheSameExpensiveRequest() {
@@ -50,12 +50,9 @@ class SpringAiComputerVisionModelTest {
     assertTrue(user.getText().contains("2/20"));
     var options = (OpenAiChatOptions)prompt.getValue().getOptions();
     assertEquals(ResponseFormat.Type.JSON_SCHEMA,options.getResponseFormat().getType());
-    assertEquals(Boolean.TRUE,options.getResponseFormat().getJsonSchema().getStrict());
-    assertEquals(Boolean.FALSE,options.getInternalToolExecutionEnabled());
+    assertEquals(Boolean.TRUE,options.getResponseFormat().getStrict());
     assertNull(options.getToolChoice());
-    assertNull(options.getTools());
     assertTrue(options.getToolCallbacks().isEmpty());
-    assertTrue(options.getToolNames().isEmpty());
   }
   @Test void invalidOutputRetriesWithinBudgetAndThenFails() throws Exception {
     var model = mock(ChatModel.class);
@@ -78,15 +75,28 @@ class SpringAiComputerVisionModelTest {
   }
   @Test void refusesAmbientToolsBeforeInference() {
     var model = mock(ChatModel.class);
-    when(model.getDefaultOptions()).thenReturn(OpenAiChatOptions.builder().toolNames("shell").build());
+    when(model.getOptions()).thenReturn(OpenAiChatOptions.builder().toolCallbacks(mock(org.springframework.ai.tool.ToolCallback.class)).build());
     assertThrows(IllegalArgumentException.class, () -> new SpringAiComputerVisionModel(model, OpenAiChatOptions::builder, () -> false, 1));
     verify(model,never()).call(any(Prompt.class));
   }
-  @Test void refusesRawDefaultToolsThatWouldOtherwiseBeMergedIntoNoToolsRequest() {
-    var model = mock(ChatModel.class);
-    when(model.getDefaultOptions()).thenReturn(OpenAiChatOptions.builder().tools(List.of(
-        mock(org.springframework.ai.openai.api.OpenAiApi.FunctionTool.class))).build());
-    assertThrows(IllegalArgumentException.class, () -> new SpringAiComputerVisionModel(model, OpenAiChatOptions::builder, () -> false, 1));
+  @Test void preservesSuppliedProviderOptionsWithoutMutatingSharedDefaults() throws Exception {
+    var model=mock(ChatModel.class);
+    when(model.call(any(Prompt.class))).thenReturn(response(ActionValidationTest.json("DONE","reason","\"Visible\"")));
+    var defaults=OpenAiChatOptions.builder().model("local-vision").temperature(.25).maxCompletionTokens(4096)
+        .toolCallbacks(mock(org.springframework.ai.tool.ToolCallback.class)).toolChoice("auto").build();
+    new SpringAiComputerVisionModel(model,defaults::mutate,()->false,0).decide(observation());
+    var prompt=ArgumentCaptor.forClass(Prompt.class);verify(model).call(prompt.capture());
+    var sent=(OpenAiChatOptions)prompt.getValue().getOptions();
+    assertEquals("local-vision",sent.getModel());assertEquals(.25,sent.getTemperature());assertEquals(4096,sent.getMaxCompletionTokens());
+    assertTrue(sent.getToolCallbacks().isEmpty());assertNull(sent.getToolChoice());
+    assertEquals(1,defaults.getToolCallbacks().size());assertEquals("auto",defaults.getToolChoice());assertNull(defaults.getResponseFormat());
+  }
+
+  @Test void refusesRawToolsInRequestOptionsBeforeInference() {
+    var model=mock(ChatModel.class);
+    var vision=new SpringAiComputerVisionModel(model,()->OpenAiChatOptions.builder()
+        .extraBody(Map.of("tools",List.of(Map.of("type","function","function",Map.of("name","shell"))))),()->false,0);
+    assertThrows(IllegalArgumentException.class,()->vision.decide(observation()));
     verify(model,never()).call(any(Prompt.class));
   }
 }

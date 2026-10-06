@@ -7,8 +7,6 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.ai.retry.RetryUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -67,7 +65,7 @@ public class LlmModelProvider {
     if (server != null && server.hasCustomServer()) {
       ChatModel primary = createOpenAiCompatibleChatModel(server);
       model = (LlmFeature.COMPUTER_USE.equals(feature) || LlmFeature.COMPUTER_USE_PLANNER.equals(feature) || LlmFeature.ACTIVITY.equals(feature) || LlmFeature.ACTIVITY_BEHAVIOR.equals(feature)) ? primary
-          : new FallbackChatModel(feature, primary, defaultChatModel, server.getModel());
+          : new FallbackChatModel(feature, primary, defaultChatModel, primary.getOptions().getModel());
     }
     return eventFactory == null || eventPublisher == null
         ? model
@@ -77,7 +75,7 @@ public class LlmModelProvider {
   public String model(String feature, String defaultModel) {
     LlmProperties.Server server = properties.feature(feature);
     if (server == null || server.getModel() == null || server.getModel().isBlank()) {
-      return defaultModel;
+      return defaultModel != null && !defaultModel.isBlank() ? defaultModel : configuredDefaultModel();
     }
     return server.getModel();
   }
@@ -101,44 +99,55 @@ public class LlmModelProvider {
   }
 
   private ChatModel createOpenAiCompatibleChatModel(LlmProperties.Server server) {
-    OpenAiApi api = OpenAiApi.builder()
-        .baseUrl(server.getBaseUrl())
+    OpenAiChatOptions options = chatOptionsBuilder(server, modelForServer(server))
+        .baseUrl(OpenAiCompatibleEndpoint.baseUrl(server.getBaseUrl()))
         .apiKey(server.getApiKey() == null || server.getApiKey().isBlank() ? "dummy-key" : server.getApiKey())
-        // These builders bypass Boot customizers, so use the OS resolver explicitly for .local hosts.
-        .restClientBuilder(org.springframework.web.client.RestClient.builder()
-            .requestInterceptor(new dev.mikoto2000.rei.computeruse.ShowUiRequestInterceptor())
-            .requestFactory(new org.springframework.http.client.ReactorClientHttpRequestFactory(
-                featureHttpClient())))
-        .webClientBuilder(org.springframework.web.reactive.function.client.WebClient.builder()
-            .clientConnector(new org.springframework.http.client.reactive.ReactorClientHttpConnector(
-                featureHttpClient())))
         .build();
-    OpenAiChatOptions.Builder options = chatOptionsBuilder(server, server.getModel());
     return OpenAiChatModel.builder()
-        .openAiApi(api)
-        .defaultOptions(options.build())
+        .options(options)
+        .httpClientBuilderCustomizer(builder -> builder.interceptor(new ShowUiSdkRequestInterceptor()))
         .toolCallingManager(ToolCallingManager.builder()
             .observationRegistry(ObservationRegistry.NOOP)
             .build())
-        .retryTemplate(RetryUtils.DEFAULT_RETRY_TEMPLATE)
         .observationRegistry(ObservationRegistry.NOOP)
         .build();
   }
 
-  static reactor.netty.http.client.HttpClient featureHttpClient() {
-    return reactor.netty.http.client.HttpClient.create()
-        .resolver(io.netty.resolver.DefaultAddressResolverGroup.INSTANCE);
+  private String configuredDefaultModel() {
+    return defaultChatModel == null || defaultChatModel.getOptions() == null
+        ? null : defaultChatModel.getOptions().getModel();
+  }
+
+  private String modelForServer(LlmProperties.Server server) {
+    return server.getModel() == null || server.getModel().isBlank()
+        ? configuredDefaultModel() : server.getModel();
   }
 
   private OpenAiChatOptions.Builder chatOptionsBuilder(String feature, String defaultModel) {
     LlmProperties.Server server = properties.feature(feature);
-    return chatOptionsBuilder(server, model(feature, defaultModel));
+    OpenAiChatOptions.Builder options = chatOptionsBuilder(server, model(feature, defaultModel));
+    // AI 2 uses a request's options as-is, rather than merging them with model defaults.
+    if ((server == null || !server.hasCustomServer()) && defaultChatModel != null
+        && defaultChatModel.getOptions() != null) {
+      var defaults = defaultChatModel.getOptions();
+      options = OpenAiChatOptions.builder().combineWith(defaults.mutate()).combineWith(options);
+      if (defaults instanceof OpenAiChatOptions openAi && openAi.getMaxCompletionTokens() != null) {
+        // combineWith can retain both token fields, and maxTokens cannot clear itself
+        // while maxCompletionTokens is present. Keep the configured parameter family.
+        options.maxCompletionTokens(null).maxTokens(null).maxCompletionTokens(maxOutputTokens(server));
+      }
+    }
+    return options;
+  }
+
+  private Integer maxOutputTokens(LlmProperties.Server server) {
+    return server != null && server.getMaxOutputTokens() != null
+        ? server.getMaxOutputTokens() : properties.getMaxOutputTokens();
   }
 
   private OpenAiChatOptions.Builder chatOptionsBuilder(LlmProperties.Server server, String model) {
     OpenAiChatOptions.Builder options = OpenAiChatOptions.builder()
-        .maxTokens(server != null && server.getMaxOutputTokens() != null
-            ? server.getMaxOutputTokens() : properties.getMaxOutputTokens());
+        .maxTokens(maxOutputTokens(server));
     if (model != null && !model.isBlank()) {
       options.model(model);
     }

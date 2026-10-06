@@ -11,9 +11,6 @@ import dev.mikoto2000.rei.llm.*;
 @EnableConfigurationProperties(ComputerUseProperties.class)
 @ConditionalOnProperty(name = "rei.computer-use.enabled", havingValue = "true")
 public class ComputerUseConfiguration {
-  @Bean org.springframework.boot.restclient.RestClientCustomizer showUiRequestOrderCustomizer() {
-    return builder -> builder.requestInterceptor(new ShowUiRequestInterceptor());
-  }
   @Bean RobotDriver computerRobotDriver() { return new AwtRobotDriver(); }
   @Bean ComputerDiagnostics computerDiagnostics(
       @org.springframework.beans.factory.annotation.Value("${rei.computer-use.diagnostics.enabled:false}") boolean enabled,
@@ -39,18 +36,18 @@ public class ComputerUseConfiguration {
       @org.springframework.beans.factory.annotation.Value("${rei.computer-use.grounding:generic}") String grounding) {
     if ("showui".equals(grounding) || "uitars".equals(grounding)) {
       var planner = new SpringAiComputerVisionModel(provider.chatModel(LlmFeature.COMPUTER_USE_PLANNER),
-          () -> new org.springframework.ai.openai.OpenAiChatOptions.Builder(provider.chatOptions(LlmFeature.COMPUTER_USE_PLANNER, current.get())),
+          () -> provider.chatOptions(LlmFeature.COMPUTER_USE_PLANNER, current.get()).mutate(),
           cancellation::isCancellationRequested, properties.repairs());
       return new ShowUiComputerVisionModel(planner::decideOverview, provider.computerUseChatModel(),
-          () -> new org.springframework.ai.openai.OpenAiChatOptions.Builder(provider.chatOptions(LlmFeature.COMPUTER_USE, current.get())),
+          () -> provider.chatOptions(LlmFeature.COMPUTER_USE, current.get()).mutate(),
           cancellation::isCancellationRequested, "uitars".equals(grounding) ? GroundingProtocol.UITARS : GroundingProtocol.SHOWUI,
           new PlannerGroundingVerifier(provider.chatModel(LlmFeature.COMPUTER_USE_PLANNER),
-              () -> new org.springframework.ai.openai.OpenAiChatOptions.Builder(provider.chatOptions(LlmFeature.COMPUTER_USE_PLANNER, current.get())),
+              () -> provider.chatOptions(LlmFeature.COMPUTER_USE_PLANNER, current.get()).mutate(),
               cancellation::isCancellationRequested));
     }
     if (!"generic".equals(grounding)) throw new IllegalArgumentException("Unknown computer-use grounding: " + grounding);
     return new SpringAiComputerVisionModel(provider.computerUseChatModel(),
-        () -> new org.springframework.ai.openai.OpenAiChatOptions.Builder(provider.chatOptions(LlmFeature.COMPUTER_USE, current.get())),
+        () -> provider.chatOptions(LlmFeature.COMPUTER_USE, current.get()).mutate(),
         cancellation::isCancellationRequested, properties.repairs());
   }
   @Bean ComputerUseService computerUseService(ScreenCapture capture, ComputerVisionModel model, ComputerInput input,

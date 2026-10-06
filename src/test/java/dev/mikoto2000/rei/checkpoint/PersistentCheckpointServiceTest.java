@@ -82,6 +82,7 @@ class PersistentCheckpointServiceTest {
   @Test void resumedLlmCancellationSavesProgressReleasesLeaseAndInjectsReferenceSeparately() {
     service.finish(owner,"CANCELLED");var prompts=new ArrayList<org.springframework.ai.chat.prompt.Prompt>();
     var model=new org.springframework.ai.chat.model.ChatModel(){
+      public org.springframework.ai.chat.prompt.ChatOptions getOptions() { return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build(); }
       public org.springframework.ai.chat.model.ChatResponse call(org.springframework.ai.chat.prompt.Prompt prompt){throw new UnsupportedOperationException();}
       public reactor.core.publisher.Flux<org.springframework.ai.chat.model.ChatResponse> stream(org.springframework.ai.chat.prompt.Prompt prompt){prompts.add(prompt);return reactor.core.publisher.Flux.error(new java.util.concurrent.CancellationException());}
     };

@@ -1,6 +1,11 @@
 package dev.mikoto2000.rei.core.chat;
 
+import com.openai.errors.OpenAIIoException;
+import com.openai.errors.OpenAIRetryableException;
+import com.openai.errors.OpenAIServiceException;
 import java.util.*;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.ai.chat.messages.Message;
@@ -16,6 +21,22 @@ public final class BoundedToolLoop {
   private final ToolLoopSupport tools = new ToolLoopSupport();
   public static final class SharedBudgetExceeded extends RuntimeException { }
   public static final class MaxStepsExceeded extends RuntimeException { }
+  private static boolean isTransientModelFailure(Throwable error) {
+    // Spring AI 2 streams SDK failures through async completion wrappers. Do not
+    // follow arbitrary causes: an application failure may have a transient cause.
+    while ((error instanceof CompletionException || error instanceof ExecutionException) && error.getCause() != null) {
+      error = error.getCause();
+    }
+    if (error instanceof OpenAIIoException || error instanceof OpenAIRetryableException) return true;
+    if (error instanceof OpenAIServiceException service) {
+      String retryHint = service.headers().values("X-Should-Retry").stream().findFirst().orElse("");
+      if ("false".equals(retryHint)) return false;
+      if ("true".equals(retryHint)) return true;
+      int status = service.statusCode();
+      return status == 408 || status == 409 || status == 429 || status >= 500;
+    }
+    return false;
+  }
   /** One invocation-wide retry allowance, also shared by repair cycles and the tool-free judge. */
   public static final class ModelRetries {
     private final AtomicInteger remaining;
@@ -23,7 +44,7 @@ public final class BoundedToolLoop {
     private final List<String> failures=new java.util.concurrent.CopyOnWriteArrayList<>();
     public ModelRetries(int max){if(max<0||max>3)throw new IllegalArgumentException("Model retries must be 0 to 3");remaining=new AtomicInteger(max);}
     private boolean reserve(){return remaining.getAndUpdate(value->Math.max(0,value-1))>0;}
-    private void failure(Throwable error,boolean received){if(error instanceof org.springframework.ai.retry.TransientAiException&&failures.size()<4)failures.add(received?"TRANSIENT_MODEL_FAILURE_AFTER_PARTIAL_RESPONSE":"TRANSIENT_MODEL_FAILURE_BEFORE_RESPONSE");}
+    private void failure(Throwable error,boolean received){if(isTransientModelFailure(error)&&failures.size()<4)failures.add(received?"TRANSIENT_MODEL_FAILURE_AFTER_PARTIAL_RESPONSE":"TRANSIENT_MODEL_FAILURE_BEFORE_RESPONSE");}
     public int attempts(){return attempts.get();}
     public List<String> history(){return List.copyOf(failures);}
   }
@@ -73,7 +94,7 @@ public final class BoundedToolLoop {
           try{reservation.recordTotalTokens(null);}catch(RuntimeException stopped){/* Accounting state prevents further calls. */}
         }
       }).onErrorResume(error->{
-        if(error instanceof org.springframework.ai.retry.TransientAiException&&!received.get()) {
+        if(isTransientModelFailure(error)&&!received.get()) {
           checkActive.run();
           if(retries.reserve())return Mono.delay(java.time.Duration.ofMillis(100)).then(response(model,prompt,remaining,checkActive,reservation,retries,true));
         }

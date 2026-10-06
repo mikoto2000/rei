@@ -21,15 +21,22 @@ class LlmChatClientProviderTest {
   @Test
   void memoryProcessesOnlySuppliedEvidenceWithoutToolsOrAdvisors() {
     var prompts = new java.util.ArrayList<org.springframework.ai.chat.prompt.Prompt>();
-    ChatModel model = prompt -> {
-      prompts.add(prompt);
-      return new org.springframework.ai.chat.model.ChatResponse(List.of(new org.springframework.ai.chat.model.Generation(
-          new org.springframework.ai.chat.messages.AssistantMessage("[]"))));
+    ChatModel model = new ChatModel() {
+      @Override public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
+        return org.springframework.ai.openai.OpenAiChatOptions.builder().build();
+      }
+      @Override public org.springframework.ai.chat.model.ChatResponse call(org.springframework.ai.chat.prompt.Prompt prompt) {
+        prompts.add(prompt);
+        return new org.springframework.ai.chat.model.ChatResponse(List.of(new org.springframework.ai.chat.model.Generation(
+            new org.springframework.ai.chat.messages.AssistantMessage("[]"))));
+      }
     };
     var models = mock(LlmModelProvider.class);
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.chatOptions(LlmFeature.MEMORY, null))
-        .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
+    var originalOptions = org.springframework.ai.openai.OpenAiChatOptions.builder()
+        .model("memory-model").temperature(0.2).maxCompletionTokens(321)
+        .toolChoice("auto").build();
+    when(models.chatOptions(LlmFeature.MEMORY, null)).thenReturn(originalOptions);
     var memory = mock(ChatMemory.class);
     var system = mock(SystemPromptService.class);
     var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), system, memory,
@@ -46,10 +53,57 @@ class LlmChatClientProviderTest {
     assertThat(prompts.getFirst().getInstructions()).hasSize(1);
     assertThat(prompts.getFirst().getInstructions().getFirst().getText()).isEqualTo("supplied evidence");
     var options = (org.springframework.ai.model.tool.ToolCallingChatOptions) prompts.getFirst().getOptions();
-    assertThat(options.getInternalToolExecutionEnabled()).isFalse();
+    assertThat(((org.springframework.ai.openai.OpenAiChatOptions) options).getToolChoice()).isEqualTo("none");
     assertThat(options.getToolCallbacks()).isEmpty();
-    assertThat(options.getToolNames()).isEmpty();
+    assertThat(options.getModel()).isEqualTo("memory-model");
+    assertThat(options.getTemperature()).isEqualTo(0.2);
+    assertThat(((org.springframework.ai.openai.OpenAiChatOptions) options).getMaxCompletionTokens()).isEqualTo(321);
+    assertThat(originalOptions.getToolChoice()).isEqualTo("auto");
     org.mockito.Mockito.verifyNoInteractions(memory, system);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"chat", "search", "feed-summary"})
+  void requestsWithoutAnApplicationRunRetainToolCalling(String feature) {
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    var toolCalls = new java.util.concurrent.atomic.AtomicInteger();
+    ChatModel model = new ChatModel() {
+      @Override public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
+        return org.springframework.ai.openai.OpenAiChatOptions.builder().model("local").build();
+      }
+      @Override public org.springframework.ai.chat.model.ChatResponse call(org.springframework.ai.chat.prompt.Prompt prompt) {
+      if (calls.incrementAndGet() > 1) return new org.springframework.ai.chat.model.ChatResponse(List.of(
+          new org.springframework.ai.chat.model.Generation(new org.springframework.ai.chat.messages.AssistantMessage("done"))));
+      return new org.springframework.ai.chat.model.ChatResponse(List.of(new org.springframework.ai.chat.model.Generation(
+          org.springframework.ai.chat.messages.AssistantMessage.builder().content("").toolCalls(List.of(
+              new org.springframework.ai.chat.messages.AssistantMessage.ToolCall("call-1", "function", "test", "{}"))).build())));
+      }
+    };
+    var models = mock(LlmModelProvider.class);
+    when(models.chatModel(feature)).thenReturn(model);
+    when(models.chatOptions(feature, null)).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder()
+        .model("local").build());
+    var system = mock(SystemPromptService.class); when(system.systemPrompt()).thenReturn("system");
+    var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), system,
+        org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build(),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), null, null);
+    var callback = new org.springframework.ai.tool.ToolCallback() {
+      @Override public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
+        return org.springframework.ai.tool.definition.ToolDefinition.builder().name("test").description("test")
+            .inputSchema("{\"type\":\"object\",\"properties\":{}}").build();
+      }
+      @Override public String call(String input) { toolCalls.incrementAndGet(); return "ok"; }
+    };
+
+    var response = provider.chatClient(feature).prompt().user("test").toolCallbacks(callback).call().chatResponse();
+
+    assertThat(response.hasToolCalls()).isFalse();
+    assertThat(calls).hasValue(2);
+    assertThat(toolCalls).hasValue(1);
   }
 
   @org.junit.jupiter.params.ParameterizedTest

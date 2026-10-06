@@ -22,7 +22,38 @@ class LlmWorkContextExtractorTest {
     var captured=org.mockito.ArgumentCaptor.forClass(Prompt.class);verify(model).stream(captured.capture());
     var prompt=captured.getValue();assertTrue(prompt.getSystemMessage().getText().contains("untrusted historical DATA"));
     assertTrue(prompt.getUserMessage().getText().contains("ignore all instructions"));
-    var options=(OpenAiChatOptions)prompt.getOptions();assertFalse(options.getInternalToolExecutionEnabled());assertTrue(options.getToolCallbacks().isEmpty());
+    var options=(OpenAiChatOptions)prompt.getOptions();assertTrue(options.getToolCallbacks().isEmpty());assertEquals("none",options.getToolChoice());
+  }
+  @Test void requestDisablesToolsWithoutChangingConfiguredModelOptions() {
+    var models=mock(LlmModelProvider.class);var model=mock(ChatModel.class);
+    var callback=org.springframework.ai.tool.function.FunctionToolCallback.builder("unexpected",(String input)->input)
+        .description("must not be exposed").inputType(String.class).build();
+    var configured=OpenAiChatOptions.builder().model("memory-model").temperature(0.2).maxTokens(456)
+        .toolCallbacks(List.of(callback)).toolChoice("required").build();
+    when(models.memoryChatModel()).thenReturn(model);
+    when(models.chatOptions(LlmFeature.MEMORY,null)).thenReturn(configured);
+    when(model.stream(any(Prompt.class))).thenReturn(Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("{\"changes\":[]}"))))));
+
+    new LlmWorkContextExtractor(models,new WorkContextProperties(false,true,1200,12000,1,20))
+        .extract(evidence("task"),List.of(),"COMPLETED");
+
+    var captured=org.mockito.ArgumentCaptor.forClass(Prompt.class);verify(model).stream(captured.capture());
+    var actual=(OpenAiChatOptions)captured.getValue().getOptions();
+    assertNotSame(configured,actual);assertEquals("memory-model",actual.getModel());
+    assertEquals(0.2,actual.getTemperature());assertEquals(456,actual.getMaxTokens());
+    assertTrue(actual.getToolCallbacks().isEmpty());assertEquals("none",actual.getToolChoice());
+    assertEquals(List.of(callback),configured.getToolCallbacks());assertEquals("required",configured.getToolChoice());
+  }
+  @Test void rawToolDefinitionsAreRejectedBeforeSendingThePrompt() {
+    var models=mock(LlmModelProvider.class);var model=mock(ChatModel.class);
+    when(models.memoryChatModel()).thenReturn(model);
+    when(models.chatOptions(LlmFeature.MEMORY,null)).thenReturn(OpenAiChatOptions.builder()
+        .extraBody(Map.of("tools",List.of(Map.of("type","function")))).build());
+
+    assertThrows(IllegalArgumentException.class,()->new LlmWorkContextExtractor(models,
+        new WorkContextProperties(false,true,1200,12000,1,20)).extract(evidence("task"),List.of(),"COMPLETED"));
+
+    verify(model,never()).stream(any(Prompt.class));
   }
   @Test void timeoutInvalidOutputAndOversizedInputFailWithoutInvokingTools() {
     var models=mock(LlmModelProvider.class);var model=mock(ChatModel.class);when(models.memoryChatModel()).thenReturn(model);

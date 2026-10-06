@@ -30,7 +30,14 @@ public final class RunScopedAdvisor implements BaseAdvisor {
   }
   private ChatClientRequest capture(ChatClientRequest request) {
     var current = (AgentRunContext) request.context().getOrDefault(AgentRunContext.class.getName(), AgentRunScope.current());
-    if (current == null) return request;
+    if (current == null) {
+      if (!(delegate instanceof BaseChatMemoryAdvisor)
+          || request.context().containsKey(org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID)) return request;
+      // Preserve the former PromptChatMemoryAdvisor fallback for legacy non-run callers.
+      var defaults = new java.util.HashMap<>(request.context());
+      defaults.put(org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID, "default");
+      return request.mutate().context(defaults).build();
+    }
     var context = new java.util.HashMap<>(request.context());
     context.put(AgentRunContext.class.getName(), current);
     String memoryKey = org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID;
@@ -39,11 +46,11 @@ public final class RunScopedAdvisor implements BaseAdvisor {
       context.put(memoryKey, "project:" + current.projectId() + ":" + id);
     var prompt = request.prompt();
     if (prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options) {
-      var copy = (org.springframework.ai.model.tool.ToolCallingChatOptions) options.copy();
+      var copy = options;
       var tools = new java.util.HashMap<String, Object>();
       if (copy.getToolContext() != null) tools.putAll(copy.getToolContext());
       tools.put(AgentRunContext.class.getName(), current);
-      copy.setToolContext(tools);
+      copy = options.mutate().toolContext(tools).build();
       prompt = new org.springframework.ai.chat.prompt.Prompt(prompt.getInstructions(), copy);
     }
     return request.mutate().context(context).prompt(prompt).build();

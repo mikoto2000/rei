@@ -16,6 +16,7 @@ import static org.mockito.Mockito.*;
 class ChatExecutionInterventionTest {
   @Test void cancellationAfterCompletedEventDoesNotRewriteCompletedTurn() {
     ChatModel model = new ChatModel() {
+      public org.springframework.ai.chat.prompt.ChatOptions getOptions() { return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build(); }
       public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
       public Flux<ChatResponse> stream(Prompt p) {
         return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("done")))));
@@ -40,6 +41,7 @@ class ChatExecutionInterventionTest {
     workingSet.recordRead(Path.of("network.md"));
     var memory = org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build();
     ChatModel model = new ChatModel() {
+      public org.springframework.ai.chat.prompt.ChatOptions getOptions() { return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build(); }
       public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
       public Flux<ChatResponse> stream(Prompt p) {
         requests.add(p);
@@ -48,7 +50,7 @@ class ChatExecutionInterventionTest {
       }
     };
     var client = ChatClient.builder(model).defaultAdvisors(RunScopedAdvisor.wrap(List.of(
-        org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor.builder(memory).build(),
+        org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor.builder(memory).build(),
         new dev.mikoto2000.rei.core.working.WorkingSetAdvisor(workingSet)))).build();
     var holder = mock(ModelHolderService.class); when(holder.get()).thenReturn("test");
     var service = new ChatExecutionService(client, holder, new CommandCancellationService(), Optional.empty());
@@ -67,6 +69,7 @@ class ChatExecutionInterventionTest {
   }
   @Test void cancelledRunDiscardsPendingGuidanceAndRecordsCancellation() {
     ChatModel model = new ChatModel() {
+      public org.springframework.ai.chat.prompt.ChatOptions getOptions() { return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build(); }
       public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
       public Flux<ChatResponse> stream(Prompt p) { return Flux.error(new java.util.concurrent.CancellationException()); }
     };
@@ -85,6 +88,7 @@ class ChatExecutionInterventionTest {
   }
   @Test void cancellationStateIsClearedEvenWhenFinalHistoryWriteFails() {
     ChatModel model = new ChatModel() {
+      public org.springframework.ai.chat.prompt.ChatOptions getOptions() { return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build(); }
       public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
       public Flux<ChatResponse> stream(Prompt p) { return Flux.error(new IllegalStateException("request failed")); }
     };
@@ -103,6 +107,7 @@ class ChatExecutionInterventionTest {
     var queue = new UserInterventionQueue();
     List<Prompt> requests = new ArrayList<>();
     ChatModel model = new ChatModel() {
+      public org.springframework.ai.chat.prompt.ChatOptions getOptions() { return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build(); }
       public ChatResponse call(Prompt p) { throw new UnsupportedOperationException(); }
       public Flux<ChatResponse> stream(Prompt p) {
         requests.add(p);
