@@ -11,3 +11,7 @@ C17の別provider追加として、既存の共通委譲service・Run/Goal予算
 実Claude Code CLIはこの環境のPATHで未確認。実認証・実モデル・サブスクリプション枠を消費するレビューを行っていない。mock process outputと実SQLiteによる制御フロー検証であり、live provider品質や実利用枠内の動作保証ではない。利用する環境でnative CLI installation/loginが必要。
 
 [CLI利用方法・subscription・metadata/source境界・制限](claude-code-reviews.md)。Claudeの直接編集・native session resume・fix proposal・Claude並列実行は本provider追加の対象外。
+
+## Git と最終確認
+
+feature `1d90dfe2` を `codex/claude-code-reviews` にCommit/Pushし、mainへ `cc427165` でMerge。Merge後のClaude/Codex・履歴・予算・設定関連テストはPASS。Push時にremote mainのPR #39（Shell時刻表示、`948534b7`）を検出し、変更を保持して `0e276e3d` で統合した。Claude/Codex関連と時刻表示の4クラスを合わせた統合後回帰もPASSし、mainへPush済み。全体回帰3329 / 614はremote時刻表示統合前、統合後は影響範囲の関連回帰を実行した。実CLI/有料モデルは未実行。
