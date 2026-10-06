@@ -254,6 +254,9 @@ public class ExternalConfigFileService {
             timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
             prompt-enhancement:
               enabled: ${REI_IMAGE_PROMPT_ENHANCEMENT_ENABLED:true}
+          subagents:
+            standalone-max-llm-calls: ${REI_SUBAGENTS_STANDALONE_MAX_LLM_CALLS:0}
+            standalone-max-total-tokens: ${REI_SUBAGENTS_STANDALONE_MAX_TOTAL_TOKENS:0}
           skills:
             enabled: true
             directories:

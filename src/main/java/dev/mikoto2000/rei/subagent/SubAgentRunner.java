@@ -22,6 +22,9 @@ import reactor.core.publisher.Mono;
 
 /** Per-invocation state only. Inherited values are explicit task/context, model, project location and an optional shared call reservation. */
 public final class SubAgentRunner {
+  private SubAgentProperties standaloneBudgetProperties=new SubAgentProperties();
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setStandaloneBudgetProperties(SubAgentProperties properties){standaloneBudgetProperties=properties;}
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
   @org.springframework.beans.factory.annotation.Autowired
   public void setToolPermissionGuard(dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {this.permissions=permissions;}
@@ -51,6 +54,8 @@ public final class SubAgentRunner {
   }
   public SubAgentResult run(String agent,String task,String context) {return run(agent,task,context,null);}
   public SubAgentResult run(String agent, String task, String context,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
+    var effectiveReservation=reservation==null&&AgentRunScope.current()==null?
+        StandaloneSubAgentBudget.create(standaloneBudgetProperties):reservation;
     String runId = UUID.randomUUID().toString();
     Instant started = clock.instant();
     long nanos = System.nanoTime();
@@ -106,7 +111,7 @@ public final class SubAgentRunner {
           ChatModel model = models.apply(d.model());
           ToolLoopSupport.requireNoDefaultTools(model);
           subscriptions.add(validatedRun(model, prompt, d, owner, check, evidence,
-                  new AtomicInteger(d.maxSteps()), repairAttempts, validationHistory,reservation)
+                  new AtomicInteger(d.maxSteps()), repairAttempts, validationHistory,effectiveReservation)
               .map(output -> new SubAgentResult(agent, runId, SubAgentResult.Status.COMPLETED, output.raw(), started,
                     clock.instant(), output.structured(), List.of(), repairAttempts.get(), validationHistory))
               .subscribeOn(Schedulers.boundedElastic()).timeout(d.timeout())
