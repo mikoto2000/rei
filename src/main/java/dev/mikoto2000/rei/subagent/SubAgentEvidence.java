@@ -11,6 +11,12 @@ final class SubAgentEvidence {
   private record Observation(String tool, String hash, String output,JsonNode arguments,boolean truncated) { }
   private final Map<String,Observation> observations = new LinkedHashMap<>();
   private final JsonMapper mapper = JsonMapper.builder().build();
+  synchronized String semanticSnapshot() {
+    String snapshot=mapper.writeValueAsString(observations);
+    if(snapshot.length()>65536)throw new SubAgentValidationException(List.of(
+        new ValidationError("/result/evidence","Semantic evidence exceeds bounded input limit")));
+    return snapshot;
+  }
   synchronized String capture(String tool, String input, String output) {
     if (observations.size() >= 64 || output == null) throw new IllegalStateException("Evidence capture limit or invalid tool output");
     String id = UUID.randomUUID().toString();

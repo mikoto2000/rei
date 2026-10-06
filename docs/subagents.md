@@ -198,3 +198,5 @@ CHATのdelegateTasksは独立した依頼をまとめて実行し、個別結果
 Goal内のdelegateTask / delegateTasksでは、子の初回呼び出し・各Tool cycle・validation repairを親Goalの永続予算へ事前予約します。並列workerも同じ予約を利用します。予約が拒否されたらモデルを呼ばずFAILED / SHARED_LLM_BUDGET_EXHAUSTEDを返します。失敗・キャンセルで予約を返却しません。元のvalidation履歴も保持します。
 
 予約はホストのToolContext経由で渡し、ToolのJSON入力には公開しません。親履歴・Working Setの共有は行いません。Goal予算のない通常のChat/手動委譲は従来のmaxSteps/timeoutを維持します。共通token上限やSkill selectorなど別経路への継承は対象外です。
+
+意味検証の任意設定は [SubAgentの意味検証](subagent-semantic-validation.md) を参照。

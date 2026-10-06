@@ -33,6 +33,14 @@ class SubAgentConfigurationTest {
     assertThat(definition.timeout()).isEqualTo(java.time.Duration.ofSeconds(120));
     assertThat(loader.load(write("b.yaml", yaml("reviewer") + "model: known\n")).model()).isEqualTo("known");
   }
+  @Test void semanticValidationIsOptInBooleanAndRequiresEvidenceTools() throws Exception {
+    assertThat(loader.load(write("default.yaml",yaml("reviewer"))).semanticValidation()).isFalse();
+    assertThat(loader.load(write("enabled.yaml",yaml("reviewer")+"evidenceTools: [readMultiFile]\nsemanticValidation: true\n")).semanticValidation()).isTrue();
+    for(String value:List.of("true","null","1","wrong")) {
+      var file=write("bad-semantic.yaml",yaml("reviewer")+"semanticValidation: "+value+"\n");
+      assertThatThrownBy(()->loader.load(file)).hasMessageContaining("semanticValidation");
+    }
+  }
   @Test void evidenceToolsAreOptInAndMustBeUniqueRequestedTools() throws Exception {
     assertThat(loader.load(write("a.yaml",yaml("reviewer"))).evidenceTools()).isEmpty();
     assertThat(loader.load(write("a.yaml",yaml("reviewer")+"evidenceTools: [readMultiFile]\n")).evidenceTools()).containsExactly("readMultiFile");
