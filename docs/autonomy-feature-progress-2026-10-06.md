@@ -1,6 +1,6 @@
 # 自律機能の継続作業記録（2026-10-06）
 
-最初の継続7件に加え、後続の継続でSubAgent関連3件を完了した。後続分は末尾の表に記録する。
+最初の継続7件に加え、後続の継続でSubAgent関連3件と共有Run報告token上限を完了した。後続分は末尾の表に記録する。
 
 この継続作業で次の7件を独立ブランチで実装し、Red→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後確認→main Pushを完了した。各実装の制限・追加候補を残し、全候補の完成とは区別する。初回からの一覧は[実装状況](autonomy-feature-audit.md)を参照。
 
@@ -30,7 +30,7 @@ Merged intoは全件main。各全体回帰はPASS（failure/error/skip各0）。
 
 ## Remaining
 
-全対応の完了は宣言しない。監査表には意味検証の実モデル品質評価・別モデル合意、共通token・embedding/rerank予算、意味的なActivity個人化、複数ファイル／binary文書／描画検証、外部通知・複数External Agentなどの追加候補が残る。既存の基本機能の完成と、これらの拡張候補は別に扱う。自由文の意味検証と読み取り系のSubAgent承認継承は以下の後続作業で実装した。
+全対応の完了は宣言しない。監査表には意味検証の実モデル品質評価・別モデル合意、Goal跨ぎ永続token上限・独立要約／Sleep／CLI／embedding/rerank予算、意味的なActivity個人化、複数ファイル／binary文書／描画検証、外部通知・複数External Agentなどの追加候補が残る。既存の基本機能の完成と、これらの拡張候補は別に扱う。自由文の意味検証と読み取り系のSubAgent承認継承、明示Run経路の報告token上限は以下の後続作業で実装した。
 
 有料Providerや実LLMを使うPaper E2E、LLMの編集品質評価は実施していない。CLI継続は実機helpの対応確認とプロセスfixtureで検証し、実アカウントへreview/resumeは送っていない。これらを実施済みとする報告はしない。
 
@@ -47,3 +47,13 @@ Merged intoは全件main。各全体回帰はPASS（failure/error/skip各0）。
 - semanticValidationは既定無効。決定的な実証跡検査の後に、原タスク・最終回答・実観測をToolなしの独立Promptで評価する。固定判定コード・入力上限・共有step/Goal予算/deadlineを守り、修復後も再検証する。実LLMの意味判断品質は未評価で、正しさの証明とはしない。
 - inheritApprovalsは既定無効。Runnerが捕捉した親のみ参照し、READ/NETWORK_READ・Project/root/source一致時に正確な親Sessionの一回承認をSQLiteで消費する。未承認なら親所有の確認要求を保存する。DENY優先、並列一回競合、既定拒否と承認再利用の拒否を検証した。
 - Goal外の通常Chatでは子LLMが親Run予算を消費していなかったため、既存共有予約を親カウンタ経由へ修正した。親・子・並列子・意味検証が共通Run回数を消費し、Goalにも二重計上しない。共通token上限とは区別する。
+
+## 後続の共有Run報告token上限
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [共有Run報告token上限](implementation-report-shared-run-token-limit.md) | shared-run-token-limit | ef243dbf | 3c74d61c | 3064 / 587 |
+
+Red→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。最新全体回帰は3064 tests / 587 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。
+
+既定0で無効。有効時は親Chat・子・並列子・修復／意味検証・Skill選択・出力上限plannerのProvider報告totalTokensを同じRunへ計上する。超過応答のToolを実行せず、使用量不明時も停止する。予算本体の同期と8 workerの並列計上も検証した。応答後の停止条件であり、開始済み呼出しの請求上限やGoal全期間の上限を保証しない。詳しい適用範囲は[設定と制限](shared-run-token-limit.md)に記録した。

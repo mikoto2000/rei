@@ -14,4 +14,4 @@
 
 ## Gitと制限
 
-ブランチcodex/shared-run-token-limit、base main。feature Commit/Push→main Merge→Merge後確認→main Pushの順に進める。API報告後の制限であり、in-flight呼出しの費用を戻さず、並列呼出しでの厳密な超過防止は保証しない。Goal跨ぎ永続token上限・独立要約やSleep・External CLI・embedding/rerankは残件として区別する。実Providerのusage品質は評価していない。
+ブランチcodex/shared-run-token-limit、Feature Commit ef243dbf、main Merge 3c74d61c。feature Commit/Push→main Merge→Merge後関連テスト確認→main Pushまで完了した。API報告後の制限であり、in-flight呼出しの費用を戻さず、並列呼出しでの厳密な超過防止は保証しない。Goal跨ぎ永続token上限・独立要約やSleep・External CLI・embedding/rerankは残件として区別する。実Providerのusage品質は評価していない。
