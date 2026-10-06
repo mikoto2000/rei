@@ -15,3 +15,7 @@ testsuite/testsuitesのトップレベル報告countと、実testcaseの観測co
 単一file1MiB、XML深さ64・tree8192 node、観測1024 case、診断24件。test名／type256文字、message512文字、detail2048文字。CredentialRedactorとprivate key block除去を切り詰め前に適用する。DOCTYPE・外部entity／schema・XIncludeを無効化し、不正XML・未対応root・不正count・上限超過を拒否する。取消を伝播する。
 
 親path traversal・絶対path・symlink・Project外・秘密情報用pathを拒否する。既存のRepository Map除外基準を使うが、レポート配置のtarget/buildは明示読取を許容する。JUnitを出力するMaven/Gradle等で利用できる。その他の形式、レポート自動発見、複数file合算、任意suite metadataの評価、原因の証明・自動repairは今回の範囲外。
+
+## 集合診断 follow-up
+
+標準配置の自動発見・明示directory・複数fileの集合診断を[diagnoseTestReports](junit-report-discovery.md)として追加した。上記の自動発見／複数file未対応は初期実装時点の記録である。現在のprocess／Goal成功を判定しない制約は同じ。

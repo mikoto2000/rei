@@ -9,7 +9,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @EnableConfigurationProperties(ToolPermissionProperties.class)
 public class ToolPermissionPolicy {
   private static final Set<String> READ=Set.of("readFile","readMultiFile","grepMultiQuery","readPdfFile",
-      "searchAndRead","today","now","findFile","listFile","repositoryMap","changeTestImpact","diagnoseTestReport","readTextChangeSetBase","inspectTextChangeSet","getShellProcessStatus","waitForShellProcess","waitForFile","dependencyStatus","dependencyHistory","checkDependency","waitForDependency","listScheduledActions","listCodexReviews","getCodexReview");
+      "searchAndRead","today","now","findFile","listFile","repositoryMap","changeTestImpact","diagnoseTestReport","diagnoseTestReports","readTextChangeSetBase","inspectTextChangeSet","getShellProcessStatus","waitForShellProcess","waitForFile","dependencyStatus","dependencyHistory","checkDependency","waitForDependency","listScheduledActions","listCodexReviews","getCodexReview");
   private static final Set<String> NETWORK_READ=Set.of("webSearch","webSearchAndRead","fetchUrlContent","checkHttpDependency","waitForHttpDependency");
   private static final Set<String> LOCAL_WRITE=Set.of("applyTextDiff","writeMultiFile","proposeTextChangeSet","applyTextChangeSet","discardTextChangeSet","createDirectory","copyFile","scheduleAfter","scheduleAt","scheduleInterval","scheduleCron","scheduleOnEvent","registerDependency","cancelDependency");
   private final ToolPermissionProperties properties;
