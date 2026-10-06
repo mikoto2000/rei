@@ -323,7 +323,7 @@ class PaperWorkflowTest {
     var fallback =
         new CrossrefSearchProvider(
             (u, t, m, o) ->
-                "{\"message\":{\"items\":[{\"title\":[\"Fallback\"],\"DOI\":\"10.2/fallback\"}]}}"
+                "{\"message\":{\"items\":[{\"title\":[\"Fallback\"],\"DOI\":\"10.2/fallback\",\"published\":{\"date-parts\":[[2025]]}}]}}"
                     .getBytes(),
             config);
     var refs = new PaperSessionReferences();

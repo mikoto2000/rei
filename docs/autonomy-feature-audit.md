@@ -26,7 +26,7 @@
 | C19 | Change/Test Impact | Partially implemented | Implemented (Java structural candidate slice)。Repository Map再利用、逆import/テスト名候補の推移探索・根拠/不完全性・READ Tool。Git差分自動取得/coverage/完全意味解析はDeferred |
 | C20 | Build/Test Failure Diagnosis | Partially implemented | Implemented (deterministic process-log slice)。既存command/snapshotにreported test/cause/source・分類・固定確認手順、認証情報除去・上限・context圧縮保持。完全原因特定/report読取/自動repairはDeferred |
 | C21 | Self Patch Review Loop | Partially implemented | 初回test→同一patch/静的diff review→保存Change Setの実Fix→全サイクル再検証を追加。最大3修正/4round・180秒共有・元の失敗保持・結果不明/進展なし停止。明示testと保存修正案を用いる経路は対応済み。意味review/全Goal強制統合は追加候補 |
-| D | Diagram edit / Change Set / Document Agent / Paper E2E | Deferred | 単一既存UTF-8ファイルのSQLite Change Set・完全baseline・差分確認・明示Apply/Discardに対応。既存SubAgentのdocument-editor定義と専用Schemaを追加し、文書・Mermaid/PlantUMLの自然言語編集案→保存差分→明示適用へ接続。Paper Provider E2Eは未完了。複数ファイル/binary文書/専用rendererは追加候補 |
+| D | Diagram edit / Change Set / Document Agent / Paper E2E | Deferred | 単一既存UTF-8ファイルのSQLite Change Set・完全baseline・差分確認・明示Apply/Discardに対応。document-editor定義/専用Schemaで文書・Mermaid/PlantUMLの自然言語編集案→保存差分→明示適用へ接続。PaperはProvider→条件検査→SQLite/Session/Library→要約/根拠→再起動cacheのオフライン結合を追加し、条件外応答の取込みを修正。複数ファイル/binary文書/専用renderer/live provider E2Eは追加候補 |
 
 ## 重複実装を避ける項目
 
