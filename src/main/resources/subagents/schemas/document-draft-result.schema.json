@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["proposal", "sources", "unverified"],
+  "additionalProperties": false,
+  "properties": {
+    "proposal": {
+      "type": ["object", "null"],
+      "required": ["path", "format", "expectedText", "replacement", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "format": {"type": "string", "enum": ["TEXT", "MARKDOWN", "MERMAID", "PLANTUML"]},
+        "expectedText": {"type": "string", "minLength": 1, "maxLength": 65536},
+        "replacement": {"type": "string", "maxLength": 65536},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 2048}
+      }
+    },
+    "sources": {
+      "type": "array", "maxItems": 16,
+      "items": {
+        "type": "object", "required": ["path", "quote"], "additionalProperties": false,
+        "properties": {
+          "path": {"type": "string", "minLength": 1, "maxLength": 1024},
+          "quote": {"type": "string", "minLength": 1, "maxLength": 1024}
+        }
+      }
+    },
+    "unverified": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": 1024}}
+  }
+}
