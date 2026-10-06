@@ -70,6 +70,8 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("inherit-run-model-budget: ${REI_RERANK_INHERIT_RUN_MODEL_BUDGET:false}"));
     assertTrue(content.contains("inherit-run-model-budget: ${REI_EMBEDDING_INHERIT_RUN_MODEL_BUDGET:false}"));
     assertTrue(content.contains("inherit-run-model-budget: ${REI_CODEX_INHERIT_RUN_MODEL_BUDGET:false}"));
+    assertTrue(content.contains("parallel-review-enabled: ${REI_CODEX_PARALLEL_REVIEW_ENABLED:false}"));
+    assertTrue(content.contains("parallel-review-timeout: ${REI_CODEX_PARALLEL_REVIEW_TIMEOUT:120s}"));
     assertTrue(content.contains("standalone-summary-max-llm-calls: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_LLM_CALLS:0}"));
     assertTrue(content.contains("standalone-summary-max-total-tokens: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_TOTAL_TOKENS:0}"));
     assertTrue(content.contains("max-selected: 3"));
