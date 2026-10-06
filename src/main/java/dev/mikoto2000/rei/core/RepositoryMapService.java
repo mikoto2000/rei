@@ -30,9 +30,15 @@ public final class RepositoryMapService {
   private record Parsed(String packageName,String status,List<Symbol> symbols,List<String> imports) { }
   private record Cached(String digest,Parsed parsed) { }
   private final Inventory inventory;
+  private final JavaCompiler compiler;
+  private SqliteRepositoryMapIndex persistentIndex;
   private final LinkedHashMap<Path,Map<String,Cached>> caches=new LinkedHashMap<>(4,.75f,true);
   public RepositoryMapService(){this(RepositoryMapService::gitFiles);}
-  RepositoryMapService(Inventory inventory){this.inventory=inventory;}
+  RepositoryMapService(Inventory inventory){this(inventory,ToolProvider.getSystemJavaCompiler());}
+  RepositoryMapService(Inventory inventory,JavaCompiler compiler){this.inventory=inventory;this.compiler=compiler;}
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void configurePersistentIndex(javax.sql.DataSource data,@org.springframework.beans.factory.annotation.Value("${rei.repository-map.persistent-index-enabled:false}") boolean enabled){if(enabled)persistentIndex=new SqliteRepositoryMapIndex(data);}
+  void setPersistentIndex(SqliteRepositoryMapIndex index){persistentIndex=index;}
   public synchronized View map(Path directory,String query,int limit)throws IOException {
     return build(directory,query,limit,false);
   }
@@ -42,10 +48,12 @@ public final class RepositoryMapService {
     if(limit<1 || limit>100 || (query!=null && query.length()>256))throw new IllegalArgumentException("Map limit must be 1 to 100 and query at most 256 characters");
     Path root=directory.toRealPath();long deadline=System.nanoTime()+Duration.ofSeconds(10).toNanos();
     var paths=inventory.files(root).stream().distinct().sorted().toList();
-    var previous=caches.getOrDefault(root,Map.of());var next=new HashMap<String,Cached>();
+    var previous=new HashMap<>(caches.getOrDefault(root,Map.of()));var next=new HashMap<String,Cached>();
+    if(persistentIndex!=null)try{persistentIndex.load(root).forEach((path,entry)->previous.putIfAbsent(path,new Cached(entry.digest(),new Parsed(entry.packageName(),"PARSED",entry.symbols(),entry.imports()))));}
+    catch(RuntimeException error){RunCancellation.propagate(error);org.slf4j.LoggerFactory.getLogger(getClass()).warn("Repository metadata index read failed ({})",error.getClass().getSimpleName());}
     var files=new ArrayList<File>();var warnings=new LinkedHashSet<String>();
     if(paths.size()>1024)warnings.add("File inventory limited to 1024 entries");
-    var compiler=ToolProvider.getSystemJavaCompiler();long bytesRead=0;
+    long bytesRead=0;
     try(var manager=compiler==null?null:compiler.getStandardFileManager(null,Locale.ROOT,StandardCharsets.UTF_8)) {
       for(String relative:paths.stream().limit(1024).toList()) {
         RunCancellation.propagate(null);
@@ -79,6 +87,8 @@ public final class RepositoryMapService {
       }
     }
     RunCancellation.propagate(null);caches.put(root,Map.copyOf(next));while(caches.size()>2)caches.remove(caches.keySet().iterator().next());
+    if(persistentIndex!=null && warnings.isEmpty())try{persistentIndex.replace(root,next.entrySet().stream().filter(e->e.getValue().parsed().status().equals("PARSED")).map(e->new SqliteRepositoryMapIndex.Entry(e.getKey(),e.getValue().digest(),e.getValue().parsed().packageName(),e.getValue().parsed().symbols(),e.getValue().parsed().imports())).toList());}
+    catch(RuntimeException error){RunCancellation.propagate(error);org.slf4j.LoggerFactory.getLogger(getClass()).warn("Repository metadata index write failed ({})",error.getClass().getSimpleName());}
     String fingerprint=hash(files.stream().map(f->f.path()+":"+f.sha256()+":"+f.status()).reduce("",(a,b)->a+"\n"+b).getBytes(StandardCharsets.UTF_8));
     String filter=Objects.toString(query,"").toLowerCase(Locale.ROOT);
     var selected=files.stream().filter(f->(f.path()+" "+f.packageName()+" "+f.module()).toLowerCase(Locale.ROOT).contains(filter)
