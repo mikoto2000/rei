@@ -58,8 +58,6 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("max-total-tokens: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS:0}"));
     assertTrue(content.contains("max-llm-calls-per-project: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS_PER_PROJECT:0}"));
     assertTrue(content.contains("max-total-tokens-per-project: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS_PER_PROJECT:0}"));
-    assertTrue(content.contains("max-llm-calls-per-project: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS_PER_PROJECT:0}"));
-    assertTrue(content.contains("max-total-tokens-per-project: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS_PER_PROJECT:0}"));
     assertTrue(content.contains("skills:"));
     assertTrue(content.contains("${rei.data-dir}/skills"));
     assertTrue(content.contains("max-selected: 3"));

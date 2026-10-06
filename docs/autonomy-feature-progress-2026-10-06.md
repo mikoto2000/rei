@@ -159,3 +159,10 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 初期Red→実ChatClient/SQLite最小Green→保存・usage・取消・境界の検証→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。全体回帰は3149 tests / 597 suites、failure/error/skip各0。Java/configのみ変更し、Native/Reactは再実行していない。
 
 1操作内の抽出と要約で呼出回数／報告token上限を共有し、未知／超過は解析・fallback・保存前に停止する。実Picocli --approveで停止後のMemoryService非接触、上限ちょうどの成功／次呼出抑制、正常保存、provider障害、取消、独立設定binding・既定互換を検証した。Sleep跨ぎ永続予算・CLI／embedding／rerank等の費用予算は引き続き残件。
+## 後続のSleepプロジェクト累積予算
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [Sleep累積予算](implementation-report-sleep-persistent-budget.md) | sleep-persistent-budget | 6b8b0438 | 43f5ea06 | 3159 / 598 |
+
+初期Red→実SQLite／実Sleep経路Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。失敗・preview費用の保持、unknown／pending停止、再起動・並行予約・設定bindingを検証した。CLI／embedding／rerankなどの費用予算は残件。
