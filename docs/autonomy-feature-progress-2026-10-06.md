@@ -190,3 +190,11 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 | Implemented | [非正値usage修正](implementation-report-sleep-empty-usage.md) | sleep-persistent-empty-usage | cdbcdd85 | 1b1404b6 | 3174 / 599 |
 
 2 failure / 0 errorのRed→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。累積token上限だけを有効にした場合も非正値usageで停止し、永続unknownを保持する。
+
+## 後続の外部Codex CLI親モデル予算
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [CLI親モデル予算](implementation-report-codex-run-model-budget.md) | codex-run-model-budget | 5b397165 | eb46a810 | 3183 / 600 |
+
+初期Red→Green→9テストでCLI usage／Goal永続化／未知・超過／取消／保存前停止／既定互換→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。CLI内部cycleの回数制限ではなく、1委譲の報告費用を親へ累積する。embedding／rerank費用予算などは残件。
