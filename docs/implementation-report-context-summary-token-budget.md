@@ -16,7 +16,7 @@ context圧縮・取消・実Chat・境界・Run/Goal予算の関連テストはP
 
 ## Git
 
-独立ブランチcodex/context-summary-token-budget。feature Commit/Push→main Merge→Merge後関連テスト→main Pushの順に進める。検証済みhashは後続の作業記録へ保存する。
+独立ブランチcodex/context-summary-token-budget。Feature Commit dbf29060、main Merge 53ce0a61。feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。
 
 ## 制限
 
