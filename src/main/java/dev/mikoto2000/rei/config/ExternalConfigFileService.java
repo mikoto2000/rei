@@ -254,6 +254,8 @@ public class ExternalConfigFileService {
             timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
             prompt-enhancement:
               enabled: ${REI_IMAGE_PROMPT_ENHANCEMENT_ENABLED:true}
+          repository-map:
+            persistent-index-enabled: ${REI_REPOSITORY_MAP_PERSISTENT_INDEX_ENABLED:false}
           subagents:
             max-transient-read-tool-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_READ_TOOL_RETRIES:0}
             max-transient-model-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_MODEL_RETRIES:0}

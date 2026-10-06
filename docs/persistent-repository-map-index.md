@@ -1,0 +1,13 @@
+# Repository Map の永続メタデータ索引
+
+`rei.repository-map.persistent-index-enabled` / `REI_REPOSITORY_MAP_PERSISTENT_INDEX_ENABLED` は既定false。既存application SQLite DBに、Java ASTのpackage/型/method/import/入口と、相対path・ソースSHA-256を保存する。ソース本文・コメント・文字列本文・問い合わせは保存しない。宣言名やpath自体はコード由来のデータとして既存DBの管理対象となる。
+
+有効化したMap/Change Impactの読取りで初めてtableを作成する。bean作成や無効設定ではSQLを実行しない。旧constructorの動作はメモリcacheのみ。永続索引は1 DBに1つのactive root snapshotを保持する。canonical rootのSHAとparser format/JDK vendor/versionのprofileが一致した場合だけ読み、別rootへの切替時は再解析する。profileが変わればcacheを再利用しない。
+
+毎回Git inventoryと現在ソースを既存の境界・秘密除外・byte/time上限で走査し、現在SHAが一致するmetadataだけを利用する。索引はファイル読取りや権限確認の代替ではない。変更は再解析、削除は次の完全snapshotで除去する。解析不足・過大inventory・時間切れを含むpartial走査では前回完全snapshotを消さない。保存が残っても次回の現在inventory/SHA検証を省かない。
+
+snapshotは最大1024 Javaファイル、1 payload 64KiB、合計8MiB。各fileは最大64 symbols/128 imports、文字列・相対pathも検証する。SQL読取りは1025行目で拒否、blobは65537bytesまで取得し、length/checksum/strict JSONを検証する。SQL timeoutは5秒。checksumは破損検出であり署名ではない。上限は取得するpayload量の境界であり、SQLite内部IO量を保証するものではない。
+
+全metadataを検証後、DELETE/INSERTを同じtransactionで保存する。失敗・取消でrollbackし、既存snapshotを残す。DB障害・破損・profile不一致は現在ソースのAST解析へ戻る。ログへDB診断本文を出さない。追加LLM、コンパイル、annotation processor、ソース実行は行わない。
+
+同じDBを複数process/rootが更新すると最後の完全snapshotが残り、別rootは再解析する。多言語AST、意味的依存解決、学習/品質評価はこの索引では実装したとは扱わない。
