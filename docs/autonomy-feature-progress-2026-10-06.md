@@ -267,3 +267,11 @@ Java／Native／React Red→最小Green→未来日入力HTTP修正／fixture ma
 | Implemented | [SubAgentモデルretry](implementation-report-subagent-transient-model-retry.md) | subagent-transient-model-retry | a8f1338a | efc96ef3 | 3267 / 608 |
 
 初期Red→4テストGreen→9新規テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。応答受信前だけを再試行し、既実行Toolの再生・step/費用予算reset・未知usage retryを防いだ。Tool障害retry・永続resumeなどは引き続き対応対象。
+
+## 後続のSubAgent読み取りTool retry
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [SubAgent READ Tool retry](implementation-report-subagent-read-tool-retry.md) | subagent-read-tool-retry | c014b5dd | 3eca76c3 | 3275 / 609 |
+
+compile Red→3テストGreen→8新規テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。単発承認や書き込み分類を再利用せず、実embedding費用も共有Goal予算で止めることを確認した。永続resume・Repository Map永続索引などは引き続き対応対象。
