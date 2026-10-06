@@ -182,3 +182,11 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 | Implemented | [RunContextなし要約予算](implementation-report-standalone-context-summary-budget.md) | standalone-context-summary-budget | f25a564e | 87d892d5 | 3172 / 599 |
 
 初期Red→Green→7テストで履歴／実行ログ共有・未知usage・timeout・保存・親予算優先・設定→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。CLI／embedding／rerankの費用予算は残件。
+
+## Sleep累積予算の0 token報告修正
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [非正値usage修正](implementation-report-sleep-empty-usage.md) | sleep-persistent-empty-usage | cdbcdd85 | 1b1404b6 | 3174 / 599 |
+
+2 failure / 0 errorのRed→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。累積token上限だけを有効にした場合も非正値usageで停止し、永続unknownを保持する。
