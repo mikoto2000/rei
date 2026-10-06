@@ -30,6 +30,11 @@ class SleepPersistentBudgetTest {
     assertTrue(assertThrows(RuntimeException.class,()->repository().reserveSleepModelCall("p",0,5))
         .getMessage().contains("TOKEN_BUDGET_EXCEEDED"));
   }
+  @Test void zeroReportedTokensRemainUnknownAcrossRestart() {
+    repository().reserveSleepModelCall("p",0,5);repository().recordSleepTokens("p",0);
+    assertTrue(assertThrows(RuntimeException.class,()->repository().reserveSleepModelCall("p",0,5))
+        .getMessage().contains("TOKEN_USAGE_UNKNOWN"));
+  }
   @Test void unreportedInFlightAndUnknownUsageFailClosedAcrossRestart() {
     repository().reserveSleepModelCall("pending",0,5);
     assertTrue(assertThrows(RuntimeException.class,()->repository().reserveSleepModelCall("pending",0,5))
