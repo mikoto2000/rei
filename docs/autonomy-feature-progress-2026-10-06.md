@@ -198,3 +198,11 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 | Implemented | [CLI親モデル予算](implementation-report-codex-run-model-budget.md) | codex-run-model-budget | 5b397165 | eb46a810 | 3183 / 600 |
 
 初期Red→Green→9テストでCLI usage／Goal永続化／未知・超過／取消／保存前停止／既定互換→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。CLI内部cycleの回数制限ではなく、1委譲の報告費用を親へ累積する。embedding／rerank費用予算などは残件。
+
+## 後続のembedding親モデル予算
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [embedding親モデル予算](implementation-report-embedding-run-model-budget.md) | embedding-run-model-budget | 934880b4 | efedc73a | 3192 / 601 |
+
+初期Red→Green→実ストアのtyped停止変換Red→修正→9テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。Tool／Skill／worker／Goal永続化・vector保存抑止を検証した。rerank費用予算などは残件。
