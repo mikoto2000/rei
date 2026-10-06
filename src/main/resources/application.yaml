@@ -262,6 +262,9 @@ rei:
     max-turns: ${REI_WORK_CONTEXT_MAX_TURNS:20}
   memory:
     enabled: ${REI_MEMORY_ENABLED:true}
+    consolidation:
+      max-llm-calls: ${REI_MEMORY_CONSOLIDATION_MAX_LLM_CALLS:0}
+      max-total-tokens: ${REI_MEMORY_CONSOLIDATION_MAX_TOTAL_TOKENS:0}
     retrieval:
       max-memories: ${REI_MEMORY_MAX_MEMORIES:5}
       max-tokens: ${REI_MEMORY_MAX_TOKENS:1500}
