@@ -166,3 +166,11 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 | Implemented | [Sleep累積予算](implementation-report-sleep-persistent-budget.md) | sleep-persistent-budget | 6b8b0438 | 43f5ea06 | 3159 / 598 |
 
 初期Red→実SQLite／実Sleep経路Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。失敗・preview費用の保持、unknown／pending停止、再起動・並行予約・設定bindingを検証した。CLI／embedding／rerankなどの費用予算は残件。
+
+## 後続のAuto Sleep保存済みmetadata再検出
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [metadata定期再検出](implementation-report-auto-sleep-metadata-refresh.md) | auto-sleep-metadata-refresh | 944cdb6d | 6b5e54a3 | 3165 / 599 |
+
+実ファイルでの外部追加未検出Red→Green→6テストでページ／復旧／idle／project境界→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。終了triggerは残件。
