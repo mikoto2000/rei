@@ -15,7 +15,11 @@ public class LlmConversationCompressor implements ConversationCompressor {
     this.models = models; this.properties = properties;
   }
   @Override public String summarize(String previous, List<Message> messages, int maxTokens, Prompt owner) {
+    return summarize(previous,messages,maxTokens,owner,null);
+  }
+  @Override public String summarize(String previous,List<Message> messages,int maxTokens,Prompt owner,ModelCallBudget supplied) {
     var execution = ContextAssembler.execution(owner);
+    ModelCallBudget standalone=execution==null?(supplied==null?StandaloneSummaryBudget.create(properties):supplied):null;
     if (execution != null) execution.consumeNextLlmCall();
     var provider = models.getObject();
     // Same model/server as the parent makes the configured input window applicable to summarization too.
@@ -53,6 +57,7 @@ public class LlmConversationCompressor implements ConversationCompressor {
     try {
       var responses = reactor.core.publisher.Flux.defer(() -> {
         if (execution != null) execution.checkModelTokenBudget();
+        else if(standalone!=null)standalone.run();
         invoked.set(true);
         return model.stream(prompt);
       }).doOnNext(response -> {
@@ -69,12 +74,17 @@ public class LlmConversationCompressor implements ConversationCompressor {
         var usage = response == null ? null : response.getMetadata().getUsage();
         execution.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
         execution.checkActive();
+      } else if(standalone!=null) {
+        reported=true;
+        var response=aggregate.get();var usage=response==null?null:response.getMetadata().getUsage();
+        standalone.recordTotalTokens(usage==null?null:usage.getTotalTokens());
       }
       if (outputLimited.get()) throw new IllegalStateException("Summary output limit");
       return result.toString();
     } catch (RuntimeException error) {
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
       if (execution != null && invoked.get() && !reported) execution.recordTotalTokens(null);
+      else if(standalone!=null&&invoked.get()&&!reported)standalone.recordTotalTokens(null);
       throw error;
     }
   }

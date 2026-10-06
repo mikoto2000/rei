@@ -98,6 +98,8 @@ public class ExternalConfigFileService {
             open-alex-api-key: ${REI_PAPER_OPEN_ALEX_API_KEY:}
           context-compression:
             enabled: ${REI_CONTEXT_COMPRESSION_ENABLED:true}
+            standalone-summary-max-llm-calls: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_LLM_CALLS:0}
+            standalone-summary-max-total-tokens: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_TOTAL_TOKENS:0}
           computer-use:
             enabled: false
             diagnostics:
