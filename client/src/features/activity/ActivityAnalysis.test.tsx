@@ -4,6 +4,14 @@ import { afterEach, it, expect, vi } from "vitest";
 import type { Command } from "../../tauri/commands";
 import { ActivityAnalysis } from "./ActivityAnalysis";
 afterEach(cleanup);
+it("includes explicit coaching controls without starting any settings request on navigation", () => {
+  const call = vi.fn();
+  render(<ActivityAnalysis call={call as Command} serverId="s" />);
+  expect(
+    screen.getByRole("button", { name: "保存済み設定を取得" }),
+  ).toBeTruthy();
+  expect(call).not.toHaveBeenCalled();
+});
 it("discards a previous period read after the user changes the analysis selection", async () => {
   let finish!: (value: unknown) => void;
   const call = vi

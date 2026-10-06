@@ -25,6 +25,15 @@ pub struct BackgroundReceipt {
     deny_unknown_fields
 )]
 pub enum WorkspaceOperation {
+    ActivityCoachingSettings,
+    ActivityCoachingConfigure {
+        expected_revision: i64,
+        settings: ActivityCoachingSettings,
+    },
+    ActivityCoachingEnabled {
+        expected_revision: i64,
+        enabled: bool,
+    },
     ActivityAnalysis {
         period: String,
         date: Option<String>,
@@ -196,6 +205,56 @@ pub enum WorkspaceOperation {
         id: String,
     },
     ReloadSkills,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ActivityCoachingSettings {
+    pub enabled: bool,
+    pub categories: Vec<String>,
+    pub target_share: f64,
+    pub minimum_observed_minutes: i32,
+    pub minimum_coverage: f64,
+    pub maximum_unknown_share: f64,
+    pub cooldown_days: i32,
+}
+impl ActivityCoachingSettings {
+    pub fn valid(&self) -> bool {
+        !self.categories.is_empty()
+            && self.categories.len() <= 11
+            && self.categories.iter().all(|c| {
+                matches!(
+                    c.as_str(),
+                    "development"
+                        | "research"
+                        | "documentation"
+                        | "communication"
+                        | "social"
+                        | "media"
+                        | "shopping"
+                        | "gaming"
+                        | "monitoring"
+                        | "navigation"
+                        | "idle"
+                )
+            })
+            && self
+                .categories
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .len()
+                == self.categories.len()
+            && self.target_share.is_finite()
+            && self.target_share > 0.0
+            && self.target_share <= 1.0
+            && (1..=44640).contains(&self.minimum_observed_minutes)
+            && self.minimum_coverage.is_finite()
+            && self.minimum_coverage > 0.0
+            && self.minimum_coverage <= 1.0
+            && self.maximum_unknown_share.is_finite()
+            && (0.0..=1.0).contains(&self.maximum_unknown_share)
+            && (1..=366).contains(&self.cooldown_days)
+    }
 }
 
 /// Client presentation model. Server DTOs are decoded and mapped in the API adapter.

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Command } from "../../tauri/commands";
 import type { WorkspaceResult } from "../../entities/workspace";
 import { errorText } from "../../entities/models";
+import { ActivityCoachingSettings } from "./ActivityCoachingSettings";
 export function ActivityAnalysis({
   call,
   serverId,
@@ -102,6 +103,7 @@ export function ActivityAnalysis({
       </button>
       {pending && <p role="status">保存観測を読み取っています…</p>}
       {error && <p role="alert">{error}</p>}
+      <ActivityCoachingSettings call={call} serverId={serverId} />
       {visible?.items.map((item, index) => (
         <article key={index}>
           <h3>{item.title}</h3>

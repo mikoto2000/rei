@@ -1,4 +1,24 @@
+export interface CoachingSettings {
+  enabled: boolean;
+  categories: string[];
+  targetShare: number;
+  minimumObservedMinutes: number;
+  minimumCoverage: number;
+  maximumUnknownShare: number;
+  cooldownDays: number;
+}
 export type WorkspaceOperation =
+  | { operation: "activityCoachingSettings" }
+  | {
+      operation: "activityCoachingConfigure";
+      expectedRevision: number;
+      settings: CoachingSettings;
+    }
+  | {
+      operation: "activityCoachingEnabled";
+      expectedRevision: number;
+      enabled: boolean;
+    }
   | {
       operation: "activityAnalysis";
       period: "WEEK" | "MONTH";
