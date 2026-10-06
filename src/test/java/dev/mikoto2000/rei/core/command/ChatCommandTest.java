@@ -67,7 +67,7 @@ class ChatCommandTest {
         Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty(),
         new AgentEventFactory(Clock.systemDefaultZone()), bus)).execute("hello") == 0);
 
-    assertTrue(output.text().contains("=== answer ==="));
+    assertTrue(output.text().contains("=== answer ("));
     assertTrue(output.text().contains("answer text"));
     assertTrue(output.text().contains("[agent] completed"));
   }
@@ -493,10 +493,10 @@ class ChatCommandTest {
         Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty(),
         new AgentEventFactory(Clock.systemDefaultZone()), bus)).execute("hello") == 0);
 
-    assertTrue(output.text().contains("=== thinking ==="));
+    assertTrue(output.text().contains("=== thinking ("));
     assertTrue(output.text().contains("考えています"));
-    assertTrue(output.text().contains("=== answer ==="));
-    assertTrue(output.text().indexOf("=== thinking ===") < output.text().indexOf("=== answer ==="));
+    assertTrue(output.text().contains("=== answer ("));
+    assertTrue(output.text().indexOf("=== thinking (") < output.text().indexOf("=== answer ("));
   }
 
   private static final class RecordingOutput implements ShellEventOutput {
