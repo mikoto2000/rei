@@ -18,10 +18,24 @@ public final class ChangeTestImpactService {
       List<String> changedFiles,List<String> unindexedChanges,List<Candidate> candidates,RegressionAssessment regressionAssessment) {}
   private final RepositoryMapService maps;
   public ChangeTestImpactService(RepositoryMapService maps){this.maps=maps;}
+  public Result analyzeGit(Path root,int limit)throws IOException {
+    if(limit<1||limit>100)throw new IllegalArgumentException("Limit must be 1 to 100");
+    Path actual=root.toRealPath();
+    var observation=new GitChangedFiles(new dev.mikoto2000.rei.externalagent.ExternalAgentProcessRunner()).collect(actual);
+    var result=analyzePaths(actual,observation.paths(),limit,observation.excluded());
+    var warnings=new ArrayList<>(result.warnings());
+    warnings.add("Git staged, unstaged and untracked paths collected; observations are not an atomic patch snapshot or permission to skip tests");
+    if(observation.excluded())warnings.add("Excluded sensitive/generated change paths; broader regression required");
+    return new Result(result.root(),result.version(),result.scannedAt(),result.partial(),List.copyOf(warnings),result.changedFiles(),
+        result.unindexedChanges(),result.candidates(),result.regressionAssessment());
+  }
   public Result analyze(Path root,List<String> changedFiles,int limit)throws IOException {
     RunCancellation.propagate(null);
     if(changedFiles==null || changedFiles.isEmpty() || changedFiles.size()>64 || limit<1 || limit>100)
       throw new IllegalArgumentException("Require 1 to 64 changed paths and limit 1 to 100");
+    return analyzePaths(root,changedFiles,limit,false);
+  }
+  private Result analyzePaths(Path root,List<String> changedFiles,int limit,boolean incompleteInventory)throws IOException {
     var changes=new LinkedHashSet<String>();
     for(String name:changedFiles){
       if(name==null || name.isBlank() || name.length()>1024)throw new IllegalArgumentException("Invalid changed path");
@@ -46,7 +60,7 @@ public final class ChangeTestImpactService {
     }
     if(found.size()>limit)warnings.add("Candidate output limited; refine changed paths or run broader regression");
     warnings.add("Structural candidates only: same-package references, wildcard imports, reflection, resources and build configuration may affect additional tests");
-    boolean partial=snapshot.partial() || !missing.isEmpty() || found.size()>limit;
+    boolean partial=incompleteInventory || snapshot.partial() || !missing.isEmpty() || found.size()>limit;
     var assessment=assess(snapshot,changes,missing,found.values(),partial);
     if(assessment.partial()&&!partial)warnings.add("Regression assessment output limited; broader regression required");
     return new Result(snapshot.root(),snapshot.version(),snapshot.scannedAt(),partial||assessment.partial(),List.copyOf(warnings),List.copyOf(changes),missing,

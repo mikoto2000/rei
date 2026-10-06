@@ -109,10 +109,11 @@ public class Tools {
   }
   private RepositoryMapService repositoryMaps = new RepositoryMapService();
 
-  @Tool(description = "変更pathからJavaの逆importとテスト命名候補を探索します。changedFilesはProject相対pathを1〜64件、limitは1〜100（既定20）。完全なcoverageではなく、warningsを確認して広い回帰テストも実施してください。")
-  ChangeTestImpactService.Result changeTestImpact(List<String> changedFiles,
+  @Tool(description = "変更pathからJavaの逆importとテスト命名候補を探索します。changedFiles省略時はProjectのGitステージ済み・未ステージ・未追跡変更を読み取り取得します（HEAD必須、最大64path）。明示時はProject相対pathを1〜64件、limitは1〜100（既定20）。完全なcoverageではなく、warningsを確認して広い回帰テストも実施してください。")
+  ChangeTestImpactService.Result changeTestImpact(@org.springframework.ai.tool.annotation.ToolParam(required = false) List<String> changedFiles,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) throws IOException {
-    return new ChangeTestImpactService(repositoryMaps).analyze(currentWorkingDirectory(), changedFiles, limit == null ? 20 : limit);
+    var service=new ChangeTestImpactService(repositoryMaps);int bounded=limit==null?20:limit;
+    return changedFiles==null?service.analyzeGit(currentWorkingDirectory(),bounded):service.analyze(currentWorkingDirectory(),changedFiles,bounded);
   }
 
   @Autowired
