@@ -75,8 +75,19 @@ rei:
     tool-result-threshold: ${REI_CONTEXT_TOOL_RESULT_THRESHOLD:8000}
     tool-result-tokens: ${REI_CONTEXT_TOOL_RESULT_TOKENS:2000}
     summary-timeout-seconds: ${REI_CONTEXT_SUMMARY_TIMEOUT_SECONDS:60}
+    standalone-summary-max-llm-calls: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_LLM_CALLS:0}
+    standalone-summary-max-total-tokens: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_TOTAL_TOKENS:0}
   external-agents:
+    claude:
+      enabled: ${REI_CLAUDE_ENABLED:false}
+      command: ${REI_CLAUDE_COMMAND:claude}
+      total-timeout: 5m
+      inactivity-timeout: 2m
+      max-output-bytes: 1048576
     codex:
+      inherit-run-model-budget: ${REI_CODEX_INHERIT_RUN_MODEL_BUDGET:false}
+      parallel-review-enabled: ${REI_CODEX_PARALLEL_REVIEW_ENABLED:false}
+      parallel-review-timeout: ${REI_CODEX_PARALLEL_REVIEW_TIMEOUT:120s}
       enabled: true
       command: codex
       total-timeout: 20m
@@ -85,8 +96,10 @@ rei:
   data-dir: ${REI_DATA_DIR:${LOCALAPPDATA:${user.home}/.local/share}/Rei}
   embedding:
     enabled: ${REI_EMBEDDING_ENABLED:true}
+    inherit-run-model-budget: ${REI_EMBEDDING_INHERIT_RUN_MODEL_BUDGET:false}
   rerank:
     enabled: ${REI_RERANK_ENABLED:true}
+    inherit-run-model-budget: ${REI_RERANK_INHERIT_RUN_MODEL_BUDGET:false}
     base-url: ${REI_RERANK_BASE_URL:}
     api-key: ${REI_RERANK_API_KEY:}
     model: ${REI_RERANK_MODEL:}
@@ -155,6 +168,20 @@ rei:
     timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
     prompt-enhancement:
       enabled: ${REI_IMAGE_PROMPT_ENHANCEMENT_ENABLED:true}
+  repository-map:
+    persistent-index-enabled: ${REI_REPOSITORY_MAP_PERSISTENT_INDEX_ENABLED:false}
+  subagents:
+    max-transient-read-tool-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_READ_TOOL_RETRIES:0}
+    max-transient-model-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_MODEL_RETRIES:0}
+    standalone-max-llm-calls: ${REI_SUBAGENTS_STANDALONE_MAX_LLM_CALLS:0}
+    standalone-max-total-tokens: ${REI_SUBAGENTS_STANDALONE_MAX_TOTAL_TOKENS:0}
+  attention:
+    delivery:
+      enabled: ${REI_ATTENTION_DELIVERY_ENABLED:false}
+      automatic: ${REI_ATTENTION_DELIVERY_AUTOMATIC:false}
+      endpoint: ${REI_ATTENTION_DELIVERY_ENDPOINT:}
+      bearer-token: ${REI_ATTENTION_DELIVERY_BEARER_TOKEN:}
+      projects: ${REI_ATTENTION_DELIVERY_PROJECTS:}
   skills:
     enabled: ${REI_SKILLS_ENABLED:true}
     directories:
@@ -165,6 +192,8 @@ rei:
       max-skills: ${REI_SKILLS_SEMANTIC_MAX_SKILLS:64}
       minimum-similarity: ${REI_SKILLS_SEMANTIC_MINIMUM_SIMILARITY:0.55}
       failure-backoff-seconds: ${REI_SKILLS_SEMANTIC_FAILURE_BACKOFF_SECONDS:30}
+      persistent-index-enabled: ${REI_SKILLS_SEMANTIC_PERSISTENT_INDEX_ENABLED:false}
+      index-namespace: ${REI_SKILLS_SEMANTIC_INDEX_NAMESPACE:}
   google:
     application-name: Rei
     credentials-path: ${REI_GOOGLE_CREDENTIALS_PATH:${rei.data-dir}/google-credentials.json}
@@ -259,11 +288,27 @@ rei:
     timeout-seconds: ${REI_WORK_CONTEXT_TIMEOUT_SECONDS:120}
     max-turns: ${REI_WORK_CONTEXT_MAX_TURNS:20}
   memory:
+    auto-sleep:
+      enabled: ${REI_MEMORY_AUTO_SLEEP_ENABLED:false}
+      minimum-idle: ${REI_MEMORY_AUTO_SLEEP_MINIMUM_IDLE:5m}
+      minimum-turns: ${REI_MEMORY_AUTO_SLEEP_MINIMUM_TURNS:5}
+      retry-interval: ${REI_MEMORY_AUTO_SLEEP_RETRY_INTERVAL:10m}
+      cron: ${REI_MEMORY_AUTO_SLEEP_CRON:}
+      zone: ${REI_MEMORY_AUTO_SLEEP_ZONE:}
+      on-session-end: ${REI_MEMORY_AUTO_SLEEP_ON_SESSION_END:false}
+      on-shutdown: ${REI_MEMORY_AUTO_SLEEP_ON_SHUTDOWN:false}
     enabled: ${REI_MEMORY_ENABLED:true}
+    consolidation:
+      max-llm-calls: ${REI_MEMORY_CONSOLIDATION_MAX_LLM_CALLS:0}
+      max-total-tokens: ${REI_MEMORY_CONSOLIDATION_MAX_TOTAL_TOKENS:0}
     retrieval:
       max-memories: ${REI_MEMORY_MAX_MEMORIES:5}
       max-tokens: ${REI_MEMORY_MAX_TOKENS:1500}
     sleep:
+      max-llm-calls: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS:0}
+      max-total-tokens: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS:0}
+      max-llm-calls-per-project: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS_PER_PROJECT:0}
+      max-total-tokens-per-project: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS_PER_PROJECT:0}
       min-confidence: ${REI_MEMORY_MIN_CONFIDENCE:0.70}
       min-importance: ${REI_MEMORY_MIN_IMPORTANCE:0.50}
       max-turns: ${REI_MEMORY_SLEEP_MAX_TURNS:50}

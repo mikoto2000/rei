@@ -18,8 +18,52 @@ import dev.mikoto2000.rei.core.configuration.SystemPromptService;
 import dev.mikoto2000.rei.summarize.SummaryTools;
 
 class LlmChatClientProviderTest {
+  @Test
+  void memoryProcessesOnlySuppliedEvidenceWithoutToolsOrAdvisors() {
+    var prompts = new java.util.ArrayList<org.springframework.ai.chat.prompt.Prompt>();
+    ChatModel model = new ChatModel() {
+      @Override public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
+        return org.springframework.ai.openai.OpenAiChatOptions.builder().build();
+      }
+      @Override public org.springframework.ai.chat.model.ChatResponse call(org.springframework.ai.chat.prompt.Prompt prompt) {
+        prompts.add(prompt);
+        return new org.springframework.ai.chat.model.ChatResponse(List.of(new org.springframework.ai.chat.model.Generation(
+            new org.springframework.ai.chat.messages.AssistantMessage("[]"))));
+      }
+    };
+    var models = mock(LlmModelProvider.class);
+    when(models.memoryChatModel()).thenReturn(model);
+    var originalOptions = org.springframework.ai.openai.OpenAiChatOptions.builder()
+        .model("memory-model").temperature(0.2).maxCompletionTokens(321)
+        .toolChoice("auto").build();
+    when(models.chatOptions(LlmFeature.MEMORY, null)).thenReturn(originalOptions);
+    var memory = mock(ChatMemory.class);
+    var system = mock(SystemPromptService.class);
+    var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), system, memory,
+        optional(mock(dev.mikoto2000.rei.core.Tools.class)), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null),
+        optional(mock(dev.mikoto2000.rei.temporal.RuntimeContextAdvisor.class)), optional(null),
+        optional(mock(dev.mikoto2000.rei.core.working.WorkingSetAdvisor.class)),
+        optional(mock(dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor.class)),
+        optional(null), optional(mock(dev.mikoto2000.rei.event.ToolEventCallbackProvider.class)), null, null);
+
+    assertThat(provider.chatClient(LlmFeature.MEMORY).prompt("supplied evidence").call().content()).isEqualTo("[]");
+    assertThat(prompts).hasSize(1);
+    assertThat(prompts.getFirst().getInstructions()).hasSize(1);
+    assertThat(prompts.getFirst().getInstructions().getFirst().getText()).isEqualTo("supplied evidence");
+    var options = (org.springframework.ai.model.tool.ToolCallingChatOptions) prompts.getFirst().getOptions();
+    assertThat(((org.springframework.ai.openai.OpenAiChatOptions) options).getToolChoice()).isEqualTo("none");
+    assertThat(options.getToolCallbacks()).isEmpty();
+    assertThat(options.getModel()).isEqualTo("memory-model");
+    assertThat(options.getTemperature()).isEqualTo(0.2);
+    assertThat(((org.springframework.ai.openai.OpenAiChatOptions) options).getMaxCompletionTokens()).isEqualTo(321);
+    assertThat(originalOptions.getToolChoice()).isEqualTo("auto");
+    org.mockito.Mockito.verifyNoInteractions(memory, system);
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {"chat", "search", "feed-summary", "memory"})
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"chat", "search", "feed-summary"})
   void requestsWithoutAnApplicationRunRetainToolCalling(String feature) {
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     var toolCalls = new java.util.concurrent.atomic.AtomicInteger();

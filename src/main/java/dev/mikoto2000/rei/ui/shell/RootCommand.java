@@ -37,6 +37,7 @@ subcommands = {
   dev.mikoto2000.rei.goal.GoalCommand.class,
   dev.mikoto2000.rei.attention.AttentionCommand.class,
   dev.mikoto2000.rei.temporal.TimerCommand.class,
+  dev.mikoto2000.rei.core.dependency.DependencyCommand.class,
   dev.mikoto2000.rei.core.policy.ApprovalCommand.class,
   dev.mikoto2000.rei.checkpoint.CheckpointCommand.class,
   dev.mikoto2000.rei.checkpoint.ResumeCommand.class,

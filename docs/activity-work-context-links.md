@@ -12,4 +12,14 @@ Activityの既存RecentEventはSHELL/FILE_EDITに分類したTool完了イベン
 
 Work Context未生成、出典未採用、直近100 revisionsより古いだけの出典、旧Activityに参照IDがない場合は一致なし。保存証跡が後でWork Contextに採用されれば、その後の読取時にリンクできる。自動backfill・誤った完了判定・長期記憶昇格は行わない。
 
-foregroundとtaskの意味的帰属、観測時点のGit/ファイル/terminal command相関、独立Task ID、専用Web/Native UIは今後の対象。
+## 観測時の作業文脈保存
+
+`rei.activity.work-context-enabled=true` を明示設定すると、Activityの既存観測時に選択Projectの現在Work ContextとGit branch/commitを取得し、標本のJSONへ保存する。既定はfalse。Activity本体のenabled/pause・除外ウィンドウ・保持規則を維持する。追加LLM・撮影・Tool実行・Work Context更新は行わない。Gitは既存WorkContextGitの読み取り専用処理（各問い合わせ2秒、合計最大4秒）を再利用し、失敗時はunknownとして古いGit情報へ置き換えない。
+
+保存するのはProject ID、観測時刻、Work Context revision/更新時刻、Git取得時刻・branch/commit、最大20の現行Item ID/kind/status/certaintyと各最大8のTOOL出典参照。上限超過はpartial=true。出典はEvent/Session/Turn/Run/Tool call ID・取得元の観測時刻とProject内の相対ファイル名で、コマンド本文・結果・作業文・会話・絶対directoryはコピーしない。Project外パス、秘密用directory/.env/鍵ファイル等の名前は除外する。Tool call IDは保存Event APIから元コマンドを確認するための参照であり、コマンド内容を推測しない。
+
+`/activity context` はこの保存文脈を `OBSERVATION_CONTEXT` としてforeground process・Project・Git・Item・出典参照とともに表示する。Work Context履歴が取得できなくなる前に保存済みなら、その後も標本から読める。Work Context未生成ならrevision=0、ItemなしでGitのみ保存する。既存の近接Event照合は `EVENT_REFERENCE` として維持し、そのGitは引き続き古いWork Context snapshot時点の情報である。読取コマンド自体はGitを再実行しない。
+
+観測前後で選択Project/rootが変わる、別ProjectのWork Context、未来時刻の文脈は採用しない。保存文脈と最終選択Projectの異なるsource寄与も破棄する。旧JSONのworkContext欠落はnullとして読め、後から観測時Gitを捏造しない。
+
+foregroundはOSの観測、Projectはアプリの選択状態、Itemは保存Work Contextの申告である。この関連はユーザーがそのタスクに従事した証明や作業成果の判定ではない。Git・OS・DBを跨ぐ原子的snapshotでもない。foregroundとtaskの意味的帰属、独立Task ID、専用Web/Native UIは追加候補として残る。

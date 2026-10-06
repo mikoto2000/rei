@@ -55,7 +55,7 @@ Chat の実際の結果に応じて COMPLETED / FAILED / CANCELLED を記録し�
 PENDING / SCHEDULED と結果履歴は再起動後も残ります。期限超過の SCHEDULED は設定有効時に取得します。
 RUNNING の予約は実行成否が不明なので自動で SCHEDULED に戻しません。
 外部副作用の exactly-once を保証する仕組みではなく、自動 dispatch の at-most-once claim です。
-RUNNING は永続状態表示で確認します。成否の照合・予約復旧の専用操作は未実装です。
+RUNNINGは永続状態表示で確認します。停止と副作用を確認後、Shell `/timer reconcile` で結果不明の終了を記録できます。詳細はscheduler-uncertain-run-recovery.mdを参照してください。
 その Session の別予約も、未解決 RUNNING がある間は claim しません。
 
 実行は既存 operation FIFO を使用し、専用の介入 mailbox・Native 予約UI・Web予約管理APIは未対応です。

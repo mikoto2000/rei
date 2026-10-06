@@ -24,6 +24,13 @@ public final class SessionCommand implements java.util.concurrent.Callable<Integ
     this.conversations = conversations; this.sessions = sessions; this.projects = projects;
   }
   @Override public Integer call() { return show(); }
+  @Command(name="end",description="現在のSessionの利用を終了します。履歴は再開できます",mixinStandardHelpOptions=true)
+  public int end() {
+    return display(()->{
+      var session=conversations.end();
+      spec.commandLine().getOut().println(session==null?"No active session.":"Session ended: "+format.label(session.sessionId()));
+    });
+  }
 
   @Command(name="show", description="現在の Session を表示", mixinStandardHelpOptions=true)
   public int show() {

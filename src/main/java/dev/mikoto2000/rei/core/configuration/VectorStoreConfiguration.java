@@ -11,9 +11,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import dev.mikoto2000.rei.vectorstore.DisabledVectorStore;
 
 import dev.mikoto2000.rei.vectorstore.LazySqliteVectorStore;
+import dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
+@EnableConfigurationProperties(HybridRetrievalProperties.class)
 public class VectorStoreConfiguration {
 
   @Bean
@@ -21,8 +24,12 @@ public class VectorStoreConfiguration {
   public LazySqliteVectorStore vectorStore(
       @Qualifier("vectorStoreDataSource") DataSource dataSource,
       EmbeddingModel embeddingModel,
-      JsonMapper objectMapper) {
-    return new LazySqliteVectorStore(dataSource, embeddingModel, objectMapper);
+      JsonMapper objectMapper, HybridRetrievalProperties retrieval) {
+    return new LazySqliteVectorStore(dataSource, embeddingModel, objectMapper, retrieval.enabled() && retrieval.bm25Enabled());
+  }
+
+  public LazySqliteVectorStore vectorStore(DataSource dataSource, EmbeddingModel embeddingModel, JsonMapper objectMapper) {
+    return vectorStore(dataSource, embeddingModel, objectMapper, new HybridRetrievalProperties(false, 40, 60));
   }
 
   @Bean

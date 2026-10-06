@@ -89,7 +89,12 @@ public class AgentSkillAdvisor implements BaseAdvisor {
     eventPublisher.publish(eventFactory.skillRoutingStarted(runId, routingId, candidateCount, routingInvocation));
     AgentSkillSelection selection;
     try {
-      selection = selectionService.select(userMessage.getText());
+      var execution = prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
+          && options.getToolContext() != null
+          && options.getToolContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+              instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext context ? context : null;
+      selection = execution == null ? selectionService.select(userMessage.getText())
+          : selectionService.select(userMessage.getText(), execution.modelCallBudget());
       dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
       java.util.List<String> selectedNames = skillNames(selection.selectedSkills());
       publishCandidateEvaluation(selection, allSkills.size(),

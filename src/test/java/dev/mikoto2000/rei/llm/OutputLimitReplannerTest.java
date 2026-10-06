@@ -64,4 +64,16 @@ class OutputLimitReplannerTest {
   private static ChatResponse response(String text) {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
   }
+  @Test void plannerReportsUsageBeforeParsingResult() {
+    var model=Mockito.mock(ChatModel.class);var provider=Mockito.mock(LlmModelProvider.class);
+    var holder=Mockito.mock(ModelHolderService.class);when(holder.get()).thenReturn("model");
+    when(provider.chatModel(LlmFeature.OUTPUT_LIMIT_PLANNER)).thenReturn(model);
+    when(provider.chatOptions(LlmFeature.OUTPUT_LIMIT_PLANNER,"model")).thenReturn(OpenAiChatOptions.builder().model("model").build());
+    when(model.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("not valid plan"))),
+        org.springframework.ai.chat.metadata.ChatResponseMetadata.builder().usage(new org.springframework.ai.chat.metadata.DefaultUsage(2,3)).build()));
+    var tokens=new java.util.concurrent.atomic.AtomicInteger();
+    org.assertj.core.api.Assertions.assertThatThrownBy(()->new OutputLimitReplanner(provider,holder,new LlmProperties()).replan(
+        new OutputLimitReplanRequest("task","goal","progress","partial",1,2,3),tokens::set)).isInstanceOf(RuntimeException.class);
+    assertThat(tokens).hasValue(5);
+  }
 }

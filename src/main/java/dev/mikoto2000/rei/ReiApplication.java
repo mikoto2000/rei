@@ -294,6 +294,8 @@ public class ReiApplication {
     if(resume!=null && resume.getCommand() instanceof dev.mikoto2000.rei.checkpoint.ResumeCommand command) command.setShellOutput(writer);
     var approval=cmd.getSubcommands().get("approval");
     var timer=cmd.getSubcommands().get("timer");
+    var dependency=cmd.getSubcommands().get("dependency");
+    if(dependency!=null && dependency.getCommand() instanceof dev.mikoto2000.rei.core.dependency.DependencyCommand command) command.setShellOutput(writer);
     var attention=cmd.getSubcommands().get("attention");
     var goal=cmd.getSubcommands().get("goal");
     var reflection=cmd.getSubcommands().get("reflection");
@@ -471,7 +473,7 @@ public class ReiApplication {
     AttributedStyle style = AttributedStyle.DEFAULT.foreground(AttributedStyle.CYAN);
 
     builder.append(System.lineSeparator());
-    builder.append("┌ User", style);
+    builder.append(userInputHeader(), style);
     builder.append(System.lineSeparator());
     for (String line : input.split("\\R", -1)) {
       builder.append(line, style);
@@ -491,10 +493,14 @@ public class ReiApplication {
     }
   }
 
+  private String userInputHeader() {
+    return "┌ User (" + now().format(DateTimeFormatter.ofPattern("HH:mm:ss")) + ")";
+  }
+
   String formatUserInput(String input) {
     StringBuilder builder = new StringBuilder();
     builder.append(System.lineSeparator());
-    builder.append("┌ User").append(System.lineSeparator());
+    builder.append(userInputHeader()).append(System.lineSeparator());
     for (String line : input.split("\\R", -1)) {
       builder.append(line).append(System.lineSeparator());
     }

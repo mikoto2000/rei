@@ -1,0 +1,11 @@
+# embedding の親 Run/Goal モデル予算
+
+`rei.embedding.inherit-run-model-budget=true`（環境変数 `REI_EMBEDDING_INHERIT_RUN_MODEL_BUDGET`）で、Spring管理のEmbeddingModelを予算付きadapterへ接続する。既定false。所有RunのTool callback、Skill選択、Skill embedding workerは、明示的なModelCallBudgetScopeで同じ親Run/Goal予算を引き継ぐ。scopeは終了・失敗時に復元し、workerの次の処理へ持ち越さない。
+
+実EmbeddingRequestのprovider呼出直前に1回予約し、EmbeddingResponse metadataの報告total tokensを、vectorの利用・cache・検索・index保存より先に計上する。未知／非正値usage・provider障害はtoken有効時に停止する。超過は計上後停止、ちょうど上限のvectorは利用できるが次の呼出を禁止する。文書のprovider getEmbeddingContent、batch options、通常のgetEmbeddingContent経路を維持し、scopeがない呼出はdelegateの既存APIへ渡す。
+
+embedding次元が未確定のowned adapterでは、必要なprobeも予算付きcallで取得する。成功responseの次元をcacheし、再probeを避ける。probeのtoken／呼出回数を無料扱いしない。Skill metadataとqueryの呼出も同じ親予算に累積する。Semantic Skillのkeyword fallbackやSQLiteの更新例外でtyped予算停止を吸収しない。
+
+1回のSqliteVectorStore chunk batchは、後続embeddingの超過時にrollbackするが、使用済み費用は親予算へ保持する。VectorDocumentServiceの複数ファイル操作では以前に完了した別ファイルの保存まで取り消さない。Goalの永続予約・累積tokenと再起動保持、取消後の未報告予約を再利用する。
+
+この予算は所有Run/Goalの共有回数・報告tokenに適用する。親scopeを伴わない直接呼出、独自にnewした未登録provider、金額・provider側hard spend limitを制御するものではない。既定falseは従来EmbeddingModel beanをそのまま使い、新しい有料呼出を行わない。input/context・vectorサイズ・既存Skill timeout等の上限と併用する。

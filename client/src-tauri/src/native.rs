@@ -44,6 +44,45 @@ impl NotificationPort for NativeNotifications {
 }
 type App<'a> = State<'a, Arc<Application>>;
 #[tauri::command]
+async fn goal_track(
+    app: App<'_>,
+    server_id: String,
+    project_id: String,
+    goal_id: String,
+) -> Result<RunView> {
+    app.goal_track(&server_id, &project_id, &goal_id).await
+}
+#[tauri::command]
+async fn schedule_track(
+    app: App<'_>,
+    server_id: String,
+    project_id: String,
+    schedule_id: String,
+) -> Result<RunView> {
+    app.schedule_track(&server_id, &project_id, &schedule_id)
+        .await
+}
+#[tauri::command]
+async fn checkpoint_resume(
+    app: App<'_>,
+    server_id: String,
+    project_id: String,
+    task_id: String,
+) -> Result<RunView> {
+    app.checkpoint(&server_id, &project_id, &task_id, true)
+        .await
+}
+#[tauri::command]
+async fn checkpoint_track(
+    app: App<'_>,
+    server_id: String,
+    project_id: String,
+    task_id: String,
+) -> Result<RunView> {
+    app.checkpoint(&server_id, &project_id, &task_id, false)
+        .await
+}
+#[tauri::command]
 async fn workspace_execute(
     app: App<'_>,
     server_id: String,
@@ -333,6 +372,10 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             workspace_execute,
+            checkpoint_resume,
+            checkpoint_track,
+            goal_track,
+            schedule_track,
             background_submit,
             app_snapshot,
             vault_unlock,

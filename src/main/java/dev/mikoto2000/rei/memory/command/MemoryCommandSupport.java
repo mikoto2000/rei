@@ -19,6 +19,18 @@ public class MemoryCommandSupport {
   }
   private String project() { return projects.currentContext().id(); }
   public void enabled() { if(!properties.enabled()) throw new IllegalStateException("Memory is disabled (rei.memory.enabled=false)"); }
+  public String autoSleepRequests() {
+    String project=project();var format=new dev.mikoto2000.rei.conversation.HistoryFormatter();
+    var rows=sleep.pendingAutoSleepRequests().stream().filter(r->r.projectId().equals(project))
+        .map(r->format.label(r.sessionId())+" revision="+r.revision()+" cause="+format.label(r.cause())).toList();
+    return rows.isEmpty()?"No pending Auto Sleep requests.":dev.mikoto2000.rei.event.CredentialRedactor.redact(String.join("\n",rows));
+  }
+  public String cancelAutoSleepRequest(String session,long revision) {
+    if(session==null||session.isBlank()||session.length()>512||revision<1)throw new IllegalArgumentException("Session and positive revision are required");
+    if(!sleep.completeAutoSleepRequest(new MemoryRepository.AutoSleepRequest(session,project(),revision,"")))
+      throw new IllegalStateException("Auto Sleep request changed or is not in this Project");
+    return "Pending Auto Sleep request cancelled. An already running Sleep is unaffected.";
+  }
   public String list(int limit,int offset) { enabled(); return render(repository.list(project(),limit,offset)); }
   public String search(String query,int limit) { enabled(); return render(repository.search(query,project(),limit)); }
   public String show(String id) {
@@ -27,7 +39,8 @@ public class MemoryCommandSupport {
         +"\ncontent: "+m.content()+"\nsummary: "+m.summary()+"\nconfidence: "+m.confidence()+"\nimportance: "+m.importance()
         +"\ncreatedAt: "+m.createdAt()+"\nupdatedAt: "+m.updatedAt()+"\nlastAccessedAt: "+m.lastAccessedAt()
         +"\nvalidFrom: "+m.validFrom()+"\nvalidUntil: "+m.validUntil()+"\nsupersededBy: "+m.supersededBy()
-        +"\nsource sessions/turns: "+m.sources()+"\ntags: "+m.tags()+"\nrelations: "+repository.relations(id);
+        +"\nsource sessions/turns: "+m.sources()+"\ntags: "+m.tags()+"\nrelations: "+repository.relations(id)
+        +repository.verifiedReflectionProofByMemory(project(),id).map(proof->"\nverified reflection proof: "+proof).orElse("");
   }
   public String forget(String id) { enabled(); visible(id); repository.archive(id); return "Archived: "+id; }
   private LongTermMemory visible(String id) {

@@ -86,6 +86,7 @@ public final class ConversationInputRouter {
   public Disposition submit(AgentRunContext context, String prompt, Consumer<Runnable> lifecycle) {
     return enqueue(slot(context, prompt), lifecycle);
   }
+  public boolean containsRun(String projectId,String runId) {return projectQueue.containsRun(projectId,runId);}
   public boolean cancelQueued(String runId) {
     boolean removed = projectQueue.cancelQueued(runId);
     if (removed) {

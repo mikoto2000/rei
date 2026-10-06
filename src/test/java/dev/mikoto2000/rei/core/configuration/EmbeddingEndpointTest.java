@@ -26,7 +26,15 @@ class EmbeddingEndpointTest {
         "REI_OPENAI_EMBEDDING_BASE_URL=", "REI_OPENAI_EMBEDDING_API_KEY=");
   }
 
+  @Test void sdkEmbeddingUsageIsChargedBeforeTheNextRequest() {
+    verify(true, "https://chat.invalid/v1/embeddings", "chat-key");
+  }
+
   private void verify(String endpoint, String key, String... properties) {
+    verify(false, endpoint, key, properties);
+  }
+
+  private void verify(boolean budgeted, String endpoint, String key, String... properties) {
     var requests = new java.util.concurrent.atomic.AtomicInteger();
     OpenAiHttpClientBuilderCustomizer transport = builder -> builder.interceptor(chain -> {
       var request = chain.request();
@@ -52,8 +60,22 @@ class EmbeddingEndpointTest {
             "spring.ai.openai.api-key=chat-key", "REI_OPENAI_EMBEDDING_MODEL=embedding-model",
             "logging.file.name=target/embedding-endpoint-test.log")
         .withPropertyValues(properties)
-        .run(context -> assertArrayEquals(new float[] {0.1f, 0.2f},
-            context.getBean(EmbeddingModel.class).embed("document")));
+        .run(context -> {
+          var model = context.getBean(EmbeddingModel.class);
+          if (!budgeted) {
+            assertArrayEquals(new float[] {0.1f, 0.2f}, model.embed("document"));
+            return;
+          }
+          var budget = new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0, 10, null, 1);
+          var run = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext("embedding", budget, null, null, null);
+          var wrapped = new dev.mikoto2000.rei.llm.BudgetedEmbeddingModel(model);
+          try (var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(run.modelCallBudget())) {
+            assertArrayEquals(new float[] {0.1f, 0.2f}, wrapped.embed("document"));
+            assertEquals(1, budget.totalTokens());
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> wrapped.embed("next"))
+                .hasMessageContaining("TOKEN_BUDGET_EXCEEDED");
+          }
+        });
     assertEquals(1, requests.get());
   }
 }

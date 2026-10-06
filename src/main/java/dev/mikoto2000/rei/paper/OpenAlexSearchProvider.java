@@ -89,6 +89,7 @@ public class OpenAlexSearchProvider implements AcademicSearchProvider {
                 text(n, "publication_date"),
                 text(loc, "license") == null ? List.of() : List.of(text(loc, "license")));
         if (p.title() != null && matches(p, q)) result.add(p);
+        if(result.size()>=q.limit())break;
       }
       return result;
     } catch (PaperException | java.util.concurrent.CancellationException e) {
@@ -99,6 +100,10 @@ public class OpenAlexSearchProvider implements AcademicSearchProvider {
   }
 
   static boolean matches(Paper p, PaperSearchQuery q) {
+    // Provider-side query filters are not evidence that every returned record meets the request.
+    if((q.fromYear()!=null && (p.publicationYear()==null || p.publicationYear()<q.fromYear()))
+        || (q.toYear()!=null && (p.publicationYear()==null || p.publicationYear()>q.toYear()))
+        || (q.openAccessOnly() && !Boolean.TRUE.equals(p.openAccess())))return false;
     return q.authors().stream()
             .allMatch(
                 a ->

@@ -69,6 +69,8 @@ class ShellAgentEventRendererTest {
     assertTrue(output.text().contains("recovered"));
     assertTrue(output.text().contains("STAGNATED"));
   }
+  private final String eventTime = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
+      .withZone(java.time.ZoneId.systemDefault()).format(Instant.parse("2026-08-23T00:00:00Z"));
   private final AgentEventFactory events = new AgentEventFactory(
       Clock.fixed(Instant.parse("2026-08-23T00:00:00Z"), ZoneOffset.UTC));
 
@@ -120,11 +122,11 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.messageStarted("m1", "assistant"));
     renderer.onEvent(events.messageDelta("m1", "もっと絞って"));
     renderer.onEvent(events.llmResponseCompleted("run-1", "request-1", 27682));
-    assertEquals("=== answer ===\nもっと絞って", output.text());
+    assertEquals("=== answer (" + eventTime + ") ===\nもっと絞って", output.text());
     renderer.onEvent(events.messageCompleted("other", "assistant", ""));
     renderer.onEvent(events.messageDelta("m1", "提案するよ。"));
     renderer.onEvent(events.messageCompleted("m1", "assistant", "もっと絞って提案するよ。"));
-    assertEquals("=== answer ===\nもっと絞って提案するよ。\n[llm] response received (request-1, 27682 ms)\n", output.text());
+    assertEquals("=== answer (" + eventTime + ") ===\nもっと絞って提案するよ。\n[llm] response received (request-1, 27682 ms)\n", output.text());
   }
 
   @Test
@@ -136,7 +138,7 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.llmResponseCompleted("run-1", "request-1", 20));
     renderer.onEvent(events.thinkingDelta("t1", "します。"));
     renderer.onEvent(events.thinkingCompleted("t1", "確認します。"));
-    assertEquals("=== thinking ===\n確認します。\n[llm] response received (request-1, 20 ms)\n", output.text());
+    assertEquals("=== thinking (" + eventTime + ") ===\n確認します。\n[llm] response received (request-1, 20 ms)\n", output.text());
   }
 
   @Test
@@ -149,7 +151,7 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.runCancelled("run-1", new ErrorInformation("CancellationException", "cancelled", "cancelled")));
     renderer.onEvent(events.runStarted("run-2", "user", null));
     renderer.onEvent(events.llmResponseCompleted("run-2", "request-2", 30));
-    assertEquals("=== answer ===\n途中\n[llm] response received (request-1, 20 ms)\n"
+    assertEquals("=== answer (" + eventTime + ") ===\n途中\n[llm] response received (request-1, 20 ms)\n"
         + "[agent] cancelled\n[agent] running\n[llm] response received (request-2, 30 ms)\n", output.text());
   }
 
@@ -163,7 +165,7 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.toolStarted("c1", "readMultiFile", ""));
     renderer.onEvent(events.messageDelta("m1", "完了。"));
     renderer.onEvent(events.messageCompleted("m1", "assistant", "確認します。完了。"));
-    assertEquals("=== answer ===\n確認します。\n[llm] response received (request-1, 20 ms)\n"
+    assertEquals("=== answer (" + eventTime + ") ===\n確認します。\n[llm] response received (request-1, 20 ms)\n"
         + "  → readMultiFile\n\n完了。\n", output.text());
   }
 
@@ -175,7 +177,7 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.messageDelta("m1", "既存実装を"));
     renderer.onEvent(events.messageDelta("m1", "確認します。"));
     renderer.onEvent(events.messageCompleted("m1", "assistant", "既存実装を確認します。"));
-    assertEquals("=== answer ===\n既存実装を確認します。\n", output.text());
+    assertEquals("=== answer (" + eventTime + ") ===\n既存実装を確認します。\n", output.text());
   }
 
   @Test
@@ -190,7 +192,7 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.messageDelta("m1", "回答です。"));
     renderer.onEvent(events.messageCompleted("m1", "assistant", "回答です。"));
 
-    assertEquals("=== thinking ===\n状況を確認します。\n=== answer ===\n回答です。\n", output.text());
+    assertEquals("=== thinking (" + eventTime + ") ===\n状況を確認します。\n=== answer (" + eventTime + ") ===\n回答です。\n", output.text());
   }
 
   @Test
@@ -203,7 +205,7 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.toolCompleted("c1", "readMultiFile", 121, "ok"));
     renderer.onEvent(events.messageDelta("m1", "続けます。"));
     renderer.onEvent(events.messageCompleted("m1", "assistant", "確認します。続けます。"));
-    assertEquals("=== answer ===\n確認します。\n  → readMultiFile files=8\n  ✓ readMultiFile (121 ms)\n\n続けます。\n", output.text());
+    assertEquals("=== answer (" + eventTime + ") ===\n確認します。\n  → readMultiFile files=8\n  ✓ readMultiFile (121 ms)\n\n続けます。\n", output.text());
   }
 
   @Test

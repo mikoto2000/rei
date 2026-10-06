@@ -16,7 +16,7 @@ public final class HybridRetriever {
     if(request.hasFilterExpression())builder.filterExpression(request.getFilterExpression());
     var candidates=builder.build();
     // Validate lexical filters before asking the embedding provider to process the query.
-    var lexical=backend.lexicalSearch(candidates);checkCancellation();
+    var lexical=settings.bm25Enabled()?backend.bm25Search(candidates):backend.lexicalSearch(candidates);checkCancellation();
     var dense=backend.denseSearch(candidates);checkCancellation();
     return new ReciprocalRankFusion(settings.rankConstant()).fuse(List.of(dense,lexical),Document::getId,request.getTopK()).stream().map(rank->{
       var document=rank.item();var metadata=new LinkedHashMap<>(document.getMetadata());

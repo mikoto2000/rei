@@ -26,11 +26,75 @@ public class AutoSleepService implements AutoCloseable {
   });
   private volatile Thread runningThread;
   private final java.util.concurrent.atomic.AtomicBoolean executing=new java.util.concurrent.atomic.AtomicBoolean();
+  private dev.mikoto2000.rei.application.session.SessionRepository savedSessions;
+  private dev.mikoto2000.rei.core.project.ProjectService projects;
+  private Iterator<dev.mikoto2000.rei.application.session.SessionMetadata> startup;
+  private boolean startupCaptured;
+  private Instant nextMetadataScan;
+  private dev.mikoto2000.rei.application.session.CursorKey metadataCursor;
+  private boolean metadataScanning;
+  @org.springframework.beans.factory.annotation.Autowired
+  public synchronized void setStartupSources(dev.mikoto2000.rei.application.session.SessionRepository savedSessions,
+      dev.mikoto2000.rei.core.project.ProjectService projects) {
+    this.savedSessions=savedSessions;this.projects=projects;
+  }
+  /** Metadata only: no history reads or model calls until the usual idle gates pass. */
+  private void discoverStartup() {
+    if(savedSessions==null||projects==null)return;
+    if(!startupCaptured) {startup=savedSessions.completionSnapshot().iterator();startupCaptured=true;}
+    var registered=projects.completionProjects();
+    for(int scanned=0;scanned<256&&sessions.size()<256&&startup.hasNext();scanned++) {
+      var item=startup.next();
+      registerMetadata(item,registered);
+    }
+    if(!startup.hasNext())startup=Collections.emptyIterator();
+  }
+  private void registerMetadata(dev.mikoto2000.rei.application.session.SessionMetadata item,
+      List<dev.mikoto2000.rei.core.project.ProjectContext> registered) {
+    if(item.sessionId().isBlank()||item.projectId().isBlank()||registered.stream().noneMatch(p->p.id().equals(item.projectId())))return;
+    try {
+      String encoded=dev.mikoto2000.rei.core.project.ProjectStorage.projectId(item.sessionId());
+      if(encoded!=null&&!encoded.equals(item.projectId()))return;
+      sessions.putIfAbsent(item.sessionId(),item.projectId());
+    } catch(IllegalArgumentException invalidIdentity) { /* Unusable metadata is never a Sleep candidate. */ }
+  }
+  /** Periodic persistent reads catch metadata added after startup, without an unbounded candidate queue. */
+  private void discoverSaved(Instant now) {
+    discoverStartup();
+    if(!startupCaptured||startup.hasNext()||sessions.size()>=256)return;
+    if(!metadataScanning) {
+      if(nextMetadataScan==null) {nextMetadataScan=now.plus(properties.retryInterval());return;}
+      if(now.isBefore(nextMetadataScan))return;
+      metadataScanning=true;metadataCursor=null;
+    }
+    try {
+      int limit=Math.min(100,256-sessions.size());
+      var rows=savedSessions.findPage(null,metadataCursor,limit);
+      if(rows.size()>limit)throw new IllegalStateException("Session metadata page exceeds limit");
+      var registered=projects.completionProjects();
+      for(var item:rows)registerMetadata(item,registered);
+      if(rows.size()<limit) {
+        metadataScanning=false;metadataCursor=null;nextMetadataScan=now.plus(properties.retryInterval());
+      } else {
+        var last=rows.getLast();
+        var next=new dev.mikoto2000.rei.application.session.CursorKey(last.updatedAt(),last.sessionId());
+        if(next.equals(metadataCursor))throw new IllegalStateException("Session metadata cursor did not advance");
+        metadataCursor=next;
+      }
+    } catch(RuntimeException error) {
+      metadataScanning=false;metadataCursor=null;nextMetadataScan=now.plus(properties.retryInterval());
+      throw error;
+    }
+  }
+  private final org.springframework.scheduling.support.CronExpression cron;
+  private Instant nextCron;
   private long runningVersion;
   private boolean closed;
   public AutoSleepService(SleepService sleep, MemoryProperties memory, AutoSleepProperties properties,
       AgentActivityTracker activity, Clock clock) {
     this.sleep=sleep; this.memory=memory; this.properties=properties; this.activity=activity; this.clock=clock;
+    cron=properties.cron()==null?null:org.springframework.scheduling.support.CronExpression.parse(properties.cron());
+    if(cron!=null)advanceCron(clock.instant());
   }
   /** Called only after durable terminal turn metadata. Never invokes the LLM on the user thread. */
   public synchronized void afterTerminal(AgentRunContext owner) {
@@ -39,6 +103,33 @@ public class AutoSleepService implements AutoCloseable {
     while(sessions.size()>256) {
       String oldest=sessions.keySet().iterator().next(); sessions.remove(oldest); attempts.remove(oldest);
     }
+  }
+  /** Explicit end never starts a model or destroys resumable conversation history. */
+  public synchronized void afterSessionEnd(dev.mikoto2000.rei.application.session.SessionMetadata session) {
+    if(closed||!properties.enabled()||!properties.onSessionEnd()||!memory.enabled())return;
+    sleep.requestAutoSleep(session.sessionId(),session.projectId(),"session_end");
+    sessions.put(session.sessionId(),session.projectId());
+    while(sessions.size()>256) {
+      String oldest=sessions.keySet().iterator().next();sessions.remove(oldest);attempts.remove(oldest);
+    }
+  }
+  private Map<String,MemoryRepository.AutoSleepRequest> discoverEndRequests() {
+    if(projects==null||(!properties.onSessionEnd()&&!properties.onShutdown()))return Map.of();
+    var registered=projects.completionProjects();
+    var requested=new LinkedHashMap<String,MemoryRepository.AutoSleepRequest>();
+    for(var request:sleep.pendingAutoSleepRequests()) {
+      if(!(request.cause().equals("session_end")&&properties.onSessionEnd())&&!(request.cause().equals("shutdown")&&properties.onShutdown()))continue;
+      if(registered.stream().noneMatch(p->p.id().equals(request.projectId())))continue;
+      try {
+        String encoded=dev.mikoto2000.rei.core.project.ProjectStorage.projectId(request.sessionId());
+        if(encoded!=null&&!encoded.equals(request.projectId()))continue;
+        if(sessions.containsKey(request.sessionId())&&!sessions.get(request.sessionId()).equals(request.projectId()))continue;
+        requested.put(request.sessionId(),request);
+      }catch(IllegalArgumentException invalidIdentity){/* A persisted request cannot override ownership. */}
+    }
+    var ordered=new LinkedHashMap<String,String>();requested.values().forEach(r->ordered.put(r.sessionId(),r.projectId()));
+    for(var entry:sessions.entrySet())if(ordered.size()<256)ordered.putIfAbsent(entry.getKey(),entry.getValue());
+    sessions.clear();sessions.putAll(ordered);return requested;
   }
   @Scheduled(fixedDelayString="${rei.memory.auto-sleep.check-interval:5s}")
   public synchronized void tick() {
@@ -54,18 +145,35 @@ public class AutoSleepService implements AutoCloseable {
     Instant latest=java.util.stream.Stream.of(activity.applicationStartedAt(),activity.lastUserActivityAt(),activity.lastAgentActivityAt())
         .filter(Objects::nonNull).max(Instant::compareTo).orElse(now);
     if(Duration.between(latest,now).compareTo(properties.minimumIdle())<0) return;
-    for(var session:sessions.entrySet()) {
+    Map<String,MemoryRepository.AutoSleepRequest> requested;
+    try{requested=discoverEndRequests();}
+    catch(RuntimeException error){requested=Map.of();org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep requests unavailable ({})",error.getClass().getSimpleName());}
+    if(requested.isEmpty()&&cron!=null&&(nextCron==null||now.isBefore(nextCron)))return;
+    // Coalesce missed occurrences into one idle opportunity; never replay a backlog.
+    if(cron!=null&&nextCron!=null&&!now.isBefore(nextCron))advanceCron(now);
+    try {discoverSaved(now);}
+    catch(RuntimeException error) {org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep discovery unavailable ({})",error.getClass().getSimpleName());}
+    var candidates=sessions.entrySet().iterator();
+    while(candidates.hasNext()) {
+      var session=candidates.next();
       Instant previous=attempts.get(session.getKey());
       if(previous!=null && now.isBefore(previous.plus(properties.retryInterval()))) continue;
       try {
-        if(sleep.unsleptTurns(session.getKey())<properties.minimumTurns()) continue;
+        var request=requested.get(session.getKey());
+        if(sleep.unsleptTurns(session.getKey())<(request==null?properties.minimumTurns():1)) {
+          if(request!=null)sleep.completeAutoSleepRequest(request);
+          attempts.remove(session.getKey());candidates.remove();continue;
+        }
         String id=session.getKey(), project=session.getValue();
         runningVersion=version;
         attempts.put(id,now);
         executing.set(true);
         worker.submit(() -> {
           runningThread=Thread.currentThread();
-          try {sleep.sleep(id,project,false,()->activity.isAgentBusy() || activity.activityVersion()!=version);}
+          try {
+            sleep.sleep(id,project,false,()->activity.isAgentBusy() || activity.activityVersion()!=version);
+            if(request!=null&&sleep.unsleptTurns(id)==0)sleep.completeAutoSleepRequest(request);
+          }
           catch(RuntimeException error) {
             org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep deferred ({})",error.getClass().getSimpleName());
           }
@@ -79,8 +187,20 @@ public class AutoSleepService implements AutoCloseable {
       }
     }
   }
+  private void advanceCron(Instant after) {
+    var next=cron.next(after.atZone(ZoneId.of(properties.zone())));
+    nextCron=next==null?null:next.toInstant();
+  }
   @jakarta.annotation.PreDestroy @Override public void close() {
-    synchronized(this) {if(closed)return; closed=true; worker.shutdown();}
+    synchronized(this) {
+      if(closed)return;closed=true;
+      if(properties.enabled()&&properties.onShutdown()&&memory.enabled()) {
+        try{discoverStartup();}catch(RuntimeException error){org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep shutdown discovery unavailable ({})",error.getClass().getSimpleName());}
+        for(var entry:sessions.entrySet())try{sleep.requestAutoSleep(entry.getKey(),entry.getValue(),"shutdown");}
+        catch(RuntimeException error){org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep shutdown request unavailable ({})",error.getClass().getSimpleName());}
+      }
+      worker.shutdown();
+    }
     try {if(!worker.awaitTermination(2,TimeUnit.SECONDS))worker.shutdownNow();}
     catch(InterruptedException error) {worker.shutdownNow(); Thread.currentThread().interrupt();}
   }

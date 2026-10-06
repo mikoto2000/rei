@@ -51,7 +51,8 @@ class SubAgentEventTest {
     assertThat(events.toString()).doesNotContain("hidden").doesNotContain("x".repeat(121));
   }
   @Test void shellSeparatesInterleavedRunsAndResumesParentAnswer() {
-    var factory = new AgentEventFactory(Clock.systemUTC());
+    var startedAt = java.time.Instant.parse("2026-08-23T00:00:00Z");
+    var factory = new AgentEventFactory(Clock.fixed(startedAt, java.time.ZoneOffset.UTC));
     var output = new StringBuilder();
     var renderer = new ShellAgentEventRenderer(new ShellEventOutput() {
       public void print(String value) { output.append(value); }
@@ -90,7 +91,8 @@ class SubAgentEventTest {
     }
     renderer.onEvent(factory.messageDelta("parent-message", "parent-after"));
     renderer.onEvent(factory.messageCompleted("parent-message", "assistant", "parent-beforeparent-after"));
-    assertThat(output.toString()).startsWith("=== answer ===\nparent-before\n").endsWith("parent-after\n")
+    assertThat(output.toString()).startsWith("=== answer (" + java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
+        .withZone(java.time.ZoneId.systemDefault()).format(startedAt) + ") ===\nparent-before\n").endsWith("parent-after\n")
         .doesNotContain("child-answer");
   }
   @Test void lifecycleRoundTripsThroughExistingProjectEventStore() {

@@ -7,7 +7,21 @@ import java.util.List;
 /** Provider-independent, immutable configuration for an ephemeral execution. */
 public record SubAgentDefinition(String id, String name, String description, String systemPrompt,
     List<String> requestedTools, String model, int maxSteps, Duration timeout, Path source, SubAgentResultSchema resultSchema,
-    List<String> evidenceTools, int maxRepairs) {
+    List<String> evidenceTools, int maxRepairs,List<SubAgentRequiredCall> requiredToolCalls,boolean semanticValidation,boolean inheritApprovals) {
+  public SubAgentDefinition(String id,String name,String description,String systemPrompt,List<String> requestedTools,
+      String model,int maxSteps,Duration timeout,Path source,SubAgentResultSchema resultSchema,List<String> evidenceTools,
+      int maxRepairs,List<SubAgentRequiredCall> requiredToolCalls,boolean semanticValidation) {
+    this(id,name,description,systemPrompt,requestedTools,model,maxSteps,timeout,source,resultSchema,evidenceTools,maxRepairs,requiredToolCalls,semanticValidation,false);
+  }
+  public SubAgentDefinition(String id,String name,String description,String systemPrompt,List<String> requestedTools,
+      String model,int maxSteps,Duration timeout,Path source,SubAgentResultSchema resultSchema,List<String> evidenceTools,
+      int maxRepairs,List<SubAgentRequiredCall> requiredToolCalls) {
+    this(id,name,description,systemPrompt,requestedTools,model,maxSteps,timeout,source,resultSchema,evidenceTools,maxRepairs,requiredToolCalls,false);
+  }
+  public SubAgentDefinition(String id,String name,String description,String systemPrompt,List<String> requestedTools,
+      String model,int maxSteps,Duration timeout,Path source,SubAgentResultSchema resultSchema,List<String> evidenceTools,int maxRepairs) {
+    this(id,name,description,systemPrompt,requestedTools,model,maxSteps,timeout,source,resultSchema,evidenceTools,maxRepairs,List.of());
+  }
   public SubAgentDefinition(String id, String name, String description, String systemPrompt,
       List<String> requestedTools, String model, int maxSteps, Duration timeout, Path source, SubAgentResultSchema resultSchema,
       List<String> evidenceTools) {
@@ -32,6 +46,12 @@ public record SubAgentDefinition(String id, String name, String description, Str
     try { timeout.toNanos(); } catch (ArithmeticException e) { throw new IllegalArgumentException("timeout: too large"); }
     requestedTools = List.copyOf(requestedTools);
     evidenceTools = List.copyOf(evidenceTools);
+    if(semanticValidation&&evidenceTools.isEmpty())throw new IllegalArgumentException("semanticValidation: requires evidenceTools");
+    requiredToolCalls=List.copyOf(requiredToolCalls);
+    if(requiredToolCalls.size()>16)
+      throw new IllegalArgumentException("requiredToolCalls: at most 16 calls using evidenceTools");
+    for(var call:requiredToolCalls)if(!evidenceTools.contains(call.tool()))
+      throw new IllegalArgumentException("requiredToolCalls: calls must use evidenceTools");
     if (evidenceTools.size()>16 || new java.util.HashSet<>(evidenceTools).size()!=evidenceTools.size()
         || !requestedTools.containsAll(evidenceTools)) throw new IllegalArgumentException("evidenceTools: expected unique subset of tools, at most 16");
     source = source.toAbsolutePath().normalize();

@@ -25,12 +25,12 @@ public class ActivityConfiguration {
   @Bean ActivityAgentEvidenceSource activityAgentEvidence(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.event.AgentEventBus> bus) {
     return new ActivityAgentEvidenceSource(bus.getIfAvailable());
   }
-  @Bean ActivityEvidenceSource activityProjectEvidence(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.project.ProjectService> projects) {
-    return at -> {
-      var service=projects.getIfAvailable();
-      var project=service==null?null:service.currentContext();
-      return new ActivityEvidenceSource.Contribution(project==null?"":project.name(),project==null?"":project.id(),java.util.List.of());
-    };
+  @Bean ActivityEvidenceSource activityProjectEvidence(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.project.ProjectService> projects,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextRepository> contexts,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextGit> git,ActivityProperties properties) {
+    return new ActivityObservationContextSource(properties,()->{var service=projects.getIfAvailable();return service==null?null:service.currentContext();},
+        project->{var repository=contexts.getIfAvailable();return repository==null?java.util.Optional.empty():repository.current(project);},
+        (root,at)->{var capture=git.getIfAvailable();return capture==null?null:capture.capture(root,at);});
   }
   @Bean ActivityCapture activityCapture(ActivityProperties p,DesktopActivityObserver observer,ActivityExtractor extractor,ActivityStore store,ScreenshotStore screenshots,
       @Qualifier("activityAnalysisExecutor") ThreadPoolTaskExecutor analysisExecutor,
@@ -45,15 +45,26 @@ public class ActivityConfiguration {
         ()->provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get()),Duration.ofSeconds(p.getSummary().getTimeoutSeconds())):null;
     return new DailySummaryService(aliases,writer);
   }
-  @Bean ActivityTimeline activityTimeline(ActivityStore store,ActivityProperties p,DailySummaryService dailySummary) {
+  @Bean ActivityTimeline activityTimeline(ActivityStore store,ActivityProperties p,DailySummaryService dailySummary,PeriodCoachingStore scoreCriteria) {
     var zone=ZoneId.of(p.getZone());
     return new ActivityTimeline(store,Clock.system(zone),new SemanticSessionPolicy(
         Duration.ofSeconds(p.effectiveNormalGapSeconds()),Duration.ofSeconds(p.effectiveMaximumGapSeconds()),
-        Duration.ofSeconds(p.getSummaryBriefSwitchSeconds()),p.getPrimaryConfidenceThreshold(),zone),dailySummary);
+        Duration.ofSeconds(p.getSummaryBriefSwitchSeconds()),p.getPrimaryConfidenceThreshold(),zone),dailySummary,scoreCriteria);
   }
   @Bean ActivityTools activityTools(ActivityTimeline timeline) {return new ActivityTools(timeline);}
   @Bean PeriodCoachingStore periodCoachingStore(javax.sql.DataSource ds){return new SqlitePeriodCoachingStore(ds);}
   @Bean PeriodCoachingService periodCoachingService(ActivityTimeline timeline,PeriodCoachingStore store){return new PeriodCoachingService(timeline,store,Clock.systemUTC());}
+  @Bean AutomaticPeriodCoaching automaticPeriodCoaching(ActivityProperties properties,PeriodCoachingService coaching,ActivityCapture capture,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.topic.AgentMessagePublisher> publisher,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.topic.AgentActivityTracker> tracker) {
+    return new AutomaticPeriodCoaching(properties,coaching,publisher.getIfAvailable(),tracker.getIfAvailable(),capture::isPaused,Clock.systemUTC());
+  }
+  @Bean ThreadPoolTaskExecutor periodCoachingExecutor(){return worker("rei-period-coaching-");}
+  @Bean PeriodCoachingJob periodCoachingJob(AutomaticPeriodCoaching service,@Qualifier("periodCoachingExecutor") ThreadPoolTaskExecutor executor){return new PeriodCoachingJob(service,executor);}
+  public record PeriodCoachingJob(AutomaticPeriodCoaching service,ThreadPoolTaskExecutor executor) {
+    @Scheduled(fixedDelayString="#{${rei.activity.coaching.check-interval-seconds:3600} * 1000}",initialDelayString="#{${rei.activity.coaching.check-interval-seconds:3600} * 1000}")
+    public void poll(){if(!service.enabled())return;try{executor.execute(service::tick);}catch(org.springframework.core.task.TaskRejectedException ignored){/* Never queue stale advice. */}}
+  }
   @Bean ActivityWorkContextService activityWorkContextService(ActivityStore store,org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextRepository> contexts,ActivityProperties properties) {
     return new ActivityWorkContextService(store,project->{
       var repository=contexts.getIfAvailable();return repository==null?java.util.List.of():repository.history(project,100);

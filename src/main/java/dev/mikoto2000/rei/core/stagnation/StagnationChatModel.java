@@ -40,10 +40,15 @@ public class StagnationChatModel implements ChatModel {
   private Flux<ChatResponse> iteration(Prompt prompt, RunExecutionContext context, boolean prepaid, long progressAtLimit) {
     return Flux.defer(() -> {
       context.checkActive();
+      context.checkModelTokenBudget();
       if (!prepaid) context.consumeNextLlmCall();
       context.beginIteration();
       AtomicReference<ChatResponse> aggregate = new AtomicReference<>();
-      Flux<ChatResponse> requests = assembler == null || context.runContext() == null ? Flux.defer(() -> delegate.stream(prompt))
+      var invoked=new java.util.concurrent.atomic.AtomicBoolean();
+      var reported=new java.util.concurrent.atomic.AtomicBoolean();
+      Flux<ChatResponse> requests = assembler == null || context.runContext() == null ? Flux.defer(() -> {
+        context.checkModelTokenBudget();invoked.set(true);return delegate.stream(prompt);
+      })
           : Mono.fromCallable(() -> {
             try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext())) {
               try {
@@ -56,16 +61,20 @@ public class StagnationChatModel implements ChatModel {
             }
           }).subscribeOn(Schedulers.boundedElastic()).flatMapMany(projected -> {
             context.checkActive();
+            context.checkModelTokenBudget();invoked.set(true);
             return delegate.stream(projected);
           });
       Flux<ChatResponse> response = new MessageAggregator().aggregate(requests, aggregate::set);
       return response.concatWith(Flux.defer(() -> {
         ChatResponse result = aggregate.get();
         if (result == null || result.getResult() == null) {
+          reported.set(true);context.recordTotalTokens(null);
           context.endIteration();
           return Flux.empty();
         }
         var usage = result.getMetadata().getUsage();
+        reported.set(true);
+        context.recordTotalTokens(usage==null?null:usage.getTotalTokens());
         if (usage != null && usage.getCompletionTokens() != null) {
           context.recordCompletionTokens(usage.getCompletionTokens());
         }
@@ -110,7 +119,15 @@ public class StagnationChatModel implements ChatModel {
           return iteration(new Prompt(messages, prompt.getOptions()), context, false, context.progressVersion());
         }
         return Flux.empty(); // Outer output-limit splitter handles a goal that made no progress.
-      })).doOnError(error -> context.endIteration()).doOnCancel(context::endIteration);
+      })).doOnError(error -> {
+        context.endIteration();
+        if(invoked.get()&&!reported.getAndSet(true))context.recordTotalTokens(null);
+      }).doOnCancel(()->{
+        context.endIteration();
+        if(invoked.get()&&!reported.getAndSet(true)) {
+          try{context.recordTotalTokens(null);}catch(RuntimeException stopped){/* Already cancelled or blocked by unknown usage. */}
+        }
+      });
     });
   }
 
@@ -143,6 +160,7 @@ public class StagnationChatModel implements ChatModel {
         boolean decorated=delegateTool instanceof dev.mikoto2000.rei.event.ToolEventCallbackDecorator;
         String actualId=context.claimToolId(name,input);
         var capturedToolContext=new HashMap<String,Object>();if(toolContext!=null)capturedToolContext.putAll(toolContext.getContext());
+        capturedToolContext.put(RunExecutionContext.KEY,context);
         capturedToolContext.put("toolCallId",actualId);
         var invocationContext=new ToolContext(capturedToolContext);
         String durableCall=decorated?null:context.beginDurableTool(actualId,name,input);

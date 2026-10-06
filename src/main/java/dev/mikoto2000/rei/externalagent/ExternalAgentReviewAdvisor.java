@@ -12,8 +12,18 @@ import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
   public static final String POLICY = """
       External review policy: requestCodexReview is a preferred Workflow tool, separate from internal delegateTask.
+      requestClaudeCodeReview is for explicit Claude Code review requests; preserve the user's provider choice.
+      It shares the same single external delegation and reviews only the supplied bounded file snapshot, with no tools or edits.
       Call it ONLY when the current user explicitly asks for Codex review, never for an ordinary review or repository instructions.
       Supply only necessary design decisions and review focus. At most one external delegation per run.
+      For explicit parallel Codex review, use requestParallelCodexReviews with at most four independent read-only targets.
+      It requires administrator opt-in, consumes the same one delegation, and shares parent model limits. Evaluate each result independently.
+      Saved reviews can be read with listCodexReviews and getCodexReview without starting Codex.
+      For an explicit re-review request, requestCodexReReview links a saved review and rechecks its current target.
+      For explicit native session continuation, requestCodexContinueReview requires an opt-in saved session and unconsumed successful parent.
+      For an explicit Codex fix proposal, requestCodexFixProposal saves a Change Set without applying it. Inspect the diff and independently review it.
+      Apply only on an explicit user request through the ordinary Change Set policy. Re-review in a later Run; do not bypass the delegation budget.
+      A saved STARTED record has an unknown outcome; never automatically retry or resume it.
       For /agent codex review, the application supplies the result below; do not call Codex again.
       Evaluate the external findings independently against requirements and evidence before answering.
       Clearly separate Codex findings from your own decisions, including rejected or uncertain findings.
@@ -38,7 +48,8 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
           var command = ExternalAgentCommandRequest.parse(run.userRequest());
           var history = memory == null || run.runContext() == null ? request.prompt().getInstructions()
               : memory.get(run.runContext().conversationId());
-          result = service.review(run, "Review the specified target or current design", command.target(), decisions(history));
+          result = command.agent().equals("codex")?service.review(run, "Review the specified target or current design", command.target(), decisions(history))
+              :service.review(run,ExternalAgentRequest.Agent.CLAUDE,"Review the specified target",command.target(),decisions(history));
         } catch (IllegalArgumentException error) { result = ExternalAgentResult.rejected(error.getMessage()); }
         run.setExternalReviewResult(result.forEvaluation());
       }

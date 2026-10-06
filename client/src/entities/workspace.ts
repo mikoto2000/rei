@@ -1,4 +1,84 @@
+export interface CoachingSettings {
+  enabled: boolean;
+  categories: string[];
+  targetShare: number;
+  minimumObservedMinutes: number;
+  minimumCoverage: number;
+  maximumUnknownShare: number;
+  cooldownDays: number;
+}
 export type WorkspaceOperation =
+  | {
+      operation: "activityObservationContext";
+      projectId: string;
+      date: string | null;
+    }
+  | { operation: "activityCoachingSettings" }
+  | {
+      operation: "activityCoachingConfigure";
+      expectedRevision: number;
+      settings: CoachingSettings;
+    }
+  | {
+      operation: "activityCoachingEnabled";
+      expectedRevision: number;
+      enabled: boolean;
+    }
+  | {
+      operation: "activityAnalysis";
+      period: "WEEK" | "MONTH";
+      date: string | null;
+    }
+  | { operation: "goals"; projectId: string }
+  | {
+      operation:
+        "goal" | "goalHistory" | "goalVerify" | "goalRun" | "goalCancel";
+      projectId: string;
+      id: string;
+    }
+  | {
+      operation: "goalReconcile";
+      projectId: string;
+      id: string;
+      expectedRunId: string;
+      acknowledgeUncertainSideEffects: boolean;
+    }
+  | { operation: "schedules"; projectId: string }
+  | {
+      operation:
+        "schedule" | "scheduleHistory" | "scheduleActivate" | "scheduleCancel";
+      projectId: string;
+      id: string;
+    }
+  | {
+      operation: "scheduleReconcile";
+      projectId: string;
+      id: string;
+      expectedRunId: string;
+      acknowledgeUncertainSideEffects: boolean;
+    }
+  | { operation: "dependencies"; projectId: string }
+  | {
+      operation: "dependencyAnswer";
+      projectId: string;
+      id: string;
+      expectedVersion: number;
+      answer: string;
+    }
+  | { operation: "checkpoints"; projectId: string }
+  | {
+      operation: "checkpoint" | "checkpointInspect" | "checkpointAbandon";
+      projectId: string;
+      taskId: string;
+    }
+  | { operation: "attention" | "approvals"; projectId: string }
+  | { operation: "attentionAck"; projectId: string; id: string }
+  | {
+      operation: "approvalDecision";
+      projectId: string;
+      id: string;
+      approved: boolean;
+    }
   | { operation: "workContext" | "workContextHistory"; projectId: string }
   | { operation: "workContextUpdate"; sessionId: string }
   | {

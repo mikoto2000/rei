@@ -25,6 +25,6 @@ Tests:
 Result: PASS
 
 Remaining:
-- 起動時全 Session 走査、cron、日次、Session 終了 trigger は未対応。
+- 起動時保存metadataのbounded走査は後続の auto-sleep-startup-discovery で対応。cron/日次は後続auto-sleep-cronで対応。Session終了triggerは未対応。
 - OS 全体の idle と入力途中のキー操作は観測しない。
-- Session 登録は直近256件。永続 Sleep cursor は再起動後も保持され、会話終了後に登録を再開する。
+- 候補は最大256件。永続Sleep cursorを保持し、起動時の保存metadataと会話終了後の登録を利用する。

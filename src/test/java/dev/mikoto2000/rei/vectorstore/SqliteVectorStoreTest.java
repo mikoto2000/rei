@@ -36,6 +36,24 @@ import tools.jackson.databind.json.JsonMapper;
 
 @org.junit.jupiter.api.Tag("integration")
 class SqliteVectorStoreTest {
+  @Test void embeddingBudgetOvershootRollsBackWholeChunkBatchButKeepsReportedCost() {
+    var provider=org.mockito.Mockito.mock(EmbeddingModel.class);
+    org.mockito.Mockito.when(provider.dimensions()).thenReturn(2);
+    org.mockito.Mockito.when(provider.getEmbeddingContent(org.mockito.ArgumentMatchers.any(Document.class)))
+        .thenAnswer(invocation->((Document)invocation.getArgument(0)).getText());
+    org.mockito.Mockito.when(provider.call(org.mockito.ArgumentMatchers.any(EmbeddingRequest.class)))
+        .thenReturn(new EmbeddingResponse(List.of(new Embedding(new float[]{1,0},0)),
+            new org.springframework.ai.embedding.EmbeddingResponseMetadata("test",new org.springframework.ai.chat.metadata.DefaultUsage(3,0))));
+    var store=new SqliteVectorStore(newVecDataSource(tempDir.resolve("budget.db")),new dev.mikoto2000.rei.llm.BudgetedEmbeddingModel(provider),new JsonMapper());
+    var budget=new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0,10,null,5);
+    var run=new dev.mikoto2000.rei.core.stagnation.RunExecutionContext("run",budget,null,null,null);
+    try(var scope=dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(run.modelCallBudget())) {
+      assertTrue(assertThrows(dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.class,()->store.add(List.of(chunk("a","text one","same"),chunk("b","text two","same"))))
+          .getMessage().contains("TOKEN_BUDGET_EXCEEDED"));
+    }
+    assertEquals(6,budget.totalTokens());assertTrue(store.lexicalSearch(SearchRequest.builder().query("text").topK(10).build()).isEmpty());
+    org.mockito.Mockito.verify(provider,org.mockito.Mockito.times(2)).call(org.mockito.ArgumentMatchers.any(EmbeddingRequest.class));
+  }
 
   @TempDir
   Path tempDir;
@@ -371,6 +389,76 @@ class SqliteVectorStoreTest {
 
   private SqliteVectorStore newStore(Path dbPath) {
     return new SqliteVectorStore(newVecDataSource(dbPath), new FakeEmbeddingModel(), new JsonMapper());
+  }
+
+  @Test
+  void bm25RanksFrequencyAndLengthAndFiltersBeforeTopK() {
+    var store = new SqliteVectorStore(newVecDataSource(tempDir.resolve("bm25.db")), new ConstantEmbeddingModel(), new JsonMapper(), true);
+    store.add(List.of(
+        chunk("a", "spring " + "filler ".repeat(80), "outside"),
+        chunk("b", "spring spring spring", "inside"),
+        chunk("c", "spring filler filler filler filler", "inside")));
+    var request = SearchRequest.builder().query("spring").topK(3).similarityThresholdAll().build();
+    var ranked = store.bm25Search(request);
+    assertEquals(List.of("b", "c", "a"), ranked.stream().map(Document::getId).toList());
+    assertEquals("bm25", ranked.getFirst().getMetadata().get("lexicalMode"));
+    assertTrue(((Number) ranked.getFirst().getMetadata().get("bm25Score")).doubleValue() > 0);
+    assertEquals("a", store.bm25Search(SearchRequest.builder().query("spring").topK(1)
+        .filterExpression(new FilterExpressionBuilder().eq("source", "outside").build()).build()).getFirst().getId());
+    assertTrue(store.bm25Search(SearchRequest.builder().query("spring missing").similarityThreshold(0.75).build()).isEmpty());
+  }
+
+  @Test
+  void bm25BackfillsRestartsAndKeepsReplacementRollbackAndDeletesConsistent() {
+    Path path = tempDir.resolve("bm25-restart.db");
+    newStore(path).add(List.of(chunk("a", "spring", "one"), chunk("b", "spring", "two")));
+    var store = new SqliteVectorStore(newVecDataSource(path), new ConstantEmbeddingModel(), new JsonMapper(), true);
+    assertEquals(2, store.bm25Search(SearchRequest.builder().query("spring").build()).size());
+    var failing = new SqliteVectorStore(newVecDataSource(path), new FailingEmbeddingModel(), new JsonMapper(), true);
+    assertThrows(IllegalStateException.class, () -> failing.replaceBySource("a", "one", "now", List.of(chunk("a", "fail", "one"))));
+    assertEquals(2, store.bm25Search(SearchRequest.builder().query("spring").build()).size());
+    store.replaceBySource("a", "one", "now", List.of(chunk("a", "weather", "one")));
+    assertEquals(List.of("b"), store.bm25Search(SearchRequest.builder().query("spring").build()).stream().map(Document::getId).toList());
+    store.delete(List.of("b"));
+    assertTrue(store.bm25Search(SearchRequest.builder().query("spring").build()).isEmpty());
+    store.add(List.of(chunk("c", "weather", "three"), chunk("d", "weather", "four")));
+    var filters = new FilterExpressionBuilder();
+    store.delete(filters.and(filters.eq("docId", "c"), filters.eq("source", "three")).build());
+    assertTrue(store.deleteByDocId("d"));
+    assertEquals(1, store.deleteBySource("one"));
+    assertTrue(store.bm25Search(SearchRequest.builder().query("weather").build()).isEmpty());
+    var disabled = newStore(path);
+    disabled.add(List.of(chunk("e", "spring", "five")));
+    assertEquals("e", store.bm25Search(SearchRequest.builder().query("spring").build()).getFirst().getId());
+    disabled.replaceBySource("e", "five", "now", List.of(chunk("e", "spring spring", "five")));
+    assertEquals(1, store.bm25Search(SearchRequest.builder().query("spring").build()).size());
+    var restarted = new SqliteVectorStore(newVecDataSource(path), new ConstantEmbeddingModel(), new JsonMapper(), true);
+    assertEquals("e", restarted.bm25Search(SearchRequest.builder().query("spring").build()).getFirst().getId());
+  }
+
+  private Document chunk(String id, String text, String source) {
+    return new Document(id, text, Map.of("docId", id, "source", source, "chunkIndex", 0, "ingestedAt", "2026-10-06T00:00:00Z"));
+  }
+
+  @Test
+  void bm25TreatsOperatorsAsTextAndRejectsUnsupportedFiltersLimitsAndCancellation() {
+    var model = org.mockito.Mockito.spy(new ConstantEmbeddingModel());
+    var store = new SqliteVectorStore(newVecDataSource(tempDir.resolve("bm25-query.db")), model, new JsonMapper(), true);
+    store.add(List.of(chunk("a", "spring OR weather", "one"), chunk("b", "springtime", "two")));
+    org.mockito.Mockito.clearInvocations(model);
+    assertEquals(List.of("a"), store.bm25Search(SearchRequest.builder().query("\"spring\" OR weather* NOT (missing)").build()).stream().map(Document::getId).toList());
+    assertEquals(List.of("a"), store.bm25Search(SearchRequest.builder().query("spring").build()).stream().map(Document::getId).toList());
+    assertTrue(store.bm25Search(SearchRequest.builder().query(" ").build()).isEmpty());
+    assertThrows(UnsupportedOperationException.class, () -> store.bm25Search(SearchRequest.builder().query("spring")
+        .filterExpression(new FilterExpressionBuilder().eq("secret", "one").build()).build()));
+    assertThrows(IllegalArgumentException.class, () -> store.bm25Search(SearchRequest.builder().query("x".repeat(4097)).build()));
+    assertThrows(IllegalArgumentException.class, () -> store.bm25Search(SearchRequest.builder().query("spring").topK(257).build()));
+    try {
+      Thread.currentThread().interrupt();
+      assertThrows(java.util.concurrent.CancellationException.class, () -> store.bm25Search(SearchRequest.builder().query("spring").build()));
+    } finally { Thread.interrupted(); }
+    org.mockito.Mockito.verifyNoInteractions(model);
+    assertThrows(UnsupportedOperationException.class, () -> newStore(tempDir.resolve("disabled.db")).bm25Search(SearchRequest.builder().query("spring").build()));
   }
   @Test void independentRetrievalRecoversLexicalMatchOutsideDenseNearestNeighbors() {
     var model=new FakeEmbeddingModel(){@Override protected float[] embedText(String text){return text.equals("needle is here")?new float[]{0,1,0,0}:new float[]{1,0,0,0};}};

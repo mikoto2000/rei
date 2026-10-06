@@ -207,7 +207,8 @@ public class ChatExecutionService {
     AtomicReference<GenerationMetrics> lastGenerationMetrics = new AtomicReference<>();
     OutputLimitRunBudget budget = new OutputLimitRunBudget(
         llmProperties.getOutputLimit().getMaxReplansPerGoal(),
-        llmProperties.getOutputLimit().getMaxLlmCallsPerRun(),reservation);
+        llmProperties.getOutputLimit().getMaxLlmCallsPerRun(),reservation,
+        llmProperties.getOutputLimit().getMaxTotalTokensPerRun());
     RunExecutionContext execution = new RunExecutionContext(runId, budget,
         new ProgressEvaluator(context.projectRoot(),
             actionPlan), eventFactory, eventPublisher);
@@ -265,7 +266,7 @@ public class ChatExecutionService {
       }
       while (result.status() == ChatRunStatus.SUCCESS && !interventions.finishIfEmpty()) {
         var guidance = execution.applyInterventions();
-        if (!budget.tryConsumeLlmCall()) { result = new ChatRunResult(ChatRunStatus.LLM_CALL_BUDGET_EXCEEDED, ""); break; }
+        if (!budget.tryConsumeLlmCall()) { result = new ChatRunResult(budgetStopStatus(budget), ""); break; }
         result = executePrompt(guidance.stream().map(org.springframework.ai.chat.messages.Message::getText)
             .collect(java.util.stream.Collectors.joining("\n")), false, startedAtNanos, budget, execution, runId,
             skillRoutingContext, runCompletionTokens, usageAvailable, lastGenerationMetrics);
@@ -334,6 +335,8 @@ public class ChatExecutionService {
           "context_hard_limit");
       case STAGNATED -> new ErrorInformation("Stagnated", "STAGNATED: no meaningful progress after replanning", "stagnated");
       case LLM_CALL_BUDGET_EXCEEDED -> new ErrorInformation("LlmCallBudgetExceeded", "LLM call budget exceeded", "llm_call_budget_exceeded");
+      case TOKEN_BUDGET_EXCEEDED -> new ErrorInformation("TokenBudgetExceeded","Reported Run token limit exceeded","token_budget_exceeded");
+      case TOKEN_USAGE_UNKNOWN -> new ErrorInformation("TokenUsageUnknown","Token limit enabled but model usage is unknown","token_usage_unknown");
       case REPLAN_BUDGET_EXCEEDED -> new ErrorInformation("ReplanBudgetExceeded", "replan hard budget exceeded", "replan_budget_exceeded");
       case CANCELLED -> new ErrorInformation("Cancelled", "chat run cancelled", "cancelled");
       case FAILED -> new ErrorInformation("ChatRunFailed", "chat run failed", null);
@@ -353,7 +356,7 @@ public class ChatExecutionService {
     if (!budget.hasRemainingLlmCalls()) {
       log.warn("Output limit replan skipped: goal={}, reason=llm_call_budget_exhausted_before_planner",
           summarizeForLog(currentGoal));
-      return new ChatRunResult(ChatRunStatus.LLM_CALL_BUDGET_EXCEEDED, partialOutput);
+      return new ChatRunResult(budgetStopStatus(budget), partialOutput);
     }
     if (!budget.tryConsumeReplan()) {
       log.warn("Output limit replan skipped: goal={}, reason=replan_budget_exhausted, replanCount={}",
@@ -363,23 +366,26 @@ public class ChatExecutionService {
     if (!budget.tryConsumeLlmCall()) {
       log.warn("Output limit replan skipped: goal={}, reason=llm_call_budget_exhausted_before_planner",
           summarizeForLog(currentGoal));
-      return new ChatRunResult(ChatRunStatus.LLM_CALL_BUDGET_EXCEEDED, partialOutput);
+      return new ChatRunResult(budgetStopStatus(budget), partialOutput);
     }
 
     OutputLimitReplanPlan plan;
     try {
       log.info("Output limit replan started: goal={}, replanCount={}, remainingLlmCalls={}",
           summarizeForLog(currentGoal), budget.replanCount(), budget.remainingLlmCalls());
-      plan = outputLimitReplanner.get().replan(new OutputLimitReplanRequest(
+      var replanRequest = new OutputLimitReplanRequest(
           originalUserRequest,
           currentGoal,
           progressSoFar,
           partialOutput,
           budget.replanCount(),
           llmProperties.getOutputLimit().getMaxReplansPerGoal(),
-          budget.remainingLlmCalls()));
+          budget.remainingLlmCalls());
+      plan=budget.tokenLimitEnabled()?outputLimitReplanner.get().replan(replanRequest,execution::recordTotalTokens)
+          :outputLimitReplanner.get().replan(replanRequest);
     } catch (Exception e) {
       RunCancellation.propagate(e);
+      if(e instanceof ExecutionStoppedException stopped)throw stopped;
       log.warn("Output limit replan failed", e);
       return ChatRunResult.outputLimit(partialOutput);
     }
@@ -388,7 +394,7 @@ public class ChatExecutionService {
     for (OutputLimitReplanSubgoal subgoal : plan.subgoals()) {
       if (!budget.tryConsumeLlmCall()) {
         log.warn("Output limit subgoal skipped: LLM call budget exhausted");
-        return new ChatRunResult(ChatRunStatus.LLM_CALL_BUDGET_EXCEEDED, subgoalResults.toString());
+        return new ChatRunResult(budgetStopStatus(budget), subgoalResults.toString());
       }
       log.info("Output limit subgoal started: id={}, goal={}", subgoal.id(), subgoal.goal());
       ChatRunResult subgoalResult = executePrompt(subgoal.goal(), false, startedAtNanos, budget, execution, runId,
@@ -410,7 +416,7 @@ public class ChatExecutionService {
 
     if (!budget.tryConsumeLlmCall()) {
       log.warn("Output limit final integration skipped: LLM call budget exhausted");
-      return new ChatRunResult(ChatRunStatus.LLM_CALL_BUDGET_EXCEEDED, subgoalResults.toString());
+      return new ChatRunResult(budgetStopStatus(budget), subgoalResults.toString());
     }
     return executePrompt(buildIntegrationPrompt(originalUserRequest, plan.finalGoal(), subgoalResults.toString()),
         false, startedAtNanos, budget, execution, runId, skillRoutingContext, runCompletionTokens, usageAvailable,
@@ -570,6 +576,10 @@ public class ChatExecutionService {
       if (cause instanceof java.util.concurrent.CancellationException) return ChatRunResult.cancelled();
     }
     return ChatRunResult.failed();
+  }
+  private ChatRunStatus budgetStopStatus(OutputLimitRunBudget budget) {
+    return budget.usageUnknown()?ChatRunStatus.TOKEN_USAGE_UNKNOWN:
+        budget.tokenExhausted()?ChatRunStatus.TOKEN_BUDGET_EXCEEDED:ChatRunStatus.LLM_CALL_BUDGET_EXCEEDED;
   }
 
   private String buildIntegrationPrompt(String originalUserRequest, String finalGoal, String subgoalResults) {
@@ -785,6 +795,8 @@ public class ChatExecutionService {
     SUCCESS,
     STAGNATED,
     LLM_CALL_BUDGET_EXCEEDED,
+    TOKEN_BUDGET_EXCEEDED,
+    TOKEN_USAGE_UNKNOWN,
     REPLAN_BUDGET_EXCEEDED,
     OUTPUT_LIMIT,
     CONTEXT_HARD_LIMIT,

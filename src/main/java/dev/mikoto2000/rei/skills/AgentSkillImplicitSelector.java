@@ -38,11 +38,39 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
 
   @Override
   public List<AgentSkill> select(String prompt, Set<String> excludedSkillNames, List<AgentSkill> providedCandidates) {
+    return select(prompt, excludedSkillNames, providedCandidates, null);
+  }
+
+  @Override
+  public List<AgentSkill> select(String prompt, Set<String> excludedSkillNames,
+      List<AgentSkill> providedCandidates, Runnable beforeModelCall) {
     List<AgentSkill> candidates = (providedCandidates == null ? repository.findEnabled() : providedCandidates).stream()
         .filter(skill -> excludedSkillNames == null || !excludedSkillNames.contains(skill.name()))
         .toList();
     if (candidates.isEmpty()) {
       return List.of();
+    }
+    // Budget exhaustion must stop the run, rather than become a selection fallback.
+    if (beforeModelCall != null) beforeModelCall.run();
+    if(beforeModelCall instanceof dev.mikoto2000.rei.llm.ModelCallBudget budget&&budget.tokenLimitEnabled()) {
+      org.springframework.ai.chat.model.ChatResponse response;
+      try {
+        var model=modelProvider.chatModel(LlmFeature.AGENT_SKILLS);
+        dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+        // AI 2 uses provider-specific request options without merging model defaults.
+        var options=modelProvider.chatOptions(LlmFeature.AGENT_SKILLS,null).mutate()
+            .toolCallbacks(List.of()).toolChoice("none").build();
+        dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
+        response=model.call(new org.springframework.ai.chat.prompt.Prompt(buildSelectionPrompt(prompt,candidates),options));
+      }catch(Exception error) {
+        dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
+        budget.recordTotalTokens(null);
+        return List.of();
+      }
+      var usage=response==null?null:response.getMetadata().getUsage();
+      budget.recordTotalTokens(usage==null?null:usage.getTotalTokens());
+      String content=response.getResult()==null?"":response.getResult().getOutput().getText();
+      return resolveSelectedSkills(parseJsonStringArray(content),candidates);
     }
     try {
       String content = modelProvider.chatModel(LlmFeature.AGENT_SKILLS).call(buildSelectionPrompt(prompt, candidates));

@@ -33,12 +33,41 @@ class SubAgentConfigurationTest {
     assertThat(definition.timeout()).isEqualTo(java.time.Duration.ofSeconds(120));
     assertThat(loader.load(write("b.yaml", yaml("reviewer") + "model: known\n")).model()).isEqualTo("known");
   }
+  @Test void semanticValidationIsOptInBooleanAndRequiresEvidenceTools() throws Exception {
+    assertThat(loader.load(write("default.yaml",yaml("reviewer"))).semanticValidation()).isFalse();
+    assertThat(loader.load(write("enabled.yaml",yaml("reviewer")+"evidenceTools: [readMultiFile]\nsemanticValidation: true\n")).semanticValidation()).isTrue();
+    for(String value:List.of("true","null","1","wrong")) {
+      var file=write("bad-semantic.yaml",yaml("reviewer")+"semanticValidation: "+value+"\n");
+      assertThatThrownBy(()->loader.load(file)).hasMessageContaining("semanticValidation");
+    }
+  }
+  @Test void parentApprovalInheritanceIsAnExplicitBoolean() throws Exception {
+    assertThat(loader.load(write("default.yaml",yaml("reviewer"))).inheritApprovals()).isFalse();
+    assertThat(loader.load(write("enabled.yaml",yaml("reviewer")+"inheritApprovals: true\n")).inheritApprovals()).isTrue();
+    for(String value:List.of("null","1","wrong")) {
+      var file=write("bad-approval.yaml",yaml("reviewer")+"inheritApprovals: "+value+"\n");
+      assertThatThrownBy(()->loader.load(file)).hasMessageContaining("inheritApprovals");
+    }
+    var forbidden=write("forbidden.yaml",yaml("reviewer").replace("readMultiFile","runCommand")+"inheritApprovals: true\n");
+    assertThatThrownBy(()->loader.load(forbidden)).hasMessageContaining("not permitted");
+  }
   @Test void evidenceToolsAreOptInAndMustBeUniqueRequestedTools() throws Exception {
     assertThat(loader.load(write("a.yaml",yaml("reviewer"))).evidenceTools()).isEmpty();
     assertThat(loader.load(write("a.yaml",yaml("reviewer")+"evidenceTools: [readMultiFile]\n")).evidenceTools()).containsExactly("readMultiFile");
     for (String value : List.of("[missing]","[readMultiFile, readMultiFile]","wrong","[true]")) {
       var file=write("invalid.yaml",yaml("reviewer")+"evidenceTools: "+value+"\n");
       assertThatThrownBy(()->loader.load(file)).hasMessageContaining("evidenceTools");
+    }
+  }
+  @Test void requiredCallsLoadExactJsonArgumentsAndRejectUnobservedToolsAndUnsafeValues() throws Exception {
+    String extra="evidenceTools: [readMultiFile]\nrequiredToolCalls:\n  - tool: readMultiFile\n    arguments: {paths: [README.md]}\n";
+    var definition=loader.load(write("calls.yaml",yaml("reviewer")+extra));
+    assertThat(definition.requiredToolCalls()).hasSize(1);
+    assertThat(definition.requiredToolCalls().getFirst().argumentsJson()).isEqualTo("{\"paths\":[\"README.md\"]}");
+    assertThat(loader.load(write("default.yaml",yaml("reviewer"))).requiredToolCalls()).isEmpty();
+    for(String bad:List.of(extra.replace("tool: readMultiFile","tool: missing"),extra.replace("arguments: {paths: [README.md]}","arguments: []"),extra.replace("arguments: {paths: [README.md]}","arguments: {date: 2026-01-01}"),extra.replace("evidenceTools: [readMultiFile]\n",""))) {
+      var file=write("bad-calls.yaml",yaml("reviewer")+bad);
+      assertThatThrownBy(()->loader.load(file)).hasMessageContaining("requiredToolCalls");
     }
   }
   @Test void repairLimitDefaultsToDisabledAndRejectsInvalidValues() throws Exception {
@@ -48,6 +77,17 @@ class SubAgentConfigurationTest {
       var file=write("invalid.yaml",yaml("reviewer")+"maxRepairs: "+value+"\n");
       assertThatThrownBy(()->loader.load(file)).hasMessageContaining("maxRepairs");
     }
+  }
+  @Test void expectedOutputLoadsTypedFieldsAndRejectsEmptyNullAndUnknownFields() throws Exception {
+    String extra="evidenceTools: [readMultiFile]\nrequiredToolCalls:\n  - tool: readMultiFile\n    arguments: {}\n    expectedOutput: {found: true, count: 0}\n";
+    var definition=loader.load(write("outcome.yaml",yaml("reviewer")+extra));
+    assertThat(definition.requiredToolCalls().getFirst().expectedOutputJson()).isEqualTo("{\"found\":true,\"count\":0}");
+    for(String value:List.of("{}","[]","null","{date: 2026-01-01}")) {
+      var file=write("bad-outcome.yaml",yaml("reviewer")+extra.replace("{found: true, count: 0}",value));
+      assertThatThrownBy(()->loader.load(file)).hasMessageContaining("requiredToolCalls");
+    }
+    var unknown=write("unknown-outcome.yaml",yaml("reviewer")+extra+"    unexpected: true\n");
+    assertThatThrownBy(()->loader.load(unknown)).hasMessageContaining("requiredToolCalls");
   }
   @Test void rejectsInvalidFieldsWithFileAndField() throws Exception {
     for (String field : List.of("id", "name", "description", "systemPrompt", "maxSteps", "timeout")) {
@@ -105,6 +145,6 @@ class SubAgentConfigurationTest {
     var samples = new SubAgentRegistry(Path.of("config/subagents"),
         new SubAgentDefinitionLoader(new SubAgentToolPolicy(catalog.knownNames()), m -> false));
     assertThat(samples.reload()).isEmpty();
-    assertThat(samples.list()).extracting(SubAgentDefinition::id).containsExactly("researcher", "reviewer");
+    assertThat(samples.list()).extracting(SubAgentDefinition::id).containsExactly("document-editor", "researcher", "reviewer");
   }
 }

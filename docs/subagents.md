@@ -14,9 +14,10 @@ SubAgent は、目的・独立コンテキスト・制限された Tool 権限�
 相対パスは起動時の作業ディレクトリを基準に一度解決します。
 
 リポジトリの [researcher](../config/subagents/researcher.yaml) と
-[reviewer](../config/subagents/reviewer.yaml) を上記ディレクトリにコピーして利用してください。
+[reviewer](../config/subagents/reviewer.yaml)、[document-editor](../config/subagents/document-editor.yaml) を上記ディレクトリにコピーして利用してください。
 サンプルを自動インストールしてユーザー設定を書き換えることはありません。
 開発時は `rei.subagents.directory=config/subagents` でも利用できます。
+文書・Mermaid/PlantUMLの編集案から保存差分・明示適用へ進める手順は [document-draft-agent.md](document-draft-agent.md) を参照してください。
 
 ```text
 /subagent init java-expert
@@ -117,8 +118,8 @@ Shell は開始・終了に加え、子の LLM リクエスト・応答・失敗
 子の回答・思考の token stream は親の回答に混ぜず、親の UI 状態も変更しません。
 
 永続化するのは既存の監査イベントで、子専用の会話履歴は保存しません。
-複数 Run の ID と状態は独立していますが、自動並列 orchestration はありません。
-再帰委譲、Agent 間会話、動的生成、DAG planner、協調プロトコル、GUI、remote agents は Phase 2 以降です。
+複数RunのIDと状態は独立しています。delegateTasksで独立した依頼をboundedに並列実行できます。
+再帰委譲、Agent間会話、動的生成、DAG planner、協調プロトコル、GUI、remote agentsは未対応です。
 
 ## 出力の構造検証（Phase 1）
 
@@ -187,3 +188,17 @@ SubAgent は provider 共通の Tool loop と fallback を使うため、それ�
 ## 検証エラーの修復
 
 任意のmaxRepairs設定で、共通の呼び出し予算とtimeoutの範囲内で最終JSONを修復できます。設定と結果履歴は [検証エラーの修復](subagent-validation-repair.md) を参照してください。
+
+## 並列委譲
+
+CHATのdelegateTasksは独立した依頼をまとめて実行し、個別結果を入力順に返します。制限と停止時の扱いは [複数SubAgentへの並列委譲](parallel-subagent-delegation.md) を参照してください。
+
+## Goalの共有LLM呼び出し予算
+
+Goal内のdelegateTask / delegateTasksでは、子の初回呼び出し・各Tool cycle・validation repairを親Goalの永続予算へ事前予約します。並列workerも同じ予約を利用します。予約が拒否されたらモデルを呼ばずFAILED / SHARED_LLM_BUDGET_EXHAUSTEDを返します。失敗・キャンセルで予約を返却しません。元のvalidation履歴も保持します。
+
+予約はホストのToolContext経由で渡し、ToolのJSON入力には公開しません。親履歴・Working Setの共有は行いません。Goal予算のない通常のChat/手動委譲は従来のmaxSteps/timeoutを維持します。共通token上限やSkill selectorなど別経路への継承は対象外です。
+
+意味検証の任意設定は [SubAgentの意味検証](subagent-semantic-validation.md) を参照。
+
+読み取り系の一回限り承認を親から使用する設定は [親承認継承](subagent-parent-approval.md) を参照。

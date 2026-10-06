@@ -65,7 +65,11 @@ public class SleepService {
         if (turn.status()==ConversationTurnStore.Status.COMPLETED) batch.add(turn);
       }
       processed=(int)(to-from);
-      var candidates=batch.isEmpty()?List.<MemoryCandidate>of():extractor.extract(List.copyOf(batch));
+      dev.mikoto2000.rei.llm.ModelCallBudget budget=properties.sleep().maxLlmCallsPerProject()>0||properties.sleep().maxTotalTokensPerProject()>0
+          ?new PersistentSleepModelBudget(repository,properties.sleep(),project,check)
+          :properties.sleep().maxLlmCalls()>0||properties.sleep().maxTotalTokens()>0
+              ?new SleepModelBudget(properties.sleep(),check):null;
+      var candidates=batch.isEmpty()?List.<MemoryCandidate>of():budget==null?extractor.extract(List.copyOf(batch)):extractor.extract(List.copyOf(batch),budget);
       check.run();
       var sourceIds=batch.stream().map(ConversationTurnStore.Turn::runId).collect(java.util.stream.Collectors.toSet());
       var plans=new ArrayList<Plan>();
@@ -88,7 +92,7 @@ public class SleepService {
           existing.add(m); existingTokens+=size;
         }
         var resolution=!seen.add(candidate.scope()+":"+MemoryResolver.normalize(candidate.content()))
-            ?new MemoryResolution(MemoryAction.IGNORE,List.of()):resolver.resolve(candidate,existing,project);
+            ?new MemoryResolution(MemoryAction.IGNORE,List.of()):budget==null?resolver.resolve(candidate,existing,project):resolver.resolve(candidate,existing,project,budget);
         var targets=resolution.targetIds().stream().map(target -> repository.find(target).orElseThrow()).toList();
         if (resolution.targetIds().stream().anyMatch(usedTargets::contains))
           throw new IllegalArgumentException("Ambiguous batch: multiple changes to the same memory; retry with fewer turns");
@@ -155,5 +159,11 @@ public class SleepService {
         counts.getOrDefault(MemoryAction.CONFLICT,0),failed);
   }
   public long unsleptTurns(String session) { return session==null?0:Math.max(0,turns.read(session).size()-repository.lastProcessed(session)); }
+  public void requestAutoSleep(String session,String project,String cause) {
+    if(!properties.enabled())throw new IllegalStateException("Memory is disabled");
+    repository.requestAutoSleep(session,project,cause);
+  }
+  public List<MemoryRepository.AutoSleepRequest> pendingAutoSleepRequests(){return repository.pendingAutoSleepRequests();}
+  public boolean completeAutoSleepRequest(MemoryRepository.AutoSleepRequest request){return repository.completeAutoSleepRequest(request);}
   private static void check() { if(Thread.currentThread().isInterrupted()) throw new CancellationException("Sleep cancelled"); }
 }

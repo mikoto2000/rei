@@ -107,6 +107,35 @@ public class RunExecutionContext {
     this.factory = factory; this.publisher = publisher;
   }
 
+  /** Children share the local Run counter as well as its optional durable Goal reservation. */
+  public OutputLimitRunBudget.LlmCallReservation sharedLlmReservation() {
+    return new OutputLimitRunBudget.LlmCallReservation() {
+      public boolean tryReserve() {
+        synchronized(RunExecutionContext.this) {checkActive();return budget.tryConsumeLlmCall();}
+      }
+      public int remaining() {
+        synchronized(RunExecutionContext.this) {return budget.remainingLlmCalls();}
+      }
+      public boolean tokenLimitEnabled(){return budget.tokenLimitEnabled();}
+      public void recordTotalTokens(Integer tokens){RunExecutionContext.this.recordTotalTokens(tokens);}
+    };
+  }
+  public dev.mikoto2000.rei.llm.ModelCallBudget modelCallBudget() {
+    return new dev.mikoto2000.rei.llm.ModelCallBudget() {
+      public void run(){consumeNextLlmCall();}
+      public boolean tokenLimitEnabled(){return budget.tokenLimitEnabled();}
+      public void recordTotalTokens(Integer tokens){RunExecutionContext.this.recordTotalTokens(tokens);}
+    };
+  }
+  public synchronized void recordTotalTokens(Integer tokens) {
+    checkActive();budget.recordTotalTokens(tokens);
+    if(budget.usageUnknown())throw new ExecutionStoppedException(TOKEN_USAGE_UNKNOWN);
+    if(budget.tokenExceeded())throw new ExecutionStoppedException(TOKEN_BUDGET_EXCEEDED);
+  }
+  public synchronized void checkModelTokenBudget() {
+    checkActive();
+    if(budget.tokenExhausted())throw new ExecutionStoppedException(budget.usageUnknown()?TOKEN_USAGE_UNKNOWN:TOKEN_BUDGET_EXCEEDED);
+  }
   public StagnationDetector detector() { return detector; }
   public ProgressEvaluator evaluator() { return evaluator; }
   public long progressVersion() { return progressVersion; }
@@ -178,6 +207,7 @@ public class RunExecutionContext {
     pending.clear();
   }
   public synchronized void consumeNextLlmCall() {
+    checkModelTokenBudget();
     checkActive();
     if (!budget.tryConsumeLlmCall()) throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
   }

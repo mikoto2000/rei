@@ -9,6 +9,7 @@ import java.util.concurrent.Future;
 
 class ManagedBackgroundProcess {
   final String processId;
+  final dev.mikoto2000.rei.core.chat.AgentRunContext owner;
   final Process process;
   final List<String> commandLine;
   final Path workingDirectory;
@@ -27,6 +28,7 @@ class ManagedBackgroundProcess {
   ManagedBackgroundProcess(String processId, Process process, List<String> commandLine, Path workingDirectory,
       int logLineCapacity, Instant startedAt, long startedAtNanos) {
     this.processId = processId;
+    this.owner=dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     this.process = process;
     this.commandLine = List.copyOf(commandLine);
     this.workingDirectory = workingDirectory;

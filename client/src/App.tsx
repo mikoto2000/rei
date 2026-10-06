@@ -16,6 +16,9 @@ import { Settings } from "./features/settings/Settings";
 import { useUserAvatar } from "./features/settings/userAvatar";
 import { Avatar } from "./shared/Avatar";
 import { SessionList } from "./features/history/SessionList";
+import { Recovery } from "./features/recovery/Recovery";
+import { Attention } from "./features/attention/Attention";
+import { ActivityAnalysis } from "./features/activity/ActivityAnalysis";
 import { Workspace } from "./features/workspace/Workspace";
 import { WorkContextNotice } from "./features/workspace/WorkContextNotice";
 import {
@@ -33,7 +36,15 @@ const initial: Snapshot = {
   notifications: false,
 };
 type Page =
-  "conversations" | "new" | "chat" | "runs" | "settings" | "workspace";
+  | "conversations"
+  | "new"
+  | "chat"
+  | "runs"
+  | "settings"
+  | "workspace"
+  | "attention"
+  | "activity"
+  | "recovery";
 const noProjects: Project[] = [];
 export function App({
   call = command,
@@ -275,6 +286,24 @@ export function App({
         </button>
         <nav aria-label="メイン">
           <button
+            className={page === "activity" ? "selected" : ""}
+            onClick={() => navigate("activity")}
+          >
+            Activity分析
+          </button>
+          <button
+            className={page === "recovery" ? "selected" : ""}
+            onClick={() => navigate("recovery")}
+          >
+            復旧・再開
+          </button>
+          <button
+            className={page === "attention" ? "selected" : ""}
+            onClick={() => navigate("attention")}
+          >
+            Inbox・承認
+          </button>
+          <button
             className={page === "workspace" ? "selected" : ""}
             onClick={() => navigate("workspace")}
           >
@@ -387,6 +416,30 @@ export function App({
           <div className="empty">Rei Client を準備しています…</div>
         ) : (
           <>
+            {page === "recovery" && (
+              <Recovery
+                call={call}
+                serverId={data.unlocked ? data.selectedServer : null}
+                projects={projects[data.selectedServer ?? ""] ?? noProjects}
+                onAccepted={(run) =>
+                  setData((d) => ({ ...d, runs: mergeRun(d.runs, run) }))
+                }
+              />
+            )}
+            {page === "attention" && (
+              <Attention
+                call={call}
+                serverId={data.unlocked ? data.selectedServer : null}
+                projects={projects[data.selectedServer ?? ""] ?? noProjects}
+              />
+            )}
+            {page === "activity" && (
+              <ActivityAnalysis
+                call={call}
+                serverId={data.unlocked ? data.selectedServer : null}
+                projects={projects[data.selectedServer ?? ""] ?? noProjects}
+              />
+            )}
             {page === "workspace" && (
               <Workspace
                 call={call}

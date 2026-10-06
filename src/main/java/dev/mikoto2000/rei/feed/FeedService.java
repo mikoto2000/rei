@@ -20,6 +20,7 @@ public class FeedService {
   }
 
   public Feed add(String url, String displayName) {
+    FeedUrlSafety.parse(url);
     if (existsByUrl(url)) {
       throw new DuplicateFeedException();
     }
@@ -224,14 +225,16 @@ public class FeedService {
 
   private Feed mapFeed(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
     String lastFetchedAt = rs.getString("last_fetched_at");
+    String rawUrl = rs.getString("url");
+    String displayName = rs.getString("display_name");
 
     return new Feed(
         rs.getLong("id"),
-        rs.getString("url"),
+        safeFeedUrl(rawUrl),
         rs.getString("title"),
         rs.getString("site_url"),
         rs.getString("description"),
-        rs.getString("display_name"),
+        rawUrl.equals(displayName) ? safeFeedUrl(rawUrl) : displayName,
         rs.getInt("enabled") != 0,
         OffsetDateTime.parse(rs.getString("created_at")),
         OffsetDateTime.parse(rs.getString("updated_at")),
@@ -251,6 +254,16 @@ public class FeedService {
         OffsetDateTime.parse(rs.getString("fetched_at")),
         OffsetDateTime.parse(rs.getString("created_at")),
         OffsetDateTime.parse(rs.getString("updated_at")));
+  }
+
+  private String safeFeedUrl(String url) {
+    try {
+      FeedUrlSafety.parse(url);
+      return url;
+    } catch (IllegalArgumentException e) {
+      // Do not re-expose credentials in legacy rows via CLI, API or update result names.
+      return "[invalid feed URL]";
+    }
   }
 
   private FeedFetchFailure mapFeedFetchFailure(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {

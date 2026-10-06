@@ -26,6 +26,18 @@ pub trait NotificationPort: Send + Sync {
 pub type ByteStream = Pin<Box<dyn Stream<Item = Result<Vec<u8>>> + Send>>;
 #[async_trait]
 pub trait ReiClient: Send + Sync {
+    async fn schedule_snapshot(&self, _project: &str, _schedule: &str) -> Result<RunSnapshot> {
+        Err(AppError::InvalidResponse)
+    }
+    async fn goal_snapshot(&self, _project: &str, _goal: &str) -> Result<RunSnapshot> {
+        Err(AppError::InvalidResponse)
+    }
+    async fn resume_checkpoint(&self, _project: &str, _task: &str) -> Result<CheckpointReceipt> {
+        Err(AppError::InvalidResponse)
+    }
+    async fn checkpoint_run(&self, _project: &str, _task: &str) -> Result<CheckpointReceipt> {
+        Err(AppError::InvalidResponse)
+    }
     async fn background(
         &self,
         _project: &str,

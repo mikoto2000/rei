@@ -26,3 +26,7 @@ RRFは各経路で重複IDを一度だけ数え、`sum(1/(rankConstant + rank))`
 空queryは呼び出しなし。zero query embeddingならdenseを空としてlexicalを利用する。未対応filter・backend・DB/embedding例外は黙ってfilterを外さず失敗させる。stage間のinterruptを伝播する。両候補検索は逐次の独立読取で、同時取り込み時の一つのDB snapshotは保証しない。
 
 Skill検索へのembedding/RRF適用、FTS/BM25、候補集合の実データ評価・score calibrationは今後の対象。Document RAGの新規システムは追加していない。
+
+## BM25 follow-up
+
+明示opt-inのSQLite FTS5/BM25を後続で追加した。設定・語句処理・閾値・transaction同期・再起動時再構築の範囲は[document-bm25-retrieval.md](document-bm25-retrieval.md)を参照。上記のFTS/BM25未実装記述は初期実装時点の記録である。学習済みsparse・実データ品質評価は引き続き残る。

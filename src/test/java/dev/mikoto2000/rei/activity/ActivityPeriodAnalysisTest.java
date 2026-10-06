@@ -82,4 +82,54 @@ class ActivityPeriodAnalysisTest {
     org.mockito.Mockito.verifyNoMoreInteractions(store);
     assertTrue(out.toString().contains("月次 Activity 分析"));
   }
+  @Test void userCriteriaScoreTracksDaysAndUnknownTimeIsExcluded() {
+    var analysis=new ActivityPeriodAnalysis(CLOCK,.5,new ProjectNameNormalizer(Map.of()),Set.of("development"));
+    var range=analysis.range(ActivityPeriodAnalysis.Period.WEEK,LocalDate.of(2026,9,23));
+    var dev=record("dev","2026-09-23T09:00:00Z",600);
+    var raw=record("unknown","2026-09-23T10:00:00Z",600);
+    var unknown=new ActivityRecord(raw.id(),raw.capturedAt(),600,List.of(),null,raw.inference(),.1,List.of(),0,false,"one");
+    var result=analysis.aggregate(range,List.of(dev,unknown));
+    assertEquals(100.0,result.metrics().score());assertEquals(600,result.metrics().classifiedSeconds());
+    assertEquals(Map.of(LocalDate.of(2026,9,23),100.0),result.metrics().dayScores());
+    var text=analysis.format(result,analysis.aggregate(analysis.previous(range),List.of()));
+    assertTrue(text.contains("基準適合指数"));assertTrue(text.contains("development"));assertFalse(text.contains("NaN"));
+    var noCriteria=new ActivityPeriodAnalysis(CLOCK,.5).aggregate(range,List.of(dev));assertNull(noCriteria.metrics().score());
+  }
+  @Test void focusCandidatesUseObservedSecondsAndGapsDoNotCountAsInterruptions() {
+    var analysis=new ActivityPeriodAnalysis(CLOCK,.5,new ProjectNameNormalizer(Map.of()),Set.of("development"));
+    var range=analysis.range(ActivityPeriodAnalysis.Period.WEEK,LocalDate.of(2026,9,23));
+    var a=record("a","2026-09-23T09:00:00Z",900);var b=record("b","2026-09-23T09:15:00Z",900);
+    var c=record("c","2026-09-23T12:00:00Z",600);
+    var result=analysis.aggregate(range,List.of(a,b,c,a));
+    assertEquals(1,result.metrics().focusCandidates());assertEquals(1800,result.metrics().focusSeconds());
+    assertEquals(1800,result.metrics().longestStableSeconds());assertEquals(0,result.metrics().interruptionCandidates());
+  }
+
+  @Test void classifiedSharesAndAdjacentThemeSwitchesAreComparedWithoutScoringGaps() {
+    var analysis=new ActivityPeriodAnalysis(CLOCK,.5,new ProjectNameNormalizer(Map.of()),Set.of("development"));
+    var range=analysis.range(ActivityPeriodAnalysis.Period.WEEK,LocalDate.of(2026,9,23));
+    var dev=record("dev","2026-09-23T09:00:00Z",600);var base=record("research","2026-09-23T09:10:00Z",600);
+    var candidate=base.inference().activities().getFirst();
+    var research=new ActivityRecord(base.id(),base.capturedAt(),600,base.observations(),base.foreground(),
+        new ActivityRecord.Inference("",List.of(new ActivityRecord.Activity(candidate.monitor(),"research",candidate.application(),candidate.service(),candidate.contentTitle(),candidate.projectCandidate()))),.8,List.of(),0,false,"one");
+    var result=analysis.aggregate(range,List.of(dev,research));assertEquals(50.0,result.metrics().score());assertEquals(1,result.metrics().interruptionCandidates());
+    var previous=analysis.aggregate(analysis.previous(range),List.of(record("old","2026-09-16T09:00:00Z",600)));
+    assertTrue(analysis.format(result,previous).contains("-50.0ポイント"));
+    var changedSeries=new ActivityRecord(research.id(),research.capturedAt(),600,research.observations(),research.foreground(),research.inference(),.8,List.of(),0,false,"two");
+    assertEquals(0,analysis.aggregate(range,List.of(dev,changedSeries)).metrics().interruptionCandidates());
+    assertThrows(IllegalArgumentException.class,()->new ActivityPeriodAnalysis(CLOCK,.5,new ProjectNameNormalizer(Map.of()),Set.of("unknown")));
+  }
+  @Test @org.junit.jupiter.api.Tag("integration")
+  void savedUserCategoriesReachWeeklyAndMonthlyReportsAfterRestart(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) {
+    var source=new org.springframework.jdbc.datasource.DriverManagerDataSource("jdbc:sqlite:"+dir.resolve("criteria.db"));
+    var settings=new SqlitePeriodCoachingStore(source);settings.configure(new PeriodCoaching.Settings(false,Set.of("development"),.6,120,.1,.25,7));
+    var reopened=new SqlitePeriodCoachingStore(source);var store=org.mockito.Mockito.mock(ActivityStore.class);
+    org.mockito.Mockito.when(store.findRecordsBetween(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any())).thenReturn(List.of(record("a","2026-09-23T09:00:00Z",600)));
+    var policy=new SemanticSessionPolicy(Duration.ofSeconds(120),Duration.ofSeconds(300),Duration.ofSeconds(120),.5,ZoneOffset.UTC);
+    var timeline=new ActivityTimeline(store,CLOCK,policy,DailySummaryService.local(),reopened);
+    assertTrue(timeline.periodAnalysis(ActivityPeriodAnalysis.Period.WEEK,"2026-09-23").contains("100.0 / 指定分類=[development]"));
+    assertTrue(timeline.periodAnalysis(ActivityPeriodAnalysis.Period.MONTH,"2026-09-23").contains("100.0 / 指定分類=[development]"));
+    assertFalse(reopened.load().settings().enabled());
+  }
+
 }

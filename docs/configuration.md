@@ -449,3 +449,11 @@ rei:
 `rei.context-compression` でモデル上限、圧縮閾値、最近の会話・要約・Tool Result の予算を調整できます。
 
 `REI_MEMORY_CONFLICT_TIMEOUT_SECONDS`（既定: `60`）は、記憶候補を保存する前の競合確認の制限時間です。タイムアウトした候補は保存されず、警告が表示されます。
+
+## 非公開 RSS / Atom
+
+読み取り専用 Bearer token を環境変数で参照できます。[設定・CLI / API・安全境界](private-feeds.md)を参照してください。
+
+## Claude Code 外部レビュー
+
+`rei.external-agents.claude.enabled` / `REI_CLAUDE_ENABLED` は既定false。`command` / `REI_CLAUDE_COMMAND` はnative `claude`（Windowsは `claude.exe`）。既存外部設定へclaude節を追加すると有効化できる。CLIは2.1.286以上、claude.aiのサブスクリプションで事前ログインし、API/cloud fallbackを行わない。対象のUTF-8 snapshot上限、Tool無効化、Run/Goal予算・履歴・取消は[Claude Code reviews](claude-code-reviews.md)を参照。

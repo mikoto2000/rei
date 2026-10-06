@@ -38,12 +38,12 @@ public class GoalReflectionService {
     var attempt=goals.attempts(goal.projectId(),goal.id()).stream()
         .filter(a->Objects.equals(a.runId(),source.runId())&&a.number()==snapshot.attempts()).findFirst();
     String actual="NOT_CHECKED",reason="not_recorded";
-    if(snapshot.status().equals("COMPLETED")&&snapshot.reason().equals("file_digest_verified")) {
-      actual="VERIFIED";reason="file_digest_verified";
+    if(snapshot.status().equals("COMPLETED")&&Set.of("file_digest_verified","criteria_verified").contains(snapshot.reason())) {
+      actual="VERIFIED";reason=snapshot.reason();
     } else if(attempt.isPresent()) {
       reason=attempt.get().reason();
-      if(Set.of("digest_mismatch","file_missing_or_not_regular").contains(reason))actual="UNVERIFIED";
-      else if(Set.of("symbolic_link_rejected","outside_project","file_too_large","project_path_changed").contains(reason))actual="REJECTED";
+      if(Set.of("digest_mismatch","json_value_mismatch","file_missing_or_not_regular").contains(reason))actual="UNVERIFIED";
+      else if(Set.of("symbolic_link_rejected","outside_project","file_too_large","project_path_changed","json_file_too_large","json_file_invalid").contains(reason))actual="REJECTED";
     }
     String gap=switch(actual) {case "VERIFIED" -> "CRITERION_SATISFIED";case "UNVERIFIED" -> "CRITERION_NOT_SATISFIED";case "REJECTED" -> "VERIFICATION_REJECTED";default -> "VERIFICATION_NOT_RECORDED";};
     String next=switch(snapshot.status()) {

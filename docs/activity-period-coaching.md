@@ -1,6 +1,6 @@
 # Activity 期間Coaching
 
-週月分析の保存済み標本を使う手動の補助機能。追加撮影、LLM、通知、音声、Tool実行、タスク変更は行わない。既存Behaviorの現在娯楽判定・通知・cooldown設定は変更しない。
+週月分析の保存済み標本を使う補助機能。手動評価は追加撮影、LLM、通知、音声、Tool実行、タスク変更を行わない。後続で [opt-inの自動週月通知](activity-automatic-period-coaching.md) を追加した。既定では手動のみ。既存Behaviorの現在娯楽判定・基準・cooldown設定は変更しない。
 
 ```text
 /activity coaching status
@@ -25,4 +25,4 @@
 
 保存する表示予約は期間キー・理由コード・予約時刻・設定revisionだけ。画面内容、自由記述、Project名、モデル回答は保存しない。記録は重複抑制のため保持する。
 
-バックグラウンド週月通知、専用Web/Native UI、意味的な助言の個人化、成果・生産性スコアは今後の対象。短時間の既存Behavior通知には従来の設定・抑制が適用される。
+バックグラウンド週月通知は共通品質gate・予約/cooldownを再利用して対応済み。専用分析Web/Native UI、意味的な助言の個人化、成果・生産性の実測は追加候補。短時間の既存Behavior通知には従来の設定・抑制が適用される。

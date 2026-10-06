@@ -29,21 +29,21 @@ class ReiApplicationInputRenderingTest {
 
   @Test
   void formatUserInputRendersLeftBarBlock() {
-    ReiApplication app = newApp();
+    ReiApplication app = newAppWithFixedTime("test-model", LocalTime.of(20, 19, 20));
     String ls = System.lineSeparator();
 
     assertEquals(
-        ls + "┌ User" + ls + "README を要約して" + ls + "└" + ls + ls,
+        ls + "┌ User (20:19:20)" + ls + "README を要約して" + ls + "└" + ls + ls,
         app.formatUserInput("README を要約して"));
   }
 
   @Test
   void formatUserInputPrefixesEveryLine() {
-    ReiApplication app = newApp();
+    ReiApplication app = newAppWithFixedTime("test-model", LocalTime.of(20, 19, 20));
     String ls = System.lineSeparator();
 
     assertEquals(
-        ls + "┌ User" + ls + "1行目" + ls + "2行目" + ls + "└" + ls + ls,
+        ls + "┌ User (20:19:20)" + ls + "1行目" + ls + "2行目" + ls + "└" + ls + ls,
         app.formatUserInput("1行目\n2行目"));
   }
 

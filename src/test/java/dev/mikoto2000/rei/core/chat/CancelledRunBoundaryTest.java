@@ -42,7 +42,8 @@ class CancelledRunBoundaryTest {
     var returned = new CountDownLatch(1);
     var advisorFinished = new CountDownLatch(1);
     var selection = mock(AgentSkillSelectionService.class);
-    when(selection.select(anyString())).thenAnswer(invocation -> {
+    when(selection.select(anyString(), any(Runnable.class))).thenAnswer(invocation -> {
+      invocation.getArgument(1, Runnable.class).run();
       entered.countDown();
       awaitIgnoringInterrupt(release);
       returned.countDown();

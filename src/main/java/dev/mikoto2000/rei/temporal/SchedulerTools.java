@@ -47,6 +47,24 @@ public class SchedulerTools {
     return scheduler.list();
   }
 
+  @Tool(name="scheduleInterval",description="Register a bounded interval continuation as PENDING. Interval 1m..366d, occurrences 2..100. Review /timer show ID and explicitly activate. Missed times coalesce; failure stops repetitions.")
+  public ScheduledAgentTask scheduleInterval(String interval,int occurrences,String action,String conversationId) {
+    if(!(scheduler instanceof PersistentAgentScheduler persistent))throw new IllegalStateException("Persistent scheduler required");
+    return persistent.scheduleInterval(parseDuration(interval),occurrences,action,conversationId);
+  }
+
+  @Tool(name="scheduleCron",description="Register a bounded cron continuation as PENDING. Six cron fields, seconds fixed to 0, explicit IANA time zone, occurrences 2..100. Review /timer show ID and activate explicitly. Missed times coalesce; failure stops repetitions.")
+  public ScheduledAgentTask scheduleCron(String expression,String zone,int occurrences,String action,String conversationId) {
+    if(!(scheduler instanceof PersistentAgentScheduler persistent))throw new IllegalStateException("Persistent scheduler required");
+    return persistent.scheduleCron(expression,zone,occurrences,action,conversationId);
+  }
+
+  @Tool(name="scheduleOnEvent",description="Register a PENDING one-shot continuation for an exact source Run in the current Project/Session. eventType is AGENT_RUN_COMPLETED/FAILED/CANCELLED or EXECUTION_COMPLETED/FAILED/CANCELLED or DEPENDENCY_COMPLETED/FAILED/CANCELLED. For dependency events, sourceRunId is the exact dependency ID. expiresAfter 1s..366d. Review /timer show ID and activate before the event; only events after activation match. No automatic retry after uncertain execution.")
+  public ScheduledAgentTask scheduleOnEvent(String sourceRunId,String eventType,String expiresAfter,String action,String conversationId) {
+    if(!(scheduler instanceof PersistentAgentScheduler persistent))throw new IllegalStateException("Persistent scheduler required");
+    return persistent.scheduleOnEvent(sourceRunId,dev.mikoto2000.rei.event.AgentEventType.valueOf(eventType),parseDuration(expiresAfter),action,conversationId);
+  }
+
   Duration parseDuration(String value) {
     if (value == null || value.isBlank()) {
       throw new IllegalArgumentException("duration は空にできません");

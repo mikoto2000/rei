@@ -22,12 +22,15 @@ public class ContextCompressionProperties {
   private int toolResultTokens = 2000;
   private double minimumCompressionGain = 0.1;
   private int summaryTimeoutSeconds = 60;
+  private int standaloneSummaryMaxLlmCalls;
+  private long standaloneSummaryMaxTotalTokens;
 
   public void validate() {
     if (modelContextLimit <= 0 || completionReserve < 0 || toolReserve < 0 || safetyMargin < 0
         || threshold <= 0 || hardLimit < threshold || recentTokens <= 0 || summaryTokens <= 0
         || toolResultThreshold <= 0 || toolResultTokens <= 0 || toolResultTokens >= toolResultThreshold
-        || minimumCompressionGain <= 0 || minimumCompressionGain >= 1 || summaryTimeoutSeconds <= 0)
+        || minimumCompressionGain <= 0 || minimumCompressionGain >= 1 || summaryTimeoutSeconds <= 0
+        || standaloneSummaryMaxLlmCalls<0 || standaloneSummaryMaxLlmCalls>1000 || standaloneSummaryMaxTotalTokens<0)
       throw new IllegalArgumentException("Invalid context compression budgets");
     if ((long) completionReserve + toolReserve + safetyMargin >= modelContextLimit)
       throw new IllegalArgumentException("Context reserves exhaust model context limit");

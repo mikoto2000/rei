@@ -2,7 +2,7 @@
 
 Web API 向けの Tauri 2 クライアント（Phase 1 / 2）は [client/README.md](client/README.md) を参照してください。Windows での開発・ビルド、Conversation / Run UI、SSE 再接続、モバイルの検証状況を記載しています。
 
-Codex による read-only 外部レビューは `/agent codex review [target]` または明示的な自然言語依頼で利用できます。
+Codex による read-only 外部レビューは `/agent codex review [target]` または明示的な自然言語依頼で利用できます。Claude Code CLI のサブスクリプション認証レビューも、明示opt-inで `/agent claude review [target]` に対応します（[利用準備・範囲](docs/claude-code-reviews.md)）。
 必要な CLI capability、設定、安全境界は [External Agent Delegation](docs/external-agent-delegation.md) を参照してください。
 
 Rei は、ターミナルで使う AI 秘書シェルです。OpenAI 互換 API を使った対話を中心に、調査、文書検索、予定・タスク管理などを一つの CLI で行えます。
@@ -148,7 +148,7 @@ Web では認証付き `GET /api/v1/sessions`、`GET /api/v1/sessions/{sessionId
 | 画像生成 | [生成・保存先の指定](docs/usage.md#画像生成) |
 | Google Calendar | [認証設定](docs/configuration.md#google-calendar-と-google-tasks) → [予定の一覧・追加](docs/usage.md#google-calendar) |
 | Google Tasks | [認証設定](docs/configuration.md#google-calendar-と-google-tasks) → [タスクの追加・完了・削除](docs/usage.md#タスク管理) |
-| RSS/Atom | [購読・OPML 取り込み・記事要約](docs/usage.md#rss-feed) |
+| RSS/Atom | [購読・OPML 取り込み・記事要約](docs/usage.md#rss-feed) / [認証付きフィード](docs/private-feeds.md) |
 | 日次ブリーフィング | [予定・タスク・新着記事の確認](docs/usage.md#日次ブリーフィング) |
 | リマインド | [日時指定・一覧・削除](docs/usage.md#リマインド) |
 | 文書検索 | [文書の登録・検索・削除](docs/usage.md#文書の埋め込み) |

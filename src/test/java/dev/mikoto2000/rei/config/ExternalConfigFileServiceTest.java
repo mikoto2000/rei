@@ -50,11 +50,35 @@ class ExternalConfigFileServiceTest {
     assertTrue(Files.exists(created));
     assertTrue(Files.exists(service.additionalSystemPromptFilePath()));
     String content = Files.readString(created);
+    assertTrue(content.contains("enabled: ${REI_ATTENTION_DELIVERY_ENABLED:false}"));
+    assertTrue(content.contains("automatic: ${REI_ATTENTION_DELIVERY_AUTOMATIC:false}"));
+    assertTrue(content.contains("max-transient-model-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_MODEL_RETRIES:0}"));
     assertTrue(content.contains("spring:"));
     assertTrue(content.contains("rei:"));
-    assertTrue(content.contains("skills:"));
+    assertTrue(content.contains("max-llm-calls: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS:0}"));
+    assertTrue(content.contains("max-llm-calls: ${REI_MEMORY_CONSOLIDATION_MAX_LLM_CALLS:0}"));
+    assertTrue(content.contains("max-total-tokens: ${REI_MEMORY_CONSOLIDATION_MAX_TOTAL_TOKENS:0}"));
+    assertTrue(content.contains("max-total-tokens: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS:0}"));
+    assertTrue(content.contains("max-llm-calls-per-project: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS_PER_PROJECT:0}"));
+    assertTrue(content.contains("max-total-tokens-per-project: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS_PER_PROJECT:0}"));
+      assertTrue(content.contains("skills:"));
+      assertTrue(content.contains("on-session-end: ${REI_MEMORY_AUTO_SLEEP_ON_SESSION_END:false}"));
+      assertTrue(content.contains("on-shutdown: ${REI_MEMORY_AUTO_SLEEP_ON_SHUTDOWN:false}"));
+      assertTrue(content.contains("standalone-max-llm-calls: ${REI_SUBAGENTS_STANDALONE_MAX_LLM_CALLS:0}"));
+      assertTrue(content.contains("standalone-max-total-tokens: ${REI_SUBAGENTS_STANDALONE_MAX_TOTAL_TOKENS:0}"));
     assertTrue(content.contains("${rei.data-dir}/skills"));
+    assertTrue(content.contains("inherit-run-model-budget: ${REI_RERANK_INHERIT_RUN_MODEL_BUDGET:false}"));
+    assertTrue(content.contains("inherit-run-model-budget: ${REI_EMBEDDING_INHERIT_RUN_MODEL_BUDGET:false}"));
+    assertTrue(content.contains("inherit-run-model-budget: ${REI_CODEX_INHERIT_RUN_MODEL_BUDGET:false}"));
+    assertTrue(content.contains("parallel-review-enabled: ${REI_CODEX_PARALLEL_REVIEW_ENABLED:false}"));
+    assertTrue(content.contains("parallel-review-timeout: ${REI_CODEX_PARALLEL_REVIEW_TIMEOUT:120s}"));
+    assertTrue(content.contains("enabled: ${REI_CLAUDE_ENABLED:false}"));
+    assertTrue(content.contains("command: ${REI_CLAUDE_COMMAND:claude}"));
+    assertTrue(content.contains("standalone-summary-max-llm-calls: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_LLM_CALLS:0}"));
+    assertTrue(content.contains("standalone-summary-max-total-tokens: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_TOTAL_TOKENS:0}"));
     assertTrue(content.contains("max-selected: 3"));
+    assertTrue(content.contains("persistent-index-enabled: ${REI_SKILLS_SEMANTIC_PERSISTENT_INDEX_ENABLED:false}"));
+    assertTrue(content.contains("index-namespace: ${REI_SKILLS_SEMANTIC_INDEX_NAMESPACE:}"));
     assertTrue(content.contains("REI_OPENAI_BASE_URL"));
     assertTrue(content.contains("base-url: ${REI_OPENAI_EMBEDDING_BASE_URL:}"));
     assertTrue(content.contains("api-key: ${REI_OPENAI_EMBEDDING_API_KEY:}"));
@@ -68,8 +92,10 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("REI_LLM_MAX_OUTPUT_TOKENS"));
     assertTrue(content.contains("max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}"));
     assertTrue(content.contains("REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL"));
+    assertTrue(content.contains("max-total-tokens-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_TOTAL_TOKENS_PER_GOAL:0}"));
     assertTrue(content.contains("REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN"));
     assertTrue(content.contains("REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN"));
+    assertTrue(content.contains("REI_LLM_OUTPUT_LIMIT_MAX_TOTAL_TOKENS_PER_RUN:0"));
     assertTrue(content.contains("REI_LLM_CHAT_BASE_URL"));
     assertTrue(content.contains("REI_LLM_SEARCH_BASE_URL"));
     assertTrue(content.contains("REI_LLM_BLUESKY_REPLY_BASE_URL"));
@@ -115,6 +141,11 @@ class ExternalConfigFileServiceTest {
         "rei.activity.detection.background-full-screen-enabled",false);
     expected.addAll(detectionSettings.keySet());
     detectionSettings.forEach((key,value)->assertEquals(value,template.get(key),key));
+    var coachingSettings=Map.of("rei.activity.coaching.automatic-enabled",false,
+        "rei.activity.coaching.weekly-enabled",true,"rei.activity.coaching.monthly-enabled",true);
+    expected.addAll(coachingSettings.keySet());
+    coachingSettings.forEach((key,value)->assertEquals(value,template.get(key),key));
+    assertEquals(3600,template.get("rei.activity.coaching.check-interval-seconds"));
     for(String feature:List.of("unknown-registry","entertainment-registry","rule-suggestion","diagnostics")) {
       String key="rei.activity.classification."+feature+".enabled";expected.add(key);assertEquals(true,template.get(key),key);
     }

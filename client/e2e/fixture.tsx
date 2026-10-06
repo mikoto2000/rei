@@ -132,17 +132,353 @@ if (new URLSearchParams(location.search).has("timeline")) {
   ];
 }
 let onRun: (run: Run) => void = () => {};
+let checkpointResumed = false;
+let checkpointAbandoned = false;
+let humanAnswer: string | null = null;
+let goalStatus =
+  new URLSearchParams(location.search).get("goal") === "uncertain"
+    ? "RUNNING"
+    : "READY";
+let goalCurrentRun = goalStatus === "RUNNING" ? "old-goal-run" : "";
+let scheduleStatus =
+  new URLSearchParams(location.search).get("schedule") === "uncertain"
+    ? "RUNNING"
+    : "PENDING";
+let scheduleRun = scheduleStatus === "RUNNING" ? "old-schedule-run" : "";
+let acknowledged = false;
+let decided = false;
 const call = (async (
   name: string,
   args: Record<string, unknown> | undefined,
 ) => {
   if (name === "app_snapshot") return structuredClone(data);
+  if (name === "goal_track") {
+    if (
+      args?.serverId !== "s" ||
+      args?.projectId !== "p" ||
+      args?.goalId !== "g"
+    )
+      throw "InvalidInput";
+    if (goalCurrentRun !== "goal-run") throw "RunNotFound";
+    const accepted: Run = {
+      ...run,
+      conversationId: "",
+      runId: "goal-run",
+      sessionId: "session",
+      turnId: null,
+      prompt: "Goal g",
+      status: "QUEUED",
+      revision: 1,
+      assistantText: "",
+      tools: [],
+      activities: [],
+      timeline: [],
+      messages: [],
+      workingSet: [],
+    };
+    onRun(accepted);
+    return accepted;
+  }
+  if (name === "schedule_track") {
+    if (
+      args?.serverId !== "s" ||
+      args?.projectId !== "p" ||
+      args?.scheduleId !== "timer"
+    )
+      throw "InvalidInput";
+    if (scheduleRun !== "schedule-run") throw "RunNotFound";
+    const accepted: Run = {
+      ...run,
+      conversationId: "",
+      runId: "schedule-run",
+      sessionId: "session",
+      turnId: null,
+      prompt: "Schedule g",
+      status: "QUEUED",
+      revision: 1,
+      assistantText: "",
+      tools: [],
+      activities: [],
+      timeline: [],
+      messages: [],
+      workingSet: [],
+    };
+    onRun(accepted);
+    return accepted;
+  }
+  if (name === "checkpoint_resume" || name === "checkpoint_track") {
+    if (
+      args?.serverId !== "s" ||
+      args?.projectId !== "p" ||
+      args?.taskId !== "checkpoint-task"
+    )
+      throw "InvalidInput";
+    if (name === "checkpoint_resume") checkpointResumed = true;
+    if (!checkpointResumed) throw "RunNotFound";
+    const accepted: Run = {
+      ...run,
+      conversationId: "",
+      runId: "checkpoint-run",
+      sessionId: "session",
+      turnId: null,
+      prompt: "Checkpoint checkpoint-task",
+      status: "QUEUED",
+      revision: 1,
+      assistantText: "",
+      tools: [],
+      activities: [],
+      timeline: [],
+      messages: [],
+      workingSet: [],
+    };
+    onRun(accepted);
+    return accepted;
+  }
   if (name === "workspace_execute") {
     const op = args?.operation as {
       operation: string;
       url?: string;
       displayName?: string;
+      projectId?: string;
+      taskId?: string;
+      id?: string;
+      approved?: boolean;
+      expectedVersion?: number;
+      answer?: string;
+      expectedRunId?: string;
+      acknowledgeUncertainSideEffects?: boolean;
     };
+    if (
+      [
+        "schedules",
+        "schedule",
+        "scheduleHistory",
+        "scheduleActivate",
+        "scheduleCancel",
+        "scheduleReconcile",
+      ].includes(op.operation)
+    ) {
+      if (
+        op.projectId !== "p" ||
+        (op.operation !== "schedules" && op.id !== "timer")
+      )
+        throw "ProjectNotFound";
+      if (op.operation === "scheduleActivate") {
+        scheduleStatus = "RUNNING";
+        scheduleRun = "schedule-run";
+      }
+      if (op.operation === "scheduleCancel") scheduleStatus = "CANCELLED";
+      if (op.operation === "scheduleReconcile") {
+        if (
+          op.expectedRunId !== scheduleRun ||
+          !op.acknowledgeUncertainSideEffects
+        )
+          throw "ResourceConflict";
+        scheduleStatus = "FAILED";
+      }
+      const fields = [
+        ["Project", "p"],
+        ["Session", "session"],
+        ["Status", scheduleStatus],
+        ["Run", scheduleRun],
+        ["Due", "2026-10-05T01:00:00Z"],
+        ["Interval", "60000ms / remaining: 2"],
+        [
+          "Outcome",
+          scheduleStatus === "FAILED" ? "uncertain_run_reconciled" : "",
+        ],
+      ];
+      if (op.operation === "scheduleHistory")
+        fields.push(["History", "saved_schedule_history"]);
+      return {
+        title: "Schedules",
+        items: [{ id: "timer", title: "Inspect scheduled result", fields }],
+      };
+    }
+    if (
+      [
+        "goals",
+        "goal",
+        "goalHistory",
+        "goalVerify",
+        "goalRun",
+        "goalCancel",
+        "goalReconcile",
+      ].includes(op.operation)
+    ) {
+      if (op.projectId !== "p" || (op.operation !== "goals" && op.id !== "g"))
+        throw "ProjectNotFound";
+      if (op.operation === "goalRun") {
+        goalStatus = "RUNNING";
+        goalCurrentRun = "goal-run";
+      }
+      if (op.operation === "goalCancel") goalStatus = "CANCELLED";
+      if (op.operation === "goalVerify") goalStatus = "COMPLETED";
+      if (op.operation === "goalReconcile") {
+        if (
+          op.expectedRunId !== goalCurrentRun ||
+          !op.acknowledgeUncertainSideEffects
+        )
+          throw "ResourceConflict";
+        goalStatus = "PAUSED";
+      }
+      const fields = [
+        ["Project", "p"],
+        ["Session", "session"],
+        ["Status", goalStatus],
+        ["Run", goalCurrentRun],
+        ["Runs", "1 / 3"],
+        ["LLM calls", "2 / 20"],
+        ["Criteria", "out.txt must match saved SHA-256"],
+        ["Reason", goalStatus === "PAUSED" ? "uncertain_run_reconciled" : ""],
+      ];
+      if (op.operation === "goalHistory")
+        fields.push(
+          ["History", "saved_goal_history"],
+          ["Attempts", "saved_attempt_history"],
+        );
+      if (op.operation === "goalVerify")
+        fields.push(
+          ["Satisfied", "true"],
+          ["Verification", "file_digest_verified"],
+        );
+      return {
+        title: "Goal",
+        items: [{ id: "g", title: "Fixture Goal outcome", fields }],
+      };
+    }
+    if (
+      op.operation === "dependencies" ||
+      op.operation === "dependencyAnswer"
+    ) {
+      if (op.projectId !== "p") throw "ProjectNotFound";
+      if (op.operation === "dependencyAnswer") {
+        if (
+          op.id !== "dep" ||
+          op.expectedVersion !== (humanAnswer === null ? 3 : 4) ||
+          !op.answer
+        )
+          throw "ResourceConflict";
+        humanAnswer = op.answer;
+      }
+      return {
+        title: "Dependencies",
+        items: [
+          {
+            id: "dep",
+            title: "Fixture question: choose A or B",
+            fields: [
+              ["Project", "p"],
+              ["Session", "session"],
+              ["Kind", "USER_ANSWER"],
+              ["State", "WAITING"],
+              ["Version", humanAnswer === null ? "3" : "4"],
+              ["Answer", humanAnswer ?? ""],
+              ["Deadline", "2026-10-05T00:00:00Z"],
+              ["Reason", "user_answer_waiting"],
+              ["Prerequisites", ""],
+            ],
+          },
+        ],
+      };
+    }
+    if (
+      ["attention", "approvals", "attentionAck", "approvalDecision"].includes(
+        op.operation,
+      )
+    ) {
+      if (op.projectId !== "p") throw "ProjectNotFound";
+      if (op.operation === "attentionAck") {
+        if (op.id !== "notice") throw "InvalidInput";
+        acknowledged = true;
+        return { title: "ack", items: [] };
+      }
+      if (op.operation === "approvalDecision") {
+        if (op.id !== "request" || typeof op.approved !== "boolean")
+          throw "InvalidInput";
+        decided = true;
+        return { title: "decided", items: [] };
+      }
+      return {
+        title: "Inbox",
+        items:
+          op.operation === "attention"
+            ? acknowledged
+              ? []
+              : [
+                  {
+                    id: "notice",
+                    title: "RUN_FAILED",
+                    fields: [
+                      ["Project", "p"],
+                      ["Session", "session"],
+                      ["Status", "OPEN"],
+                      ["Message", "Fixture failure requires review"],
+                    ],
+                  },
+                ]
+            : decided
+              ? []
+              : [
+                  {
+                    id: "request",
+                    title: "writeFile",
+                    fields: [
+                      ["Project", "p"],
+                      ["Session", "session"],
+                      ["Run", "r"],
+                      ["Status", "PENDING"],
+                      ["Arguments", "Fixture redacted arguments"],
+                      ["Expires", "2026-10-04T12:00:00Z"],
+                    ],
+                  },
+                ],
+      };
+    }
+    if (
+      [
+        "checkpoints",
+        "checkpoint",
+        "checkpointInspect",
+        "checkpointAbandon",
+      ].includes(op.operation)
+    ) {
+      if (op.projectId !== "p") throw "ProjectNotFound";
+      if (op.operation === "checkpointAbandon") checkpointAbandoned = true;
+      const state = {
+        id: "checkpoint-task",
+        title: "Fixture checkpoint outcome",
+        fields: [
+          ["Project", "p"],
+          ["Session", "session"],
+          ["Run", checkpointResumed ? "checkpoint-run" : "old"],
+          ["Revision", "3"],
+          ["Status", checkpointAbandoned ? "ABANDONED" : "INTERRUPTED"],
+        ],
+      };
+      return {
+        title: "Checkpoint",
+        items:
+          op.operation === "checkpointInspect"
+            ? [
+                {
+                  id: "checkpoint-task",
+                  title: "Reconciliation",
+                  fields: [
+                    ["Project", "p"],
+                    ["Decision", "CONFIRMATION_REQUIRED"],
+                    ["Changed", "Fixture file changed"],
+                    [
+                      "Unknown operations",
+                      "writeFile result requires confirmation",
+                    ],
+                    ["Next", "Verify before repeating effects"],
+                  ],
+                },
+              ]
+            : [state],
+      };
+    }
     if (op.operation !== "feeds" && op.operation !== "createFeed")
       throw "InvalidInput";
     return {

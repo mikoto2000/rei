@@ -56,6 +56,86 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 
 @Component
 public class Tools {
+  private TextChangeSetService textChangeSets;
+  @Autowired(required=false) void setTextChangeSets(TextChangeSetService service){this.textChangeSets=service;}
+
+  @Tool(description="Change Set用に現在Project内の既存UTF-8ファイルを最大64KiB読み、BOM/CRLF/末尾改行を保持した正確なtextとSHA-256を返します。readMultiFileの行表示で失われる改行情報も保持します。返されたtextをproposeTextChangeSetのexpectedTextに使います。提案保存・ファイル変更は行いません。")
+  TextChangeSetService.Baseline readTextChangeSetBase(String path)throws IOException {
+    var project=changeSetProject();var baseline=changeSets().readBase(project,path);
+    workingSet.recordRead(project.root().resolve(baseline.path()));return baseline;
+  }
+
+  @Tool(description="保存済みの単一UTF-8ファイルについて、完全なexpectedTextとreplacementからChange Setを提案・SQLite保存します。各64KiB以内。対象ファイルは変更しません。返されたdiffとproposalSha256を確認し、明示applyTextChangeSetで適用します。Modelの自然言語編集結果もこの提案として確認できます。")
+  TextChangeSetService.View proposeTextChangeSet(TextChangeSetService.Request request)throws IOException {
+    return changeSets().propose(changeSetProject(),request);
+  }
+  @Tool(description="現在Projectに保存したChange SetをIDで読み、差分・状態・元/提案/現在のSHA-256を確認します。ファイルを変更せず、APPLYING/FAILED_UNCERTAINは自動再実行しません。")
+  TextChangeSetService.View inspectTextChangeSet(String id)throws IOException {
+    return changeSets().inspect(changeSetProject(),id);
+  }
+  @Tool(description="保存Change Setの正確なID/proposalSha256を確認して、未claimの提案だけを破棄します。ファイルは変更せず、適用中や結果不明の操作を破棄・再実行しません。")
+  TextChangeSetService.View discardTextChangeSet(String id,String proposalSha256)throws IOException {
+    return changeSets().discard(changeSetProject(),id,proposalSha256);
+  }
+  @Tool(description="確認したChange Set IDと正確なproposalSha256を指定し、元ファイルhashが一致する保存提案だけを一回適用します。古い内容はSTALE、結果不明は再送拒否。APPLIEDは保存receiptで現在hashも確認してください。LOCAL_WRITE権限を必要とします。")
+  TextChangeSetService.View applyTextChangeSet(String id,String proposalSha256)throws IOException {
+    return changeSets().apply(changeSetProject(),id,proposalSha256,changeSetWriter());
+  }
+  private TextChangeSetService.Writer changeSetWriter(){return (path,oldText,newText)->{
+      Files.writeString(path,newText,StandardCharsets.UTF_8,StandardOpenOption.TRUNCATE_EXISTING,java.nio.file.LinkOption.NOFOLLOW_LINKS);
+      recordTextEdit(path);
+    };}
+  private TextChangeSetService changeSets(){if(textChangeSets==null)throw new IllegalStateException("Change Set service unavailable");return textChangeSets;}
+  private dev.mikoto2000.rei.core.project.ProjectContext changeSetProject() {
+    var owner=dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    if(owner!=null)return new dev.mikoto2000.rei.core.project.ProjectContext(owner.projectId(),"",owner.projectRoot());
+    var project=projectService==null?null:projectService.currentContext();
+    if(project==null)throw new IllegalArgumentException("Select a Project before editing");return project;
+  }
+  @Tool(description = "明示されたtestCommandを最大2回実行し、初回test→Git作業ツリーの静的diffチェック→最終testを検証します。request={testCommand,timeoutSeconds}、timeoutは各1〜60秒（既定30）、全体180秒予算。VERIFIED_CHECKSは同じpatchと成功exit・静的チェックの確認であり、意味的正しさの保証ではありません。FIX_REQUIREDなら既存Toolで修正して全サイクルを再実行してください。任意commandを実行するためrunCommandと同等の権限が必要です。")
+  SelfPatchReviewService.Result selfReviewPatch(SelfPatchReviewService.Request request) throws IOException {
+    return new SelfPatchReviewService(systemShellService).verify(currentWorkingDirectory(), request);
+  }
+  @Tool(description="test→静的diff review→保存済み修正案Apply→全サイクル再検証を、明示された1〜3件のChange Setで行います。request={testCommand,timeoutSeconds,repairs:[{id,proposalSha256}]}。各test1〜60秒/共有180秒、最大3修正・8回test。元の失敗・全round・receiptを保持し、patch変更/不完全/timeout/結果不明/進展なしは停止します。追加LLMなし。任意commandと編集を含むためselfReviewPatchと同等の全能力Policyを維持し、意味的正しさは保証しません。")
+  SelfPatchRepairService.Result selfRepairPatch(SelfPatchRepairService.Request request)throws IOException {
+    var project=changeSetProject();var saved=changeSets();var verification=new SelfPatchReviewService(systemShellService);
+    var inspector=new GitPatchInspector(new dev.mikoto2000.rei.externalagent.ExternalAgentProcessRunner());
+    return new SelfPatchRepairService(verification::verify,inspector::capture,(root,repair,deadline)->{
+      SelfPatchReviewService.remaining(deadline,1);
+      if(!project.root().toRealPath().equals(root))throw new IllegalArgumentException("Repair Project root changed");
+      var receipt=saved.apply(project,repair.id(),repair.proposalSha256(),changeSetWriter());
+      return new SelfPatchRepairService.Receipt(receipt.id(),receipt.status(),receipt.proposedSha256(),receipt.currentSha256());
+    }).verify(project.root(),request);
+  }
+  private RepositoryMapService repositoryMaps = new RepositoryMapService();
+
+  @Tool(description="Project相対pathの保存済みJUnit XMLを読み、実testcaseの失敗/error/skippedと報告count・SHA・更新時刻を返します。pathは単一XML、1MiB/1024case/24診断上限。test実行や現在Run/Goalの成功判定は行いません。partial/warningsとレポートの鮮度を確認してください。")
+  TestReportDiagnosisService.Result diagnoseTestReport(String path)throws IOException {
+    return new TestReportDiagnosisService().read(currentWorkingDirectory(),path);
+  }
+
+  @Tool(description="保存済みJUnit XMLをProject内で上限付き発見・複数診断するREAD Tool。directory省略時はMaven target/surefire-reports・failsafe-reportsとGradle build/test-resultsをmodule深さ6まで探します。明示directoryは直下のTEST*.xmlのみ。探索256folder/4096entry/32file、各1MiB/全体10秒、失敗証拠合計24件。各fileのSHA/時刻/報告count/観測countとpartialを返し、合計は解析済みfileのみ（重複実行を除去しません）。test実行や現在Run/Goal成功の判定は行いません。")
+  TestReportCollectionDiagnosisService.Result diagnoseTestReports(
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) String directory)throws IOException {
+    return new TestReportCollectionDiagnosisService().read(currentWorkingDirectory(),directory);
+  }
+
+  @Tool(description = "変更pathからJavaの逆importとテスト命名候補を探索します。changedFiles省略時はProjectのGitステージ済み・未ステージ・未追跡変更を読み取り取得します（HEAD必須、最大64path）。明示時はProject相対pathを1〜64件、limitは1〜100（既定20）。完全なcoverageではなく、warningsを確認して広い回帰テストも実施してください。")
+  ChangeTestImpactService.Result changeTestImpact(@org.springframework.ai.tool.annotation.ToolParam(required = false) List<String> changedFiles,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) throws IOException {
+    var service=new ChangeTestImpactService(repositoryMaps);int bounded=limit==null?20:limit;
+    return changedFiles==null?service.analyzeGit(currentWorkingDirectory(),bounded):service.analyze(currentWorkingDirectory(),changedFiles,bounded);
+  }
+
+  @Autowired
+  void setRepositoryMaps(RepositoryMapService service) { this.repositoryMaps = service; }
+
+  @Tool(description = "Git管理下の構造索引を取得します。Javaの型・method・import・mainとテスト候補。summaryは絞り込み前の走査範囲のmodule/package/入口/関連件数です。queryで表示を絞り込み、limitは1〜100、既定20。partialとwarnings、summary.partialを確認してください。")
+  RepositoryMapService.View repositoryMap(
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String query,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) throws IOException {
+    return repositoryMaps.map(currentWorkingDirectory(), query, limit == null ? 20 : limit);
+  }
   private static final int DEFAULT_SHELL_TIMEOUT_SECONDS = 30;
   private static final int MAX_SHELL_TIMEOUT_SECONDS = 600;
   private static final Charset CP932 = Charset.forName("windows-31j");
@@ -273,7 +353,7 @@ public class Tools {
   Use executionMode=foreground when you explicitly need to wait for completion.
   Use executionMode=background when you explicitly want a managed background process.
   @param request command, optional executionMode (auto/foreground/background), and optional foreground timeoutSeconds
-  @return normalized completion or managed-process result
+  @return normalized completion or managed-process result, with bounded diagnosis (reported tests/causes/evidence/nextActions). Diagnostic suggestions never execute commands.
   """)
   RunCommandResult runCommand(RunCommandRequest request) throws IOException, InterruptedException {
     return runCommand(request, currentWorkingDirectory(), Duration.ofSeconds(3));
@@ -340,7 +420,7 @@ public class Tools {
   Get the status and recent logs of a managed shell process created by runCommand.
   @param processId runCommand が返した logical processId
   @param tailLines 返すログ末尾行数。null の場合は既定値です。
-  @return 状態、終了コード、直近の標準出力/標準エラー
+  @return 状態、終了コード、直近の標準出力/標準エラーと根拠付きdiagnosis。実行中の診断は暫定です。
   """)
   BackgroundProcessSnapshot getShellProcessStatus(String processId, Integer tailLines) {
     return backgroundProcessManager.status(processId, tailLines);
@@ -1359,13 +1439,17 @@ public class Tools {
       }
 
       Files.writeString(path, updatedContent, original.charset(), StandardOpenOption.TRUNCATE_EXISTING);
+      recordTextEdit(path);
+      return new TextDiffApplyResult(true, true, "差分を適用しました");
+    }
+
+    private void recordTextEdit(java.nio.file.Path path) {
       workingSet.recordEdit(path);
       recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
       fileSummaryCache.invalidate(path.toString());
       publishFileModified(path, null, null);
       relatedFileGraph.removeRelationsFor(path.toString());
       searchResultCache.clear();
-      return new TextDiffApplyResult(true, true, "差分を適用しました");
     }
 
   public record TextDiffApplyResult(

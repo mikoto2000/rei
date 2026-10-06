@@ -47,6 +47,17 @@ public class AgentSkillSelectionService {
   }
 
   public AgentSkillSelection select(String prompt) {
+    return select(prompt, null);
+  }
+
+  public AgentSkillSelection select(String prompt, Runnable beforeModelCall) {
+    var budget=beforeModelCall instanceof dev.mikoto2000.rei.llm.ModelCallBudget accounting?accounting:
+        dev.mikoto2000.rei.llm.ModelCallBudgetScope.current();
+    try(var scope=dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(budget)) {
+      return selectBudgeted(prompt,beforeModelCall);
+    }
+  }
+  private AgentSkillSelection selectBudgeted(String prompt,Runnable beforeModelCall) {
     if (!properties.isEnabled()) {
       return new AgentSkillSelection(List.of(), List.of(), List.of(), prompt == null ? "" : prompt, null,
           List.of(), null);
@@ -70,10 +81,12 @@ public class AgentSkillSelectionService {
         candidateDurationMs = Math.max(0L, (nanoTime.getAsLong() - candidateStartedAtNanos) / 1_000_000L);
       }
       long selectorStartedAtNanos = nanoTime.getAsLong();
+      List<AgentSkill> providedCandidates = repository == null || candidateSelector == null ? null
+          : candidates.stream().map(SkillCandidate::skill).toList();
       implicitSkills = distinctAndLimit(
-          implicitSelector.select(explicit.sanitizedPrompt(), explicitNames,
-              repository == null || candidateSelector == null ? null
-                  : candidates.stream().map(SkillCandidate::skill).toList()),
+          beforeModelCall == null
+              ? implicitSelector.select(explicit.sanitizedPrompt(), explicitNames, providedCandidates)
+              : implicitSelector.select(explicit.sanitizedPrompt(), explicitNames, providedCandidates, beforeModelCall),
           remaining);
       selectorDurationMs = Math.max(0L, (nanoTime.getAsLong() - selectorStartedAtNanos) / 1_000_000L);
     }

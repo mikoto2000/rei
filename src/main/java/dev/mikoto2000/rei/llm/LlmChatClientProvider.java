@@ -43,6 +43,12 @@ public class LlmChatClientProvider {
   private dev.mikoto2000.rei.temporal.SchedulerTools schedulerTools;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   void setSchedulerTools(dev.mikoto2000.rei.temporal.SchedulerTools tools){this.schedulerTools=tools;}
+  private dev.mikoto2000.rei.core.dependency.DependencyTools dependencyTools;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  void setDependencyTools(dev.mikoto2000.rei.core.dependency.DependencyTools tools){this.dependencyTools=tools;}
+  private dev.mikoto2000.rei.core.FileDependencyTools fileDependencyTools;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  void setFileDependencyTools(dev.mikoto2000.rei.core.FileDependencyTools tools){this.fileDependencyTools=tools;}
   private dev.mikoto2000.rei.core.ProcessDependencyTools processDependencyTools;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   void setProcessDependencyTools(dev.mikoto2000.rei.core.ProcessDependencyTools tools){this.processDependencyTools=tools;}
@@ -167,6 +173,14 @@ public class LlmChatClientProvider {
   }
 
   private ChatClient createChatClient(String feature) {
+    // Extraction and summarization process supplied evidence without conversation state or tools.
+    if (LlmFeature.MEMORY.equals(feature)) {
+      var options = modelProvider.chatOptions(feature, null);
+      dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
+      return ChatClient.builder(modelProvider.memoryChatModel())
+          .defaultOptions(options.mutate().toolCallbacks(List.of()).toolChoice("none"))
+          .build();
+    }
     List<Advisor> advisors = new ArrayList<>();
     if(LlmFeature.CHAT.equals(feature)&&resumeContext!=null&&resumeContext.getIfAvailable()!=null)advisors.add(resumeContext.getObject());
     if (LlmFeature.CHAT.equals(feature) && workContext != null && workContext.getIfAvailable() != null)
@@ -231,6 +245,8 @@ public class LlmChatClientProvider {
       toolObjects.add(taskStateToolsInstance);
     }
     if(LlmFeature.CHAT.equals(feature) && processDependencyTools!=null)toolObjects.add(processDependencyTools);
+    if(LlmFeature.CHAT.equals(feature) && fileDependencyTools!=null)toolObjects.add(fileDependencyTools);
+    if(LlmFeature.CHAT.equals(feature) && dependencyTools!=null)toolObjects.add(dependencyTools);
     if(LlmFeature.CHAT.equals(feature) && schedulerTools!=null)toolObjects.add(schedulerTools);
     if (!toolObjects.isEmpty()) {
       MethodToolCallbackProvider methodTools = MethodToolCallbackProvider.builder()
@@ -247,6 +263,8 @@ public class LlmChatClientProvider {
     if (LlmFeature.CHAT.equals(feature) && subAgentTools != null && subAgentTools.getIfAvailable() != null) {
       builder.defaultToolCallbacks(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
           subAgentTools.getObject().callback(), eventFactory, eventPublisher));
+      builder.defaultToolCallbacks(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
+          subAgentTools.getObject().callback("delegateTasks"), eventFactory, eventPublisher));
     }
     if (LlmFeature.CHAT.equals(feature) && computerUseTools != null) {
       var computer = computerUseTools.getIfAvailable();

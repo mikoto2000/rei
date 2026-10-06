@@ -8,6 +8,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties("rei.activity")
 public class ActivityProperties {
   private boolean enabled = false;
+  /** Explicit opt-in to observation-time Git and saved Work Context references. */
+  private boolean workContextEnabled = false;
   private boolean extractionEnabled = true;
   private boolean keepScreenshots = false;
   private boolean keepOnExtractionFailure = false;
@@ -17,6 +19,13 @@ public class ActivityProperties {
   private Detection detection = new Detection();
   private Classification classification=new Classification();
   private Summary summary=new Summary();
+  private Coaching coaching=new Coaching();
+  @Data public static class Coaching {
+    private boolean automaticEnabled=false;
+    private boolean weeklyEnabled=true;
+    private boolean monthlyEnabled=true;
+    private int checkIntervalSeconds=3600;
+  }
   @Data public static class Summary {
     private boolean llmEnabled=true;
     private int timeoutSeconds=30;
@@ -62,6 +71,8 @@ public class ActivityProperties {
   private List<String> excludedWindowTitlePatterns = List.of("*Password*", "*Private Browsing*", "*InPrivate*");
 
   public void validate() {
+    if(coaching==null || coaching.checkIntervalSeconds<60 || coaching.checkIntervalSeconds>86400)
+      throw new IllegalArgumentException("Invalid period coaching interval (60..86400 seconds)");
     if(summary==null || summary.timeoutSeconds<1 || summary.timeoutSeconds>120 || summary.projectAliasesFile==null || summary.projectAliasesFile.isBlank())
       throw new IllegalArgumentException("Invalid daily summary settings");
     if(classification==null || classification.userRulesFile==null || classification.userRulesFile.isBlank() || classification.unknownRegistry==null || classification.entertainmentRegistry==null || classification.ruleSuggestion==null || classification.diagnostics==null || classification.ruleSuggestion.minimumSamples<1)

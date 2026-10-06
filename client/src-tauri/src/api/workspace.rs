@@ -2,6 +2,38 @@ use super::*;
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::BTreeMap;
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ObservationContextDto {
+    schema_version: u32,
+    scope: String,
+    project_id: String,
+    date: String,
+    zone: String,
+    partial: bool,
+    missing_context_records: u32,
+    linked_observations: u32,
+    report: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CoachingSettingsDto {
+    schema_version: u32,
+    scope: String,
+    revision: i64,
+    settings: ActivityCoachingSettings,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ActivityAnalysisDto {
+    schema_version: u32,
+    scope: String,
+    period: String,
+    anchor_date: String,
+    zone: String,
+    partial: bool,
+    report: String,
+}
 #[derive(Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ProfileDto {
@@ -159,6 +191,80 @@ pub(super) fn result(title: &str, items: Vec<WorkspaceItem>) -> WorkspaceResult 
 }
 
 impl HttpReiClient {
+    async fn coaching_operation(&self, op: WorkspaceOperation) -> Result<WorkspaceResult> {
+        const MAX_SAFE: i64 = 9_007_199_254_740_991;
+        let (request, expected, criteria, enabled) = match op {
+            WorkspaceOperation::ActivityCoachingSettings => (
+                self.request(Method::GET, "/api/v1/activity/coaching", true)?,
+                None,
+                None,
+                None,
+            ),
+            WorkspaceOperation::ActivityCoachingConfigure {
+                expected_revision,
+                mut settings,
+            } => {
+                if !(0..MAX_SAFE).contains(&expected_revision)
+                    || settings.enabled
+                    || !settings.valid()
+                {
+                    return Err(AppError::InvalidInput);
+                }
+                settings.categories.sort();
+                (
+                    self.request(Method::POST, "/api/v1/activity/coaching/settings", true)?
+                        .json(&json!({"expectedRevision":expected_revision,"settings":settings})),
+                    Some(expected_revision + 1),
+                    Some(settings),
+                    None,
+                )
+            }
+            WorkspaceOperation::ActivityCoachingEnabled {
+                expected_revision,
+                enabled,
+            } => {
+                if !(0..MAX_SAFE).contains(&expected_revision) {
+                    return Err(AppError::InvalidInput);
+                }
+                (
+                    self.request(Method::POST, "/api/v1/activity/coaching/enabled", true)?
+                        .json(&json!({"expectedRevision":expected_revision,"enabled":enabled})),
+                    Some(expected_revision + 1),
+                    None,
+                    Some(enabled),
+                )
+            }
+            _ => return Err(AppError::InvalidInput),
+        };
+        let mut dto: CoachingSettingsDto = Self::json(request, Operation::Resource).await?;
+        dto.settings.categories.sort();
+        if dto.schema_version != 1
+            || dto.scope != "LOCAL_DEVICE_COACHING_SETTINGS"
+            || !(0..=MAX_SAFE).contains(&dto.revision)
+            || !dto.settings.valid()
+            || expected.is_some_and(|revision| dto.revision != revision)
+            || criteria.is_some_and(|settings| settings != dto.settings)
+            || enabled.is_some_and(|enabled| dto.settings.enabled != enabled)
+        {
+            return Err(AppError::InvalidResponse);
+        }
+        Ok(result(
+            "Activity coaching settings",
+            vec![WorkspaceItem {
+                id: None,
+                title: "Coaching settings".into(),
+                fields: vec![
+                    ("Scope".into(), dto.scope),
+                    ("Revision".into(), dto.revision.to_string()),
+                    (
+                        "Settings".into(),
+                        serde_json::to_string(&dto.settings)
+                            .map_err(|_| AppError::InvalidResponse)?,
+                    ),
+                ],
+            }],
+        ))
+    }
     async fn profile_view(&self) -> Result<WorkspaceResult> {
         let dto: ProfileDto = Self::json(
             self.request(Method::GET, "/api/v1/profile", true)?,
@@ -210,6 +316,144 @@ impl HttpReiClient {
         op: WorkspaceOperation,
     ) -> Result<WorkspaceResult> {
         match op {
+            WorkspaceOperation::ActivityObservationContext { project_id, date } => {
+                let valid_date = |value: &str| {
+                    value.len() == 10
+                        && value.bytes().enumerate().all(|(i, c)| {
+                            if i == 4 || i == 7 {
+                                c == b'-'
+                            } else {
+                                c.is_ascii_digit()
+                            }
+                        })
+                };
+                if date.as_deref().is_some_and(|date| !valid_date(date)) {
+                    return Err(AppError::InvalidInput);
+                }
+                let path = format!(
+                    "/api/v1/projects/{}/activity/observation-context",
+                    segment(&project_id)?
+                );
+                let mut request = self.request(Method::GET, &path, true)?;
+                if let Some(date) = date.as_deref() {
+                    request = request.query(&[("date", date)]);
+                }
+                let dto: ObservationContextDto = Self::json(request, Operation::Resource).await?;
+                if dto.schema_version != 1
+                    || dto.scope != "PROJECT_OBSERVATION_CONTEXT"
+                    || dto.project_id != project_id
+                    || !valid_date(&dto.date)
+                    || date.as_deref().is_some_and(|date| date != dto.date)
+                    || dto.zone.is_empty()
+                    || dto.zone.len() > 128
+                    || dto.missing_context_records > 5000
+                    || dto.linked_observations > 128
+                    || dto.report.len() > 131072
+                {
+                    return Err(AppError::InvalidResponse);
+                }
+                Ok(result(
+                    "Activity observation context",
+                    vec![WorkspaceItem {
+                        id: None,
+                        title: format!("保存観測時文脈 {}", dto.date),
+                        fields: vec![
+                            ("Scope".into(), dto.scope),
+                            ("Project".into(), dto.project_id),
+                            ("Date".into(), dto.date),
+                            ("Zone".into(), dto.zone),
+                            ("Partial".into(), dto.partial.to_string()),
+                            (
+                                "MissingContextRecords".into(),
+                                dto.missing_context_records.to_string(),
+                            ),
+                            (
+                                "LinkedObservations".into(),
+                                dto.linked_observations.to_string(),
+                            ),
+                            ("Report".into(), dto.report),
+                        ],
+                    }],
+                ))
+            }
+            op @ (WorkspaceOperation::ActivityCoachingSettings
+            | WorkspaceOperation::ActivityCoachingConfigure { .. }
+            | WorkspaceOperation::ActivityCoachingEnabled { .. }) => {
+                self.coaching_operation(op).await
+            }
+            WorkspaceOperation::ActivityAnalysis { period, date } => {
+                let valid_date = |value: &str| {
+                    value.len() == 10
+                        && value.bytes().enumerate().all(|(i, c)| {
+                            if i == 4 || i == 7 {
+                                c == b'-'
+                            } else {
+                                c.is_ascii_digit()
+                            }
+                        })
+                };
+                if !matches!(period.as_str(), "WEEK" | "MONTH")
+                    || date.as_deref().is_some_and(|d| !valid_date(d))
+                {
+                    return Err(AppError::InvalidInput);
+                }
+                let mut query = vec![("period", period.as_str())];
+                if let Some(day) = date.as_deref() {
+                    query.push(("date", day));
+                }
+                let dto: ActivityAnalysisDto = Self::json(
+                    self.request(Method::GET, "/api/v1/activity/period", true)?
+                        .query(&query),
+                    Operation::Resource,
+                )
+                .await?;
+                if dto.schema_version != 1
+                    || dto.scope != "LOCAL_DEVICE_OBSERVATIONS"
+                    || dto.period != period
+                    || !valid_date(&dto.anchor_date)
+                    || dto.zone.is_empty()
+                    || dto.zone.len() > 128
+                    || dto.report.len() > 131072
+                {
+                    return Err(AppError::InvalidResponse);
+                }
+                Ok(result(
+                    "Activity period analysis",
+                    vec![WorkspaceItem {
+                        id: None,
+                        title: format!("{} {}", dto.period, dto.anchor_date),
+                        fields: vec![
+                            ("Scope".into(), dto.scope),
+                            ("Zone".into(), dto.zone),
+                            ("Partial".into(), dto.partial.to_string()),
+                            ("Report".into(), dto.report),
+                        ],
+                    }],
+                ))
+            }
+            op @ (WorkspaceOperation::Schedules { .. }
+            | WorkspaceOperation::Schedule { .. }
+            | WorkspaceOperation::ScheduleHistory { .. }
+            | WorkspaceOperation::ScheduleActivate { .. }
+            | WorkspaceOperation::ScheduleCancel { .. }
+            | WorkspaceOperation::ScheduleReconcile { .. }) => self.schedule_operation(op).await,
+            op @ (WorkspaceOperation::Goals { .. }
+            | WorkspaceOperation::Goal { .. }
+            | WorkspaceOperation::GoalHistory { .. }
+            | WorkspaceOperation::GoalVerify { .. }
+            | WorkspaceOperation::GoalRun { .. }
+            | WorkspaceOperation::GoalCancel { .. }
+            | WorkspaceOperation::GoalReconcile { .. }) => self.goal_operation(op).await,
+            op @ (WorkspaceOperation::Dependencies { .. }
+            | WorkspaceOperation::DependencyAnswer { .. }) => self.dependency_operation(op).await,
+            op @ (WorkspaceOperation::Checkpoints { .. }
+            | WorkspaceOperation::Checkpoint { .. }
+            | WorkspaceOperation::CheckpointInspect { .. }
+            | WorkspaceOperation::CheckpointAbandon { .. }) => self.checkpoint_operation(op).await,
+            op @ (WorkspaceOperation::Attention { .. }
+            | WorkspaceOperation::AttentionAck { .. }
+            | WorkspaceOperation::Approvals { .. }
+            | WorkspaceOperation::ApprovalDecision { .. }) => self.attention_operation(op).await,
             WorkspaceOperation::WorkContext { project_id } => {
                 let dto: serde_json::Value = Self::json(
                     self.request(

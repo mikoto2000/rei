@@ -1,0 +1,11 @@
+# 独立検証済みReflectionの長期記憶昇格
+
+`/reflection promote <reflectionId>`は現在Projectの明示操作。Memoryが有効で、保存GoalとReflectionのProject/Session/Run/完了状態/検証reason/criteria snapshotが一致する場合に限り、既存のGoal owner検査とFileGoalVerifierを再実行する。SHA-256／固定JSON Pointer scalar全件の独立一致が必要。失敗Reflection・未確認・偽造完了・所有者不明・現在不一致・取消では保存しない。GoalやRunの起動、予算消費、追加モデル呼出はない。
+
+保存するのは「記録時点にローカルの保存条件が独立検証で一致した」というProject限定PROJECT_STATEの過去の観測事実。criteria JSONを含めるがobjective・モデル出力・Reflectionの評価文・次回助言・ファイル本文は含めない。将来も条件が一致するという主張や一般化したLESSON/PROCEDUREへ自動変換しない。内容4000文字・summary500文字の既存Memory上限を超える場合は、根拠を切り詰めず全体を拒否する。
+
+`verified_reflection_memories`にProject/Reflection/Goal/Session/Memory ID、criteria JSONのSHA-256、再検証時刻を保存する。記憶・tags・FTSと出典proofを同一SQLite transactionへ書き、途中失敗はすべてrollback。Project/Reflectionの一意claimにより並行操作も1記憶となる。会話turnを捏造せず、`memory_sources`のturn欄には追加しない。`/memory show <memoryId>`は専用のverified reflection proofを表示する。既存記憶検索・Project境界・忘却を再利用する。
+
+同じReflectionの再昇格は過去のproofと記憶を返し、再検証や再保存をしない。後のファイル変更で過去の観測事実を消さない。忘却済み記憶も再有効化しない。複数ファイルの観測は通常のGoal検証と同じ逐次読取りで、filesystem全体の原子的snapshotではない。検証時刻の事実を越えて正確性・意味的成功・一般的教訓を保証しない。
+
+自動昇格・Run Reflectionの自由文・意味的教訓生成・Native/HTTP専用操作はこのsliceでは追加しない。条件を含む内部長期記憶は既存検索/モデル文脈へ使用されるため、利用者が昇格対象を明示する。

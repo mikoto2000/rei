@@ -98,6 +98,8 @@ public class ExternalConfigFileService {
             open-alex-api-key: ${REI_PAPER_OPEN_ALEX_API_KEY:}
           context-compression:
             enabled: ${REI_CONTEXT_COMPRESSION_ENABLED:true}
+            standalone-summary-max-llm-calls: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_LLM_CALLS:0}
+            standalone-summary-max-total-tokens: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_TOTAL_TOKENS:0}
           computer-use:
             enabled: false
             diagnostics:
@@ -135,6 +137,11 @@ public class ExternalConfigFileService {
               diagnostics:
                 enabled: true
             keep-screenshots: false
+            coaching:
+              automatic-enabled: false
+              weekly-enabled: true
+              monthly-enabled: true
+              check-interval-seconds: 3600
             behavior:
               enabled: false
               check-interval-seconds: 60
@@ -161,7 +168,16 @@ public class ExternalConfigFileService {
                 warning-minutes: 45
                 strong-warning-minutes: 30
           external-agents:
+            claude:
+              enabled: ${REI_CLAUDE_ENABLED:false}
+              command: ${REI_CLAUDE_COMMAND:claude}
+              total-timeout: 5m
+              inactivity-timeout: 2m
+              max-output-bytes: 1048576
             codex:
+              inherit-run-model-budget: ${REI_CODEX_INHERIT_RUN_MODEL_BUDGET:false}
+              parallel-review-enabled: ${REI_CODEX_PARALLEL_REVIEW_ENABLED:false}
+              parallel-review-timeout: ${REI_CODEX_PARALLEL_REVIEW_TIMEOUT:120s}
               enabled: true
               command: codex
               total-timeout: 20m
@@ -169,8 +185,10 @@ public class ExternalConfigFileService {
               max-output-bytes: 4194304
           embedding:
             enabled: ${REI_EMBEDDING_ENABLED:true}
+            inherit-run-model-budget: ${REI_EMBEDDING_INHERIT_RUN_MODEL_BUDGET:false}
           rerank:
             enabled: ${REI_RERANK_ENABLED:true}
+            inherit-run-model-budget: ${REI_RERANK_INHERIT_RUN_MODEL_BUDGET:false}
             base-url: ${REI_RERANK_BASE_URL:}
             api-key: ${REI_RERANK_API_KEY:}
             model: ${REI_RERANK_MODEL:}
@@ -186,6 +204,8 @@ public class ExternalConfigFileService {
               max-replans-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL:2}
               max-subgoals-per-replan: ${REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN:8}
               max-llm-calls-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN:120}
+              max-total-tokens-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_TOTAL_TOKENS_PER_RUN:0}
+              max-total-tokens-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_TOTAL_TOKENS_PER_GOAL:0}
             features:
               activity-behavior:
                 base-url: ${REI_LLM_ACTIVITY_BEHAVIOR_BASE_URL:}
@@ -242,6 +262,20 @@ public class ExternalConfigFileService {
             timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
             prompt-enhancement:
               enabled: ${REI_IMAGE_PROMPT_ENHANCEMENT_ENABLED:true}
+          repository-map:
+            persistent-index-enabled: ${REI_REPOSITORY_MAP_PERSISTENT_INDEX_ENABLED:false}
+          subagents:
+            max-transient-read-tool-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_READ_TOOL_RETRIES:0}
+            max-transient-model-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_MODEL_RETRIES:0}
+            standalone-max-llm-calls: ${REI_SUBAGENTS_STANDALONE_MAX_LLM_CALLS:0}
+            standalone-max-total-tokens: ${REI_SUBAGENTS_STANDALONE_MAX_TOTAL_TOKENS:0}
+          attention:
+            delivery:
+              enabled: ${REI_ATTENTION_DELIVERY_ENABLED:false}
+              automatic: ${REI_ATTENTION_DELIVERY_AUTOMATIC:false}
+              endpoint: ${REI_ATTENTION_DELIVERY_ENDPOINT:}
+              bearer-token: ${REI_ATTENTION_DELIVERY_BEARER_TOKEN:}
+              projects: ${REI_ATTENTION_DELIVERY_PROJECTS:}
           skills:
             enabled: true
             directories:
@@ -252,6 +286,8 @@ public class ExternalConfigFileService {
               max-skills: ${REI_SKILLS_SEMANTIC_MAX_SKILLS:64}
               minimum-similarity: ${REI_SKILLS_SEMANTIC_MINIMUM_SIMILARITY:0.55}
               failure-backoff-seconds: ${REI_SKILLS_SEMANTIC_FAILURE_BACKOFF_SECONDS:30}
+              persistent-index-enabled: ${REI_SKILLS_SEMANTIC_PERSISTENT_INDEX_ENABLED:false}
+              index-namespace: ${REI_SKILLS_SEMANTIC_INDEX_NAMESPACE:}
           web-search:
             enabled: true
             providers:
@@ -271,7 +307,24 @@ public class ExternalConfigFileService {
             discovery:
               enabled: ${REI_TOPIC_GENERATOR_DISCOVERY_ENABLED:true}
           memory:
+            auto-sleep:
+              enabled: ${REI_MEMORY_AUTO_SLEEP_ENABLED:false}
+              minimum-idle: ${REI_MEMORY_AUTO_SLEEP_MINIMUM_IDLE:5m}
+              minimum-turns: ${REI_MEMORY_AUTO_SLEEP_MINIMUM_TURNS:5}
+              retry-interval: ${REI_MEMORY_AUTO_SLEEP_RETRY_INTERVAL:10m}
+              cron: ${REI_MEMORY_AUTO_SLEEP_CRON:}
+              zone: ${REI_MEMORY_AUTO_SLEEP_ZONE:}
+              on-session-end: ${REI_MEMORY_AUTO_SLEEP_ON_SESSION_END:false}
+              on-shutdown: ${REI_MEMORY_AUTO_SLEEP_ON_SHUTDOWN:false}
             enabled: ${REI_MEMORY_ENABLED:true}
+            consolidation:
+              max-llm-calls: ${REI_MEMORY_CONSOLIDATION_MAX_LLM_CALLS:0}
+              max-total-tokens: ${REI_MEMORY_CONSOLIDATION_MAX_TOTAL_TOKENS:0}
+            sleep:
+              max-llm-calls: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS:0}
+              max-total-tokens: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS:0}
+              max-llm-calls-per-project: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS_PER_PROJECT:0}
+              max-total-tokens-per-project: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS_PER_PROJECT:0}
           feed:
             briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:3}
             cron: ${REI_FEED_CRON:0 0 4 * * *}

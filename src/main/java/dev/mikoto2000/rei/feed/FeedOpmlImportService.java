@@ -2,7 +2,6 @@ package dev.mikoto2000.rei.feed;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
@@ -29,7 +28,8 @@ public class FeedOpmlImportService {
     List<FeedOpmlImportResult.Entry> failed = new ArrayList<>();
     for (OpmlSubscription subscription : subscriptions) {
       if (!isFeedUrl(subscription.xmlUrl())) {
-        failed.add(new FeedOpmlImportResult.Entry(subscription, "invalid feed URL"));
+        failed.add(new FeedOpmlImportResult.Entry(
+            new OpmlSubscription("", "", "[invalid feed URL]", "", List.of()), "invalid feed URL"));
         continue;
       }
       try {
@@ -69,9 +69,8 @@ public class FeedOpmlImportService {
 
   private boolean isFeedUrl(String value) {
     try {
-      URI uri = URI.create(value);
-      return ("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))
-          && uri.getHost() != null;
+      FeedUrlSafety.parse(value);
+      return true;
     } catch (IllegalArgumentException e) {
       return false;
     }

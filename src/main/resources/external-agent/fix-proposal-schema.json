@@ -1,0 +1,28 @@
+{
+  "type": "object", "additionalProperties": false,
+  "required": ["summary", "findings", "warnings", "proposal"],
+  "properties": {
+    "summary": {"type": "string"},
+    "warnings": {"type": "array", "items": {"type": "string"}},
+    "findings": {
+      "type": "array", "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["severity", "title", "reason", "recommendation", "location"],
+        "properties": {
+          "severity": {"type": "string", "enum": ["critical", "high", "medium", "low", "info"]},
+          "title": {"type": "string"}, "reason": {"type": "string"},
+          "recommendation": {"type": "string"}, "location": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "proposal": {
+      "type": ["object", "null"], "additionalProperties": false,
+      "required": ["path", "expectedText", "replacement"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "expectedText": {"type": "string", "minLength": 1, "maxLength": 65536},
+        "replacement": {"type": "string", "maxLength": 65536}
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+# Git変更の自動収集によるテスト影響分析
+
+## 変更
+
+監査C19に残っていたGit差分自動取得を既存changeTestImpactへ追加した。changedFilesを省略すると、捕捉したProjectのステージ済み・未ステージ・Gitignore対象外の未追跡pathを収集し、既存Repository Mapの逆import・テスト命名・広い回帰の評価へ渡す。明示path指定と空配列拒否は維持する。新しいToolやPolicy能力は追加せずREADを維持する。
+
+diff本文・外部diff/textconvを使わず、NUL区切り・重複除去・rename前後のpath・共有deadline・byte/path上限を扱う。GitのProject最上位rootとHEADを要求し、取得失敗や切り詰めを空変更へ変換しない。秘密情報／生成物用pathを除外した場合はpartialを明示する。取消は既存の制御フローへ伝播する。
+
+## 検証
+
+初期RedはanalyzeGit未実装によるコンパイル失敗で確認した。実装後、GitChangeTestImpactTest・ChangeTestImpactServiceTest・RepositoryMapServiceTestはGreen。
+
+実Gitの一時リポジトリで、ステージ済み・未ステージ・削除・未追跡・rename・空白／日本語path、変更なし、秘密情報pathの除外、Gitignore、ステージ後に作業ツリーだけHEADへ戻した変更の保持、64path超過、非Git／Project root不一致を検証する。fixture portで失敗・timeout・出力切り詰め・不完全NUL出力・取消を検証する。実Tool callbackの省略引数、捕捉Project、明示空配列拒否と既存READ/SubAgent許可も検証する。
+
+関連テスト（GitChangeTestImpactTest・ChangeTestImpactServiceTest・RepositoryMapServiceTest・ToolsTest・ToolPermissionPolicyTest・SelfPatchReviewGitTest）はPASS。全体回帰は3096 tests / 591 suites、failure/error/skip各0。Native/Reactは再実行していない。feature 61e27783をPushし、main 3b6c33ceへMergeした。Merge後関連テストもPASS、main Push済み。
+
+## 制限
+
+複数Git観測・索引走査は原子的なpatch snapshotではない。構造候補であり、coverage・完全な意味的依存解析やテスト省略の保証ではない。任意revision間比較、未commitの新規repository、subdirectory Projectから親repositoryへの探索は今回の範囲外。Javaのみ変更し、Native/Reactを変更していない。

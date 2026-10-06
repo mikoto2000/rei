@@ -40,6 +40,11 @@ public final class ProjectRunQueue {
     if (first) dispatch(job);
     return first;
   }
+  /** Includes queued, dispatching and executing operations until their finally releases the slot. */
+  public synchronized boolean containsRun(String projectId,String runId) {
+    var queue=projects.get(projectId);
+    return queue!=null&&queue.stream().anyMatch(job->job.runId.equals(runId));
+  }
   public boolean cancelQueued(String runId) {
     Job removed = null, next = null;
     synchronized (this) {

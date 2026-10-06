@@ -9,7 +9,7 @@ Codex にこの設計をレビューさせて
 /agent codex review docs/web-api.md
 ```
 
-`/agent` の agent は `codex`、action は `review` のみです。未知の値は usage / unsupported エラーになります。
+`/agent` の agent は `codex` / `claude`、action は `review` のみです。Claude Codeは後続で追加したTool-free snapshotレビューです（[サブスクリプション認証・利用準備](claude-code-reviews.md)）。以下のPhase 1の実行説明・CLI隔離設定はCodexを対象とします。未知の値は usage / unsupported エラーになります。
 target は存在するプロジェクト内のパスに限定し、正規化前後および symlink 解決後に検証します。
 省略時は Working Set のパス、抽出した設計決定、repository の順で対象を選びます。
 自然言語の実行許可は現在のユーザー要求だけを確認する保守的な日本語・英語の判定です。
@@ -109,3 +109,7 @@ Shell は `[delegation] codex completed: N findings` 等を表示し、stdout �
 ## Phase 2
 
 実装・修正・commit/push の委譲、他社 agent、registry、複数 agent の並列実行、resume、自動委譲、自動再レビューは対象外です。
+
+## 保存レビューと再レビュー
+
+通常レビューはSQLiteへ結果を保存します。履歴Toolと明示的な再レビューの動作・保証範囲は [保存レビュー仕様](external-review-history.md) を参照してください。

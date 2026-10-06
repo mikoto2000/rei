@@ -44,6 +44,9 @@ public class MemoryRepository {
             merged INTEGER NOT NULL, superseded INTEGER NOT NULL, ignored INTEGER NOT NULL,
             conflicts INTEGER NOT NULL, failed INTEGER NOT NULL)
           """).update();
+      db.sql("CREATE TABLE IF NOT EXISTS sleep_model_usage (project_id TEXT PRIMARY KEY, calls INTEGER NOT NULL DEFAULT 0, tokens INTEGER NOT NULL DEFAULT 0, pending INTEGER NOT NULL DEFAULT 0, unknown INTEGER NOT NULL DEFAULT 0)").update();
+      db.sql("CREATE TABLE IF NOT EXISTS auto_sleep_requests(session_id TEXT PRIMARY KEY,project_id TEXT NOT NULL,revision INTEGER NOT NULL,cause TEXT NOT NULL)").update();
+      db.sql("CREATE TABLE IF NOT EXISTS verified_reflection_memories(project_id TEXT NOT NULL,reflection_id TEXT NOT NULL,goal_id TEXT NOT NULL,session_id TEXT NOT NULL,memory_id TEXT NOT NULL UNIQUE,criteria_sha256 TEXT NOT NULL,verified_at TEXT NOT NULL,PRIMARY KEY(project_id,reflection_id))").update();
       return null;
     });
   }
@@ -52,10 +55,75 @@ public class MemoryRepository {
       db.sql("ALTER TABLE " + table + " ADD COLUMN " + name + " " + definition).update();
   }
   public <T> T transaction(Supplier<T> action) { return transactions.execute(status -> action.get()); }
+  public record AutoSleepRequest(String sessionId,String projectId,long revision,String cause) {}
+  /** Ending records intent only; a later idle worker performs consolidation. */
+  public void requestAutoSleep(String session,String project,String cause) {
+    if(session==null||session.isBlank()||session.length()>512||project==null||project.isBlank()||project.length()>128
+        ||cause==null||!Set.of("session_end","shutdown").contains(cause))throw new IllegalArgumentException("Invalid Auto Sleep request");
+    String encoded=dev.mikoto2000.rei.core.project.ProjectStorage.projectId(session);
+    if(encoded!=null&&!encoded.equals(project))throw new IllegalArgumentException("Session belongs to another Project");
+    int changed=db.sql("""
+        INSERT INTO auto_sleep_requests(session_id,project_id,revision,cause)
+        SELECT ?,?,1,? WHERE (SELECT COUNT(*) FROM auto_sleep_requests)<256
+          OR EXISTS(SELECT 1 FROM auto_sleep_requests WHERE session_id=?)
+        ON CONFLICT(session_id) DO UPDATE SET revision=revision+1,cause=excluded.cause
+          WHERE auto_sleep_requests.project_id=excluded.project_id AND revision<9223372036854775807
+        """).params(session,project,cause,session).update();
+    if(changed!=1)throw new IllegalStateException("Auto Sleep request limit or ownership conflict");
+  }
+  public List<AutoSleepRequest> pendingAutoSleepRequests() {
+    return db.sql("SELECT session_id,project_id,revision,cause FROM auto_sleep_requests ORDER BY revision,session_id LIMIT 256")
+        .query((r,n)->new AutoSleepRequest(r.getString(1),r.getString(2),r.getLong(3),r.getString(4))).list();
+  }
+  public boolean completeAutoSleepRequest(AutoSleepRequest request) {
+    return db.sql("DELETE FROM auto_sleep_requests WHERE session_id=? AND project_id=? AND revision=?")
+        .params(request.sessionId(),request.projectId(),request.revision()).update()==1;
+  }
+  /** Reserve before the provider call; pending usage survives failure and restart. */
+  public void reserveSleepModelCall(String project,long maxCalls,long maxTokens) {
+    if(project==null||project.isBlank()||maxCalls<0||maxTokens<0)throw new IllegalArgumentException("Invalid Sleep budget");
+    transaction(()->{
+      db.sql("INSERT OR IGNORE INTO sleep_model_usage(project_id) VALUES(?)").param(project).update();
+      int changed=db.sql("""
+          UPDATE sleep_model_usage SET calls=calls+1,pending=pending+?
+          WHERE project_id=? AND calls<9223372036854775807
+            AND (?=0 OR calls<?) AND (?=0 OR (unknown=0 AND pending=0 AND tokens<?))
+          """).params(maxTokens>0?1:0,project,maxCalls,maxCalls,maxTokens,maxTokens).update();
+      if(changed==0) {
+        var usage=db.sql("SELECT calls,tokens,pending,unknown FROM sleep_model_usage WHERE project_id=?")
+            .param(project).query((r,n)->new long[]{r.getLong(1),r.getLong(2),r.getLong(3),r.getLong(4)}).single();
+        var reason=maxTokens>0&&(usage[2]>0||usage[3]>0)
+            ?dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOKEN_USAGE_UNKNOWN
+            :maxTokens>0&&usage[1]>=maxTokens
+                ?dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOKEN_BUDGET_EXCEEDED
+                :dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.LLM_CALL_BUDGET_EXCEEDED;
+        throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(reason);
+      }
+      return null;
+    });
+  }
+  /** This accounting is separate from memory/checkpoint writes, also for previews. */
+  public void recordSleepTokens(String project,Integer tokens) {
+    boolean valid=tokens!=null&&tokens>0;
+    int changed=db.sql("""
+        UPDATE sleep_model_usage SET pending=pending-1,
+          tokens=CASE WHEN tokens>9223372036854775807-? THEN 9223372036854775807 ELSE tokens+? END,
+          unknown=CASE WHEN ?=1 THEN unknown ELSE 1 END
+        WHERE project_id=? AND pending>0
+        """).params(valid?tokens:0,valid?tokens:0,valid?1:0,project).update();
+    if(changed!=1)throw new IllegalStateException("No pending Sleep model call");
+  }
+  public void checkSleepTokenBudget(String project,long limit) {
+    long tokens=db.sql("SELECT tokens FROM sleep_model_usage WHERE project_id=?").param(project).query(Long.class).single();
+    if(tokens>limit)throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
+        dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOKEN_BUDGET_EXCEEDED);
+  }
   public LongTermMemory insert(MemoryCandidate c, String project, String session) {
+    return insert(c,project,session,"mem_"+UUID.randomUUID(),true);
+  }
+  private LongTermMemory insert(MemoryCandidate c,String project,String session,String id,boolean includeTurns) {
     if (c.scope() == MemoryScope.PROJECT && (project == null || project.isBlank())) throw new IllegalArgumentException("Project required");
     return transaction(() -> {
-      String id = "mem_" + UUID.randomUUID();
       String now = OffsetDateTime.now(java.time.ZoneOffset.UTC).toString();
       db.sql("""
           INSERT INTO memories(id,content,type,scope,status,confidence,created_at,updated_at,
@@ -63,7 +131,7 @@ public class MemoryRepository {
           VALUES(?,?,?,?,'ACTIVE',?,?,?,?,?,?,?,?,?)
           """).params(id,c.content(),c.type().name(),c.scope().name(),c.confidence(),now,now,now,
               c.scope()==MemoryScope.PROJECT ? project : null,c.summary(),c.importance(),now,MemoryResolver.normalize(c.content())).update();
-      enrich(id,c,session);
+      if(includeTurns)enrich(id,c,session);else enrichTags(id,c);
       index(id);
       return find(id).orElseThrow();
     });
@@ -73,11 +141,28 @@ public class MemoryRepository {
         INSERT INTO memory_sources(memory_id,source,session_id,turn_id)
         SELECT ?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM memory_sources WHERE memory_id=? AND session_id=? AND turn_id=?)
         """).params(id,session + "/" + turn,session,turn,id,session,turn).update();
+    enrichTags(id,c);
+  }
+  private void enrichTags(String id,MemoryCandidate c) {
     for (String tag : c.tags()) db.sql("""
         INSERT INTO memory_tags(memory_id,tag) SELECT ?,? WHERE NOT EXISTS(SELECT 1 FROM memory_tags WHERE memory_id=? AND tag=?)
         """).params(id,tag,id,tag).update();
     db.sql("UPDATE memories SET updated_at=? WHERE id=?").params(now(),id).update();
     index(id);
+  }
+  public record ReflectionProof(String projectId,String reflectionId,String goalId,String sessionId,String memoryId,String criteriaSha256,java.time.Instant verifiedAt) {}
+  private static final org.springframework.jdbc.core.RowMapper<ReflectionProof> PROOF=(r,n)->new ReflectionProof(r.getString("project_id"),r.getString("reflection_id"),r.getString("goal_id"),r.getString("session_id"),r.getString("memory_id"),r.getString("criteria_sha256"),java.time.Instant.parse(r.getString("verified_at")));
+  public Optional<ReflectionProof> verifiedReflectionProof(String project,String reflection) {return db.sql("SELECT * FROM verified_reflection_memories WHERE project_id=? AND reflection_id=?").params(project,reflection).query(PROOF).optional();}
+  public Optional<ReflectionProof> verifiedReflectionProofByMemory(String project,String memory) {return db.sql("SELECT * FROM verified_reflection_memories WHERE project_id=? AND memory_id=?").params(project,memory).query(PROOF).optional();}
+  /** Atomic publication of a fact and its explicit non-conversation proof. Called after independent verification. */
+  public LongTermMemory insertVerifiedReflection(MemoryCandidate candidate,String project,String session,String reflection,String goal,String criteriaSha256,java.time.Instant verifiedAt) {
+    if(candidate.scope()!=MemoryScope.PROJECT||candidate.type()!=MemoryType.PROJECT_STATE||project==null||project.isBlank()||session==null||session.isBlank()||reflection==null||reflection.isBlank()||goal==null||goal.isBlank()||criteriaSha256==null||!criteriaSha256.matches("[a-f0-9]{64}")||verifiedAt==null)throw new IllegalArgumentException("Invalid verified reflection fact");
+    return transaction(()->{
+      String memory="mem_"+UUID.randomUUID();
+      int inserted=db.sql("INSERT OR IGNORE INTO verified_reflection_memories VALUES(?,?,?,?,?,?,?)").params(project,reflection,goal,session,memory,criteriaSha256,verifiedAt.toString()).update();
+      if(inserted==0)return find(verifiedReflectionProof(project,reflection).orElseThrow().memoryId()).orElseThrow();
+      return insert(candidate,project,session,memory,false);
+    });
   }
   public void update(String id, MemoryCandidate c, String session) {
     db.sql("UPDATE memories SET content=?,summary=?,confidence=?,importance=?,updated_at=?,content_key=? WHERE id=? AND status='ACTIVE'")

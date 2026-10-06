@@ -874,3 +874,22 @@ main {
 .tool-event-line {
   padding-inline-start: 1rem;
 }
+
+.attention-pane pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.attention-pane p {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  html {
+    scroll-padding-bottom: calc(200px + env(safe-area-inset-bottom));
+  }
+  .app-shell {
+    padding-bottom: calc(200px + env(safe-area-inset-bottom));
+  }
+  .attention-pane button {
+    scroll-margin-bottom: calc(200px + env(safe-area-inset-bottom));
+  }
+}
