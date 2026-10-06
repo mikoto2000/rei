@@ -16,6 +16,11 @@ final class SubAgentSemanticValidator {
   Mono<Void> validate(ChatModel model,Prompt original,SubAgentDefinition definition,String output,
       SubAgentEvidence evidence,AtomicInteger remaining,AgentRunContext owner,Runnable check,
       OutputLimitRunBudget.LlmCallReservation reservation) {
+    return validate(model,original,definition,output,evidence,remaining,owner,check,reservation,new BoundedToolLoop.ModelRetries(0));
+  }
+  Mono<Void> validate(ChatModel model,Prompt original,SubAgentDefinition definition,String output,
+      SubAgentEvidence evidence,AtomicInteger remaining,AgentRunContext owner,Runnable check,
+      OutputLimitRunBudget.LlmCallReservation reservation,BoundedToolLoop.ModelRetries retries) {
     return Mono.defer(()->{
       check.run();
       String task=original.getInstructions().stream().filter(UserMessage.class::isInstance)
@@ -40,7 +45,7 @@ final class SubAgentSemanticValidator {
           Allowed issue codes: UNSUPPORTED_CLAIM, CONTRADICTION, INCOMPLETE_TASK.
           Do not output prose, quotes, tool calls, private values or extra fields.
           """),new UserMessage(input)),options);
-      return new BoundedToolLoop().runWithHistory(model,prompt,remaining,owner,check,reservation)
+      return new BoundedToolLoop().runWithHistory(model,prompt,remaining,owner,check,reservation,retries)
           .flatMap(result->{check.run();return decision(result.output());});
     });
   }
