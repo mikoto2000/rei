@@ -4,7 +4,11 @@ import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties("rei.memory.auto-sleep")
-public record AutoSleepProperties(boolean enabled, Duration minimumIdle, int minimumTurns, Duration retryInterval, String cron, String zone) {
+public record AutoSleepProperties(boolean enabled, Duration minimumIdle, int minimumTurns, Duration retryInterval, String cron, String zone,
+    boolean onSessionEnd,boolean onShutdown) {
+  public AutoSleepProperties(boolean enabled,Duration minimumIdle,int minimumTurns,Duration retryInterval,String cron,String zone) {
+    this(enabled,minimumIdle,minimumTurns,retryInterval,cron,zone,false,false);
+  }
   public AutoSleepProperties(boolean enabled,Duration minimumIdle,int minimumTurns,Duration retryInterval) {
     this(enabled,minimumIdle,minimumTurns,retryInterval,null,null);
   }

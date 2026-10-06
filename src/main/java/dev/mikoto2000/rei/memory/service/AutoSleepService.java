@@ -104,6 +104,33 @@ public class AutoSleepService implements AutoCloseable {
       String oldest=sessions.keySet().iterator().next(); sessions.remove(oldest); attempts.remove(oldest);
     }
   }
+  /** Explicit end never starts a model or destroys resumable conversation history. */
+  public synchronized void afterSessionEnd(dev.mikoto2000.rei.application.session.SessionMetadata session) {
+    if(closed||!properties.enabled()||!properties.onSessionEnd()||!memory.enabled())return;
+    sleep.requestAutoSleep(session.sessionId(),session.projectId(),"session_end");
+    sessions.put(session.sessionId(),session.projectId());
+    while(sessions.size()>256) {
+      String oldest=sessions.keySet().iterator().next();sessions.remove(oldest);attempts.remove(oldest);
+    }
+  }
+  private Map<String,MemoryRepository.AutoSleepRequest> discoverEndRequests() {
+    if(projects==null||(!properties.onSessionEnd()&&!properties.onShutdown()))return Map.of();
+    var registered=projects.completionProjects();
+    var requested=new LinkedHashMap<String,MemoryRepository.AutoSleepRequest>();
+    for(var request:sleep.pendingAutoSleepRequests()) {
+      if(!(request.cause().equals("session_end")&&properties.onSessionEnd())&&!(request.cause().equals("shutdown")&&properties.onShutdown()))continue;
+      if(registered.stream().noneMatch(p->p.id().equals(request.projectId())))continue;
+      try {
+        String encoded=dev.mikoto2000.rei.core.project.ProjectStorage.projectId(request.sessionId());
+        if(encoded!=null&&!encoded.equals(request.projectId()))continue;
+        if(sessions.containsKey(request.sessionId())&&!sessions.get(request.sessionId()).equals(request.projectId()))continue;
+        requested.put(request.sessionId(),request);
+      }catch(IllegalArgumentException invalidIdentity){/* A persisted request cannot override ownership. */}
+    }
+    var ordered=new LinkedHashMap<String,String>();requested.values().forEach(r->ordered.put(r.sessionId(),r.projectId()));
+    for(var entry:sessions.entrySet())if(ordered.size()<256)ordered.putIfAbsent(entry.getKey(),entry.getValue());
+    sessions.clear();sessions.putAll(ordered);return requested;
+  }
   @Scheduled(fixedDelayString="${rei.memory.auto-sleep.check-interval:5s}")
   public synchronized void tick() {
     if(closed) return;
@@ -118,9 +145,12 @@ public class AutoSleepService implements AutoCloseable {
     Instant latest=java.util.stream.Stream.of(activity.applicationStartedAt(),activity.lastUserActivityAt(),activity.lastAgentActivityAt())
         .filter(Objects::nonNull).max(Instant::compareTo).orElse(now);
     if(Duration.between(latest,now).compareTo(properties.minimumIdle())<0) return;
-    if(cron!=null&&(nextCron==null||now.isBefore(nextCron)))return;
+    Map<String,MemoryRepository.AutoSleepRequest> requested;
+    try{requested=discoverEndRequests();}
+    catch(RuntimeException error){requested=Map.of();org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep requests unavailable ({})",error.getClass().getSimpleName());}
+    if(requested.isEmpty()&&cron!=null&&(nextCron==null||now.isBefore(nextCron)))return;
     // Coalesce missed occurrences into one idle opportunity; never replay a backlog.
-    if(cron!=null)advanceCron(now);
+    if(cron!=null&&nextCron!=null&&!now.isBefore(nextCron))advanceCron(now);
     try {discoverSaved(now);}
     catch(RuntimeException error) {org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep discovery unavailable ({})",error.getClass().getSimpleName());}
     var candidates=sessions.entrySet().iterator();
@@ -129,14 +159,21 @@ public class AutoSleepService implements AutoCloseable {
       Instant previous=attempts.get(session.getKey());
       if(previous!=null && now.isBefore(previous.plus(properties.retryInterval()))) continue;
       try {
-        if(sleep.unsleptTurns(session.getKey())<properties.minimumTurns()) {attempts.remove(session.getKey());candidates.remove();continue;}
+        var request=requested.get(session.getKey());
+        if(sleep.unsleptTurns(session.getKey())<(request==null?properties.minimumTurns():1)) {
+          if(request!=null)sleep.completeAutoSleepRequest(request);
+          attempts.remove(session.getKey());candidates.remove();continue;
+        }
         String id=session.getKey(), project=session.getValue();
         runningVersion=version;
         attempts.put(id,now);
         executing.set(true);
         worker.submit(() -> {
           runningThread=Thread.currentThread();
-          try {sleep.sleep(id,project,false,()->activity.isAgentBusy() || activity.activityVersion()!=version);}
+          try {
+            sleep.sleep(id,project,false,()->activity.isAgentBusy() || activity.activityVersion()!=version);
+            if(request!=null&&sleep.unsleptTurns(id)==0)sleep.completeAutoSleepRequest(request);
+          }
           catch(RuntimeException error) {
             org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep deferred ({})",error.getClass().getSimpleName());
           }
@@ -155,7 +192,15 @@ public class AutoSleepService implements AutoCloseable {
     nextCron=next==null?null:next.toInstant();
   }
   @jakarta.annotation.PreDestroy @Override public void close() {
-    synchronized(this) {if(closed)return; closed=true; worker.shutdown();}
+    synchronized(this) {
+      if(closed)return;closed=true;
+      if(properties.enabled()&&properties.onShutdown()&&memory.enabled()) {
+        try{discoverStartup();}catch(RuntimeException error){org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep shutdown discovery unavailable ({})",error.getClass().getSimpleName());}
+        for(var entry:sessions.entrySet())try{sleep.requestAutoSleep(entry.getKey(),entry.getValue(),"shutdown");}
+        catch(RuntimeException error){org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep shutdown request unavailable ({})",error.getClass().getSimpleName());}
+      }
+      worker.shutdown();
+    }
     try {if(!worker.awaitTermination(2,TimeUnit.SECONDS))worker.shutdownNow();}
     catch(InterruptedException error) {worker.shutdownNow(); Thread.currentThread().interrupt();}
   }

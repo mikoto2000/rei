@@ -45,6 +45,7 @@ public class MemoryRepository {
             conflicts INTEGER NOT NULL, failed INTEGER NOT NULL)
           """).update();
       db.sql("CREATE TABLE IF NOT EXISTS sleep_model_usage (project_id TEXT PRIMARY KEY, calls INTEGER NOT NULL DEFAULT 0, tokens INTEGER NOT NULL DEFAULT 0, pending INTEGER NOT NULL DEFAULT 0, unknown INTEGER NOT NULL DEFAULT 0)").update();
+      db.sql("CREATE TABLE IF NOT EXISTS auto_sleep_requests(session_id TEXT PRIMARY KEY,project_id TEXT NOT NULL,revision INTEGER NOT NULL,cause TEXT NOT NULL)").update();
       return null;
     });
   }
@@ -53,6 +54,30 @@ public class MemoryRepository {
       db.sql("ALTER TABLE " + table + " ADD COLUMN " + name + " " + definition).update();
   }
   public <T> T transaction(Supplier<T> action) { return transactions.execute(status -> action.get()); }
+  public record AutoSleepRequest(String sessionId,String projectId,long revision,String cause) {}
+  /** Ending records intent only; a later idle worker performs consolidation. */
+  public void requestAutoSleep(String session,String project,String cause) {
+    if(session==null||session.isBlank()||session.length()>512||project==null||project.isBlank()||project.length()>128
+        ||cause==null||!Set.of("session_end","shutdown").contains(cause))throw new IllegalArgumentException("Invalid Auto Sleep request");
+    String encoded=dev.mikoto2000.rei.core.project.ProjectStorage.projectId(session);
+    if(encoded!=null&&!encoded.equals(project))throw new IllegalArgumentException("Session belongs to another Project");
+    int changed=db.sql("""
+        INSERT INTO auto_sleep_requests(session_id,project_id,revision,cause)
+        SELECT ?,?,1,? WHERE (SELECT COUNT(*) FROM auto_sleep_requests)<256
+          OR EXISTS(SELECT 1 FROM auto_sleep_requests WHERE session_id=?)
+        ON CONFLICT(session_id) DO UPDATE SET revision=revision+1,cause=excluded.cause
+          WHERE auto_sleep_requests.project_id=excluded.project_id AND revision<9223372036854775807
+        """).params(session,project,cause,session).update();
+    if(changed!=1)throw new IllegalStateException("Auto Sleep request limit or ownership conflict");
+  }
+  public List<AutoSleepRequest> pendingAutoSleepRequests() {
+    return db.sql("SELECT session_id,project_id,revision,cause FROM auto_sleep_requests ORDER BY revision,session_id LIMIT 256")
+        .query((r,n)->new AutoSleepRequest(r.getString(1),r.getString(2),r.getLong(3),r.getString(4))).list();
+  }
+  public boolean completeAutoSleepRequest(AutoSleepRequest request) {
+    return db.sql("DELETE FROM auto_sleep_requests WHERE session_id=? AND project_id=? AND revision=?")
+        .params(request.sessionId(),request.projectId(),request.revision()).update()==1;
+  }
   /** Reserve before the provider call; pending usage survives failure and restart. */
   public void reserveSleepModelCall(String project,long maxCalls,long maxTokens) {
     if(project==null||project.isBlank()||maxCalls<0||maxTokens<0)throw new IllegalArgumentException("Invalid Sleep budget");

@@ -13,6 +13,8 @@ public final class SessionLifecycle {
   private final SessionRepository repository;
   private final Clock clock;
   private java.util.function.Consumer<AgentRunContext> selected=context->{};
+  private java.util.function.Consumer<SessionMetadata> ended=session->{};
+  public void onEnded(java.util.function.Consumer<SessionMetadata> ended){this.ended=ended;}
   public void onSelected(java.util.function.Consumer<AgentRunContext> selected){this.selected=selected;}
   public SessionLifecycle(SessionRepository repository, Clock clock) {
     this.repository = repository; this.clock = clock;
@@ -21,6 +23,13 @@ public final class SessionLifecycle {
     var session = repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Session"));
     if (!session.projectId().equals(projectId)) throw new SessionConflictException();
     return session;
+  }
+  /** Ends the client's activity, while keeping the Session resumable and its history intact. */
+  public SessionMetadata end(String id,String projectId) {
+    if(projectId==null||projectId.isBlank())throw new IllegalArgumentException("Project ID is required");
+    synchronized(repository) {
+      var session=validate(id,projectId);ended.accept(session);return session;
+    }
   }
   /** Persist an empty conversation without starting or inheriting a run. */
   public SessionMetadata create(ProjectContext project, String title) {

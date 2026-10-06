@@ -10,7 +10,7 @@ import dev.mikoto2000.rei.core.service.CommandCancellationService;
 
 @Component
 @Command(name="sleep",description="現在 Session の未処理 Turn から長期記憶を整理します",
-    subcommands={SleepCommand.Preview.class,SleepCommand.Status.class,SleepCommand.History.class})
+    subcommands={SleepCommand.Preview.class,SleepCommand.Status.class,SleepCommand.History.class,SleepCommand.Requests.class,SleepCommand.CancelRequest.class})
 public class SleepCommand implements Callable<Integer> {
   private final SleepService service;
   private final MemoryCommandSupport support;
@@ -61,5 +61,15 @@ public class SleepCommand implements Callable<Integer> {
   @Command(name="history") public static class History implements Callable<Integer> {
     @ParentCommand SleepCommand parent;
     public Integer call() { return parent.execute(parent.support::history); }
+  }
+  @Command(name="requests",description="現在Projectの保存済みAuto Sleep要求を表示") public static class Requests implements Callable<Integer> {
+    @ParentCommand SleepCommand parent;
+    public Integer call(){return parent.execute(parent.support::autoSleepRequests);}
+  }
+  @Command(name="cancel-request",description="確認したrevisionの未処理要求を取り消す。稼働中Sleepは停止しない") public static class CancelRequest implements Callable<Integer> {
+    @ParentCommand SleepCommand parent;
+    @Parameters(index="0") String session;
+    @Option(names="--revision",required=true) long revision;
+    public Integer call(){return parent.execute(()->parent.support.cancelAutoSleepRequest(session,revision));}
   }
 }
