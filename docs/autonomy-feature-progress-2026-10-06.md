@@ -251,3 +251,11 @@ status＋完全本文SHA-256一致を既存依存条件へ追加し、最大64Ki
 | Implemented | [検証済みReflection記憶](implementation-report-verified-reflection-memory.md) | verified-reflection-memory | 652aeada | 6d0925bb | 3253 / 606 |
 
 初期Red→5テストGreen→10新規テスト・関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Push済み。failure/error/skip各0。観測事実と教訓・会話turnを区別し、追加LLMなしでowner／snapshot／現在ファイル条件・atomic出典保存を確認した。Activity専用分析UIなどは引き続き対応対象。
+
+## 後続のNative Activity期間分析
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [Native Activity分析](implementation-report-native-activity-period-analysis.md) | native-activity-period-analysis | 46842000 | 821c4bc4 | 3258 / 607 |
+
+Java／Native／React Red→最小Green→未来日入力HTTP修正／fixture matcher修正→Java5・Native3・React5新規テスト→関連・全体回帰→feature Commit/Push→main Merge→Merge後三経路関連テスト→main Push済み。Java failure/error/skip各0、Native全96、React全72、typecheck PASS。保存観測を既存分析へ接続し、閲覧でcapture／モデル／Runを開始しない。SubAgent障害retryなどは引き続き対応対象。
