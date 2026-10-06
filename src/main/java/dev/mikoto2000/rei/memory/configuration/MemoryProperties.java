@@ -54,8 +54,15 @@ public record MemoryProperties(
   public record Sleep(
       @org.springframework.boot.context.properties.bind.DefaultValue("0.70") double minConfidence,
       @org.springframework.boot.context.properties.bind.DefaultValue("0.50") double minImportance,
-      int maxTurns, int maxInputTokens, int timeoutSeconds) {
+      int maxTurns, int maxInputTokens, int timeoutSeconds,
+      @org.springframework.boot.context.properties.bind.DefaultValue("0") int maxLlmCalls,
+      @org.springframework.boot.context.properties.bind.DefaultValue("0") long maxTotalTokens) {
+    public Sleep(double minConfidence,double minImportance,int maxTurns,int maxInputTokens,int timeoutSeconds) {
+      this(minConfidence,minImportance,maxTurns,maxInputTokens,timeoutSeconds,0,0);
+    }
+    @org.springframework.boot.context.properties.bind.ConstructorBinding
     public Sleep {
+      if(maxLlmCalls<0||maxLlmCalls>1000||maxTotalTokens<0)throw new IllegalArgumentException("Invalid Sleep model budgets");
       if (!Double.isFinite(minConfidence) || minConfidence < 0 || minConfidence > 1
           || !Double.isFinite(minImportance) || minImportance < 0 || minImportance > 1)
         throw new IllegalArgumentException("Invalid memory sleep thresholds");
