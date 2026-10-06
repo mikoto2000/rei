@@ -25,7 +25,7 @@ public class DependencyObservationService {
   }
   public PersistentDependencyRepository.Entry inspect(String project,String id,boolean network) {
     var entry=repo.prepare(project,id);
-    if(entry.spec().kind()==DependencySpec.Kind.HTTP_STATUS&&!network)throw new IllegalArgumentException("HTTP observation requires the network tool/control");
+    if(entry.spec().network()&&!network)throw new IllegalArgumentException("HTTP observation requires the network tool/control");
     if(PersistentDependencyRepository.terminal(entry.state())||entry.reason().equals("dependency_waiting")||entry.reason().equals("dependency_failed")){flushFacts();return entry;}
     if(!validProject(entry)){entry=repo.observe(entry,DependencyState.BLOCKED,"owner_unavailable");flushFacts();return entry;}
     var observed=probe.probe(entry);
@@ -48,7 +48,7 @@ public class DependencyObservationService {
       after=saved.id();
       try {
         var entry=repo.prepare(saved.projectId(),saved.id());if(PersistentDependencyRepository.terminal(entry.state())||entry.reason().equals("dependency_waiting")||entry.reason().equals("dependency_failed"))continue;
-        boolean http=entry.spec().kind()==DependencySpec.Kind.HTTP_STATUS;
+        boolean http=entry.spec().network();
         var permission=policy.evaluate(http?"checkHttpDependency":"checkDependency");
         if(permission!=PermissionDecision.AUTO_APPROVE)repo.observe(entry,DependencyState.BLOCKED,permission==PermissionDecision.DENY?"permission_denied":"permission_required");
         else inspect(entry.projectId(),entry.id(),http);

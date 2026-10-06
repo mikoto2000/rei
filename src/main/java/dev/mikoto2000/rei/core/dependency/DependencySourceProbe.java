@@ -50,6 +50,7 @@ public class DependencySourceProbe implements DependencyProbe {
         yield new DependencyObservation(entry.id(),state,!process.found()?"process_unavailable":"process_"+state.name().toLowerCase(java.util.Locale.ROOT));
       }
       case HTTP_STATUS -> http.probe(entry.id(),spec.target(),Integer.parseInt(spec.expected()));
+      case HTTP_BODY_SHA256 -> http.probeBody(entry.id(),spec.target(),Integer.parseInt(spec.expected().substring(0,3)),spec.expected().substring(4));
       case USER_ANSWER -> new DependencyObservation(entry.id(),entry.answer()==null?DependencyState.WAITING:DependencyState.COMPLETED,entry.answer()==null?"user_answer_waiting":"user_answer_received");
     };
   }
