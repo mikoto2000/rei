@@ -76,7 +76,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   public static class MonthlyCommand extends PeriodCommand {
     protected ActivityPeriodAnalysis.Period period(){return ActivityPeriodAnalysis.Period.MONTH;}
   }
-  @Command(name="coaching",description="Manual period coaching: status, configure, on, off, weekly, monthly")
+  @Command(name="coaching",description="Period coaching: status, configure, on, off, weekly, monthly")
   public static class CoachingCommand implements java.util.concurrent.Callable<Integer> {
     @ParentCommand private ActivityCommand parent;
     @Spec private picocli.CommandLine.Model.CommandSpec spec;
@@ -99,8 +99,8 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
             .anyMatch(name->spec.commandLine().getParseResult().hasMatchedOption(name)))throw new IllegalArgumentException("criteria options require configure");
         var service=parent.coaching;String result;
         switch(action) {
-          case "status" -> result=service.status().toString();
-          case "on" -> result="手動Coachingを有効にしました（通知なし）。"+service.setEnabled(true);
+          case "status" -> result=service.status()+"; automaticNotifications="+automaticEnabled();
+          case "on" -> result=(automaticEnabled()?"Coachingを有効にしました（自動通知設定あり）。":"手動Coachingを有効にしました（通知なし）。")+service.setEnabled(true);
           case "off" -> result="Coachingを無効にしました。"+service.setEnabled(false);
           case "configure" -> result="基準を保存しました。適用するには coaching on を実行してください。"+service.configure(new PeriodCoaching.Settings(false,categories,targetShare,observedMinutes,coverage,unknownShare,cooldownDays));
           case "weekly","monthly" -> result=service.evaluate(action.equals("weekly")?ActivityPeriodAnalysis.Period.WEEK:ActivityPeriodAnalysis.Period.MONTH,date);
@@ -110,6 +110,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
       } catch(java.time.DateTimeException | IllegalArgumentException e){spec.commandLine().getErr().println("Coachingの引数・基準を確認してください。未来日付は指定できません。");return 2;}
       catch(Exception e){spec.commandLine().getErr().println("Coachingの操作に失敗しました。ログを確認してください。");return 1;}
     }
+    private boolean automaticEnabled(){return parent.properties!=null && parent.properties.getCoaching().isAutomaticEnabled();}
   }
   @Command(name="context",description="Read-only saved Activity/Work Context references in the selected Project")
   public static class ContextCommand implements java.util.concurrent.Callable<Integer> {

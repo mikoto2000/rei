@@ -135,6 +135,11 @@ public class ExternalConfigFileService {
               diagnostics:
                 enabled: true
             keep-screenshots: false
+            coaching:
+              automatic-enabled: false
+              weekly-enabled: true
+              monthly-enabled: true
+              check-interval-seconds: 3600
             behavior:
               enabled: false
               check-interval-seconds: 60

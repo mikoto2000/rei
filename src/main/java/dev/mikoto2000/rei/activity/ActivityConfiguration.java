@@ -54,6 +54,17 @@ public class ActivityConfiguration {
   @Bean ActivityTools activityTools(ActivityTimeline timeline) {return new ActivityTools(timeline);}
   @Bean PeriodCoachingStore periodCoachingStore(javax.sql.DataSource ds){return new SqlitePeriodCoachingStore(ds);}
   @Bean PeriodCoachingService periodCoachingService(ActivityTimeline timeline,PeriodCoachingStore store){return new PeriodCoachingService(timeline,store,Clock.systemUTC());}
+  @Bean AutomaticPeriodCoaching automaticPeriodCoaching(ActivityProperties properties,PeriodCoachingService coaching,ActivityCapture capture,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.topic.AgentMessagePublisher> publisher,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.topic.AgentActivityTracker> tracker) {
+    return new AutomaticPeriodCoaching(properties,coaching,publisher.getIfAvailable(),tracker.getIfAvailable(),capture::isPaused,Clock.systemUTC());
+  }
+  @Bean ThreadPoolTaskExecutor periodCoachingExecutor(){return worker("rei-period-coaching-");}
+  @Bean PeriodCoachingJob periodCoachingJob(AutomaticPeriodCoaching service,@Qualifier("periodCoachingExecutor") ThreadPoolTaskExecutor executor){return new PeriodCoachingJob(service,executor);}
+  public record PeriodCoachingJob(AutomaticPeriodCoaching service,ThreadPoolTaskExecutor executor) {
+    @Scheduled(fixedDelayString="#{${rei.activity.coaching.check-interval-seconds:3600} * 1000}",initialDelayString="#{${rei.activity.coaching.check-interval-seconds:3600} * 1000}")
+    public void poll(){if(!service.enabled())return;try{executor.execute(service::tick);}catch(org.springframework.core.task.TaskRejectedException ignored){/* Never queue stale advice. */}}
+  }
   @Bean ActivityWorkContextService activityWorkContextService(ActivityStore store,org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextRepository> contexts,ActivityProperties properties) {
     return new ActivityWorkContextService(store,project->{
       var repository=contexts.getIfAvailable();return repository==null?java.util.List.of():repository.history(project,100);

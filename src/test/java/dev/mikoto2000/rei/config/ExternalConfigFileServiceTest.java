@@ -115,6 +115,11 @@ class ExternalConfigFileServiceTest {
         "rei.activity.detection.background-full-screen-enabled",false);
     expected.addAll(detectionSettings.keySet());
     detectionSettings.forEach((key,value)->assertEquals(value,template.get(key),key));
+    var coachingSettings=Map.of("rei.activity.coaching.automatic-enabled",false,
+        "rei.activity.coaching.weekly-enabled",true,"rei.activity.coaching.monthly-enabled",true);
+    expected.addAll(coachingSettings.keySet());
+    coachingSettings.forEach((key,value)->assertEquals(value,template.get(key),key));
+    assertEquals(3600,template.get("rei.activity.coaching.check-interval-seconds"));
     for(String feature:List.of("unknown-registry","entertainment-registry","rule-suggestion","diagnostics")) {
       String key="rei.activity.classification."+feature+".enabled";expected.add(key);assertEquals(true,template.get(key),key);
     }
