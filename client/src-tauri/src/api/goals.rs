@@ -22,6 +22,10 @@ struct Goal {
 struct Criterion {
     relative_file: String,
     sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    json_pointer: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    expected_json: Option<String>,
 }
 #[derive(Deserialize)]
 struct Inspection {

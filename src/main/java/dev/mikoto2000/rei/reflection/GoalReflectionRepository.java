@@ -38,7 +38,10 @@ public class GoalReflectionRepository {
       .orElseThrow(()->new IllegalArgumentException("Reflection not found in this Project"));}
   // Multiple criteria are ordered JSON arrays; single-file observations retain their original representation.
   private String expectedFiles(GoalRepository.Goal goal) {return goal.criteria().size()==1?goal.relativeFile():json(goal.criteria().stream().map(GoalRepository.FileCriterion::relativeFile).toList());}
-  private String expectedDigests(GoalRepository.Goal goal) {return goal.criteria().size()==1?goal.sha256():json(goal.criteria().stream().map(GoalRepository.FileCriterion::sha256).toList());}
+  private String expectedDigests(GoalRepository.Goal goal) {
+    if(goal.criteria().stream().anyMatch(GoalRepository.FileCriterion::jsonCriterion))return json(goal.criteria());
+    return goal.criteria().size()==1?goal.sha256():json(goal.criteria().stream().map(GoalRepository.FileCriterion::sha256).toList());
+  }
   private String json(Object value) {
     try {return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(value);}
     catch(com.fasterxml.jackson.core.JsonProcessingException impossible){throw new IllegalStateException(impossible);}

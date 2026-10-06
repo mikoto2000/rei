@@ -89,8 +89,8 @@ public class GoalLoopService {
     catch(RuntimeException error){goals.recordAttempt(claim,run,"BLOCKED","owner_unavailable");stop(claim,"BLOCKED","owner_unavailable");return;}
     var verification=verifier.verify(claim.goal());
     goals.recordAttempt(claim,run,verification.satisfied()?"VERIFIED":"UNVERIFIED",verification.reason());
-    if(verification.satisfied()){stop(claim,"COMPLETED","file_digest_verified");return;}
-    if(!verification.reason().equals("digest_mismatch")&&!verification.reason().equals("file_missing_or_not_regular")) {
+    if(verification.satisfied()){stop(claim,"COMPLETED",verification.reason());return;}
+    if(!java.util.Set.of("digest_mismatch","json_value_mismatch","file_missing_or_not_regular").contains(verification.reason())) {
       stop(claim,"BLOCKED",verification.reason());return;
     }
     next(claim);

@@ -14,16 +14,41 @@ public class FileGoalVerifier {
   public Verification verify(GoalRepository.Goal goal) {
     if(goal.criteria().isEmpty()||goal.criteria().size()>16)return new Verification(false,"verification_unavailable");
     for(var criterion:goal.criteria()) {
+      if(criterion.jsonCriterion()) {
+        if(goal.projectRoot()==null)return new Verification(false,"verification_unavailable");
+        try{var result=verifyJson(Path.of(goal.projectRoot()),criterion);if(!result.satisfied())return result;}
+        catch(IllegalArgumentException invalid){return new Verification(false,"verification_unavailable");}
+        continue;
+      }
       if(criterion.sha256()==null||!criterion.sha256().matches("[a-f0-9]{64}")||goal.projectRoot()==null)
         return new Verification(false,"verification_unavailable");
       try {var result=verify(Path.of(goal.projectRoot()),criterion);if(!result.satisfied())return result;}
       catch(IllegalArgumentException error){return new Verification(false,"verification_unavailable");}
     }
-    return new Verification(true,"file_digest_verified");
+    return new Verification(true,goal.criteria().stream().anyMatch(GoalRepository.FileCriterion::jsonCriterion)?"criteria_verified":"file_digest_verified");
+  }
+  private Verification verifyJson(Path root,GoalRepository.FileCriterion criterion) {
+    if(Thread.currentThread().isInterrupted())return new Verification(false,"verification_cancelled");
+    var condition=JsonFileGoalCondition.parse(criterion.jsonPointer(),criterion.expectedJson());
+    if(criterion.sha256()!=null&&!criterion.sha256().isEmpty())return new Verification(false,"verification_unavailable");
+    var safe=fingerprint(root,criterion.relativeFile(),false);
+    if(!safe.available())return new Verification(false,safe.reason());
+    Path file=root.resolve(criterion.relativeFile());
+    try(var channel=FileChannel.open(file,StandardOpenOption.READ,LinkOption.NOFOLLOW_LINKS)) {
+      var buffer=ByteBuffer.allocate(65537);
+      while(channel.read(buffer)>=0) {
+        if(Thread.currentThread().isInterrupted())return new Verification(false,"verification_cancelled");
+        if(!buffer.hasRemaining())return new Verification(false,"json_file_too_large");
+      }
+      var bytes=java.util.Arrays.copyOf(buffer.array(),buffer.position());
+      boolean matches=condition.matches(bytes);
+      return new Verification(matches,matches?"json_value_verified":"json_value_mismatch");
+    }catch(java.io.IOException invalid){return new Verification(false,Thread.currentThread().isInterrupted()?"verification_cancelled":"json_file_invalid");}
   }
   public record Fingerprint(boolean available,String sha256,String reason) {}
   public Fingerprint fingerprint(Path root,String relativeFile){return fingerprint(root,relativeFile,true);}
   public Verification verify(Path root,GoalRepository.FileCriterion criterion) {
+    if(criterion.jsonCriterion())return verifyJson(root,criterion);
     var observed=fingerprint(root,criterion.relativeFile(),criterion.sha256()!=null);
     if(!observed.available())return new Verification(false,observed.reason());
     if(criterion.sha256()==null)return new Verification(true,"file_exists");
