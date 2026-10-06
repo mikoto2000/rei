@@ -121,6 +121,9 @@ public final class SubAgentRunner {
                 if(error instanceof BoundedToolLoop.SharedBudgetExceeded) {
                   finish.accept(SubAgentResult.Status.FAILED,"SubAgent stopped: SHARED_LLM_BUDGET_EXHAUSTED");return;
                 }
+                if(error instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException budgetStopped) {
+                  finish.accept(SubAgentResult.Status.FAILED,"SubAgent stopped: "+budgetStopped.reason());return;
+                }
                 var status = error instanceof TimeoutException ? SubAgentResult.Status.TIMEOUT
                     : error instanceof BoundedToolLoop.MaxStepsExceeded ? SubAgentResult.Status.MAX_STEPS_EXCEEDED
                     : error instanceof CancellationException ? SubAgentResult.Status.CANCELLED : SubAgentResult.Status.FAILED;

@@ -34,11 +34,28 @@ public class OutputLimitReplanner {
   }
 
   public OutputLimitReplanPlan replan(OutputLimitReplanRequest request) {
+    return replan(request,null);
+  }
+  public OutputLimitReplanPlan replan(OutputLimitReplanRequest request,java.util.function.Consumer<Integer> usageRecorder) {
     log.info("Output limit replan planner started: replanCount={}, remainingLlmCalls={}",
         request.replanCount(), request.remainingLlmCalls());
     Prompt prompt = new Prompt(buildPrompt(request),
         modelProvider.chatOptions(LlmFeature.OUTPUT_LIMIT_PLANNER, modelHolderService.get()));
-    ChatResponse response = modelProvider.chatModel(LlmFeature.OUTPUT_LIMIT_PLANNER).call(prompt);
+    ChatResponse response;
+    try {
+      var model=modelProvider.chatModel(LlmFeature.OUTPUT_LIMIT_PLANNER);
+      if(usageRecorder!=null)dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+      response=model.call(prompt);
+    }
+    catch(RuntimeException error) {
+      dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
+      if(usageRecorder!=null)usageRecorder.accept(null);
+      throw error;
+    }
+    if(usageRecorder!=null) {
+      var usage=response==null?null:response.getMetadata().getUsage();
+      usageRecorder.accept(usage==null?null:usage.getTotalTokens());
+    }
     String text = response.getResult().getOutput().getText();
     OutputLimitReplanPlan plan = parser.parse(text, properties.getOutputLimit().getMaxSubgoalsPerReplan());
     log.info("Output limit replan planner completed: subgoals={}", plan.subgoals().size());

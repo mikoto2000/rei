@@ -191,6 +191,7 @@ public class ExternalConfigFileService {
               max-replans-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL:2}
               max-subgoals-per-replan: ${REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN:8}
               max-llm-calls-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN:120}
+              max-total-tokens-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_TOTAL_TOKENS_PER_RUN:0}
             features:
               activity-behavior:
                 base-url: ${REI_LLM_ACTIVITY_BEHAVIOR_BASE_URL:}

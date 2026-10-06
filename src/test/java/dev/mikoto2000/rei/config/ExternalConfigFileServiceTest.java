@@ -70,6 +70,7 @@ class ExternalConfigFileServiceTest {
     assertTrue(content.contains("REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL"));
     assertTrue(content.contains("REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN"));
     assertTrue(content.contains("REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN"));
+    assertTrue(content.contains("REI_LLM_OUTPUT_LIMIT_MAX_TOTAL_TOKENS_PER_RUN:0"));
     assertTrue(content.contains("REI_LLM_CHAT_BASE_URL"));
     assertTrue(content.contains("REI_LLM_SEARCH_BASE_URL"));
     assertTrue(content.contains("REI_LLM_BLUESKY_REPLY_BASE_URL"));

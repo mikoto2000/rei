@@ -36,10 +36,19 @@ public final class BoundedToolLoop {
       if(reservation!=null&&!reservation.tryReserve())return Mono.error(new SharedBudgetExceeded());
       checkActive.run();
       AtomicReference<ChatResponse> aggregated = new AtomicReference<>();
-      return new MessageAggregator().aggregate(model.stream(prompt), aggregated::set).then(Mono.defer(() -> {
+      var started=new java.util.concurrent.atomic.AtomicBoolean();
+      var reported=new java.util.concurrent.atomic.AtomicBoolean();
+      return new MessageAggregator().aggregate(reactor.core.publisher.Flux.defer(()->{
+        started.set(true);return model.stream(prompt);
+      }), aggregated::set).then(Mono.defer(() -> {
         checkActive.run();
         var response = aggregated.get();
         if (response == null || response.getResult() == null) return Mono.error(new IllegalStateException("Empty response"));
+        if(reservation!=null) {
+          reported.set(true);
+          var usage=response.getMetadata().getUsage();
+          reservation.recordTotalTokens(usage==null?null:usage.getTotalTokens());
+        }
         if (OutputLimitDetector.isOutputLimitReached(response)) return Mono.error(new IllegalStateException("Output limit"));
         if (!response.hasToolCalls()) {
           var history = new ArrayList<Message>(prompt.getInstructions());
@@ -67,7 +76,13 @@ public final class BoundedToolLoop {
           }
           return iteration(model, new Prompt(result.conversationHistory(), prompt.getOptions()), remaining, owner, checkActive,reservation);
         });
-      }));
+      })).doOnError(error->{
+        if(reservation!=null&&reservation.tokenLimitEnabled()&&started.get()&&!reported.getAndSet(true))reservation.recordTotalTokens(null);
+      }).doFinally(signal->{
+        if(signal==reactor.core.publisher.SignalType.CANCEL&&reservation!=null&&reservation.tokenLimitEnabled()&&started.get()&&!reported.getAndSet(true)) {
+          try{reservation.recordTotalTokens(null);}catch(RuntimeException stopped){/* The accounting state already prevents further calls. */}
+        }
+      });
     });
   }
 }
