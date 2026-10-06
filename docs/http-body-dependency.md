@@ -19,6 +19,6 @@ checkHttpDependency／waitForHttpDependencyと、明示有効化した既存watc
 
 各request最大2秒、redirectなし、認証headerなし。waitは既存の最大60秒・最小1秒間隔。ByteBufferを逐次hashし、本文を保持・decode・SQLite保存・返却しない。サイズ条件は受け入れる本文の上限で、開始済みの通信量の厳密な上限ではない。取消では所有requestをcancelし、既存のinterruptを保持する。
 
-ハッシュ対象はHttpClientが届けた本文byte列。charset変換・JSON正規化・gzip展開は追加しない。動的な日時や空白も異なるdigestになる。今回の条件は既知の完全本文の一致であり、任意code predicate／JSON field／部分文字列／自動baseline取得・書き込みは対象外。
+ハッシュ対象はHttpClientが届けた本文byte列。charset変換・JSON正規化・gzip展開は追加しない。動的な日時や空白も異なるdigestになる。今回の条件は既知の完全本文の一致であり、任意code predicate／部分文字列／自動baseline取得・書き込みは対象外。JSON field条件は後続の[HTTP JSON値依存条件](http-json-dependency.md)で対応した。
 
 既存SQLiteのkind/expectedへ保存するため、新しいDB/table/migrationは追加しない。新kindを読むには対応版が必要で、旧アプリへのdowngrade互換は保証しない。外部の実サービスは呼び出さず、検証はloopback HTTP fixtureで行った。

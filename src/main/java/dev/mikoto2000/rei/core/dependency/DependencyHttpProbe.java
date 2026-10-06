@@ -5,4 +5,7 @@ package dev.mikoto2000.rei.core.dependency;
   default DependencyObservation probeBody(String id,String url,int expectedStatus,String sha256) {
     return new DependencyObservation(id,DependencyState.BLOCKED,"http_body_verification_unsupported");
   }
+  default DependencyObservation probeJson(String id,String url,String expected) {
+    return new DependencyObservation(id,DependencyState.BLOCKED,"http_json_verification_unsupported");
+  }
 }
