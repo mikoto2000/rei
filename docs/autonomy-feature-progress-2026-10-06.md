@@ -1,6 +1,6 @@
 # 自律機能の継続作業記録（2026-10-06）
 
-最初の継続7件に加え、後続の継続でSubAgent関連3件、共有Run報告token上限、Goal永続報告token上限を完了した。後続分は末尾の表に記録する。
+最初の継続7件に加え、後続の継続でSubAgent関連3件、共有Run報告token上限、Goal永続報告token上限、Run内context要約token計上を完了した。後続分は末尾の表に記録する。
 
 この継続作業で次の7件を独立ブランチで実装し、Red→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後確認→main Pushを完了した。各実装の制限・追加候補を残し、全候補の完成とは区別する。初回からの一覧は[実装状況](autonomy-feature-audit.md)を参照。
 
@@ -30,7 +30,7 @@ Merged intoは全件main。各全体回帰はPASS（failure/error/skip各0）。
 
 ## Remaining
 
-全対応の完了は宣言しない。監査表には意味検証の実モデル品質評価・別モデル合意、独立要約／Sleep／CLI／embedding/rerank予算、汎用Goal検証条件、意味的なActivity個人化、複数ファイル／binary文書／描画検証、外部通知・複数External Agentなどの追加候補が残る。既存の基本機能の完成と、これらの拡張候補は別に扱う。自由文の意味検証と読み取り系のSubAgent承認継承、明示Run経路の報告token上限とGoal跨ぎ永続報告token上限は以下の後続作業で実装した。
+全対応の完了は宣言しない。監査表には意味検証の実モデル品質評価・別モデル合意、RunContextなしの要約／Sleep／CLI／embedding/rerank予算、汎用Goal検証条件、意味的なActivity個人化、複数ファイル／binary文書／描画検証、外部通知・複数External Agentなどの追加候補が残る。既存の基本機能の完成と、これらの拡張候補は別に扱う。自由文の意味検証と読み取り系のSubAgent承認継承、明示Run経路の報告token上限、Goal跨ぎ永続報告token上限、Run内context要約token計上は以下の後続作業で実装した。
 
 有料Providerや実LLMを使うPaper E2E、LLMの編集品質評価は実施していない。CLI継続は実機helpの対応確認とプロセスfixtureで検証し、実アカウントへreview/resumeは送っていない。これらを実施済みとする報告はしない。
 
@@ -67,3 +67,13 @@ Red→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge�
 Red→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。最新全体回帰は3072 tests / 588 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。
 
 既定0で無効。新規Goalの上限を作成時に保存し、使用量を複数Run・再開・再起動に跨いで累積する。未知usageや未報告予約は不明状態として保持し、reconcileで補充しない。親・子の二重計上拒否、Goal単独上限による実Chatの超過Tool非実行、旧DB移行、並列SQLite報告10組を検証した。未報告予約から次のattemptに進む所有権例外と、並列報告のSQLITE_BUSYを検出し、停止条件と同一トランザクション読み取りを修正後に全体回帰を再実行した。詳細は[設定と制限](persistent-goal-token-limit.md)に記録した。
+
+## 後続のRun内context要約token計上
+
+| Status | 機能 / 実装レポート | Branch（codex/以下） | Feature Commit | main Merge | 全体回帰 tests / suites |
+|---|---|---|---|---|---|
+| Implemented | [context要約の共有token計上](implementation-report-context-summary-token-budget.md) | context-summary-token-budget | dbf29060 | 53ce0a61 | 3079 / 589 |
+
+Red→Green→関連・全体回帰→feature Commit/Push→main Merge→Merge後関連テスト→main Pushまで完了した。最新全体回帰は3079 tests / 589 suites、failure/error/skip各0。Javaのみ変更し、Native/Reactは再実行していない。
+
+要約は既存の呼出回数予算を既に消費していたため、usageの集約後にRunへ報告する処理を追加した。Goal単独上限でも永続使用量へ渡る。超過／不明をfallbackに隠さず、要約で上限へ達した親を開始しない。不採用・length応答でも既知usageを保持し、timeoutのProvider取消、既存キャンセル、超過／不明の非保存と上限ちょうどの保存を確認した。新しい設定・予算DB・Runは追加していない。詳しい範囲は[context-summary-token-budget.md](context-summary-token-budget.md)。
