@@ -287,6 +287,8 @@ public class ExternalConfigFileService {
             sleep:
               max-llm-calls: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS:0}
               max-total-tokens: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS:0}
+              max-llm-calls-per-project: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS_PER_PROJECT:0}
+              max-total-tokens-per-project: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS_PER_PROJECT:0}
           feed:
             briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:3}
             cron: ${REI_FEED_CRON:0 0 4 * * *}
