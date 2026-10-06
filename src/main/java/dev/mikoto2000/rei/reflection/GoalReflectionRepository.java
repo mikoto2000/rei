@@ -36,6 +36,7 @@ public class GoalReflectionRepository {
   public List<Item> list(String project) {return db.sql("SELECT * FROM goal_reflections WHERE project=? ORDER BY created DESC,id LIMIT 256").param(project).query(ROW).list();}
   public Item get(String project,String id) {return db.sql("SELECT * FROM goal_reflections WHERE project=? AND id=?").params(project,id).query(ROW).optional()
       .orElseThrow(()->new IllegalArgumentException("Reflection not found in this Project"));}
+  public boolean matchesCriteria(Item item,GoalRepository.Goal goal){return item.expectedFile().equals(expectedFiles(goal))&&item.expectedSha256().equals(expectedDigests(goal));}
   // Multiple criteria are ordered JSON arrays; single-file observations retain their original representation.
   private String expectedFiles(GoalRepository.Goal goal) {return goal.criteria().size()==1?goal.relativeFile():json(goal.criteria().stream().map(GoalRepository.FileCriterion::relativeFile).toList());}
   private String expectedDigests(GoalRepository.Goal goal) {

@@ -39,7 +39,8 @@ public class MemoryCommandSupport {
         +"\ncontent: "+m.content()+"\nsummary: "+m.summary()+"\nconfidence: "+m.confidence()+"\nimportance: "+m.importance()
         +"\ncreatedAt: "+m.createdAt()+"\nupdatedAt: "+m.updatedAt()+"\nlastAccessedAt: "+m.lastAccessedAt()
         +"\nvalidFrom: "+m.validFrom()+"\nvalidUntil: "+m.validUntil()+"\nsupersededBy: "+m.supersededBy()
-        +"\nsource sessions/turns: "+m.sources()+"\ntags: "+m.tags()+"\nrelations: "+repository.relations(id);
+        +"\nsource sessions/turns: "+m.sources()+"\ntags: "+m.tags()+"\nrelations: "+repository.relations(id)
+        +repository.verifiedReflectionProofByMemory(project(),id).map(proof->"\nverified reflection proof: "+proof).orElse("");
   }
   public String forget(String id) { enabled(); visible(id); repository.archive(id); return "Archived: "+id; }
   private LongTermMemory visible(String id) {
