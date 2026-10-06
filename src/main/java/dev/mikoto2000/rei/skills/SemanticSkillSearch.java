@@ -6,17 +6,24 @@ import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.vectorstore.ReciprocalRankFusion;
 import dev.mikoto2000.rei.vectordocument.CandidateReranker;
 
-/** Small live-catalog metadata search. No persisted index, instructions, query cache or Skill execution. */
+/** Live-catalog metadata search with an optional persisted vector cache; never caches queries or instructions. */
 public final class SemanticSkillSearch {
   private static final org.slf4j.Logger log=org.slf4j.LoggerFactory.getLogger(SemanticSkillSearch.class);
   private final SemanticSkillProperties settings;
   private final Supplier<SkillMetadataEmbedding> embedding;
   private final Supplier<CandidateReranker> reranker;
   private final LongSupplier nanos;
+  private final SkillEmbeddingIndex index;
+  private volatile Set<String> indexedProfiles;
+  private volatile boolean bypassPersistent;
   private volatile Map<String,float[]> cache=Map.of();
   private volatile Long failureAt;
   public SemanticSkillSearch(SemanticSkillProperties settings,Supplier<SkillMetadataEmbedding> embedding,Supplier<CandidateReranker> reranker,LongSupplier nanos) {
+    this(settings,embedding,reranker,nanos,null);
+  }
+  public SemanticSkillSearch(SemanticSkillProperties settings,Supplier<SkillMetadataEmbedding> embedding,Supplier<CandidateReranker> reranker,LongSupplier nanos,SkillEmbeddingIndex index) {
     this.settings=settings;this.embedding=embedding;this.reranker=reranker;this.nanos=nanos;
+    this.index=index;
   }
   public boolean enabled(){return settings.enabled();}
   public List<SkillCandidate> select(String request,List<AgentSkill> skills,List<SkillCandidate> lexical,int limit) {
@@ -26,11 +33,24 @@ public final class SemanticSkillSearch {
     List<SkillCandidate> dense;
     try {
       var eligible=skills.stream().filter(AgentSkill::enabled).filter(s->profile(s).length()<=2048).toList();
-      if(eligible.isEmpty())return lexical.stream().limit(limit).toList();
+      if(eligible.isEmpty()) {
+        cache=Map.of();
+        if(persistent()&&!Objects.equals(indexedProfiles,Set.of()))try {
+          index.replace(settings.indexNamespace(),Map.of());RunCancellation.propagate(null);indexedProfiles=Set.of();
+        }catch(RuntimeException error){RunCancellation.propagate(error);log.warn("Skill index cleanup unavailable ({})",error.getClass().getSimpleName());}
+        return lexical.stream().limit(limit).toList();
+      }
       var model=embedding.get();if(model==null)return lexical.stream().limit(limit).toList();
       var profiles=eligible.stream().map(SemanticSkillSearch::profile).distinct().toList();
       var old=cache;var vectors=new LinkedHashMap<String,float[]>();
       for(var profile:profiles)if(old.containsKey(profile))vectors.put(profile,old.get(profile));
+      if(persistent()&&!bypassPersistent) {
+        var toLoad=profiles.stream().filter(p->!vectors.containsKey(p)).toList();
+        if(!toLoad.isEmpty())try {
+          var saved=index.load(settings.indexNamespace(),toLoad);RunCancellation.propagate(null);
+          for(var profile:toLoad)if(saved.containsKey(profile))vectors.put(profile,normalized(saved.get(profile)));
+        }catch(RuntimeException error){RunCancellation.propagate(error);log.warn("Skill index read unavailable; using live metadata ({})",error.getClass().getSimpleName());}
+      }
       var missing=profiles.stream().filter(p->!vectors.containsKey(p)).toList();
       if(!missing.isEmpty()) {
         var batch=model.embed(missing);RunCancellation.propagate(null);
@@ -40,8 +60,15 @@ public final class SemanticSkillSearch {
       var queryBatch=model.embed(List.of(request));RunCancellation.propagate(null);
       if(queryBatch==null || queryBatch.size()!=1)throw new IllegalStateException("Invalid query embedding count");
       var query=normalized(queryBatch.getFirst());
-      for(var vector:vectors.values())if(vector.length!=query.length)throw new IllegalStateException("Embedding dimensions changed");
+      for(var vector:vectors.values())if(vector.length!=query.length) {
+        bypassPersistent=true;
+        if(persistent())try{index.invalidate(settings.indexNamespace());}catch(RuntimeException error){RunCancellation.propagate(error);log.warn("Skill index invalidation unavailable ({})",error.getClass().getSimpleName());}
+        indexedProfiles=null;throw new IllegalStateException("Embedding dimensions changed");
+      }
       cache=Map.copyOf(vectors);failureAt=null;
+      if(persistent()&&(!Objects.equals(indexedProfiles,vectors.keySet())||!missing.isEmpty()))try {
+        index.replace(settings.indexNamespace(),vectors);RunCancellation.propagate(null);indexedProfiles=Set.copyOf(vectors.keySet());bypassPersistent=false;
+      }catch(RuntimeException error){RunCancellation.propagate(error);log.warn("Skill index write unavailable; keeping live candidates ({})",error.getClass().getSimpleName());}
       if(zero(query))return lexical.stream().limit(limit).toList();
       dense=eligible.stream().map(s->new Dense(s,cosine(query,vectors.get(profile(s)))))
           .filter(s->s.score()>=settings.minimumSimilarity()).sorted(Comparator.comparingDouble(Dense::score).reversed().thenComparing(s->identity(s.skill())))
@@ -73,6 +100,7 @@ public final class SemanticSkillSearch {
     return ordered.stream().limit(limit).toList();
   }
   static String profile(AgentSkill skill){return "name: "+SkillCandidateSelector.normalize(skill.name())+"\ndescription: "+SkillCandidateSelector.normalize(skill.description())+"\nkeywords: "+String.join(", ",skill.keywords().stream().map(SkillCandidateSelector::normalize).toList());}
+  private boolean persistent(){return settings.persistentIndexEnabled()&&index!=null;}
   static String identity(AgentSkill skill){return (skill.skillFile()==null?"":skill.skillFile().toAbsolutePath().normalize().toString())+"#"+SkillCandidateSelector.normalize(skill.name());}
   private record Dense(AgentSkill skill,double score) {}
   private static float[] normalized(float[] vector) {

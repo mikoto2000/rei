@@ -12,7 +12,10 @@ public class SemanticSkillConfiguration {
   @Bean(destroyMethod="close") SkillEmbeddingClient skillEmbeddingClient(ObjectProvider<EmbeddingModel> embedding) {
     return new SkillEmbeddingClient(()->{var model=embedding.getIfAvailable();return model==null?null:model::embed;},java.time.Duration.ofSeconds(15));
   }
-  @Bean SemanticSkillSearch semanticSkillSearch(SemanticSkillProperties settings,SkillEmbeddingClient embedding,ObjectProvider<CandidateReranker> reranker) {
-    return new SemanticSkillSearch(settings,()->embedding,reranker::getIfAvailable,System::nanoTime);
+  @Bean SkillEmbeddingIndex skillEmbeddingIndex(@org.springframework.beans.factory.annotation.Qualifier("dataSource") javax.sql.DataSource data) {
+    return new SqliteSkillEmbeddingIndex(data);
+  }
+  @Bean SemanticSkillSearch semanticSkillSearch(SemanticSkillProperties settings,SkillEmbeddingClient embedding,ObjectProvider<CandidateReranker> reranker,SkillEmbeddingIndex index) {
+    return new SemanticSkillSearch(settings,()->embedding,reranker::getIfAvailable,System::nanoTime,index);
   }
 }
