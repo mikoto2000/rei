@@ -117,3 +117,20 @@ Run/Session/mailbox/Background operation関連の9クラス回帰は成功。
 実行: JDK25、`mvnw.cmd -q -Pfull clean test`。
 DB migrationなし、config追加なし、固定上限の利用説明をconfiguration.mdへ追加した。
 Native/Reactは変更していない。実サービス・モデルは実行していない。
+
+## 今回ここまでの検証・Git receipt
+
+| 作業 | Feature branch | Feature commit | Main merge commit | Tests |
+|---|---|---|---|---|
+| 全件開始時監査 | codex/remaining-features-audit | 8ddfa487 | 0ccd6898 | 開始時関連4 suites / 9 tests成功 |
+| Windows実JVM起動harness | codex/windows-checkpoint-restart-harness | 5d5f74ee | 123ad0f8 | 5 suites / 26 tests成功、後続全体回帰成功 |
+| Run受付上限/HTTP 429 | codex/bounded-run-admission | cfab4654 | 34cf9b61 | 全体624 suites / 3466 tests成功、merge後14 suites / 54 tests成功 |
+
+全体回帰・merge後回帰ともfailure/error/skipped各0。live E2Eは未実施。
+Native/Rust・React・typecheckは未実施（この変更はJavaとdocsのみ）。
+上記feature/mergeはpush済み。検証用worktreeは34cf9b61時点でcleanを確認した。
+元checkoutは開始時のLLM変更と引き継ぎ文書を保持するためdirtyのままであり、cleanと報告しない。
+
+依頼全体は未完了。P1のREAD並行実行・Native入力、P2 Task projection、P3共通Artifactから
+順に実装する必要があり、開始時監査表の残りも未完了である。
+今回の受付上限とharness修正を全Phase完成へ読み替えない。
