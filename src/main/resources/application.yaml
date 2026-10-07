@@ -213,9 +213,16 @@ rei:
     delivery:
       enabled: ${REI_ATTENTION_DELIVERY_ENABLED:false}
       automatic: ${REI_ATTENTION_DELIVERY_AUTOMATIC:false}
+      provider: ${REI_ATTENTION_DELIVERY_PROVIDER:WEBHOOK}
       endpoint: ${REI_ATTENTION_DELIVERY_ENDPOINT:}
       bearer-token: ${REI_ATTENTION_DELIVERY_BEARER_TOKEN:}
       projects: ${REI_ATTENTION_DELIVERY_PROJECTS:}
+    slack:
+      enabled: ${REI_ATTENTION_SLACK_ENABLED:false}
+      endpoint: ${REI_ATTENTION_SLACK_ENDPOINT:https://slack.com/api/chat.postMessage}
+      bot-token: ${REI_ATTENTION_SLACK_BOT_TOKEN:}
+      channel: ${REI_ATTENTION_SLACK_CHANNEL:}
+      channels: ${REI_ATTENTION_SLACK_CHANNELS:}
   skills:
     enabled: ${REI_SKILLS_ENABLED:true}
     directories:

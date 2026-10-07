@@ -483,6 +483,11 @@ Goal/Dependencyの宣言的JSON条件は `REI_PREDICATES_ENABLED`（既定false�
 Reflectionのlesson候補管理は `REI_REFLECTION_LESSONS_ENABLED`（既定false）。
 人による明示レビュー、反復証拠、反例・修正・鮮度のgateを持ち、自動で長期記憶に保存しない。
 操作と制限は [Reflection lessons](reflection-lessons.md) を参照。
+
+通知の `REI_ATTENTION_DELIVERY_PROVIDER` は既定WEBHOOK、Slackを使う場合はSLACK。
+`REI_ATTENTION_SLACK_ENABLED`（既定false）、`BOT_TOKEN`、`CHANNEL`、`CHANNELS`（同prefix）を設定する。
+既存delivery enabled/Project allowlist/Policyも必要。Slackの送信先とsecretは管理者設定だけで指定する。
+receipt・rate limit・UNKNOWN・retryとfixture設定は [Slack通知](slack-notification-provider.md) を参照。
 version/schema、AND/OR/NOT/型比較/MATCH、UNKNOWNと各上限は[Declarative predicates](declarative-predicates.md)を参照。
 
 `rei.task-manager.enabled=true`（既定false）で認証済みHTTP/Nativeの横断Task一覧・個別操作を
