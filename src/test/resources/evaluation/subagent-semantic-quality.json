@@ -1,0 +1,7 @@
+[
+ {"id":"correct","category":"correct","task":"Report the observed test outcome","answer":"CORRECT: the observed test passed","observations":[{"tool":"test","arguments":"{}","output":"test outcome PASS"}],"expected":"ACCEPT"},
+ {"id":"subtle","category":"subtly wrong","task":"Report the number of passing tests","answer":"SUBTLE: all 12 tests passed","observations":[{"tool":"test","arguments":"{}","output":"11 passed, 1 skipped"}],"expected":"REJECT"},
+ {"id":"unsupported","category":"unsupported","task":"Report file content","answer":"UNSUPPORTED: the file contains the required value","observations":[],"expected":"REJECT"},
+ {"id":"contradiction","category":"contradictory","task":"Report observed build outcome","answer":"CONTRADICTORY: the build passed","observations":[{"tool":"build","arguments":"{}","output":"build failed"}],"expected":"REJECT"},
+ {"id":"insufficient","category":"insufficient evidence","task":"Determine whether hidden content meets the requirement","answer":"INSUFFICIENT: unable to determine from available evidence","observations":[],"expected":"ABSTAIN"}
+]
