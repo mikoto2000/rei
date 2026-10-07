@@ -96,6 +96,10 @@ public final class RunRegistry implements AutoCloseable {
   }
   /** Delegation retains the existing child Run, with the human owner's Session as metadata. */
   public synchronized void registerChild(AgentRunContext child,AgentRunContext parent,String agent) {
+    registerChild(child,parent,agent,null);
+  }
+  public synchronized void registerChild(AgentRunContext child,AgentRunContext parent,String agent,String durableTaskId) {
+    if(durableTaskId!=null && !durableTaskId.matches("[A-Za-z0-9_-]{1,64}"))throw new IllegalArgumentException("Invalid durable child reference");
     if(!Objects.equals(child.projectId(),parent.projectId())||!child.projectRoot().equals(parent.projectRoot())
         ||child.runId().equals(parent.runId())||parent.projectId()==null||agent==null||agent.isBlank()||agent.length()>128)
       throw new IllegalArgumentException("Invalid child ownership");
@@ -103,7 +107,7 @@ public final class RunRegistry implements AutoCloseable {
     if(!owner.context().equals(parent)||!ownsExecution(parent.runId())||owner.status().isTerminal())
       throw new dev.mikoto2000.rei.application.state.OperationConflictException();
     if(runs.containsKey(child.runId()))throw new IllegalArgumentException("Duplicate run");
-    var origin=new RunSnapshot.ChildOrigin(parent.runId(),owner.childOrigin()==null?parent.conversationId():owner.childOrigin().sessionId(),agent);
+    var origin=new RunSnapshot.ChildOrigin(parent.runId(),owner.childOrigin()==null?parent.conversationId():owner.childOrigin().sessionId(),agent,durableTaskId);
     var value=new RunSnapshot(child,RunStatus.QUEUED,null,null,null,origin);save(value);runs.put(child.runId(),value);owned.add(child.runId());
   }
   public synchronized RunSnapshot get(String runId) {

@@ -466,6 +466,10 @@ native session継続は `REI_CLAUDE_PERSIST_SESSIONS`、修正案→Change Set�
 
 ## Agent Runの受付上限
 
+SubAgentの永続child checkpointは `REI_SUBAGENTS_DURABLE_ENABLED` で明示有効化（既定false）。
+追加token上限は `REI_SUBAGENTS_DURABLE_MAX_TOTAL_TOKENS`（既定0、親Run/Goal予算は常に共有）。
+保存容量、UNKNOWN照合、明示再開とTask参照は[Durable SubAgent](durable-subagents.md)を参照。
+
 `rei.task-manager.enabled=true`（既定false）で認証済みHTTP/Nativeの横断Task一覧・個別操作を
 有効化する。設定、保存期間、復元と操作の詳細は[Task Manager](task-manager.md)を参照。
 

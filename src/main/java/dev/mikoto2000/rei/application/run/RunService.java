@@ -91,7 +91,8 @@ public class RunService implements AutoCloseable {
   public void finishMissingTerminal(AgentRunContext context,RunStatus terminal) {
     if(!terminal.isTerminal())throw new IllegalArgumentException("Terminal state required");
     synchronized(monitor()) {
-      var failure=terminal==RunStatus.FAILED?new RunFailure("ExecutionFailure","Application Run failed"):null;
+      var failure=terminal==RunStatus.UNKNOWN?new RunFailure("UnknownOutcome","Application Run outcome unknown; inspect saved child checkpoint")
+          :terminal==RunStatus.FAILED?new RunFailure("ExecutionFailure","Application Run failed"):null;
       if(registry.transition(context.runId(),terminal,failure)) {
         var event=switch(terminal) {
           case COMPLETED->events.runCompleted(context.runId(),0);

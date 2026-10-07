@@ -363,3 +363,35 @@ adapter・履歴/claim・Change Set・共有予算・並列item・実Git隔離/m
 
 Java全体659 suites / 3562 tests、failure/error/skipped各0。Native全体120 tests、
 React25 suites / 99 testsとtypecheck成功。Claudeの追加5機能をlocal fixtureとしてIMPLEMENTED。
+
+Claude Git receipt: feature `ac582081`、main merge `4c8cda8d0bb4cd8bb22305998e22c884db4da32a`、両方push済み。
+統合後Java関連12 suites / 79 tests、Native120 tests、React25 suites / 99 testsとtypecheck成功、failure/error/skipped各0。
+
+## Phase 3: Durable SubAgent resume
+
+branch `codex/durable-subagent-resume`、fetch済み基準main `4c8cda8d`。
+既存SubAgentRunner・RunRegistryの親子Run・共通Run/Goal予算を再利用する。
+現状の子Run状態だけでは、再起動後の消費予算・未確定Tool・保存結果照合と明示child resumeが不足している。
+
+子checkpointを既存primary SQLiteの `subagent_checkpoints` に保存し、runnerの前後と共通Tool境界へ接続した。
+子IDと原親Run/Project/root/human Session、現在の子Run、definition/schema/Git観測baseline、消費・予約予算、
+pending model/Tool、結果hashをversion/revision付きで保持する。既定OFF、親Run/Goal予算必須。
+native model呼出し・Toolより先に予約/STARTEDを永続化し、PID/start identity喪失をstartupでUNKNOWNへ照合する。
+未確定Toolは明示human確認までresume不可。token上限下の未報告usageは予算を復活させず停止する。
+保存結果一覧・取得はREAD、照合はEXCLUSIVEのhuman、再開はID/revisionを含む現在の完全一致した明示依頼を要求する。
+再開は保存taskと観測からbounded childを新規実行し、残予算を保持する。モデル履歴・中間Tool結果・承認・思考を自動再生しない。
+既存Task Managerの子Runにcheckpoint参照を加え、UNKNOWN状態をRunRegistryとも一致させた。
+既存RunServiceのUNKNOWN終了でnullを参照する問題も、この結合Redに基づき修正した。
+
+Red→Greenでowner隔離、restart、runner/schema再生成、cancel/明示resume、未知Tool非再試行、
+モデル途中crash、stale revision/duplicate claim、READ_ONLY書込拒否、総保存quota/旧checkpoint保持と公開Tool経路を検証した。
+新旧SubAgent・並列batch・Task Managerの関連回帰を実施。設定と操作は[Durable SubAgent](durable-subagents.md)を参照。
+
+Git baselineの共通読取がrepository設定fsmonitorを起動することを実GitのRedで確認し、
+`--no-optional-locks -c core.fsmonitor=false` を指定して外部補助プログラムを起動しないようにした。
+token usageの0も既存親予算と同じ不明判定とし、crash後のtoken予算復活を拒否する。
+
+Java全体661 suites / 3573 tests、failure/error/skipped各0で成功。
+Native全体120 tests、React25 suites / 99 testsとtypecheck成功。
+Durable childの最低要件をdeterministic model/SQLite/実Gitと公開ToolでIMPLEMENTED。
+DAG/consensusは別機能branchで続ける。実モデル品質を検証済みと読み替えない。

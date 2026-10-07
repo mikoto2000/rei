@@ -5,6 +5,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 class CheckpointReconcilerTest {
+  @Test void readingGitBaselineDoesNotExecuteRepositoryConfiguredFsmonitor()throws Exception {
+    Path repository=Files.createDirectory(root.resolve("git-fixture"));
+    var init=new ProcessBuilder("git","init","--quiet",repository.toString()).start();assertEquals(0,init.waitFor());
+    Path hook=repository.resolve(".git/fsmonitor-fixture.sh");Files.writeString(hook,"#!/bin/sh\nprintf called > fsmonitor-called.txt\nexit 0\n");hook.toFile().setExecutable(true);
+    var config=new ProcessBuilder("git","-C",repository.toString(),"config","core.fsmonitor",hook.toString().replace('\\','/')).start();assertEquals(0,config.waitFor());
+    CheckpointReconciler.git(repository);assertFalse(Files.exists(repository.resolve("fsmonitor-called.txt")));
+  }
   @TempDir Path root;
   @Test void detectsChangesWithoutOverwritingAndNeverReplaysUnknownOperations() throws Exception {
     var reconciler=new CheckpointReconciler(null);

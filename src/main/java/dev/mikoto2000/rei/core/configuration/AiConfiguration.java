@@ -203,7 +203,11 @@ public class AiConfiguration {
     // Lazy callback avoids a bean cycle through the model provider during ChatClient construction.
     if (externalAgentTools != null) builder.defaultTools(externalAgentTools);
     if (subAgentTools != null) builder.defaultToolCallbacks(new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools),
-        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"delegateTasks"));
+        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"delegateTasks"),
+        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"listDurableSubAgents"),
+        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"getDurableSubAgent"),
+        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"resumeSubAgent"),
+        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"reconcileSubAgent"));
     if (computerUseTools != null) {
       var computer = computerUseTools.getIfAvailable();
       if (computer != null) {
