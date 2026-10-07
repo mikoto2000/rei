@@ -22,6 +22,10 @@ public class ToolPermissionPolicy {
   }
   /** Parallel authority uses known intrinsic behavior, never an administrator relabeling of arbitrary commands. */
   public static Set<ActionCapability> intrinsicCapabilities(String tool) {
+    if(Set.of("getExternalImplementation","inspectExternalImplementation").contains(tool))return Set.of(ActionCapability.READ);
+    // Isolated tests execute administrator-selected project code and retain arbitrary-command authority.
+    if("requestCodexImplementation".equals(tool))return Set.copyOf(EnumSet.allOf(ActionCapability.class));
+    if("mergeExternalImplementation".equals(tool))return Set.of(ActionCapability.LOCAL_WRITE,ActionCapability.EXECUTE);
     if(Set.of("listClaudeCodeReviews","getClaudeCodeReview").contains(tool))return Set.of(ActionCapability.READ);
     if(READ.contains(tool)) return Set.of(ActionCapability.READ);
     if(NETWORK_READ.contains(tool)) return Set.of(ActionCapability.NETWORK_READ);

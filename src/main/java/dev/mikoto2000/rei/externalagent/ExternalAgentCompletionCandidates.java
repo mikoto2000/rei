@@ -5,15 +5,17 @@ import dev.mikoto2000.rei.core.completion.*;
 
 /** Metadata for the existing variadic /agent grammar, limited to its supported domain actions. */
 public final class ExternalAgentCompletionCandidates implements CompletionMetadata {
-  private static final ExternalAgentRequest.Action[] COMMAND_ACTIONS={ExternalAgentRequest.Action.REVIEW};
+  private static final ExternalAgentRequest.Action[] COMMAND_ACTIONS={ExternalAgentRequest.Action.REVIEW,ExternalAgentRequest.Action.IMPLEMENT};
   @Override public Set<String> types(CompletionContext context) {
     return context.argumentIndex() >= 2 && valid(context, 1, ExternalAgentRequest.Agent.values())
         && valid(context, 2, COMMAND_ACTIONS) ? Set.of("file-or-directory") : Set.of("choices");
   }
   @Override public List<CompletionCandidate> choices(CompletionContext context) {
     if (context.argumentIndex() == 0) return candidates(ExternalAgentRequest.Agent.values(), "agent");
-    if (context.argumentIndex() == 1 && valid(context, 1, ExternalAgentRequest.Agent.values()))
-      return candidates(COMMAND_ACTIONS, "action");
+    if (context.argumentIndex() == 1 && valid(context, 1, ExternalAgentRequest.Agent.values())) {
+      if(context.tokens().get(1).equals("claude"))return candidates(new ExternalAgentRequest.Action[]{ExternalAgentRequest.Action.REVIEW},"action");
+      var actions=new ArrayList<>(candidates(COMMAND_ACTIONS,"action"));actions.add(CompletionCandidate.value("implementation","action"));actions.add(CompletionCandidate.value("merge","action"));return List.copyOf(actions);
+    }
     return List.of();
   }
   private boolean valid(CompletionContext context, int index, Enum<?>[] values) {

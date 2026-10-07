@@ -12,11 +12,13 @@ import dev.mikoto2000.rei.externalagent.*;
 import dev.mikoto2000.rei.core.SelfPatchReviewService.*;
 
 /** Git worktree facts only. Does not alter the index, invoke diff helpers, or retain source bodies. */
-final class GitPatchInspector {
+public final class GitPatchInspector {
   private final ExternalAgentProcessRunner processes;
+  private final java.util.function.BooleanSupplier cancelled;
   private static final Pattern CHECK=Pattern.compile("^(.*):(\\d+): (.*)$");
-  GitPatchInspector(ExternalAgentProcessRunner processes){this.processes=processes;}
-  Snapshot capture(Path root,long deadline)throws IOException {
+  public GitPatchInspector(ExternalAgentProcessRunner processes){this(processes,()->false);}
+  public GitPatchInspector(ExternalAgentProcessRunner processes,java.util.function.BooleanSupplier cancelled){this.processes=processes;this.cancelled=cancelled;}
+  public Snapshot capture(Path root,long deadline)throws IOException {
     var identity=git(root,deadline,4096,"rev-parse","--show-toplevel","HEAD").stdout().lines().toList();
     if(identity.size()!=2 || !Path.of(identity.getFirst()).toRealPath().equals(root) || !identity.getLast().matches("[0-9a-f]{40,64}"))
       throw new IOException("A Git repository root with a HEAD commit is required");
@@ -42,7 +44,7 @@ final class GitPatchInspector {
     }
     return new Snapshot(HexFormat.of().formatHex(digest.digest()),List.copyOf(changes),untracked,true,List.of());
   }
-  Review review(Path root,Snapshot snapshot,long deadline)throws IOException {
+  public Review review(Path root,Snapshot snapshot,long deadline)throws IOException {
     var output=runGit(root,deadline,65536,"diff","--no-ext-diff","--no-textconv","--no-renames","--no-color","--check","HEAD","--");
     var findings=new LinkedHashSet<Finding>();var warnings=new LinkedHashSet<String>();boolean complete=true;
     if(output.truncated() || output.status()!=ExternalAgentResult.Status.SUCCESS && output.status()!=ExternalAgentResult.Status.FAILED)
@@ -105,7 +107,7 @@ final class GitPatchInspector {
   private ExternalAgentProcessRunner.Output runGit(Path root,long deadline,int bytes,String... args)throws IOException {
     var command=new ArrayList<String>(List.of("git","--no-pager","--no-optional-locks","-c","core.quotepath=false","-c","core.fsmonitor=false"));command.addAll(List.of(args));
     var timeout=SelfPatchReviewService.remaining(deadline,5);
-    var output=processes.run(command,root,"",timeout,timeout,bytes,()->Thread.currentThread().isInterrupted());
+    var output=processes.run(command,root,"",timeout,timeout,bytes,()->cancelled.getAsBoolean() || Thread.currentThread().isInterrupted());
     if(output.status()==ExternalAgentResult.Status.CANCELLED)throw new java.util.concurrent.CancellationException("self-review cancelled");
     RunCancellation.propagate(null);return output;
   }
