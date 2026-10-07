@@ -1,4 +1,16 @@
-# 自律機能の実装状況（初回2026-10-04、更新2026-10-07）
+# 自律機能の実装状況（初回2026-10-04、更新2026-10-08）
+
+## 2026-10-08の全件実装監査
+
+後続依頼のPriority1–22とcrash consistencyは要求されたbounded contractを実装。
+最終Java693 suites/3762 tests（failure/error/skipped0）、Native120、React99/typecheck成功。
+[全件Before/After監査・feature commit・最終Git receipt](implementation-report-remaining-features-2026-10-07.md)を優先する。
+既存10機能案も同reportで照合した。Scheduler/Inbox/Approval/Waitingの既存基盤は維持し、
+並行会話/Task Manager/Artifact/GitHub/Today/External implementationを接続・拡張した。
+[最終crash consistency](final-crash-consistency.md)は未知副作用を自動再実行せずUNKNOWNで保持。
+[Live harness](live-environment-e2e.md)は既定OFFの8経路、今回は理由付きskip8・実成功0。
+実モデル品質・実アカウント/サービス確認・完全性保証とは区別する。
+以下は初回調査とその後のfollow-up履歴。過去の未対応/Deferredを現在の未実装と混同しない。
 
 初回調査の基準: main `b37ac23`。コード・既存テスト・docs・merge 履歴を照合し、以下のfollow-upでMerge済み変更を反映した。
 「部分実装」は関連部品が存在することを意味し、候補全体の完成を意味しない。

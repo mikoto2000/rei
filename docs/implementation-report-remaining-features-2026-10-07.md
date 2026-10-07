@@ -9,7 +9,7 @@ Spring Boot / Spring AI の更新を含む。開始時のローカルmainとorig
 これらを変更・commitせず、`.worktrees/remaining-features` に
 `codex/remaining-features-audit` を作成した。
 
-本書は進行中の記録である。下表は開始時判定であり、完成報告ではない。
+下表は開始時判定である。最終状態は末尾のBefore/After監査と検証・Git receiptを参照する。
 テストファイルの存在と今回の実行成功を区別する。
 
 ## 開始時再監査
@@ -856,3 +856,116 @@ TDD古い通知上書き/guard履歴削除/STARTED inspection/単一lost claim/r
 Tool policy READ inspection/LOCAL_WRITE照合、captured human指示・READ-only拒否を確認。
 関連10 suites / 75 tests成功、failure/error/skipped各0。全体回帰へ進む。
 最終Java全体回帰（2026-10-08）: 689 suites / 3751 tests、failure=0/error=0/skipped=0。実PlantUML指定、live除外。Native120、React25/99、typecheck成功。
+## 最終Before / After監査（2026-10-08）
+
+要求されたbounded contractに対する実装状態と、実環境・実モデルの確認状態を分ける。
+下表のJava件数は各featureで実行した全体回帰、または明記した関連回帰である。
+最終の全体回帰集計・Git receiptは後続節を参照する。
+
+| Feature | Before | After | Tests | Commit | Remaining limitation |
+|---|---|---|---|---|---|
+| P1 会話並行化 | PARTIAL | IMPLEMENTED: captured会話scope、READ並行、WRITE exclusive、durable Run | Java3490 / Native108 / React87 | d06748eb | READ並行既定OFF、未知Toolは並行不可 |
+| P2 Task Manager | PARTIAL | IMPLEMENTED: 共通Run等の横断projection、HTTP/Native、owned controls/recovery | Java3512 / Native114 / React92 / Chrome30 | e05dd8b7 | projectionの状態は元receipt由来 |
+| P3 Artifact Delivery | PARTIAL | IMPLEMENTED: owner/hash/MIME/immutable保存、認証API/Native preview/export | Java3524 / Native119 / React99 / Chrome36 | 76a27198 | quota/retention内、任意path配信なし |
+| P4 GitHub Event Trigger | MISSING | IMPLEMENTED: HMAC、delivery dedup、allowlist、Inbox/Dependency/Scheduler | Java3533 / Native120 / React99 / Chrome38 | 858404aa | 既定OFF、実GitHub webhook登録は未実施 |
+| P5 Cross-project Today | PARTIAL | IMPLEMENTED: 明示allowlist横断readonly集計 | Java3541 / Native120 / React99 | 73684285 | 16Projects/5秒等のbudget内 |
+| P6.1 Codex隔離実装 | PARTIAL | IMPLEMENTED: private worktree、structured edits、親独立検証、exact human merge | Java3555 | 0e258475 | native account/CLI実モデル未検証、既定OFF |
+| P6.2 Claude拡張 | PARTIAL | IMPLEMENTED: native resume、Change Set、parallel review、隔離実装、storage canonical検査 | Java3562、storage境界34 tests | ac582081 / ec95783f | subscription/OAuth限定、実モデル未検証 |
+| P7.1 Durable child | PARTIAL | IMPLEMENTED: child checkpoint/claim、共有予算、owned exact resume | Java3573 | 68271a40 | 未知Tool副作用はUNKNOWN・手動照合 |
+| P7.2 Child DAG | MISSING | IMPLEMENTED: durable graph/fan-in/cycle/fail policy/restart | Java3589 | 40fb5a45 | 16nodes/2workers等のbounded contract |
+| P7.3 Consensus | MISSING | IMPLEMENTED: 保存回答/evidence/disagreement、任意judge | Java3599 | 7de1f118 | 合意はtruthではない、judge既定OFF |
+| P8 Predicate | PARTIAL | IMPLEMENTED: bounded declarative Goal/Dependency predicate | Java3611 | c2b6f6fa | missingはUNKNOWN、任意code実行なし |
+| P9 Reflection候補 | PARTIAL | IMPLEMENTED: provenance/counterexample/expiry/forgetを持つ明示昇格ledger | Java3622 | 061034b8 | 自由文を自動的な事実/lessonにしない |
+| P10 Notification provider | PARTIAL | IMPLEMENTED: Slack adapter、共通outbox、receipt/rate-limit/unknown | Java3636、実loopback HTTP | 81413147 | 実Slack未送信、credential/allowlist/既定OFF |
+| P11 多言語Map | PARTIAL | IMPLEMENTED: TS/JS/Rust/Go/Pythonのbounded parserとImpact接続 | Java3649 | 9dd80460 | heuristic表示、完全binding/依存解析の保証なし |
+| P12 Coverage Impact | MISSING | IMPLEMENTED: JaCoCo/LCOV/Cobertura実reportとchanged-line結合 | Java3660 | e463d90a | UNMEASURED/STALEを区別、coverage完全性を保証しない |
+| P13 Diagnosis→Repair | PARTIAL | IMPLEMENTED: 保存JUnit診断→guarded Change Set→exact human Apply→再検証 | Java3667 | 20a6c0b0 | 既定OFF、1fix/2rounds/180秒 |
+| P14 Semantic patch review | PARTIAL | IMPLEMENTED: requirement/file/test/hygiene証拠＋任意tool-free judge | Java3679 | 28ae998a | 意味判定は確率的、deterministic失敗を覆さない |
+| P15 Goal gate | PARTIAL | IMPLEMENTED: definition/proof保存、全完了経路の独立gate | Java3691 | 03abab6c | 全Goal強制既定OFF、current証拠を必要とする |
+| P16 Multi-file Change Set | PARTIAL | IMPLEMENTED: update/create/delete/rename、保存SHA、logical transaction/rollback/recovery | Java3706 | a995653c | UTF-8限定、複数pathの物理atomicityは保証しない |
+| P17 Renderer | PARTIAL | IMPLEMENTED: bounded PlantUML実描画、parse/hash/PNG/Artifact receipt | Java3716、実PlantUML PNG/timeout/cancel | c1275077 | 既定OFF、trusted jarが必要、generic binary編集なし |
+| P18 RAG/Skill評価 | PARTIAL | IMPLEMENTED: 匿名label/hard negatives、4指標、6pipeline比較 | 関連52 / Phase7全体3739 | 03b7e4b8 | fixture評価であり実モデル品質未測定 |
+| P19 Learned Sparse | MISSING | IMPLEMENTED: optional encoder/index境界、model/dim/filter検査、BM25 fallback | 関連42 / Phase7全体3739 | 6072fb3d | repositoryに実provider未設定、特定モデル必須化なし |
+| P20 意味検証評価 | PARTIAL | IMPLEMENTED: 5分類fixture、TP/FP/FN/TN/棄権、任意別judge agreement | 関連17 / Phase7全体3739 | 1a15c999 | native binary validatorの棄権制約を明記、実モデル未測定 |
+| P21 Activity/Coaching評価 | PARTIAL | IMPLEMENTED: project/theme/unknown/ambiguous/低品質/gap、origin分離、構造的根拠性 | 関連31 / Phase7全体3739 | bff87788 | 匿名candidate projection評価、実vision/個人化品質未測定 |
+| P22 live E2E harness | MISSING | IMPLEMENTED: 8実経路、専用profile、既定OFF、明示skip理由 | 関連39、live8件理由付きskip | 80397d55 | 今回実モデル/実Paper/実Slackの成功は0件 |
+| Crash consistency | PARTIAL | IMPLEMENTED: attempt CAS、PID/start/heartbeat、UNKNOWN、inspection、guard retention/明示metadata照合 | 関連75、実JVM hard kill4経路 | 18f3398f | 未知外部効果は人の照合が必要、hook保証なし |
+
+### 既存10機能案との最終照合
+
+| 項目 | 最終状態 / 根拠 |
+|---|---|
+| Scheduler | IMPLEMENTED。既存PersistentAgentScheduler/ScheduleRecoveryの全体回帰を維持。重複schedulerなし |
+| Notification Inbox | IMPLEMENTED。既存AttentionService/RepositoryとHTTP/Nativeを維持。provider outboxだけ拡張 |
+| Long task中の別会話 | IMPLEMENTED。P1のcaptured会話・READ admission/WRITE競合境界 |
+| Task Manager | IMPLEMENTED。P2の既存state projectionとowned controls |
+| Artifact Delivery | IMPLEMENTED。P3の共通保存/認証取得/Native/renderer artifact |
+| Approval / Permission | IMPLEMENTED。既存ToolPermissionPolicy/ApprovalRepository/HTTP/Nativeを維持。承認を回答/通知と混同しない |
+| Waiting / Follow-up | IMPLEMENTED。既存Dependency/Checkpoint/人回答UI・SSE、P7 durable childとP8 predicateへ接続 |
+| GitHub Event Trigger | IMPLEMENTED。P4 signed event adapter |
+| Cross-project Today | IMPLEMENTED。P5 explicit allowlist集計 |
+| External Agent Implementation | IMPLEMENTED。P6隔離worktree＋structured edits＋独立検証＋explicit merge |
+
+### 新規機能・既存拡張・変更不要
+
+新規: Task Manager projection、共通Artifact、GitHub署名trigger、Cross-project Today、
+durable child/DAG/consensus、Reflection候補ledger、Sparse境界、品質評価3系統、live harness。
+既存拡張: conversation admission、Codex/Claude、Goal/Dependency predicate/completion gate、
+notification provider、多言語Map/coverage、診断repair/semantic patch review、Change Set/renderer、
+各receiptのcrash consistency。既存共通Run/予算/Policy/Inbox/Schedulerを作り直していない。
+変更不要の既実装: Scheduler基本実行、Inbox保存/ack、Approval基本承認、Waiting基本依存監視・
+人回答/Checkpoint再開。関連する実行・復旧・UIテストは全体回帰に含めた。
+
+### 最終marker検索
+
+production Java、React、Native全体でTODO/FIXME/unsupported/not implemented/not supported/
+future work/follow-upを再検索した。再現用出力はtarget/final-marker-audit.txt。
+ActionPlan TODOはstate値、SubAgentCommand TODOは利用者が編集する生成template、
+SemanticPatchReview TODO/FIXMEはhygiene検出の文字列。未実装処理ではない。
+DependencyHttpProbe・AgentEventBus・RetrievalCandidatesの拒否defaultはinterface境界であり、
+production JavaHttpDependencyProbe/InMemoryAgentEventBus/SQLite検索の実装経路を確認した。
+unsupportedはformat/OS/platform/linked/binary/unsafe Git filterなどの明示拒否・partial境界。
+Bluesky等の今回の対象外providerを追加スコープへ拡張していない。
+今回の要求されたbounded contractに関する実装残件はない。
+
+### 実環境確認と制約
+
+実PlantUML、実Windows filesystem/junction、実Git worktree、実子JVM hard kill、loopback
+HTTP、Chrome UIの検証と、実有料モデル/実サービスの確認を区別した。
+Codex/Claude review/resume/implementation/fix、Paper live provider、Slack送信は
+今回有効化していない。8件のlive skip理由はLIVE_DISABLED。未実行を成功と記録しない。
+account/credential不足は今回確認しておらず、その有無を断定しない。live実行時は
+capability/account attestation/認証/credential条件をharnessが明示検査する。
+評価fixtureの指標は実モデル品質・個人化品質・完全性の証明ではない。
+Learned Sparse実providerはrepositoryに未設定で、依頼どおりoptional境界まで実装した。
+実provider導入やpaid品質評価を自動的な残件/成功へ読み替えない。
+
+
+## 最終検証とGit確認
+
+最終Java full（PR40統合後）: 693 suites / 3762 tests、failures0/errors0/skipped0。
+Native120、React25 files / 99 tests、typecheck成功。live専用profileは8件を
+LIVE_DISABLED理由でskip、実呼出0・実成功0。full profileはliveを完全除外。
+実PlantUML指定でrendererの実環境fixtureもskipせず検証した。
+Java/Native/Reactのログと集計はtarget/final-integrated-full.log、target/final-native.log、
+target/final-react.log、target/final-typecheck.log、target/evaluation/final-integrated-full-totals.json。
+
+復旧feature `18f3398f` は `codex/receipt-crash-recovery` にpush済み。
+当初ref `codex/final-crash-consistency` は反復500/commit_refs失敗、namespace競合は検出なし。
+同一commitを別の未使用refへpushすると成功したため採用した。元ref失敗の原因は未確定。
+HTTPSは既存credentialがなく非対話で停止し、認証設定・installation・account変更なし。
+復旧main mergeは `901f52ca91b2d6ad54d0637eb79a2ec42e35ec90`。
+fetchで作業中のorigin/main更新 `5740b211`（PR40 Material Review）を確認し、
+他作業を保持して `ba0cbbda0e0305f407ef3588c3f3acd9bacdd579` へmerge。
+最新統合状態の全体回帰は成功。3751件は復旧feature単体の検証時集計であり、
+最新PR40統合後の最終件数とmain push確認は以下receiptに明記する。
+PR40統合後のJava全体回帰: 693 suites / 3762 tests、failure=0/error=0/skipped=0、実PlantUML指定・live除外。新しい外部Agent APIを含め全体成功。client source差分0につきNative120/React99/typecheck結果を維持。
+
+検証済み統合main `ba0cbbda0e0305f407ef3588c3f3acd9bacdd579` をpush済み。
+fetchでorigin/mainとの一致を確認。復旧feature `18f3398f` のremote branchは
+`codex/receipt-crash-recovery`。復旧merge `901f52ca` と並行PR40保持merge `ba0cbbda`。
+27 feature commitsがmain祖先であることを検証。元checkoutの未commit5件は保持。
+最終監査文書branch `codex/remaining-features-completion-report` はfetch済みorigin/mainから作成。
+このbranchは文書のみの変更で、検証済みJava/Native/React/pomへの差分はない。
+最終文書mergeのmain hashは最終回答とGit履歴で示す（自己参照hashを本文へ埋め込まない）。
+最新統合mainでlive専用profileを再実行し、8 tests / failure0 / error0 / skipped8（LIVE_DISABLED）を確認。実呼出0。通常fullとは分離しtarget/evaluation/live-off-final.xmlへ保存。
