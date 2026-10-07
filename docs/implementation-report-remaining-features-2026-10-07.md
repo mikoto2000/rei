@@ -801,3 +801,19 @@ invalid verdictは棄権、binary validatorのnative abstention不在も評価�
 TDD未実装API Red→Green、実validator fixtureを含む関連3 suites / 17 tests成功、各0。
 出力target/evaluation/subagent-semantic-quality.json。実モデル呼出0、truthVerified=false。
 DB/config/default runtime変更なし。Phase7末に全体回帰。仕様subagent-semantic-quality-evaluation.md。
+SubAgent evaluation Git receipt: feature `1a15c999`、main merge `8c1d674e`、両方push済み。
+統合後関連3 suites / 17 tests、failure/error/skipped各0。
+
+## Phase 7: Activity / Coaching quality evaluation
+
+branch `codex/activity-coaching-quality-evaluation`、fetch済みmain `8c1d674e`。
+既存RolePolicy/PeriodAnalysis/PeriodCoachingを使い匿名fixtureと構造的根拠性評価を追加する。
+匿名fixture healthy/unknown/ambiguous/low confidence/gap-heavy、expected project/theme。
+既存RolePolicy/PeriodAnalysis/PeriodCoachingによる分類精度・coverage・構造的助言評価。
+観測foreground、推定project/theme/duration、明示confirmation ID付きユーザーannotationを分離。
+unknown/低品質/未観測期間に助言を創作しない。golden wordingでなくdecision/reason/shareを確認。
+TDD未実装API Red→Green、正例助言と誤ラベル検出を含む関連4 suites / 31 tests成功、各0。
+128cases/16候補・confirmation/限定text/5秒、cancel伝播。DB/config/default runtime変更なし。
+target/evaluation/activity-coaching-quality.json、truthVerified=false、実visionモデル品質は未測定。
+Phase7全体回帰を開始。仕様activity-coaching-quality-evaluation.md。
+Phase7 Java全体回帰: 687 suites / 3739 tests、failure=0/error=0/skipped=0。実PlantUML指定。Native 120、React25/99、typecheck成功。
