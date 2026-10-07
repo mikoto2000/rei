@@ -56,6 +56,17 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 
 @Component
 public class Tools {
+  private SemanticPatchReviewService patchReviews;
+  @Autowired(required=false) void setPatchReviews(SemanticPatchReviewService service){patchReviews=service;}
+  @Tool(description="明示testCommandを実行して要件・変更file・必須JUnit testcase・静的hygieneを検証し、任意の意味Reviewを共有Run予算内で行います。request={testCommand,timeoutSeconds,requirements:[{id,statement,files,tests}],allowedFiles,testReports,semantic}。意味Reviewは既定OFF、確率的評価で正しさの保証ではありません。追加変更・欠落test・skipped・不完全な証拠はFIX_REQUIRED。任意command実行の全能力Policyが必要です。保存receiptのid/sha256を保持してください。")
+  SemanticPatchReviewService.Receipt reviewPatchRequirements(SemanticPatchReviewService.Request request,org.springframework.ai.chat.model.ToolContext context)throws IOException {
+    var run=context==null?null:(dev.mikoto2000.rei.core.stagnation.RunExecutionContext)context.getContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY);
+    if(run!=null)run.checkActive();
+    return patchReviews().review(run==null?diagnosedOwner():run.runContext(),request,run);
+  }
+  @Tool(description="現在Project/root/sessionの要件Review receiptを正確なid/sha256で読みます。読み取りのみ。保存判定はその時点のpatchについての観測で、現在の変更や意味的正しさを保証しません。STARTED/UNKNOWNを自動再実行しません。")
+  SemanticPatchReviewService.Receipt getPatchRequirementReview(String id,String sha256)throws IOException{return patchReviews().get(diagnosedOwner(),id,sha256);}
+  private SemanticPatchReviewService patchReviews(){if(patchReviews==null)throw new IllegalStateException("Patch requirement review unavailable");return patchReviews;}
   private DiagnosedRepairService diagnosedRepairs;
   @Autowired(required=false) void setDiagnosedRepairs(DiagnosedRepairService service){diagnosedRepairs=service;}
   @Tool(description="既定OFFの診断付き修正案を保存します。request={reportPath,change:{path,expectedText,replacement},testCommand,timeoutSeconds}。完全な保存JUnit失敗・Git patch version・既存単一UTF-8 Change Setと明示test commandを結ぶだけで、test実行やApplyはしません。最大32 patch files、64KiB text、1..60秒test。diff/diagnosis/command/receiptSha256を独立に確認し、人の正確な /repair apply ID receiptSha256 指示を待ってください。")

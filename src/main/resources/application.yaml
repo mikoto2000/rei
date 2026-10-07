@@ -198,6 +198,8 @@ rei:
     enabled: ${REI_PREDICATES_ENABLED:false}
   repair:
     diagnosed-enabled: ${REI_REPAIR_DIAGNOSED_ENABLED:false}
+  patch-review:
+    semantic-enabled: ${REI_PATCH_REVIEW_SEMANTIC_ENABLED:false}
   reflection:
     lessons-enabled: ${REI_REFLECTION_LESSONS_ENABLED:false}
   subagents:

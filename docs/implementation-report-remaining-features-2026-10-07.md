@@ -640,3 +640,30 @@ TDD: 未実装接続、caller deadline、Tool/人入口、READ_ONLY参照、通�
 関連Java7 suites / 40 tests、failure/error/skipped各0。Native120、React25/99とtypecheck成功。
 設定/API/限界はdiagnosed-repair-flow.md。Java全体回帰を実行中。
 Diagnosis→Repair Java全体回帰: 674 suites / 3667 tests、failure/error/skipped各0。Native120、React25/99とtypecheck成功。Git統合を実施する。
+
+Diagnosis→Repair Git receipt: feature `20a6c0b0`、main merge `a291c645571b7417d05e834797544907f0b87bf3`、両方push済み。
+統合後Java関連7 suites / 40 tests、Native120、React25/99とtypecheck成功、failure/error/skipped各0。
+元のLLM関連dirty2件とuntracked3件を保持している。
+
+## Phase 5: Semantic Patch Review
+
+branch `codex/semantic-patch-review`、fetch済み基準main `a291c645`。
+既存SelfPatchReviewは同一patch・明示command exit・静的diffのみ。
+要件/変更範囲/testcase evidence/current file SHAのdeterministic gateとoptional Tool-free semantic
+reviewを同じ検証サイクルへ接続し、保存receiptを次のGoal completion gateへ渡せるようにする。
+
+Semantic Patch Review: 既存test/static/final cycleに要件→変更file→必須JUnit testcaseの
+保存接続を追加。追加/未割当変更・必須証拠欠落・skip/古い/不完全report・patch driftは
+FIX_REQUIRED。source64KiB/diff32KiB、要件16/files32/reports8/tests64、共有180秒。
+コメント/文字列を区別する追加行hygiene、不明diff headerは保守的に確認要求。
+Tool入口は既存任意command全能力Policy、receipt読取のみREAD。意味Review既定OFF、
+親Run/Goal共有予約1call/30秒/retryなし/Tool-free、全6観点と各要件のstrict verdict。
+不正JSON/ambient Tool/予算欠落/cancel、UNKNOWNを肯定へ読み替えない。
+SQLite write-ahead unique claim、owner/root/session/SHA、history128/Project/4096全体、
+receipt128KiB、同じRun/requestの再送でcommandを繰返さない。raw source/diff非保存。
+モデル一致は確率的判断、truthVerified=false、command-report provenanceは保証しない。
+TDD未実装Toolとunmapped diffによる偽成功のRed→Greenを確認。
+関連5 suites / 43 tests成功。実Git/実Shell/SQLiteでJUnit更新・2回command・index不変・
+receipt再送無実行を確認。Java全体回帰中。Native120、React25/99/typecheck成功。
+仕様/API/DB/config/限界はsemantic-patch-review.md。
+Semantic Patch Review Java全体回帰: 676 suites / 3679 tests、failure/error/skipped各0。Native120、React25/99とtypecheck成功。Git統合を実施する。

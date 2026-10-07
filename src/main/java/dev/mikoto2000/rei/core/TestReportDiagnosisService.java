@@ -16,8 +16,12 @@ import dev.mikoto2000.rei.event.CredentialRedactor;
 public final class TestReportDiagnosisService {
   public record Counts(int tests,int failures,int errors,int skipped) {}
   public record FailedTest(String test,String kind,String type,String message,String detail) {}
+  public record TestCase(String test,String outcome) {}
   public record Result(String path,String sha256,Instant modifiedAt,Instant observedAt,boolean partial,
-      Counts reported,Counts observed,List<FailedTest> failedTests,List<String> nextActions,List<String> warnings) {}
+      Counts reported,Counts observed,List<FailedTest> failedTests,List<String> nextActions,List<String> warnings,List<TestCase> testCases) {
+    public Result{testCases=testCases==null?List.of():List.copyOf(testCases);}
+    public Result(String path,String sha256,Instant modifiedAt,Instant observedAt,boolean partial,Counts reported,Counts observed,List<FailedTest> failedTests,List<String> nextActions,List<String> warnings){this(path,sha256,modifiedAt,observedAt,partial,reported,observed,failedTests,nextActions,warnings,List.of());}
+  }
   public Result read(Path directory,String relative)throws IOException {
     RunCancellation.propagate(null);
     if(relative==null||relative.isBlank()||relative.length()>1024||relative.contains(":"))throw new IllegalArgumentException("Project-relative XML report required");
@@ -44,7 +48,7 @@ public final class TestReportDiagnosisService {
       RunCancellation.propagate(null);if(++nodes>8192)throw new IOException("Report tree exceeds node limit");
       for(Node child=pending.removeFirst().getFirstChild();child!=null;child=child.getNextSibling())pending.addLast(child);
     }
-    var warnings=new LinkedHashSet<String>();var failed=new ArrayList<FailedTest>();
+    var warnings=new LinkedHashSet<String>();var failed=new ArrayList<FailedTest>();var outcomes=new ArrayList<TestCase>();
     var cases=top.getElementsByTagName("testcase");int failures=0,errors=0,skipped=0;
     if(cases.getLength()>1024)warnings.add("Test case observation limited to 1024 entries");
     int tests=Math.min(cases.getLength(),1024);
@@ -66,6 +70,7 @@ public final class TestReportDiagnosisService {
       }
       if(failure)failures++;if(error)errors++;if(skip)skipped++;
       if((failure?1:0)+(error?1:0)+(skip?1:0)>1)warnings.add("Conflicting outcomes reported for one test");
+      outcomes.add(new TestCase(excerpt(test.getAttribute("classname")+"#"+test.getAttribute("name"),256,warnings),error?"ERROR":failure?"FAILURE":skip?"SKIPPED":"PASSED"));
     }
     Counts observed=new Counts(tests,failures,errors,skipped),reported=counts(top,warnings);
     if(reported==null)warnings.add("Top-level complete counts unavailable; observed cases may be incomplete");
@@ -75,7 +80,7 @@ public final class TestReportDiagnosisService {
     var actions=failed.isEmpty()?List.of("Confirm report identity and current process result before claiming test success"):
         List.of("Inspect the reported failing test and diagnostic excerpt","Reproduce the relevant test before choosing a repair");
     return new Result(root.relativize(file).toString().replace('\\','/'),hash(bytes),before.lastModifiedTime().toInstant(),Instant.now(),partial,
-        reported,observed,List.copyOf(failed),actions,List.copyOf(warnings));
+        reported,observed,List.copyOf(failed),actions,List.copyOf(warnings),List.copyOf(outcomes));
   }
   private static Counts counts(Element top,Set<String> warnings)throws IOException {
     String[] names={"tests","failures","errors","skipped"};int[] values=new int[4];boolean missing=false;
