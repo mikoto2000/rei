@@ -1,7 +1,7 @@
 use super::*;
 use serde_json::json;
 impl HttpReiClient {
-    async fn task_json<T: DeserializeOwned>(
+    pub(super) async fn bounded_resource_json<T: DeserializeOwned>(
         request: reqwest::RequestBuilder,
         accepted: bool,
     ) -> Result<T> {
@@ -56,13 +56,15 @@ impl HttpReiClient {
         if let Some(session) = &query.session_id {
             request = request.query(&[("sessionId", session)]);
         }
-        let page: TaskPage = Self::task_json(request, false).await.map_err(|e| {
-            if e == AppError::NotFound {
-                AppError::EndpointNotFound
-            } else {
-                e
-            }
-        })?;
+        let page: TaskPage = Self::bounded_resource_json(request, false)
+            .await
+            .map_err(|e| {
+                if e == AppError::NotFound {
+                    AppError::EndpointNotFound
+                } else {
+                    e
+                }
+            })?;
         page.validate(&query)?;
         Ok(page)
     }
@@ -79,7 +81,7 @@ impl HttpReiClient {
         if let Some(session) = session {
             request = request.query(&[("sessionId", session)]);
         }
-        let task: ManagedTask = Self::task_json(request, false).await?;
+        let task: ManagedTask = Self::bounded_resource_json(request, false).await?;
         task.owned(project, session, Some(id))?;
         Ok(task)
     }
@@ -91,7 +93,7 @@ impl HttpReiClient {
     ) -> Result<ManagedTask> {
         Self::task_owner(project, session)?;
         task_message(message)?;
-        let task: ManagedTask = Self::task_json(
+        let task: ManagedTask = Self::bounded_resource_json(
             self.request(Method::POST, "/api/v1/tasks", true)?
                 .json(&json!({"projectId":project,"sessionId":session,"message":message})),
             true,
@@ -134,7 +136,7 @@ impl HttpReiClient {
         } else if message.is_some() {
             return Err(AppError::InvalidInput);
         }
-        let task: ManagedTask = Self::task_json(
+        let task: ManagedTask = Self::bounded_resource_json(
             self.request(Method::POST, &task_path(id, suffix)?, true)?
                 .json(&body),
             true,

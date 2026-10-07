@@ -1,4 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
+import type {
+  ArtifactPage,
+  ArtifactPreview,
+  ArtifactSaveReceipt,
+  DeliveryArtifact,
+} from "../entities/artifacts";
 import type { ManagedTask, TaskAction, TaskPage } from "../entities/tasks";
 import type {
   Snapshot,
@@ -19,6 +25,44 @@ import type {
   WorkspaceResult,
 } from "../entities/workspace";
 interface Commands {
+  artifacts_list: [
+    {
+      serverId: string;
+      projectId?: string | null;
+      sessionId?: string | null;
+      runId?: string | null;
+      limit?: number;
+      cursor?: string | null;
+    },
+    ArtifactPage,
+  ];
+  artifact_preview: [
+    {
+      serverId: string;
+      projectId: string;
+      sessionId: string | null;
+      artifactId: string;
+    },
+    ArtifactPreview,
+  ];
+  artifact_get: [
+    {
+      serverId: string;
+      projectId: string;
+      sessionId: string | null;
+      artifactId: string;
+    },
+    DeliveryArtifact,
+  ];
+  artifact_save: [
+    {
+      serverId: string;
+      projectId: string;
+      sessionId: string | null;
+      artifactId: string;
+    },
+    ArtifactSaveReceipt,
+  ];
   tasks_list: [
     {
       serverId: string;

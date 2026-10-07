@@ -147,11 +147,49 @@ let scheduleStatus =
 let scheduleRun = scheduleStatus === "RUNNING" ? "old-schedule-run" : "";
 let acknowledged = false;
 let decided = false;
+const artifact = {
+  artifactId: "12345678-1234-1234-1234-123456789012",
+  owner: "RUN",
+  projectId: "p",
+  sessionId: "session",
+  runId: "old",
+  taskId: "run:old",
+  mediaType: "text/plain",
+  filename: "生成結果.txt",
+  size: 4,
+  sha256: "a".repeat(64),
+  createdAt: "2026-10-07T01:00:00Z",
+  expiresAt: "2026-11-06T01:00:00Z",
+  storageReference: "artifact:12345678-1234-1234-1234-123456789012",
+  status: "AVAILABLE",
+};
+const imageArtifact =
+  new URLSearchParams(location.search).get("artifact") === "image";
+const artifactImage =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aM1sAAAAASUVORK5CYII=";
+if (imageArtifact) {
+  artifact.mediaType = "image/png";
+  artifact.filename = "生成画像.png";
+}
 const call = (async (
   name: string,
   args: Record<string, unknown> | undefined,
 ) => {
   if (name === "app_snapshot") return structuredClone(data);
+  if (name === "artifacts_list") return { items: [artifact], nextCursor: null };
+  if (name === "artifact_get") return artifact;
+  if (name === "artifact_preview")
+    return {
+      artifact,
+      text: imageArtifact ? null : "<script>内容は実行せず表示します</script>",
+      dataUrl: imageArtifact ? artifactImage : null,
+    };
+  if (name === "artifact_save")
+    return {
+      path: "Downloads/Rei/生成結果.txt",
+      size: 4,
+      sha256: artifact.sha256,
+    };
   if (name === "tasks_list")
     return {
       items: [
@@ -164,7 +202,7 @@ const call = (async (
           runId: "old",
           status: "SUSPENDED",
           mode: "EXCLUSIVE",
-          results: [],
+          results: [{ kind: "ARTIFACT", id: artifact.artifactId }],
           dependencyIds: [],
           childIds: [],
           revision: 9,

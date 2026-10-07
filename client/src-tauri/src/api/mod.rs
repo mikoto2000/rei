@@ -4,6 +4,7 @@ use futures_util::StreamExt;
 use reqwest::{Client, Method, Response};
 use serde::de::DeserializeOwned;
 use std::time::Duration;
+mod artifacts;
 mod attention;
 mod background;
 mod checkpoints;
@@ -101,6 +102,20 @@ impl HttpReiClient {
 }
 #[async_trait]
 impl ReiClient for HttpReiClient {
+    async fn list_artifacts(&self, query: ArtifactQuery) -> Result<ArtifactPage> {
+        self.artifacts_list(query).await
+    }
+    async fn get_artifact(
+        &self,
+        project: &str,
+        session: Option<&str>,
+        id: &str,
+    ) -> Result<DeliveryArtifact> {
+        self.artifact_get(project, session, id).await
+    }
+    async fn artifact_content(&self, item: &DeliveryArtifact) -> Result<Vec<u8>> {
+        self.artifact_bytes(item).await
+    }
     async fn list_tasks(&self, query: TaskQuery) -> Result<TaskPage> {
         self.task_list(query).await
     }

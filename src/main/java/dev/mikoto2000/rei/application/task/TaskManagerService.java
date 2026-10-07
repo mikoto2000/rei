@@ -20,6 +20,9 @@ public final class TaskManagerService {
   private final PersistentDependencyRepository dependencies;
   private final PersistentAgentScheduler schedules;
   private final CursorCodec cursors=new CursorCodec();
+  private dev.mikoto2000.rei.artifact.ArtifactStore artifacts;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setArtifactStore(dev.mikoto2000.rei.artifact.ArtifactStore store) { artifacts=store; }
   public TaskManagerService(ProjectRegistry projects,RunRegistry runs,PersistentCheckpointRepository checkpoints,
       GoalRepository goals,PersistentDependencyRepository dependencies,PersistentAgentScheduler schedules) {
     this.projects=projects;this.runs=runs;this.checkpoints=checkpoints;this.goals=goals;this.dependencies=dependencies;this.schedules=schedules;
@@ -166,7 +169,21 @@ public final class TaskManagerService {
         }
       }
     }
-    return task.links(goal,List.copyOf(deps),schedule,parent,List.copyOf(children));
+    var references=new LinkedHashSet<>(task.results());
+    if(artifacts!=null&&task.runId()!=null) {
+      var lineage=new LinkedHashSet<String>();lineage.add(task.runId());
+      if(task.kind().equals("CHECKPOINT"))lineage.add(task.id().substring(4));
+      for(String run:lineage) {
+        String cursor=null;
+        do {
+          var page=artifacts.list(project.id(),task.sessionId(),run,100,cursor);
+          for(var artifact:page.items())if(Objects.equals(task.sessionId(),artifact.sessionId()))
+            references.add(new TaskView.Reference("ARTIFACT",artifact.artifactId()));
+          cursor=page.nextCursor();
+        }while(cursor!=null);
+      }
+    }
+    return task.links(goal,List.copyOf(deps),schedule,parent,List.copyOf(children)).withResults(List.copyOf(references));
   }
   private String referenceTask(ProjectContext project,String run) {
     if(run==null)return null;

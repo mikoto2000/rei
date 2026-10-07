@@ -199,3 +199,36 @@ Native Rust全体は114 tests成功、React全体は24 suites / 92 tests成功�
 Chromeのdesktop/mobileはTask専用2件と既存画面を含む全体30件が成功した。
 最初のブラウザー試験は未対応fixtureで失敗し終了処理が停滞したため、今回起動したPIDとコマンドを
 照合して終了し、通常のChrome実行権限で再実行した。停滞した試験を成功扱いしない。
+
+Task Git receipt: feature `e05dd8b7`、main merge `5f9ed1a8`、両方push済み。
+統合後mainはJava関連24 suites / 122 tests、Native全体114 tests、React24 suites / 92 testsと
+typecheck成功。failure/error/skipped各0。統合時の隔離worktreeはclean、元checkoutの変更は保持した。
+
+## Phase 1: Artifact Deliveryの実装
+
+branch `codex/artifact-delivery`。共通SQLite metadataとUUID保存コピー、Bearer APIの
+一覧/所有取得/内容/明示削除、Nativeの一覧/preview/明示Downloads保存を追加した。
+Project/root/Session、canonical UUID、サイズ、SHA-256を照合する。元pathをAPIへ渡さない。
+Run/Task結果からの参照、Image生成、保存済みPaper版と単一ファイル変更提案の明示exportを接続した。
+Paper exportはモデルやHTTPを実行せず、提案exportはApplyしない。
+
+TDDで不足store/API/Native command/Task projection/source exportのRedからGreenを確認した。
+別JVMを公開予約後とatomic move後で強制終了し、UNKNOWN復元と再生成拒否を検証した。
+画像寸法制限、期限切れ、欠落・改変、所有Session拒否、保存先競合、UTF-8 filename、
+サーバー切替のstale応答破棄、HTMLのテキスト表示、画像読込失敗を確認した。
+Native全体119 tests、React25 suites / 99 tests、format/build/typecheck、
+Chrome desktop/mobile全画面36 testsが成功した。画像とテキストのNative取得はローカルHTTP fixture。
+操作と保存上限は [Artifact Delivery](artifact-delivery.md) を参照。
+Java全体とGit receiptは完了後に記録する。P4以降は未完了であり、全件完了とは扱わない。
+
+最初のJava全体は644 suites / 3523 tests、failure 1/error 0/skipped 0。
+新規Artifact enabled設定が外部設定テンプレートにないため網羅性テストが失敗した。
+テンプレートを修正し関連回帰を成功させた。追加レビューでは子Runのprivate会話IDと
+Taskの所有Sessionが異なる不足をTDDで再現し、Registryの親Sessionを引き継いで修正した。
+会話/WorkspaceからのRun生成物リンク、古いpreviewの読込失敗後の消去、Chrome PNG実デコードも検証した。
+最初の全体Redを完成検証の成功扱いにせず、修正後のJava全体を再実行している。
+
+修正後のJava全体は644 suites / 3524 tests、failure/error/skipped各0で成功した。
+Native全体119 tests、最終React25 suites / 99 testsとformat/build/typecheckが成功。
+Chrome desktop/mobile全体36 tests（PNG decode、Runリンク、Task結果、明示保存を含む）が成功。
+有料モデル・外部サービスへの書き込みは実行していない。

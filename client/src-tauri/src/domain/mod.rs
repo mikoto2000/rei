@@ -6,6 +6,8 @@ mod workspace;
 pub use workspace::*;
 mod tasks;
 pub use tasks::*;
+mod artifacts;
+pub use artifacts::*;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]

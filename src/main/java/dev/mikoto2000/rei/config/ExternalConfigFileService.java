@@ -93,6 +93,12 @@ public class ExternalConfigFileService {
               enabled: false
 
         rei:
+          artifacts:
+            enabled: ${REI_ARTIFACTS_ENABLED:false}
+            max-bytes: ${REI_ARTIFACTS_MAX_BYTES:33554432}
+            max-total-bytes: ${REI_ARTIFACTS_MAX_TOTAL_BYTES:536870912}
+            max-artifacts: ${REI_ARTIFACTS_MAX_COUNT:1024}
+            retention: ${REI_ARTIFACTS_RETENTION:30d}
           paper:
             enabled: ${REI_PAPER_ENABLED:true}
             open-alex-api-key: ${REI_PAPER_OPEN_ALEX_API_KEY:}

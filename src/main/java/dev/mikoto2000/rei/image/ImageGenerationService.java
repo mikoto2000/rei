@@ -11,6 +11,9 @@ import dev.mikoto2000.rei.core.service.CommandCancellationService;
 
 @Service
 public class ImageGenerationService {
+  private dev.mikoto2000.rei.artifact.ArtifactStore artifacts;
+  @Autowired(required=false)
+  public void setArtifactStore(dev.mikoto2000.rei.artifact.ArtifactStore artifacts){this.artifacts=artifacts;}
 
   private final ImageGenerationClient client;
   private final ImageOutputPathResolver outputPathResolver;
@@ -68,10 +71,14 @@ public class ImageGenerationService {
         Files.createDirectories(outputPath.getParent());
       }
       Files.write(outputPath, bytes);
-      return ImageGenerationResult.success(outputPath, effectiveRequest.prompt());
+      var owner=dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+      String artifact=artifacts!=null&&owner!=null&&owner.projectId()!=null?
+          artifacts.publish(owner,"image:"+java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(outputPath.getFileName().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8))),"image/png",outputPath.getFileName().toString(),bytes).artifactId():null;
+      return ImageGenerationResult.success(outputPath,effectiveRequest.prompt(),artifact);
     } catch (IllegalArgumentException e) {
       return ImageGenerationResult.failure("画像データのデコードに失敗しました");
     } catch (Exception e) {
+      if(dev.mikoto2000.rei.core.chat.RunCancellation.isCancellation(e)||Thread.currentThread().isInterrupted())return ImageGenerationResult.failure("cancelled");
       return ImageGenerationResult.failure(sanitizeMessage(e));
     }
   }

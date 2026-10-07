@@ -6,6 +6,16 @@ import org.springframework.web.bind.annotation.*;
 
 @RestControllerAdvice(basePackages = "dev.mikoto2000.rei.web")
 public class ApiExceptionHandler {
+  @ExceptionHandler(dev.mikoto2000.rei.artifact.ArtifactException.class)
+  public ResponseEntity<Error> artifact(dev.mikoto2000.rei.artifact.ArtifactException error) {
+    int status=switch(error.code()) {
+      case CAPACITY->507;
+      case MISSING,EXPIRED,DELETED->410;
+      case STALE,UNAVAILABLE->409;
+      default->500;
+    };
+    return ResponseEntity.status(status).body(new Error("Artifact: "+error.code()));
+  }
   @ExceptionHandler(dev.mikoto2000.rei.core.chat.ProjectRunQueue.CapacityExceededException.class)
   public ResponseEntity<Error> runCapacity() {
     return ResponseEntity.status(429).body(new Error("Run admission capacity reached"));

@@ -146,6 +146,9 @@ Web では認証付き `GET /api/v1/sessions`、`GET /api/v1/sessions/{sessionId
 | --- | --- |
 | 画像の添付 | [ファイル・クリップボードから入力](docs/usage.md#画像の入力)（画像対応モデルが必要） |
 | 画像生成 | [生成・保存先の指定](docs/usage.md#画像生成) |
+| 別会話の並行実行 | [会話・読み取り・作業Runの使い分け](docs/concurrent-conversation-runs.md) |
+| Agent Task Manager | [Project横断の状態一覧と明示操作](docs/task-manager.md) |
+| 生成物の受取 | [Artifact一覧・preview・Downloads保存](docs/artifact-delivery.md) |
 | Google Calendar | [認証設定](docs/configuration.md#google-calendar-と-google-tasks) → [予定の一覧・追加](docs/usage.md#google-calendar) |
 | Google Tasks | [認証設定](docs/configuration.md#google-calendar-と-google-tasks) → [タスクの追加・完了・削除](docs/usage.md#タスク管理) |
 | RSS/Atom | [購読・OPML 取り込み・記事要約](docs/usage.md#rss-feed) / [認証付きフィード](docs/private-feeds.md) |

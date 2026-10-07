@@ -11,6 +11,10 @@ public record TaskView(String id,String kind,String sourceId,String projectId,St
     boolean cancelSupported,boolean resumeSupported,boolean inputSupported,long revision) {
   public record Progress(int completed,int total) {}
   public record Reference(String kind,String id) {}
+  public TaskView withResults(List<Reference> references) {
+    return new TaskView(id,kind,sourceId,projectId,sessionId,runId,status,mode,startedAt,updatedAt,waitingReason,errorSummary,
+        progress,references,goalId,dependencyIds,schedulerId,parentId,childIds,checkpointTaskId,cancelSupported,resumeSupported,inputSupported,revision);
+  }
   public TaskView { results=List.copyOf(results);dependencyIds=List.copyOf(dependencyIds);childIds=List.copyOf(childIds); }
   @com.fasterxml.jackson.annotation.JsonProperty("suspendSupported")
   public boolean suspendSupported() {

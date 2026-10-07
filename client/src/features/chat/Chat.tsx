@@ -12,7 +12,9 @@ import {
   type ConversationTurn,
 } from "../../entities/models";
 import type { HistoryState } from "../history/pagination";
+import type { ArtifactSelection } from "../../entities/artifacts";
 interface Props {
+  onArtifacts?: (selection: ArtifactSelection) => void;
   userAvatar?: string | null;
   conversation: Conversation;
   projectName: string;
@@ -49,6 +51,7 @@ export function Chat({
   onMoreHistory,
   onRetryHistory,
   onRefreshHistory,
+  onArtifacts,
 }: Props) {
   const [message, setMessage] = useState("");
   const [mode, setMode] = useState<RunMode | "INTERVENTION">("EXCLUSIVE");
@@ -200,6 +203,19 @@ export function Chat({
                 {run.error && <p className="muted">{errorText(run.error)}</p>}
                 <div className="run-actions">
                   <small>Run {run.runId.slice(0, 8)}</small>
+                  {onArtifacts && (
+                    <button
+                      onClick={() =>
+                        onArtifacts({
+                          projectId: run.projectId,
+                          sessionId: run.sessionId,
+                          runId: run.runId,
+                        })
+                      }
+                    >
+                      このRunの生成物
+                    </button>
+                  )}
                   <button className="quiet" onClick={() => onRefresh(run)}>
                     状態を更新
                   </button>
@@ -242,6 +258,19 @@ export function Chat({
                 <div className="answer">
                   {turn.assistantMessage ?? "応答はまだ記録されていません。"}
                 </div>
+                {onArtifacts && (
+                  <button
+                    onClick={() =>
+                      onArtifacts({
+                        projectId: conversation.projectId,
+                        sessionId: conversation.sessionId,
+                        runId: turn.runId,
+                      })
+                    }
+                  >
+                    このRunの生成物
+                  </button>
+                )}
               </div>
             </article>
           ) : null,

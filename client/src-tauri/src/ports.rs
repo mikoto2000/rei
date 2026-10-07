@@ -26,6 +26,20 @@ pub trait NotificationPort: Send + Sync {
 pub type ByteStream = Pin<Box<dyn Stream<Item = Result<Vec<u8>>> + Send>>;
 #[async_trait]
 pub trait ReiClient: Send + Sync {
+    async fn list_artifacts(&self, _query: ArtifactQuery) -> Result<ArtifactPage> {
+        Err(AppError::EndpointNotFound)
+    }
+    async fn get_artifact(
+        &self,
+        _project: &str,
+        _session: Option<&str>,
+        _id: &str,
+    ) -> Result<DeliveryArtifact> {
+        Err(AppError::EndpointNotFound)
+    }
+    async fn artifact_content(&self, _artifact: &DeliveryArtifact) -> Result<Vec<u8>> {
+        Err(AppError::EndpointNotFound)
+    }
     async fn list_tasks(&self, _query: TaskQuery) -> Result<TaskPage> {
         Err(AppError::EndpointNotFound)
     }

@@ -14,6 +14,22 @@ import org.junit.jupiter.api.io.TempDir;
 
 @org.junit.jupiter.api.Tag("integration")
 class ImageGenerationServiceTest {
+  @Test void enabledDeliveryCopiesGeneratedBytesAndReturnsAnOwnedArtifactReceipt() throws Exception {
+    var buffer=new java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(1,1,java.awt.image.BufferedImage.TYPE_INT_RGB),"png",buffer);
+    var projects=new dev.mikoto2000.rei.core.project.ProjectRegistry(tempDir.resolve("projects.json"));var project=projects.resolve(tempDir);
+    var source=new org.sqlite.SQLiteDataSource();source.setUrl("jdbc:sqlite:"+tempDir.resolve("state.db"));
+    var store=new dev.mikoto2000.rei.artifact.ArtifactStore(source,projects,tempDir.resolve("delivery"),Clock.systemUTC(),new dev.mikoto2000.rei.artifact.ArtifactProperties());
+    var service=service(new RecordingClient(Base64.getEncoder().encodeToString(buffer.toByteArray())));service.setArtifactStore(store);
+    var owner=new dev.mikoto2000.rei.core.chat.AgentRunContext("image","session",tempDir,project.id());
+    ImageGenerationResult result;
+    try(var scope=dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+      result=service.generate(new ImageGenerationRequest("fixture",tempDir.resolve("生成結果.png"),null,new ImageSize(1,1),false));
+    }
+    assertThat(result.success()).isTrue();assertThat(result.artifactId()).isNotNull();
+    Files.writeString(result.savedPath(),"changed source");
+    assertThat(store.content(project.id(),"session",result.artifactId())).isEqualTo(buffer.toByteArray());
+    assertThat(store.get(project.id(),"session",result.artifactId()).runId()).isEqualTo("image");
+  }
 
   @TempDir
   Path tempDir;
