@@ -17,3 +17,9 @@
 子にはShell、ファイル書込、Change Set保存/適用、再帰委譲を公開しない。資料内の命令はuntrustedとして扱う。モデルが挙げたsource/quoteはSchemaで形を検査するだけで、事実や引用の正しさを保証しない。出典確認・図の構文検証/rendering・要件充足は親が独立確認し、未実施の検証を成功として扱わない。図の編集でも既存node ID・関係・周辺文書を維持するよう指示する。
 
 DOCX/PDF/PPTX生成、複数ファイル編集、図の専用renderer、自動適用はこの機能に含めない。既存テキスト編集と共通Change Setの機能を利用するため、追加モデルへの無条件呼び出しや権限拡張はない。
+# PlantUML renderer validation
+
+親は保存済み `.puml` / `.plantuml` の変更をApplyした後、正確なsource SHAで
+`validateDocumentRender` を呼べる。既定OFFの実rendererでexit/parse/PNG/size/hashを
+検証し、Artifact有効時は既存deliveryへ公開する。詳細は
+[renderer validation](document-renderer-validation.md)。子の文章だけを描画成功の証拠にしない。

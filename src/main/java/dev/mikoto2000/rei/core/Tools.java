@@ -56,6 +56,12 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 
 @Component
 public class Tools {
+  private DocumentRendererService documentRenderer;
+  @Autowired(required=false) void setDocumentRenderer(DocumentRendererService service){documentRenderer=service;}
+  @Tool(description="既定OFFの管理者指定PlantUML rendererで現在の.puml/.plantumlと正確なsourceSha256をPNG検証します。directive/function/resource link禁止、SANDBOX、20秒/4MiB/4096px、exit/parse/画像/size/hashを記録。file Applyはせず、Artifact有効時だけ既存deliveryへ公開。モデルの説明は描画証拠ではありません。")
+  DocumentRendererService.Receipt validateDocumentRender(DocumentRendererService.Request request)throws IOException{if(documentRenderer==null)throw new IllegalStateException("Renderer unavailable");return documentRenderer.validate(diagnosedOwner(),request);}
+  @Tool(description="現在Project/root/sessionの保存renderer receiptを読みます。履歴の描画結果で現在sourceの成功保証ではありません。STARTED/UNKNOWNは自動再実行せず、不足環境は成功扱いにしません。")
+  DocumentRendererService.Receipt inspectDocumentRender(String id)throws IOException{if(documentRenderer==null)throw new IllegalStateException("Renderer unavailable");return documentRenderer.inspect(diagnosedOwner(),id);}
   private dev.mikoto2000.rei.goal.GoalCompletionGate goalCompletionGate;
   @Autowired(required=false) void setGoalCompletionGate(dev.mikoto2000.rei.goal.GoalCompletionGate gate){goalCompletionGate=gate;}
   @Tool(description="現在Project/root/sessionのGoal completion definitionと保存proofを読みます。READのみ。モデルの完了宣言は証拠ではなく、定義変更やRun起動は行いません。")
