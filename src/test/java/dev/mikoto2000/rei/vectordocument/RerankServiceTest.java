@@ -25,6 +25,11 @@ import tools.jackson.databind.json.JsonMapper;
 
 @org.junit.jupiter.api.Tag("integration")
 class RerankServiceTest {
+  @Test void evaluationRejectsDisabledOrFailedProviderWhileRuntimeRetainsFallback(){
+    var absent=new RerankService(new RerankProperties(false,null,null,null,null),RestClient.builder());assertEquals(List.of("a"),absent.rerank("q",List.of("a"),s->s));assertThrows(IllegalStateException.class,()->absent.rerankForEvaluation("q",List.of("a"),s->s));
+    var configured=new RerankService(new RerankProperties(true,baseUrl,"fixture-key","model","/custom/rerank"),RestClient.builder());status=500;assertEquals(List.of("a","b"),configured.rerank("q",List.of("a","b"),s->s));assertThrows(RuntimeException.class,()->configured.rerankForEvaluation("q",List.of("a","b"),s->s));
+    status=200;response="{\"results\":[{\"index\":1,\"relevance_score\":0.9},{\"index\":0,\"relevance_score\":0.1}]}";assertEquals(List.of("b","a"),configured.rerankForEvaluation("q",List.of("a","b"),s->s));
+  }
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path root;
   private RerankService budgetedService() {
     return new RerankService(new RerankProperties(true,baseUrl,"rerank-key","reranker","/custom/rerank",true),RestClient.builder());

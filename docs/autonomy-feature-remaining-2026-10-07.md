@@ -14,8 +14,10 @@ Priority 9–13はReflection候補ledger、Slack通知、複数言語Map、cover
 Priority 15では、既存FileGoalVerifier/GoalLoop全完了経路に[定義可能なcompletion gate](goal-completion-gate.md)を追加した。全Goal強制は既定OFF、保存Review/current patch/test/artifact/predicateを独立再確認する。
 Priority 16の[multi-file text transaction](multi-file-document-change-set.md)は統合済み。
 Priority 17では[PlantUML renderer validation](document-renderer-validation.md)を追加し、
-実renderer/Artifact/timeout/cancelの関連回帰は成功、全体回帰を確認中。
+実renderer/Artifact/timeout/cancelの関連回帰と全体回帰を成功し統合済み。
 下表の複数file・renderer未対応は過去の状態であり、これらの限定対応を反映して読む。
+Priority 18の[RAG/Skill品質評価harness](retrieval-quality-evaluation.md)は匿名fixture、
+4指標、lexical/dense/RRFとrerank比較を追加した。実モデル品質の確認は別途必要。
 
 元の依頼は「現在のリポジトリ・環境で安全に実装できる項目」を小さな独立機能として実装し、候補全部の無条件実装や既存機能の二重実装を避けるものだった。後続の全対応要求を受け、具体的な不足を再照合して追加実装した。過去のfollow-upの「未対応」はその記録時点の状態であり、現在の判定は[監査表](autonomy-feature-audit.md)を参照する。Deferredを実装済みへ読み替えない。
 
