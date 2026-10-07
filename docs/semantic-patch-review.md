@@ -61,3 +61,8 @@ TDDで未実装入口と読めないdiffの偽成功をRedで再現し、予算�
 欠落/skip/stale report、追加変更、hygieneと文字列、途中のpatch変化、SQLite再読取を検証。
 実Git/実Shellではcommandが2回実行してJUnitを更新し、同一patch・receipt・index不変と
 再送時に実行が増えないことを確認する。実LLMや外部サービスは呼ばない。
+
+Crash inspection: `inspectPatchRequirementReview(id)` and
+`listPatchRequirementReviews()` are READ tools for the captured Project/root/session.
+Lost STARTED becomes UNKNOWN; no proof is fabricated. Exact terminal ID/SHA retrieval
+and Goal completion validation remain unchanged. See final-crash-consistency.md.

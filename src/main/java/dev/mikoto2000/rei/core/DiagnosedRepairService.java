@@ -30,6 +30,7 @@ public final class DiagnosedRepairService {
   private final JdbcClient db;private final TransactionTemplate transaction;private final TextChangeSetService changes;
   private final Clock clock;private final boolean enabled;private final SelfPatchReviewService.Capture capture;
   private final SelfPatchRepairService.Cycle cycle;private final ObjectMapper json=new ObjectMapper().findAndRegisterModules();
+  private final PersistedReceiptLease leases;
   @org.springframework.beans.factory.annotation.Autowired
   public DiagnosedRepairService(@org.springframework.beans.factory.annotation.Qualifier("memoryConsolidationDataSource") DataSource source,
       TextChangeSetService changes,Clock clock,@org.springframework.beans.factory.annotation.Value("${rei.repair.diagnosed-enabled:false}") boolean enabled,SystemShellService shell){
@@ -40,6 +41,7 @@ public final class DiagnosedRepairService {
     this.changes=changes;this.clock=clock;this.enabled=enabled;this.capture=capture;this.cycle=cycle;
     db=JdbcClient.create(source);transaction=new TransactionTemplate(new DataSourceTransactionManager(source));
     db.sql("CREATE TABLE IF NOT EXISTS diagnosed_repairs(id TEXT PRIMARY KEY,project TEXT NOT NULL,root TEXT NOT NULL,session TEXT NOT NULL,payload TEXT NOT NULL,status TEXT NOT NULL,result TEXT)").update();
+    leases=new PersistedReceiptLease(source,"diagnosed_repairs",clock);
   }
   public View propose(AgentRunContext owner,Request request)throws IOException {
     requireEnabled();requireExclusive(owner);Path root=owner(owner);validate(request);long deadline=deadline();
@@ -56,7 +58,7 @@ public final class DiagnosedRepairService {
         changes.protectDiagnosed(project(owner,root),proposal.id());
         String hash=hash(proposal.id()+"\u0000"+owner.projectId()+"\u0000"+root+"\u0000"+owner.conversationId()+"\u0000"+diagnosis.sha256()+"\u0000"+snapshot.version()+"\u0000"+proposal.proposalSha256()+"\u0000"+request.testCommand()+"\u0000"+seconds);
         var record=new Saved(proposal.id(),owner.projectId(),root.toString(),owner.conversationId(),hash,diagnosis,snapshot.version(),proposal.proposalSha256(),request.testCommand(),seconds);
-        db.sql("INSERT INTO diagnosed_repairs VALUES(?,?,?,?,?,'PROPOSED',NULL)").params(record.id(),record.project(),record.root(),record.session(),encode(record)).update();return record;
+        db.sql("INSERT INTO diagnosed_repairs(id,project,root,session,payload,status,result) VALUES(?,?,?,?,?,'PROPOSED',NULL)").params(record.id(),record.project(),record.root(),record.session(),encode(record)).update();return record;
       }catch(IOException error){throw new java.io.UncheckedIOException(error);}
     });
     return view(owner,new Stored(saved,"PROPOSED",null));
@@ -75,7 +77,7 @@ public final class DiagnosedRepairService {
     if(!proposal.status().equals("PROPOSED")||!proposal.proposalSha256().equals(saved.changeHash())||!Objects.equals(proposal.baselineSha256(),proposal.currentSha256()))throw new IllegalStateException("Repair Change Set stale, claimed or changed");
     RunCancellation.propagate(null);
     if(db.sql("UPDATE diagnosed_repairs SET status='STARTED' WHERE id=? AND project=? AND status='PROPOSED'").params(id,owner.projectId()).update()!=1)throw new IllegalStateException("Repair already claimed");
-    try {
+    try(var lease=leases.activate(id)) {
       SelfPatchRepairService.Cycle bounded=(path,request,budget)->{
         var observed=capture.capture(path,budget);
         if(!observed.complete()||observed.changedFiles().size()>32)throw new IOException("Repair patch exceeds 32 files or is incomplete");
@@ -90,6 +92,7 @@ public final class DiagnosedRepairService {
       });
       var result=verifier.verify(root,new SelfPatchRepairService.Request(saved.testCommand(),saved.timeoutSeconds(),List.of(new SelfPatchRepairService.Repair(id,saved.changeHash()))),deadline);
       RunCancellation.propagate(null);SelfPatchReviewService.remaining(deadline,1);
+      leases.heartbeat(id);
       if(db.sql("UPDATE diagnosed_repairs SET status=?,result=? WHERE id=? AND project=? AND status='STARTED'").params(result.status(),encode(result),id,owner.projectId()).update()!=1)throw new IOException("Repair receipt unavailable");
       return view(owner,new Stored(saved,result.status(),result));
     }catch(IOException|RuntimeException error){
@@ -101,7 +104,7 @@ public final class DiagnosedRepairService {
     Path root=owner(owner);if(id==null||!id.matches("[0-9a-fA-F-]{36}"))throw new IllegalArgumentException("Repair UUID required");
     var stored=db.sql("SELECT payload,status,result FROM diagnosed_repairs WHERE id=? AND project=? AND root=? AND session=?")
         .params(id,owner.projectId(),root.toString(),owner.conversationId()).query((row,n)->new Stored(decode(row.getString("payload"),Saved.class),row.getString("status"),row.getString("result")==null?null:decode(row.getString("result"),SelfPatchRepairService.Result.class))).optional().orElseThrow(()->new IllegalArgumentException("Repair not found in this Project/root/session"));
-    if(!id.equals(stored.saved().id())||!owner.projectId().equals(stored.saved().project())||!root.toString().equals(stored.saved().root())||!owner.conversationId().equals(stored.saved().session()))throw new IllegalStateException("Repair ownership receipt invalid");return stored;
+    if(!id.equals(stored.saved().id())||!owner.projectId().equals(stored.saved().project())||!root.toString().equals(stored.saved().root())||!owner.conversationId().equals(stored.saved().session()))throw new IllegalStateException("Repair ownership receipt invalid");leases.reconcile(id);String currentStatus=db.sql("SELECT status FROM diagnosed_repairs WHERE id=?").param(id).query(String.class).single();return new Stored(stored.saved(),currentStatus,stored.result());
   }
   private View view(AgentRunContext owner,Stored stored)throws IOException {var saved=stored.saved();return new View(saved.id(),stored.status(),saved.receiptHash(),saved.diagnosis(),saved.patchVersion(),changes.inspect(project(owner,Path.of(saved.root())),saved.id()),saved.testCommand(),saved.timeoutSeconds(),stored.result());}
   private void requireFailure(TestReportDiagnosisService.Result diagnosis){if(diagnosis.partial()||diagnosis.failedTests().isEmpty()||diagnosis.observed().failures()+diagnosis.observed().errors()==0)throw new IllegalArgumentException("Complete saved failing test evidence required");if(diagnosis.modifiedAt().isBefore(clock.instant().minus(Duration.ofDays(7)))||diagnosis.modifiedAt().isAfter(clock.instant().plusSeconds(60)))throw new IllegalStateException("Failure report is stale or future dated");}

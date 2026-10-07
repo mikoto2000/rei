@@ -10,6 +10,7 @@ import org.junit.jupiter.api.io.TempDir;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 
 class SemanticPatchReviewServiceTest {
+  @Test void lostStartedReviewCanBeInspectedWithoutReplayOrProof()throws Exception{var ds=new org.springframework.jdbc.datasource.DriverManagerDataSource("jdbc:sqlite:"+root.resolve("review.db"));var service=new SemanticPatchReviewService(ds,Clock.systemUTC(),false,(r,d)->snapshot(),(r,q,d)->{throw new AssertionError("simulated lost operation");},(r,s,d)->{throw new AssertionError();},(input,run,d)->{throw new AssertionError();});assertThrows(AssertionError.class,()->service.review(owner(),request(false),null));var rows=service.list(owner());assertEquals(1,rows.size());var inspection=service.inspect(owner(),rows.getFirst().id());assertEquals("UNKNOWN",inspection.status());assertNull(inspection.sha256());assertFalse(inspection.completed());assertThrows(IllegalStateException.class,()->service.review(owner(),request(false),null));assertThrows(IllegalArgumentException.class,()->service.inspect(new AgentRunContext("foreign","foreign",root,project),inspection.id()));}
   @TempDir Path root;final String project=UUID.randomUUID().toString();final AtomicInteger models=new AtomicInteger();
   String diffOverride;boolean stale;int driftAfter=Integer.MAX_VALUE;final AtomicInteger captures=new AtomicInteger();
   AgentRunContext owner(){return new AgentRunContext("run","session",root,project);}
@@ -57,8 +58,8 @@ class SemanticPatchReviewServiceTest {
   }
   @Test void toolEntryKeepsArbitraryCommandAuthorityAndReadOnlyReceiptLookup()throws Exception {
     var tools=new Tools();tools.setPatchReviews(service(false,false,"value","class A {}"));
-    try(var scope=dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner())){var receipt=tools.reviewPatchRequirements(request(false),null);assertEquals(receipt,tools.getPatchRequirementReview(receipt.id(),receipt.sha256()));}
-    var policy=new dev.mikoto2000.rei.core.policy.ToolPermissionPolicy(new dev.mikoto2000.rei.core.policy.ToolPermissionProperties(true,null,null,null));assertTrue(policy.capabilities("reviewPatchRequirements").contains(dev.mikoto2000.rei.core.policy.ActionCapability.EXECUTE));assertEquals(Set.of(dev.mikoto2000.rei.core.policy.ActionCapability.READ),policy.capabilities("getPatchRequirementReview"));
+    try(var scope=dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner())){var receipt=tools.reviewPatchRequirements(request(false),null);assertEquals(receipt,tools.getPatchRequirementReview(receipt.id(),receipt.sha256()));assertTrue(tools.inspectPatchRequirementReview(receipt.id()).completed());assertEquals(receipt.id(),tools.listPatchRequirementReviews().getFirst().id());}
+    var policy=new dev.mikoto2000.rei.core.policy.ToolPermissionPolicy(new dev.mikoto2000.rei.core.policy.ToolPermissionProperties(true,null,null,null));assertTrue(policy.capabilities("reviewPatchRequirements").contains(dev.mikoto2000.rei.core.policy.ActionCapability.EXECUTE));assertEquals(Set.of(dev.mikoto2000.rei.core.policy.ActionCapability.READ),policy.capabilities("getPatchRequirementReview"));assertEquals(Set.of(dev.mikoto2000.rei.core.policy.ActionCapability.READ),policy.capabilities("inspectPatchRequirementReview"));assertEquals(Set.of(dev.mikoto2000.rei.core.policy.ActionCapability.READ),policy.capabilities("listPatchRequirementReviews"));
   }
   @Test void unmappedDiffHeaderCannotSilentlySkipHygiene()throws Exception {
     diffOverride="diff --git a/A.java b/A.java\n--- a/A.java\n+++ \"b/A.java\"\n@@ -1 +1 @@\n+// TODO finish\n";

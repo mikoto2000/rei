@@ -66,12 +66,12 @@ public class AttentionDeliveryService {
       eligible(item.projectId(),item.id());
       json=new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(Map.of("schemaVersion",1,"id",attention.id(),"projectId",attention.projectId(),"kind",attention.kind(),"createdAt",attention.createdAt().toString()));
     }catch(Exception error){outbox.skip(item,"BLOCKED","invalid_metadata");return;}
-    if(!outbox.claim(item.projectId(),item.id(),selected.minimumIntervalMillis()))return;
+    var lease=outbox.claimActive(item,selected.minimumIntervalMillis());if(lease==null)return;
     NotificationProvider.Receipt receipt=new NotificationProvider.Receipt("UNKNOWN","transport_outcome_unknown","",0);boolean interrupted=false;
     try{receipt=selected.deliver(item.id(),json);}
     catch(InterruptedException error){interrupted=true;receipt=new NotificationProvider.Receipt("UNKNOWN","interrupted_outcome_unknown","",0);}
     catch(Exception error){receipt=new NotificationProvider.Receipt("UNKNOWN","transport_outcome_unknown","",0);}
-    finally{interrupted|=Thread.interrupted();try{outbox.finish(item,receipt);}finally{if(interrupted)Thread.currentThread().interrupt();}}
+    finally{interrupted|=Thread.interrupted();try{outbox.finish(lease.delivery(),receipt);}finally{lease.close();if(interrupted)Thread.currentThread().interrupt();}}
   }
   @PreDestroy public void close(){synchronized(this){if(closed)return;closed=true;if(subscription!=null){subscription.unsubscribe();subscription=null;}}worker.shutdownNow();try{worker.awaitTermination(2,TimeUnit.SECONDS);}catch(InterruptedException error){Thread.currentThread().interrupt();}}
 }

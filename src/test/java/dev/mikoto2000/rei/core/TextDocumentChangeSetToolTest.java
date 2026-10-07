@@ -17,7 +17,7 @@ class TextDocumentChangeSetToolTest {
     org.mockito.Mockito.verify(factory,org.mockito.Mockito.times(1)).fileModified(root.resolve("A.md").toString(),null,null);
   }
   @Test void humanRecoveryCommandRoutesExactInstructionThroughExistingExclusiveQueue(){
-    var conversations=org.mockito.Mockito.mock(dev.mikoto2000.rei.application.session.ShellConversationService.class);var cli=new picocli.CommandLine(new dev.mikoto2000.rei.core.command.DocumentCommand(conversations));String id=UUID.randomUUID().toString(),sha="a".repeat(64);assertEquals(0,cli.execute("rollback",id,sha));org.mockito.Mockito.verify(conversations).submit("/document rollback "+id+" "+sha);assertEquals(2,cli.execute("auto",id,sha));org.mockito.Mockito.verifyNoMoreInteractions(conversations);
+    var conversations=org.mockito.Mockito.mock(dev.mikoto2000.rei.application.session.ShellConversationService.class);var cli=new picocli.CommandLine(new dev.mikoto2000.rei.core.command.DocumentCommand(conversations));String id=UUID.randomUUID().toString(),sha="a".repeat(64);assertEquals(0,cli.execute("rollback",id,sha));org.mockito.Mockito.verify(conversations).submit("/document rollback "+id+" "+sha);assertEquals(0,cli.execute("reconcile-single",id,sha));org.mockito.Mockito.verify(conversations).submit("/document reconcile-single "+id+" "+sha);assertEquals(2,cli.execute("auto",id,sha));org.mockito.Mockito.verifyNoMoreInteractions(conversations);
     assertTrue(Arrays.asList(dev.mikoto2000.rei.ui.shell.RootCommand.class.getAnnotation(picocli.CommandLine.Command.class).subcommands()).contains(dev.mikoto2000.rei.core.command.DocumentCommand.class));
   }
 }

@@ -15,6 +15,8 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 
 @Tag("integration")
 class AttentionDeliveryTest {
+  @Test void startupPreservesActiveLeaseAndLostLeaseBecomesUnknown(){start(properties(true,false),true);var item=fact("lease");var pending=delivery.request("project",item.id());var lease=outbox.claimActive(pending,0);assertNotNull(lease);var restarted=new AttentionDeliveryRepository(new DriverManagerDataSource("jdbc:sqlite:"+dir.resolve("inbox.db")),clock);restarted.recover();assertEquals("SENDING",restarted.find("project",item.id()).orElseThrow().status());lease.close();restarted.recover();assertEquals("UNKNOWN",restarted.find("project",item.id()).orElseThrow().status());assertEquals(0,calls.get());}
+  @Test void oldAttemptCannotOverwriteExplicitlyRetriedClaim(){start(properties(true,false),true);var item=fact("late-attempt");var pending=delivery.request("project",item.id());assertTrue(outbox.claim("project",item.id()));var old=outbox.find("project",item.id()).orElseThrow();outbox.recover();outbox.retry("project",item.id(),pending.destination(),true);assertTrue(outbox.claim("project",item.id()));var current=outbox.find("project",item.id()).orElseThrow();outbox.finish(old,"SENT","late_outcome");assertEquals("SENDING",outbox.find("project",item.id()).orElseThrow().status());outbox.finish(current,"SENT","current_outcome");assertEquals("SENT",outbox.find("project",item.id()).orElseThrow().status());}
   @TempDir Path dir;
   Clock clock=Clock.fixed(Instant.EPOCH,ZoneOffset.UTC);
   AttentionRepository inbox; AttentionDeliveryRepository outbox;

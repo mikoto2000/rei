@@ -65,7 +65,7 @@ public final class TextDocumentChangeSetService {
     Path root=Path.of(row.saved().root());if(!TextDocumentTransaction.matches(root,row.saved().changes(),false)){finish(row,"PROPOSED","STALE",List.of("Baseline changed; no writes"));return inspect(owner,id);}
     if(!ACTIVE.add(id))throw new IllegalStateException("Document apply already active");
     try{
-      int claim=db.sql("UPDATE text_document_change_sets SET status='APPLYING',phase='CLAIMED',pid=?,process_start=?,heartbeat=? WHERE id=? AND status='PROPOSED' AND NOT EXISTS (SELECT 1 FROM text_change_sets s WHERE s.root=text_document_change_sets.root AND s.status IN ('APPLYING','FAILED_UNCERTAIN'))")
+      int claim=db.sql("UPDATE text_document_change_sets SET status='APPLYING',phase='CLAIMED',pid=?,process_start=?,heartbeat=? WHERE id=? AND status='PROPOSED' AND NOT EXISTS (SELECT 1 FROM text_change_sets s WHERE s.root=text_document_change_sets.root AND s.status IN ('APPLYING','FAILED_UNCERTAIN','UNKNOWN'))")
           .params(ProcessHandle.current().pid(),processStart(),clock.instant().toString(),id).update();if(claim!=1)throw new IllegalStateException("Document or single-file apply requires inspection");
       var outcome=TextDocumentTransaction.apply(root,id,row.saved().changes(),(phase,stages)->journal(id,phase,stages),move);
       finish(row,"APPLYING",outcome.status(),outcome.warnings());if(outcome.status().equals("APPLIED")){cleanupTerminal(row);committed.accept(row.saved().changes());}return inspect(owner,id);

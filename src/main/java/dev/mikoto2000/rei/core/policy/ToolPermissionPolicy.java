@@ -11,7 +11,7 @@ public class ToolPermissionPolicy {
   private static final Set<String> READ=Set.of("readFile","readMultiFile","grepMultiQuery","readPdfFile",
       "searchAndRead","today","now","findFile","listFile","repositoryMap","changeTestImpact","diagnoseTestReport","diagnoseTestReports","readTextChangeSetBase","inspectTextChangeSet","getShellProcessStatus","waitForShellProcess","waitForFile","dependencyStatus","dependencyHistory","checkDependency","waitForDependency","listScheduledActions","listCodexReviews","getCodexReview");
   private static final Set<String> NETWORK_READ=Set.of("webSearch","webSearchAndRead","fetchUrlContent","checkHttpDependency","waitForHttpDependency");
-  private static final Set<String> LOCAL_WRITE=Set.of("applyTextDiff","writeMultiFile","proposeTextChangeSet","applyTextChangeSet","discardTextChangeSet","createDirectory","copyFile","scheduleAfter","scheduleAt","scheduleInterval","scheduleCron","scheduleOnEvent","registerDependency","cancelDependency");
+  private static final Set<String> LOCAL_WRITE=Set.of("applyTextDiff","writeMultiFile","proposeTextChangeSet","applyTextChangeSet","discardTextChangeSet","reconcileTextChangeSet","createDirectory","copyFile","scheduleAfter","scheduleAt","scheduleInterval","scheduleCron","scheduleOnEvent","registerDependency","cancelDependency");
   private final ToolPermissionProperties properties;
   public ToolPermissionPolicy(ToolPermissionProperties properties) {this.properties=properties;}
   public boolean enforced(){return properties.enabled();}
@@ -27,7 +27,7 @@ public class ToolPermissionPolicy {
     if("inspectTextDocumentChangeSet".equals(tool))return Set.of(ActionCapability.READ);
     if(Set.of("proposeTextDocumentChangeSet","discardTextDocumentChangeSet").contains(tool))return Set.of(ActionCapability.LOCAL_WRITE);
     if(Set.of("applyTextDocumentChangeSet","rollbackTextDocumentChangeSet","cleanTextDocumentStaging").contains(tool))return Set.of(ActionCapability.LOCAL_WRITE,ActionCapability.DESTRUCTIVE);
-    if(Set.of("inspectDiagnosedRepair","getPatchRequirementReview","getGoalCompletionDefinition").contains(tool))return Set.of(ActionCapability.READ);
+    if(Set.of("inspectDiagnosedRepair","getPatchRequirementReview","inspectPatchRequirementReview","listPatchRequirementReviews","getGoalCompletionDefinition").contains(tool))return Set.of(ActionCapability.READ);
     if("attachGoalCompletionEvidence".equals(tool))return Set.of(ActionCapability.LOCAL_WRITE);
     if("proposeDiagnosedRepair".equals(tool))return Set.of(ActionCapability.LOCAL_WRITE);
     if(Set.of("listDurableSubAgents","getDurableSubAgent","getSubAgentGraph","compareSubAgentAnswers").contains(tool))return Set.of(ActionCapability.READ);

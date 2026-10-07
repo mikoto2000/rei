@@ -49,3 +49,7 @@ Tests use SQLite persistence, exact human request guards, stale/foreign/READ_ONL
 claims, uncertain writes and shared deadline. A real Git/Shell fixture reproduces a failed command,
 updates JUnit XML, applies the saved fix, runs both subsequent checks and confirms index preservation.
 No live models or external service writes are needed.
+
+Final recovery uses persisted PID/start/heartbeat and active ownership. Lost STARTED
+is UNKNOWN on startup/inspection; guarded Change Set audit history is retained.
+Unknown repair is never automatically reapplied. See final-crash-consistency.md.
