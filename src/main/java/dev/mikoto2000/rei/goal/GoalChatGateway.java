@@ -43,7 +43,7 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
     if(!session.projectId().equals(goal.projectId()))throw new IllegalStateException("Goal Session belongs to another Project");
   }
   @Override public void dispatch(GoalRepository.Claim claim,String run,Consumer<GoalLoopService.Outcome> completed) {
-    var goal=claim.goal();validate(goal);
+    var goal=goals.get(claim.goal().projectId(),claim.goal().id());validate(goal);
     var owner=new AgentRunContext(run,goal.sessionId(),Path.of(goal.projectRoot()),goal.projectId(),AgentRunContext.RequestSource.WEB);
     var reservation=goals.modelBudget(claim,run);
     boolean registered=false;
@@ -61,9 +61,10 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
           if(verifier.verify(goal).satisfied())outcome=new GoalLoopService.Outcome(ChatExecutionResult.success("Criterion already satisfied",false));
           else {
             boolean uncertain=goals.attempts(goal.projectId(),goal.id()).stream().anyMatch(a->a.reason().equals("uncertain_run_reconciled"));
-            String prompt="Goal: "+goal.objective()+"\nCompletion criteria: ALL Project-relative file predicates must match. SHA-256 predicates require the exact digest; JSON predicates require the fixed JSON Pointer's scalar to equal expectedJson with its JSON type: "+goal.criteria()
+            String prompt="Goal: "+goal.objective()+"\nGoal ID: "+goal.id()+"\nCompletion definition: "+goal.completion()+"\nCompletion criteria: ALL Project-relative file predicates must match. SHA-256 predicates require the exact digest; JSON predicates require the fixed JSON Pointer's scalar to equal expectedJson with its JSON type: "+goal.criteria()
                 +". Use the existing action plan and task state to choose and execute the next bounded step. "
                 +"The host verifies the file independently; a completion statement is insufficient. "
+                +(goal.completion()==null?"":"For required review/tests, use reviewPatchRequirements with the human-defined requirements and exact test command. Attach saved Review/Artifact IDs and SHAs with attachGoalCompletionEvidence for this Goal ID. Never weaken the definition or invent evidence. ")
                 +"Previous attempts remain in this conversation. Do not repeat an already completed side effect."
                 +(uncertain?" An earlier Run has unknown side effects. Inspect current artifacts and saved history before deciding whether any action needs to be repeated.":"");
             outcome=new GoalLoopService.Outcome(chat.execute(owner,prompt,new UserInterventionQueue(),reservation));

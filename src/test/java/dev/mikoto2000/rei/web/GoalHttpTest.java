@@ -25,7 +25,16 @@ class GoalHttpTest {
   @Bean GoalRepository goals(@org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String path){return new GoalRepository(new org.springframework.jdbc.datasource.DriverManagerDataSource("jdbc:sqlite:"+Path.of(path).resolve("goals.db")),Clock.systemUTC());}
   @Bean Gateway gateway(){return new Gateway();}
   @Bean FileGoalVerifier verifier(){return new FileGoalVerifier();}
+  @Bean GoalCompletionGate completionGate(GoalRepository goals){return new GoalCompletionGate(goals,(owner,ref)->{throw new java.io.IOException("fixture has no Review");},(owner,ref)->{throw new java.io.IOException("fixture has no Artifact");},(root,deadline)->{throw new java.io.IOException("fixture has no patch");},Clock.systemUTC(),false);}
   @Bean GoalLoopService loop(GoalRepository repo,Gateway gateway,FileGoalVerifier verifier){return new GoalLoopService(repo,verifier,gateway,new dev.mikoto2000.rei.core.policy.ToolPermissionProperties(true,null,null,null),org.mockito.Mockito.mock(GoalEvents.class));}
+ }
+ @Test void completionDefinitionEndpointRequiresAuthenticationStrictJsonAndStoppedGoal()throws Exception{
+  var app=new SpringApplication(Config.class);WebApplication.configure(app,"integration-key");
+  try(var context=app.run("--rei.web.port=0","--rei.data-dir="+dir,"--logging.config=classpath:web-test-logback.xml");var client=HttpClient.newHttpClient()){
+   int port=Integer.parseInt(context.getEnvironment().getProperty("local.server.port"));var repo=context.getBean(GoalRepository.class);java.nio.file.Files.writeString(dir.resolve("out.txt"),"correct");String sha=context.getBean(FileGoalVerifier.class).fingerprint(dir.toRealPath(),"out.txt").sha256();var goal=repo.create(new AgentRunContext("source","session",dir,"p"),"result","out.txt",sha,2,5);String path="/projects/p/goals/"+goal.id();String json="{\"completionEvidence\":[{\"relativeFile\":\"out.txt\",\"sha256\":\""+sha+"\"}]}";
+   assertEquals(401,ReadHttpTest.send(client,port,path+"/completion","PUT",json,false).statusCode());assertNull(repo.get("p",goal.id()).completion());assertEquals(200,ReadHttpTest.send(client,port,path+"/completion","PUT",json,true).statusCode());assertNotNull(repo.get("p",goal.id()).completion());
+   assertEquals(400,ReadHttpTest.send(client,port,path+"/completion","PUT",json+" {}",true).statusCode());assertEquals(400,ReadHttpTest.send(client,port,path+"/completion","PUT",json.replace("\"completionEvidence\":","\"misspelled\":true,\"completionEvidence\":"),true).statusCode());repo.claim("p",goal.id());assertEquals(409,ReadHttpTest.send(client,port,path+"/completion","PUT",json,true).statusCode());assertEquals(0,context.getBean(Gateway.class).dispatched.get());
+  }
  }
  @Test void optedInPredicateVerifiesThroughAuthenticatedHttpWithoutModelDispatch()throws Exception {
   var app=new SpringApplication(Config.class);WebApplication.configure(app,"integration-key");

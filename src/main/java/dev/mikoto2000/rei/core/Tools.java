@@ -56,6 +56,12 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 
 @Component
 public class Tools {
+  private dev.mikoto2000.rei.goal.GoalCompletionGate goalCompletionGate;
+  @Autowired(required=false) void setGoalCompletionGate(dev.mikoto2000.rei.goal.GoalCompletionGate gate){goalCompletionGate=gate;}
+  @Tool(description="現在Project/root/sessionのGoal completion definitionと保存proofを読みます。READのみ。モデルの完了宣言は証拠ではなく、定義変更やRun起動は行いません。")
+  dev.mikoto2000.rei.goal.GoalRepository.Goal getGoalCompletionDefinition(String goalId)throws IOException{if(goalCompletionGate==null)throw new IllegalStateException("Goal gate unavailable");return goalCompletionGate.inspect(diagnosedOwner(),goalId);}
+  @Tool(description="現在の実行中Goal Runへ確認したReview/ArtifactのIDとSHAを添付します。proof={review:{id,sha256},artifacts:[{id,sha256}]}。定義を変更せずcommandも実行しません。現在の捕捉Run/root/session以外は拒否し、完了は独立gateがcurrent patch/report/artifact/predicateを再検証します。")
+  dev.mikoto2000.rei.goal.GoalRepository.Goal attachGoalCompletionEvidence(String goalId,dev.mikoto2000.rei.goal.GoalCompletionGate.Proof proof)throws IOException{if(goalCompletionGate==null)throw new IllegalStateException("Goal gate unavailable");return goalCompletionGate.attach(diagnosedOwner(),goalId,proof,false);}
   private SemanticPatchReviewService patchReviews;
   @Autowired(required=false) void setPatchReviews(SemanticPatchReviewService service){patchReviews=service;}
   @Tool(description="明示testCommandを実行して要件・変更file・必須JUnit testcase・静的hygieneを検証し、任意の意味Reviewを共有Run予算内で行います。request={testCommand,timeoutSeconds,requirements:[{id,statement,files,tests}],allowedFiles,testReports,semantic}。意味Reviewは既定OFF、確率的評価で正しさの保証ではありません。追加変更・欠落test・skipped・不完全な証拠はFIX_REQUIRED。任意command実行の全能力Policyが必要です。保存receiptのid/sha256を保持してください。")

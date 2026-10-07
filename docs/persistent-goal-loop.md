@@ -72,3 +72,10 @@ SQLiteにGoal、試行、状態履歴、累積予算を保存します。モデ�
 Goal専用HTTP操作とNativeの確認／起動／取消／照合は、後続の[HTTP統合](implementation-report-goal-http-controls.md)・[Native統合](implementation-report-native-goal-controls.md)で対応しました。
 汎用のbuild/test/API条件、独立Sleep／要約／CLI／embedding/rerankへの予算継承、Goal専用介入mailbox、
 複数アプリ間のProject FIFO、Goalとcheckpointの自動関連付けは追加候補です。
+
+## 定義した追加完了条件
+
+Goal definitionにcompletion evidence、required tests/artifacts/predicates、review gateを保存できる。
+FileGoalVerifier/GoalLoopの全完了経路で追加証拠を再確認し、旧ファイル判定も維持する。
+全Goalに人の定義を強制する設定は既定OFF。人の定義変更、捕捉Goal Runの証拠添付、
+strict JSON/HTTP/SQLite migrationと状態は[Goal completion gate](goal-completion-gate.md)を参照。

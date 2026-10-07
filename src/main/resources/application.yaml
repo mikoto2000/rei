@@ -200,6 +200,9 @@ rei:
     diagnosed-enabled: ${REI_REPAIR_DIAGNOSED_ENABLED:false}
   patch-review:
     semantic-enabled: ${REI_PATCH_REVIEW_SEMANTIC_ENABLED:false}
+  goal:
+    completion-gate:
+      require-all: ${REI_GOAL_COMPLETION_GATE_REQUIRE_ALL:false}
   reflection:
     lessons-enabled: ${REI_REFLECTION_LESSONS_ENABLED:false}
   subagents:

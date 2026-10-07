@@ -64,7 +64,7 @@ public class ReflectionLessonService {
       if(!item.sessionId().equals(context.conversationId())||!goal.sessionId().equals(context.conversationId())
           ||!goal.projectRoot().equals(context.projectRoot().toString()))throw new IllegalArgumentException("Goal ownership mismatch");
       boolean verified="VERIFIED".equals(item.actual())&&"COMPLETED".equals(goal.status())&&"COMPLETED".equals(item.goalStatus())
-          &&Set.of("file_digest_verified","criteria_verified").contains(goal.reason())&&goal.reason().equals(item.actualReason())
+          &&Set.of("file_digest_verified","criteria_verified","completion_gate_verified").contains(goal.reason())&&goal.reason().equals(item.actualReason())
           &&Objects.equals(goal.currentRunId()==null?"":goal.currentRunId(),item.runId())&&reflections.matchesCriteria(item,goal)&&verifier.verify(goal).satisfied();
       return new Observation("observation-"+hash(owner(context)+":"+kind+":"+id),"OBSERVATION",kind,id,item.goalId(),item.expectedFile(),item.actual()+":"+item.gap(),hash(encode(item)),item.createdAt(),true,verified);
     }

@@ -22,7 +22,7 @@ public class VerifiedReflectionMemoryService {
     if(!properties.enabled())throw new IllegalStateException("Memory is disabled");
     var reflection=reflections.get(project,reflectionId);var goal=goals.get(project,reflection.goalId());owner.validate(goal);
     if(!"COMPLETED".equals(reflection.goalStatus())||!"VERIFIED".equals(reflection.actual())||!"COMPLETED".equals(goal.status())
-        ||!Set.of("file_digest_verified","criteria_verified").contains(goal.reason())||!goal.reason().equals(reflection.actualReason())
+        ||!Set.of("file_digest_verified","criteria_verified","completion_gate_verified").contains(goal.reason())||!goal.reason().equals(reflection.actualReason())
         ||!goal.sessionId().equals(reflection.sessionId())||!Objects.equals(goal.currentRunId()==null?"":goal.currentRunId(),reflection.runId())||!reflections.matchesCriteria(reflection,goal))
       throw new IllegalArgumentException("Only matching completed and independently verified Goal reflections can be promoted");
     var previous=memories.verifiedReflectionProof(project,reflectionId);

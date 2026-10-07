@@ -60,6 +60,14 @@ class SelfPatchReviewGitTest {
     assertEquals("DETERMINISTIC_CHECKS_ONLY",receipt.status(),receipt.toString());assertEquals(2,Files.readAllLines(root.resolve("build/runs.txt")).size());assertArrayEquals(index,Files.readAllBytes(root.resolve(".git/index")));
     assertEquals(List.of("Fixture#value"),receipt.detail().tests().getFirst().passedTests());assertEquals(receipt,service.get(owner,receipt.id(),receipt.sha256()));
     assertEquals(receipt,service.review(owner,request,null));assertEquals(2,Files.readAllLines(root.resolve("build/runs.txt")).size());
+    var goals=new dev.mikoto2000.rei.goal.GoalRepository(ds,java.time.Clock.systemUTC());var verifier=new dev.mikoto2000.rei.goal.FileGoalVerifier();
+    var artifacts=org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+    var gate=new dev.mikoto2000.rei.goal.GoalCompletionGate(goals,service,artifacts,java.time.Clock.systemUTC(),false);verifier.setCompletionGate(gate);
+    var goal=goals.create(owner,"change value","A.txt",receipt.detail().files().getFirst().sha256(),2,5);
+    goals.defineCompletion(owner,goal.id(),new dev.mikoto2000.rei.goal.GoalCompletionGate.Definition(goal.criteria(),new dev.mikoto2000.rei.goal.GoalCompletionGate.RequiredTests(receipt.detail().commandSha256(),List.of("Fixture#value")),List.of(),List.of(),new dev.mikoto2000.rei.goal.GoalCompletionGate.ReviewGate(false,request.requirements())));
+    var loop=new dev.mikoto2000.rei.goal.GoalLoopService(goals,verifier,(claim,run,done)->fail("saved proof needs no model"),new dev.mikoto2000.rei.core.policy.ToolPermissionProperties(true,null,null,null),new dev.mikoto2000.rei.goal.GoalEvents(event->{},java.time.Clock.systemUTC()));
+    assertEquals("READY",loop.verify(owner.projectId(),goal.id()).goal().status());gate.attach(owner,goal.id(),new dev.mikoto2000.rei.goal.GoalCompletionGate.Proof(new dev.mikoto2000.rei.goal.GoalCompletionGate.Reference(receipt.id(),receipt.sha256()),List.of()),true);
+    assertEquals("COMPLETED",loop.verify(owner.projectId(),goal.id()).goal().status());assertEquals("completion_gate_verified",goals.get(owner.projectId(),goal.id()).reason());assertArrayEquals(index,Files.readAllBytes(root.resolve(".git/index")));
   }
   @Test void savedChangeSetRepairsRealGitFindingThenRunsFinalRealShellTest() throws Exception {
     Files.createDirectories(root.resolve("build"));Files.writeString(root.resolve("A.txt"),"after \n");
