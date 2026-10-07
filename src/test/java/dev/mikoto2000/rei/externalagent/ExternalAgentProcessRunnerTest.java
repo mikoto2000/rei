@@ -13,8 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class ExternalAgentProcessRunnerTest {
   @TempDir Path root;
   List<String> command(String mode) {
-    return List.of(Path.of(System.getProperty("java.home"), "bin", "java").toString(), "-cp",
-        System.getProperty("java.class.path"), Fixture.class.getName(), mode);
+    return dev.mikoto2000.rei.testsupport.JavaFixtureCommand.command(root, Fixture.class, mode);
   }
   ExternalAgentProcessRunner.Output run(String mode, Duration total, Duration idle, int limit, AtomicBoolean cancel) {
     return new ExternalAgentProcessRunner().run(command(mode), root, "hello", total, idle, limit, cancel::get);
@@ -95,8 +94,7 @@ class ExternalAgentProcessRunnerTest {
           err.join();
         }
         case "child" -> {
-          Process child = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-              "-cp", System.getProperty("java.class.path"), Fixture.class.getName(), "sleep").start();
+          Process child = new ProcessBuilder(dev.mikoto2000.rei.testsupport.JavaFixtureCommand.command(Path.of("."), Fixture.class, "sleep")).start();
           // Publish only complete content; observing file creation alone otherwise races the write.
           Files.writeString(Path.of("child.pid.tmp"), Long.toString(child.pid()));
           Files.move(Path.of("child.pid.tmp"), Path.of("child.pid"), StandardCopyOption.ATOMIC_MOVE);

@@ -191,14 +191,7 @@ class BackgroundProcessManagerTest {
   }
 
   private List<String> javaCommand(String... args) {
-    String java = Path.of(System.getProperty("java.home"), "bin", isWindows() ? "java.exe" : "java").toString();
-    List<String> command = new java.util.ArrayList<>();
-    command.add(java);
-    command.add("-cp");
-    command.add(System.getProperty("java.class.path"));
-    command.add(LongRunningProcessFixture.class.getName());
-    command.addAll(List.of(args));
-    return command;
+    return dev.mikoto2000.rei.testsupport.JavaFixtureCommand.command(tempDir, LongRunningProcessFixture.class, args);
   }
 
   private boolean isWindows() {

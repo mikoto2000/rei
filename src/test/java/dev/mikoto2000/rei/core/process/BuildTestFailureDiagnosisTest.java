@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class BuildTestFailureDiagnosisTest {
+  @org.junit.jupiter.api.io.TempDir java.nio.file.Path fixtureRoot;
   RunCommandResult result(String status,Integer exit,String out,String err,boolean timeout) {
     return new RunCommandResult(status,"foreground","foreground",exit,out,err,null,null,timeout,null);
   }
@@ -55,8 +56,7 @@ class BuildTestFailureDiagnosisTest {
   @Test void aRealManagedProcessReturnsDiagnosticEvidenceWithoutStartingAnotherCommand() throws Exception {
     var manager=new BackgroundProcessManager(new dev.mikoto2000.rei.core.service.SystemShellService());
     try {
-      String runtimeExecutable=java.nio.file.Path.of(System.getProperty("java.home"),"bin",System.getProperty("os.name").toLowerCase().contains("win")?"java.exe":"java").toString();
-      var started=manager.spawnCommandLine(List.of(runtimeExecutable,"-cp",System.getProperty("java.class.path"),FailureFixture.class.getName()),java.nio.file.Path.of(".").toAbsolutePath());
+      var started=manager.spawnCommandLine(dev.mikoto2000.rei.testsupport.JavaFixtureCommand.command(fixtureRoot, FailureFixture.class),fixtureRoot);
       var observed=manager.await(started.processId(),java.time.Duration.ofSeconds(10));
       assertEquals("FAILED",observed.diagnosis().outcome());assertEquals("TEST_FAILURE",observed.diagnosis().category());
       assertTrue(observed.diagnosis().failedTests().contains("demo.AppTest.fail"));
