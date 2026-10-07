@@ -817,3 +817,21 @@ TDD未実装API Red→Green、正例助言と誤ラベル検出を含む関連4 
 target/evaluation/activity-coaching-quality.json、truthVerified=false、実visionモデル品質は未測定。
 Phase7全体回帰を開始。仕様activity-coaching-quality-evaluation.md。
 Phase7 Java全体回帰: 687 suites / 3739 tests、failure=0/error=0/skipped=0。実PlantUML指定。Native 120、React25/99、typecheck成功。
+Activity evaluation Git receipt: feature `bff87788`、main merge `b55e6279`、両方push済み。
+統合後Phase7関連8 suites / 50 tests、failure/error/skipped各0。
+
+## Phase 8: explicit live environment E2E harness
+
+branch `codex/live-environment-e2e`、fetch済みmain `b55e6279`。
+8実環境経路をlive tagと専用profileへ分離し、環境フラグ既定OFF・skip理由を追加。
+通常回帰では実モデル・外部通知を実行しない。
+live tag専用profile、全通常profileのlive除外、explicit trueのみ有効のpolicy test。
+8経路は実adapter/隔離worktree/既存Change Set/SafeCrossrefHTTP/Slack outbox claimとreceiptを呼ぶ。
+CLI60秒/idle30秒/2call/1MiB、JUnit180秒、匿名TempDir fixtureのみ。native UUID同一確認。
+Codex/Claude account-ready明示、Slack credential/channel条件、既知CLI/auth不足のみskip。
+TDD missing policy Red→Green、共有予算interfaceのcompile不足も修正。
+関連7 suites / 39 tests成功、failure/error/skipped各0。
+-Plive-e2e実行: tests8、failure0/error0/skipped8、各LIVE_DISABLED、実呼出0・実成功0。
+full profileでlive class明示選択しても除外され、policy/Slack回帰のみ成功。
+理由付きreportはtarget/evaluation/live-off.xml。仕様/config手順live-environment-e2e.md。
+認証やアカウントを未検査のまま利用可能/不足と断定していない。

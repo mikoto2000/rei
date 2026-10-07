@@ -50,3 +50,4 @@ Priority 19の[Learned Sparse境界](learned-sparse-provider-boundary.md)はopti
 モデル/次元/filter検査、理由付きBM25 fallbackを実装。実providerは未設定のため導入していない。
 Priority 20の[SubAgent意味検証評価](subagent-semantic-quality-evaluation.md)は匿名fixture・混同行列・棄権・任意別judge一致を追加。実モデル品質は未測定。
 Priority 21の[Activity/Coaching品質評価](activity-coaching-quality-evaluation.md)は匿名fixture・project/theme精度・unknown/欠測・origin分離・構造的根拠性を追加。
+Priority 22の[既定OFF live E2E](live-environment-e2e.md)は8実経路を専用profileに追加。今回は8理由付きskip、実モデル・Paper live・Slack送信は未実施。
