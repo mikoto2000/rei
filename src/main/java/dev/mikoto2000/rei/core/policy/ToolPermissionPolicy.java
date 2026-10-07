@@ -22,6 +22,9 @@ public class ToolPermissionPolicy {
   }
   /** Parallel authority uses known intrinsic behavior, never an administrator relabeling of arbitrary commands. */
   public static Set<ActionCapability> intrinsicCapabilities(String tool) {
+    if("inspectTextDocumentChangeSet".equals(tool))return Set.of(ActionCapability.READ);
+    if(Set.of("proposeTextDocumentChangeSet","discardTextDocumentChangeSet").contains(tool))return Set.of(ActionCapability.LOCAL_WRITE);
+    if(Set.of("applyTextDocumentChangeSet","rollbackTextDocumentChangeSet","cleanTextDocumentStaging").contains(tool))return Set.of(ActionCapability.LOCAL_WRITE,ActionCapability.DESTRUCTIVE);
     if(Set.of("inspectDiagnosedRepair","getPatchRequirementReview","getGoalCompletionDefinition").contains(tool))return Set.of(ActionCapability.READ);
     if("attachGoalCompletionEvidence".equals(tool))return Set.of(ActionCapability.LOCAL_WRITE);
     if("proposeDiagnosedRepair".equals(tool))return Set.of(ActionCapability.LOCAL_WRITE);

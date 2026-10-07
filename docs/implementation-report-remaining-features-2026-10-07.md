@@ -694,3 +694,27 @@ TDD: 未実装gate/人HTTP入口と定義更新競合のRed→Green。新規Shel
 実HTTP認証/不正JSON/実行中定義変更拒否、保存再読取、current Goal Run証拠添付を確認。
 Native120、React25/99とtypecheck成功。Java全体回帰中。仕様はgoal-completion-gate.md。
 Goal completion gate Java全体回帰: 678 suites / 3691 tests、failure/error/skipped各0。Native120、React25/99とtypecheck成功。Git統合を実施する。
+
+Goal completion gate Git receipt: feature `03abab6c`、main merge `72e355413769f30ae3304d440911ba5f7c1caf48`、両方push済み。
+統合後Java関連14 suites / 98 tests、Native120、React25/99とtypecheck成功、failure/error/skipped各0。
+元のLLM dirty2件とuntracked3件を保持。
+
+## Phase 6: Multi-file Document Change Set
+
+branch `codex/multi-file-document-change-set`、fetch済み基準main `72e35541`。
+既存単一UTF-8 Change Setはexact baseline/保存hash/一回claimを持つ。複数fileの
+保存proposal/journal、create/delete/rename、logical apply/rollback/UNKNOWN復旧が不足している。
+
+Multi-file Document Change Set: additive SQLite tableを既存Repositoryへ追加。
+UPDATE/CREATE/DELETE/RENAME、per-file/current SHA・whole proposal hash、captured
+Project/root/session、EXCLUSIVE/Policy、全baseline再確認、staging+baseline backup、
+write-ahead journal・PID/start identity、全target検証後のみAPPLIED・一回event。
+通常失敗/cancelは逆順rollback、外部編集は保護しUNKNOWN、hard-stop後自動再送なし。
+UNKNOWNは既存single-file Applyも排他。実human requestの明示rollback最大3回と
+owned staging cleanup。未適用破棄・安全なterminal履歴100件保持、active/UNKNOWN非削除。
+External Agentのprivate worktreeも共通transactionを使用、selected manifestを再確認。
+TDD: 未実装multi-file/Tool/External adapter/破棄のRed→Green、実Windows junction、
+fatal stop保存再読取、second-publication failure、cancel、外部編集・重複eventを検証。
+関連8 suites / 44 tests成功、Native120、React25/99/typecheck成功。Java全体回帰中。
+仕様・DB/API/config/physical atomicity限界はmulti-file-document-change-set.md。
+Multi-file Document Change Set Java全体回帰: 680 suites / 3706 tests、failure/error/skipped各0。Native120、React25/99/typecheck成功。Git統合を実施する。

@@ -8,6 +8,11 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ImplementationProposalTest {
   @TempDir Path root;
+  @Test void sharedTextTransactionRestoresDisposableTreeWhenSecondPublishFails()throws Exception{
+    Files.writeString(root.resolve("A.txt"),"before");Files.writeString(root.resolve("B.txt"),"before");String hash=sha("before");var proposal=new ImplementationProposal(List.of(new ImplementationProposal.Edit("A.txt",hash,"after"),new ImplementationProposal.Edit("B.txt",hash,"next")));var moves=new java.util.concurrent.atomic.AtomicInteger();
+    assertThrows(java.io.IOException.class,()->proposal.apply(root,Map.of("A.txt",hash,"B.txt",hash),(stage,target)->{if(moves.incrementAndGet()==2)throw new java.io.IOException("controlled failure");dev.mikoto2000.rei.core.TextDocumentTransaction.replace(stage,target);}));assertEquals("before",Files.readString(root.resolve("A.txt")));assertEquals("before",Files.readString(root.resolve("B.txt")));try(var files=Files.list(root)){assertTrue(files.noneMatch(path->path.getFileName().toString().startsWith(".rei-document-")));}
+  }
+  String sha(String text){return ImplementationProposal.sha256(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));}
   @Test void validatesAllBaselinesBeforeWritingAnyFile() throws Exception {
     Files.writeString(root.resolve("A.txt"),"before\n");Files.writeString(root.resolve("B.txt"),"before\n");
     String hash=ImplementationProposal.sha256(Files.readAllBytes(root.resolve("A.txt")));
