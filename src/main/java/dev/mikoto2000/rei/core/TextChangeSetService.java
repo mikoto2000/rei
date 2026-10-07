@@ -61,10 +61,19 @@ public class TextChangeSetService {
     return inspect(project,id);
   }
   public View apply(ProjectContext project,String id,String proposalHash,Writer writer)throws IOException {
+    return apply(project,id,proposalHash,writer,null);
+  }
+  void protectDiagnosed(ProjectContext project,String id)throws IOException {
+    var saved=owned(project,id);if(!saved.status().equals("PROPOSED"))throw new IllegalStateException("Only a pending proposal can receive a repair guard");repository.protectDiagnosed(project.id(),id);
+  }
+  View applyDiagnosed(ProjectContext project,String id,String proposalHash,Writer writer)throws IOException {return apply(project,id,proposalHash,writer,"DIAGNOSED_REPAIR");}
+  private View apply(ProjectContext project,String id,String proposalHash,Writer writer,String trustedGuard)throws IOException {
     RunCancellation.propagate(null);var saved=owned(project,id);
     if(proposalHash==null || !saved.proposalHash().equals(proposalHash))throw new IllegalArgumentException("Exact reviewed proposal hash required");
     var root=Path.of(saved.root());var file=resolve(root,saved.path());var current=hash(read(file));
     if(saved.status().equals("APPLIED"))return view(saved,current); // Receipt read; never execute the writer twice.
+    var guard=repository.applyGuard(project.id(),id);
+    if(guard!=null&&!guard.equals(trustedGuard)||trustedGuard!=null&&!trustedGuard.equals(guard))throw new IllegalStateException("Diagnosed repair proposal requires its exact human approval flow");
     if(!saved.status().equals("PROPOSED"))throw new IllegalStateException("Change Set is no longer applicable; inspect current content");
     if(!saved.baselineHash().equals(current)) {
       repository.transition(project.id(),id,"PROPOSED","STALE");return inspect(project,id);

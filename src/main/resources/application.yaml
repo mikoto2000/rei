@@ -196,6 +196,8 @@ rei:
     persistent-index-enabled: ${REI_REPOSITORY_MAP_PERSISTENT_INDEX_ENABLED:false}
   predicates:
     enabled: ${REI_PREDICATES_ENABLED:false}
+  repair:
+    diagnosed-enabled: ${REI_REPAIR_DIAGNOSED_ENABLED:false}
   reflection:
     lessons-enabled: ${REI_REFLECTION_LESSONS_ENABLED:false}
   subagents:

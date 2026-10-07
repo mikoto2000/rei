@@ -23,8 +23,11 @@ public final class SelfPatchRepairService {
   private final Fixer fixer;
   public SelfPatchRepairService(Cycle cycle,SelfPatchReviewService.Capture capture,Fixer fixer){this.cycle=cycle;this.capture=capture;this.fixer=fixer;}
   public Result verify(Path directory,Request request)throws IOException {
+    return verify(directory,request,System.nanoTime()+Duration.ofSeconds(180).toNanos());
+  }
+  public Result verify(Path directory,Request request,long requestedDeadline)throws IOException {
     RunCancellation.propagate(null);validate(request);Path root=directory.toRealPath();
-    long deadline=System.nanoTime()+Duration.ofSeconds(180).toNanos();
+    long deadline=Math.min(requestedDeadline,System.nanoTime()+Duration.ofSeconds(180).toNanos());
     var rounds=new ArrayList<SelfPatchReviewService.Result>();var receipts=new ArrayList<Receipt>();
     var warnings=new ArrayList<String>();warnings.add("Explicit saved fixes and static patch/test checks only; no semantic correctness or test coverage guarantee");
     var test=new SelfPatchReviewService.Request(request.testCommand(),request.timeoutSeconds());

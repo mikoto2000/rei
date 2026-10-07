@@ -15,7 +15,10 @@ public class TextChangeSetRepository {
   public TextChangeSetRepository(@Qualifier("memoryConsolidationDataSource") DataSource source) {
     db=JdbcClient.create(source);
     db.sql("CREATE TABLE IF NOT EXISTS text_change_sets(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,root TEXT NOT NULL,path TEXT NOT NULL,baseline TEXT NOT NULL,proposed TEXT NOT NULL,baseline_hash TEXT NOT NULL,proposed_hash TEXT NOT NULL,proposal_hash TEXT NOT NULL,status TEXT NOT NULL,created_at TEXT NOT NULL)").update();
+    db.sql("CREATE TABLE IF NOT EXISTS text_change_set_apply_guards(project_id TEXT NOT NULL,id TEXT NOT NULL,guard TEXT NOT NULL,PRIMARY KEY(project_id,id))").update();
   }
+  void protectDiagnosed(String project,String id){db.sql("INSERT INTO text_change_set_apply_guards VALUES(?,?,'DIAGNOSED_REPAIR')").params(project,id).update();}
+  String applyGuard(String project,String id){return db.sql("SELECT guard FROM text_change_set_apply_guards WHERE project_id=? AND id=?").params(project,id).query(String.class).optional().orElse(null);}
   void save(Saved saved) {
     // Bounded per-owner history. Pending/uncertain proposals are never silently evicted.
     db.sql("DELETE FROM text_change_sets WHERE project_id=? AND status IN ('APPLIED','STALE','DISCARDED') AND id NOT IN (SELECT id FROM text_change_sets WHERE project_id=? ORDER BY created_at DESC,id DESC LIMIT 100)")

@@ -62,3 +62,11 @@ APPLIED receiptと実際の現在hashの一致、完全なGit snapshot、patch v
 結果は全roundの初回/最終test診断・review・patch version・元の失敗と、適用receiptのID/status/hashを保持する。最終roundが同じpatchでVERIFIED_CHECKSとなった場合だけ成功を返す。修正案は受け付けた順に一回ずつで、同じIDの繰り返しは拒否する。
 
 任意commandと編集を含むToolのため、selfReviewPatch/runCommandと同じ標準全能力分類を維持する。READ化・SubAgentへの新しい許可・別のPolicy経路は作らない。Toolは既存編集Event/cache更新も維持する。静的diff確認と明示test commandの観測であり、修正の意味的正しさやtest選択の完全性を保証しない。
+
+## 診断付きの人の承認フロー
+
+保存JUnit失敗・patch version・修正案・commandを結ぶ `proposeDiagnosedRepair` と、正確な人の
+`/repair apply ID receiptSha256` 指示による `applyDiagnosedRepair` を追加した。
+診断付きChange Setは保存guardにより通常Applyやunguarded selfRepairPatchでclaimできない。
+既定OFF、同じSelfPatchRepairサイクルと呼び出し元deadlineを再利用する。
+状態、上限、実Git/Shell検証と証拠の限界は [Diagnosis → Repair](diagnosed-repair-flow.md) を参照。
