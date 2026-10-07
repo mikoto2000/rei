@@ -7,6 +7,69 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class ProjectRunQueueTest {
+  @Test void boundedAdmissionCountsExecutingAndQueuedJobsAndReleasesCancelledSlots() {
+    var tasks = new ArrayList<Runnable>();
+    var queue = new ProjectRunQueue(tasks::add, 2, 3);
+    queue.enqueue("first", "one", () -> {});
+    queue.enqueue("first", "two", () -> {});
+    assertThatThrownBy(() -> queue.enqueue("first", "overflow", () -> fail("Rejected work ran")))
+        .isInstanceOf(java.util.concurrent.RejectedExecutionException.class);
+    assertThat(queue.containsRun("first", "overflow")).isFalse();
+    queue.enqueue("other", "three", () -> {});
+    assertThatThrownBy(() -> queue.enqueue("third", "global-overflow", () -> {}))
+        .isInstanceOf(java.util.concurrent.RejectedExecutionException.class);
+    assertThat(queue.cancelQueued("two")).isTrue();
+    queue.enqueue("third", "four", () -> {});
+    assertThat(tasks).hasSize(3);
+    tasks.removeFirst().run();
+    queue.enqueue("first", "five", () -> {});
+    assertThat(queue.containsRun("first", "five")).isTrue();
+  }
+
+  @Test void admissionLimitsMustBePositiveAndProjectLimitCannotExceedTotal() {
+    assertThatThrownBy(() -> new ProjectRunQueue(Runnable::run, 0, 3)).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new ProjectRunQueue(Runnable::run, 2, 0)).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new ProjectRunQueue(Runnable::run, 4, 3)).isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test void executorRejectionDoesNotKeepAnAdmissionSlot() {
+    var reject = new java.util.concurrent.atomic.AtomicBoolean(true);
+    var queue = new ProjectRunQueue(task -> {
+      if (reject.get()) throw new java.util.concurrent.RejectedExecutionException("executor closed");
+      task.run();
+    }, 1, 1);
+    assertThatThrownBy(() -> queue.enqueue("project", "one", () -> {}))
+        .isInstanceOf(java.util.concurrent.RejectedExecutionException.class);
+    assertThat(queue.containsRun("project", "one")).isFalse();
+    reject.set(false);
+    var executed = new java.util.concurrent.atomic.AtomicBoolean();
+    queue.enqueue("project", "two", () -> executed.set(true));
+    assertThat(executed).isTrue();
+  }
+
+  @Test void concurrentAdmissionsNeverExceedGlobalCapacity() throws Exception {
+    var accepted = new java.util.concurrent.atomic.AtomicInteger();
+    var dispatched = new java.util.concurrent.atomic.AtomicInteger();
+    var queue = new ProjectRunQueue(task -> dispatched.incrementAndGet(), 2, 3);
+    try (var workers = Executors.newVirtualThreadPerTaskExecutor()) {
+      var ready = new CountDownLatch(1);
+      var futures = new ArrayList<Future<?>>();
+      for (int i = 0; i < 32; i++) {
+        int index = i;
+        futures.add(workers.submit(() -> {
+          ready.await();
+          try { queue.enqueue("project-" + index, "run-" + index, () -> {}); accepted.incrementAndGet(); }
+          catch (ProjectRunQueue.CapacityExceededException expected) { }
+          return null;
+        }));
+      }
+      ready.countDown();
+      for (var future : futures) future.get(5, TimeUnit.SECONDS);
+    }
+    assertThat(accepted).hasValue(3);
+    assertThat(dispatched).hasValue(3);
+  }
+
   @Test void cancellationDuringDispatchDiscardsLateScheduledView() throws Exception {
     var scheduling = new CountDownLatch(1);
     var release = new CountDownLatch(1);

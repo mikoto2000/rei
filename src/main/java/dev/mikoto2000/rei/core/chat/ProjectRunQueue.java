@@ -5,6 +5,9 @@ import java.util.concurrent.Executor;
 
 /** Runs work outside the monitor; a project slot is released only after the work's finally returns. */
 public final class ProjectRunQueue {
+  public static final class CapacityExceededException extends java.util.concurrent.RejectedExecutionException {
+    public CapacityExceededException() { super("Run admission capacity reached"); }
+  }
   private static final class Job {
     final String projectId, runId;
     final Runnable work;
@@ -20,7 +23,17 @@ public final class ProjectRunQueue {
   }
   private final Map<String, ArrayDeque<Job>> projects = new HashMap<>();
   private final Executor executor;
-  public ProjectRunQueue(Executor executor) { this.executor = executor; }
+  private final int projectLimit;
+  private final int totalLimit;
+  /** Bounds include executing jobs so cancellation does not release a running write prematurely. */
+  public ProjectRunQueue(Executor executor) { this(executor, 64, 256); }
+  public ProjectRunQueue(Executor executor, int projectLimit, int totalLimit) {
+    if (projectLimit < 1 || totalLimit < projectLimit)
+      throw new IllegalArgumentException("Run admission limits must be positive and project <= total");
+    this.executor = Objects.requireNonNull(executor);
+    this.projectLimit = projectLimit;
+    this.totalLimit = totalLimit;
+  }
 
   public boolean enqueue(String projectId, String runId, Runnable work) {
     return enqueue(projectId, runId, work, () -> {});
@@ -33,6 +46,10 @@ public final class ProjectRunQueue {
     var job = new Job(projectId, runId, work, scheduled, discarded, rejected);
     boolean first;
     synchronized (this) {
+      var existing = projects.get(projectId);
+      if ((existing != null && existing.size() >= projectLimit)
+          || projects.values().stream().mapToInt(ArrayDeque::size).sum() >= totalLimit)
+        throw new CapacityExceededException();
       var queue = projects.computeIfAbsent(projectId, ignored -> new ArrayDeque<>());
       first = queue.isEmpty();
       queue.addLast(job);
