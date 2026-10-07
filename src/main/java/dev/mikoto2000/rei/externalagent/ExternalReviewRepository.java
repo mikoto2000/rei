@@ -81,7 +81,8 @@ public class ExternalReviewRepository {
     var warnings=new ArrayList<>(result.warnings().stream().limit(truncated?11:12).map(s->bounded(s,512)).toList());
     if(truncated)warnings.add("Saved review fields were truncated; inspect the review scope before drawing conclusions");
     var status=truncated && result.status()==ExternalAgentResult.Status.SUCCESS?ExternalAgentResult.Status.SUCCESS_WITH_WARNINGS:result.status();
-    return new ExternalAgentResult(status,bounded(result.summary(),2048),findings,warnings,result.duration(),result.exitCode(),"",result.reviewId(),result.externalSessionId(),null,result.changeSetId());
+    return new ExternalAgentResult(status,bounded(result.summary(),2048),findings,warnings,result.duration(),result.exitCode(),"",result.reviewId(),result.externalSessionId(),null,result.changeSetId(),null,
+        result.materialReviewReport()==null?null:bounded(result.materialReviewReport(),MaterialReviewReport.MAX_REPORT_CHARS));
   }
   private static int length(String text){return text==null?0:text.length();}
   private static String bounded(String text,int limit){return ExternalAgentDelegationService.bounded(text,limit);}

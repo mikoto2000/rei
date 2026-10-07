@@ -9,7 +9,7 @@ Codex にこの設計をレビューさせて
 /agent codex review docs/web-api.md
 ```
 
-`/agent` の agent は `codex` / `claude`、action は `review` のみです。Claude Codeは後続で追加したTool-free snapshotレビューです（[サブスクリプション認証・利用準備](claude-code-reviews.md)）。以下のPhase 1の実行説明・CLI隔離設定はCodexを対象とします。未知の値は usage / unsupported エラーになります。
+`/agent` の agent は `codex` / `claude` です。現在は通常の `review` に加え、Codex専用の [`material-review [target]`](material-review.md)、両providerの `implement` / `implementation` / `merge` を提供します。教材レビューは自動修正を行わない専用タスクです。Claude Codeは後続で追加したTool-free snapshotレビューです（[サブスクリプション認証・利用準備](claude-code-reviews.md)）。以下のPhase 1の実行説明・CLI隔離設定はCodexを対象とします。未知の値は usage / unsupported エラーになります。
 target は存在するプロジェクト内のパスに限定し、正規化前後および symlink 解決後に検証します。
 省略時は Working Set のパス、抽出した設計決定、repository の順で対象を選びます。
 自然言語の実行許可は現在のユーザー要求だけを確認する保守的な日本語・英語の判定です。
