@@ -11,7 +11,7 @@ import org.springframework.context.annotation.*;
 import org.springframework.scheduling.annotation.*;
 
 @Configuration(proxyBeanMethods = false)
-@Import({dev.mikoto2000.rei.conversation.SessionHistoryConfiguration.class,dev.mikoto2000.rei.application.task.TaskManagerConfiguration.class,dev.mikoto2000.rei.artifact.ArtifactConfiguration.class})
+@Import({dev.mikoto2000.rei.conversation.SessionHistoryConfiguration.class,dev.mikoto2000.rei.application.task.TaskManagerConfiguration.class,dev.mikoto2000.rei.artifact.ArtifactConfiguration.class,dev.mikoto2000.rei.github.GitHubWebhookConfiguration.class})
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @EnableScheduling

@@ -31,6 +31,12 @@ public class AttentionRepository {
         ||!reference.equals(source.correlationId())||source.runId()!=null)return Optional.empty();
     return create(source,kind,reference,message,true);
   }
+  public Optional<Item> createGitHub(AgentEvent source,String kind,String message) {
+    if(!(source.payload() instanceof dev.mikoto2000.rei.event.GitHubLifecyclePayload payload)
+        ||source.runId()!=null||payload.sourceId()==null||payload.fact()==null||!payload.sourceId().equals(payload.fact().sourceId())||!payload.sourceId().equals(source.correlationId())
+        ||!source.type().name().equals("GITHUB_"+payload.fact().type()))return Optional.empty();
+    return create(source,kind,source.id(),message,true);
+  }
   private Optional<Item> create(AgentEvent source,String kind,String reference,String message,boolean dependency) {
     if(source.projectId()==null||source.projectId().isBlank()||source.sessionId()==null||source.sessionId().isBlank()||(!dependency&&(source.runId()==null||source.runId().isBlank())))
       return Optional.empty();

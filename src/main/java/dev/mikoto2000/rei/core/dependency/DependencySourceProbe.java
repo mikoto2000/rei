@@ -10,6 +10,9 @@ import dev.mikoto2000.rei.workcontext.WorkContextGit;
 public class DependencySourceProbe implements DependencyProbe {
   private final FileGoalVerifier files;private final WorkContextGit git;private final BackgroundProcessManager processes;
   private final DependencyHttpProbe http;private final Clock clock;
+  private dev.mikoto2000.rei.github.GitHubFactRepository github;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setGitHubFacts(dev.mikoto2000.rei.github.GitHubFactRepository github){this.github=github;}
   public DependencySourceProbe(FileGoalVerifier files,WorkContextGit git,BackgroundProcessManager processes,DependencyHttpProbe http,Clock clock){this.files=files;this.git=git;this.processes=processes;this.http=http;this.clock=clock;}
   public String fileBaseline(Path root,String file) {
     var snapshot=files.fingerprint(root,file);
@@ -53,6 +56,12 @@ public class DependencySourceProbe implements DependencyProbe {
       case HTTP_BODY_SHA256 -> http.probeBody(entry.id(),spec.target(),Integer.parseInt(spec.expected().substring(0,3)),spec.expected().substring(4));
       case HTTP_JSON_VALUE -> http.probeJson(entry.id(),spec.target(),spec.expected());
       case USER_ANSWER -> new DependencyObservation(entry.id(),entry.answer()==null?DependencyState.WAITING:DependencyState.COMPLETED,entry.answer()==null?"user_answer_waiting":"user_answer_received");
+      case GITHUB_PR_MERGED -> {
+        if(github==null)yield new DependencyObservation(entry.id(),DependencyState.BLOCKED,"github_webhook_unavailable");
+        int separator=spec.target().lastIndexOf('#');
+        boolean merged=github.merged(entry.projectId(),entry.projectRoot(),entry.sessionId(),spec.target().substring(0,separator),Integer.parseInt(spec.target().substring(separator+1)));
+        yield new DependencyObservation(entry.id(),merged?DependencyState.COMPLETED:DependencyState.WAITING,merged?"authenticated_github_merge_observed":"github_merge_not_observed");
+      }
     };
   }
 }

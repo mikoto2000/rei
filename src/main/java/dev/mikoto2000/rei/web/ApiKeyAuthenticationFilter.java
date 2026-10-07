@@ -12,12 +12,18 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 final class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
   private final byte[] expected;
+  private final boolean github;
   ApiKeyAuthenticationFilter(ApiKeyProperties properties) {
+    this(properties,false);
+  }
+  ApiKeyAuthenticationFilter(ApiKeyProperties properties,boolean github) {
     expected = properties.getApiKey().getBytes(StandardCharsets.UTF_8);
+    this.github=github;
   }
   @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
       FilterChain chain) throws ServletException, IOException {
     String path = request.getRequestURI().substring(request.getContextPath().length());
+    if(github&&"POST".equals(request.getMethod())&&"/api/v1/github/events".equals(path)){chain.doFilter(request,response);return;}
     if ("GET".equals(request.getMethod()) && "/actuator/health".equals(path)) {
       chain.doFilter(request, response);
       return;

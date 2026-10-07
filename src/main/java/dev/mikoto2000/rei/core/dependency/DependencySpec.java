@@ -4,7 +4,7 @@ import java.net.URI;
 import java.util.*;
 
 public record DependencySpec(Kind kind,String target,String expected) {
-  public enum Kind { FILE_EXISTS, FILE_SHA256, FILE_CHANGED, GIT_STATE_CHANGED, PROCESS_EXIT, HTTP_STATUS, HTTP_BODY_SHA256, HTTP_JSON_VALUE, USER_ANSWER }
+  public enum Kind { FILE_EXISTS, FILE_SHA256, FILE_CHANGED, GIT_STATE_CHANGED, PROCESS_EXIT, HTTP_STATUS, HTTP_BODY_SHA256, HTTP_JSON_VALUE, USER_ANSWER, GITHUB_PR_MERGED }
   public boolean network(){return kind==Kind.HTTP_STATUS||kind==Kind.HTTP_BODY_SHA256||kind==Kind.HTTP_JSON_VALUE;}
   public DependencySpec {
     if(kind==null||target==null||target.isBlank()||target.length()>2048||expected!=null&&expected.length()>4096)
@@ -35,6 +35,12 @@ public record DependencySpec(Kind kind,String target,String expected) {
         if(parts.length!=2||parts[0].isBlank()||parts[0].length()>256||parts[0].contains("\r")||!parts[1].matches("[a-fA-F0-9]{40}|[a-fA-F0-9]{64}"))throw new IllegalArgumentException("Branch and commit baseline required");
       }
       case USER_ANSWER -> {if(target.length()>1024)throw new IllegalArgumentException("Question too long");expected=null;}
+      case GITHUB_PR_MERGED -> {
+        if(!target.matches("[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}#[1-9][0-9]{0,9}")||expected!=null)
+          throw new IllegalArgumentException("GitHub repository#PR required without an expected argument");
+        try{Integer.parseInt(target.substring(target.lastIndexOf('#')+1));}catch(NumberFormatException invalid){throw new IllegalArgumentException("GitHub PR number out of range");}
+        target=target.toLowerCase(Locale.ROOT);
+      }
     }
   }
 }
