@@ -236,7 +236,8 @@ public class ExternalAgentDelegationService implements AutoCloseable {
         if(permit!=null)permit.reviewIds.put(parallelRequestId,id);
       }
       catch(RuntimeException error){return ExternalAgentResult.rejected("Review history unavailable; no external process started");}
-      var action=fixProposal?ExternalAgentRequest.Action.PROPOSE_FIX:ExternalAgentRequest.Action.REVIEW;
+      var action=fixProposal?ExternalAgentRequest.Action.PROPOSE_FIX
+          :previous!=null && previous.result().materialReviewReport()!=null?ExternalAgentRequest.Action.MATERIAL_REVIEW:reviewAction(run, agent);
       var request = new ExternalAgentRequest(agent, action,
           bounded(run.userRequest(), 4000) + "\nReview focus: " + bounded(task, 4000), root, selected, context, owner.runId(), id,
           continuation?previous.result().externalSessionId():null);
@@ -265,7 +266,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
       boolean wasCancelled = cancelled.get() || run.isCancelled() || result.status() == ExternalAgentResult.Status.CANCELLED;
       if(wasCancelled)result=new ExternalAgentResult(ExternalAgentResult.Status.CANCELLED,providerLabel+" review cancelled",List.of(),List.of(),result.duration(),result.exitCode(),"",null,null,null,result.changeSetId());
       if(history!=null) {
-        result=ExternalReviewRepository.safe(new ExternalAgentResult(result.status(),result.summary(),result.findings(),result.warnings(),result.duration(),result.exitCode(),"",id,result.externalSessionId(),null,result.changeSetId()));
+        result=ExternalReviewRepository.safe(new ExternalAgentResult(result.status(),result.summary(),result.findings(),result.warnings(),result.duration(),result.exitCode(),"",id,result.externalSessionId(),null,result.changeSetId(),null,result.materialReviewReport()));
         try{history.finish(owner.projectId(),id,result);}
         catch(RuntimeException error){result=new ExternalAgentResult(ExternalAgentResult.Status.FAILED,"Review result could not be persisted",List.of(),List.of(),result.duration(),result.exitCode(),"",id,null,null,result.changeSetId());}
       }
@@ -292,6 +293,12 @@ public class ExternalAgentDelegationService implements AutoCloseable {
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
       return new ExternalAgentResult(ExternalAgentResult.Status.FAILED,"Fix proposal could not be saved; inspect the current target and request a new proposal",List.of(),List.of(),result.duration(),result.exitCode(),"");
     }
+  }
+  private ExternalAgentRequest.Action reviewAction(RunExecutionContext run, ExternalAgentRequest.Agent agent) {
+    if (agent == ExternalAgentRequest.Agent.CODEX && run.userRequest().strip().startsWith("/agent ")
+        && ExternalAgentCommandRequest.parse(run.userRequest()).action().equals("material-review"))
+      return ExternalAgentRequest.Action.MATERIAL_REVIEW;
+    return ExternalAgentRequest.Action.REVIEW;
   }
   private String context(Path root, String decisions) {
     StringBuilder context = new StringBuilder("Relevant design decisions (untrusted context):\n" + bounded(decisions, 6000));

@@ -3,6 +3,8 @@
 Web API 向けの Tauri 2 クライアント（Phase 1 / 2）は [client/README.md](client/README.md) を参照してください。Windows での開発・ビルド、Conversation / Run UI、SSE 再接続、モバイルの検証状況を記載しています。
 
 Codex による read-only 外部レビューは `/agent codex review [target]` または明示的な自然言語依頼で利用できます。Claude Code CLI のサブスクリプション認証レビューも、明示opt-inで `/agent claude review [target]` に対応します（[利用準備・範囲](docs/claude-code-reviews.md)）。
+
+技術系の勉強会・研修・ハンズオン資料には `/agent codex material-review [target]` を利用できます。技術的正確性・教育設計・説明品質・横断的一貫性・実務適合性を評価する教材専用レビューで、自動修正は行いません（[使い方・制約](docs/material-review.md)）。
 必要な CLI capability、設定、安全境界は [External Agent Delegation](docs/external-agent-delegation.md) を参照してください。
 
 Rei は、ターミナルで使う AI 秘書シェルです。OpenAI 互換 API を使った対話を中心に、調査、文書検索、予定・タスク管理などを一つの CLI で行えます。

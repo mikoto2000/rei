@@ -11,6 +11,26 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ExternalAgentReviewAdvisorTest {
+  @Test void materialReviewDispatchesOnceAndKeepsReportInEphemeralSystemContext() throws Exception {
+    var run = mock(RunExecutionContext.class);
+    when(run.userRequest()).thenReturn("/agent codex material-review docs");
+    var report = MaterialReviewReport.parse(MaterialReviewSpecificationTest.fixture());
+    var result = new ExternalAgentResult(ExternalAgentResult.Status.SUCCESS, report.summary(), report.findings(), report.warnings(),
+        1, 0, "PRIVATE LOG", null, null, null, null, null, report.report());
+    var service = mock(ExternalAgentDelegationService.class);
+    when(service.review(eq(run), anyString(), eq("docs"), anyString())).thenReturn(result);
+    var options = OpenAiChatOptions.builder().toolContext(Map.of(RunExecutionContext.KEY, run)).build();
+    var request = ChatClientRequest.builder().prompt(new Prompt(List.of(new SystemMessage("system"),
+        new UserMessage(run.userRequest())), options)).build();
+    var advisor = new ExternalAgentReviewAdvisor(service);
+    var evaluated = advisor.before(request, null);
+    when(run.externalReviewResult()).thenReturn(result.forEvaluation());
+    advisor.before(request, null);
+    verify(service, times(1)).review(eq(run), anyString(), eq("docs"), anyString());
+    assertTrue(evaluated.prompt().getSystemMessage().getText().contains("# 勉強会資料レビュー"));
+    assertFalse(evaluated.prompt().getSystemMessage().getText().contains("PRIVATE LOG"));
+    assertEquals(request.prompt().getUserMessage(), evaluated.prompt().getUserMessage());
+  }
   @Test void slashCallsSharedServiceThenInjectsReviewIntoSystemOnly() {
     var run = mock(RunExecutionContext.class);
     when(run.userRequest()).thenReturn("/agent codex review docs/api.md");

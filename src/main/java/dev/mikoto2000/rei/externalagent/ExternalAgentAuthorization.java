@@ -7,7 +7,7 @@ public final class ExternalAgentAuthorization {
   private ExternalAgentAuthorization() {}
   public static boolean explicitRequest(String input,ExternalAgentRequest.Agent agent) {
     if(input==null)return false;
-    if(input.strip().startsWith("/agent ")){try{var command=ExternalAgentCommandRequest.parse(input);return command.action().equals("review") && command.agent().equals(agent.name().toLowerCase(Locale.ROOT));}catch(IllegalArgumentException invalid){return false;}}
+    if(input.strip().startsWith("/agent ")){try{var command=ExternalAgentCommandRequest.parse(input);return reviewAction(command) && command.agent().equals(agent.name().toLowerCase(Locale.ROOT));}catch(IllegalArgumentException invalid){return false;}}
     if(agent==ExternalAgentRequest.Agent.CODEX)return explicitRequest(input);
     return explicitRequest(input.toLowerCase(Locale.ROOT).replaceAll("\\bcodex\\b","other-provider").replaceAll("\\bclaude(?:\\s+code)?\\b","codex"));
   }
@@ -38,7 +38,7 @@ public final class ExternalAgentAuthorization {
   public static boolean explicitRequest(String input) {
     if (input == null) return false;
     if (input.strip().startsWith("/agent ")) {
-      try { var command=ExternalAgentCommandRequest.parse(input);return command.action().equals("review") && command.agent().equals("codex"); }
+      try { var command=ExternalAgentCommandRequest.parse(input);return reviewAction(command) && command.agent().equals("codex"); }
       catch (IllegalArgumentException error) { return false; }
     }
     String text = input.toLowerCase(Locale.ROOT);
@@ -51,5 +51,8 @@ public final class ExternalAgentAuthorization {
     return text.contains("codex") && (text.matches("(?s).*codex\\s*(?:[にのでへ]|を(?:使って|利用して|使用して)).*(レビュー.*(して|させて|もら|依頼|頼|お願い)|意見.*(聞|きい)).*")
         || text.matches("(?s).*codex\\s*[にへ].*" + delegation + ".*")
         || text.matches("(?s).*(ask|use|have|let|request|please).*\\bcodex\\b.*\\breview\\b.*"));
+  }
+  private static boolean reviewAction(ExternalAgentCommandRequest command) {
+    return command.action().equals("review") || command.action().equals("material-review");
   }
 }

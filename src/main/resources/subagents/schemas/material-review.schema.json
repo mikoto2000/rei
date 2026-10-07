@@ -1,0 +1,367 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "scope",
+    "scores",
+    "findings",
+    "crossPageFindings",
+    "missingExplanations",
+    "recommendedAdditions",
+    "appendixCandidates",
+    "positiveFindings",
+    "recommendedFixOrder",
+    "validationResults",
+    "warnings"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "maxLength": 4000,
+      "minLength": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "reviewedFiles",
+        "excludedFiles",
+        "assumptions"
+      ],
+      "properties": {
+        "target": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "reviewedFiles": {
+          "type": "array",
+          "maxItems": 2048,
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "excludedFiles": {
+          "type": "array",
+          "maxItems": 2048,
+          "items": {
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        }
+      }
+    },
+    "scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "technicalAccuracy",
+        "instructionalDesign",
+        "explanationQuality",
+        "crossPageConsistency",
+        "practicalApplicability"
+      ],
+      "properties": {
+        "technicalAccuracy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "score",
+            "reason"
+          ],
+          "properties": {
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 5
+            },
+            "reason": {
+              "type": "string",
+              "maxLength": 2000,
+              "minLength": 1
+            }
+          }
+        },
+        "instructionalDesign": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "score",
+            "reason"
+          ],
+          "properties": {
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 5
+            },
+            "reason": {
+              "type": "string",
+              "maxLength": 2000,
+              "minLength": 1
+            }
+          }
+        },
+        "explanationQuality": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "score",
+            "reason"
+          ],
+          "properties": {
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 5
+            },
+            "reason": {
+              "type": "string",
+              "maxLength": 2000,
+              "minLength": 1
+            }
+          }
+        },
+        "crossPageConsistency": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "score",
+            "reason"
+          ],
+          "properties": {
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 5
+            },
+            "reason": {
+              "type": "string",
+              "maxLength": 2000,
+              "minLength": 1
+            }
+          }
+        },
+        "practicalApplicability": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "score",
+            "reason"
+          ],
+          "properties": {
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 5
+            },
+            "reason": {
+              "type": "string",
+              "maxLength": 2000,
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "crossPageFindings": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "aspect",
+          "finding"
+        ],
+        "properties": {
+          "aspect": {
+            "type": "string",
+            "enum": [
+              "TERMS",
+              "DUPLICATION",
+              "CONTRADICTION",
+              "PREREQUISITES",
+              "ORDER"
+            ]
+          },
+          "finding": {
+            "$ref": "#/$defs/finding"
+          }
+        }
+      }
+    },
+    "missingExplanations": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "string",
+        "maxLength": 2000
+      }
+    },
+    "recommendedAdditions": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "string",
+        "maxLength": 2000
+      }
+    },
+    "appendixCandidates": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "string",
+        "maxLength": 2000
+      }
+    },
+    "positiveFindings": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "string",
+        "maxLength": 2000
+      }
+    },
+    "recommendedFixOrder": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "string",
+        "maxLength": 2000
+      }
+    },
+    "validationResults": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "command",
+          "status",
+          "details"
+        ],
+        "properties": {
+          "command": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PASSED",
+              "FAILED",
+              "NOT_RUN"
+            ]
+          },
+          "details": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "string",
+        "maxLength": 500
+      }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "severity",
+        "file",
+        "heading",
+        "line",
+        "category",
+        "issue",
+        "whyItMatters",
+        "suggestedImprovement"
+      ],
+      "properties": {
+        "severity": {
+          "type": "string",
+          "enum": [
+            "CRITICAL",
+            "HIGH",
+            "MEDIUM",
+            "LOW"
+          ]
+        },
+        "file": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "heading": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 500
+        },
+      "line": {
+        "anyOf": [
+          { "type": "integer", "minimum": 1 },
+          { "type": "null" }
+        ]
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "Technical Accuracy",
+            "Instructional Design",
+            "Presentation / Teaching Usability",
+            "Reader Comprehension",
+            "Code Samples",
+            "Markdown / Documentation Site Quality",
+            "Cross-page Consistency",
+            "Practical Applicability",
+            "Content Volume and Time Allocation"
+          ]
+        },
+        "issue": {
+          "type": "string",
+          "maxLength": 2000,
+          "minLength": 1
+        },
+        "whyItMatters": {
+          "type": "string",
+          "maxLength": 2000,
+          "minLength": 1
+        },
+        "suggestedImprovement": {
+          "type": "string",
+          "maxLength": 2000,
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
