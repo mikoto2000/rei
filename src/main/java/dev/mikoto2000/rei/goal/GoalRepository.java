@@ -126,6 +126,15 @@ public class GoalRepository {
         .orElseThrow(()->new IllegalArgumentException("Goal not found in this Project")));
   }
   public List<Goal> list(String project) {return transaction.execute(status->db.sql("SELECT * FROM agent_goals WHERE project=? ORDER BY id LIMIT 256").param(project).query(ROW).list());}
+  public List<Goal> taskPage(String project,String root,String session,String after,int limit) {
+    if(limit<1||limit>101)throw new IllegalArgumentException("Invalid projection page limit");
+    return db.sql("SELECT * FROM agent_goals WHERE project=:project AND root=:root AND (:session IS NULL OR session=:session) AND id>:after ORDER BY id LIMIT :limit")
+        .param("project",project).param("root",root).param("session",session).param("after",after).param("limit",limit).query(ROW).list();
+  }
+  public Optional<Goal> taskOrigin(String project,String root,String session,String run) {
+    return db.sql("SELECT * FROM agent_goals WHERE project=:project AND root=:root AND session=:session AND (run=:run OR id IN (SELECT goal FROM agent_goal_attempts WHERE run=:run)) ORDER BY id LIMIT 1")
+        .param("project",project).param("root",root).param("session",session).param("run",run).query(ROW).optional();
+  }
   public Claim claim(String project,String id) {
     return transaction.execute(status->{
       get(project,id);String token=UUID.randomUUID().toString();
@@ -220,10 +229,19 @@ public class GoalRepository {
     });return get(project,id);
   }
   public Goal cancel(String project,String id) {
+    return cancel(project,id,null,null);
+  }
+  public Goal cancel(String project,String id,String expectedRun,long expectedAttempts) {
+    return cancel(project,id,expectedRun,Long.valueOf(expectedAttempts));
+  }
+  private Goal cancel(String project,String id,String expectedRun,Long expectedAttempts) {
     transaction.executeWithoutResult(status->{
       get(project,id);
-      if(db.sql("UPDATE agent_goals SET status='CANCELLED',reason='human_cancelled',token=NULL,tokens_unknown=CASE WHEN max_tokens>0 AND tokens_pending>0 THEN 1 ELSE tokens_unknown END WHERE project=? AND id=? AND status NOT IN ('COMPLETED','CANCELLED')")
-          .params(project,id).update()!=1)throw new IllegalStateException("Goal is already terminal");
+      if(db.sql("UPDATE agent_goals SET status='CANCELLED',reason='human_cancelled',token=NULL,tokens_unknown=CASE WHEN max_tokens>0 AND tokens_pending>0 THEN 1 ELSE tokens_unknown END WHERE project=:project AND id=:id AND status NOT IN ('COMPLETED','CANCELLED') AND (:attempts IS NULL OR (attempts=:attempts AND run IS :run))")
+          .param("project",project).param("id",id).param("attempts",expectedAttempts).param("run",expectedRun).update()!=1) {
+        if(expectedAttempts!=null)throw new dev.mikoto2000.rei.application.state.OperationConflictException();
+        throw new IllegalStateException("Goal is already terminal");
+      }
       db.sql("UPDATE agent_goal_attempts SET status='CANCELLED',reason='human_cancelled' WHERE goal=? AND status='RUNNING'").param(id).update();
       history(id,"CANCELLED","human_cancelled");
     });return get(project,id);

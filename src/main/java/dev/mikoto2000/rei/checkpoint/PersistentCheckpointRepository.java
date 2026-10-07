@@ -40,6 +40,26 @@ public class PersistentCheckpointRepository {
   public List<PersistentCheckpoint> list(String project) {
     return db.sql("SELECT task FROM checkpoint_heads WHERE project=? AND revision>0 ORDER BY task LIMIT 1000").param(project).query(String.class).list().stream().map(t->get(project,t)).toList();
   }
+  /** Page immutable original Run identities, including a valid older revision of a damaged head. */
+  public List<PersistentCheckpoint> taskPage(String project,String root,String session,String after,int limit) {
+    if(limit<1||limit>101)throw new IllegalArgumentException("Invalid projection page limit");
+    return db.sql("""
+        WITH valid AS (SELECT task,CASE WHEN json_valid(snapshot) THEN snapshot END AS snapshot
+          FROM checkpoint_revisions WHERE project=:project)
+        SELECT task,MIN(json_extract(snapshot,'$.originalRunId')) AS original FROM valid
+        WHERE json_extract(snapshot,'$.projectRoot')=:root AND (:session IS NULL OR json_extract(snapshot,'$.sessionId')=:session)
+        GROUP BY task HAVING original>:after ORDER BY original,task LIMIT :limit
+        """).param("project",project).param("root",root).param("session",session).param("after",after).param("limit",limit)
+        .query((rs,n)->rs.getString("task")).list().stream().map(task->get(project,task)).toList();
+  }
+  public Optional<PersistentCheckpoint> findByRun(String project,String run) {
+    return db.sql("""
+        WITH valid AS (SELECT task,revision,CASE WHEN json_valid(snapshot) THEN snapshot END AS snapshot
+          FROM checkpoint_revisions WHERE project=:project)
+        SELECT task FROM valid WHERE json_extract(snapshot,'$.runId')=:run OR json_extract(snapshot,'$.originalRunId')=:run
+        ORDER BY revision DESC LIMIT 1
+        """).param("project",project).param("run",run).query(String.class).optional().map(task->get(project,task));
+  }
   public PersistentCheckpoint save(PersistentCheckpoint state,long expected,String event) {
     var next=state.revision(expected+1);String encoded=encode(next);
     if(encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>settings.getMaxSnapshotBytes())throw new CheckpointException(CheckpointException.Code.CAPACITY,"Checkpoint snapshot capacity reached");

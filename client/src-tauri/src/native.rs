@@ -351,6 +351,71 @@ fn notification_settings(
     Ok(granted)
 }
 
+#[tauri::command]
+async fn tasks_list(
+    app: App<'_>,
+    server_id: String,
+    project_id: Option<String>,
+    session_id: Option<String>,
+    limit: Option<i32>,
+    cursor: Option<String>,
+) -> Result<TaskPage> {
+    app.tasks_list(
+        &server_id,
+        project_id.as_deref(),
+        session_id.as_deref(),
+        limit,
+        cursor,
+    )
+    .await
+}
+#[tauri::command]
+async fn task_get(
+    app: App<'_>,
+    server_id: String,
+    project_id: String,
+    session_id: Option<String>,
+    task_id: String,
+) -> Result<ManagedTask> {
+    app.task_get(&server_id, &project_id, session_id.as_deref(), &task_id)
+        .await
+}
+#[tauri::command]
+async fn task_submit(
+    app: App<'_>,
+    server_id: String,
+    project_id: String,
+    session_id: Option<String>,
+    message: String,
+) -> Result<ManagedTask> {
+    app.task_submit(&server_id, &project_id, session_id.as_deref(), &message)
+        .await
+}
+#[tauri::command]
+async fn task_control(
+    app: App<'_>,
+    server_id: String,
+    project_id: String,
+    session_id: Option<String>,
+    task_id: String,
+    expected_run_id: Option<String>,
+    expected_revision: u64,
+    action: TaskAction,
+    message: Option<String>,
+) -> Result<ManagedTask> {
+    app.task_control(
+        &server_id,
+        &project_id,
+        session_id.as_deref(),
+        &task_id,
+        expected_run_id.as_deref(),
+        expected_revision,
+        action,
+        message.as_deref(),
+    )
+    .await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default().plugin(tauri_plugin_notification::init());
@@ -381,6 +446,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            tasks_list,
+            task_get,
+            task_submit,
+            task_control,
             workspace_execute,
             checkpoint_resume,
             checkpoint_track,

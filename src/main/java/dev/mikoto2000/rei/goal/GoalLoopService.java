@@ -60,6 +60,11 @@ public class GoalLoopService {
     if(before.status().equals("RUNNING"))gateway.cancel(goal);
     events.publish(goal);return goal;
   }
+  public GoalRepository.Goal cancel(String project,String id,String expectedRun,long expectedAttempts) {
+    var before=goals.get(project,id);var goal=goals.cancel(project,id,expectedRun,expectedAttempts);
+    if(before.status().equals("RUNNING"))gateway.cancel(goal);
+    events.publish(goal);return goal;
+  }
   private synchronized void next(GoalRepository.Claim claim) {
     if(!goals.active(claim))return;
     var goal=goals.get(claim.goal().projectId(),claim.goal().id());

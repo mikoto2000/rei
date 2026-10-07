@@ -27,6 +27,8 @@ public class PersistentAgentScheduler implements AgentScheduler {
     db=JdbcClient.create(source);this.clock=clock;transaction=new TransactionTemplate(new DataSourceTransactionManager(source));
     db.sql("CREATE TABLE IF NOT EXISTS agent_schedules(id TEXT PRIMARY KEY,created INTEGER NOT NULL,due INTEGER NOT NULL,action TEXT NOT NULL,session TEXT NOT NULL,project TEXT NOT NULL,root TEXT NOT NULL,status TEXT NOT NULL,run TEXT,outcome TEXT NOT NULL DEFAULT '')").update();
     db.sql("CREATE INDEX IF NOT EXISTS agent_schedules_due ON agent_schedules(status,due)").update();
+    if(!db.sql("PRAGMA table_info(agent_schedules)").query((rs,n)->rs.getString("name")).list().contains("creator_run"))
+      db.sql("ALTER TABLE agent_schedules ADD COLUMN creator_run TEXT").update();
     db.sql("CREATE UNIQUE INDEX IF NOT EXISTS agent_schedules_session_running ON agent_schedules(project,session) WHERE status='RUNNING'").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_schedule_events(id TEXT PRIMARY KEY,source_run TEXT NOT NULL,type TEXT NOT NULL,expires INTEGER NOT NULL,activated INTEGER,matched_event TEXT)").update();
     db.sql("CREATE INDEX IF NOT EXISTS agent_schedule_events_source ON agent_schedule_events(source_run,type)").update();
@@ -53,6 +55,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
       int count=db.sql("INSERT INTO agent_schedules(id,created,due,action,session,project,root,status) SELECT ?,?,?,?,?,?,?,'PENDING' WHERE (SELECT COUNT(*) FROM agent_schedules WHERE project=? AND status IN ('PENDING','SCHEDULED','RUNNING','WAITING_EVENT'))<256")
           .params(task.id(),task.createdAt().toEpochMilli(),executeAt.toEpochMilli(),action,conversationId,owner.projectId(),owner.projectRoot().toString(),owner.projectId()).update();
       if(count!=1)throw new IllegalStateException("Project schedule limit reached (256)");
+      db.sql("UPDATE agent_schedules SET creator_run=? WHERE project=? AND id=?").params(owner.runId(),owner.projectId(),task.id()).update();
       history(task.id(),"PENDING","");
     });return task;
   }
@@ -179,6 +182,20 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .params(owner.projectId(),owner.conversationId()).query(ROW).list().stream().map(Entry::task).toList();
   }
   public List<Entry> list(String project) {return db.sql("SELECT * FROM agent_schedules WHERE project=? ORDER BY created DESC,id LIMIT 256").param(project).query(ROW).list();}
+  public List<Entry> taskPage(String project,String root,String session,String after,int limit) {
+    if(limit<1||limit>101)throw new IllegalArgumentException("Invalid projection page limit");
+    return db.sql("SELECT * FROM agent_schedules WHERE project=:project AND root=:root AND (:session IS NULL OR session=:session) AND id>:after ORDER BY id LIMIT :limit")
+        .param("project",project).param("root",root).param("session",session).param("after",after).param("limit",limit).query(ROW).list();
+  }
+  public List<Entry> createdByRun(String project,String root,String session,String run) {
+    return db.sql("SELECT * FROM agent_schedules WHERE project=:project AND root=:root AND session=:session AND creator_run=:run ORDER BY id LIMIT 101")
+        .param("project",project).param("root",root).param("session",session).param("run",run).query(ROW).list();
+  }
+  public Optional<Entry> taskOrigin(String project,String root,String session,String run) {
+    return db.sql("SELECT * FROM agent_schedules WHERE project=:project AND root=:root AND session=:session AND (run=:run OR id IN (SELECT id FROM agent_schedule_history WHERE status='RUNNING' AND detail=:run)) ORDER BY id LIMIT 1")
+        .param("project",project).param("root",root).param("session",session).param("run",run).query(ROW).optional();
+  }
+  public String creatorRun(String project,String id){get(project,id);return db.sql("SELECT creator_run FROM agent_schedules WHERE project=? AND id=?").params(project,id).query(String.class).optional().orElse(null);}
   public Entry get(String project,String id) {return db.sql("SELECT * FROM agent_schedules WHERE project=? AND id=?").params(project,id).query(ROW).optional()
       .orElseThrow(()->new IllegalArgumentException("Schedule not found in this project"));}
   /** Human-facing control only; no Tool exposes activation. */
@@ -194,9 +211,18 @@ public class PersistentAgentScheduler implements AgentScheduler {
     });
   }
   public void cancel(String project,String id) {
+    cancel(project,id,(Long)null);
+  }
+  public void cancel(String project,String id,long expectedRevision) {
+    cancel(project,id,Long.valueOf(expectedRevision));
+  }
+  private void cancel(String project,String id,Long expectedRevision) {
     transaction.executeWithoutResult(status->{get(project,id);
-      if(db.sql("UPDATE agent_schedules SET status='CANCELLED' WHERE project=? AND id=? AND status IN ('PENDING','SCHEDULED','WAITING_EVENT')").params(project,id).update()!=1)
+      if(db.sql("UPDATE agent_schedules SET status='CANCELLED' WHERE project=:project AND id=:id AND status IN ('PENDING','SCHEDULED','WAITING_EVENT') AND (:revision IS NULL OR (SELECT COUNT(*) FROM agent_schedule_history WHERE id=:id)=:revision)")
+          .param("project",project).param("id",id).param("revision",expectedRevision).update()!=1) {
+        if(expectedRevision!=null)throw new dev.mikoto2000.rei.application.state.OperationConflictException();
         throw new IllegalStateException("Only unclaimed schedules can be cancelled; stop a running Run separately");
+      }
       history(id,"CANCELLED","");
     });
   }

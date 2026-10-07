@@ -53,6 +53,93 @@ pub struct Application {
     submitting: Mutex<HashSet<String>>,
 }
 impl Application {
+    pub async fn tasks_list(
+        &self,
+        server: &str,
+        project: Option<&str>,
+        session: Option<&str>,
+        limit: Option<i32>,
+        cursor: Option<String>,
+    ) -> Result<TaskPage> {
+        let query = TaskQuery::new(
+            project.map(str::to_owned),
+            session.map(str::to_owned),
+            limit,
+            cursor,
+        )?;
+        let page = self.api(server, true)?.list_tasks(query.clone()).await?;
+        page.validate(&query)?;
+        Ok(page)
+    }
+    pub async fn task_get(
+        &self,
+        server: &str,
+        project: &str,
+        session: Option<&str>,
+        id: &str,
+    ) -> Result<ManagedTask> {
+        let task = self
+            .api(server, true)?
+            .get_task(project, session, id)
+            .await?;
+        task.owned(project, session, Some(id))?;
+        Ok(task)
+    }
+    pub async fn task_submit(
+        &self,
+        server: &str,
+        project: &str,
+        session: Option<&str>,
+        message: &str,
+    ) -> Result<ManagedTask> {
+        if message.trim().is_empty() || message.encode_utf16().count() > 16384 {
+            return Err(AppError::InvalidInput);
+        }
+        let task = self
+            .api(server, true)?
+            .submit_task(project, session, message)
+            .await?;
+        task.validate()?;
+        if task.project_id != project
+            || task.session_id.is_none()
+            || session.is_some_and(|s| task.session_id.as_deref() != Some(s))
+        {
+            return Err(AppError::InvalidResponse);
+        }
+        Ok(task)
+    }
+    pub async fn task_control(
+        &self,
+        server: &str,
+        project: &str,
+        session: Option<&str>,
+        id: &str,
+        run: Option<&str>,
+        revision: u64,
+        action: TaskAction,
+        message: Option<&str>,
+    ) -> Result<ManagedTask> {
+        let api = self.api(server, true)?;
+        let current = api.get_task(project, session, id).await?;
+        current.owned(project, session, Some(id))?;
+        if current.run_id.as_deref() != run || current.revision != revision {
+            return Err(AppError::Conflict);
+        }
+        let supported = match action {
+            TaskAction::Cancel => current.cancel_supported,
+            TaskAction::Suspend => current.suspend_supported,
+            TaskAction::Resume => current.resume_supported,
+            TaskAction::Input => current.input_supported,
+        };
+        if !supported {
+            return Err(AppError::Conflict);
+        }
+        let task = api
+            .control_task(project, session, id, run, revision, action, message)
+            .await?;
+        task.owned(project, session, Some(id))?;
+        Ok(task)
+    }
     pub async fn workspace(
         &self,
         server: &str,

@@ -10,6 +10,9 @@
   --muted: #9aa9bd;
   --line: #2a3545;
 }
+.task-manager article {
+  overflow-wrap: anywhere;
+}
 * {
   box-sizing: border-box;
 }

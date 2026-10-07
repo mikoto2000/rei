@@ -46,6 +46,12 @@ class PersistentCheckpointServiceTest {
     assertEquals(AgentRunContext.Mode.CONVERSATION, repository.list("A").stream().filter(s -> s.runId().equals(resumed.runId())).findFirst().orElseThrow().mode());
   }
   PersistentCheckpoint state(){return repository.list("A").getFirst();}
+  @Test void staleTaskProjectionRevisionCannotResumeOrConsumeAnExecutionLease() {
+    service.finish(owner,"CANCELLED");var saved=state();
+    assertThrows(dev.mikoto2000.rei.application.state.OperationConflictException.class,
+        ()->service.resume("A",saved.taskId(),AgentRunContext.RequestSource.WEB,saved.revision()-1));
+    assertTrue(queue.isEmpty());assertEquals(saved.revision(),state().revision());assertFalse(repository.leased("A",saved.taskId()));
+  }
   @Test void inspectionNeverExecutesAndResumeCreatesNewRunWithLineageAndLease() {
     service.finish(owner,"CANCELLED");String task=state().taskId();
     service.list("A");service.inspect("A",task);assertTrue(queue.isEmpty());

@@ -163,3 +163,39 @@ TDDでqueue競合/公平性/取消、権限拒否、個別mailbox、共有状態
 実行はJDK25、`mvnw.cmd -q -Pfull test`。全体Redを成功扱いせず、修正後の結果を確認した。
 Native Rust全体は108 tests成功、React全体は23 suites / 87 tests成功。
 React typecheckとformat、Rust formatも成功。有料モデル・外部サービス書き込みは未実施。
+
+同時会話Run Git receipt: feature `d06748eb`、main merge `451f326f`、両方push済み。
+統合後mainの関連Javaは18 suites / 82 tests、Native Rust全体108 tests、
+React全体23 suites / 87 testsとtypecheckが成功した。failure/error/skipped各0。
+隔離worktreeは統合時clean。元checkoutのLLM未コミット変更と引き継ぎ文書は保持した。
+
+## Phase 1: Task projectionの実装
+
+branch `codex/task-manager-projection`。Run/Checkpoint/Goal/Dependency/Scheduler/SubAgentを
+既存資料から投影し、登録Projectの横断一覧、所有Session境界、安定cursor、関連参照を追加した。
+元のrepositoryへ制御を委譲し、別のTask実行queueは作成しない。
+HTTPとNativeにsubmit/get/list/cancel/suspend/resume/inputを接続した。
+CheckpointのTask IDはoriginalRunIdに固定し、再開時のrunId変更と区別する。
+入力は対象Runの次のiteration、再開は保存予算を復元・補充しない明示操作である。
+
+SubAgentは共通Run Registryに親Run/Sessionを保存する。実際の子実行・個別取消は既存runnerに
+接続し、子取消で親を止めない。これはP7の永続子checkpoint/DAG実装完了を意味しない。
+Task対応のShell登録は相談modeの有効化とは独立する。
+
+TDDで不足method/HTTP復元/Source一覧切捨て/所有プロセス終了/Goal再開条件のRedを確認し、
+対応するGreenと関連回帰を実行した。270 Dependency、270 Goal+270 Scheduler+1005 Checkpointを
+ページングするfixture、別JVM hard kill、実HTTP3起動による既定OFF/Bearer/受付/再起動を含む。
+Native再起動・HTTP所有境界・操作payload・stale revisionの書込前拒否、React切替競合・
+明示再開・拒否操作の非再送・絞込/pagination・新規受付も検証している。
+
+検証とGit receiptは完了後に追記する。共通Artifact参照はP3で統合するため、Phase 1全体は未完了。
+操作・保存期間・migration・既知の境界は [Task Manager](task-manager.md) を参照。
+
+最初のJava全体は637 suites / 3511 tests、failure/error/skipped各0。
+続くレビューで、実行中Goalの取消・中断可否が共通Runの所有権を反映していない不足を発見した。
+別Registry・Run不明のfixture Redを確認し、操作不可とUNKNOWN表示の修正後関連回帰を成功させた。
+この修正を含む最終Java全体は637 suites / 3512 tests、failure/error/skipped各0で成功した。
+Native Rust全体は114 tests成功、React全体は24 suites / 92 tests成功、typecheck/format/build成功。
+Chromeのdesktop/mobileはTask専用2件と既存画面を含む全体30件が成功した。
+最初のブラウザー試験は未対応fixtureで失敗し終了処理が停滞したため、今回起動したPIDとコマンドを
+照合して終了し、通常のChrome実行権限で再実行した。停滞した試験を成功扱いしない。

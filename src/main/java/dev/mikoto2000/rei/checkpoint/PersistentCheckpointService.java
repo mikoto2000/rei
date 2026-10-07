@@ -123,13 +123,18 @@ public class PersistentCheckpointService implements AutoCloseable {
   }
   public record ResumeResult(String taskId,String runId,String previousRunId,long checkpointRevision,CheckpointReconciler.Result reconciliation) {}
   public ResumeResult resume(String project,String task,AgentRunContext.RequestSource source) {
+    return resume(project,task,source,null);
+  }
+  public ResumeResult resume(String project,String task,AgentRunContext.RequestSource source,Long expectedRevision) {
     if(!settings.isEnabled())throw new CheckpointException(CheckpointException.Code.DISABLED,"Checkpoint saving is disabled");
     CheckpointReconciler.active();var state=get(project,task);String run=UUID.randomUUID().toString();
     if(!repository.acquire(project,task,run))throw new CheckpointException(CheckpointException.Code.TASK_BUSY,"Task already executing");
     boolean submitted=false;
     try {
       // Re-read after acquiring the cross-process lease; never resume a stale pre-lock revision.
-      state=get(project,task);var result=reconciler.check(state,false);
+      state=get(project,task);
+      if(expectedRevision!=null&&state.revision()!=expectedRevision)throw new dev.mikoto2000.rei.application.state.OperationConflictException();
+      var result=reconciler.check(state,false);
       if(!repository.diagnostics(project,task).isEmpty())throw new CheckpointException(CheckpointException.Code.RECONCILIATION_REQUIRED,"Damaged or incompatible latest checkpoint; inspect before resume");
       if("BLOCKED".equals(result.decision()))throw new CheckpointException(CheckpointException.Code.RECONCILIATION_REQUIRED,String.join("; ",result.blockers()));
       CheckpointReconciler.active();var next=state.resume(run);var fields=repository.fields(next);fields.put("nextAction",result.nextAction());fields.put("reconciliation",result);

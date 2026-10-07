@@ -460,6 +460,9 @@ rei:
 
 ## Agent Runの受付上限
 
+`rei.task-manager.enabled=true`（既定false）で認証済みHTTP/Nativeの横断Task一覧・個別操作を
+有効化する。設定、保存期間、復元と操作の詳細は[Task Manager](task-manager.md)を参照。
+
 長時間Run中の相談・READ並行・対象Runへの追加指示は `rei.conversation.concurrent-enabled=true`
 で明示的に有効化する（既定false）。期限は `rei.conversation.timeout=PT5M`。
 API・Shell・Native・状態保存の詳細は[並行会話Run](concurrent-conversation-runs.md)を参照。

@@ -22,6 +22,26 @@ import reactor.core.publisher.Flux;
 
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentRunnerTest {
+  @Test void taskTrackingUsesTheExistingChildRunAndCommonCancellation() throws Exception {
+    var runs=new dev.mikoto2000.rei.application.run.RunRegistry(Clock.systemUTC());
+    var bus=new InMemoryAgentEventBus();
+    var factory=new AgentEventFactory(Clock.systemUTC());
+    var service=new dev.mikoto2000.rei.application.run.RunService(runs,bus,factory,cancellation,id->false);
+    var parent=new AgentRunContext("parent","session",directory,"project");runs.register(parent);runs.transition("parent",dev.mikoto2000.rei.application.run.RunStatus.RUNNING,null);
+    var started=new CountDownLatch(1);
+    var runner=runner(p->{started.countDown();return Flux.never();},"120s");
+    runner.setTaskTracking(true,runs,service);
+    var operation=CompletableFuture.supplyAsync(()->{try(var scope=AgentRunScope.open(parent)){return runner.run("reviewer","review",null);}});
+    assertThat(started.await(5,TimeUnit.SECONDS)).isTrue();
+    String child=runs.runIds().stream().filter(id->!id.equals("parent")).findFirst().orElseThrow();
+    assertThat(runs.get(child).childOrigin().sessionId()).isEqualTo("session");
+    assertThat(runs.get(child).status()).isEqualTo(dev.mikoto2000.rei.application.run.RunStatus.RUNNING);
+    service.cancel(child);
+    assertThat(operation.get(5,TimeUnit.SECONDS).status()).isEqualTo(SubAgentResult.Status.CANCELLED);
+    assertThat(runs.get(child).status()).isEqualTo(dev.mikoto2000.rei.application.run.RunStatus.CANCELLED);
+    assertThat(runs.get("parent").status()).isEqualTo(dev.mikoto2000.rei.application.run.RunStatus.RUNNING);
+    service.close();
+  }
   @Test void commonPolicyBlocksChildToolBeforeInvocation() throws Exception {
     var runner=runner(prompt -> Flux.just(new ChatResponse(List.of(new Generation(
         AssistantMessage.builder().content("").toolCalls(List.of(
