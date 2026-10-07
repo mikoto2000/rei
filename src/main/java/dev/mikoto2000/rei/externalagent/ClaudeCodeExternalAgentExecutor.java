@@ -24,6 +24,7 @@ public final class ClaudeCodeExternalAgentExecutor implements ExternalAgentExecu
   @Override public ExternalAgentResult execute(ExternalAgentRequest request,BooleanSupplier cancelled){return execute(request,cancelled,null);}
   @Override public ExternalAgentResult execute(ExternalAgentRequest request,BooleanSupplier cancelled,ModelCallBudget budget){
     if(!properties.isEnabled())return ExternalAgentResult.rejected("Claude Code reviews are disabled");
+    if(request.action()==ExternalAgentRequest.Action.MATERIAL_REVIEW)return ExternalAgentResult.rejected("Material review is supported only by Codex");
     boolean fix=request.action()==ExternalAgentRequest.Action.PROPOSE_FIX;
     boolean implementation=request.action()==ExternalAgentRequest.Action.IMPLEMENT;
     if(request.agent()!=ExternalAgentRequest.Agent.CLAUDE || implementation && !properties.isImplementationEnabled() || fix && !properties.isFixProposalsEnabled())return ExternalAgentResult.rejected("Claude Code action is disabled or unsupported");

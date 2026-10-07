@@ -57,8 +57,10 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
       schema = Files.createTempFile("rei-codex-review-", ".json");
       boolean fix=request.action()==ExternalAgentRequest.Action.PROPOSE_FIX;
       boolean implementation=request.action()==ExternalAgentRequest.Action.IMPLEMENT;
-      Files.writeString(schema, resource(implementation?"implementation-schema.json":fix?"fix-proposal-schema.json":"schema.json"));
-      String prompt = resource(implementation?"implementation.txt":fix?"fix-proposal.txt":"review.txt") + "\nReview request data (JSON):\n" + mapper.writeValueAsString(Map.of(
+      boolean material=request.action()==ExternalAgentRequest.Action.MATERIAL_REVIEW;
+      var specification = ExternalAgentTaskSpecification.forAction(request.action());
+      Files.writeString(schema, specification.schema());
+      String prompt = specification.prompt() + "\nReview request data (JSON):\n" + mapper.writeValueAsString(Map.of(
           "task", request.task(), "target", request.target() == null ? "current repository" : request.projectRoot().relativize(request.target()).toString(),
           "context", request.context()));
       Duration remaining = properties.getTotalTimeout().minusNanos(System.nanoTime() - start);
@@ -70,7 +72,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
           properties.getInactivityTimeout(),properties.getMaxOutputBytes(),cancelled);
       if(budget!=null&&output.status()==Status.CANCELLED)throw new java.util.concurrent.CancellationException();
       if(budget!=null) {reported=true;budget.recordTotalTokens(budget.tokenLimitEnabled()?CodexTokenUsage.total(output):null);}
-      var result=implementation?parseImplementation(output):parse(output,fix);
+      var result=implementation?parseImplementation(output):material?parseMaterialReview(output):parse(output,fix);
       if(request.externalSessionId()!=null && result.success() && !request.externalSessionId().equals(result.externalSessionId()))
         return new ExternalAgentResult(Status.FAILED,"Continued review did not confirm the saved native session; request a fresh re-review",List.of(),List.of(),result.duration(),result.exitCode(),"");
       return result;
@@ -233,6 +235,32 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     if(value.getBytes(StandardCharsets.UTF_8).length>limit)throw new IllegalArgumentException("Proposal text exceeds limit");
     return value; // Never redact or truncate the exact baseline or replacement.
   }
+  private ExternalAgentResult parseMaterialReview(ExternalAgentProcessRunner.Output output) {
+    if (output.status() != Status.SUCCESS) return parse(output);
+    try {
+      if (output.truncated()) throw new IllegalArgumentException("Incomplete material review");
+      String finalText = null, sessionId = null;
+      boolean invalidSession = false;
+      for (String line : output.stdout().split("\\R")) {
+        JsonNode event = mapper.readTree(line);
+        if (event == null) continue;
+        if (event.path("type").asText().equals("thread.started")) {
+          String candidate = event.path("thread_id").asText();
+          if (!ExternalAgentResult.validSessionId(candidate) || sessionId != null && !sessionId.equals(candidate)) invalidSession = true;
+          else sessionId = candidate;
+        }
+        if (event.path("type").asText().equals("item.completed") && event.path("item").path("type").asText().equals("agent_message"))
+          finalText = event.path("item").path("text").asText();
+      }
+      var review = MaterialReviewReport.parse(finalText);
+      return new ExternalAgentResult(review.warnings().isEmpty() ? Status.SUCCESS : Status.SUCCESS_WITH_WARNINGS,
+          review.summary(), review.findings(), review.warnings(), output.duration(), output.exitCode(), "", null,
+          properties.isPersistSessions() && !invalidSession ? sessionId : null, null, null, null, review.report());
+    } catch (Exception invalid) {
+      return new ExternalAgentResult(Status.FAILED, "Invalid or incomplete structured material review; no automatic retry",
+          List.of(), List.of(), output.duration(), output.exitCode(), "");
+    }
+  }
   private ExternalAgentResult parseImplementation(ExternalAgentProcessRunner.Output output) {
     if(output.status()!=Status.SUCCESS)return parse(output);
     if(output.truncated() || CodexTokenUsage.total(output)==null)return new ExternalAgentResult(Status.FAILED,"Incomplete implementation proposal or turn receipt",List.of(),List.of(),output.duration(),output.exitCode(),"");
@@ -254,10 +282,4 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     return ExternalAgentDelegationService.bounded(node.path(key).asText(), limit);
   }
   private static Duration min(Duration a, Duration b) { return a.compareTo(b) <= 0 ? a : b; }
-  private String resource(String name) throws java.io.IOException {
-    try (var stream = getClass().getResourceAsStream("/external-agent/" + name)) {
-      if (stream == null) throw new java.io.IOException("Missing review resource");
-      return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-    }
-  }
 }

@@ -10,6 +10,27 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ExternalReviewHistoryTest {
+  @Test void materialReportSurvivesDelegationPersistenceAndEvaluationBeyondSummaryLimit() throws Exception {
+    String fixture = MaterialReviewSpecificationTest.fixture().replace("再現可能なコード例", "維持すべき構成".repeat(150) + " api_key=private-material-secret");
+    var parsed = MaterialReviewReport.parse(fixture);
+    var repository = repository();
+    var requests = new ArrayList<ExternalAgentRequest>();
+    try (var service = service((request, cancelled) -> {
+      requests.add(request);
+      return new ExternalAgentResult(ExternalAgentResult.Status.SUCCESS, parsed.summary(), parsed.findings(), parsed.warnings(),
+          1, 0, "private raw log", null, null, null, null, null, parsed.report());
+    }, repository)) {
+      var result = service.review(run("/agent codex material-review", "project"), "material", null, "");
+      assertTrue(result.success());
+      assertTrue(result.materialReviewReport().length() > 2048);
+      assertEquals(parsed.report(), result.forEvaluation().materialReviewReport());
+      assertEquals(parsed.report(), repository().get("project", result.reviewId()).result().materialReviewReport());
+      assertFalse(result.materialReviewReport().contains("private-material-secret"));
+      var repeated = service.rereview(run("Codex に再レビューして", "project"), result.reviewId(), "recheck", "");
+      assertTrue(repeated.success());
+      assertEquals(ExternalAgentRequest.Action.MATERIAL_REVIEW, requests.getLast().action());
+    }
+  }
   @TempDir Path root;
   ExternalReviewRepository repository() {var source=new SQLiteDataSource();source.setUrl("jdbc:sqlite:"+root.resolve("reviews.db"));return new ExternalReviewRepository(source,Clock.systemUTC());}
   AgentRunContext owner(){return new AgentRunContext("run","session",root,"project");}
