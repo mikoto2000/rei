@@ -45,3 +45,6 @@ Priority 18の[RAG/Skill品質評価harness](retrieval-quality-evaluation.md)は
 | D | 複数ファイル/binary/renderer/live Paper E2E | 原子的適用/復旧方式、対象format/renderer/providerと評価環境。現在の単一テキスト適用やoffline Provider fixtureはこれらの完了ではない |
 
 元候補を超える拡張が存在することと、対応した基本機能の不具合・具体的な未統合を分ける。別provider追加の保留は過去の回答時点の状態。その後のClaude Code追加依頼を反映した。実装・Git・検証結果は[継続記録](autonomy-feature-progress-2026-10-06.md)と機能別reportに保存する。
+
+Priority 19の[Learned Sparse境界](learned-sparse-provider-boundary.md)はoptional encoder/index、
+モデル/次元/filter検査、理由付きBM25 fallbackを実装。実providerは未設定のため導入していない。

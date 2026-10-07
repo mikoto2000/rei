@@ -772,3 +772,17 @@ TDD未実装指標/実HTTP strict入口とhidden rerank fallbackのRed→Green�
 fixture出力directoryのテスト順依存を修正。関連8 suites / 52 tests成功、各0。
 出力target/evaluation/rag-quality.json・skill-quality.json、仕様retrieval-quality-evaluation.md。
 DB/config/Native/React変更なし。Phase7の評価基盤各機能を関連回帰し、Phase末に全体回帰する。
+Retrieval evaluation Git receipt: feature `03b7e4b8`、main merge
+`10a2c6db0f6b02737af670977c8be75fa173f8eb`、両方push済み。
+統合後関連8 suites / 52 tests、failure/error/skipped各0。
+
+## Phase 7: Learned Sparse provider boundary
+
+branch `codex/learned-sparse-provider-boundary`、fetch済みmain `10a2c6db`。
+production/config/resources/pom検索で設定済みSparse/SPLADE/BGE providerと依存なし。
+既存SQLite BM25/FTS5・dense/RRFを維持し、optional encoder/index境界のみ整備する。SparseEncoderのimmutable numeric vectorと明示SparseRetrieval encoder/index境界を追加。
+model identity/dimensions/filter整合、不正vector/empty/timeout/provider不在は理由付きBM25。
+cancel/共有予算停止はfallbackしない。BM25自体の障害は再実行しない。
+TDD追加のbaseline失敗試験は二重実行でRed、provider失敗分類とfallback実行を分けGreen。
+DB/config/default検索変更なし。provider既定必須化・自動モデル呼出・学習品質保証なし。
+関連5 suites / 42 tests成功、failure/error/skipped各0。Phase7末に全体回帰する。
