@@ -123,7 +123,7 @@ public class ProgressEvaluator {
     if (node == null) return;
     if (node.isArray()) { node.forEach(item -> collectPaths(item, files)); return; }
     if (!node.isObject()) return;
-    node.fields().forEachRemaining(entry -> {
+    node.properties().forEach(entry -> {
       if (Set.of("path", "pathStr", "sourcePath", "destPath").contains(entry.getKey()) && entry.getValue().isTextual()) {
         try {
           Path path = root.resolve(entry.getValue().asText()).normalize();
@@ -172,7 +172,7 @@ public class ProgressEvaluator {
   private static String canonical(JsonNode node) {
     if (node.isObject()) {
       Map<String, String> sorted = new TreeMap<>();
-      node.fields().forEachRemaining(e -> sorted.put(e.getKey(), canonical(e.getValue())));
+      node.properties().forEach(e -> sorted.put(e.getKey(), canonical(e.getValue())));
       return sorted.toString();
     }
     if (node.isArray()) {

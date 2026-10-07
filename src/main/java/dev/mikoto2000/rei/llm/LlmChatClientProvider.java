@@ -279,25 +279,25 @@ public class LlmChatClientProvider {
       MethodToolCallbackProvider methodTools = MethodToolCallbackProvider.builder()
           .toolObjects(toolObjects.toArray())
           .build();
-      builder.defaultToolCallbacks(new ToolEventCallbackProvider(methodTools, eventFactory, eventPublisher));
+      builder.defaultTools(new ToolEventCallbackProvider(methodTools, eventFactory, eventPublisher));
     }
 
     ToolEventCallbackProvider toolCallbackProvider = toolEventCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {
-      builder.defaultToolCallbacks(toolCallbackProvider);
+      builder.defaultTools(toolCallbackProvider);
     }
     if (LlmFeature.CHAT.equals(feature) && externalAgentTools != null) builder.defaultTools(externalAgentTools);
     if (LlmFeature.CHAT.equals(feature) && subAgentTools != null && subAgentTools.getIfAvailable() != null) {
-      builder.defaultToolCallbacks(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
+      builder.defaultTools(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
           subAgentTools.getObject().callback(), eventFactory, eventPublisher));
-      builder.defaultToolCallbacks(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
+      builder.defaultTools(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
           subAgentTools.getObject().callback("delegateTasks"), eventFactory, eventPublisher));
-      for(String name:java.util.List.of("listDurableSubAgents","getDurableSubAgent","resumeSubAgent","reconcileSubAgent","delegateTaskGraph","getSubAgentGraph","resumeSubAgentGraph","compareSubAgentAnswers","judgeSubAgentAnswers"))builder.defaultToolCallbacks(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(subAgentTools.getObject().callback(name),eventFactory,eventPublisher));
+      for(String name:java.util.List.of("listDurableSubAgents","getDurableSubAgent","resumeSubAgent","reconcileSubAgent","delegateTaskGraph","getSubAgentGraph","resumeSubAgentGraph","compareSubAgentAnswers","judgeSubAgentAnswers"))builder.defaultTools(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(subAgentTools.getObject().callback(name),eventFactory,eventPublisher));
     }
     if (LlmFeature.CHAT.equals(feature) && computerUseTools != null) {
       var computer = computerUseTools.getIfAvailable();
       if (computer != null) {
-        builder.defaultToolCallbacks(computer.callback());
+        builder.defaultTools(computer.callback());
         builder.defaultSystem(systemPromptService.systemPrompt() + "\n\n" + computer.orchestrationPrompt());
       }
     }

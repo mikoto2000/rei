@@ -65,7 +65,7 @@ class ProjectRunSwitchIntegrationTest extends dev.mikoto2000.rei.core.project.Pr
       var memory = MessageWindowChatMemory.builder().maxMessages(100).build();
       var client = ChatClient.builder(new StagnationChatModel(model))
           .defaultAdvisors(new RunAwareToolCallingAdvisor())
-          .defaultToolCallbacks(new ToolEventCallbackDecorator(tool, events, bus))
+          .defaultTools(new ToolEventCallbackDecorator(tool, events, bus))
           .defaultAdvisors(RunScopedAdvisor.wrap(List.of(MessageChatMemoryAdvisor.builder(memory).build()))).build();
       var holder = mock(ModelHolderService.class); when(holder.get()).thenReturn("test");
       var service = new ChatExecutionService(client, holder, new CommandCancellationService(), Optional.empty(), events, bus);

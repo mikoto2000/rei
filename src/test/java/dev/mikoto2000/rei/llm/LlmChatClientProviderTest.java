@@ -121,7 +121,7 @@ class LlmChatClientProviderTest {
       @Override public String call(String input) { toolCalls.incrementAndGet(); return "ok"; }
     };
 
-    var response = provider.chatClient(feature).prompt().user("test").toolCallbacks(callback).call().chatResponse();
+    var response = provider.chatClient(feature).prompt().user("test").tools(callback).call().chatResponse();
 
     assertThat(response.hasToolCalls()).isFalse();
     assertThat(calls).hasValue(2);

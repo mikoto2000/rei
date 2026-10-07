@@ -64,7 +64,7 @@ class ChatExecutionStagnationTest {
       public String call(String input) { return "new information"; }
     };
     ChatClient client = ChatClient.builder(new StagnationChatModel(model))
-        .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultToolCallbacks(read).build();
+        .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultTools(read).build();
     List<AgentEvent> events = new ArrayList<>();
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenReturn("test");
@@ -102,7 +102,7 @@ class ChatExecutionStagnationTest {
       public String call(String input) { return "unchanged"; }
     };
     ChatClient client = ChatClient.builder(new StagnationChatModel(model))
-        .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultToolCallbacks(read).build();
+        .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultTools(read).build();
     List<AgentEvent> events = new ArrayList<>();
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenReturn("test");

@@ -43,7 +43,7 @@ class GoalBudgetChatIntegrationTest {
     var goal=goals.create(new AgentRunContext("source","session",dir,"project"),"Artifact","out.txt","a".repeat(64),3,10);
     var holder=mock(ModelHolderService.class);when(holder.get()).thenReturn("test");
     var chat=new ChatExecutionService(new FixedLlmChatClientProvider(ChatClient.builder(new StagnationChatModel(model))
-        .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultToolCallbacks(read).build()),
+        .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultTools(read).build()),
         holder,new FixedLlmModelProvider(),properties,new CommandCancellationService(),Optional.empty(),Optional.empty());
     var loop=new GoalLoopService(goals,new FileGoalVerifier(),(claim,run,done)->done.accept(new GoalLoopService.Outcome(
         chat.execute(new AgentRunContext(run,"session",dir,"project"),"Artifact",new UserInterventionQueue(),goals.modelBudget(claim,run)))),
@@ -71,7 +71,7 @@ class GoalBudgetChatIntegrationTest {
     };
     var holder=mock(ModelHolderService.class);when(holder.get()).thenReturn("test");
     var client=ChatClient.builder(new StagnationChatModel(model))
-        .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultToolCallbacks(read).build();
+        .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultTools(read).build();
     var chat=new ChatExecutionService(new FixedLlmChatClientProvider(client),holder,new FixedLlmModelProvider(),new LlmProperties(),
         new CommandCancellationService(),Optional.empty(),Optional.empty());
     var goals=new GoalRepository(new DriverManagerDataSource("jdbc:sqlite:"+dir.resolve("goals.db")),Clock.systemUTC());

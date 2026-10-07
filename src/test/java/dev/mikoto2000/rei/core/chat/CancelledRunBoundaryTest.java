@@ -118,7 +118,7 @@ class CancelledRunBoundaryTest {
         new AssistantMessage.ToolCall("b", "function", "work", "{}"))).build())));
     var calls = new AtomicInteger();
     var client = ChatClient.builder(new StagnationChatModel(model(calls, Flux.just(response))))
-        .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultToolCallbacks(tool).build();
+        .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultTools(tool).build();
     var cancellation = new CommandCancellationService();
     var service = service(client, cancellation, new CopyOnWriteArrayList<>());
     try (var executor = Executors.newSingleThreadExecutor()) {

@@ -538,7 +538,7 @@ class SubAgentRunnerTest {
     };
     var holder=org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);org.mockito.Mockito.when(holder.get()).thenReturn("test");
     var client=org.springframework.ai.chat.client.ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(parentModel))
-        .defaultAdvisors(new dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor()).defaultToolCallbacks(delegate).build();
+        .defaultAdvisors(new dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor()).defaultTools(delegate).build();
     var chat=new ChatExecutionService(new dev.mikoto2000.rei.llm.FixedLlmChatClientProvider(client),holder,new dev.mikoto2000.rei.llm.FixedLlmModelProvider(),new dev.mikoto2000.rei.llm.LlmProperties(),cancellation,Optional.empty(),Optional.empty());
     var goals=new dev.mikoto2000.rei.goal.GoalRepository(new org.springframework.jdbc.datasource.DriverManagerDataSource("jdbc:sqlite:"+directory.resolve("goals.db")),Clock.systemUTC());
     var goal=goals.create(new AgentRunContext("source","session",directory,"project"),"artifact","out.txt","a".repeat(64),3,2);var claim=goals.claim("project",goal.id());String run=goals.beginAttempt(claim);

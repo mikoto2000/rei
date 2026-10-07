@@ -78,7 +78,7 @@ class RunAwareToolCallingAdvisorTest {
       options.toolContext(Map.of(RunExecutionContext.KEY, context));
     }
     var client = ChatClient.builder(new StagnationChatModel(delegate))
-        .defaultAdvisors(outerAdvisor, new RunAwareToolCallingAdvisor()).defaultOptions(options).defaultToolCallbacks(callback).build();
+        .defaultAdvisors(outerAdvisor, new RunAwareToolCallingAdvisor()).defaultOptions(options).defaultTools(callback).build();
 
     if (stream) client.prompt().user("test").stream().chatResponse().blockLast();
     else client.prompt().user("test").call().chatResponse();

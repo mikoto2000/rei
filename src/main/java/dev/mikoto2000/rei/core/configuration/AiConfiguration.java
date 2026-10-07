@@ -189,20 +189,20 @@ public class AiConfiguration {
     if (fileDependencyTools != null) builder.defaultTools(fileDependencyTools);
     if (dependencyTools != null) builder.defaultTools(dependencyTools);
     if(resumeContext!=null&&resumeContext.getIfAvailable()!=null)builder.defaultAdvisors(new dev.mikoto2000.rei.core.chat.RunScopedAdvisor(resumeContext.getObject()));
-    if(checkpointTools!=null&&checkpointTools.getIfAvailable()!=null)builder.defaultToolCallbacks(new ToolEventCallbackProvider(
+    if(checkpointTools!=null&&checkpointTools.getIfAvailable()!=null)builder.defaultTools(new ToolEventCallbackProvider(
         org.springframework.ai.tool.method.MethodToolCallbackProvider.builder().toolObjects(checkpointTools.getObject()).build(),eventFactory,eventPublisher));
-    if (workTools != null && workTools.getIfAvailable() != null) builder.defaultToolCallbacks(
+    if (workTools != null && workTools.getIfAvailable() != null) builder.defaultTools(
         new ToolEventCallbackProvider(org.springframework.ai.tool.method.MethodToolCallbackProvider.builder()
             .toolObjects(workTools.getObject()).build(), eventFactory, eventPublisher));
     if (paperTools != null && paperTools.getIfAvailable() != null) builder.defaultTools(paperTools.getObject());
     ToolEventCallbackProvider toolCallbackProvider = toolEventCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {
-      builder.defaultToolCallbacks(toolCallbackProvider);
+      builder.defaultTools(toolCallbackProvider);
     }
 
     // Lazy callback avoids a bean cycle through the model provider during ChatClient construction.
     if (externalAgentTools != null) builder.defaultTools(externalAgentTools);
-    if (subAgentTools != null) builder.defaultToolCallbacks(new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools),
+    if (subAgentTools != null) builder.defaultTools(new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools),
         new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"delegateTasks"),
         new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"listDurableSubAgents"),
         new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"getDurableSubAgent"),
@@ -216,7 +216,7 @@ public class AiConfiguration {
     if (computerUseTools != null) {
       var computer = computerUseTools.getIfAvailable();
       if (computer != null) {
-        builder.defaultToolCallbacks(computer.callback());
+        builder.defaultTools(computer.callback());
         builder.defaultSystem(systemPromptService.systemPrompt() + "\n\n" + computer.orchestrationPrompt());
       }
     }

@@ -4,7 +4,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Component;
@@ -108,9 +107,6 @@ public class LlmModelProvider {
         .httpClientBuilderCustomizer(builder -> builder
             .interceptor(new ChatStreamTimeoutInterceptor())
             .interceptor(new ShowUiSdkRequestInterceptor()))
-        .toolCallingManager(ToolCallingManager.builder()
-            .observationRegistry(ObservationRegistry.NOOP)
-            .build())
         .observationRegistry(ObservationRegistry.NOOP)
         .build();
   }
