@@ -292,7 +292,7 @@ public class LlmChatClientProvider {
           subAgentTools.getObject().callback(), eventFactory, eventPublisher));
       builder.defaultToolCallbacks(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
           subAgentTools.getObject().callback("delegateTasks"), eventFactory, eventPublisher));
-      for(String name:java.util.List.of("listDurableSubAgents","getDurableSubAgent","resumeSubAgent","reconcileSubAgent","delegateTaskGraph","getSubAgentGraph","resumeSubAgentGraph"))builder.defaultToolCallbacks(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(subAgentTools.getObject().callback(name),eventFactory,eventPublisher));
+      for(String name:java.util.List.of("listDurableSubAgents","getDurableSubAgent","resumeSubAgent","reconcileSubAgent","delegateTaskGraph","getSubAgentGraph","resumeSubAgentGraph","compareSubAgentAnswers","judgeSubAgentAnswers"))builder.defaultToolCallbacks(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(subAgentTools.getObject().callback(name),eventFactory,eventPublisher));
     }
     if (LlmFeature.CHAT.equals(feature) && computerUseTools != null) {
       var computer = computerUseTools.getIfAvailable();

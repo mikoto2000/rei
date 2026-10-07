@@ -292,6 +292,8 @@ public class ExternalConfigFileService {
           subagents:
             durable-enabled: ${REI_SUBAGENTS_DURABLE_ENABLED:false}
             dag-enabled: ${REI_SUBAGENTS_DAG_ENABLED:false}
+            consensus-enabled: ${REI_SUBAGENTS_CONSENSUS_ENABLED:false}
+            consensus-judge-enabled: ${REI_SUBAGENTS_CONSENSUS_JUDGE_ENABLED:false}
             dag-timeout: ${REI_SUBAGENTS_DAG_TIMEOUT:120s}
             durable-max-total-tokens: ${REI_SUBAGENTS_DURABLE_MAX_TOTAL_TOKENS:0}
             max-transient-read-tool-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_READ_TOOL_RETRIES:0}

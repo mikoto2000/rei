@@ -210,7 +210,9 @@ public class AiConfiguration {
         new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"reconcileSubAgent"),
         new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"delegateTaskGraph"),
         new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"getSubAgentGraph"),
-        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"resumeSubAgentGraph"));
+        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"resumeSubAgentGraph"),
+        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"compareSubAgentAnswers"),
+        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"judgeSubAgentAnswers"));
     if (computerUseTools != null) {
       var computer = computerUseTools.getIfAvailable();
       if (computer != null) {

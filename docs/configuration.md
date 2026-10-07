@@ -474,6 +474,10 @@ SubAgentの永続child checkpointは `REI_SUBAGENTS_DURABLE_ENABLED` で明示�
 `REI_SUBAGENTS_DAG_TIMEOUT` は1–120秒（既定120s）。
 入力制限、fail-fast、部分継続、保存結果hashと再開は[Durable child DAG](durable-subagent-dag.md)を参照。
 
+保存childの回答・根拠比較は `REI_SUBAGENTS_CONSENSUS_ENABLED`（既定false）、
+任意judgeはさらに `REI_SUBAGENTS_CONSENSUS_JUDGE_ENABLED`（既定false）で有効にする。
+一致と正しさの区別、入力契約、共通予算は[SubAgent Consensus](subagent-consensus.md)を参照。
+
 `rei.task-manager.enabled=true`（既定false）で認証済みHTTP/Nativeの横断Task一覧・個別操作を
 有効化する。設定、保存期間、復元と操作の詳細は[Task Manager](task-manager.md)を参照。
 

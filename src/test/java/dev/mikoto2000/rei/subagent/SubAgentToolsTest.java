@@ -10,6 +10,13 @@ import org.junit.jupiter.api.io.TempDir;
 
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentToolsTest {
+  @Test void consensusCallbacksExposeHashReferencesAndDefaultDisabled() {
+    var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(new SubAgentToolPolicy(Set.of()),m->true));
+    var tools=new SubAgentTools(mock(SubAgentRunner.class),registry);
+    assertThat(tools.callback("compareSubAgentAnswers").getToolDefinition().inputSchema()).contains("childId","resultHash");
+    assertThat(tools.callback("judgeSubAgentAnswers").getToolDefinition().inputSchema()).contains("agent","references");
+    assertThatThrownBy(()->tools.compareSubAgentAnswers(null,null)).isInstanceOf(IllegalStateException.class);
+  }
   @Test void dagCallbacksExposeBoundedPlanAndRequireConfiguredService() {
     var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(new SubAgentToolPolicy(Set.of()),m->true));
     var tools=new SubAgentTools(mock(SubAgentRunner.class),registry);

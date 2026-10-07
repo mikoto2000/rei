@@ -13,6 +13,14 @@ public class SubAgentTools {
   private final SubAgentRunner runner;
   private final SubAgentRegistry registry;
   private ParallelSubAgentDelegator parallel;
+  private org.springframework.beans.factory.ObjectProvider<SubAgentConsensusService> consensus;
+  @org.springframework.beans.factory.annotation.Autowired
+  void consensusService(org.springframework.beans.factory.ObjectProvider<SubAgentConsensusService> consensus){this.consensus=consensus;}
+  private SubAgentConsensusService consensus(){var service=consensus==null?null:consensus.getIfAvailable();if(service==null)throw new IllegalStateException("SubAgent consensus is disabled");return service;}
+  @Tool(description="Compare 2 to 8 completed independent child answers to the same task using saved child IDs and result hashes. Report disagreement, evidence overlap and unresolved support. Agreement never verifies truth. Read only; opt-in required.")
+  public SubAgentConsensusService.Comparison compareSubAgentAnswers(java.util.List<SubAgentConsensusService.Reference> references,ToolContext context){return consensus().compare(execution(context).runContext(),references);}
+  @Tool(description="Optionally ask an administrator-configured tool-free SubAgent to compare saved answers and evidence. Requires opt-in and current exclusive human Run, shares Run/Goal budget. Judge cannot replace original disagreement or unresolved status.")
+  public SubAgentConsensusService.Judged judgeSubAgentAnswers(java.util.List<SubAgentConsensusService.Reference> references,String agent,ToolContext context){return consensus().judge(execution(context),references,agent);}
   private org.springframework.beans.factory.ObjectProvider<SubAgentDagService> graphs;
   @org.springframework.beans.factory.annotation.Autowired
   void graphService(org.springframework.beans.factory.ObjectProvider<SubAgentDagService> graphs){this.graphs=graphs;}
