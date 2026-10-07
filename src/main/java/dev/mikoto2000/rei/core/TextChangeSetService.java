@@ -88,7 +88,7 @@ public class TextChangeSetService {
       repository.transition(project.id(),id,"PROPOSED","STALE");return inspect(project,id);
     }
     if(!repository.transition(project.id(),id,"PROPOSED","APPLYING"))throw new IllegalStateException("Change Set already claimed");
-    try {
+    try(var lease=repository.activate(id)) {
       RunCancellation.propagate(null);
       // Recheck after the durable claim and immediately before the existing editing boundary.
       file=resolve(root,saved.path());
@@ -97,6 +97,7 @@ public class TextChangeSetService {
       }
       writer.write(file,saved.baseline(),saved.proposed());RunCancellation.propagate(null);
       if(!saved.proposedHash().equals(hash(read(resolve(root,saved.path())))))throw new IOException("Applied content requires inspection");
+      repository.heartbeat(id);
       if(!repository.transition(project.id(),id,"APPLYING","APPLIED"))throw new IOException("Apply receipt could not be saved");
       return inspect(project,id);
     }catch(IOException | RuntimeException error) {
@@ -104,12 +105,18 @@ public class TextChangeSetService {
       RunCancellation.propagate(error);throw error;
     }
   }
+  public View reconcile(dev.mikoto2000.rei.core.chat.AgentRunContext owner,String id,String proposalHash,String actualRequest)throws IOException{
+    RunCancellation.propagate(null);if(owner==null||owner.mode()!=dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE||owner.requestSource()!=dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.SHELL||owner.conversationId().startsWith("subagent:"))throw new IllegalArgumentException("Exclusive human Shell owner required");
+    var project=new ProjectContext(owner.projectId(),"",owner.projectRoot());var saved=owned(project,id);if(!saved.proposalHash().equals(proposalHash)||!("/document reconcile-single "+id+" "+proposalHash).equals(actualRequest==null?null:actualRequest.strip()))throw new IllegalArgumentException("Exact human reconciliation ID/SHA request required");
+    if(saved.status().equals("RECONCILED"))return inspect(project,id);if(!Set.of("UNKNOWN","FAILED_UNCERTAIN").contains(saved.status()))throw new IllegalStateException("Only an uncertain lost Apply can be reconciled");String current=hash(read(resolve(Path.of(saved.root()),saved.path())));if(!Set.of(saved.baselineHash(),saved.proposedHash()).contains(current))throw new IllegalStateException("Current content is neither saved version; inspect and manually repair first");
+    if(!repository.transition(project.id(),id,saved.status(),"RECONCILED"))throw new IllegalStateException("Reconciliation state changed");return inspect(project,id);
+  }
   private TextChangeSetRepository.Saved owned(ProjectContext project,String id)throws IOException {
     RunCancellation.propagate(null);
     if(id==null || id.isBlank())throw new IllegalArgumentException("Change Set ID required");
-    var saved=repository.get(project.id(),id);
+    var saved=repository.peek(project.id(),id);
     if(!project.root().toRealPath().toString().equals(saved.root()))throw new IllegalArgumentException("Change Set belongs to a different Project root");
-    return saved;
+    return repository.get(project.id(),id);
   }
   private static Path resolve(Path root,String name)throws IOException {
     if(name==null || name.isBlank() || name.length()>1024 || name.codePoints().anyMatch(Character::isISOControl))throw new IllegalArgumentException("Project-relative text path required");

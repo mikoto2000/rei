@@ -30,3 +30,9 @@ Applyは既存編集のWorking Set/Recent Changes・各cache無効化・FileModi
 UPDATE/CREATE/DELETE/RENAME proposals now share this repository and permission
 boundary. See [multi-file document changes](multi-file-document-change-set.md) for
 whole-set hashes, durable staging journals, explicit recovery and ownership limits.
+
+Crash recovery now persists process PID/start/heartbeat. A lost APPLYING becomes
+UNKNOWN without rewriting current content or auto-replaying. Exact captured human
+`/document reconcile-single ID proposalSha256` may mark RECONCILED only if current
+bytes equal the saved baseline/proposal. This is metadata, not Apply/test proof.
+Partial other content is preserved for manual inspection. See final-crash-consistency.md.

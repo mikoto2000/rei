@@ -28,12 +28,14 @@ public final class SemanticPatchReviewService {
       List<Requirement> requirements,List<FileFact> files,List<TestFact> tests,List<Check> checks,SelfPatchReviewService.Result verification,
       Verdict semantic,boolean truthVerified,List<String> warnings) {}
   public record Receipt(String id,String status,String sha256,Detail detail) {}
+  public record Inspection(String id,String status,String sha256,boolean completed,long pid,Instant heartbeat,List<String> warnings){}
   @FunctionalInterface public interface MaterialReader{GitPatchInspector.Material read(Path root,SelfPatchReviewService.Snapshot snapshot,long deadline)throws IOException;}
   @FunctionalInterface public interface SemanticReviewer{Verdict judge(Input input,RunExecutionContext run,long deadline)throws IOException;}
   static final Set<String> DIMENSIONS=Set.of("requirements","extraChanges","security","tests","hygiene","compatibility");
   private final JdbcClient db;private final Clock clock;private final boolean semanticEnabled;
   private final SelfPatchReviewService.Capture capture;private final SelfPatchRepairService.Cycle cycle;private final MaterialReader materials;private final SemanticReviewer reviewer;
   private final ObjectMapper json=new ObjectMapper().findAndRegisterModules();
+  private final PersistedReceiptLease leases;
   @org.springframework.beans.factory.annotation.Autowired
   public SemanticPatchReviewService(@org.springframework.beans.factory.annotation.Qualifier("memoryConsolidationDataSource") DataSource source,
       Clock clock,@org.springframework.beans.factory.annotation.Value("${rei.patch-review.semantic-enabled:false}") boolean semanticEnabled,
@@ -45,6 +47,7 @@ public final class SemanticPatchReviewService {
       SelfPatchRepairService.Cycle cycle,MaterialReader materials,SemanticReviewer reviewer){
     this.clock=clock;this.semanticEnabled=semanticEnabled;this.capture=capture;this.cycle=cycle;this.materials=materials;this.reviewer=reviewer;db=JdbcClient.create(source);
     db.sql("CREATE TABLE IF NOT EXISTS patch_requirement_reviews(id TEXT PRIMARY KEY,project TEXT NOT NULL,root TEXT NOT NULL,session TEXT NOT NULL,run TEXT NOT NULL,request_hash TEXT NOT NULL,status TEXT NOT NULL,payload TEXT,sha TEXT,UNIQUE(project,root,session,run,request_hash))").update();
+    leases=new PersistedReceiptLease(source,"patch_requirement_reviews",clock);
   }
   public Receipt review(AgentRunContext owner,Request request,RunExecutionContext run)throws IOException {
     Path root=owner(owner);if(owner.mode()!=AgentRunContext.Mode.EXCLUSIVE)throw new IllegalArgumentException("Exclusive Run required for explicit test execution");validate(request);
@@ -52,11 +55,11 @@ public final class SemanticPatchReviewService {
     var previous=db.sql("SELECT id,status,payload,sha FROM patch_requirement_reviews WHERE project=? AND root=? AND session=? AND run=? AND request_hash=?").params(owner.projectId(),root.toString(),owner.conversationId(),owner.runId(),requestHash).query((row,n)->stored(row.getString("id"),row.getString("status"),row.getString("payload"),row.getString("sha"))).optional();
     if(previous.isPresent())return previous.get();
     var snapshot=capture.capture(root,deadline);String id=UUID.randomUUID().toString();
-    int claimed=db.sql("INSERT OR IGNORE INTO patch_requirement_reviews SELECT ?,?,?,?,?,?,'STARTED',NULL,NULL WHERE (SELECT count(*) FROM patch_requirement_reviews WHERE project=?)<128 AND (SELECT count(*) FROM patch_requirement_reviews)<4096")
+    int claimed=db.sql("INSERT OR IGNORE INTO patch_requirement_reviews(id,project,root,session,run,request_hash,status,payload,sha) SELECT ?,?,?,?,?,?,'STARTED',NULL,NULL WHERE (SELECT count(*) FROM patch_requirement_reviews WHERE project=?)<128 AND (SELECT count(*) FROM patch_requirement_reviews)<4096")
         .params(id,owner.projectId(),root.toString(),owner.conversationId(),owner.runId(),requestHash,owner.projectId()).update();
     if(claimed!=1)throw new IllegalStateException("Review already claimed or history capacity reached; inspect without replay");
     var checks=new ArrayList<Check>();var files=new ArrayList<FileFact>();var tests=new ArrayList<TestFact>();SelfPatchReviewService.Result verification=null;Verdict verdict=null;String status="CHECKS_INCOMPLETE";Instant started=clock.instant();
-    try {
+    try(var lease=leases.activate(id)) {
       if(!snapshot.complete()||snapshot.changedFiles().isEmpty()||snapshot.changedFiles().size()>32)checks.add(new Check("PATCH_INCOMPLETE","",""));
       else {
         for(String path:snapshot.changedFiles())if(!request.allowedFiles().contains(path))checks.add(new Check("EXTRA_CHANGE","",path));
@@ -106,6 +109,7 @@ public final class SemanticPatchReviewService {
       var detail=new Detail(owner.projectId(),root.toString(),owner.conversationId(),owner.runId(),status,clock.instant(),hash(request.testCommand()),request.requirements(),List.copyOf(files),List.copyOf(tests),checks.stream().limit(64).toList(),verification,verdict,false,
           List.of("Requirement traceability and explicit command/static observations only; no universal semantic correctness or coverage proof","Saved reports may not independently establish command-to-report provenance; semantic judgement is probabilistic"));
       String payload=encode(detail),sha=hash(payload);
+      leases.heartbeat(id);
       if(db.sql("UPDATE patch_requirement_reviews SET status=?,payload=?,sha=? WHERE id=? AND status='STARTED'").params(status,payload,sha,id).update()!=1)throw new IOException("Review receipt unavailable");
       return new Receipt(id,status,sha,detail);
     }catch(IOException|RuntimeException error){try{db.sql("UPDATE patch_requirement_reviews SET status='UNKNOWN' WHERE id=? AND status='STARTED'").param(id).update();}catch(RuntimeException persistence){error.addSuppressed(persistence);}RunCancellation.propagate(error);throw error;}
@@ -115,6 +119,8 @@ public final class SemanticPatchReviewService {
     var receipt=db.sql("SELECT id,status,payload,sha FROM patch_requirement_reviews WHERE id=? AND project=? AND root=? AND session=?").params(id,owner.projectId(),root.toString(),owner.conversationId()).query((row,n)->stored(row.getString("id"),row.getString("status"),row.getString("payload"),row.getString("sha"))).optional().orElseThrow(()->new IllegalArgumentException("Review not found in this Project/root/session"));
     if(!receipt.sha256().equals(sha))throw new IllegalArgumentException("Review SHA mismatch");return receipt;
   }
+  public Inspection inspect(AgentRunContext owner,String id)throws IOException{Path root=owner(owner);if(id==null||!id.matches("[0-9a-fA-F-]{36}"))throw new IllegalArgumentException("Review UUID required");if(db.sql("SELECT count(*) FROM patch_requirement_reviews WHERE id=? AND project=? AND root=? AND session=?").params(id,owner.projectId(),root.toString(),owner.conversationId()).query(Integer.class).single()!=1)throw new IllegalArgumentException("Review not found in this Project/root/session");leases.reconcile(id);return db.sql("SELECT id,status,sha,payload,pid,heartbeat FROM patch_requirement_reviews WHERE id=? AND project=? AND root=? AND session=?").params(id,owner.projectId(),root.toString(),owner.conversationId()).query((rs,n)->new Inspection(rs.getString("id"),rs.getString("status"),rs.getString("sha"),rs.getString("payload")!=null&&rs.getString("sha")!=null,rs.getLong("pid"),rs.getObject("heartbeat")==null?null:Instant.ofEpochMilli(rs.getLong("heartbeat")),List.of("Historical execution state only; no automatic replay or correctness proof"))).optional().orElseThrow(()->new IllegalArgumentException("Review not found in this Project/root/session"));}
+  public List<Inspection> list(AgentRunContext owner)throws IOException{Path root=owner(owner);var ids=db.sql("SELECT id FROM patch_requirement_reviews WHERE project=? AND root=? AND session=? ORDER BY rowid DESC LIMIT 128").params(owner.projectId(),root.toString(),owner.conversationId()).query(String.class).list();var results=new ArrayList<Inspection>();for(String id:ids)results.add(inspect(owner,id));return List.copyOf(results);}
   private Receipt stored(String id,String status,String payload,String sha){if(payload==null||sha==null)throw new IllegalStateException("Review STARTED/UNKNOWN; inspect Run outcomes without automatic replay");if(!hash(payload).equals(sha))throw new IllegalStateException("Review receipt changed");var detail=decode(payload,Detail.class);if(!status.equals(detail.status())||detail.truthVerified())throw new IllegalStateException("Invalid review receipt");return new Receipt(id,status,sha,detail);}
   private static boolean valid(Verdict verdict,Request request){if(verdict==null||!Set.of("MATCH","FAIL","UNKNOWN").contains(verdict.status())||!verdict.dimensions().keySet().equals(DIMENSIONS)||!verdict.requirements().keySet().equals(request.requirements().stream().map(Requirement::id).collect(java.util.stream.Collectors.toSet())))return false;var values=new ArrayList<>(verdict.dimensions().values());values.addAll(verdict.requirements().values());if(values.stream().anyMatch(value->!Set.of("PASS","FAIL","UNKNOWN").contains(value)))return false;return switch(verdict.status()){case "MATCH"->values.stream().allMatch("PASS"::equals);case "FAIL"->values.contains("FAIL");default->values.contains("UNKNOWN")&&!values.contains("FAIL");};}
   private static void hygiene(String diff,List<String> changed,List<Check> checks){String path=null;boolean inHunk=false;var added=new StringBuilder();

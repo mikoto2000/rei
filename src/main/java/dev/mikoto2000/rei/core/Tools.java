@@ -78,6 +78,10 @@ public class Tools {
   }
   @Tool(description="現在Project/root/sessionの要件Review receiptを正確なid/sha256で読みます。読み取りのみ。保存判定はその時点のpatchについての観測で、現在の変更や意味的正しさを保証しません。STARTED/UNKNOWNを自動再実行しません。")
   SemanticPatchReviewService.Receipt getPatchRequirementReview(String id,String sha256)throws IOException{return patchReviews().get(diagnosedOwner(),id,sha256);}
+  @Tool(description="現在Project/root/sessionのReview実行状態をidだけで検査します。失われたSTARTEDはUNKNOWN、再実行せず成功proofを生成しません。読み取りinspectionです。")
+  SemanticPatchReviewService.Inspection inspectPatchRequirementReview(String id)throws IOException{return patchReviews().inspect(diagnosedOwner(),id);}
+  @Tool(description="現在Project/root/sessionの保存Review状態を最大128件一覧します。STARTED/UNKNOWNのinspection用でcommandを再実行しません。")
+  java.util.List<SemanticPatchReviewService.Inspection> listPatchRequirementReviews()throws IOException{return patchReviews().list(diagnosedOwner());}
   private SemanticPatchReviewService patchReviews(){if(patchReviews==null)throw new IllegalStateException("Patch requirement review unavailable");return patchReviews;}
   private DiagnosedRepairService diagnosedRepairs;
   @Autowired(required=false) void setDiagnosedRepairs(DiagnosedRepairService service){diagnosedRepairs=service;}
@@ -123,6 +127,8 @@ public class Tools {
   TextChangeSetService.View inspectTextChangeSet(String id)throws IOException {
     return changeSets().inspect(changeSetProject(),id);
   }
+  @Tool(description="人の正確な /document reconcile-single ID proposalSha256 指示でのみ、失われた単一file Applyの現在SHAが保存元/提案版に一致することを照合しRECONCILEDへ移します。file変更・Apply再送なし、APPLIEDやtest成功のproofではありません。不一致はUNKNOWNのまま。")
+  TextChangeSetService.View reconcileTextChangeSet(String id,String proposalSha256,org.springframework.ai.chat.model.ToolContext context)throws IOException{var run=documentRecoveryRun(context);return changeSets().reconcile(run.runContext(),id,proposalSha256,run.userRequest());}
   @Tool(description="保存Change Setの正確なID/proposalSha256を確認して、未claimの提案だけを破棄します。ファイルは変更せず、適用中や結果不明の操作を破棄・再実行しません。")
   TextChangeSetService.View discardTextChangeSet(String id,String proposalSha256)throws IOException {
     return changeSets().discard(changeSetProject(),id,proposalSha256);

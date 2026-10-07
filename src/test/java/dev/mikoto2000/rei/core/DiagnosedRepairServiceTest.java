@@ -67,7 +67,7 @@ class DiagnosedRepairServiceTest {
     assertEquals(proposal.id(),service(false).inspect(reader,proposal.id()).id());
     assertThrows(IllegalArgumentException.class,()->service(true).apply(reader,proposal.id(),proposal.receiptSha256(),"/repair apply "+proposal.id()+" "+proposal.receiptSha256(),(p,o,n)->fail("no reader write")));
     org.springframework.jdbc.core.simple.JdbcClient.create(source()).sql("UPDATE diagnosed_repairs SET status='STARTED' WHERE id=?").param(proposal.id()).update();
-    assertEquals("STARTED",service(true).inspect(owner(),proposal.id()).status());
+    assertEquals("UNKNOWN",service(true).inspect(owner(),proposal.id()).status());
     assertThrows(IllegalStateException.class,()->service(true).apply(owner(),proposal.id(),proposal.receiptSha256(),"/repair apply "+proposal.id()+" "+proposal.receiptSha256(),(p,o,n)->fail("no crash replay")));
   }
 }

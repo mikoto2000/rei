@@ -835,3 +835,24 @@ TDD missing policy Red→Green、共有予算interfaceのcompile不足も修正�
 full profileでlive class明示選択しても除外され、policy/Slack回帰のみ成功。
 理由付きreportはtarget/evaluation/live-off.xml。仕様/config手順live-environment-e2e.md。
 認証やアカウントを未検査のまま利用可能/不足と断定していない。
+Live harness Git receipt: feature `80397d55`、main merge `dd13776f`、両方push済み。
+統合後policy/Slack関連2 suites / 7 tests各0、fullによるlive除外維持。
+
+## Phase 8: final crash consistency
+
+branch `codex/final-crash-consistency`、fetch済みmain `dd13776f`。
+通知attempt CASと生存lease保護、Review/Repair失われたSTARTEDのUNKNOWN化、
+診断guard付きChange Setの履歴保持をTDDで補修する。hook成功を保証しない。
+通知attempt CAS/provider/destination照合、生存leaseのstartup保護とlost/dead送信UNKNOWN。
+Review/Repair/単一Applyの既存tableへnullable PID/start/heartbeat、DB別active lease。
+Review READ inspection/listは最大128でowned root/sessionのみ、成功proofは従来exact ID/SHA。
+失われたSTARTED/APPLYINGはUNKNOWN、command/send/Applyの自動再実行なし。
+単一UNKNOWNは次の単一/複数書込みも拒否。正確なhuman Shell reconcile-single ID SHAで
+現bytesが保存元/提案版に一致する場合だけRECONCILED metadata（APPLIED/test proofではない）。
+部分bytes・未知副作用は保存、人のinspect/修復/照合が必要。guard付き履歴はprune除外。
+TDD古い通知上書き/guard履歴削除/STARTED inspection/単一lost claim/root再書込をRed→Green。
+実子JVM hard kill4経路: Review/Repair/通知/部分単一Apply。生存state保持→死後UNKNOWN、
+再実行なし・部分bytes保持・finally reaper/atomic ready markerを確認。
+Tool policy READ inspection/LOCAL_WRITE照合、captured human指示・READ-only拒否を確認。
+関連10 suites / 75 tests成功、failure/error/skipped各0。全体回帰へ進む。
+最終Java全体回帰（2026-10-08）: 689 suites / 3751 tests、failure=0/error=0/skipped=0。実PlantUML指定、live除外。Native120、React25/99、typecheck成功。
