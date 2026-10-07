@@ -9,7 +9,7 @@ public record ExternalAgentRequest(Agent agent, Action action, String task, Path
     this(agent,action,task,projectRoot,target,context,runId,delegationId,null);
   }
   public enum Agent { CODEX, CLAUDE }
-  public enum Action { REVIEW, PROPOSE_FIX }
+  public enum Action { REVIEW, PROPOSE_FIX, IMPLEMENT }
   public static Path resolveTarget(Path projectRoot, String target) {
     try {
       Path root = projectRoot.toRealPath();

@@ -190,6 +190,9 @@ public class ExternalConfigFileService {
               inactivity-timeout: 2m
               max-output-bytes: 1048576
             codex:
+              implementation-enabled: ${REI_CODEX_IMPLEMENTATION_ENABLED:false}
+              implementation-test-command: ${REI_CODEX_IMPLEMENTATION_TEST_COMMAND:}
+              implementation-test-timeout-seconds: ${REI_CODEX_IMPLEMENTATION_TEST_TIMEOUT_SECONDS:30}
               inherit-run-model-budget: ${REI_CODEX_INHERIT_RUN_MODEL_BUDGET:false}
               parallel-review-enabled: ${REI_CODEX_PARALLEL_REVIEW_ENABLED:false}
               parallel-review-timeout: ${REI_CODEX_PARALLEL_REVIEW_TIMEOUT:120s}

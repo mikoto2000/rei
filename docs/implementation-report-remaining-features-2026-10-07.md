@@ -303,3 +303,37 @@ Java全体は650 suites / 3541 tests、failure/error/skipped各0で成功した�
 Native全体120 tests、React25 suites / 99 testsとtypecheck成功。
 P5は最低公開範囲として認証済みHTTPから利用可能で、決定的な読み取り集計をIMPLEMENTED。
 LLM順位付け・有料モデル・外部書込を実行せず、任意sourceの未設定と切捨てをwarningsで区別する。
+
+Today Git receipt: feature `73684285`、main merge `73b7b74a`、両方push済み。
+統合後Java関連6 suites / 22 tests、Native全体120 tests、React25 suites / 99 testsとtypecheck成功。
+failure/error/skipped各0。元checkoutのLLM変更と追加3件は保持し、隔離worktreeは統合時clean。
+Phase 2のP4/P5は今回の要求範囲でIMPLEMENTED。P6以降の実装を続ける。
+
+## Phase 3: Codex implementation delegationの実装
+
+branch `codex/isolated-codex-implementation`、fetch後の基準 `73b7b74a`。
+既存External Agent provider境界と親Run/Goal予算、process timeout/cancellationを再利用する。
+公式CLI資料とローカルexec --helpの隔離config/schema能力を確認した。
+helpはモデル・認証・外部書込を呼ばない。実モデルの成功扱いにはしない。
+
+TDDで変更案・隔離worktree・adapter・command・diff preview・cancellation・merge conflictのRedを確認した。
+親側がsnapshotのexact SHAを全件検証して、既存UTF-8ファイルのbounded置換を隔離worktreeへ反映する。
+固定の管理者test recipe→既存SelfPatchReview→final testを再利用し、元HEAD・changed-file list・source hashes・
+test/static review receipt・full Git diff SHA・生成commitを保存する。親のファイルは明示mergeまで変更しない。
+保存結果とredacted diffを再レビューでき、実際のhuman requestの結果ID/hashでのみmergeする。
+dirty/stale/不完全/想定外/binary/未解決Git操作を拒否し、競合はCONFLICT、結果不明はUNKNOWNで自動abort/retryしない。
+merge claimは一度限り。再起動で保存結果を読むだけでは外部CLI・mergeを起動しない。
+source snapshot処理をprovider共通へ抽出し、既存Claudeの読取専用回帰を確認した。
+実装は毎回ephemeral、親Run/Goal予算を必須共有し、cancelをGit・CLI・実test subprocessへ伝える。
+既定OFF、外部出力からtest/Git commandを選ばず、application commandでのみ実装とmergeを実行する。
+実装test recipeは既存任意commandと同じ全能力Policyを維持し、権限を狭く偽装しない。
+実Git fixtureで親編集の保持、commit/patch照合、変更後の再レビュー要求、競合保存、一度限りmergeを確認した。
+nativeモデルは呼ばず、deterministic adapterとlocal processのみで検証した。
+操作・制約は [Isolated external implementation](isolated-external-implementation.md) を参照。
+Java全体とGit receiptは検証後に追記する。
+
+
+P6 Java全体は656 suites / 3555 tests、failure/error/skipped各0で成功。
+Native全体120 tests、React25 suites / 99 testsとtypecheck成功。
+Codex implementation delegationの最低要件をlocal fixtureと公開application commandでIMPLEMENTED。
+有料モデル・CLI認証変更・外部サービス書込は実行していない。

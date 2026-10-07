@@ -13,6 +13,10 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
   private final CodexProperties properties;
   private final ExternalAgentProcessRunner runner;
   private final ObjectMapper mapper = new ObjectMapper();
+  private static final ObjectMapper IMPLEMENTATION_JSON=new ObjectMapper(com.fasterxml.jackson.core.JsonFactory.builder()
+      .enable(com.fasterxml.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+      .streamReadConstraints(com.fasterxml.jackson.core.StreamReadConstraints.builder().maxNestingDepth(32).maxStringLength(1048576).maxNumberLength(32).build()).build())
+      .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
   public CodexExternalAgentExecutor(CodexProperties properties, ExternalAgentProcessRunner runner) {
     this.properties = properties; this.runner = runner;
   }
@@ -23,6 +27,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
   @Override public ExternalAgentResult execute(ExternalAgentRequest request,BooleanSupplier cancelled,
       dev.mikoto2000.rei.llm.ModelCallBudget budget) {
     if (!properties.isEnabled()) return ExternalAgentResult.rejected("Codex external reviews are disabled");
+    if(request.action()==ExternalAgentRequest.Action.IMPLEMENT && (request.externalSessionId()!=null || properties.getTotalTimeout()==null || properties.getTotalTimeout().compareTo(Duration.ofMinutes(20))>0))return ExternalAgentResult.rejected("Implementation requires a fresh ephemeral session and at most 20 minutes of CLI execution");
     if(request.externalSessionId()!=null && (!supportsContinuation() || !ExternalAgentResult.validSessionId(request.externalSessionId())))
       return ExternalAgentResult.rejected("An enabled, saved native session UUID is required");
     if (properties.getTotalTimeout() == null || properties.getTotalTimeout().isNegative() || properties.getTotalTimeout().isZero()
@@ -51,8 +56,9 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     try {
       schema = Files.createTempFile("rei-codex-review-", ".json");
       boolean fix=request.action()==ExternalAgentRequest.Action.PROPOSE_FIX;
-      Files.writeString(schema, resource(fix?"fix-proposal-schema.json":"schema.json"));
-      String prompt = resource(fix?"fix-proposal.txt":"review.txt") + "\nReview request data (JSON):\n" + mapper.writeValueAsString(Map.of(
+      boolean implementation=request.action()==ExternalAgentRequest.Action.IMPLEMENT;
+      Files.writeString(schema, resource(implementation?"implementation-schema.json":fix?"fix-proposal-schema.json":"schema.json"));
+      String prompt = resource(implementation?"implementation.txt":fix?"fix-proposal.txt":"review.txt") + "\nReview request data (JSON):\n" + mapper.writeValueAsString(Map.of(
           "task", request.task(), "target", request.target() == null ? "current repository" : request.projectRoot().relativize(request.target()).toString(),
           "context", request.context()));
       Duration remaining = properties.getTotalTimeout().minusNanos(System.nanoTime() - start);
@@ -64,7 +70,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
           properties.getInactivityTimeout(),properties.getMaxOutputBytes(),cancelled);
       if(budget!=null&&output.status()==Status.CANCELLED)throw new java.util.concurrent.CancellationException();
       if(budget!=null) {reported=true;budget.recordTotalTokens(budget.tokenLimitEnabled()?CodexTokenUsage.total(output):null);}
-      var result=parse(output,fix);
+      var result=implementation?parseImplementation(output):parse(output,fix);
       if(request.externalSessionId()!=null && result.success() && !request.externalSessionId().equals(result.externalSessionId()))
         return new ExternalAgentResult(Status.FAILED,"Continued review did not confirm the saved native session; request a fresh re-review",List.of(),List.of(),result.duration(),result.exitCode(),"");
       return result;
@@ -124,7 +130,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
       command.add(command.size() - 1, "-c");
       command.add(command.size() - 1, "windows.sandbox=\"elevated\"");
     }
-    if(properties.isPersistSessions())command.remove("--ephemeral");
+    if(properties.isPersistSessions() && request.action()!=ExternalAgentRequest.Action.IMPLEMENT)command.remove("--ephemeral");
     if(request.externalSessionId()!=null) {
       int color=command.indexOf("--color");command.remove(color+1);command.remove(color);
       int directory=command.indexOf("--cd");command.remove(directory);command.remove(directory);
@@ -226,6 +232,22 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     String value=node.path(key).asText();
     if(value.getBytes(StandardCharsets.UTF_8).length>limit)throw new IllegalArgumentException("Proposal text exceeds limit");
     return value; // Never redact or truncate the exact baseline or replacement.
+  }
+  private ExternalAgentResult parseImplementation(ExternalAgentProcessRunner.Output output) {
+    if(output.status()!=Status.SUCCESS)return parse(output);
+    if(output.truncated() || CodexTokenUsage.total(output)==null)return new ExternalAgentResult(Status.FAILED,"Incomplete implementation proposal or turn receipt",List.of(),List.of(),output.duration(),output.exitCode(),"");
+    try {
+      String finalText=null;
+      for(String line:output.stdout().split("\\R")) {
+        var event=IMPLEMENTATION_JSON.readTree(line);
+        if(event.path("type").asText().equals("item.completed") && event.path("item").path("type").asText().equals("agent_message"))finalText=event.path("item").path("text").asText();
+      }
+      var structured=IMPLEMENTATION_JSON.readTree(finalText);
+      if(structured==null || !structured.isObject() || structured.size()!=4 || !structured.path("summary").isTextual() || !structured.path("findings").isArray() || !structured.path("warnings").isArray())throw new IllegalArgumentException();
+      var proposal=ImplementationProposal.parse(structured.get("implementation"));var evaluated=parse(output);
+      if(!evaluated.success() || evaluated.warnings().stream().anyMatch(w->w.contains("Could not parse")))throw new IllegalArgumentException();
+      return new ExternalAgentResult(evaluated.status(),evaluated.summary(),evaluated.findings(),evaluated.warnings(),output.duration(),output.exitCode(),"",null,null,null,null,proposal);
+    }catch(Exception invalid){return new ExternalAgentResult(Status.FAILED,"Could not parse a complete structured implementation proposal",List.of(),List.of(),output.duration(),output.exitCode(),"");}
   }
   private String text(JsonNode node, String key, int limit) {
     if (!node.path(key).isTextual()) throw new IllegalArgumentException("Missing review field");

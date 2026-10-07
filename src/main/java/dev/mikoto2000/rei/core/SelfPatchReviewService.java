@@ -28,11 +28,14 @@ public final class SelfPatchReviewService {
   private final Capture capture;private final Reviewer reviewer;private final Tester tester;
   public SelfPatchReviewService(Capture capture,Reviewer reviewer,Tester tester){this.capture=capture;this.reviewer=reviewer;this.tester=tester;}
   public SelfPatchReviewService(SystemShellService shell) {
-    var processes=new ExternalAgentProcessRunner();var inspector=new GitPatchInspector(processes);
+    this(shell,()->false);
+  }
+  public SelfPatchReviewService(SystemShellService shell,java.util.function.BooleanSupplier cancelled) {
+    var processes=new ExternalAgentProcessRunner();var inspector=new GitPatchInspector(processes,cancelled);
     capture=inspector::capture;reviewer=inspector::review;
     tester=(root,command,timeout)->{
       var output=processes.run(shell.shellCommandLine(shell.resolveShell(System.getenv(),System.getProperty("os.name")),command),
-          root,"",timeout,timeout,65536,()->Thread.currentThread().isInterrupted());
+          root,"",timeout,timeout,65536,()->cancelled.getAsBoolean() || Thread.currentThread().isInterrupted());
       if(output.status()==ExternalAgentResult.Status.CANCELLED)throw new java.util.concurrent.CancellationException("self-review cancelled");
       boolean timedOut=Set.of(ExternalAgentResult.Status.TOTAL_TIMEOUT,ExternalAgentResult.Status.INACTIVITY_TIMEOUT).contains(output.status());
       String status=output.status()==ExternalAgentResult.Status.SUCCESS?"completed":"failed";
@@ -43,7 +46,7 @@ public final class SelfPatchReviewService {
   public Result verify(Path directory,Request request)throws IOException {
     return verify(directory,request,System.nanoTime()+Duration.ofSeconds(180).toNanos());
   }
-  Result verify(Path directory,Request request,long deadline)throws IOException {
+  public Result verify(Path directory,Request request,long deadline)throws IOException {
     RunCancellation.propagate(null);
     if(request==null || request.testCommand()==null || request.testCommand().isBlank() || request.testCommand().length()>4096)
       throw new IllegalArgumentException("An explicit test command of 1 to 4096 characters is required");

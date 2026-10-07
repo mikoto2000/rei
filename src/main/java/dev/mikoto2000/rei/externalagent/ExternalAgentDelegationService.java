@@ -36,6 +36,9 @@ public class ExternalAgentDelegationService implements AutoCloseable {
   private final Optional<WorkingSet> workingSet;
   private ExternalReviewRepository history;
   private CodexProperties modelBudgetProperties=new CodexProperties();
+  private IsolatedImplementationService implementations;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  void implementations(IsolatedImplementationService service){this.implementations=service;}
   @org.springframework.beans.factory.annotation.Autowired
   void modelBudgetProperties(CodexProperties properties){this.modelBudgetProperties=properties;}
   private dev.mikoto2000.rei.core.TextChangeSetService changes;
@@ -50,6 +53,52 @@ public class ExternalAgentDelegationService implements AutoCloseable {
   }
   public ExternalAgentResult review(RunExecutionContext run, String task, String target, String decisions) {
     return review(run,task,target,decisions,null,false,false);
+  }
+  public ExternalAgentResult implement(RunExecutionContext run,String target) {
+    if(closed.get() || run==null || implementations==null || !modelBudgetProperties.isEnabled() || !modelBudgetProperties.isImplementationEnabled())return ExternalAgentResult.rejected("Codex implementation requires administrator opt-in and a saved implementation service");
+    try {
+      var command=ExternalAgentCommandRequest.parse(run.userRequest());
+      if(!command.agent().equals("codex") || !command.action().equals("implement") || !Objects.equals(command.target(),target))return ExternalAgentResult.rejected("Explicit /agent codex implement target in this Run required");
+      var owner=run.runContext();if(owner==null || owner.projectId()==null || owner.mode()!=dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)return ExternalAgentResult.rejected("Exclusive current Project required");
+      run.checkToolPermission("requestCodexImplementation",target);Path parentRoot=owner.projectRoot().toRealPath();String relativeTarget=parentRoot.relativize(ExternalAgentRequest.resolveTarget(parentRoot,target)).toString();
+      String recipe=modelBudgetProperties.getImplementationTestCommand();int seconds=modelBudgetProperties.getImplementationTestTimeoutSeconds();
+      if(recipe==null || recipe.isBlank() || recipe.length()>4096 || seconds<1 || seconds>60)return ExternalAgentResult.rejected("Administrator-selected bounded implementation test recipe required");
+      if(!run.claimExternalDelegation())return ExternalAgentResult.rejected("Only one external delegation per Run");
+      var flag=new AtomicBoolean(run.isCancelled());var hook=cancellation.onCancel(owner.runId(),()->{flag.set(true);run.cancel();});
+      try {
+        var receipt=implementations.implement(owner,relativeTarget,recipe,seconds,()->flag.get() || run.isCancelled(),(tree,manifest)->{
+          run.checkActive();var selected=ExternalAgentRequest.resolveTarget(tree,relativeTarget);
+          var snapshot=ExternalAgentSourceSnapshot.snapshot(tree,selected,()->flag.get() || run.isCancelled(),System.nanoTime()+java.time.Duration.ofSeconds(10).toNanos());
+          String context=new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(Map.of("sourceSnapshot",snapshot,"manifest",manifest));
+          var request=new ExternalAgentRequest(ExternalAgentRequest.Agent.CODEX,ExternalAgentRequest.Action.IMPLEMENT,bounded(run.userRequest(),4000),tree,selected,context,owner.runId(),UUID.randomUUID().toString());
+          var result=executor.execute(request,()->flag.get() || run.isCancelled(),run.modelCallBudget());run.checkActive();
+          if(!result.success() || result.implementation()==null)throw new java.io.IOException("Codex implementation proposal "+result.status()+": "+bounded(result.summary(),800));
+          return result.implementation();
+        });return implementationResult(receipt);
+      }finally{hook.dispose();}
+    }catch(java.util.concurrent.CancellationException cancelled){run.cancel();throw cancelled;}
+    catch(java.io.IOException failure){return new ExternalAgentResult(ExternalAgentResult.Status.FAILED,"Implementation storage or process unavailable; inspect receipts before retry",List.of(),List.of(),0,null,"");}
+    catch(IllegalArgumentException invalid){return ExternalAgentResult.rejected(invalid.getMessage());}
+  }
+  public IsolatedImplementationService.Receipt implementation(RunExecutionContext run,String id) {
+    if(run==null || implementations==null)throw new IllegalArgumentException("Current Project and implementation storage required");
+    try{return implementations.get(run.runContext(),id);}catch(java.io.IOException error){throw new IllegalArgumentException("Implementation receipt unavailable");}
+  }
+  public ExternalAgentResult mergeImplementation(RunExecutionContext run,String id,String hash) {
+    if(run==null || implementations==null)return ExternalAgentResult.rejected("Current Project and implementation storage required");
+    run.checkToolPermission("mergeExternalImplementation",id+" "+hash);
+    try{return implementationResult(implementations.merge(run.runContext(),id,hash,run.userRequest()));}
+    catch(java.io.IOException unavailable){return ExternalAgentResult.rejected("Implementation receipt unavailable");}
+    catch(IllegalArgumentException rejected){return ExternalAgentResult.rejected(rejected.getMessage());}
+  }
+  public IsolatedImplementationService.Preview implementationPreview(RunExecutionContext run,String id) {
+    if(run==null || implementations==null)throw new IllegalArgumentException("Current Project and implementation storage required");
+    try{return implementations.preview(run.runContext(),id);}catch(java.io.IOException unavailable){throw new IllegalArgumentException("Implementation diff unavailable");}
+  }
+  private ExternalAgentResult implementationResult(IsolatedImplementationService.Receipt receipt)throws java.io.IOException {
+    boolean success=Set.of("READY_FOR_APPROVAL","MERGED").contains(receipt.status());
+    return new ExternalAgentResult(success?ExternalAgentResult.Status.SUCCESS_WITH_WARNINGS:ExternalAgentResult.Status.FAILED,
+        new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules().writeValueAsString(receipt),List.of(),List.of("External implementation requires independent semantic evaluation and explicit receipt/hash approval; no automatic merge"),0,null,"",receipt.id());
   }
   public ExternalAgentResult review(RunExecutionContext run,ExternalAgentRequest.Agent agent,String task,String target,String decisions) {
     if(agent==null)return ExternalAgentResult.rejected("External review provider required");

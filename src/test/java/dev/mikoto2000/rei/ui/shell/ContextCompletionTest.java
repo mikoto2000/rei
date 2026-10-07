@@ -88,13 +88,14 @@ class ContextCompletionTest {
   }
   @Test void externalAgentAndActionUseDomainDefinitions() {
     assertThat(values(command(), "/agent ")).containsExactlyInAnyOrder("codex","claude");
-    assertThat(values(command(), "/agent codex ")).containsExactly("review");
+    assertThat(values(command(), "/agent codex ")).containsExactlyInAnyOrder("review","implement","implementation","merge");
     assertThat(values(command(), "/agent claude ")).containsExactly("review");
     assertThat(values(command(), "/agent unknown ")).isEmpty();
   }
   @Test void reviewCompletesFilesAndDirectories() throws Exception {
     Files.createFile(root.resolve("report.txt")); Files.createDirectory(root.resolve("reports"));
     assertThat(values(command(), "/agent codex review ./rep")).containsExactly("./report.txt", "./reports/");
+    assertThat(values(command(), "/agent codex implement ./rep")).containsExactly("./report.txt", "./reports/");
   }
   @Test void cursorInMiddleUsesCurrentTokenNotLastToken() {
     assertThat(complete(command(), "/project c foo", 10)).extracting(Candidate::value).containsExactly("cd");
