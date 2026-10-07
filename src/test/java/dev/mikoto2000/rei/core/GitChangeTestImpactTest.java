@@ -9,6 +9,28 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GitChangeTestImpactTest {
+  @Test void quotedPathAndHeaderLikeAddedTextCannotRedirectLineEvidence()throws Exception {
+    var fake=new ExternalAgentProcessRunner(){
+      @Override public Output run(List<String> command,Path directory,String input,Duration total,Duration idle,int bytes,java.util.function.BooleanSupplier cancelled){
+        assertTrue(command.contains(":(literal)B.java"));
+        return new Output(ExternalAgentResult.Status.SUCCESS,"diff --git a/quoted b/quoted\n+++ \"b/quoted\"\n@@ -1 +1 @@\n+++ b/B.java\n@@ -3 +3 @@\n+text\n","",0,0,false);
+      }
+    };
+    assertTrue(new GitChangedFiles(fake).changedLines(root.toRealPath(),Set.of("quoted","B.java")).ranges().isEmpty());
+  }
+  @Test void gitCoverageObservesCurrentChangedLinesWithoutExecutingTests()throws Exception {
+    init();write("A.java","class A {\n int value;\n}\n");
+    write("coverage/lcov.info","TN:ATest\nSF:A.java\nDA:1,1\nDA:2,0\nDA:3,1\nend_of_record\n");
+    var result=new ChangeTestImpactService(new RepositoryMapService()).analyzeGit(root,20,List.of("coverage/lcov.info"));
+    assertEquals(List.of(1,2,3),result.coverage().areas().getFirst().lines().stream().map(CoverageImpactService.Line::number).toList());
+    assertEquals("REPORTED_UNCOVERED",result.coverage().areas().getFirst().lines().get(1).status());
+    assertTrue(result.warnings().stream().anyMatch(value->value.contains("Untracked")));
+    var callback=Arrays.stream(org.springframework.ai.tool.method.MethodToolCallbackProvider.builder().toolObjects(new Tools()).build().getToolCallbacks()).filter(c->c.getToolDefinition().name().equals("changeTestImpact")).findFirst().orElseThrow();
+    try(var scope=dev.mikoto2000.rei.core.chat.AgentRunScope.open(new dev.mikoto2000.rei.core.chat.AgentRunContext("run","session",root))){
+      var json=tools.jackson.databind.json.JsonMapper.builder().build().readTree(callback.call("{\"coverageReports\":[\"coverage/lcov.info\"]}"));
+      assertEquals("REPORT_OBSERVATIONS",json.get("coverage").get("status").asString());
+    }
+  }
   @TempDir Path root;
   private final ExternalAgentProcessRunner processes=new ExternalAgentProcessRunner();
   private void git(String... args) {

@@ -10,6 +10,31 @@ import dev.mikoto2000.rei.externalagent.*;
 /** Bounded, read-only path inventory. Never reads diff bodies or invokes diff helpers. */
 final class GitChangedFiles {
   record Observation(List<String> paths,boolean excluded) {}
+  record Lines(List<CoverageImpactService.Range> ranges,List<String> warnings) {}
+  Lines changedLines(Path root,Set<String> selected)throws IOException {
+    if(selected.isEmpty())return new Lines(List.of(),List.of("No selected Git paths; no changed-line coverage observations"));
+    var args=new ArrayList<String>(List.of("-c","core.quotePath=false","diff","--no-ext-diff","--no-textconv","--no-renames","--color=never","--unified=0","HEAD","--"));
+    selected.stream().sorted().forEach(name->args.add(":(literal)"+name));
+    String output=git(root,System.nanoTime()+Duration.ofSeconds(5).toNanos(),1048576,args.toArray(String[]::new));
+    var ranges=new ArrayList<CoverageImpactService.Range>();var warnings=new LinkedHashSet<String>();String path=null;int total=0;boolean header=false;
+    var hunk=com.google.re2j.Pattern.compile("^@@ -[0-9]+(?:,[0-9]+)? \\+([0-9]+)(?:,([0-9]+))? @@.*$");
+    for(String line:output.split("\n")){
+      RunCancellation.propagate(null);
+      if(line.startsWith("diff --git ")){path=null;header=true;}
+      if(header&&line.startsWith("+++ ")){String name=line.substring(4);path=name.startsWith("b/")&&selected.contains(name.substring(2))?name.substring(2):null;header=false;}
+      if(line.startsWith("@@"))header=false;
+      if(path==null||!line.startsWith("@@"))continue;
+      var match=hunk.matcher(line);if(!match.matches())throw new IOException("Unsupported Git hunk; manual changed lines required");
+      try{
+        int first=Integer.parseInt(match.group(1)),count=match.group(2)==null?1:Integer.parseInt(match.group(2));
+        if(count==0){warnings.add("Deleted lines have no current line coverage; broader regression required");continue;}
+        if(first<1||count>256||first>1000000-count+1||ranges.size()>=64||(total+=count)>256)throw new IOException("Git changed lines exceed bounds; supply manual selection");
+        ranges.add(new CoverageImpactService.Range(path,first,first+count-1));
+      }catch(NumberFormatException invalid){throw new IOException("Git line numbers exceed bounds",invalid);}
+    }
+    warnings.add("Untracked, deleted, binary and staged-only changes may have no current Git hunks; absent line observations are not coverage evidence");
+    return new Lines(List.copyOf(ranges),List.copyOf(warnings));
+  }
   private final ExternalAgentProcessRunner processes;
   GitChangedFiles(ExternalAgentProcessRunner processes){this.processes=processes;}
   Observation collect(Path root)throws IOException {
