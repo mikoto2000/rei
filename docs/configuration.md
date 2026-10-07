@@ -470,6 +470,10 @@ SubAgentの永続child checkpointは `REI_SUBAGENTS_DURABLE_ENABLED` で明示�
 追加token上限は `REI_SUBAGENTS_DURABLE_MAX_TOTAL_TOKENS`（既定0、親Run/Goal予算は常に共有）。
 保存容量、UNKNOWN照合、明示再開とTask参照は[Durable SubAgent](durable-subagents.md)を参照。
 
+子の実行依存DAGはさらに `REI_SUBAGENTS_DAG_ENABLED`（既定false）を有効にする。
+`REI_SUBAGENTS_DAG_TIMEOUT` は1–120秒（既定120s）。
+入力制限、fail-fast、部分継続、保存結果hashと再開は[Durable child DAG](durable-subagent-dag.md)を参照。
+
 `rei.task-manager.enabled=true`（既定false）で認証済みHTTP/Nativeの横断Task一覧・個別操作を
 有効化する。設定、保存期間、復元と操作の詳細は[Task Manager](task-manager.md)を参照。
 

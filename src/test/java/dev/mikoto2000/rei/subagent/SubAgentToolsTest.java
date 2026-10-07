@@ -10,6 +10,14 @@ import org.junit.jupiter.api.io.TempDir;
 
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentToolsTest {
+  @Test void dagCallbacksExposeBoundedPlanAndRequireConfiguredService() {
+    var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(new SubAgentToolPolicy(Set.of()),m->true));
+    var tools=new SubAgentTools(mock(SubAgentRunner.class),registry);
+    assertThat(tools.callback("delegateTaskGraph").getToolDefinition().inputSchema()).contains("nodes","dependencies","failurePolicy","maxConcurrency");
+    assertThat(tools.callback("getSubAgentGraph").getToolDefinition().inputSchema()).contains("graphId");
+    assertThat(tools.callback("resumeSubAgentGraph").getToolDefinition().inputSchema()).contains("revision");
+    assertThatThrownBy(()->tools.delegateTaskGraph(null,null)).isInstanceOf(IllegalStateException.class);
+  }
   @Test void durableCallbacksUseActualRunIdentityRequestAndSharedBudget()throws Exception {
     var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(new SubAgentToolPolicy(Set.of()),m->true));
     var runner=mock(SubAgentRunner.class);var tools=new SubAgentTools(runner,registry);

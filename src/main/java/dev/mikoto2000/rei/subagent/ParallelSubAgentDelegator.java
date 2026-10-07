@@ -35,6 +35,15 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
   }
   public Batch delegate(List<Request> input) {return delegate(input,null);}
   public Batch delegate(List<Request> input,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
+    return delegate(input,reservation,null,timeout);
+  }
+  Batch delegate(List<Request> input,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,
+      java.util.function.BiFunction<Request,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation,SubAgentResult> child,Duration deadlineLimit) {
+    return delegate(input,reservation,child,deadlineLimit,false);
+  }
+  Batch delegate(List<Request> input,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,
+      java.util.function.BiFunction<Request,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation,SubAgentResult> child,Duration deadlineLimit,boolean failFast) {
+    if(deadlineLimit==null || deadlineLimit.isNegative() || deadlineLimit.isZero() || deadlineLimit.compareTo(timeout)>0)throw new IllegalArgumentException("Invalid DAG wave deadline");
     var parent=AgentRunScope.current();
     if(parent!=null && parent.conversationId().startsWith("subagent:"))throw new IllegalArgumentException("Recursive delegation is prohibited");
     if(input==null || input.isEmpty() || input.size()>8)throw new IllegalArgumentException("Expected 1 to 8 delegation requests");
@@ -52,14 +61,14 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
     var futures=new CopyOnWriteArrayList<FutureTask<Item>>();
     Runnable cancel=()->{stopped.set(true);for(var future:futures)future.cancel(true);executor.purge();};
     var registration=cancellation.onCancel(parent==null?null:parent.runId(),cancel);
-    long deadline=System.nanoTime()+timeout.toNanos();Status terminal=null;
+    long deadline=System.nanoTime()+deadlineLimit.toNanos();Status terminal=null;
     try {
       for(var request:requests) {
         var future=new FutureTask<Item>(()->{
           if(stopped.get() || Thread.currentThread().isInterrupted())return item(request,Status.CANCELLED,null);
           if(System.nanoTime()-deadline>=0){deadlineReached.set(true);return item(request,Status.TIMEOUT,null);}
           try(var scope=AgentRunScope.open(parent)) {
-            var result=effectiveReservation==null?runner.run(request.agent(),request.task(),request.context()):runner.run(request.agent(),request.task(),request.context(),effectiveReservation);
+            var result=child!=null?child.apply(request,effectiveReservation):effectiveReservation==null?runner.run(request.agent(),request.task(),request.context()):runner.run(request.agent(),request.task(),request.context(),effectiveReservation);
             var state=switch(result.status()) {
               case COMPLETED -> Status.COMPLETED;case CANCELLED -> Status.CANCELLED;case TIMEOUT -> Status.TIMEOUT;default -> Status.FAILED;
             };
@@ -71,6 +80,18 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
         else try{executor.execute(future);}catch(RejectedExecutionException rejected){cancel.run();terminal=Status.REJECTED;}
       }
       for(var future:futures) {
+        if(failFast) {
+          while(!future.isDone() && !stopped.get() && System.nanoTime()<deadline) {
+            boolean failed=false;
+            for(var candidate:futures)if(candidate.isDone() && !candidate.isCancelled()) {
+              try {var item=candidate.get();if(item.status()!=Status.COMPLETED || item.result()!=null && item.result().structuredOutput()!=null && item.result().structuredOutput().status()!=SubAgentOutput.Status.SUCCESS)failed=true;}
+              catch(ExecutionException | CancellationException error){failed=true;}
+              catch(InterruptedException error){Thread.currentThread().interrupt();terminal=Status.CANCELLED;failed=true;}
+            }
+            if(failed){if(terminal==null)terminal=Status.FAILED;cancel.run();break;}
+            try{Thread.sleep(10);}catch(InterruptedException error){Thread.currentThread().interrupt();terminal=Status.CANCELLED;cancel.run();break;}
+          }
+        }
         if(stopped.get()) {if(terminal==null)terminal=Status.CANCELLED;break;}
         if(System.nanoTime()-deadline>=0){terminal=Status.TIMEOUT;cancel.run();break;}
         try {future.get(Math.max(1,deadline-System.nanoTime()),TimeUnit.NANOSECONDS);}

@@ -17,9 +17,9 @@ public final class DurableSubAgentRepository {
   public record Operation(String id,String tool,String argumentsHash,String status,String reconciliation) {}
   public record Checkpoint(int version,String id,long revision,String project,String root,String session,String parentRun,
       String agent,String task,String context,String baseline,String status,String run,int maxCalls,long maxTokens,
-      int consumedCalls,long consumedTokens,boolean usageUnknown,boolean modelPending,List<Operation> operations,String result,String resultHash,
-      Instant updated,long ownerPid,String ownerStart) {
-    public Checkpoint {operations=List.copyOf(operations);}
+      int consumedCalls,long consumedTokens,boolean usageUnknown,boolean modelPending,int pendingModels,List<Operation> operations,String result,String resultHash,
+      Instant updated,long ownerPid,String ownerStart,String kind,String graphId) {
+    public Checkpoint {kind=kind==null?"CHILD":kind;if(!Set.of("CHILD","GRAPH").contains(kind))throw new IllegalArgumentException("Invalid child checkpoint kind");if(pendingModels<0 || pendingModels>1000)throw new IllegalArgumentException("Invalid pending model reservations");if(modelPending && pendingModels==0)pendingModels=1;modelPending=pendingModels>0;operations=List.copyOf(operations);}
   }
   private final JdbcClient db;private final TransactionTemplate transaction;private final Clock clock;
   private final int maxBytes;
@@ -36,16 +36,21 @@ public final class DurableSubAgentRepository {
     }
   }
   public synchronized Checkpoint create(AgentRunContext owner,String agent,String task,String context,int calls,long tokens,String baseline) {
+    return createPrepared(owner,UUID.randomUUID().toString(),"CHILD",null,agent,task,context,calls,tokens,baseline);
+  }
+  synchronized Checkpoint createPrepared(AgentRunContext owner,String id,String kind,String graphId,String agent,String task,String context,int calls,long tokens,String baseline) {
+    if(id==null || !id.matches("[0-9a-f-]{36}") || graphId!=null && !graphId.matches("[0-9a-f-]{36}"))throw new IllegalArgumentException("Invalid graph/child identity");
     identity(owner);if(agent==null || !agent.matches("[a-z][a-z0-9-]{0,63}") || task==null || task.isBlank() || task.length()>16384
         || context!=null && context.length()>32768 || calls<1 || calls>1000 || tokens<0 || baseline==null || baseline.length()>256)throw new IllegalArgumentException("Invalid durable child request");
-    var state=new Checkpoint(1,UUID.randomUUID().toString(),0,owner.projectId(),root(owner),owner.conversationId(),owner.runId(),agent,
-        CredentialRedactor.redact(task),context==null?null:CredentialRedactor.redact(context),baseline,"QUEUED",null,calls,tokens,0,0,false,false,List.of(),null,null,clock.instant(),0,null);
+    var state=new Checkpoint(1,id,0,owner.projectId(),root(owner),owner.conversationId(),owner.runId(),agent,
+        CredentialRedactor.redact(task),context==null?null:CredentialRedactor.redact(context),baseline,"QUEUED",null,calls,tokens,0,0,false,false,0,List.of(),null,null,clock.instant(),0,null,kind,graphId);
     String encoded=encode(state);return transaction.execute(tx->{
       if(db.sql("SELECT COUNT(*) FROM subagent_checkpoints").query(Long.class).single()>=1024
           || db.sql("SELECT COALESCE(SUM(length(CAST(snapshot AS BLOB))),0) FROM subagent_checkpoints").query(Long.class).single()+encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>maxBytes)throw new IllegalArgumentException("Durable child storage capacity reached");
       db.sql("INSERT INTO subagent_checkpoints(id,revision,snapshot) VALUES(?,0,?)").params(state.id(),encode(state)).update();return state;
     });
   }
+  synchronized <T> T atomic(java.util.function.Supplier<T> action){return transaction.execute(tx->action.get());}
   public Checkpoint get(AgentRunContext owner,String id){identity(owner);var state=load(id);
     if(!state.project().equals(owner.projectId()) || !state.root().equals(root(owner)) || !state.session().equals(owner.conversationId()))throw new IllegalArgumentException("Child belongs to another human Project/root/session");return state;
   }
@@ -77,7 +82,7 @@ public final class DurableSubAgentRepository {
     update(saved,s->copy(s,s.status(),run,s.consumedCalls(),s.consumedTokens(),s.usageUnknown(),operations,s.result(),s.resultHash(),s.ownerPid(),s.ownerStart()));
   }
   public synchronized void complete(String id,String run,String status,String result){var saved=owned(id,run);
-    if(!Set.of("COMPLETED","FAILED","CANCELLED","TIMEOUT").contains(status) || result!=null && result.length()>65536)throw new IllegalArgumentException("Invalid child result");
+    if(!Set.of("COMPLETED","FAILED","CANCELLED","TIMEOUT","UNKNOWN").contains(status) || result!=null && result.length()>65536)throw new IllegalArgumentException("Invalid child result");
     boolean unknown=saved.operations().stream().anyMatch(o->Set.of("STARTED","UNKNOWN").contains(o.status()));
     String retained=result==null?null:CredentialRedactor.redact(result);
     update(saved,s->copy(s,unknown?"UNKNOWN":status,run,s.consumedCalls(),s.consumedTokens(),s.usageUnknown() || s.modelPending() && s.maxTokens()>0,unknown(s.operations()),retained,retained==null?null:hash(retained),0,null));
@@ -97,8 +102,8 @@ public final class DurableSubAgentRepository {
     long size=db.sql("SELECT COALESCE(SUM(length(CAST(snapshot AS BLOB))),0) FROM subagent_checkpoints").query(Long.class).single();
     if(size-encode(current).getBytes(java.nio.charset.StandardCharsets.UTF_8).length+encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>maxBytes)throw new IllegalArgumentException("Durable child storage capacity reached");
     if(db.sql("UPDATE subagent_checkpoints SET revision=?,snapshot=? WHERE id=? AND revision=?").params(next.revision(),encoded,saved.id(),saved.revision()).update()!=1)throw new ConcurrentModificationException("Child checkpoint revision changed");return next;});}
-  private Checkpoint copy(Checkpoint s,String status,String run,int calls,long tokens,boolean unknown,List<Operation> operations,String result,String hash,long pid,String start){return new Checkpoint(1,s.id(),s.revision()+1,s.project(),s.root(),s.session(),s.parentRun(),s.agent(),s.task(),s.context(),s.baseline(),status,run,s.maxCalls(),s.maxTokens(),calls,tokens,unknown,s.modelPending(),operations,result,hash,clock.instant(),pid,start);}
-  private Checkpoint pending(Checkpoint s,boolean pending){return new Checkpoint(s.version(),s.id(),s.revision(),s.project(),s.root(),s.session(),s.parentRun(),s.agent(),s.task(),s.context(),s.baseline(),s.status(),s.run(),s.maxCalls(),s.maxTokens(),s.consumedCalls(),s.consumedTokens(),s.usageUnknown(),pending,s.operations(),s.result(),s.resultHash(),s.updated(),s.ownerPid(),s.ownerStart());}
+  private Checkpoint copy(Checkpoint s,String status,String run,int calls,long tokens,boolean unknown,List<Operation> operations,String result,String hash,long pid,String start){return new Checkpoint(1,s.id(),s.revision()+1,s.project(),s.root(),s.session(),s.parentRun(),s.agent(),s.task(),s.context(),s.baseline(),status,run,s.maxCalls(),s.maxTokens(),calls,tokens,unknown,s.modelPending(),s.pendingModels(),operations,result,hash,clock.instant(),pid,start,s.kind(),s.graphId());}
+  private Checkpoint pending(Checkpoint s,boolean pending){int count=Math.max(0,s.pendingModels()+(pending?1:-1));return new Checkpoint(s.version(),s.id(),s.revision(),s.project(),s.root(),s.session(),s.parentRun(),s.agent(),s.task(),s.context(),s.baseline(),s.status(),s.run(),s.maxCalls(),s.maxTokens(),s.consumedCalls(),s.consumedTokens(),s.usageUnknown(),count>0,count,s.operations(),s.result(),s.resultHash(),s.updated(),s.ownerPid(),s.ownerStart(),s.kind(),s.graphId());}
   private static boolean exhausted(Checkpoint s){return s.consumedCalls()>=s.maxCalls() || s.maxTokens()>0 && (s.usageUnknown() || s.consumedTokens()>=s.maxTokens());}
   private static List<Operation> unknown(List<Operation> operations){return operations.stream().map(o->o.status().equals("STARTED")?new Operation(o.id(),o.tool(),o.argumentsHash(),"UNKNOWN",null):o).toList();}
   private static boolean alive(Checkpoint s){return s.ownerPid()>0 && s.ownerStart()!=null && ProcessHandle.of(s.ownerPid()).filter(ProcessHandle::isAlive).flatMap(h->h.info().startInstant()).map(i->i.toString().equals(s.ownerStart())).orElse(false);}

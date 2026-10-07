@@ -14,6 +14,12 @@ public class SubAgentProperties {
   private int maxTransientModelRetries;
   private int maxTransientReadToolRetries;
   private boolean durableEnabled;
+  private boolean dagEnabled;
+  private java.time.Duration dagTimeout=java.time.Duration.ofSeconds(120);
+  public boolean isDagEnabled(){return dagEnabled;}
+  public void setDagEnabled(boolean value){dagEnabled=value;}
+  public java.time.Duration getDagTimeout(){return dagTimeout;}
+  public void setDagTimeout(java.time.Duration value){if(value==null || value.compareTo(java.time.Duration.ofSeconds(1))<0 || value.compareTo(java.time.Duration.ofSeconds(120))>0)throw new IllegalArgumentException("DAG timeout must be 1 to 120 seconds");dagTimeout=value;}
   private long durableMaxTotalTokens;
   public boolean isDurableEnabled(){return durableEnabled;}
   public void setDurableEnabled(boolean value){durableEnabled=value;}
