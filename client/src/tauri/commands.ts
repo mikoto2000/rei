@@ -5,6 +5,7 @@ import type {
   Project,
   Conversation,
   Run,
+  RunMode,
   Connection,
   SessionSummary,
   SessionPage,
@@ -17,6 +18,7 @@ import type {
   WorkspaceResult,
 } from "../entities/workspace";
 interface Commands {
+  run_input: [RunArgs & { message: string }, null];
   goal_track: [{ serverId: string; projectId: string; goalId: string }, Run];
   schedule_track: [
     { serverId: string; projectId: string; scheduleId: string },
@@ -76,7 +78,10 @@ interface Commands {
   conversation_continue_new: [{ conversationId: string }, Conversation];
   conversation_delete: [{ conversationId: string }, void];
   conversation_select: [{ conversationId: string }, void];
-  chat_submit: [{ conversationId: string; message: string }, Run];
+  chat_submit: [
+    { conversationId: string; message: string; mode?: RunMode },
+    Run,
+  ];
   run_get: [RunArgs, Run];
   run_cancel: [RunArgs, void];
   run_subscribe: [RunArgs, void];

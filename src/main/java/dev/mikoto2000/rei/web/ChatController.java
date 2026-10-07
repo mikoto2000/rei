@@ -14,7 +14,7 @@ public class ChatController {
   public ChatController(ChatSubmitService chat) { this.chat = chat; }
   @PostMapping("/api/v1/chat")
   public ResponseEntity<ChatResponse> submit(@RequestBody ChatRequest request) {
-    var run = chat.submit(request.message(), request.projectId(), request.sessionId());
+    var run = chat.submit(request.message(), request.projectId(), request.sessionId(), request.mode());
     return ResponseEntity.accepted().location(URI.create("/api/v1/runs/" + run.runId()))
         .body(new ChatResponse(run.runId(), run.conversationId(), run.runId()));
   }

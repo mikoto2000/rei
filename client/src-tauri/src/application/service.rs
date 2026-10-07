@@ -443,13 +443,27 @@ impl Application {
         })
     }
     pub async fn submit(&self, id: &str, message: &str) -> Result<RunView> {
+        self.submit_mode(id, message, RunMode::Exclusive).await
+    }
+    pub async fn intervene(&self, server: &str, run: &str, message: &str) -> Result<()> {
+        if message.trim().is_empty() || message.chars().count() > 16384 {
+            return Err(AppError::InvalidInput);
+        }
+        let owner = self.runs.get(server, run)?;
+        if owner.status.terminal() {
+            return Err(AppError::Conflict);
+        }
+        self.api(server, true)?
+            .input(run, &owner.project_id, &owner.session_id, message)
+            .await
+    }
+    pub async fn submit_mode(&self, id: &str, message: &str, mode: RunMode) -> Result<RunView> {
         if message.trim().is_empty() {
             return Err(AppError::InvalidInput);
         }
         {
             let mut submitting = self.submitting.lock().unwrap();
-            if submitting.contains(id) || self.runs.active().iter().any(|r| r.conversation_id == id)
-            {
+            if submitting.contains(id) {
                 return Err(AppError::Busy);
             }
             submitting.insert(id.into());
@@ -481,7 +495,7 @@ impl Application {
             },
         };
         let receipt = match api
-            .chat(target.project_id(), target.session_id(), message)
+            .chat_mode(target.project_id(), target.session_id(), message, mode)
             .await
         {
             Err(AppError::SessionProjectConflict) => {
@@ -508,13 +522,15 @@ impl Application {
         }
         let run_id = receipt.run_id.clone();
         let session = receipt.session_id.clone();
-        self.runs.register(Projection::new(
+        let mut projection = Projection::new(
             &c.server_profile_id,
             id,
             target.project_id(),
             receipt,
             message,
-        ))?;
+        );
+        projection.mode = mode;
+        self.runs.register(projection)?;
         // An accepted run must remain trackable even if metadata persistence fails.
         let persisted = self.conversations.record_turn(id, &session, message);
         self.runs.subscribe(&c.server_profile_id, &run_id, api)?;

@@ -7,6 +7,57 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class ProjectRunQueueTest {
+  @Test void readersShareAProjectButWriterWaitsUntilEveryReaderFinishes() {
+    var work = new ArrayList<Runnable>();
+    var queue = new ProjectRunQueue(work::add);
+    queue.enqueue("p", "read-a", ProjectRunQueue.Access.READ_ONLY, () -> {});
+    queue.enqueue("p", "read-b", ProjectRunQueue.Access.READ_ONLY, () -> {});
+    queue.enqueue("p", "write", () -> {});
+    queue.enqueue("p", "late-read", ProjectRunQueue.Access.READ_ONLY, () -> {});
+    assertThat(work).hasSize(2);
+    work.removeFirst().run();
+    assertThat(work).hasSize(1);
+    work.removeFirst().run();
+    assertThat(work).hasSize(1);
+    assertThat(queue.containsRun("p", "write")).isTrue();
+    work.removeFirst().run();
+    assertThat(work).hasSize(1);
+    work.removeFirst().run();
+    assertThat(queue.containsRun("p", "late-read")).isFalse();
+  }
+
+  @Test void toolFreeConversationCanProceedWhileAnExclusiveRunOwnsTheProject() {
+    var work = new ArrayList<Runnable>();
+    var results = new ArrayList<String>();
+    var queue = new ProjectRunQueue(work::add);
+    queue.enqueue("p", "task", () -> results.add("task"));
+    queue.enqueue("p", "next-task", () -> results.add("next-task"));
+    queue.enqueue("p", "question", ProjectRunQueue.Access.CONVERSATION, () -> results.add("question"));
+    assertThat(work).hasSize(2);
+    work.removeLast().run();
+    assertThat(results).containsExactly("question");
+    assertThat(queue.containsRun("p", "task")).isTrue();
+    work.removeFirst().run();
+    work.removeFirst().run();
+    assertThat(results).containsExactly("question", "task", "next-task");
+  }
+
+  @Test void parallelDispatchRemainsBoundedAndCancelledReaderNeverExecutes() {
+    var work = new ArrayList<Runnable>();
+    var queue = new ProjectRunQueue(work::add, 8, 8, 2);
+    queue.enqueue("p", "a", ProjectRunQueue.Access.READ_ONLY, () -> {});
+    queue.enqueue("p", "b", ProjectRunQueue.Access.READ_ONLY, () -> fail("Cancelled reader ran"));
+    queue.enqueue("p", "c", ProjectRunQueue.Access.READ_ONLY, () -> {});
+    assertThat(work).hasSize(2);
+    assertThat(queue.cancelQueued("b")).isTrue();
+    assertThat(work).hasSize(3);
+    work.remove(1).run();
+    assertThat(queue.containsRun("p", "b")).isFalse();
+    work.removeFirst().run();
+    work.removeFirst().run();
+    assertThat(queue.containsRun("p", "c")).isFalse();
+  }
+
   @Test void boundedAdmissionCountsExecutingAndQueuedJobsAndReleasesCancelledSlots() {
     var tasks = new ArrayList<Runnable>();
     var queue = new ProjectRunQueue(tasks::add, 2, 3);

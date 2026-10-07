@@ -1,5 +1,6 @@
+export type RunMode = "EXCLUSIVE" | "READ_ONLY" | "CONVERSATION";
 export type RunStatus =
-  "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
+  "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" | "UNKNOWN";
 export type StreamState =
   "CONNECTING" | "CONNECTED" | "RECONNECTING" | "CLOSED";
 export type ConnectionState =
@@ -62,6 +63,7 @@ export interface Connection {
   error: string | null;
 }
 export interface Run {
+  mode?: RunMode;
   cancelRequested?: boolean;
   timeline?: TimelineEntry[];
   serverId: string;
@@ -139,14 +141,11 @@ export function mergeRun(runs: Run[], incoming: Run): Run[] {
   return runs.map((r, i) => (i === index ? incoming : r));
 }
 export const canSubmit = (
-  conversation: string,
+  _conversation: string,
   message: string,
-  runs: Run[],
+  _runs: Run[],
   pending: boolean,
-) =>
-  !!message.trim() &&
-  !pending &&
-  !activeRuns(runs).some((r) => r.conversationId === conversation);
+) => !!message.trim() && !pending;
 const errors: Record<string, string> = {
   Conflict: "既存のリソースと競合しています。入力内容を確認してください。",
   InvalidCursor: "ページ情報が無効です。一覧を更新してください。",

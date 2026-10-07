@@ -5,6 +5,15 @@ pub use history::*;
 mod workspace;
 pub use workspace::*;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum RunMode {
+    #[default]
+    Exclusive,
+    ReadOnly,
+    Conversation,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AppError {
     ServerUnreachable,
@@ -80,10 +89,14 @@ pub enum RunStatus {
     Completed,
     Failed,
     Cancelled,
+    Unknown,
 }
 impl RunStatus {
     pub fn terminal(self) -> bool {
-        matches!(self, Self::Completed | Self::Failed | Self::Cancelled)
+        matches!(
+            self,
+            Self::Completed | Self::Failed | Self::Cancelled | Self::Unknown
+        )
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]

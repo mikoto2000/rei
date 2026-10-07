@@ -172,6 +172,33 @@ public class LlmChatClientProvider {
     return cache.computeIfAbsent(feature, this::createChatClient);
   }
 
+  /** Restricted runs deliberately have no advisors that mutate conversation or task state. */
+  public ChatClient parallelChatClient(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode) {
+    if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE) return chatClient(LlmFeature.CHAT);
+    return cache.computeIfAbsent("parallel-" + mode, ignored -> {
+      var options = modelProvider.chatOptions(LlmFeature.CHAT, null);
+      dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
+      var callbacks = new ArrayList<org.springframework.ai.tool.ToolCallback>();
+      if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY) {
+        var objects = new ArrayList<Object>();
+        addIfAvailable(objects, tools);
+        addIfAvailable(objects, searchTools);
+        addIfAvailable(objects, webSearchTools);
+        addIfAvailable(objects, urlContentFetchTools);
+        if (!objects.isEmpty()) {
+          for (var callback : MethodToolCallbackProvider.builder().toolObjects(objects.toArray()).build().getToolCallbacks()) {
+            if (dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.intrinsicallyReadOnly(callback.getToolDefinition().name()))
+              callbacks.add(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(callback, eventFactory, eventPublisher));
+          }
+        }
+      }
+      return ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(modelProvider.subAgentChatModel(), null))
+          .defaultAdvisors(new RunAwareToolCallingAdvisor())
+          .defaultOptions(options.mutate().toolCallbacks(callbacks).toolChoice(callbacks.isEmpty() ? "none" : "auto"))
+          .build();
+    });
+  }
+
   private ChatClient createChatClient(String feature) {
     // Extraction and summarization process supplied evidence without conversation state or tools.
     if (LlmFeature.MEMORY.equals(feature)) {

@@ -20,7 +20,11 @@ public class WebApiConfiguration {
   ProjectRegistry webProjectRegistry(@org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
     return new ProjectRegistry(java.nio.file.Path.of(directory).resolve("projects.json"));
   }
-  @Bean RunRegistry webRunRegistry(Clock clock) { return new RunRegistry(clock); }
+  @Bean RunRegistry webRunRegistry(Clock clock,
+      @org.springframework.beans.factory.annotation.Qualifier("memoryConsolidationDataSource") org.springframework.beans.factory.ObjectProvider<javax.sql.DataSource> source,
+      @org.springframework.beans.factory.annotation.Value("${rei.conversation.concurrent-enabled:false}") boolean enabled) {
+    return new RunRegistry(clock,enabled?source.getObject():null);
+  }
   @Bean dev.mikoto2000.rei.application.project.ProjectQueryService webProjectQueryService(ProjectRegistry projects) {
     return new dev.mikoto2000.rei.application.project.ProjectQueryService(projects);
   }
@@ -31,9 +35,10 @@ public class WebApiConfiguration {
   }
   @Bean ChatSubmitService webChatSubmitService(ProjectRegistry projects, SessionRegistry sessions,
       RunRegistry registry, RunService runs, ConversationInputRouter router,
-      dev.mikoto2000.rei.application.session.SessionLifecycle lifecycle) {
+      dev.mikoto2000.rei.application.session.SessionLifecycle lifecycle,
+      @org.springframework.beans.factory.annotation.Value("${rei.conversation.concurrent-enabled:false}") boolean concurrentEnabled) {
     return new ChatSubmitService(projects, sessions, registry, lifecycle,
-        (context, prompt) -> router.submit(context, prompt, work -> runs.execute(context, work)));
+        (context, prompt) -> router.submit(context, prompt, work -> runs.execute(context, work)), concurrentEnabled);
   }
   @Bean SseBridge sseBridge(AgentEventBus bus, RunService runs, ApiKeyProperties key) {
     return new SseBridge(bus, runs, key.getApiKey());

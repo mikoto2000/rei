@@ -4,6 +4,85 @@ import { Chat } from "./Chat";
 import userEvent from "@testing-library/user-event";
 import type { Conversation, Run } from "../../entities/models";
 afterEach(cleanup);
+it("explains unknown results after restart without offering a stop button", () => {
+  render(
+    <Chat
+      conversation={conversation}
+      projectName="rei"
+      runs={[{ ...run, status: "UNKNOWN", mode: "READ_ONLY" }]}
+      pending={false}
+      error={null}
+      onSend={vi.fn()}
+      onStop={vi.fn()}
+      onContinue={vi.fn()}
+      onRefresh={vi.fn()}
+      onSubscribe={vi.fn()}
+    />,
+  );
+  expect(screen.getByText(/実行結果が不明/)).toBeTruthy();
+  expect(screen.getByText("READ_ONLY")).toBeTruthy();
+  expect(screen.queryByRole("button", { name: "停止" })).toBeNull();
+});
+it("sends guidance to an explicitly selected run without creating a run", async () => {
+  const send = vi.fn();
+  const input = vi.fn().mockResolvedValue(true);
+  render(
+    <Chat
+      conversation={conversation}
+      projectName="rei"
+      runs={[run]}
+      pending={false}
+      error={null}
+      onSend={send}
+      onInput={input}
+      onStop={vi.fn()}
+      onContinue={vi.fn()}
+      onRefresh={vi.fn()}
+      onSubscribe={vi.fn()}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText("送信方法"), {
+    target: { value: "INTERVENTION" },
+  });
+  fireEvent.change(screen.getByLabelText("追加指示の対象Run"), {
+    target: { value: run.runId },
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "メッセージ" }), {
+    target: { value: "guidance" },
+  });
+  fireEvent.submit(
+    screen.getByRole("textbox", { name: "メッセージ" }).closest("form")!,
+  );
+  expect(input).toHaveBeenCalledWith(run, "guidance");
+  expect(send).not.toHaveBeenCalled();
+});
+it("submits a consultation as a distinct run while a task is active", async () => {
+  const send = vi.fn().mockResolvedValue(true);
+  render(
+    <Chat
+      conversation={conversation}
+      projectName="rei"
+      runs={[run]}
+      pending={false}
+      error={null}
+      onSend={send}
+      onStop={vi.fn()}
+      onContinue={vi.fn()}
+      onRefresh={vi.fn()}
+      onSubscribe={vi.fn()}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText("送信方法"), {
+    target: { value: "CONVERSATION" },
+  });
+  fireEvent.change(screen.getByRole("textbox", { name: "メッセージ" }), {
+    target: { value: "question" },
+  });
+  fireEvent.submit(
+    screen.getByRole("textbox", { name: "メッセージ" }).closest("form")!,
+  );
+  expect(send).toHaveBeenCalledWith("question", "CONVERSATION");
+});
 it("keeps a requested cancellation distinct from a terminal run", () => {
   render(
     <Chat
@@ -60,7 +139,6 @@ it("sends with Enter, keeps Shift+Enter as a newline, and ignores IME confirmati
 it.each([
   { message: "   ", pending: false, runs: [], error: null },
   { message: "hello", pending: true, runs: [], error: null },
-  { message: "hello", pending: false, active: true, error: null },
   { message: "hello", pending: false, runs: [], error: "SessionNotFound" },
 ])(
   "does not send with Enter when submission is unavailable: %j",
@@ -71,7 +149,7 @@ it.each([
       <Chat
         conversation={conversation}
         projectName="rei"
-        runs={state.active ? [run] : []}
+        runs={state.runs}
         pending={state.pending}
         error={state.error}
         onSend={send}

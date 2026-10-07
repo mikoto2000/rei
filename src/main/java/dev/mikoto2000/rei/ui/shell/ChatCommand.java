@@ -37,6 +37,10 @@ public class ChatCommand implements Runnable {
 
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
   private String[] prompts;
+  @picocli.CommandLine.Option(names="--mode",defaultValue="EXCLUSIVE",description="EXCLUSIVE / CONVERSATION / READ_ONLY")
+  private dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode;
+  @picocli.CommandLine.Option(names="--run",description="指定Runへ追加指示を送る（独立Runは作成しない）")
+  private String targetRun;
 
   public ChatCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
       CommandCancellationService cancellationService, ChatResponseNarrator chatResponseNarrator,
@@ -70,9 +74,15 @@ public class ChatCommand implements Runnable {
   @Override
   public void run() {
     if (conversations != null) {
-      conversations.submit(String.join(" ", prompts));
+      if(targetRun!=null) {
+        if(mode!=dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE || !conversations.intervene(targetRun,String.join(" ",prompts)))
+          throw new IllegalArgumentException("Target Run is unavailable for guidance");
+      } else if(mode==null || mode==dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)conversations.submit(String.join(" ",prompts));
+      else conversations.submit(String.join(" ", prompts),mode);
       return;
     }
+    if(targetRun!=null || mode!=null && mode!=dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)
+      throw new IllegalArgumentException("Concurrent conversation router is unavailable");
     chatResponseNarrator.reset();
     ChatExecutionResult result = chatExecutionService.execute(String.join(" ", prompts));
     if (result.success()) {

@@ -26,6 +26,10 @@ async fn setup() -> (tempfile::TempDir, Application, String, Arc<AtomicUsize>) {
     let posts = Arc::new(AtomicUsize::new(0));
     let count = posts.clone();
     let router = Router::new()
+        .route("/api/v1/runs/long-task/input", post(|Json(body):Json<Value>| async move {
+            assert_eq!(body, json!({"projectId":"server-project","sessionId":"remote","message":"guidance"}));
+            StatusCode::ACCEPTED
+        }))
         .route("/api/v1/sessions", get(|| async { Json(json!({"items":[metadata("remote")],"nextCursor":null})) }))
         .route("/api/v1/sessions/{id}", get(|Path(id):Path<String>| async move {
             if id == "missing" { (StatusCode::NOT_FOUND, Json(json!({}))) }
@@ -35,6 +39,7 @@ async fn setup() -> (tempfile::TempDir, Application, String, Arc<AtomicUsize>) {
         .route("/api/v1/chat", post(move |Json(body):Json<Value>| { let count=count.clone(); async move {
             count.fetch_add(1,Ordering::SeqCst);
             assert_eq!(body["projectId"], "server-project"); assert_eq!(body["sessionId"], "remote");
+            if body["message"] == "question" { assert_eq!(body["mode"], "CONVERSATION"); }
             if body["message"] == "conflict" { return (StatusCode::CONFLICT, Json(json!({}))); }
             if body["message"] == "gone" { return (StatusCode::NOT_FOUND, Json(json!({}))); }
             (StatusCode::ACCEPTED,Json(json!({"runId":"r","turnId":"r","sessionId":"remote"})))
@@ -57,6 +62,59 @@ async fn setup() -> (tempfile::TempDir, Application, String, Arc<AtomicUsize>) {
     app.set_credential(&server, Secret::new("key".into()))
         .unwrap();
     (dir, app, server, posts)
+}
+#[tokio::test]
+async fn guidance_uses_the_selected_run_owner_without_creating_a_chat() {
+    let (_dir, app, server, posts) = setup().await;
+    let c = app.resume_session(&server, "remote").await.unwrap();
+    app.runs
+        .register(Projection::new(
+            &server,
+            &c.local_id,
+            "server-project",
+            ChatReceipt {
+                run_id: "long-task".into(),
+                session_id: "remote".into(),
+                turn_id: "long-task".into(),
+            },
+            "implementation",
+        ))
+        .unwrap();
+    app.intervene(&server, "long-task", "guidance")
+        .await
+        .unwrap();
+    assert_eq!(posts.load(Ordering::SeqCst), 0);
+    assert_eq!(app.runs.all().len(), 1);
+}
+#[tokio::test]
+async fn active_run_does_not_block_another_run_in_the_same_session() {
+    let (_dir, app, server, posts) = setup().await;
+    let c = app.resume_session(&server, "remote").await.unwrap();
+    app.runs
+        .register(Projection::new(
+            &server,
+            &c.local_id,
+            "server-project",
+            ChatReceipt {
+                run_id: "long-task".into(),
+                session_id: "remote".into(),
+                turn_id: "long-task".into(),
+            },
+            "implementation",
+        ))
+        .unwrap();
+    let consultation = app
+        .submit_mode(&c.local_id, "question", RunMode::Conversation)
+        .await
+        .unwrap();
+    assert_eq!(consultation.run_id, "r");
+    assert_eq!(consultation.mode, RunMode::Conversation);
+    assert_eq!(posts.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        app.runs.get(&server, "long-task").unwrap().status,
+        RunStatus::Queued
+    );
+    assert_eq!(app.runs.all().len(), 2);
 }
 #[tokio::test]
 async fn remote_session_discovery_resume_and_sse_use_existing_run_manager() {

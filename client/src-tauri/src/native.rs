@@ -298,14 +298,24 @@ fn conversation_delete(app: App<'_>, conversation_id: String) -> Result<()> {
     app.delete_conversation(&conversation_id)
 }
 #[tauri::command]
-async fn chat_submit(app: App<'_>, conversation_id: String, message: String) -> Result<RunView> {
-    app.submit(&conversation_id, &message).await
+async fn chat_submit(
+    app: App<'_>,
+    conversation_id: String,
+    message: String,
+    mode: Option<RunMode>,
+) -> Result<RunView> {
+    app.submit_mode(&conversation_id, &message, mode.unwrap_or_default())
+        .await
 }
 #[tauri::command]
 async fn run_get(app: App<'_>, server_id: String, run_id: String) -> Result<RunView> {
     app.runs
         .refresh(&server_id, &run_id, app.api(&server_id, true)?)
         .await
+}
+#[tauri::command]
+async fn run_input(app: App<'_>, server_id: String, run_id: String, message: String) -> Result<()> {
+    app.intervene(&server_id, &run_id, &message).await
 }
 #[tauri::command]
 async fn run_subscribe(app: App<'_>, server_id: String, run_id: String) -> Result<()> {
@@ -397,6 +407,7 @@ pub fn run() {
             conversation_select,
             conversation_delete,
             chat_submit,
+            run_input,
             run_get,
             run_subscribe,
             run_unsubscribe,

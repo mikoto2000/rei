@@ -16,6 +16,7 @@ use tokio::task::JoinHandle;
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunView {
+    pub mode: RunMode,
     pub cancel_requested: bool,
     pub revision: u64,
     pub server_id: String,
@@ -53,6 +54,7 @@ fn serialize_ownership<S: serde::Serializer>(
 impl From<&Projection> for RunView {
     fn from(p: &Projection) -> Self {
         Self {
+            mode: p.mode,
             cancel_requested: p.cancel_requested,
             revision: p.revision,
             server_id: p.server_id.clone(),

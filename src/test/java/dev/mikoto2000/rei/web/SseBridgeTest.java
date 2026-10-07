@@ -9,6 +9,13 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class SseBridgeTest {
+  @Test void recoveredUnknownRunReturnsReplayGapSoClientsFetchItsStatus() {
+    var registry=new RunRegistry(Clock.systemUTC());registry.register(RunRegistryTest.context("run"));
+    registry.transition("run",RunStatus.RUNNING,null);registry.transition("run",RunStatus.UNKNOWN,null);
+    try(var bridge=new SseBridge(new InMemoryAgentEventBus(),new RunService(registry),"")) {
+      assertThatThrownBy(()->bridge.connect("run",new Sink())).isInstanceOf(ReplayGapException.class);
+    }
+  }
   @Test void broadcastsShutdownToAllRunsAndDrainsBeforeBridgeCloses() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
     registry.register(RunRegistryTest.context("one"));

@@ -8,6 +8,7 @@ import {
   errorText,
   type Conversation,
   type Run,
+  type RunMode,
   type ConversationTurn,
 } from "../../entities/models";
 import type { HistoryState } from "../history/pagination";
@@ -18,7 +19,8 @@ interface Props {
   runs: Run[];
   pending: boolean;
   error: string | null;
-  onSend: (message: string) => Promise<boolean>;
+  onSend: (message: string, mode?: RunMode) => Promise<boolean>;
+  onInput?: (run: Run, message: string) => Promise<boolean>;
   onStop: (run: Run) => void;
   onContinue: () => void;
   onRefresh: (run: Run) => void;
@@ -37,6 +39,7 @@ export function Chat({
   pending,
   error,
   onSend,
+  onInput,
   onStop,
   onContinue,
   onRefresh,
@@ -48,10 +51,17 @@ export function Chat({
   onRefreshHistory,
 }: Props) {
   const [message, setMessage] = useState("");
+  const [mode, setMode] = useState<RunMode | "INTERVENTION">("EXCLUSIVE");
+  const [targetRun, setTargetRun] = useState("");
+  const inputTargets = runs.filter(
+    (r) => r.conversationId === conversation.localId && r.status === "RUNNING",
+  );
+  const inputTarget = inputTargets.find((r) => r.runId === targetRun);
   const submitDisabled =
     !canSubmit(conversation.localId, message, runs, pending) ||
     error === "SessionNotFound" ||
-    history?.error === "SessionNotFound";
+    history?.error === "SessionNotFound" ||
+    (mode === "INTERVENTION" && (!inputTarget || !onInput));
   return (
     <section className="chat-page">
       <header className="page-heading">
@@ -133,6 +143,7 @@ export function Chat({
                   <span className={`status ${run.status.toLowerCase()}`}>
                     {run.status}
                   </span>
+                  {run.mode && <span className="pill">{run.mode}</span>}
                   <span className="muted">{run.streamState}</span>
                 </div>
                 {run.incomplete && (
@@ -178,7 +189,14 @@ export function Chat({
                     ))}
                   </details>
                 )}
-                {run.failure && <p className="notice">Run が失敗しました。</p>}
+                {run.status === "UNKNOWN" && (
+                  <p className="notice">
+                    実行結果が不明です。自動では再実行しません。保存済み状態を確認してから再開してください。
+                  </p>
+                )}
+                {run.failure && run.status !== "UNKNOWN" && (
+                  <p className="notice">Run が失敗しました。</p>
+                )}
                 {run.error && <p className="muted">{errorText(run.error)}</p>}
                 <div className="run-actions">
                   <small>Run {run.runId.slice(0, 8)}</small>
@@ -255,9 +273,52 @@ export function Chat({
           onSubmit={async (e) => {
             e.preventDefault();
             if (submitDisabled) return;
-            if (await onSend(message)) setMessage("");
+            if (
+              await (mode === "INTERVENTION"
+                ? onInput!(inputTarget!, message)
+                : mode === "EXCLUSIVE"
+                  ? onSend(message)
+                  : onSend(message, mode))
+            )
+              setMessage("");
           }}
         >
+          <label htmlFor="run-mode">送信方法</label>
+          <select
+            id="run-mode"
+            value={mode}
+            onChange={(e) =>
+              setMode(e.target.value as RunMode | "INTERVENTION")
+            }
+          >
+            <option value="EXCLUSIVE">作業（同じProjectでは順番に実行）</option>
+            <option value="CONVERSATION">
+              相談（Toolを使わず並行して回答）
+            </option>
+            <option value="READ_ONLY">
+              読み取り（書き込みせず並行して調査）
+            </option>
+            {onInput && (
+              <option value="INTERVENTION">実行中Runへの追加指示</option>
+            )}
+          </select>
+          {mode === "INTERVENTION" && (
+            <>
+              <label htmlFor="input-run">追加指示の対象Run</label>
+              <select
+                id="input-run"
+                value={targetRun}
+                onChange={(e) => setTargetRun(e.target.value)}
+              >
+                <option value="">対象Runを選択</option>
+                {inputTargets.map((r) => (
+                  <option key={r.runId} value={r.runId}>
+                    {r.runId} — {r.prompt.slice(0, 80)}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
           <label className="sr-only" htmlFor="message">
             メッセージ
           </label>

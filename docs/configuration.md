@@ -460,6 +460,10 @@ rei:
 
 ## Agent Runの受付上限
 
+長時間Run中の相談・READ並行・対象Runへの追加指示は `rei.conversation.concurrent-enabled=true`
+で明示的に有効化する（既定false）。期限は `rei.conversation.timeout=PT5M`。
+API・Shell・Native・状態保存の詳細は[並行会話Run](concurrent-conversation-runs.md)を参照。
+
 既存 `ProjectRunQueue` の受付は、実行中を含めて同Project最大64 Run、
 全Project合計最大256 Runに制限される。この上限は固定の安全上限で、追加設定は不要。
 通常Chat、Goal、Scheduler、およびHTTPのBackground operationは同じqueueを使う。

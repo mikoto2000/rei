@@ -134,3 +134,32 @@ Native/Rust・React・typecheckは未実施（この変更はJavaとdocsのみ�
 依頼全体は未完了。P1のREAD並行実行・Native入力、P2 Task projection、P3共通Artifactから
 順に実装する必要があり、開始時監査表の残りも未完了である。
 今回の受付上限とharness修正を全Phase完成へ読み替えない。
+
+## Phase 1: 同時会話Runの実装
+
+独立branch `codex/concurrent-conversation-runs`。既存Run/Session/ProjectRunQueueを拡張し、
+既定OFFの `rei.conversation.concurrent-enabled` を追加した。作業(EXCLUSIVE)、
+相談(CONVERSATION)、読み取り(READ_ONLY)、Run IDを選んだ追加指示をShell/HTTP/Nativeへ接続した。
+READは既知の読み取りToolだけを実行し、権限設定によるWRITEの読み替えを拒否する。
+相談はToolなし。共有memory/作業状態を更新せず、完了済み履歴を開始時に固定する。
+同ProjectのWRITE排他、待機WRITEの公平性、受付上限、共通予算、個別取消を維持した。
+制限付きRunは全実行期限を持ち、期限切れと取消を区別する。
+
+SQLite Run metadataとCheckpoint modeを保存する。PIDと開始時刻による所有権確認、
+状態更新CAS、受付失敗rollback、別JVMの強制終了後UNKNOWN復元を確認した。
+受付済み処理を自動再実行しない。イベント履歴を失った終端RunもSSE replay gapで状態取得へ戻す。
+操作と設定は [同時会話Run](concurrent-conversation-runs.md) を参照。
+Taskの長期一覧・Native再起動後の一覧取得はP2 projectionとの統合で完成させる。
+この段階でPhase 1全体やP2/P3の完成とは扱わない。
+
+TDDでqueue競合/公平性/取消、権限拒否、個別mailbox、共有状態分離、履歴固定、
+期限切れ、永続所有権、HTTP受付/部分失敗/Session終了/再起動、Native/React入力を検証した。
+初回Java全体は627 suites / 3489 tests、failure 1/error 8/skipped 0で失敗した。
+既定OFF時の不要なDataSource必須化と、待機executor拒否の例外伝播を修正し、
+該当7 suitesの回帰を成功させた。実HTTP再起動試験で終端SSE待機も修正した。
+2回目Java全体は628 suites / 3490 tests、failure 0/error 1/skipped 0。
+終端状態とイベント保存の競合を、再起動由来の履歴消失と区別できていないSSE回帰を修正した。
+3回目Java全体は628 suites / 3490 tests、failure/error/skipped各0で成功した。
+実行はJDK25、`mvnw.cmd -q -Pfull test`。全体Redを成功扱いせず、修正後の結果を確認した。
+Native Rust全体は108 tests成功、React全体は23 suites / 87 tests成功。
+React typecheckとformat、Rust formatも成功。有料モデル・外部サービス書き込みは未実施。

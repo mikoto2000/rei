@@ -16,9 +16,13 @@ public class ToolPermissionPolicy {
   public ToolPermissionPolicy(ToolPermissionProperties properties) {this.properties=properties;}
   public boolean enforced(){return properties.enabled();}
   public Set<ActionCapability> capabilities(String tool) {
-    if(Set.of("listClaudeCodeReviews","getClaudeCodeReview").contains(tool)&&!properties.capabilities().containsKey(tool))return Set.of(ActionCapability.READ);
     var configured=properties.capabilities().get(tool);
     if(configured!=null) return configured;
+    return intrinsicCapabilities(tool);
+  }
+  /** Parallel authority uses known intrinsic behavior, never an administrator relabeling of arbitrary commands. */
+  public static Set<ActionCapability> intrinsicCapabilities(String tool) {
+    if(Set.of("listClaudeCodeReviews","getClaudeCodeReview").contains(tool))return Set.of(ActionCapability.READ);
     if(READ.contains(tool)) return Set.of(ActionCapability.READ);
     if(NETWORK_READ.contains(tool)) return Set.of(ActionCapability.NETWORK_READ);
     if("deliverAttention".equals(tool))return Set.of(ActionCapability.NETWORK_WRITE,ActionCapability.EXTERNAL_SIDE_EFFECT);
@@ -29,6 +33,9 @@ public class ToolPermissionPolicy {
       return Set.of(ActionCapability.LOCAL_WRITE,ActionCapability.DESTRUCTIVE);
     // Arbitrary commands and unknown/MCP callbacks may exercise any capability.
     return Set.copyOf(EnumSet.allOf(ActionCapability.class));
+  }
+  public static boolean intrinsicallyReadOnly(String tool) {
+    return intrinsicCapabilities(tool).stream().allMatch(c -> c == ActionCapability.READ || c == ActionCapability.NETWORK_READ);
   }
   public PermissionDecision evaluate(String tool) {
     if(!properties.enabled()) return PermissionDecision.AUTO_APPROVE;

@@ -5,8 +5,14 @@ import java.util.Objects;
 
 /** Identity and location are captured before dispatch, never resolved at completion. */
 public record AgentRunContext(String runId, String conversationId, Path projectRoot, String projectId,
-    RequestSource requestSource) {
+    RequestSource requestSource, Mode mode) {
   public enum RequestSource { SHELL, WEB }
+  public enum Mode { EXCLUSIVE, READ_ONLY, CONVERSATION }
+
+  public AgentRunContext(String runId, String conversationId, Path projectRoot, String projectId,
+      RequestSource requestSource) {
+    this(runId, conversationId, projectRoot, projectId, requestSource, Mode.EXCLUSIVE);
+  }
 
   public AgentRunContext(String runId, String conversationId, Path projectRoot, String projectId) {
     this(runId, conversationId, projectRoot, projectId, RequestSource.SHELL);
@@ -21,6 +27,7 @@ public record AgentRunContext(String runId, String conversationId, Path projectR
     Objects.requireNonNull(runId);
     Objects.requireNonNull(conversationId);
     Objects.requireNonNull(requestSource);
+    if (mode == null) mode = Mode.EXCLUSIVE; // Legacy persisted ownership records have no mode.
     projectRoot = Objects.requireNonNull(projectRoot).toAbsolutePath().normalize();
   }
 }

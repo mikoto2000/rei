@@ -9,6 +9,13 @@ import dev.mikoto2000.rei.event.*;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 
 class RunExecutionContextTest {
+  @Test void restrictedModeCannotBypassPermissionWhenNoGuardIsInstalled() {
+    var context=new RunExecutionContext("run",new OutputLimitRunBudget(1,10),new ProgressEvaluator(Path.of(".")),new AgentEventFactory(Clock.systemUTC()),event->{});
+    context.setRunContext(new dev.mikoto2000.rei.core.chat.AgentRunContext("run","session",Path.of("."),"A",
+        dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.WEB,dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY));
+    assertThatThrownBy(()->context.checkToolPermission("runCommand","{}")).isInstanceOf(SecurityException.class);
+    assertThatCode(()->context.checkToolPermission("readMultiFile","{}")).doesNotThrowAnyException();
+  }
   @Test void mixedNoProgressActionsStillCountAndTerminalObservationIsProgressOnce() {
     var context=new RunExecutionContext("run",new OutputLimitRunBudget(1,10),new ProgressEvaluator(Path.of(".")),new AgentEventFactory(Clock.systemUTC()),event->{});
     context.beginIteration();
