@@ -786,3 +786,18 @@ cancel/共有予算停止はfallbackしない。BM25自体の障害は再実行�
 TDD追加のbaseline失敗試験は二重実行でRed、provider失敗分類とfallback実行を分けGreen。
 DB/config/default検索変更なし。provider既定必須化・自動モデル呼出・学習品質保証なし。
 関連5 suites / 42 tests成功、failure/error/skipped各0。Phase7末に全体回帰する。
+Sparse Git receipt: feature `6072fb3d`、main merge `f35a5adc`、両方push済み。
+統合後関連5 suites / 42 tests、failure/error/skipped各0。
+
+## Phase 7: SubAgent semantic validation quality evaluation
+
+branch `codex/subagent-semantic-quality-evaluation`、fetch済みmain `f35a5adc`。
+既存tool-free SubAgentSemanticValidatorを使う匿名fixture評価、棄権を分離した混同行列、
+任意の別モデルagreementを追加する。有料モデルは自動実行しない。
+匿名5分類fixture、TP/FP/FN/TN/abstention/uncertain decision/coverageと任意second-judge agreement。
+実SubAgentSemanticValidatorへtask/answer/captured evidenceのみ送り、labelは渡さない。
+Tool-free1call、共有reservation、10秒model/30秒評価、bounded128cases、cancel/errorは未完了扱い。
+invalid verdictは棄権、binary validatorのnative abstention不在も評価仕様に明示。
+TDD未実装API Red→Green、実validator fixtureを含む関連3 suites / 17 tests成功、各0。
+出力target/evaluation/subagent-semantic-quality.json。実モデル呼出0、truthVerified=false。
+DB/config/default runtime変更なし。Phase7末に全体回帰。仕様subagent-semantic-quality-evaluation.md。
