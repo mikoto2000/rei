@@ -291,6 +291,8 @@ public class ExternalConfigFileService {
             persistent-index-enabled: ${REI_REPOSITORY_MAP_PERSISTENT_INDEX_ENABLED:false}
           predicates:
             enabled: ${REI_PREDICATES_ENABLED:false}
+          reflection:
+            lessons-enabled: ${REI_REFLECTION_LESSONS_ENABLED:false}
           subagents:
             durable-enabled: ${REI_SUBAGENTS_DURABLE_ENABLED:false}
             dag-enabled: ${REI_SUBAGENTS_DAG_ENABLED:false}

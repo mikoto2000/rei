@@ -13,6 +13,16 @@ public class ReflectionCommand implements java.util.concurrent.Callable<Integer>
   private RunReflectionRepository runReflections;
   private RunReflectionService runService;
   private VerifiedReflectionMemoryService promotion;
+  private ReflectionLessonService lessons;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setLessons(ReflectionLessonService lessons){this.lessons=lessons;}
+  @Option(names="--revision",defaultValue="-1") long revision;
+  @Option(names="--evidence-hash") String evidenceHash;
+  @Option(names="--note") String note;
+  @Option(names="--source-kind",defaultValue="RUN") String sourceKind;
+  @Option(names="--kind",defaultValue="FAILURE_PATTERN") ReflectionLessonService.Kind kind;
+  @Option(names="--evidence",split=",") java.util.List<String> evidence;
+  @Option(names="--observation") String observation;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   public void setPromotion(VerifiedReflectionMemoryService promotion){this.promotion=promotion;}
   @org.springframework.beans.factory.annotation.Autowired(required=false)
@@ -38,6 +48,15 @@ public class ReflectionCommand implements java.util.concurrent.Callable<Integer>
         case "run" -> runReflections.get(project,requiredId());
         case "collect-run" -> runService.collect(project,projects.currentSessionId(),requiredId());
         case "promote" -> {if(promotion==null)throw new IllegalStateException("Verified memory promotion is unavailable");yield promotion.promote(project,requiredId());}
+        case "lessons" -> lessonService().list(lessonOwner());
+        case "lesson" -> lessonService().get(lessonOwner(),requiredId());
+        case "lesson-observe" -> lessonService().observe(lessonOwner(),sourceKind,requiredId());
+        case "lesson-observe-correction" -> lessonService().observeCorrection(lessonOwner(),requiredId(),observation,note);
+        case "lesson-propose" -> lessonService().propose(lessonOwner(),kind,note,evidence);
+        case "lesson-validate" -> lessonService().validate(lessonOwner(),requiredId(),revision,evidenceHash,note);
+        case "lesson-counterexample" -> lessonService().counterexample(lessonOwner(),requiredId(),revision,observation,note);
+        case "lesson-correct" -> lessonService().correct(lessonOwner(),requiredId(),revision,note);
+        case "lesson-forget" -> lessonService().forget(lessonOwner(),requiredId(),revision);
         default -> throw new IllegalArgumentException("Use /reflection list|show|collect|runs|run|collect-run|promote [id]");
       };
       writer.println(dev.mikoto2000.rei.event.CredentialRedactor.redact(String.valueOf(result)));return 0;
@@ -45,4 +64,6 @@ public class ReflectionCommand implements java.util.concurrent.Callable<Integer>
     finally {writer.flush();}
   }
   private String requiredId(){if(id==null||id.isBlank())throw new IllegalArgumentException("Reflection ID or Goal ID is required");return id;}
+  private ReflectionLessonService lessonService(){if(lessons==null)throw new IllegalStateException("Reflection lessons are disabled");return lessons;}
+  private dev.mikoto2000.rei.core.chat.AgentRunContext lessonOwner(){var project=projects.currentContext();return new dev.mikoto2000.rei.core.chat.AgentRunContext("human-reflection",projects.currentSessionId(),project.root(),project.id());}
 }
