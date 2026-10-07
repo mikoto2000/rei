@@ -27,6 +27,8 @@ Managed administrator policy remains part of native CLI behavior; Rei does not c
 Use `requestClaudeCodeContinueReview` only for an explicit current request to continue a Claude review, supplying the Rei review ID.
 Opt-in persistence selects a fresh UUID and a private stable cwd outside the source repository, with a source-root hash marker.
 Continuation uses the saved UUID rather than arbitrary transcript paths or a session picker. The CLI must confirm the selected UUID.
+Storage resolves existing ancestors before creating directories, including missing suffixes behind junctions/symlinks.
+A storage alias into source is rejected before filesystem writes or CLI probes; the final canonical base and new cwd are rechecked.
 Rei retains only the UUID in review history; native transcript format is not parsed or copied into Rei memory.
 Native persistence can retain previous bounded snapshots in Claude's own history. At most 128 private cwd markers are retained;
 perform deliberate operator cleanup rather than automatically evicting potentially unknown attempts.

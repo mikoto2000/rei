@@ -395,3 +395,17 @@ Java全体661 suites / 3573 tests、failure/error/skipped各0で成功。
 Native全体120 tests、React25 suites / 99 testsとtypecheck成功。
 Durable childの最低要件をdeterministic model/SQLite/実Gitと公開ToolでIMPLEMENTED。
 DAG/consensusは別機能branchで続ける。実モデル品質を検証済みと読み替えない。
+
+Durable child Git receipt: feature `68271a40`、main merge `bc0a0b470584b21ef9e12d67c755dd57e8eb36f7`、両方push済み。
+統合後Java関連25 suites / 269 tests、Native120 tests、React25 suites / 99 testsとtypecheck成功、failure/error/skipped各0。
+
+## Claude native storage boundaryの追加確認
+
+branch `codex/claude-native-storage-boundary`、fetch済み基準main `bc0a0b47`。
+DAGに先立ち、native private storageの既存／未作成ディレクトリがjunction等を介してsource rootへ解決される場合を検証する。
+snapshot reviewのsource不変境界を先に完成させるための順序変更。
+
+実Windows junctionで2ケースのRedを確認。既存aliasにはUUIDディレクトリ、未作成suffixにはsessionsディレクトリがsource内へ作成された。
+既存ancestorを作成前にcanonical解決し、source root内へのaliasを拒否する。private base/cwdも作成時に再照合する。
+修正後、実junctionの両ケースはsource不変・CLI呼出し0で成功し、Claude継続/修正案/隔離実装の関連6 suites / 34 testsが成功。
+failure/error/skipped各0。小さなJava filesystem境界修正のため関連回帰を実施し、直前の全体661 suites / 3573 testsとは区別する。
