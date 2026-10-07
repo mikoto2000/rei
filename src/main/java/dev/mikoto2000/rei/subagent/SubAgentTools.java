@@ -13,6 +13,16 @@ public class SubAgentTools {
   private final SubAgentRunner runner;
   private final SubAgentRegistry registry;
   private ParallelSubAgentDelegator parallel;
+  private org.springframework.beans.factory.ObjectProvider<SubAgentDagService> graphs;
+  @org.springframework.beans.factory.annotation.Autowired
+  void graphService(org.springframework.beans.factory.ObjectProvider<SubAgentDagService> graphs){this.graphs=graphs;}
+  private SubAgentDagService graph(){var service=graphs==null?null:graphs.getIfAvailable();if(service==null)throw new IllegalStateException("Durable child DAG is disabled");return service;}
+  @Tool(description="Execute an explicitly requested bounded child dependency graph. At most 16 nodes and 2 workers; fan-in receives saved result hashes. Shares the current Run/Goal budget; opt-in required.")
+  public SubAgentDagService.Outcome delegateTaskGraph(SubAgentDagSpec spec,ToolContext context){return graph().submit(execution(context),spec);}
+  @Tool(description="Read a durable child graph receipt for the current human Project/root/session. Never dispatch or retry a child.")
+  public SubAgentDagService.Outcome getSubAgentGraph(String graphId,ToolContext context){return graph().get(execution(context).runContext(),graphId);}
+  @Tool(description="Only for exact current human request: subagent graph resume GRAPH_ID REVISION. Resume remaining children with original budget and current revision; never replay unknown Tool side effects.")
+  public SubAgentDagService.Outcome resumeSubAgentGraph(String graphId,long revision,ToolContext context){return graph().resume(execution(context),graphId,revision);}
   @org.springframework.beans.factory.annotation.Autowired
   void parallelDelegator(ParallelSubAgentDelegator parallel) { this.parallel=parallel; }
   public SubAgentTools(SubAgentRunner runner, SubAgentRegistry registry) { this.runner = runner; this.registry = registry; }

@@ -13,6 +13,19 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ParallelSubAgentDelegatorTest {
+  @Test void dagFailFastCancelsSlowSiblingEvenWhenItPrecedesFailure()throws Exception {
+    var interrupted=new CountDownLatch(1);var started=new CountDownLatch(1);
+    try(var delegator=new ParallelSubAgentDelegator(mock(SubAgentRunner.class),registry(),new CommandCancellationService(),Duration.ofSeconds(3))) {
+      long begin=System.nanoTime();
+      var batch=delegator.delegate(requests(2),null,(request,budget)->{
+        if(request.id().equals("item-0")){started.countDown();try{new CountDownLatch(1).await();}catch(InterruptedException e){interrupted.countDown();}return completed();}
+        try{assertTrue(started.await(1,TimeUnit.SECONDS));}catch(InterruptedException e){throw new RuntimeException(e);}
+        return new SubAgentResult("reviewer","failed",SubAgentResult.Status.FAILED,"invalid result",Instant.now(),Instant.now());
+      },Duration.ofSeconds(3),true);
+      assertEquals(ParallelSubAgentDelegator.Status.FAILED,batch.status());assertTrue(interrupted.await(1,TimeUnit.SECONDS));
+      assertTrue(System.nanoTime()-begin<Duration.ofSeconds(2).toNanos());
+    }
+  }
   @TempDir Path directory;
   SubAgentRegistry registry() throws Exception {
     Files.writeString(directory.resolve("reviewer.yaml"),SubAgentConfigurationTest.yaml("reviewer"));

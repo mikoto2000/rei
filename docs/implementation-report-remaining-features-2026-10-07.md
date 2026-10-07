@@ -409,3 +409,31 @@ snapshot reviewのsource不変境界を先に完成させるための順序変�
 既存ancestorを作成前にcanonical解決し、source root内へのaliasを拒否する。private base/cwdも作成時に再照合する。
 修正後、実junctionの両ケースはsource不変・CLI呼出し0で成功し、Claude継続/修正案/隔離実装の関連6 suites / 34 testsが成功。
 failure/error/skipped各0。小さなJava filesystem境界修正のため関連回帰を実施し、直前の全体661 suites / 3573 testsとは区別する。
+
+Claude storage Git receipt: feature `ec95783f`、main merge `51380754f0321f6bd0697117928cd6e5e8566d53`、両方push済み。
+統合後もJava関連6 suites / 34 tests、failure/error/skipped各0で成功。
+
+## Phase 3: Durable child DAG
+
+branch `codex/durable-subagent-dag`、fetch済み基準main `51380754`。
+既存child runner/checkpointとbounded parallel workerを再利用し、Waiting Dependencyとは別の実行依存graphを追加する。
+cycle/依存結果/部分継続/共有予算/再起動のRedから進める。
+
+DAG実装: 既存SQLite child ledgerへGRAPH/CHILD所属とpending model予約数を追加し、全ノードを単一transactionでadmit。
+16 nodes / 2 workers / 120秒以内、cycle/input制限、FAIL_FASTと独立枝の部分継続、SUCCESSだけの依存解放、
+fan-inの保存child/run/result hashを実装。共有Run/Goalと元graphの消費予算を再開後も保持する。
+新poolやWaiting条件の別実装は追加しない。Tool接続はdelegateTaskGraph/getSubAgentGraph/resumeSubAgentGraph。
+既定OFF、EXCLUSIVE human Project/root/session、実ユーザー要求・revision・agent/Git baseline、子所属と結果参照を照合する。
+通常child resumeでgraph memberを個別実行できない。UNKNOWN Toolは個別reconcile前に自動実行しない。
+
+TDD: spec欠落、共有予約booleanによる未報告usage消失、DAG service欠落、別graphの計画差し替え、
+fail-fastの兄弟取消、wave境界での親取消receipt欠落についてRedを確認し修正した。
+SQLite再生成後の期限切れchild再開、元予算保持、部分成功/BLOCKED、fan-in hash、ownership/revision、
+容量超過時の全体rollback、既存bounded poolのorder/timeout/cancelもローカルfixtureで確認。
+関連Java24 suites / 277 tests、Native120 tests、React25 suites / 99 testsとtypecheck成功、failure/error/skipped各0。
+Java全体回帰、Git commit/merge receiptは検証後に追記する。実モデルは呼び出していない。
+API/config/DB/security制限はdurable-subagent-dag.mdを参照。
+
+DAG Java全体回帰: 663 suites / 3589 tests、failure/error/skipped各0で成功。
+Claude native storage追加修正もこの全体回帰に含む。Native120、React25/99とtypecheck成功。
+今回のbounded child DAG要件は実装済み。ConsensusとPriority 8以降は引き続き実装する。

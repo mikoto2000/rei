@@ -16,6 +16,14 @@ class DurableSubAgentRepositoryTest {
     source=new SQLiteDataSource();source.setUrl("jdbc:sqlite:"+directory.resolve("children.db"));
     parent=new AgentRunContext("parent","session",Files.createDirectory(directory.resolve("project")),"project");
   }
+  @Test void graphAdmissionRollsBackAllPreparedChildrenWhenCapacityIsExceeded() {
+    var repository=new DurableSubAgentRepository(source,Clock.systemUTC(),2048);
+    String graph=UUID.randomUUID().toString();
+    assertThrows(IllegalArgumentException.class,()->repository.atomic(()->{
+      repository.createPrepared(parent,graph,"GRAPH",null,"rei-dag","graph",null,4,0,"baseline");
+      repository.createPrepared(parent,UUID.randomUUID().toString(),"CHILD",graph,"reviewer","inspect","x".repeat(2000),2,0,"baseline");return null;
+    }));assertTrue(repository.list(parent,0,10).isEmpty());
+  }
   @Test void completedResultAndConsumedBudgetSurviveRepositoryRestartAndRemainOwnerScoped()throws Exception {
     var repository=new DurableSubAgentRepository(source,Clock.systemUTC());
     var saved=repository.create(parent,"reviewer","inspect A",null,3,1000,"baseline");
@@ -77,5 +85,12 @@ class DurableSubAgentRepositoryTest {
     var repository=new DurableSubAgentRepository(source,Clock.systemUTC());var saved=repository.create(parent,"reviewer","inspect",null,3,1000,"baseline");
     repository.claim(parent,saved.id(),0,"run");assertTrue(repository.reserve(saved.id(),"run"));repository.tokens(saved.id(),"run",0);
     assertTrue(repository.get(parent,saved.id()).usageUnknown());assertFalse(repository.reserve(saved.id(),"run"));
+  }
+  @Test void parallelReservationsRemainPendingUntilEveryUsageReportArrives() {
+    var repository=new DurableSubAgentRepository(source,Clock.systemUTC());var saved=repository.create(parent,"reviewer","inspect",null,4,1000,"baseline");
+    repository.claim(parent,saved.id(),0,"run");assertTrue(repository.reserve(saved.id(),"run"));assertTrue(repository.reserve(saved.id(),"run"));
+    repository.tokens(saved.id(),"run",100);repository.ownerLost(saved.id(),"run");
+    var unknown=repository.get(parent,saved.id());assertEquals(2,unknown.consumedCalls());assertTrue(unknown.usageUnknown());
+    assertThrows(IllegalArgumentException.class,()->repository.claim(parent,saved.id(),unknown.revision(),"retry"));
   }
 }
