@@ -4,7 +4,8 @@ import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.core.*;
 
 /** A fixed scalar comparison, never an executable expression. */
-record HttpJsonCondition(int status,String pointer,JsonNode value) {
+record HttpJsonCondition(int status,String pointer,JsonNode value,dev.mikoto2000.rei.core.predicate.DeclarativePredicate predicate) {
+  HttpJsonCondition(int status,String pointer,JsonNode value){this(status,pointer,value,null);}
   private static final ObjectMapper JSON=com.fasterxml.jackson.databind.json.JsonMapper.builder(
       JsonFactory.builder().streamReadConstraints(StreamReadConstraints.builder().maxNestingDepth(32).maxStringLength(65536).maxNumberLength(64).build())
           .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build())
@@ -13,7 +14,10 @@ record HttpJsonCondition(int status,String pointer,JsonNode value) {
     try {
       if(text==null||text.length()>4096)throw new IllegalArgumentException();
       var node=JSON.readTree(text);
-      if(node==null||!node.isObject()||node.size()!=3||!node.has("status")||!node.has("pointer")||!node.has("value"))throw new IllegalArgumentException();
+      if(node==null||!node.isObject()||!node.has("status"))throw new IllegalArgumentException();
+      var code=node.get("status");if(!code.isIntegralNumber()||!code.canConvertToInt()||code.intValue()<100||code.intValue()>599)throw new IllegalArgumentException();
+      if(node.has("predicate")){if(node.size()!=2)throw new IllegalArgumentException();return new HttpJsonCondition(code.intValue(),null,null,dev.mikoto2000.rei.core.predicate.DeclarativePredicate.parse(node.get("predicate").toString()));}
+      if(node.size()!=3||!node.has("pointer")||!node.has("value"))throw new IllegalArgumentException();
       var status=node.get("status");var pointer=node.get("pointer");var value=node.get("value");
       if(!status.isIntegralNumber()||!status.canConvertToInt()||status.intValue()<100||status.intValue()>599||!pointer.isTextual()||!value.isValueNode())throw new IllegalArgumentException();
       String path=pointer.textValue();

@@ -289,6 +289,8 @@ public class ExternalConfigFileService {
               enabled: ${REI_IMAGE_PROMPT_ENHANCEMENT_ENABLED:true}
           repository-map:
             persistent-index-enabled: ${REI_REPOSITORY_MAP_PERSISTENT_INDEX_ENABLED:false}
+          predicates:
+            enabled: ${REI_PREDICATES_ENABLED:false}
           subagents:
             durable-enabled: ${REI_SUBAGENTS_DURABLE_ENABLED:false}
             dag-enabled: ${REI_SUBAGENTS_DAG_ENABLED:false}

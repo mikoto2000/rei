@@ -38,7 +38,7 @@ public class GoalLoopService {
   /** Human-facing dispatch only, never a model Tool or automatic startup restoration. */
   public synchronized GoalRepository.Goal run(String project,String id) {
     if(!permissions.enabled())throw new IllegalStateException("Enable rei.tool-permission.enabled before running a Goal");
-    var goal=goals.get(project,id);gateway.validate(goal);
+    var goal=goals.get(project,id);gateway.validate(goal);verifier.requireEnabledPredicates(goal);
     if(!goal.status().equals("RUNNING")&&!goal.status().equals("CANCELLED")&&verifier.verify(goal).satisfied())return verify(project,id).goal();
     var claim=goals.claim(project,id);next(claim);return goals.get(project,id);
   }

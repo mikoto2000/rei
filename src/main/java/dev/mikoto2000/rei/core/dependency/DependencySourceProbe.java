@@ -39,6 +39,11 @@ public class DependencySourceProbe implements DependencyProbe {
         try {boolean changed=!fileBaseline(root,spec.target()).equals(spec.expected());yield new DependencyObservation(entry.id(),changed?DependencyState.COMPLETED:DependencyState.WAITING,changed?"file_changed":"file_unchanged");}
         catch(IllegalStateException unavailable){yield new DependencyObservation(entry.id(),DependencyState.BLOCKED,"file_snapshot_unavailable");}
       }
+      case FILE_JSON_PREDICATE -> {
+        var result=files.verify(root,new GoalRepository.FileCriterion(spec.target(),null,null,null,spec.expected()));
+        if(Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException();
+        yield new DependencyObservation(entry.id(),result.satisfied()?DependencyState.COMPLETED:result.reason().equals("predicate_mismatch")?DependencyState.WAITING:DependencyState.BLOCKED,result.reason());
+      }
       case GIT_STATE_CHANGED -> {
         try {boolean changed=!gitBaseline(root).equals(spec.expected());yield new DependencyObservation(entry.id(),changed?DependencyState.COMPLETED:DependencyState.WAITING,changed?"git_state_changed":"git_state_unchanged");}
         catch(IllegalStateException unavailable){yield new DependencyObservation(entry.id(),DependencyState.BLOCKED,"git_unavailable");}

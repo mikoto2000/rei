@@ -478,6 +478,9 @@ SubAgentの永続child checkpointは `REI_SUBAGENTS_DURABLE_ENABLED` で明示�
 任意judgeはさらに `REI_SUBAGENTS_CONSENSUS_JUDGE_ENABLED`（既定false）で有効にする。
 一致と正しさの区別、入力契約、共通予算は[SubAgent Consensus](subagent-consensus.md)を参照。
 
+Goal/Dependencyの宣言的JSON条件は `REI_PREDICATES_ENABLED`（既定false）で有効にする。
+version/schema、AND/OR/NOT/型比較/MATCH、UNKNOWNと各上限は[Declarative predicates](declarative-predicates.md)を参照。
+
 `rei.task-manager.enabled=true`（既定false）で認証済みHTTP/Nativeの横断Task一覧・個別操作を
 有効化する。設定、保存期間、復元と操作の詳細は[Task Manager](task-manager.md)を参照。
 
