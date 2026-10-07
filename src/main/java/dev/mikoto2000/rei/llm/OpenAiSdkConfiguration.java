@@ -34,6 +34,7 @@ public class OpenAiSdkConfiguration {
   OpenAiHttpClientBuilderCustomizer reiOpenAiHttpClientCustomizer(Environment environment) {
     String embeddingPath = environment.getProperty("spring.ai.openai.embedding.embeddings-path", "/v1/embeddings");
     return builder -> {
+      builder.interceptor(new ChatStreamTimeoutInterceptor());
       builder.interceptor(new ShowUiSdkRequestInterceptor());
       if (embeddingPath != null && !embeddingPath.isBlank() && !embeddingPath.equals("/v1/embeddings")) {
         builder.interceptor(chain -> {

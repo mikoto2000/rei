@@ -105,7 +105,9 @@ public class LlmModelProvider {
         .build();
     return OpenAiChatModel.builder()
         .options(options)
-        .httpClientBuilderCustomizer(builder -> builder.interceptor(new ShowUiSdkRequestInterceptor()))
+        .httpClientBuilderCustomizer(builder -> builder
+            .interceptor(new ChatStreamTimeoutInterceptor())
+            .interceptor(new ShowUiSdkRequestInterceptor()))
         .toolCallingManager(ToolCallingManager.builder()
             .observationRegistry(ObservationRegistry.NOOP)
             .build())
