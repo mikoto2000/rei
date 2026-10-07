@@ -456,6 +456,12 @@ rei:
 
 ## Claude Code 外部レビュー
 
+native session継続は `REI_CLAUDE_PERSIST_SESSIONS`、修正案→Change Setは
+`REI_CLAUDE_FIX_PROPOSALS_ENABLED`、並列reviewは `REI_CLAUDE_PARALLEL_REVIEW_ENABLED`、
+隔離実装は `REI_CLAUDE_IMPLEMENTATION_ENABLED` で個別opt-in（すべて既定false）。
+実装には管理者固定の `REI_CLAUDE_IMPLEMENTATION_TEST_COMMAND` が必要。
+期限・UUID保存・provider別merge・既存設定ファイルへの追加は[Claude拡張](claude-code-extensions.md)を参照。
+
 `rei.external-agents.claude.enabled` / `REI_CLAUDE_ENABLED` は既定false。`command` / `REI_CLAUDE_COMMAND` はnative `claude`（Windowsは `claude.exe`）。既存外部設定へclaude節を追加すると有効化できる。CLIは2.1.286以上、claude.aiのサブスクリプションで事前ログインし、API/cloud fallbackを行わない。対象のUTF-8 snapshot上限、Tool無効化、Run/Goal予算・履歴・取消は[Claude Code reviews](claude-code-reviews.md)を参照。
 
 ## Agent Runの受付上限

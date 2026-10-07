@@ -12,17 +12,28 @@ public final class ExternalAgentAuthorization {
     return explicitRequest(input.toLowerCase(Locale.ROOT).replaceAll("\\bcodex\\b","other-provider").replaceAll("\\bclaude(?:\\s+code)?\\b","codex"));
   }
   public static boolean explicitParallelRequest(String input) {
-    if(!explicitRequest(input)||input.strip().startsWith("/agent "))return false;
+    return explicitParallelRequest(input,ExternalAgentRequest.Agent.CODEX);
+  }
+  public static boolean explicitParallelRequest(String input,ExternalAgentRequest.Agent agent) {
+    if(!explicitRequest(input,agent)||input.strip().startsWith("/agent "))return false;
     String text=input.toLowerCase(Locale.ROOT).replaceAll("(?s)```.*?```|「[^」]*」|\"[^\"]*\"","");
     if(text.matches("(?s).*(並列.{0,8}(しない|せず|不要|禁止)|not.{0,12}parallel|no parallel|sequential).*"))return false;
     return text.contains("並列")||text.matches("(?s).*\\bparallel\\b.*");
   }
   public static boolean explicitFixProposalRequest(String input) {
+    return explicitFixProposalRequest(input,ExternalAgentRequest.Agent.CODEX);
+  }
+  public static boolean explicitFixProposalRequest(String input,ExternalAgentRequest.Agent agent) {
     if(input==null)return false;
     String text=input.toLowerCase(Locale.ROOT);
     String normalized=text.replace("修正案","レビュー").replace("修正を提案","レビューして")
         .replace("fix proposal","review").replace("propose a fix","review").replace("propose fixes","review");
-    return !normalized.equals(text) && explicitRequest(normalized);
+    return !normalized.equals(text) && explicitRequest(normalized,agent);
+  }
+  public static boolean explicitContinuationRequest(String input,ExternalAgentRequest.Agent agent) {
+    if(!explicitRequest(input,agent))return false;
+    String text=input.toLowerCase(Locale.ROOT).replaceAll("(?s)```.*?```|「[^」]*」|\"[^\"]*\"","");
+    return text.contains("続") || text.contains("再開") || text.matches("(?s).*\\b(?:continue|continuation|resume)\\b.*");
   }
   public static boolean explicitRequest(String input) {
     if (input == null) return false;

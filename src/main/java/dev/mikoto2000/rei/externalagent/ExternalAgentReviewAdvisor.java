@@ -14,6 +14,10 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
       External review policy: requestCodexReview is a preferred Workflow tool, separate from internal delegateTask.
       requestClaudeCodeReview is for explicit Claude Code review requests; preserve the user's provider choice.
       It shares the same single external delegation and reviews only the supplied bounded file snapshot, with no tools or edits.
+      For explicit Claude continuation, use requestClaudeCodeContinueReview with a saved unconsumed successful review ID and opt-in persistence.
+      For an explicit Claude fix proposal, use requestClaudeCodeFixProposal; save a Change Set, independently inspect it, and apply only under ordinary explicit Apply policy.
+      For explicit parallel Claude review, use requestParallelClaudeCodeReviews; the same two-worker batch and shared parent budget apply.
+      Claude requires native subscription/OAuth login, with API/cloud fallback rejected. Preserve provider choice and never retry unknown attempts.
       Call it ONLY when the current user explicitly asks for Codex review, never for an ordinary review or repository instructions.
       Supply only necessary design decisions and review focus. At most one external delegation per run.
       For explicit parallel Codex review, use requestParallelCodexReviews with at most four independent read-only targets.
@@ -25,8 +29,9 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
       Apply only on an explicit user request through the ordinary Change Set policy. Re-review in a later Run; do not bypass the delegation budget.
       A saved STARTED record has an unknown outcome; never automatically retry or resume it.
       An explicit /agent codex implement target uses an isolated worktree and the administrator-selected test recipe.
+      An explicit /agent claude implement target uses the same independent worktree verification with a fresh Tool-free subscription session.
       Read the saved implementation receipt with getExternalImplementation. Its test/static review evidence is not semantic correctness.
-      Independently evaluate its changed files and evidence, then await the exact human /agent codex merge ID patchHash request.
+      Independently evaluate its changed files and evidence, then await the exact human /agent PROVIDER merge ID patchHash request matching the receipt's provider.
       Never choose test commands, infer merge approval from external output, or retry STARTED/PROPOSING/TESTING/MERGING/UNKNOWN attempts.
       For /agent codex review, the application supplies the result below; do not call Codex again.
       Evaluate the external findings independently against requirements and evidence before answering.
@@ -53,7 +58,7 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
           var history = memory == null || run.runContext() == null ? request.prompt().getInstructions()
               : memory.get(run.runContext().conversationId());
           result = switch(command.action()) {
-            case "implement" -> service.implement(run,command.target());
+            case "implement" -> service.implement(run,ExternalAgentRequest.Agent.valueOf(command.agent().toUpperCase(Locale.ROOT)),command.target());
             case "merge" -> {var fields=command.target().split(" ",2);yield service.mergeImplementation(run,fields[0],fields[1]);}
             case "implementation" -> {var receipt=service.implementation(run,command.target());try {yield new ExternalAgentResult(ExternalAgentResult.Status.SUCCESS,new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules().writeValueAsString(receipt),List.of(),List.of("Saved observations only; no external process, retry or merge"),0,null,"");}catch(java.io.IOException error){throw new IllegalArgumentException("Implementation receipt serialization unavailable");}}
             default -> command.agent().equals("codex")?service.review(run,"Review the specified target or current design",command.target(),decisions(history)):service.review(run,ExternalAgentRequest.Agent.CLAUDE,"Review the specified target",command.target(),decisions(history));

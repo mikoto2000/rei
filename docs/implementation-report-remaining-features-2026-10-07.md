@@ -337,3 +337,29 @@ P6 Java全体は656 suites / 3555 tests、failure/error/skipped各0で成功。
 Native全体120 tests、React25 suites / 99 testsとtypecheck成功。
 Codex implementation delegationの最低要件をlocal fixtureと公開application commandでIMPLEMENTED。
 有料モデル・CLI認証変更・外部サービス書込は実行していない。
+
+Codex implementation Git receipt: feature `0e258475`、main merge `f4b7e6d2`、両方push済み。
+統合後Java関連11 suites / 65 tests、Native全体120 tests、React25 suites / 99 testsとtypecheck成功。
+failure/error/skipped各0。元checkoutの既存LLM変更2件と追加3件を保持した。
+
+## Phase 3: Claude resume / Change Set / parallelの実装
+
+branch `codex/claude-agent-extensions`、fetch後の基準 `f4b7e6d2`。
+既存provider境界、履歴、親予算、bounded parallel workerと隔離実装を共通利用する。
+公式CLI referenceとsession資料でresume、UUID指定、Tool-free JSON、subscription authを確認した。
+実CLIのモデルや認証は呼ばず、deterministic fixtureから実装する。
+
+Claude用のprivate cwd/root markerとUUID選択・確認をadapter内に追加し、成功した同一provider/Project/rootの履歴を一度だけ継続する。
+修正案は既存Text Change Setへ保存し、並列reviewはCodexと同じbounded pool・親Run/Goal予算を使う。
+隔離実装も共通worktree/test/hash/commit/merge機構を使い、Claudeの実装呼出しは常にephemeral。
+receiptにproviderを保存し、別provider名でのmergeを拒否する。旧receiptのprovider欠落はCodexとして復元する。
+保存結果とdiffは同じhuman ownerのREAD_ONLY Runから読めるが、実装とmergeはEXCLUSIVEを要求する。
+各機能は既定OFF。subscription/OAuth、auth status、safe-mode、Tool/MCP無効、snapshot再検証、未知副作用の非再試行を維持する。
+DBは既存review historyとcontinuation claimを再利用し、新規tableは追加しない。
+
+TDDでは未追加のadapter設定/API、Claude isolated proposal、READ_ONLY receipt拒否のRedを確認した。
+adapter・履歴/claim・Change Set・共有予算・並列item・実Git隔離/merge・command/completionの関連回帰が成功。
+操作と設定は[Claude拡張](claude-code-extensions.md)に記載。実モデル、認証変更、実サービス送信は未実行。
+
+Java全体659 suites / 3562 tests、failure/error/skipped各0。Native全体120 tests、
+React25 suites / 99 testsとtypecheck成功。Claudeの追加5機能をlocal fixtureとしてIMPLEMENTED。

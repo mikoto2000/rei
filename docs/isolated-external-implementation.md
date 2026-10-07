@@ -1,9 +1,10 @@
 # Isolated external implementation
 
-Codex implementation is opt-in. Existing read-only Codex and Claude review behavior remains available.
+Codex and Claude implementation are opt-in. Existing read-only review behavior remains available.
 The parent creates a generated `codex/rei-implementation-<UUID>` branch and worktree under the Rei data directory,
 outside the parent repository. Codex proposes structured replacements with read-only CLI permissions;
 the parent validates and writes them into that isolated worktree. No external output supplies a test or Git command.
+Claude uses the same parent service, with built-in tools and MCP disabled and a fresh ephemeral subscription CLI invocation.
 
 ```yaml
 rei:
@@ -25,6 +26,10 @@ unknown token usage under a token limit, failed test, incomplete review or cance
 /agent codex implementation <receipt-id>
 /agent codex merge <receipt-id> <patch-sha256>
 ```
+
+The corresponding `/agent claude ...` commands use `rei.external-agents.claude.implementation-*` settings.
+The saved receipt records the provider; an explicit merge naming another provider is rejected.
+Older receipts without a provider field remain Codex receipts.
 
 The first command requires an explicit existing target and an exclusive Project Run. Absolute targets inside the parent
 are converted into worktree-relative targets. The parent must be a clean Git repository root with a HEAD commit.

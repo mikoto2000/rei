@@ -26,12 +26,15 @@ public class ExternalReviewRepository {
   }
   /** An attempted continuation consumes its parent even after failure or a crash. Never replay it. */
   public void startContinuation(AgentRunContext owner,String id,Path root,String target,String previous) {
+    startContinuation(owner,id,root,target,previous,"codex");
+  }
+  public void startContinuation(AgentRunContext owner,String id,Path root,String target,String previous,String agent) {
     var parent=get(owner.projectId(),previous);
-    if(!parent.agent().equals("codex")||!parent.projectRoot().equals(root.toString()) || parent.result()==null || !parent.result().success()
+    if(!Set.of("codex","claude").contains(agent) || !parent.agent().equals(agent)||!parent.projectRoot().equals(root.toString()) || parent.result()==null || !parent.result().success()
         || !ExternalAgentResult.validSessionId(parent.result().externalSessionId()))throw new IllegalArgumentException("Resumable completed review required");
     if(db.sql("INSERT OR IGNORE INTO external_review_continuations(previous,review) VALUES(?,?)").params(previous,id).update()!=1)
       throw new IllegalArgumentException("This review's continuation was already attempted; use its completed successor or request a fresh re-review");
-    start(owner,id,root,target,previous);
+    start(owner,id,root,target,previous,agent);
   }
   public boolean continuationAttempted(String previous) {
     return db.sql("SELECT count(*) FROM external_review_continuations WHERE previous=?").param(previous).query(Integer.class).single()>0;

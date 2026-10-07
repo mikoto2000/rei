@@ -6,7 +6,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class ImplementationCommandTest {
   @Test void implementationNeedsAnExplicitTargetAndMergeNeedsAnExactReceiptHash() {
     var request=ExternalAgentCommandRequest.parse("/agent codex implement src/Foo.java");assertEquals("implement",request.action());assertEquals("src/Foo.java",request.target());
-    for(String invalid:new String[]{"/agent codex implement","/agent claude implement A.txt","/agent codex merge","/agent codex merge evil command"})assertThrows(IllegalArgumentException.class,()->ExternalAgentCommandRequest.parse(invalid));
+    assertEquals("claude",ExternalAgentCommandRequest.parse("/agent claude implement A.txt").agent());
+    for(String invalid:new String[]{"/agent codex implement","/agent claude implement","/agent codex merge","/agent codex merge evil command"})assertThrows(IllegalArgumentException.class,()->ExternalAgentCommandRequest.parse(invalid));
     String id=java.util.UUID.randomUUID().toString(),hash="a".repeat(64);
     assertEquals(id+" "+hash,ExternalAgentCommandRequest.parse("/agent codex merge "+id+" "+hash).target());
     assertEquals(id,ExternalAgentCommandRequest.parse("/agent codex implementation "+id).target());

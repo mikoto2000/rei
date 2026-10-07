@@ -11,4 +11,5 @@ public final class RoutingExternalAgentExecutor implements ExternalAgentExecutor
  @Override public ExternalAgentResult execute(ExternalAgentRequest request,BooleanSupplier cancelled){return select(request).execute(request,cancelled);}
  @Override public ExternalAgentResult execute(ExternalAgentRequest request,BooleanSupplier cancelled,ModelCallBudget budget){return select(request).execute(request,cancelled,budget);}
  @Override public boolean supportsContinuation(){return codex.supportsContinuation();}
+ @Override public boolean supportsContinuation(ExternalAgentRequest.Agent agent){return agent==ExternalAgentRequest.Agent.CODEX?codex.supportsContinuation():agent==ExternalAgentRequest.Agent.CLAUDE && claude.supportsContinuation();}
 }
