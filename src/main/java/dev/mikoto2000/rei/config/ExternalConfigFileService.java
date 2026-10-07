@@ -295,6 +295,8 @@ public class ExternalConfigFileService {
             lessons-enabled: ${REI_REFLECTION_LESSONS_ENABLED:false}
           repair:
             diagnosed-enabled: ${REI_REPAIR_DIAGNOSED_ENABLED:false}
+          patch-review:
+            semantic-enabled: ${REI_PATCH_REVIEW_SEMANTIC_ENABLED:false}
           subagents:
             durable-enabled: ${REI_SUBAGENTS_DURABLE_ENABLED:false}
             dag-enabled: ${REI_SUBAGENTS_DAG_ENABLED:false}

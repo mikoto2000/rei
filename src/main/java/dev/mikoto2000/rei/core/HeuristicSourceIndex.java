@@ -13,7 +13,7 @@ final class HeuristicSourceIndex {
     Boundary forPath(String path){return values.stream().filter(value->value.root().equals(".")||path.startsWith(value.root()+"/")).max(Comparator.comparingInt(value->value.root().length())).orElse(new Boundary(fallbackModule(path),"","UNKNOWN"));}
   }
   record Token(String value,boolean literal,int line) {}
-  record Lexed(String masked,List<Token> tokens,boolean valid) {}
+  record Lexed(String masked,List<Token> tokens,boolean valid,String comments) {Lexed(String masked,List<Token> tokens,boolean valid){this(masked,tokens,valid,"");}}
   private static final String ID="([\\p{L}_$][\\p{L}\\p{N}_$]*)";
   private static final Pattern TS_TYPE=Pattern.compile("^(?:export\\s+)?(?:default\\s+)?(?:declare\\s+)?(?:abstract\\s+)?(class|interface|enum|type)\\s+"+ID);
   private static final Pattern TS_FN=Pattern.compile("^(?:export\\s+)?(?:default\\s+)?(?:async\\s+)?function\\s+"+ID);
@@ -116,24 +116,24 @@ final class HeuristicSourceIndex {
     }
     if(path.length()>prefix.length())result.add(path.toString());
   }
-  private static Lexed lex(String text,String language) {
-    char[] masked=text.toCharArray();var tokens=new ArrayList<Token>();int line=1;
+  static Lexed lex(String text,String language) {
+    char[] masked=text.toCharArray();char[] comments=new char[text.length()];Arrays.fill(comments,' ');var tokens=new ArrayList<Token>();int line=1;
     for(int i=0;i<text.length();) {
       if((i&511)==0)RunCancellation.propagate(null);if(tokens.size()>32768)return new Lexed("",List.of(),false);
       char ch=text.charAt(i);if(Character.isWhitespace(ch)){if(ch=='\n')line++;i++;continue;}
       boolean slash=i+1<text.length()&&ch=='/'&&text.charAt(i+1)=='/';boolean block=i+1<text.length()&&ch=='/'&&text.charAt(i+1)=='*';boolean python=language.equals("PYTHON")&&ch=='#';
-      if(slash||python){while(i<text.length()&&text.charAt(i)!='\n')masked[i++]=' ';continue;}
-      if(block){int nesting=1;masked[i++]=' ';masked[i++]=' ';while(i<text.length()&&nesting>0){if(i+1<text.length()&&text.charAt(i)=='/'&&text.charAt(i+1)=='*'&&language.equals("RUST")){if(++nesting>32)return new Lexed("",List.of(),false);masked[i++]=' ';masked[i++]=' ';}else if(i+1<text.length()&&text.charAt(i)=='*'&&text.charAt(i+1)=='/'){nesting--;masked[i++]=' ';masked[i++]=' ';}else {if(text.charAt(i)=='\n')line++;else masked[i]=' ';i++;}}if(nesting!=0)return new Lexed("",List.of(),false);continue;}
+      if(slash||python){while(i<text.length()&&text.charAt(i)!='\n'){comments[i]=text.charAt(i);masked[i++]=' ';}continue;}
+      if(block){int begin=i;int nesting=1;masked[i++]=' ';masked[i++]=' ';while(i<text.length()&&nesting>0){if(i+1<text.length()&&text.charAt(i)=='/'&&text.charAt(i+1)=='*'&&language.equals("RUST")){if(++nesting>32)return new Lexed("",List.of(),false);masked[i++]=' ';masked[i++]=' ';}else if(i+1<text.length()&&text.charAt(i)=='*'&&text.charAt(i+1)=='/'){nesting--;masked[i++]=' ';masked[i++]=' ';}else {if(text.charAt(i)=='\n')line++;else masked[i]=' ';i++;}}if(nesting!=0)return new Lexed("",List.of(),false);text.getChars(begin,i,comments,begin);continue;}
       if(ch=='\''&&language.equals("RUST")&&i+2<text.length()&&Character.isJavaIdentifierStart(text.charAt(i+1))&&text.charAt(i+2)!='\''){tokens.add(new Token("'",false,line));i++;continue;}
       if(ch=='\''||ch=='"'||ch=='`') {
-        int startLine=line;boolean triple=language.equals("PYTHON")&&i+2<text.length()&&text.charAt(i+1)==ch&&text.charAt(i+2)==ch;int delimiter=triple?3:1;for(int j=0;j<delimiter;j++)masked[i++]=' ';boolean closed=false;StringBuilder literal=new StringBuilder();
+        int startLine=line;boolean triple=(language.equals("PYTHON")||language.equals("JAVA")&&ch=='"')&&i+2<text.length()&&text.charAt(i+1)==ch&&text.charAt(i+2)==ch;int delimiter=triple?3:1;for(int j=0;j<delimiter;j++)masked[i++]=' ';boolean closed=false;StringBuilder literal=new StringBuilder();
         while(i<text.length()){char current=text.charAt(i);boolean end=current==ch&&(!triple||i+2<text.length()&&text.charAt(i+1)==ch&&text.charAt(i+2)==ch);if(end){for(int j=0;j<delimiter;j++)masked[i++]=' ';closed=true;break;}if(current=='\n'){line++;if(!triple&&ch!='`'&&!language.equals("GO"))return new Lexed("",List.of(),false);}if(current=='\\'&&!(language.equals("GO")&&ch=='`')){masked[i++]=' ';if(i>=text.length())break;current=text.charAt(i);}if(current!='\n')masked[i]=' ';if(literal.length()<2049)literal.append(current);i++;}
         if(!closed)return new Lexed("",List.of(),false);tokens.add(new Token(literal.length()>2048?"":literal.toString(),true,startLine));continue;
       }
       if(Character.isJavaIdentifierStart(ch)){int begin=i++;while(i<text.length()&&Character.isJavaIdentifierPart(text.charAt(i)))i++;tokens.add(new Token(text.substring(begin,i),false,line));}
       else {tokens.add(new Token(String.valueOf(ch),false,line));i++;}
     }
-    return new Lexed(new String(masked),List.copyOf(tokens),true);
+    return new Lexed(new String(masked),List.copyOf(tokens),true,new String(comments));
   }
   static List<RepositoryMapService.Relation> relations(List<RepositoryMapService.File> files,Boundaries boundaries) {
     var result=new LinkedHashSet<RepositoryMapService.Relation>();var byPath=new HashMap<String,RepositoryMapService.File>();files.forEach(file->byPath.put(file.path(),file));

@@ -48,6 +48,19 @@ class SelfPatchReviewGitTest {
     assertEquals(1,result.verification().rounds().getFirst().initialTest().exitCode());assertEquals(0,result.verification().rounds().getLast().finalTest().exitCode());
     assertTrue(new TestReportDiagnosisService().read(root,"build/TEST.xml").failedTests().isEmpty());assertArrayEquals(index,Files.readAllBytes(root.resolve(".git/index")));
   }
+  @Test void requirementReviewUsesRealGitMaterialAndFreshRealCommandReportWithoutChangingIndex()throws Exception {
+    Files.createDirectories(root.resolve("build"));Files.writeString(root.resolve("A.txt"),"after\n");
+    String passed="<testsuite tests=\"1\" failures=\"0\" errors=\"0\" skipped=\"0\"><testcase classname=\"Fixture\" name=\"value\"/></testsuite>";
+    String command=System.getProperty("os.name").toLowerCase().contains("win")?"Add-Content build/runs.txt run; Set-Content build/TEST.xml '"+passed+"'; exit 0":"printf '%s\\n' run >> build/runs.txt; printf '%s' '"+passed+"' > build/TEST.xml";
+    var ds=new org.springframework.jdbc.datasource.DriverManagerDataSource("jdbc:sqlite:"+root.resolve("build/reviews.db"));
+    var service=new SemanticPatchReviewService(ds,java.time.Clock.systemUTC(),false,new dev.mikoto2000.rei.core.service.SystemShellService(),org.mockito.Mockito.mock(dev.mikoto2000.rei.llm.LlmModelProvider.class));
+    var owner=new dev.mikoto2000.rei.core.chat.AgentRunContext("run","session",root,UUID.randomUUID().toString());
+    var request=new SemanticPatchReviewService.Request(command,10,List.of(new SemanticPatchReviewService.Requirement("R1","change value",List.of("A.txt"),List.of("Fixture#value"))),List.of("A.txt"),List.of("build/TEST.xml"),false);
+    byte[] index=Files.readAllBytes(root.resolve(".git/index"));var receipt=service.review(owner,request,null);
+    assertEquals("DETERMINISTIC_CHECKS_ONLY",receipt.status(),receipt.toString());assertEquals(2,Files.readAllLines(root.resolve("build/runs.txt")).size());assertArrayEquals(index,Files.readAllBytes(root.resolve(".git/index")));
+    assertEquals(List.of("Fixture#value"),receipt.detail().tests().getFirst().passedTests());assertEquals(receipt,service.get(owner,receipt.id(),receipt.sha256()));
+    assertEquals(receipt,service.review(owner,request,null));assertEquals(2,Files.readAllLines(root.resolve("build/runs.txt")).size());
+  }
   @Test void savedChangeSetRepairsRealGitFindingThenRunsFinalRealShellTest() throws Exception {
     Files.createDirectories(root.resolve("build"));Files.writeString(root.resolve("A.txt"),"after \n");
     var project=new dev.mikoto2000.rei.core.project.ProjectContext(UUID.randomUUID().toString(),"fixture",root);

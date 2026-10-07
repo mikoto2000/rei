@@ -13,6 +13,21 @@ import dev.mikoto2000.rei.core.SelfPatchReviewService.*;
 
 /** Git worktree facts only. Does not alter the index, invoke diff helpers, or retain source bodies. */
 public final class GitPatchInspector {
+  public record Material(String diff,Map<String,String> sources){public Material{sources=Map.copyOf(sources);}}
+  public Material material(Path root,Snapshot snapshot,long deadline)throws IOException {
+    if(!snapshot.complete()||snapshot.changedFiles().size()>32)throw new IOException("Complete patch of at most 32 files required");
+    var sources=new TreeMap<String,String>();int total=0;
+    for(String name:snapshot.changedFiles()){
+      SelfPatchReviewService.remaining(deadline,1);if(!Files.exists(root.resolve(name),LinkOption.NOFOLLOW_LINKS))continue;
+      byte[] bytes=read(root,name);if(bytes.length>65536||(total+=bytes.length)>65536||!text(bytes))throw new IOException("Review sources exceed 64KiB or are nontext");sources.put(name,new String(bytes,StandardCharsets.UTF_8));
+    }
+    String staged=git(root,deadline,32768,"diff","--no-ext-diff","--no-textconv","--no-renames","--no-color","--cached","HEAD","--").stdout();
+    String working=git(root,deadline,32768,"diff","--no-ext-diff","--no-textconv","--no-renames","--no-color","HEAD","--").stdout();
+    if(staged.getBytes(StandardCharsets.UTF_8).length+working.getBytes(StandardCharsets.UTF_8).length>32768)throw new IOException("Review diff exceeds 32KiB");
+    var diff=new StringBuilder(staged).append('\n').append(working);
+    for(String name:snapshot.untracked())if(sources.containsKey(name)){diff.append("\ndiff --git a/").append(name).append(" b/").append(name).append("\n+++ b/").append(name).append("\n@@ -0,0 +1 @@\n");for(String line:sources.get(name).split("\n",-1))diff.append('+').append(line).append('\n');}
+    if(diff.toString().getBytes(StandardCharsets.UTF_8).length>32768)throw new IOException("Review diff exceeds 32KiB");return new Material(diff.toString(),sources);
+  }
   private final ExternalAgentProcessRunner processes;
   private final java.util.function.BooleanSupplier cancelled;
   private static final Pattern CHECK=Pattern.compile("^(.*):(\\d+): (.*)$");
