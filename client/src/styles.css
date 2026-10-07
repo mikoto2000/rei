@@ -13,6 +13,17 @@
 .task-manager article {
   overflow-wrap: anywhere;
 }
+.artifact-manager article {
+  overflow-wrap: anywhere;
+}
+.artifact-manager pre {
+  white-space: pre-wrap;
+}
+.artifact-manager img {
+  max-width: 100%;
+  height: auto;
+  max-height: 420px;
+}
 * {
   box-sizing: border-box;
 }

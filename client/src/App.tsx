@@ -19,6 +19,8 @@ import { Avatar } from "./shared/Avatar";
 import { SessionList } from "./features/history/SessionList";
 import { Recovery } from "./features/recovery/Recovery";
 import { Tasks } from "./features/tasks/Tasks";
+import { Artifacts } from "./features/artifacts/Artifacts";
+import type { ArtifactSelection } from "./entities/artifacts";
 import { Attention } from "./features/attention/Attention";
 import { ActivityAnalysis } from "./features/activity/ActivityAnalysis";
 import { Workspace } from "./features/workspace/Workspace";
@@ -47,7 +49,8 @@ type Page =
   | "attention"
   | "activity"
   | "recovery"
-  | "tasks";
+  | "tasks"
+  | "artifacts";
 const noProjects: Project[] = [];
 export function App({
   call = command,
@@ -60,6 +63,8 @@ export function App({
   const workContextSeen = useRef(new Set<string>());
   const [userAvatar, setUserAvatar] = useUserAvatar();
   const [page, setPage] = useState<Page>("conversations");
+  const [artifactSelection, setArtifactSelection] =
+    useState<ArtifactSelection | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chatErrors, setChatErrors] = useState<Record<string, string | null>>(
@@ -311,6 +316,15 @@ export function App({
         </button>
         <nav aria-label="メイン">
           <button
+            className={page === "artifacts" ? "selected" : ""}
+            onClick={() => {
+              setArtifactSelection(null);
+              navigate("artifacts");
+            }}
+          >
+            Artifact
+          </button>
+          <button
             className={page === "tasks" ? "selected" : ""}
             onClick={() => navigate("tasks")}
           >
@@ -452,6 +466,18 @@ export function App({
                 call={call}
                 serverId={data.unlocked ? data.selectedServer : null}
                 projects={projects[data.selectedServer ?? ""] ?? noProjects}
+                onArtifacts={(selection) => {
+                  setArtifactSelection(selection);
+                  navigate("artifacts");
+                }}
+              />
+            )}
+            {page === "artifacts" && (
+              <Artifacts
+                call={call}
+                serverId={data.unlocked ? data.selectedServer : null}
+                projects={projects[data.selectedServer ?? ""] ?? noProjects}
+                selection={artifactSelection}
               />
             )}
             {page === "recovery" && (
@@ -480,6 +506,10 @@ export function App({
             )}
             {page === "workspace" && (
               <Workspace
+                onArtifacts={(selection) => {
+                  setArtifactSelection(selection);
+                  navigate("artifacts");
+                }}
                 call={call}
                 serverId={data.unlocked ? data.selectedServer : null}
                 projects={projects[data.selectedServer ?? ""] ?? noProjects}
@@ -712,6 +742,10 @@ export function App({
                   会話一覧へ戻る
                 </button>
                 <Chat
+                  onArtifacts={(selection) => {
+                    setArtifactSelection(selection);
+                    navigate("artifacts");
+                  }}
                   userAvatar={userAvatar}
                   key={selectedConversation.localId}
                   conversation={selectedConversation}

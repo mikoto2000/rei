@@ -2,14 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import type { Command } from "../../tauri/commands";
 import { errorText, type Project } from "../../entities/models";
 import type { ManagedTask, TaskAction } from "../../entities/tasks";
+import type { ArtifactSelection } from "../../entities/artifacts";
 export function Tasks({
   call,
   serverId,
   projects,
+  onArtifacts,
 }: {
   call: Command;
   serverId: string | null;
   projects: Project[];
+  onArtifacts?: (selection: ArtifactSelection) => void;
 }) {
   const [project, setProject] = useState("");
   const [session, setSession] = useState("");
@@ -212,8 +215,35 @@ export function Tasks({
               {t.results.map((r) => (
                 <p key={`${r.kind}:${r.id}`}>
                   {r.kind}: {r.id}
+                  {r.kind === "ARTIFACT" && onArtifacts && (
+                    <button
+                      onClick={() =>
+                        onArtifacts({
+                          projectId: t.projectId,
+                          sessionId: t.sessionId,
+                          runId: null,
+                          artifactId: r.id,
+                        })
+                      }
+                    >
+                      Artifactを開く
+                    </button>
+                  )}
                 </p>
               ))}
+              {t.runId && onArtifacts && (
+                <button
+                  onClick={() =>
+                    onArtifacts({
+                      projectId: t.projectId,
+                      sessionId: t.sessionId,
+                      runId: t.runId,
+                    })
+                  }
+                >
+                  このRunの生成物
+                </button>
+              )}
               {t.cancelSupported && (
                 <button
                   disabled={busy}

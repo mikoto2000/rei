@@ -13,6 +13,7 @@ import type {
 } from "../../entities/workspace";
 import { operations, buildOperation } from "./operations";
 import { RunActivity, RunTimeline } from "../chat/RunActivity";
+import type { ArtifactSelection } from "../../entities/artifacts";
 
 export function Workspace({
   call,
@@ -20,12 +21,14 @@ export function Workspace({
   projects,
   runs,
   onAccepted,
+  onArtifacts,
 }: {
   call: Command;
   serverId: string | null;
   projects: Project[];
   runs: Run[];
   onAccepted: (run: Run) => void;
+  onArtifacts?: (selection: ArtifactSelection) => void;
 }) {
   const [action, setAction] = useState("feeds");
   const [values, setValues] = useState<Record<string, string>>({});
@@ -206,6 +209,19 @@ export function Workspace({
               {run.streamState}
             </p>
             <small>Run {run.runId}</small>
+            {onArtifacts && (
+              <button
+                onClick={() =>
+                  onArtifacts({
+                    projectId: run.projectId,
+                    sessionId: run.sessionId,
+                    runId: run.runId,
+                  })
+                }
+              >
+                このRunの生成物
+              </button>
+            )}
             {run.incomplete && (
               <p className="notice">
                 イベント履歴の一部が失われました。表示内容は不完全です。

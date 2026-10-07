@@ -48,6 +48,11 @@ public class TextChangeSetService {
     try{current=hash(read(resolve(Path.of(saved.root()),saved.path())));}catch(IOException | IllegalArgumentException unavailable){/* Missing/invalid current file is not an empty file or a successful receipt. */}
     return view(saved,current);
   }
+  /** Export the persisted proposal, including stale proposals, without touching the current file. */
+  public byte[] exportProposal(ProjectContext project,String id)throws IOException {
+    var saved=owned(project,id);validateText(saved.proposed());
+    return saved.proposed().getBytes(StandardCharsets.UTF_8);
+  }
   public View discard(ProjectContext project,String id,String proposalHash)throws IOException {
     var saved=owned(project,id);
     if(proposalHash==null || !saved.proposalHash().equals(proposalHash))throw new IllegalArgumentException("Exact reviewed proposal hash required");

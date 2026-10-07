@@ -46,7 +46,7 @@ public final class BackgroundRunSubmitService {
         if("cancelled".equals(result.message())) throw new java.util.concurrent.CancellationException();
         throw new IllegalStateException("Image generation failed");
       }
-      return ".rei/web-images/"+context.runId()+".png";
+      return result.artifactId()==null?".rei/web-images/"+context.runId()+".png":"Artifact: "+result.artifactId();
     });
   }
   private static void requireText(String text,int max) {

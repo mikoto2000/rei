@@ -8,6 +8,39 @@ import {
 import { afterEach, it, expect, vi } from "vitest";
 import { Workspace } from "./Workspace";
 afterEach(cleanup);
+it("opens generated artifacts using the background Run ownership rather than result text", () => {
+  const open = vi.fn();
+  const run = {
+    serverId: "server",
+    projectId: "p",
+    runId: "image-run",
+    sessionId: null,
+    conversationId: null,
+    prompt: "Image",
+    status: "COMPLETED",
+    streamState: "CLOSED",
+    assistantText: "untrusted filename or Artifact: fake",
+    tools: [],
+    activities: [],
+    messages: [],
+  } as unknown as import("../../entities/models").Run;
+  render(
+    <Workspace
+      call={vi.fn()}
+      serverId="server"
+      projects={[]}
+      runs={[run]}
+      onAccepted={vi.fn()}
+      onArtifacts={open}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "このRunの生成物" }));
+  expect(open).toHaveBeenCalledWith({
+    projectId: "p",
+    sessionId: null,
+    runId: "image-run",
+  });
+});
 it("uses typed commands for reads, writes, and project-owned background runs", async () => {
   const call = vi.fn().mockResolvedValue({
     title: "Feed",

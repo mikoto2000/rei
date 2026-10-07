@@ -416,6 +416,71 @@ async fn task_control(
     .await
 }
 
+#[tauri::command]
+async fn artifacts_list(
+    app: App<'_>,
+    server_id: String,
+    project_id: Option<String>,
+    session_id: Option<String>,
+    run_id: Option<String>,
+    limit: Option<i32>,
+    cursor: Option<String>,
+) -> Result<ArtifactPage> {
+    app.artifacts_list(
+        &server_id,
+        project_id.as_deref(),
+        session_id.as_deref(),
+        run_id.as_deref(),
+        limit,
+        cursor,
+    )
+    .await
+}
+#[tauri::command]
+async fn artifact_preview(
+    app: App<'_>,
+    server_id: String,
+    project_id: String,
+    session_id: Option<String>,
+    artifact_id: String,
+) -> Result<ArtifactPreview> {
+    app.artifact_preview(&server_id, &project_id, session_id.as_deref(), &artifact_id)
+        .await
+}
+#[tauri::command]
+async fn artifact_get(
+    app: App<'_>,
+    server_id: String,
+    project_id: String,
+    session_id: Option<String>,
+    artifact_id: String,
+) -> Result<DeliveryArtifact> {
+    app.artifact_get(&server_id, &project_id, session_id.as_deref(), &artifact_id)
+        .await
+}
+#[tauri::command]
+async fn artifact_save(
+    app: App<'_>,
+    handle: tauri::AppHandle,
+    server_id: String,
+    project_id: String,
+    session_id: Option<String>,
+    artifact_id: String,
+) -> Result<ArtifactSaveReceipt> {
+    let downloads = handle
+        .path()
+        .download_dir()
+        .map_err(|_| AppError::Storage)?;
+    app.artifact_save(
+        &server_id,
+        &project_id,
+        session_id.as_deref(),
+        &artifact_id,
+        &downloads,
+    )
+    .await
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default().plugin(tauri_plugin_notification::init());
@@ -446,6 +511,10 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            artifacts_list,
+            artifact_preview,
+            artifact_get,
+            artifact_save,
             tasks_list,
             task_get,
             task_submit,

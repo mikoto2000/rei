@@ -1,4 +1,6 @@
 mod activity;
+mod artifacts;
+pub use artifacts::*;
 mod conversation_service;
 pub use activity::*;
 mod projection;
