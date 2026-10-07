@@ -1,0 +1,35 @@
+{
+  "examples": [
+    {
+      "domain": "document",
+      "fixture": {
+        "id": "artifact-ownership",
+        "query": "artifact restart ownership",
+        "relevance": {"artifact-recovery": 3},
+        "hardNegatives": ["artifact-ui"],
+        "expectedTopK": ["artifact-recovery"],
+        "topK": 1
+      },
+      "corpus": [
+        {"id": "artifact-recovery", "text": "Durable receipts bind artifact content to project and session ownership after restart."},
+        {"id": "artifact-ui", "text": "Artifact UI restart buttons repaint a visual panel; they do not establish content ownership."},
+        {"id": "neutral", "text": "A clock prints the local date."}
+      ]
+    },
+    {
+      "domain": "skill",
+      "fixture": {
+        "id": "prose-vs-compose-cli",
+        "query": "compose a maintenance note",
+        "relevance": {"writer": 3},
+        "hardNegatives": ["compose-cli"],
+        "expectedTopK": ["writer"],
+        "topK": 1
+      },
+      "corpus": [
+        {"id": "writer", "text": "Technical narrative writing for maintenance documentation."},
+        {"id": "compose-cli", "text": "Launch Docker Compose services; process maintenance commands and note exit codes."}
+      ]
+    }
+  ]
+}

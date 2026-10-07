@@ -49,6 +49,11 @@ public class RerankService implements CandidateReranker {
 
   /** Reorders all candidates; preserves their original retrieval scores and metadata. */
   @Override public <T> List<T> rerank(String query, List<T> candidates, Function<T, String> text) {
+    return rerank(query,candidates,text,false);
+  }
+  @Override public <T> List<T> rerankForEvaluation(String query,List<T> candidates,Function<T,String> text){return rerank(query,candidates,text,true);}
+  private <T> List<T> rerank(String query,List<T> candidates,Function<T,String> text,boolean strict){
+    if(strict){dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);if(client==null)throw new IllegalStateException("Rerank evaluation provider unavailable");}
     if (client == null || candidates.isEmpty()) return candidates;
     var budget=properties.inheritRunModelBudget()?dev.mikoto2000.rei.llm.ModelCallBudgetScope.current():null;
     boolean invoked=false,reported=false;
@@ -95,6 +100,7 @@ public class RerankService implements CandidateReranker {
         if(exception instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException)throw exception;
       }
       logger.warn("Rerank request failed; using original search order ({})", exception.getClass().getSimpleName());
+      if(strict){dev.mikoto2000.rei.core.chat.RunCancellation.propagate(exception);throw new IllegalStateException("Rerank evaluation provider failed");}
       return candidates;
     }
   }

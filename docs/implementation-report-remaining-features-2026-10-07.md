@@ -750,3 +750,25 @@ ResourceNotFoundになり得た。fixture markerを同directoryのatomic move公
 finallyのprocess終了待機も追加。productionのArtifact判定を弱めず復旧harnessを修正。
 全体成功扱いにはせず、関連復旧→全体回帰を再実施する。
 Renderer Validation再全体回帰: 682 suites / 3716 tests、failure/error/skipped各0。実PlantUML fixtureを明示指定。Native120、React25/99/typecheck成功。Git統合を実施する。
+
+Renderer Git receipt: feature `c1275077`、main merge
+`a487b335815255f1b2abb2aec0402e785363a514`、両方push済み。
+統合後関連8 suites / 43 tests、Native120、React25/99/typecheck成功。
+
+## Phase 7: RAG / Skill retrieval quality evaluation
+
+branch `codex/retrieval-quality-evaluation`、fetch済みmain `a487b335`。
+既存HybridRetriever/RRF/SemanticSkillSearch/CandidateRerankerを使う評価harnessを追加。
+relevance/hard negatives/expected top-kを持つ匿名fixtureと4指標が不足している。
+Retrieval quality evaluation: query/graded relevance/hard negatives/expected top-kの匿名JSON。
+Recall@k、Precision@k（不足枠も分母k）、MRR@k、graded nDCG@k、expected order一致。
+lexical/dense/RRF×rerank OFF/ONの6比較、各case rankingとmacro平均、provider identity。
+既存HybridRetriever/CandidateReranker/keyword selector/SemanticSkillSearchを再利用。
+Skill instructions非使用、catalog/query metadataのみ。評価adapterで検出したfallbackは
+失敗とし、実HTTP RerankServiceも評価専用strict入口を追加。runtimeのfallback維持。
+128cases/256candidate/grade1..3/query8192/identity1024/共有30秒、cancel伝播。
+fixture指標は実モデル品質ではなくtruthVerified=false、有料モデル呼出0。
+TDD未実装指標/実HTTP strict入口とhidden rerank fallbackのRed→Green。
+fixture出力directoryのテスト順依存を修正。関連8 suites / 52 tests成功、各0。
+出力target/evaluation/rag-quality.json・skill-quality.json、仕様retrieval-quality-evaluation.md。
+DB/config/Native/React変更なし。Phase7の評価基盤各機能を関連回帰し、Phase末に全体回帰する。
