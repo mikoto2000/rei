@@ -26,6 +26,37 @@ pub trait NotificationPort: Send + Sync {
 pub type ByteStream = Pin<Box<dyn Stream<Item = Result<Vec<u8>>> + Send>>;
 #[async_trait]
 pub trait ReiClient: Send + Sync {
+    async fn list_tasks(&self, _query: TaskQuery) -> Result<TaskPage> {
+        Err(AppError::EndpointNotFound)
+    }
+    async fn get_task(
+        &self,
+        _project: &str,
+        _session: Option<&str>,
+        _id: &str,
+    ) -> Result<ManagedTask> {
+        Err(AppError::EndpointNotFound)
+    }
+    async fn submit_task(
+        &self,
+        _project: &str,
+        _session: Option<&str>,
+        _message: &str,
+    ) -> Result<ManagedTask> {
+        Err(AppError::EndpointNotFound)
+    }
+    async fn control_task(
+        &self,
+        _project: &str,
+        _session: Option<&str>,
+        _id: &str,
+        _run: Option<&str>,
+        _revision: u64,
+        _action: TaskAction,
+        _message: Option<&str>,
+    ) -> Result<ManagedTask> {
+        Err(AppError::EndpointNotFound)
+    }
     async fn schedule_snapshot(&self, _project: &str, _schedule: &str) -> Result<RunSnapshot> {
         Err(AppError::InvalidResponse)
     }

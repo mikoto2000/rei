@@ -22,6 +22,20 @@ import reactor.core.publisher.Mono;
 
 /** Per-invocation state only. Inherited values are explicit task/context, model, project location and an optional shared call reservation. */
 public final class SubAgentRunner {
+  private dev.mikoto2000.rei.application.run.RunRegistry taskRuns;
+  private dev.mikoto2000.rei.application.run.RunService taskLifecycle;
+  private java.util.function.Supplier<dev.mikoto2000.rei.application.run.RunRegistry> taskRunsProvider;
+  private java.util.function.Supplier<dev.mikoto2000.rei.application.run.RunService> taskLifecycleProvider;
+  public void setTaskTracking(boolean enabled,dev.mikoto2000.rei.application.run.RunRegistry runs,
+      dev.mikoto2000.rei.application.run.RunService lifecycle) {
+    taskRuns=enabled?runs:null;taskLifecycle=enabled?lifecycle:null;
+  }
+  @org.springframework.beans.factory.annotation.Autowired
+  public void configureTaskTracking(@org.springframework.beans.factory.annotation.Value("${rei.task-manager.enabled:false}") boolean enabled,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.application.run.RunRegistry> runs,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.application.run.RunService> lifecycle) {
+    taskRunsProvider=enabled?runs::getIfAvailable:null;taskLifecycleProvider=enabled?lifecycle::getIfAvailable:null;
+  }
   private SubAgentProperties standaloneBudgetProperties=new SubAgentProperties();
   @org.springframework.beans.factory.annotation.Autowired
   public void setStandaloneBudgetProperties(SubAgentProperties properties){standaloneBudgetProperties=properties;}
@@ -54,6 +68,8 @@ public final class SubAgentRunner {
   }
   public SubAgentResult run(String agent,String task,String context) {return run(agent,task,context,null);}
   public SubAgentResult run(String agent, String task, String context,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
+    var taskRuns=taskRunsProvider==null?this.taskRuns:taskRunsProvider.get();
+    var taskLifecycle=taskLifecycleProvider==null?this.taskLifecycle:taskLifecycleProvider.get();
     var effectiveReservation=reservation==null&&AgentRunScope.current()==null?
         StandaloneSubAgentBudget.create(standaloneBudgetProperties):reservation;
     var auxiliaryBudget=auxiliaryBudget(effectiveReservation);
@@ -83,8 +99,15 @@ public final class SubAgentRunner {
             List.of(), repairAttempts.get(), validationHistory));
     Runnable cancel = () -> finish.accept(SubAgentResult.Status.CANCELLED, "SubAgent cancelled");
     Runnable check = () -> { if (stopped.get() || Thread.currentThread().isInterrupted()) throw new CancellationException(); };
+    boolean tracked=taskRuns!=null&&taskLifecycle!=null&&parent!=null&&parent.projectId()!=null;
+    if(tracked)taskRuns.registerChild(owner,parent,agent);
     active.put(runId, cancel);
     try (var scope = AgentRunScope.open(owner)) {
+      if(tracked) {
+        cancellation.begin(null);
+        subscriptions.add(cancellation.onCancel(runId,cancel));
+        if(!taskRuns.transition(runId,dev.mikoto2000.rei.application.run.RunStatus.RUNNING,null))cancel.run();
+      }
       publisher.publish(events.subAgentLifecycle(AgentEventType.SUBAGENT_STARTED, parentId, runId, agent, task, "RUNNING", 0, null));
       subscriptions.add(cancellation.onCancel(parentId, cancel));
       var definition = registry.findById(agent);
@@ -147,8 +170,19 @@ public final class SubAgentRunner {
           ? AgentEventType.SUBAGENT_COMPLETED : AgentEventType.SUBAGENT_FAILED, parentId, runId, agent, task,
           result.status().name(), (System.nanoTime() - nanos) / 1_000_000,
           result.status() == SubAgentResult.Status.COMPLETED ? null : result.status().name()));
+      if(tracked)taskLifecycle.finishMissingTerminal(owner,switch(result.status()) {
+        case COMPLETED->dev.mikoto2000.rei.application.run.RunStatus.COMPLETED;
+        case CANCELLED->dev.mikoto2000.rei.application.run.RunStatus.CANCELLED;
+        default->dev.mikoto2000.rei.application.run.RunStatus.FAILED;
+      });
       return result;
-    } finally { subscriptions.dispose(); active.remove(runId); }
+    } finally {
+      subscriptions.dispose();active.remove(runId);
+      if(tracked) {
+        taskLifecycle.finishMissingTerminal(owner,dev.mikoto2000.rei.application.run.RunStatus.FAILED);
+        try(var scope=AgentRunScope.open(owner)){cancellation.clear();}
+      }
+    }
   }
   private record Validated(String raw, SubAgentOutput structured) { }
   private Mono<Validated> validatedRun(ChatModel model, Prompt prompt, SubAgentDefinition definition,

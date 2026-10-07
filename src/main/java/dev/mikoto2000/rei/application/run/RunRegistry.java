@@ -18,11 +18,11 @@ public final class RunRegistry implements AutoCloseable {
       .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
   private record StoredRun(int version,String runId,String sessionId,String root,String projectId,
       AgentRunContext.RequestSource source,AgentRunContext.Mode mode,RunStatus status,Instant startedAt,Instant completedAt,RunFailure failure,
-      long ownerPid,String ownerStart,String ownerInstance) {
+      long ownerPid,String ownerStart,String ownerInstance,RunSnapshot.ChildOrigin childOrigin) {
     static StoredRun of(RunSnapshot value,String instance) {
       var c=value.context();return new StoredRun(1,c.runId(),c.conversationId(),c.projectRoot().toString(),c.projectId(),
           c.requestSource(),c.mode(),value.status(),value.startedAt(),value.completedAt(),value.failure(),
-          ProcessHandle.current().pid(),ProcessHandle.current().info().startInstant().map(Instant::toString).orElse(null),instance);
+          ProcessHandle.current().pid(),ProcessHandle.current().info().startInstant().map(Instant::toString).orElse(null),instance,value.childOrigin());
     }
     boolean ownerAlive() {
       return ownerPid>0 && ownerStart!=null && ProcessHandle.of(ownerPid).filter(ProcessHandle::isAlive)
@@ -30,7 +30,7 @@ public final class RunRegistry implements AutoCloseable {
     }
     RunSnapshot snapshot() {
       if(version!=1 || status==null)throw new IllegalStateException("Unsupported Run schema");
-      return new RunSnapshot(new AgentRunContext(runId,sessionId,java.nio.file.Path.of(root),projectId,source,mode),status,startedAt,completedAt,failure);
+      return new RunSnapshot(new AgentRunContext(runId,sessionId,java.nio.file.Path.of(root),projectId,source,mode),status,startedAt,completedAt,failure,childOrigin);
     }
   }
   public RunRegistry(Clock clock) { this(clock,null); }
@@ -73,7 +73,7 @@ public final class RunRegistry implements AutoCloseable {
     }
   }
   private RunSnapshot unknown(RunSnapshot value) {
-    return new RunSnapshot(value.context(),RunStatus.UNKNOWN,value.startedAt(),clock.instant(),new RunFailure("OwnerLost","Execution result unknown; inspect checkpoint before explicit resume"));
+    return new RunSnapshot(value.context(),RunStatus.UNKNOWN,value.startedAt(),clock.instant(),new RunFailure("OwnerLost","Execution result unknown; inspect checkpoint before explicit resume"),value.childOrigin());
   }
   @Override public synchronized void close() {
     if(db==null)return;
@@ -94,7 +94,33 @@ public final class RunRegistry implements AutoCloseable {
     if(runs.containsKey(context.runId()))throw new IllegalArgumentException("Duplicate run");
     var value=new RunSnapshot(context,RunStatus.QUEUED,null,null,null);save(value);runs.put(context.runId(),value);owned.add(context.runId());
   }
+  /** Delegation retains the existing child Run, with the human owner's Session as metadata. */
+  public synchronized void registerChild(AgentRunContext child,AgentRunContext parent,String agent) {
+    if(!Objects.equals(child.projectId(),parent.projectId())||!child.projectRoot().equals(parent.projectRoot())
+        ||child.runId().equals(parent.runId())||parent.projectId()==null||agent==null||agent.isBlank()||agent.length()>128)
+      throw new IllegalArgumentException("Invalid child ownership");
+    var owner=get(parent.runId());
+    if(!owner.context().equals(parent)||!ownsExecution(parent.runId())||owner.status().isTerminal())
+      throw new dev.mikoto2000.rei.application.state.OperationConflictException();
+    if(runs.containsKey(child.runId()))throw new IllegalArgumentException("Duplicate run");
+    var origin=new RunSnapshot.ChildOrigin(parent.runId(),owner.childOrigin()==null?parent.conversationId():owner.childOrigin().sessionId(),agent);
+    var value=new RunSnapshot(child,RunStatus.QUEUED,null,null,null,origin);save(value);runs.put(child.runId(),value);owned.add(child.runId());
+  }
   public synchronized RunSnapshot get(String runId) {
+    if(db!=null&&!owned.contains(runId)) {
+      var document=db.sql("SELECT snapshot FROM rei_run_registry WHERE run_id=:id").param("id",runId).query(String.class).optional();
+      if(document.isEmpty()){runs.remove(runId);documents.remove(runId);restored.remove(runId);throw new RunNotFoundException();}
+      if(!document.get().equals(documents.get(runId)) || !runs.containsKey(runId) || !runs.get(runId).status().isTerminal()) {
+        try {
+          if(document.get().length()>20000)throw new IllegalStateException("Run snapshot capacity exceeded");
+          var stored=json.readValue(document.get(),StoredRun.class);var refreshed=stored.snapshot();
+          if(!runId.equals(refreshed.context().runId()))throw new IllegalStateException("Run identity mismatch");
+          documents.put(runId,document.get());
+          if(!refreshed.status().isTerminal()&&!stored.ownerAlive()){refreshed=unknown(refreshed);save(refreshed);}
+          runs.put(runId,refreshed);restored.add(runId);
+        }catch(java.io.IOException error){throw new IllegalStateException("Cannot refresh Run registry",error);}
+      }
+    }
     var snapshot = runs.get(runId);
     if (snapshot == null) throw new RunNotFoundException();
     return snapshot;
@@ -106,7 +132,7 @@ public final class RunRegistry implements AutoCloseable {
     if (current.status() == RunStatus.QUEUED && next != RunStatus.RUNNING && next != RunStatus.CANCELLED) return false;
     var value=new RunSnapshot(current.context(), next,
         next == RunStatus.RUNNING ? clock.instant() : current.startedAt(),
-        next.isTerminal() ? clock.instant() : null, next == RunStatus.FAILED || next == RunStatus.UNKNOWN ? failure : null);
+        next.isTerminal() ? clock.instant() : null, next == RunStatus.FAILED || next == RunStatus.UNKNOWN ? failure : null,current.childOrigin());
     save(value);runs.put(runId,value);
     return true;
   }
@@ -116,7 +142,10 @@ public final class RunRegistry implements AutoCloseable {
     expired.forEach(this::forget);
     return expired;
   }
-  public synchronized Set<String> runIds() { return Set.copyOf(runs.keySet()); }
+  public synchronized Set<String> runIds() {
+    return db==null?Set.copyOf(runs.keySet()):Set.copyOf(db.sql("SELECT run_id FROM rei_run_registry").query(String.class).list());
+  }
   /** Restored metadata has no event subscription history in this server instance. */
   public synchronized boolean restored(String runId) { return restored.contains(runId); }
+  public synchronized boolean ownsExecution(String runId) { return db==null || owned.contains(runId); }
 }

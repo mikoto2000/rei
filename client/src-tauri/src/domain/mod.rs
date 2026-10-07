@@ -4,6 +4,8 @@ mod history;
 pub use history::*;
 mod workspace;
 pub use workspace::*;
+mod tasks;
+pub use tasks::*;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]

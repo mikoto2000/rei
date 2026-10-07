@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { ManagedTask, TaskAction, TaskPage } from "../entities/tasks";
 import type {
   Snapshot,
   Server,
@@ -18,6 +19,47 @@ import type {
   WorkspaceResult,
 } from "../entities/workspace";
 interface Commands {
+  tasks_list: [
+    {
+      serverId: string;
+      projectId?: string | null;
+      sessionId?: string | null;
+      limit?: number;
+      cursor?: string | null;
+    },
+    TaskPage,
+  ];
+  task_get: [
+    {
+      serverId: string;
+      projectId: string;
+      sessionId: string | null;
+      taskId: string;
+    },
+    ManagedTask,
+  ];
+  task_submit: [
+    {
+      serverId: string;
+      projectId: string;
+      sessionId?: string | null;
+      message: string;
+    },
+    ManagedTask,
+  ];
+  task_control: [
+    {
+      serverId: string;
+      projectId: string;
+      sessionId: string | null;
+      taskId: string;
+      expectedRunId: string | null;
+      expectedRevision: number;
+      action: TaskAction;
+      message?: string;
+    },
+    ManagedTask,
+  ];
   run_input: [RunArgs & { message: string }, null];
   goal_track: [{ serverId: string; projectId: string; goalId: string }, Run];
   schedule_track: [

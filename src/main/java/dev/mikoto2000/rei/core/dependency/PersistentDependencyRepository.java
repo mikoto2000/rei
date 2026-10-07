@@ -25,6 +25,8 @@ public class PersistentDependencyRepository {
     db=JdbcClient.create(source);transaction=new TransactionTemplate(new DataSourceTransactionManager(source));this.clock=clock;
     db.sql("CREATE TABLE IF NOT EXISTS agent_dependencies(id TEXT PRIMARY KEY,project TEXT NOT NULL,root TEXT NOT NULL,session TEXT NOT NULL,kind TEXT NOT NULL,target TEXT NOT NULL,expected TEXT,created INTEGER NOT NULL,deadline INTEGER NOT NULL,state TEXT NOT NULL,reason TEXT NOT NULL,version INTEGER NOT NULL,answer TEXT)").update();
     db.sql("CREATE INDEX IF NOT EXISTS agent_dependencies_active ON agent_dependencies(state,id)").update();
+    if(!db.sql("PRAGMA table_info(agent_dependencies)").query((rs,n)->rs.getString("name")).list().contains("creator_run"))
+      db.sql("ALTER TABLE agent_dependencies ADD COLUMN creator_run TEXT").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_dependency_edges(child TEXT NOT NULL,parent TEXT NOT NULL,ordinal INTEGER NOT NULL,PRIMARY KEY(child,parent))").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_dependency_facts(sequence INTEGER PRIMARY KEY AUTOINCREMENT,event TEXT NOT NULL UNIQUE,dependency TEXT NOT NULL,project TEXT NOT NULL,session TEXT NOT NULL,kind TEXT NOT NULL,state TEXT NOT NULL,reason TEXT NOT NULL,version INTEGER NOT NULL,timestamp INTEGER NOT NULL,sent INTEGER NOT NULL DEFAULT 0,UNIQUE(dependency,version))").update();
     db.sql("CREATE INDEX IF NOT EXISTS agent_dependency_pending_facts ON agent_dependency_facts(sent,sequence)").update();
@@ -45,12 +47,23 @@ public class PersistentDependencyRepository {
       int inserted=db.sql("INSERT INTO agent_dependencies(id,project,root,session,kind,target,expected,created,deadline,state,reason,version) SELECT ?,?,?,?,?,?,?,?,?,?,?,0 WHERE (SELECT COUNT(*) FROM agent_dependencies WHERE project=? AND state IN ('RUNNING','WAITING','BLOCKED'))<256")
           .params(id,owner.projectId(),owner.projectRoot().toString(),owner.conversationId(),spec.kind().name(),spec.target(),spec.expected(),now.toEpochMilli(),now.plus(lifetime).toEpochMilli(),state,reason,owner.projectId()).update();
       if(inserted!=1)throw new IllegalStateException("Project active dependency limit reached (256)");
+      db.sql("UPDATE agent_dependencies SET creator_run=? WHERE project=? AND id=?").params(owner.runId(),owner.projectId(),id).update();
       for(int i=0;i<deps.size();i++)db.sql("INSERT INTO agent_dependency_edges(child,parent,ordinal) VALUES(?,?,?)").params(id,deps.get(i),i).update();
       var entry=get(owner.projectId(),id);fact(entry);return entry;
     });
   }
   public Entry get(String project,String id){return db.sql("SELECT * FROM agent_dependencies WHERE project=? AND id=?").params(project,id).query(row).optional().orElseThrow(()->new IllegalArgumentException("Dependency not found in this Project"));}
+  public String creatorRun(String project,String id){get(project,id);return db.sql("SELECT creator_run FROM agent_dependencies WHERE project=? AND id=?").params(project,id).query(String.class).optional().orElse(null);}
   public List<Entry> list(String project){return db.sql("SELECT * FROM agent_dependencies WHERE project=? ORDER BY created DESC,id LIMIT 256").param(project).query(row).list();}
+  public List<Entry> taskPage(String project,String root,String session,String after,int limit) {
+    if(limit<1||limit>101)throw new IllegalArgumentException("Invalid projection page limit");
+    return db.sql("SELECT * FROM agent_dependencies WHERE project=:project AND root=:root AND (:session IS NULL OR session=:session) AND id>:after ORDER BY id LIMIT :limit")
+        .param("project",project).param("root",root).param("session",session).param("after",after).param("limit",limit).query(row).list();
+  }
+  public List<Entry> createdByRun(String project,String root,String session,String run) {
+    return db.sql("SELECT * FROM agent_dependencies WHERE project=:project AND root=:root AND session=:session AND creator_run=:run ORDER BY id LIMIT 101")
+        .param("project",project).param("root",root).param("session",session).param("run",run).query(row).list();
+  }
   public List<Entry> activeAfter(String after){return db.sql("SELECT * FROM agent_dependencies WHERE state IN ('RUNNING','WAITING','BLOCKED') AND id>? ORDER BY id LIMIT 8").param(after).query(row).list();}
   public static boolean terminal(DependencyState state){return state==DependencyState.COMPLETED||state==DependencyState.FAILED||state==DependencyState.CANCELLED;}
   public Entry prepare(String project,String id) {
@@ -66,15 +79,24 @@ public class PersistentDependencyRepository {
     return entry;
   }
   public Entry observe(Entry expected,DependencyState state,String reason) {
+    return observe(expected,state,reason,false);
+  }
+  private Entry observe(Entry expected,DependencyState state,String reason,boolean strict) {
     if(state==null||reason==null||!reason.matches("[a-z_]{1,80}"))throw new IllegalArgumentException("Structured observation required");
     return transaction.execute(status->{
       if(expected.state()==state&&expected.reason().equals(reason))return get(expected.projectId(),expected.id());
       int changed=db.sql("UPDATE agent_dependencies SET state=?,reason=?,version=version+1 WHERE project=? AND id=? AND version=? AND state IN ('RUNNING','WAITING','BLOCKED')")
           .params(state.name(),reason,expected.projectId(),expected.id(),expected.version()).update();
+      if(changed==0&&strict)throw new dev.mikoto2000.rei.application.state.OperationConflictException();
       var current=get(expected.projectId(),expected.id());if(changed==1)fact(current);return current;
     });
   }
   public Entry cancel(String project,String id){var entry=get(project,id);if(terminal(entry.state()))throw new IllegalStateException("Dependency is terminal");return observe(entry,DependencyState.CANCELLED,"user_cancelled");}
+  public Entry cancel(String project,String id,long expectedVersion) {
+    var entry=get(project,id);
+    if(entry.version()!=expectedVersion||terminal(entry.state()))throw new dev.mikoto2000.rei.application.state.OperationConflictException();
+    return observe(entry,DependencyState.CANCELLED,"user_cancelled",true);
+  }
   public Entry answer(String project,String id,String text) {
     return answer(project,id,text,null);
   }

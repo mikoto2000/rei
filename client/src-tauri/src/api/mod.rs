@@ -12,6 +12,7 @@ mod goals;
 mod history;
 mod schedules;
 mod stateful;
+mod tasks;
 mod workspace;
 use history::*;
 
@@ -100,6 +101,38 @@ impl HttpReiClient {
 }
 #[async_trait]
 impl ReiClient for HttpReiClient {
+    async fn list_tasks(&self, query: TaskQuery) -> Result<TaskPage> {
+        self.task_list(query).await
+    }
+    async fn get_task(
+        &self,
+        project: &str,
+        session: Option<&str>,
+        id: &str,
+    ) -> Result<ManagedTask> {
+        self.task_get(project, session, id).await
+    }
+    async fn submit_task(
+        &self,
+        project: &str,
+        session: Option<&str>,
+        message: &str,
+    ) -> Result<ManagedTask> {
+        self.task_submit(project, session, message).await
+    }
+    async fn control_task(
+        &self,
+        project: &str,
+        session: Option<&str>,
+        id: &str,
+        run: Option<&str>,
+        revision: u64,
+        action: TaskAction,
+        message: Option<&str>,
+    ) -> Result<ManagedTask> {
+        self.task_control(project, session, id, run, revision, action, message)
+            .await
+    }
     async fn resume_checkpoint(&self, project: &str, task: &str) -> Result<CheckpointReceipt> {
         self.saved_checkpoint_run(project, task, true).await
     }

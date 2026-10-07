@@ -152,6 +152,58 @@ const call = (async (
   args: Record<string, unknown> | undefined,
 ) => {
   if (name === "app_snapshot") return structuredClone(data);
+  if (name === "tasks_list")
+    return {
+      items: [
+        {
+          id: "run:12345678-1234-1234-1234-123456789012",
+          kind: "CHECKPOINT",
+          sourceId: "checkpoint-task",
+          projectId: "p",
+          sessionId: "session",
+          runId: "old",
+          status: "SUSPENDED",
+          mode: "EXCLUSIVE",
+          results: [],
+          dependencyIds: [],
+          childIds: [],
+          revision: 9,
+          cancelSupported: false,
+          resumeSupported: true,
+          inputSupported: false,
+        },
+      ],
+      nextCursor: null,
+    };
+  if (name === "task_control") {
+    if (
+      args?.serverId !== "s" ||
+      args?.projectId !== "p" ||
+      args?.sessionId !== "session" ||
+      args?.taskId !== "run:12345678-1234-1234-1234-123456789012" ||
+      args?.expectedRunId !== "old" ||
+      args?.expectedRevision !== 9 ||
+      args?.action !== "resume"
+    )
+      throw "InvalidInput";
+    return {
+      id: args.taskId,
+      kind: "CHECKPOINT",
+      sourceId: "checkpoint-task",
+      projectId: "p",
+      sessionId: "session",
+      runId: "new",
+      status: "QUEUED",
+      mode: "EXCLUSIVE",
+      results: [],
+      dependencyIds: [],
+      childIds: [],
+      revision: 10,
+      cancelSupported: true,
+      resumeSupported: false,
+      inputSupported: false,
+    };
+  }
   if (name === "goal_track") {
     if (
       args?.serverId !== "s" ||
