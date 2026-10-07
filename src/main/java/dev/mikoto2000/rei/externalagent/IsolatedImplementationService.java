@@ -13,8 +13,9 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 public final class IsolatedImplementationService {
   public record Receipt(String id,String projectId,String sessionId,String root,String worktree,String branch,String baseline,
       String status,String patchHash,String commitHash,List<String> changedFiles,Map<String,String> sourceSnapshot,
-      SelfPatchReviewService.Result verification,String diagnostic) {
-    public Receipt {changedFiles=List.copyOf(changedFiles);sourceSnapshot=Map.copyOf(sourceSnapshot);}
+      SelfPatchReviewService.Result verification,String diagnostic,String provider) {
+    public Receipt(String id,String projectId,String sessionId,String root,String worktree,String branch,String baseline,String status,String patchHash,String commitHash,List<String> changedFiles,Map<String,String> sourceSnapshot,SelfPatchReviewService.Result verification,String diagnostic){this(id,projectId,sessionId,root,worktree,branch,baseline,status,patchHash,commitHash,changedFiles,sourceSnapshot,verification,diagnostic,"codex");}
+    public Receipt {changedFiles=List.copyOf(changedFiles);sourceSnapshot=Map.copyOf(sourceSnapshot);if(provider==null)provider="codex";if(!Set.of("codex","claude").contains(provider))throw new IllegalArgumentException("Unsupported implementation provider");}
   }
   @FunctionalInterface public interface Proposer {ImplementationProposal propose(Path worktree,Map<String,String> manifest)throws IOException;}
   public record Preview(String id,String patchHash,String commitHash,String diff,boolean redacted,List<String> warnings) {}
@@ -24,16 +25,20 @@ public final class IsolatedImplementationService {
   public IsolatedImplementationService(Path storage,ExternalAgentProcessRunner processes,SelfPatchReviewService review){this(storage,processes,cancelled->review);}
   public IsolatedImplementationService(Path storage,ExternalAgentProcessRunner processes,java.util.function.Function<BooleanSupplier,SelfPatchReviewService> reviews){this.storage=storage.toAbsolutePath().normalize();this.processes=processes;this.reviews=reviews;}
   public Receipt implement(AgentRunContext owner,String target,String testCommand,int seconds,BooleanSupplier cancelled,Proposer proposer)throws IOException {
-    if(!admission.tryAcquire())throw new IllegalArgumentException("Isolated implementation is busy");
-    try{return implementAdmitted(owner,target,testCommand,seconds,cancelled,proposer);}finally{admission.release();}
+    return implement(owner,ExternalAgentRequest.Agent.CODEX,target,testCommand,seconds,cancelled,proposer);
   }
-  private Receipt implementAdmitted(AgentRunContext owner,String target,String testCommand,int seconds,BooleanSupplier cancelled,Proposer proposer)throws IOException {
+  public Receipt implement(AgentRunContext owner,ExternalAgentRequest.Agent agent,String target,String testCommand,int seconds,BooleanSupplier cancelled,Proposer proposer)throws IOException {
+    if(agent==null)throw new IllegalArgumentException("Implementation provider required");
+    if(!admission.tryAcquire())throw new IllegalArgumentException("Isolated implementation is busy");
+    try{return implementAdmitted(owner,agent,target,testCommand,seconds,cancelled,proposer);}finally{admission.release();}
+  }
+  private Receipt implementAdmitted(AgentRunContext owner,ExternalAgentRequest.Agent agent,String target,String testCommand,int seconds,BooleanSupplier cancelled,Proposer proposer)throws IOException {
     requireOwner(owner);Path root=owner.projectRoot().toRealPath();if(storage.startsWith(root))throw new IllegalArgumentException("Implementation storage must be outside the parent repository");
     if(testCommand==null || testCommand.isBlank() || testCommand.length()>4096 || seconds<1 || seconds>60)throw new IllegalArgumentException("A bounded administrator test recipe is required");
     long deadline=System.nanoTime()+Duration.ofMinutes(25).toNanos();String baseline=clean(root,deadline,cancelled);
     Files.createDirectories(storage);try(var files=Files.list(storage)){if(files.filter(p->p.getFileName().toString().endsWith(".json")).limit(17).count()>=16)throw new IllegalArgumentException("Implementation receipt quota reached; explicit cleanup required");}
     String id=UUID.randomUUID().toString(),branch="codex/rei-implementation-"+id;Path worktree=storage.resolve(id);
-    var receipt=new Receipt(id,owner.projectId(),owner.conversationId(),root.toString(),worktree.toString(),branch,baseline,"STARTED",null,null,List.of(),Map.of(),null,"Unknown outcome until a terminal receipt is saved; never automatically retry");save(receipt);
+    var receipt=new Receipt(id,owner.projectId(),owner.conversationId(),root.toString(),worktree.toString(),branch,baseline,"STARTED",null,null,List.of(),Map.of(),null,"Unknown outcome until a terminal receipt is saved; never automatically retry",agent.name().toLowerCase(Locale.ROOT));save(receipt);
     try {
       // Configured checkout/clean filters can run programs. Reject them rather than evaluating repository code.
       var filters=run(root,deadline,cancelled,"config","--local","--get-regexp","^filter\\.");
@@ -74,13 +79,14 @@ public final class IsolatedImplementationService {
     }catch(java.util.concurrent.CancellationException error){save(copy(receipt,"CANCELLED",receipt.patchHash(),null,receipt.changedFiles(),receipt.sourceSnapshot(),receipt.verification(),"Cancelled; no parent merge"));throw error;}
   }
   public Receipt get(AgentRunContext owner,String id)throws IOException {
-    requireOwner(owner);if(id==null || !id.matches("[0-9a-f-]{36}"))throw new IllegalArgumentException("Invalid implementation ID");Path file=storage.resolve(id+".json");
+    requireIdentity(owner);if(id==null || !id.matches("[0-9a-f-]{36}"))throw new IllegalArgumentException("Invalid implementation ID");Path file=storage.resolve(id+".json");
     if(!Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS) || Files.size(file)>262144)throw new IllegalArgumentException("Implementation receipt unavailable");
     var r=json.readValue(Files.readAllBytes(file),Receipt.class);
     if(!r.id().equals(id) || !r.projectId().equals(owner.projectId()) || !r.sessionId().equals(owner.conversationId()) || !r.root().equals(owner.projectRoot().toRealPath().toString()))throw new IllegalArgumentException("Implementation receipt belongs to another Project/root/session");return r;
   }
   public synchronized Receipt merge(AgentRunContext owner,String id,String hash,String actualUserRequest)throws IOException {
-    var r=get(owner,id);String explicit="/agent codex merge "+id+" "+hash;
+    requireOwner(owner);
+    var r=get(owner,id);String explicit="/agent "+r.provider()+" merge "+id+" "+hash;
     if(!explicit.equals(actualUserRequest==null?null:actualUserRequest.strip()) || !"READY_FOR_APPROVAL".equals(r.status()) || !Objects.equals(r.patchHash(),hash) || r.commitHash()==null || r.verification()==null || !r.verification().status().equals("VERIFIED_CHECKS"))throw new IllegalArgumentException("Explicit receipt ID/hash and independent semantic approval required");
     long deadline=System.nanoTime()+Duration.ofSeconds(30).toNanos();Path root=Path.of(r.root()),tree=Path.of(r.worktree());
     if(!tree.equals(storage.resolve(id)) || !r.branch().equals("codex/rei-implementation-"+id) || !clean(root,deadline,()->false).equals(r.baseline()) || !clean(tree,deadline,()->false).equals(r.commitHash()) || !git(root,deadline,()->false,"rev-parse",r.branch()).strip().equals(r.commitHash()))throw new IllegalArgumentException("Stale parent, branch or worktree; re-review required");
@@ -102,7 +108,8 @@ public final class IsolatedImplementationService {
     var arguments=new ArrayList<String>(List.of("--no-ext-diff","--no-textconv","--no-renames","--no-color","--full-index","--binary",baseline));if(commit!=null)arguments.add(commit);arguments.add("--");
     String value=git(tree,deadline,cancelled,"diff",arguments.toArray(String[]::new));if(value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>524288)throw new IOException("Implementation diff exceeds bounded review limit");return value;
   }
-  private static void requireOwner(AgentRunContext owner){if(owner==null || owner.projectId()==null || owner.conversationId().startsWith("subagent:") || owner.mode()!=AgentRunContext.Mode.EXCLUSIVE)throw new IllegalArgumentException("Exclusive current human Project owner required");}
+  private static void requireIdentity(AgentRunContext owner){if(owner==null || owner.projectId()==null || owner.conversationId().startsWith("subagent:"))throw new IllegalArgumentException("Current human Project owner required");}
+  private static void requireOwner(AgentRunContext owner){requireIdentity(owner);if(owner.mode()!=AgentRunContext.Mode.EXCLUSIVE)throw new IllegalArgumentException("Exclusive current human Project owner required");}
   private static void check(BooleanSupplier cancelled,long deadline)throws IOException{if(cancelled.getAsBoolean() || Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException();if(System.nanoTime()>=deadline)throw new IOException("Implementation deadline reached");}
   private String clean(Path root,long deadline,BooleanSupplier cancelled)throws IOException {
     var identity=git(root,deadline,cancelled,"rev-parse","--show-toplevel","HEAD").lines().toList();
@@ -119,5 +126,5 @@ public final class IsolatedImplementationService {
   private void save(Receipt receipt)throws IOException {
     Files.createDirectories(storage);Path tmp=Files.createTempFile(storage,"receipt-",".tmp");try{Files.write(tmp,json.writeValueAsBytes(receipt));Files.move(tmp,storage.resolve(receipt.id()+".json"),StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}finally{Files.deleteIfExists(tmp);}
   }
-  private static Receipt copy(Receipt r,String status,String hash,String commit,List<String> files,Map<String,String> snapshot,SelfPatchReviewService.Result verification,String diagnostic){return new Receipt(r.id(),r.projectId(),r.sessionId(),r.root(),r.worktree(),r.branch(),r.baseline(),status,hash,commit,files,snapshot,verification,diagnostic);}
+  private static Receipt copy(Receipt r,String status,String hash,String commit,List<String> files,Map<String,String> snapshot,SelfPatchReviewService.Result verification,String diagnostic){return new Receipt(r.id(),r.projectId(),r.sessionId(),r.root(),r.worktree(),r.branch(),r.baseline(),status,hash,commit,files,snapshot,verification,diagnostic,r.provider());}
 }

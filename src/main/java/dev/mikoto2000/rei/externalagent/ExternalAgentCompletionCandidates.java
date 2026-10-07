@@ -13,7 +13,6 @@ public final class ExternalAgentCompletionCandidates implements CompletionMetada
   @Override public List<CompletionCandidate> choices(CompletionContext context) {
     if (context.argumentIndex() == 0) return candidates(ExternalAgentRequest.Agent.values(), "agent");
     if (context.argumentIndex() == 1 && valid(context, 1, ExternalAgentRequest.Agent.values())) {
-      if(context.tokens().get(1).equals("claude"))return candidates(new ExternalAgentRequest.Action[]{ExternalAgentRequest.Action.REVIEW},"action");
       var actions=new ArrayList<>(candidates(COMMAND_ACTIONS,"action"));actions.add(CompletionCandidate.value("implementation","action"));actions.add(CompletionCandidate.value("merge","action"));return List.copyOf(actions);
     }
     return List.of();

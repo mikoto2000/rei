@@ -36,6 +36,9 @@ public class ExternalAgentDelegationService implements AutoCloseable {
   private final Optional<WorkingSet> workingSet;
   private ExternalReviewRepository history;
   private CodexProperties modelBudgetProperties=new CodexProperties();
+  private ClaudeCodeProperties claudeProperties=new ClaudeCodeProperties();
+  @org.springframework.beans.factory.annotation.Autowired
+  void claudeProperties(ClaudeCodeProperties properties){this.claudeProperties=properties;}
   private IsolatedImplementationService implementations;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   void implementations(IsolatedImplementationService service){this.implementations=service;}
@@ -55,24 +58,29 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     return review(run,task,target,decisions,null,false,false);
   }
   public ExternalAgentResult implement(RunExecutionContext run,String target) {
-    if(closed.get() || run==null || implementations==null || !modelBudgetProperties.isEnabled() || !modelBudgetProperties.isImplementationEnabled())return ExternalAgentResult.rejected("Codex implementation requires administrator opt-in and a saved implementation service");
+    return implement(run,ExternalAgentRequest.Agent.CODEX,target);
+  }
+  public ExternalAgentResult implement(RunExecutionContext run,ExternalAgentRequest.Agent agent,String target) {
+    boolean codex=agent==ExternalAgentRequest.Agent.CODEX;
+    boolean enabled=codex?modelBudgetProperties.isEnabled() && modelBudgetProperties.isImplementationEnabled():agent==ExternalAgentRequest.Agent.CLAUDE && claudeProperties.isEnabled() && claudeProperties.isImplementationEnabled();
+    if(closed.get() || run==null || implementations==null || !enabled)return ExternalAgentResult.rejected("Implementation requires selected-provider administrator opt-in and a saved implementation service");
     try {
       var command=ExternalAgentCommandRequest.parse(run.userRequest());
-      if(!command.agent().equals("codex") || !command.action().equals("implement") || !Objects.equals(command.target(),target))return ExternalAgentResult.rejected("Explicit /agent codex implement target in this Run required");
+      if(!command.agent().equals(agent.name().toLowerCase(Locale.ROOT)) || !command.action().equals("implement") || !Objects.equals(command.target(),target))return ExternalAgentResult.rejected("Explicit implementation request for the selected provider and target in this Run required");
       var owner=run.runContext();if(owner==null || owner.projectId()==null || owner.mode()!=dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)return ExternalAgentResult.rejected("Exclusive current Project required");
-      run.checkToolPermission("requestCodexImplementation",target);Path parentRoot=owner.projectRoot().toRealPath();String relativeTarget=parentRoot.relativize(ExternalAgentRequest.resolveTarget(parentRoot,target)).toString();
-      String recipe=modelBudgetProperties.getImplementationTestCommand();int seconds=modelBudgetProperties.getImplementationTestTimeoutSeconds();
+      run.checkToolPermission(codex?"requestCodexImplementation":"requestClaudeCodeImplementation",target);Path parentRoot=owner.projectRoot().toRealPath();String relativeTarget=parentRoot.relativize(ExternalAgentRequest.resolveTarget(parentRoot,target)).toString();
+      String recipe=codex?modelBudgetProperties.getImplementationTestCommand():claudeProperties.getImplementationTestCommand();int seconds=codex?modelBudgetProperties.getImplementationTestTimeoutSeconds():claudeProperties.getImplementationTestTimeoutSeconds();
       if(recipe==null || recipe.isBlank() || recipe.length()>4096 || seconds<1 || seconds>60)return ExternalAgentResult.rejected("Administrator-selected bounded implementation test recipe required");
       if(!run.claimExternalDelegation())return ExternalAgentResult.rejected("Only one external delegation per Run");
       var flag=new AtomicBoolean(run.isCancelled());var hook=cancellation.onCancel(owner.runId(),()->{flag.set(true);run.cancel();});
       try {
-        var receipt=implementations.implement(owner,relativeTarget,recipe,seconds,()->flag.get() || run.isCancelled(),(tree,manifest)->{
+        var receipt=implementations.implement(owner,agent,relativeTarget,recipe,seconds,()->flag.get() || run.isCancelled(),(tree,manifest)->{
           run.checkActive();var selected=ExternalAgentRequest.resolveTarget(tree,relativeTarget);
           var snapshot=ExternalAgentSourceSnapshot.snapshot(tree,selected,()->flag.get() || run.isCancelled(),System.nanoTime()+java.time.Duration.ofSeconds(10).toNanos());
           String context=new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(Map.of("sourceSnapshot",snapshot,"manifest",manifest));
-          var request=new ExternalAgentRequest(ExternalAgentRequest.Agent.CODEX,ExternalAgentRequest.Action.IMPLEMENT,bounded(run.userRequest(),4000),tree,selected,context,owner.runId(),UUID.randomUUID().toString());
+          var request=new ExternalAgentRequest(agent,ExternalAgentRequest.Action.IMPLEMENT,bounded(run.userRequest(),4000),tree,selected,context,owner.runId(),UUID.randomUUID().toString());
           var result=executor.execute(request,()->flag.get() || run.isCancelled(),run.modelCallBudget());run.checkActive();
-          if(!result.success() || result.implementation()==null)throw new java.io.IOException("Codex implementation proposal "+result.status()+": "+bounded(result.summary(),800));
+          if(!result.success() || result.implementation()==null)throw new java.io.IOException(agent.name()+" implementation proposal "+result.status()+": "+bounded(result.summary(),800));
           return result.implementation();
         });return implementationResult(receipt);
       }finally{hook.dispose();}
@@ -112,12 +120,25 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     if(previousId==null || previousId.isBlank())return ExternalAgentResult.rejected("Previous review ID required");
     return review(run,task,null,decisions,previousId,true,false);
   }
+  public ExternalAgentResult continueReview(RunExecutionContext run,ExternalAgentRequest.Agent agent,String previousId,String task,String decisions) {
+    if(agent==null || previousId==null || previousId.isBlank())return ExternalAgentResult.rejected("Provider and previous review ID required");
+    if(agent==ExternalAgentRequest.Agent.CLAUDE && (run==null || !ExternalAgentAuthorization.explicitContinuationRequest(run.userRequest(),agent)))return ExternalAgentResult.rejected("Explicit Claude review continuation request required");
+    return review(run,task,null,decisions,previousId,true,false,null,null,agent);
+  }
   public ExternalAgentResult proposeFix(RunExecutionContext run,String previousId,String task,String decisions) {
     if(previousId==null || previousId.isBlank())return ExternalAgentResult.rejected("Previous review ID required");
     return review(run,task,null,decisions,previousId,false,true);
   }
+  public ExternalAgentResult proposeFix(RunExecutionContext run,ExternalAgentRequest.Agent agent,String previousId,String task,String decisions) {
+    if(agent==null || previousId==null || previousId.isBlank())return ExternalAgentResult.rejected("Provider and previous review ID required");
+    return review(run,task,null,decisions,previousId,false,true,null,null,agent);
+  }
   public ParallelResult reviewParallel(RunExecutionContext run,List<ParallelRequest> requests) {
-    if(closed.get()||!modelBudgetProperties.isParallelReviewEnabled()||run==null||!ExternalAgentAuthorization.explicitParallelRequest(run.userRequest()))return new ParallelResult(ParallelStatus.REJECTED,List.of(),"Explicit parallel Codex review request and opt-in configuration required");
+    return reviewParallel(run,ExternalAgentRequest.Agent.CODEX,requests);
+  }
+  public ParallelResult reviewParallel(RunExecutionContext run,ExternalAgentRequest.Agent agent,List<ParallelRequest> requests) {
+    boolean enabled=agent==ExternalAgentRequest.Agent.CODEX?modelBudgetProperties.isParallelReviewEnabled():agent==ExternalAgentRequest.Agent.CLAUDE && claudeProperties.isEnabled() && claudeProperties.isParallelReviewEnabled();
+    if(closed.get()||!enabled||run==null||!ExternalAgentAuthorization.explicitParallelRequest(run.userRequest(),agent))return new ParallelResult(ParallelStatus.REJECTED,List.of(),"Explicit parallel review request for the selected provider and opt-in configuration required");
     List<ParallelRequest> selected;
     try {
       var owner=run.runContext();if(owner==null||owner.projectId()==null||!Files.isDirectory(owner.projectRoot())||requests==null||requests.size()<1||requests.size()>4)throw new IllegalArgumentException();
@@ -128,8 +149,8 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     var futures=new ArrayList<Future<ExternalAgentResult>>();var permit=new ParallelPermit(run);ParallelStatus status=ParallelStatus.COMPLETED;
     try {
       if(!run.claimExternalDelegation())return new ParallelResult(ParallelStatus.REJECTED,List.of(),"Only one external delegation or batch is allowed per Run");
-      activeParallel.set(permit);long deadline=System.nanoTime()+modelBudgetProperties.getParallelReviewTimeout().toNanos();
-      for(var request:selected)futures.add(parallelPool.submit(()->{try{return review(run,request.task(),request.target(),request.context(),null,false,false,permit,request.requestId());}catch(dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped){permit.stopped.compareAndSet(null,stopped);permit.cancelled.set(true);throw stopped;}}));
+      activeParallel.set(permit);long deadline=System.nanoTime()+(agent==ExternalAgentRequest.Agent.CODEX?modelBudgetProperties.getParallelReviewTimeout():claudeProperties.getParallelReviewTimeout()).toNanos();
+      for(var request:selected)futures.add(parallelPool.submit(()->{try{return review(run,request.task(),request.target(),request.context(),null,false,false,permit,request.requestId(),agent);}catch(dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped){permit.stopped.compareAndSet(null,stopped);permit.cancelled.set(true);throw stopped;}}));
       for(var future:futures) {
         while(!future.isDone()) {
           if(permit.stopped.get()!=null)throw permit.stopped.get();
@@ -174,8 +195,8 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     String provider=agent.name().toLowerCase(Locale.ROOT);
     String providerLabel=agent==ExternalAgentRequest.Agent.CODEX?"Codex":"Claude Code";
     if(permit!=null&&(permit.run!=run||permit.cancelled.get()||Thread.currentThread().isInterrupted()))return new ExternalAgentResult(ExternalAgentResult.Status.CANCELLED,"Parallel review cancelled before execution",List.of(),List.of(),0,null,"");
-    if (run == null || !(fixProposal?ExternalAgentAuthorization.explicitFixProposalRequest(run.userRequest()):ExternalAgentAuthorization.explicitRequest(run.userRequest(),agent)))
-      return ExternalAgentResult.rejected(fixProposal?"Codex fix proposals require an explicit request for a Codex fix proposal in this Run; tool arguments and an ordinary review request cannot authorize it."
+    if (run == null || !(fixProposal?ExternalAgentAuthorization.explicitFixProposalRequest(run.userRequest(),agent):ExternalAgentAuthorization.explicitRequest(run.userRequest(),agent)))
+      return ExternalAgentResult.rejected(fixProposal?providerLabel+" fix proposals require an explicit request for a fix proposal from this provider in this Run; tool arguments and an ordinary review request cannot authorize it."
           :provider+" requires an explicit user request in this Run. Tool arguments cannot authorize another provider.");
     var owner = run.runContext();
     if (owner == null || owner.projectId() == null || !Files.isDirectory(owner.projectRoot()))
@@ -192,7 +213,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
           previous=history.get(owner.projectId(),previousId);
           if(!previous.agent().equals(provider)||!previous.projectRoot().equals(root.toString()) || previous.status().equals("STARTED") || previous.result()==null)return ExternalAgentResult.rejected("Completed review from this provider/project root required");
           if(fixProposal && !previous.result().success())return ExternalAgentResult.rejected("Successful completed review required for a fix proposal");
-          if(continuation && (!executor.supportsContinuation() || !previous.result().success()
+          if(continuation && (!(agent==ExternalAgentRequest.Agent.CODEX?executor.supportsContinuation():executor.supportsContinuation(agent)) || !previous.result().success()
               || !ExternalAgentResult.validSessionId(previous.result().externalSessionId()) || history.continuationAttempted(previousId)))
             return ExternalAgentResult.rejected("Unconsumed successful native session required; enable session persistence or request a fresh re-review");
           target=previous.target();
@@ -209,7 +230,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
           + previous.status()+"\n"+bounded(previous.result().summary()+"\n"+previous.result().findings(),5000)+"\n"+context,10000);
       if(history!=null)try{
         String relative=selected==null?null:root.relativize(selected).toString();
-        if(continuation)history.startContinuation(owner,id,root,relative,previousId);
+        if(continuation)history.startContinuation(owner,id,root,relative,previousId,provider);
         else if(agent==ExternalAgentRequest.Agent.CODEX)history.start(owner,id,root,relative,previousId);
         else history.start(owner,id,root,relative,previousId,provider);
         if(permit!=null)permit.reviewIds.put(parallelRequestId,id);

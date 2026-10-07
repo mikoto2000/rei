@@ -185,6 +185,13 @@ public class ExternalConfigFileService {
           external-agents:
             claude:
               enabled: ${REI_CLAUDE_ENABLED:false}
+              persist-sessions: ${REI_CLAUDE_PERSIST_SESSIONS:false}
+              fix-proposals-enabled: ${REI_CLAUDE_FIX_PROPOSALS_ENABLED:false}
+              implementation-enabled: ${REI_CLAUDE_IMPLEMENTATION_ENABLED:false}
+              implementation-test-command: ${REI_CLAUDE_IMPLEMENTATION_TEST_COMMAND:}
+              implementation-test-timeout-seconds: ${REI_CLAUDE_IMPLEMENTATION_TEST_TIMEOUT_SECONDS:30}
+              parallel-review-enabled: ${REI_CLAUDE_PARALLEL_REVIEW_ENABLED:false}
+              parallel-review-timeout: ${REI_CLAUDE_PARALLEL_REVIEW_TIMEOUT:120s}
               command: ${REI_CLAUDE_COMMAND:claude}
               total-timeout: 5m
               inactivity-timeout: 2m

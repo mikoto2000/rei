@@ -5,8 +5,10 @@
 後続の全件実装依頼については、最新main `905cd4ee` を基準にした
 [全件再監査・実装記録](implementation-report-remaining-features-2026-10-07.md)を参照する。
 このページのbounded実装済みという表記を、追加22優先項目の完成へ読み替えない。
-現在は監査とRun受付上限の前提整備を進めており、会話並行化・Task Manager・
-共通Artifact Deliveryを完成扱いしていない。
+全件依頼のPriority 1–6では、会話並行化、Task Manager、共通Artifact Delivery、
+GitHub Event Trigger、Cross-project Today、Codex隔離実装を実装・統合した。
+Claudeのresume、Change Set、並列review、隔離実装は追加回帰中。
+Priority 7以降は全件実装記録の進捗を参照する。実モデル・実サービス検証とは区別する。
 
 元の依頼は「現在のリポジトリ・環境で安全に実装できる項目」を小さな独立機能として実装し、候補全部の無条件実装や既存機能の二重実装を避けるものだった。後続の全対応要求を受け、具体的な不足を再照合して追加実装した。過去のfollow-upの「未対応」はその記録時点の状態であり、現在の判定は[監査表](autonomy-feature-audit.md)を参照する。Deferredを実装済みへ読み替えない。
 

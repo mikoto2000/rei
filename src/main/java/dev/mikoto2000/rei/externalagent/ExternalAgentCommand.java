@@ -6,7 +6,7 @@ import dev.mikoto2000.rei.application.session.ShellConversationService;
 
 /** Thin asynchronous shell adapter. The external advisor dispatches the shared domain service. */
 @Component
-@Command(name = "agent", description = "External review or isolated Codex implementation; inspect and explicitly merge verified receipts")
+@Command(name = "agent", description = "External review or isolated implementation; inspect and explicitly merge verified provider receipts")
 public class ExternalAgentCommand implements java.util.concurrent.Callable<Integer> {
   private final ShellConversationService conversations;
   @Parameters(arity = "0..*", paramLabel = "AGENT ACTION [TARGET]", completionCandidates = ExternalAgentCompletionCandidates.class) private String[] arguments;

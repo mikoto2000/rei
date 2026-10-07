@@ -28,6 +28,11 @@ class IsolatedImplementationServiceTest {
     var preview=service.preview(owner,receipt.id());assertEquals(receipt.patchHash(),preview.patchHash());assertTrue(preview.diff().contains("+after"));assertTrue(preview.diff().contains("-before"));
     var restarted=new IsolatedImplementationService(temporary.resolve("private"),new ExternalAgentProcessRunner(),new SelfPatchReviewService(new dev.mikoto2000.rei.core.service.SystemShellService()));
     assertEquals(receipt,restarted.get(owner,receipt.id()));
+    var reader=new AgentRunContext("read","session",root,"project",AgentRunContext.RequestSource.SHELL,AgentRunContext.Mode.READ_ONLY);
+    assertEquals(receipt,restarted.get(reader,receipt.id()));assertTrue(restarted.preview(reader,receipt.id()).diff().contains("+after"));
+    assertThrows(IllegalArgumentException.class,()->restarted.merge(reader,receipt.id(),receipt.patchHash(),"/agent codex merge "+receipt.id()+" "+receipt.patchHash()));
+    Path stored=temporary.resolve("private").resolve(receipt.id()+".json");var json=new com.fasterxml.jackson.databind.ObjectMapper();var legacy=(com.fasterxml.jackson.databind.node.ObjectNode)json.readTree(Files.readString(stored));legacy.remove("provider");Files.writeString(stored,json.writeValueAsString(legacy));
+    assertEquals("codex",restarted.get(owner,receipt.id()).provider());
     assertThrows(IllegalArgumentException.class,()->restarted.merge(owner,receipt.id(),receipt.patchHash(),"ordinary review"));
     assertThrows(IllegalArgumentException.class,()->restarted.merge(owner,receipt.id(),"0".repeat(64),"/agent codex merge "+receipt.id()+" "+receipt.patchHash()));
     var merged=restarted.merge(owner,receipt.id(),receipt.patchHash(),"/agent codex merge "+receipt.id()+" "+receipt.patchHash());
