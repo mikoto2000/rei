@@ -16,7 +16,9 @@ JSONはschemaVersion、id、projectId、kind、createdAtだけ。message/referen
 
 再起動時はPENDINGを保持し、SENDINGをUNKNOWNへ移し自動再送しない。FAILED/UNKNOWN/BLOCKEDの再送は手動のみで、すでにattemptがある場合は重複リスクを明示確認する。最大3 attempts。SENTは再送不可。保存先hashが設定と異なる要求はBLOCKED。事前ackはSUPPRESSEDだが、送信開始後のackで既送信を取り消せない。Inbox ackも配送もTool承認・Run再開・Goal完了を行わない。
 
-同一SQLiteへ同時に複数のReiアプリを起動する運用は対象外。停止・DB更新失敗で結果不明になる可能性を保持し、外部サービス固有のemail/Slack adapter・providerによる配送確認はこのsliceに含まない。
+同一SQLiteへ同時に複数のReiアプリを起動する運用は対象外。停止・DB更新失敗で結果不明になる可能性を保持する。
+Slack adapterとprovider receiptは [Slack notification provider](slack-notification-provider.md) を参照。
+`rei.attention.delivery.provider` の既定はWEBHOOKで、この文書の既存設定を維持する。
 
 ## 明示操作
 

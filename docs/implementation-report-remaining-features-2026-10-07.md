@@ -528,3 +528,34 @@ Native120、React25 suites / 99 testsとtypecheck成功。Java全体回帰を実
 
 Reflection Java全体回帰: 668 suites / 3622 tests、failure/error/skipped各0で成功。
 Native120、React25/99とtypecheckも成功。実装・ローカル検証完了、Git統合を実施する。
+
+Reflection Git receipt: feature `061034b8`、main merge `b7a050fa41ce2acb6d55d2807fb1a95fb01fbcb2`、両方push済み。
+統合後Java関連5 suites / 40 tests、Native120、React25/99とtypecheck成功、failure/error/skipped各0。
+
+## Phase 4: Slack notification provider
+
+branch `codex/slack-notification-provider`、fetch済み基準main `b7a050fa`。
+既存Attention Inbox/outbox、Policy、256 queue/1 in-flight、claim-before-send、UNKNOWN recovery、
+最大3 attemptsの明示risk付きretryを再利用する。新しい孤立notification体系は作らない。
+Slack chat.postMessage公式仕様のok/channel/ts receiptと429 Retry-Afterをlocal HTTP fixtureで検証する。
+参照: https://docs.slack.dev/reference/methods/chat.postMessage/ 、 https://docs.slack.dev/apis/web-api/rate-limits/ 。
+
+NotificationProvider boundary、既存Webhook compatibility adapter、Slack chat.postMessage adapterを実装。
+delivery.providerは既定WEBHOOK、Slack/automatic/deliveryは明示opt-in。Project/channel allowlistと既存Policyを必須にする。
+credential/endpoint本文を保存せず、account/channel identityのdestination hashで設定変更を検出する。
+SlackはHTTP200だけでSENTにせず、ok/channel/tsを検証しprovider receiptを既存outboxへ保存する。
+未知error/過大・不正body/5xx/transport timeoutはUNKNOWN、確定rejectはFAILED。
+429の受信済みRetry-Afterは過大bodyでも失わず、persistent cooldown（1..3600秒）を適用する。
+1秒間隔のclaim reservation、1 in-flight、256 queue、最大3 attempts、明示risk付きretryとrestart UNKNOWNを再利用。
+provider内で再送しない。config/provider/credential変更で旧pendingをBLOCKEDにし、明示retryだけ保存先を更新する。
+旧DBとconstructor/configを維持し、receipt/provider/retryNotBeforeを追加。任意message/ユーザー本文を送らない。
+
+TDD: adapter欠落、outbox接続欠落、未知error/cancel/provider変更、過大429 bodyのRedを確認。
+既存parallel claim回帰でSQLite deferred read/write upgradeのlock問題を検出し、writer取得をread前に修正。
+関連Java6 suites / 46 tests、failure/error/skipped各0。real local HTTP/SQLite restart/legacy migration、
+receipt/allowlist/redaction/Policy/disable/duplicate/manual retry/429/timeout/redirect/credential rotationを確認。
+Native120、React25/99とtypecheck成功。実Slack送信は行っていない。Java全体回帰を実行中。
+設定・API・制限はslack-notification-provider.mdを参照。
+
+Slack Java全体回帰: 670 suites / 3636 tests、failure/error/skipped各0で成功。
+Native120、React25/99とtypecheck成功。実装・ローカル検証完了、Git統合を実施する。
