@@ -84,6 +84,7 @@ pub struct WorkingSetItem {
 }
 #[derive(Clone)]
 pub struct Projection {
+    pub mode: RunMode,
     pub cancel_requested: bool,
     pub(super) registered_order: usize,
     pub revision: u64,
@@ -143,6 +144,7 @@ impl Projection {
         prompt: &str,
     ) -> Self {
         Self {
+            mode: RunMode::Exclusive,
             cancel_requested: false,
             registered_order: 0,
             revision: 0,
@@ -371,6 +373,7 @@ impl Projection {
                 RunStatus::Completed => "COMPLETED",
                 RunStatus::Failed => "FAILED",
                 RunStatus::Cancelled => "CANCELLED",
+                RunStatus::Unknown => "UNKNOWN",
             }
             .into();
             activity.duration_ms = event.payload["duration"].as_u64();

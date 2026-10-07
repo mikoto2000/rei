@@ -31,6 +31,20 @@ class PersistentCheckpointServiceTest {
     owner=new AgentRunContext("run","session",root,"A");service.start(owner,"original request");
   }
   @AfterEach void close(){service.close();}
+  @Test void restrictedRunPreservesModeAcrossResumeWithoutResettingActiveTask() {
+    var plan = new dev.mikoto2000.rei.core.actionplan.ActionPlan();
+    var task = new dev.mikoto2000.rei.core.taskstate.TaskState();
+    task.start("active implementation");
+    factory.addBean("plan", plan); factory.addBean("task", task);
+    var consultation = new AgentRunContext("consult", "session", root, "A", AgentRunContext.RequestSource.WEB, AgentRunContext.Mode.CONVERSATION);
+    service.start(consultation, "question");
+    assertEquals("active implementation", task.goal());
+    service.finish(consultation, "CANCELLED");
+    var checkpoint = repository.list("A").stream().filter(s -> s.runId().equals("consult")).findFirst().orElseThrow();
+    assertEquals(AgentRunContext.Mode.CONVERSATION, checkpoint.mode());
+    var resumed = service.resume("A", checkpoint.taskId(), AgentRunContext.RequestSource.WEB);
+    assertEquals(AgentRunContext.Mode.CONVERSATION, repository.list("A").stream().filter(s -> s.runId().equals(resumed.runId())).findFirst().orElseThrow().mode());
+  }
   PersistentCheckpoint state(){return repository.list("A").getFirst();}
   @Test void inspectionNeverExecutesAndResumeCreatesNewRunWithLineageAndLease() {
     service.finish(owner,"CANCELLED");String task=state().taskId();

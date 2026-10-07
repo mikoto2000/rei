@@ -10,7 +10,13 @@ public class RunExecutionContext {
   public static final String KEY = RunExecutionContext.class.getName();
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
   public void setToolPermissionGuard(dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {this.permissions=permissions;}
-  public void checkToolPermission(String name,String input) {if(permissions!=null)permissions.check(name,input,runContext);}
+  public void checkToolPermission(String name,String input) {
+    if(permissions!=null){permissions.check(name,input,runContext);return;}
+    if(runContext!=null && (runContext.mode()==dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.CONVERSATION
+        || runContext.mode()==dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY
+        && !dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.intrinsicallyReadOnly(name)))
+      throw new dev.mikoto2000.rei.core.policy.ToolPermissionException(name,dev.mikoto2000.rei.core.policy.PermissionDecision.DENY);
+  }
   private final String runId;
   private final OutputLimitRunBudget budget;
   private final StagnationDetector detector = new StagnationDetector();
@@ -65,6 +71,9 @@ public class RunExecutionContext {
   private long contextSegment;
   public synchronized long nextContextSegment() { return ++contextSegment * 1_000_000_000L; }
   private String userRequest = "";
+  private List<org.springframework.ai.chat.messages.Message> conversationSnapshot=List.of();
+  public void setConversationSnapshot(List<org.springframework.ai.chat.messages.Message> messages) {conversationSnapshot=List.copyOf(messages);}
+  public List<org.springframework.ai.chat.messages.Message> conversationSnapshot() {return conversationSnapshot;}
   private boolean externalDelegationUsed;
   private dev.mikoto2000.rei.externalagent.ExternalAgentResult externalReviewResult;
   public synchronized dev.mikoto2000.rei.externalagent.ExternalAgentResult externalReviewResult() { return externalReviewResult; }
@@ -153,6 +162,7 @@ public class RunExecutionContext {
     if (recovering) emit(AgentEventType.STAGNATION_RECOVERED, evidence, "progress_resumed");
   }
   public synchronized void close() { closed = true; pending.clear(); }
+  public synchronized void expire() {close();if(interventions!=null)interventions.discardAndFinish();}
   public synchronized void cancel() {
     if (completed) return;
     cancelled = true;

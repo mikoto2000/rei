@@ -87,6 +87,12 @@ public final class ConversationInputRouter {
     return enqueue(slot(context, prompt), lifecycle);
   }
   public boolean containsRun(String projectId,String runId) {return projectQueue.containsRun(projectId,runId);}
+  public boolean offerIntervention(String projectId,String sessionId,String runId,String message) {
+    if(message==null || message.isBlank() || message.length()>16384)throw new IllegalArgumentException("Invalid guidance");
+    var slot=agentSlots.get(runId);
+    return slot!=null && Objects.equals(projectId,slot.context().projectId())
+        && Objects.equals(sessionId,slot.context().conversationId()) && slot.queue().offer(message);
+  }
   public boolean cancelQueued(String runId) {
     boolean removed = projectQueue.cancelQueued(runId);
     if (removed) {
@@ -112,7 +118,7 @@ public final class ConversationInputRouter {
     agentSlots.put(context.runId(), slot);
     String key = context.projectId() == null ? context.projectRoot().toString() : context.projectId();
     try {
-      boolean first = projectQueue.enqueue(key, context.runId(), () -> {
+      boolean first = projectQueue.enqueue(key, context.runId(), ProjectRunQueue.Access.valueOf(context.mode().name()), () -> {
         try { lifecycle.accept(() -> runner.execute(context, slot.prompt(), slot.queue())); }
         finally { agentSlots.remove(context.runId()); forget(slot); }
       }, () -> { active.put(context.runId(), ActiveRun.of(context, slot.prompt())); changed(); },

@@ -35,7 +35,9 @@ public class ToolPermissionGuard {
     check(tool,input,child,matching?parent:null);
   }
   private void check(String tool,String input,AgentRunContext owner,AgentRunContext approvalOwner) {
-    var decision=policy.evaluate(tool);
+    boolean restricted = owner != null && (owner.mode() == AgentRunContext.Mode.CONVERSATION
+        || owner.mode() == AgentRunContext.Mode.READ_ONLY && !ToolPermissionPolicy.intrinsicallyReadOnly(tool));
+    var decision=restricted ? PermissionDecision.DENY : policy.evaluate(tool);
     if(decision==PermissionDecision.AUTO_APPROVE)return;
     String request=null;
     if(decision==PermissionDecision.REQUIRE_APPROVAL && approvals!=null && approvalOwner!=null && approvalOwner.projectId()!=null) {

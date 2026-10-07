@@ -19,6 +19,28 @@ import dev.mikoto2000.rei.summarize.SummaryTools;
 
 class LlmChatClientProviderTest {
   @Test
+  void conversationClientHasNoSharedMemoryAdvisorsOrTools() {
+    var model = mock(ChatModel.class);
+    when(model.getOptions()).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
+    when(model.call(org.mockito.ArgumentMatchers.any(org.springframework.ai.chat.prompt.Prompt.class))).thenReturn(new org.springframework.ai.chat.model.ChatResponse(
+        List.of(new org.springframework.ai.chat.model.Generation(new org.springframework.ai.chat.messages.AssistantMessage("answer")))));
+    var models = mock(LlmModelProvider.class);
+    when(models.subAgentChatModel()).thenReturn(model);
+    when(models.chatOptions(LlmFeature.CHAT, null)).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
+    var memory = mock(ChatMemory.class);
+    var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), mock(SystemPromptService.class), memory,
+        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null), null, null);
+    assertThat(provider.parallelChatClient(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.CONVERSATION)
+        .prompt("question").call().content()).isEqualTo("answer");
+    var captured = org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
+    org.mockito.Mockito.verify(model).call(captured.capture());
+    assertThat(captured.getValue().getInstructions()).hasSize(1);
+    assertThat(((org.springframework.ai.model.tool.ToolCallingChatOptions)captured.getValue().getOptions()).getToolCallbacks()).isEmpty();
+    org.mockito.Mockito.verifyNoInteractions(memory);
+  }
+  @Test
   void memoryProcessesOnlySuppliedEvidenceWithoutToolsOrAdvisors() {
     var prompts = new java.util.ArrayList<org.springframework.ai.chat.prompt.Prompt>();
     ChatModel model = new ChatModel() {

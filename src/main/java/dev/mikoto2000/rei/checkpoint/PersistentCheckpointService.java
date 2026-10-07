@@ -60,12 +60,13 @@ public class PersistentCheckpointService implements AutoCloseable {
     var state=active.get(context.runId());
     if(state==null) {
       state=PersistentCheckpoint.initial(UUID.randomUUID().toString(),context.projectId(),context.conversationId(),context.runId(),context.projectRoot(),request);
-      var initial=repository.fields(state);initial.put("git",CheckpointReconciler.git(context.projectRoot()));state=repository.fields(initial);
+      var initial=repository.fields(state);initial.put("mode",context.mode());initial.put("git",CheckpointReconciler.git(context.projectRoot()));state=repository.fields(initial);
       state=repository.save(state,0,"start:"+context.runId());
       if(!repository.acquire(state.projectId(),state.taskId(),context.runId()))throw new IllegalStateException("Task execution already owned");
       active.put(context.runId(),state);
     }
     executing.add(context.runId());
+    if(context.mode()!=AgentRunContext.Mode.EXCLUSIVE)return;
     var plan=plans.getIfAvailable();if(plan!=null) {
       if(state.resumedFromRunId()==null)plan.restore(List.of());
       else plan.restore(state.plan().stream().map(p->new dev.mikoto2000.rei.core.actionplan.PlanStep((String)p.get("id"),(String)p.get("description"),(String)p.get("status"),((Number)p.get("order")).intValue(),((Number)p.get("failureCount")).intValue())).toList());
@@ -134,10 +135,11 @@ public class PersistentCheckpointService implements AutoCloseable {
       CheckpointReconciler.active();var next=state.resume(run);var fields=repository.fields(next);fields.put("nextAction",result.nextAction());fields.put("reconciliation",result);
       next=repository.save(repository.fields(fields),state.revision(),"resume:"+run);
       active.put(run,next);
-      var context=new AgentRunContext(run,next.sessionId(),Path.of(next.projectRoot()),project,source);
+      var context=new AgentRunContext(run,next.sessionId(),Path.of(next.projectRoot()),project,source,next.mode());
       var registry=runs.getIfAvailable();var runner=lifecycle.getIfAvailable();
       if(registry!=null)registry.register(context);
       String prompt="保存されたタスク "+task+" を明示的に再開してください。まず現在の状態を確認し、未完了・未検証の工程を再計画してください。結果不明の副作用を再実行する前に、その項目だけをユーザーに確認してください。";
+      if(next.mode()!=AgentRunContext.Mode.EXCLUSIVE)prompt=next.request();
       try {router.getObject().submit(context,prompt,work->{
         try {if(runner!=null)runner.execute(context,work);else work.run();}
         finally {if(active.containsKey(run))finish(context,registry!=null&&registry.get(run).status()==RunStatus.CANCELLED?"CANCELLED":"INTERRUPTED");}
@@ -208,6 +210,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     throw new IllegalStateException();
   }
   private void capture(Map<String,Object> fields,AgentRunContext context) {
+    if(context.mode()!=AgentRunContext.Mode.EXCLUSIVE)return;
     var plan=plans.getIfAvailable();if(plan!=null) {
       fields.put("plan",plan.steps());fields.put("currentStep",plan.currentStep().map(s->s.id()).orElse(null));
       plan.nextStep().ifPresent(s->fields.put("nextAction",s.description()));

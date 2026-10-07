@@ -29,6 +29,7 @@ public class RunService implements AutoCloseable {
   }
   private Object monitor() { return bus == null ? registry : bus; }
   public RunSnapshot get(String runId) { synchronized (monitor()) { purgeExpired(); return registry.get(runId); } }
+  public boolean restored(String runId) { synchronized(monitor()) { return registry.restored(runId); } }
   public void purgeExpired() {
     synchronized (monitor()) {
       var expired = registry.purgeExpired();

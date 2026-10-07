@@ -185,7 +185,20 @@ impl ReiClient for HttpReiClient {
         session: Option<&str>,
         message: &str,
     ) -> Result<ChatReceipt> {
+        self.chat_mode(project, session, message, RunMode::Exclusive)
+            .await
+    }
+    async fn chat_mode(
+        &self,
+        project: &str,
+        session: Option<&str>,
+        message: &str,
+        mode: RunMode,
+    ) -> Result<ChatReceipt> {
         let mut body = serde_json::json!({"projectId":project,"message":message});
+        if mode != RunMode::Exclusive {
+            body["mode"] = serde_json::to_value(mode).map_err(|_| AppError::InvalidInput)?;
+        }
         if let Some(session) = session {
             body["sessionId"] = session.into();
         }
@@ -214,6 +227,21 @@ impl ReiClient for HttpReiClient {
             Operation::Run,
         )
         .await
+    }
+    async fn input(&self, run: &str, project: &str, session: &str, message: &str) -> Result<()> {
+        let response = Self::checked(
+            self.request(Method::POST, &Self::run_path(run, "/input")?, true)?
+                .json(
+                    &serde_json::json!({"projectId":project,"sessionId":session,"message":message}),
+                )
+                .timeout(Duration::from_secs(30)),
+            Operation::Chat,
+        )
+        .await?;
+        if response.status() != reqwest::StatusCode::ACCEPTED {
+            return Err(AppError::InvalidResponse);
+        }
+        Ok(())
     }
     async fn cancel(&self, run: &str) -> Result<RunSnapshot> {
         Ok(self.cancel_receipt(run).await?.snapshot)

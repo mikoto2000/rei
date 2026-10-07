@@ -47,9 +47,13 @@ public final class SseBridge implements AutoCloseable {
     Connection connection;
     synchronized (bus) {
       var run = runs.get(runId);
+      if(run.status()==RunStatus.UNKNOWN)throw new ReplayGapException();
       connection = new Connection(runId, sink);
       var replay = bus.subscribe(runId, lastEventId == null ? 0 : lastEventId,
           event -> connection.offer(new Frame(event)));
+      if(run.status().isTerminal() && runs.restored(runId) && replay.terminalSequence()==null) {
+        replay.subscription().unsubscribe();throw new ReplayGapException();
+      }
       connection.subscription = replay.subscription();
       connection.replay = replay.replay();
       connection.alreadyComplete = run.status().isTerminal() && replay.terminalSequence() != null

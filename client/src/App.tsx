@@ -7,6 +7,7 @@ import {
   mergeRun,
   type Snapshot,
   type Run,
+  type RunMode,
   type Connection,
   type Project,
   type Conversation,
@@ -235,13 +236,35 @@ export function App({
     void perform(() =>
       call(name, { serverId: run.serverId, runId: run.runId }),
     );
-  const send = async (message: string): Promise<boolean> => {
+  const input = async (run: Run, message: string): Promise<boolean> => {
+    const id = run.conversationId;
+    setSending((s) => [...s, id]);
+    setChatErrors((e) => ({ ...e, [id]: null }));
+    try {
+      await call("run_input", {
+        serverId: run.serverId,
+        runId: run.runId,
+        message,
+      });
+      return true;
+    } catch (e) {
+      setChatErrors((errors) => ({ ...errors, [id]: String(e) }));
+      return false;
+    } finally {
+      setSending((s) => s.filter((v) => v !== id));
+    }
+  };
+  const send = async (message: string, mode?: RunMode): Promise<boolean> => {
     if (!selectedConversation) return false;
     const id = selectedConversation.localId;
     setSending((s) => [...s, id]);
     setChatErrors((e) => ({ ...e, [id]: null }));
     try {
-      const run = await call("chat_submit", { conversationId: id, message });
+      const run = await call("chat_submit", {
+        conversationId: id,
+        message,
+        ...(mode ? { mode } : {}),
+      });
       setData((d) => ({ ...d, runs: mergeRun(d.runs, run) }));
       await reload();
       void history.pager.refresh();
@@ -695,6 +718,7 @@ export function App({
                     void refreshMetadata().catch(() => {});
                   }}
                   onSend={send}
+                  onInput={input}
                   onStop={(r) => runAction("run_cancel", r)}
                   onRefresh={(r) => runAction("run_get", r)}
                   onSubscribe={(r) => runAction("run_subscribe", r)}

@@ -17,6 +17,22 @@ fn projection() -> Projection {
         "hello",
     )
 }
+#[test]
+fn recovered_unknown_run_is_terminal_and_does_not_become_completed() {
+    let mut p = projection();
+    p.recover(RunSnapshot {
+        run_id: "r".into(),
+        session_id: "s".into(),
+        turn_id: "t".into(),
+        project_id: "p".into(),
+        status: RunStatus::Unknown,
+        failure: None,
+    })
+    .unwrap();
+    assert_eq!(p.status, RunStatus::Unknown);
+    assert!(p.status.terminal());
+    assert_eq!(p.stream_state, StreamState::Closed);
+}
 fn event(kind: &str, seq: u64, payload: serde_json::Value) -> Vec<u8> {
     format!(
         "event: {kind}\nid: {seq}\ndata: {}\n\n",

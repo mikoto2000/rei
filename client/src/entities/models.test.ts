@@ -39,9 +39,9 @@ describe("Run view model", () => {
       mergeRun([run("a")], { ...run("a"), serverId: "other" }),
     ).toHaveLength(2);
   });
-  it("allows another conversation while one is running", () => {
+  it("allows distinct runs in the same conversation while one is running", () => {
     expect(canSubmit("other", "hi", [run("a")], false)).toBe(true);
-    expect(canSubmit("c", "hi", [run("a")], false)).toBe(false);
+    expect(canSubmit("c", "hi", [run("a")], false)).toBe(true);
   });
   it("rejects empty messages and pending sends", () => {
     expect(canSubmit("c", " ", [], false)).toBe(false);

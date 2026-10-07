@@ -10,6 +10,25 @@ import static org.mockito.Mockito.*;
 
 class ChatCommandAsyncTest {
   @org.junit.jupiter.api.io.TempDir Path temp;
+  @Test void shellSeparatesIndependentConsultationFromExplicitRunGuidance() {
+    var tasks=new ArrayList<Runnable>();var contexts=new ArrayList<AgentRunContext>();var inputs=new java.util.LinkedHashMap<String,java.util.List<String>>();
+    var projects=new dev.mikoto2000.rei.core.project.ProjectService(temp,new dev.mikoto2000.rei.core.project.ProjectRegistry(temp.resolve("projects.json")));
+    var repository=new dev.mikoto2000.rei.conversation.FileSessionRepository(temp.resolve("sessions.json"));
+    var router=new ConversationInputRouter(tasks::add,(owner,prompt,queue)->{contexts.add(owner);inputs.put(owner.runId(),queue.drain());});
+    var shell=new dev.mikoto2000.rei.application.session.ShellConversationService(projects,
+        new dev.mikoto2000.rei.application.session.SessionLifecycle(repository,java.time.Clock.systemUTC()),router::submit,true,router);
+    var command=new ChatCommand(mock(ChatExecutionService.class),mock(ChatResponseNarrator.class));command.setShellConversations(shell);
+    var cli=new picocli.CommandLine(command);
+    try(var scope=projects.newClient().open()) {
+      var task=shell.submit("long task");
+      assertThat(cli.execute("--mode","CONVERSATION","question")).isZero();
+      assertThat(cli.execute("--run",task.runId(),"guidance")).isZero();
+      assertThat(tasks).hasSize(2);tasks.forEach(Runnable::run);
+      assertThat(contexts).extracting(AgentRunContext::mode).containsExactly(AgentRunContext.Mode.EXCLUSIVE,AgentRunContext.Mode.CONVERSATION);
+      assertThat(contexts).extracting(AgentRunContext::conversationId).containsOnly(task.conversationId());
+      assertThat(inputs.get(task.runId())).containsExactly("guidance");
+    }
+  }
   @Test void shellCommandReturnsBeforeAgentAndAcceptsGuidance() {
     var tasks = new ArrayList<Runnable>();
     var service = mock(ChatExecutionService.class);

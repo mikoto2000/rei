@@ -18,6 +18,8 @@ public class WorkingSetConfiguration {
   @Bean
   public WorkingSet workingSet(Clock clock, AgentEventFactory events, AgentEventBus eventBus) {
     var workingSet = new WorkingSet(WorkingSet.DEFAULT_MAX_FILES, clock, events, eventBus);
+    var run=dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    if(run!=null && run.mode()!=dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)return workingSet;
     var directory = dev.mikoto2000.rei.core.project.ProjectStorage.currentDirectory().resolve("working-set");
     var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
     String conversation = dev.mikoto2000.rei.llm.ConversationIds.currentChat();

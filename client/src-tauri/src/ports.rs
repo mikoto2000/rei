@@ -73,7 +73,28 @@ pub trait ReiClient: Send + Sync {
         session: Option<&str>,
         message: &str,
     ) -> Result<ChatReceipt>;
+    async fn chat_mode(
+        &self,
+        project: &str,
+        session: Option<&str>,
+        message: &str,
+        mode: RunMode,
+    ) -> Result<ChatReceipt> {
+        if mode != RunMode::Exclusive {
+            return Err(AppError::InvalidInput);
+        }
+        self.chat(project, session, message).await
+    }
     async fn run(&self, run: &str) -> Result<RunSnapshot>;
+    async fn input(
+        &self,
+        _run: &str,
+        _project: &str,
+        _session: &str,
+        _message: &str,
+    ) -> Result<()> {
+        Err(AppError::EndpointNotFound)
+    }
     async fn cancel(&self, run: &str) -> Result<RunSnapshot>;
     async fn cancel_receipt(&self, run: &str) -> Result<CancelReceipt> {
         Ok(CancelReceipt {

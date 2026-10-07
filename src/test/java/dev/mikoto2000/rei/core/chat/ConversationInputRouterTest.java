@@ -7,6 +7,21 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class ConversationInputRouterTest {
+  @Test void explicitGuidanceIsDeliveredOnlyToTheNamedRunAndOwner() {
+    var scheduled = new ArrayList<Runnable>();
+    var inputs = new LinkedHashMap<String,List<String>>();
+    var router = new ConversationInputRouter(scheduled::add, (owner,prompt,queue) -> inputs.put(owner.runId(),queue.drain()));
+    var first = new AgentRunContext("first","session",Path.of("."),"A");
+    var second = new AgentRunContext("second","session",Path.of("."),"A",AgentRunContext.RequestSource.WEB,AgentRunContext.Mode.CONVERSATION);
+    router.submit(first,"task");router.submit(second,"question");
+    assertThat(router.offerIntervention("A","session","first","guidance")).isTrue();
+    assertThat(router.offerIntervention("B","session","first","wrong project")).isFalse();
+    assertThat(router.offerIntervention("A","other","first","wrong session")).isFalse();
+    assertThat(scheduled).hasSize(2);
+    scheduled.forEach(Runnable::run);
+    assertThat(inputs.get("first")).containsExactly("guidance");assertThat(inputs.get("second")).isEmpty();
+    assertThat(router.offerIntervention("A","session","first","late")).isFalse();
+  }
   @Test void persistentProjectIdentityOwnsMailboxEvenIfLocationChanges() {
     List<Runnable> tasks = new ArrayList<>();
     String conversation = "project:" + UUID.randomUUID() + ":chat:main";

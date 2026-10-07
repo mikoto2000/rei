@@ -9,8 +9,17 @@ public class AgentRunConfiguration {
   @Bean
   public dev.mikoto2000.rei.application.session.ShellConversationService shellConversations(
       dev.mikoto2000.rei.core.project.ProjectService projects,
-      dev.mikoto2000.rei.application.session.SessionLifecycle lifecycle, ConversationInputRouter router) {
-    return new dev.mikoto2000.rei.application.session.ShellConversationService(projects, lifecycle, router::submit);
+      dev.mikoto2000.rei.application.session.SessionLifecycle lifecycle, ConversationInputRouter router,
+      @org.springframework.beans.factory.annotation.Value("${rei.conversation.concurrent-enabled:false}") boolean enabled,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.application.run.RunRegistry> registry,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.application.run.RunService> service) {
+    return new dev.mikoto2000.rei.application.session.ShellConversationService(projects, lifecycle,(context,prompt)->{
+      var runs=registry.getIfAvailable();var runner=service.getIfAvailable();
+      if(!enabled || runs==null || runner==null){router.submit(context,prompt);return;}
+      runs.register(context);
+      try {router.submit(context,prompt,work->runner.execute(context,work));}
+      catch(RuntimeException|Error error){runs.forget(context.runId());throw error;}
+    },enabled,router);
   }
   @Bean(destroyMethod = "shutdownNow")
   public ExecutorService agentRunExecutor() {

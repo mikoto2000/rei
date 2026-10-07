@@ -24,7 +24,16 @@ public final class ProjectBeanScope implements Scope {
   }
   public Object resolveContextualObject(String key) { return null; }
   public String getConversationId() {
-    return identity.get();
+    var run=dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    return run!=null && run.mode()!=dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE
+        ? "run:"+run.runId()+":"+identity.get() : identity.get();
+  }
+  public synchronized void releaseRun(String runId) {
+    String prefix="run:"+runId+":";
+    projects.keySet().removeIf(key->key.startsWith(prefix));
+    var callbacks=new ArrayList<Runnable>();
+    destruction.entrySet().removeIf(entry->{if(entry.getKey().startsWith(prefix)){callbacks.add(entry.getValue());return true;}return false;});
+    callbacks.forEach(Runnable::run);
   }
   public synchronized void close() { destruction.values().forEach(Runnable::run); destruction.clear(); projects.clear(); }
 }

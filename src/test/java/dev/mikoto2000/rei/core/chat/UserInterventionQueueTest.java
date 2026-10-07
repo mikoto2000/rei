@@ -5,6 +5,14 @@ import java.util.concurrent.*;
 import static org.assertj.core.api.Assertions.*;
 
 class UserInterventionQueueTest {
+  @Test void mailboxIsBoundedAndCapacityReturnsAfterDrain() {
+    var queue=new UserInterventionQueue();
+    for(int i=0;i<32;i++)assertThat(queue.offer("guidance "+i)).isTrue();
+    assertThat(queue.offer("overflow")).isFalse();
+    assertThat(queue.drain()).hasSize(32);assertThat(queue.offer("next")).isTrue();
+    assertThatThrownBy(()->queue.offer("x".repeat(16385))).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(()->queue.offer("  ")).isInstanceOf(IllegalArgumentException.class);
+  }
   @Test void appliesInOrderOnlyAtSafePoint() {
     var queue = new UserInterventionQueue();
     assertThat(queue.offer("first")).isTrue();

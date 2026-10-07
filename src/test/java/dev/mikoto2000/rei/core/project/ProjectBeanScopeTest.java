@@ -10,6 +10,20 @@ import dev.mikoto2000.rei.core.working.WorkingSet;
 @org.junit.jupiter.api.Tag("integration")
 class ProjectBeanScopeTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
+  @Test void restrictedRunsHaveSeparateTransientStateAndReleaseItAtTermination() {
+    var scope=new ProjectBeanScope(()->"same-project");
+    var original=scope.get("state",Object::new);
+    var reader=new AgentRunContext("reader","session",temp,"A",AgentRunContext.RequestSource.WEB,AgentRunContext.Mode.READ_ONLY);
+    Object transientState;
+    try(var binding=AgentRunScope.open(reader)) {
+      transientState=scope.get("state",Object::new);
+      assertThat(transientState).isNotSameAs(original);
+      assertThat(scope.get("state",Object::new)).isSameAs(transientState);
+      scope.releaseRun(reader.runId());
+      assertThat(scope.get("state",Object::new)).isNotSameAs(transientState);
+    }
+    assertThat(scope.get("state",Object::new)).isSameAs(original);
+  }
   @Test void workingSetIsScopedAndPersistsIndependentlyOfEvents() throws Exception {
     Path a = Files.createDirectory(temp.resolve("a"));
     Path b = Files.createDirectory(temp.resolve("b"));
