@@ -25,3 +25,8 @@ Project/root境界、相対path、symlink、秘密/生成directory・.env/鍵等
 Applyは既存編集のWorking Set/Recent Changes・各cache無効化・FileModified Eventを共有する。書込直前に元内容とpathを再確認し、NOFOLLOW_LINKS・TRUNCATE_EXISTINGで既存ファイルを置換する。SQLiteとfilesystemの分散transactionや、別プロセスの書込に対するOSレベルの原子的compare-and-swapではない。途中失敗や再起動を成功として扱わず、結果不明のまま保持する。
 
 保存する提案は元/新のファイル本文を含むため、通常のProject作業データとして既存DBに保持する。コマンド・network・勝手なcommit/Push・自動再試行は実行しない。
+# Multi-file extension
+
+UPDATE/CREATE/DELETE/RENAME proposals now share this repository and permission
+boundary. See [multi-file document changes](multi-file-document-change-set.md) for
+whole-set hashes, durable staging journals, explicit recovery and ownership limits.

@@ -16,6 +16,15 @@ import org.springframework.stereotype.Service;
 /** Single existing UTF-8 file, exact baseline, durable proposal identity and explicit one-shot Apply. */
 @Service
 public class TextChangeSetService {
+  private TextDocumentChangeSetService documents;
+  @Autowired(required=false) public void setDocuments(TextDocumentChangeSetService service){documents=service;}
+  public TextDocumentChangeSetService.View proposeDocuments(dev.mikoto2000.rei.core.chat.AgentRunContext owner,TextDocumentChangeSetService.Request request)throws IOException{return documents().propose(owner,request);}
+  public TextDocumentChangeSetService.View inspectDocuments(dev.mikoto2000.rei.core.chat.AgentRunContext owner,String id)throws IOException{return documents().inspect(owner,id);}
+  public TextDocumentChangeSetService.View discardDocuments(dev.mikoto2000.rei.core.chat.AgentRunContext owner,String id,String sha)throws IOException{return documents().discard(owner,id,sha);}
+  public TextDocumentChangeSetService.View applyDocuments(dev.mikoto2000.rei.core.chat.AgentRunContext owner,String id,String sha,java.util.function.Consumer<java.util.List<TextDocumentTransaction.Change>> committed)throws IOException{return documents().apply(owner,id,sha,committed);}
+  public TextDocumentChangeSetService.View rollbackDocuments(dev.mikoto2000.rei.core.chat.AgentRunContext owner,String id,String sha,String actualRequest)throws IOException{return documents().rollback(owner,id,sha,actualRequest);}
+  public TextDocumentChangeSetService.View cleanDocumentStaging(dev.mikoto2000.rei.core.chat.AgentRunContext owner,String id,String sha,String actualRequest)throws IOException{return documents().cleanup(owner,id,sha,actualRequest);}
+  private TextDocumentChangeSetService documents(){if(documents==null)throw new IllegalStateException("Multi-file document service unavailable");return documents;}
   public record Request(String path,String expectedText,String replacement) {}
   public record Baseline(String path,String text,String sha256) {}
   public record View(String id,String projectId,String path,String status,String baselineSha256,String proposedSha256,

@@ -22,6 +22,9 @@ public record ImplementationProposal(List<Edit> edits) {
     return new ImplementationProposal(edits);
   }
   public List<String> apply(Path directory,Map<String,String> manifest)throws IOException {
+    return apply(directory,manifest,dev.mikoto2000.rei.core.TextDocumentTransaction::replace);
+  }
+  public List<String> apply(Path directory,Map<String,String> manifest,dev.mikoto2000.rei.core.TextDocumentTransaction.Move move)throws IOException {
     Path root=directory.toRealPath();var paths=new LinkedHashMap<Path,byte[]>();int total=0;
     if(edits.isEmpty() || edits.size()>32)throw new IllegalArgumentException("Require 1 to 32 edits");
     for(var edit:edits) {
@@ -36,8 +39,15 @@ public record ImplementationProposal(List<Edit> edits) {
       if(!edit.replacement().equals(new String(bytes,StandardCharsets.UTF_8)))throw new IllegalArgumentException("Malformed text replacement");
       if(bytes.length>65536 || total>262144 || paths.putIfAbsent(path,bytes)!=null)throw new IllegalArgumentException("Duplicate or oversized edit");
     }
-    // The worktree is disposable. A write failure remains FAILED and can never authorize a merge.
-    for(var entry:paths.entrySet())Files.write(entry.getKey(),entry.getValue(),StandardOpenOption.TRUNCATE_EXISTING);
+    // Parent-selected limits remain intact. The same bounded file transaction now restores normal failures.
+    var changes=new ArrayList<dev.mikoto2000.rei.core.TextDocumentTransaction.Change>();
+    for(var entry:paths.entrySet()){String name=root.relativize(entry.getKey()).toString().replace('\\','/');String before=dev.mikoto2000.rei.core.TextDocumentTransaction.read(root,name);if(!Objects.equals(dev.mikoto2000.rei.core.TextDocumentTransaction.hash(before),manifest.get(name)))throw new IllegalArgumentException("Source snapshot changed before transaction");String after=new String(entry.getValue(),StandardCharsets.UTF_8);if(!Objects.equals(before,after))changes.add(new dev.mikoto2000.rei.core.TextDocumentTransaction.Change(name,before,after));}
+    if(!changes.isEmpty()){
+      String id=UUID.randomUUID().toString();var journal=new java.util.concurrent.atomic.AtomicReference<List<dev.mikoto2000.rei.core.TextDocumentTransaction.Stage>>(List.of());
+      var outcome=dev.mikoto2000.rei.core.TextDocumentTransaction.apply(root,id,changes,(phase,stages)->journal.set(List.copyOf(stages)),move);
+      if(!outcome.status().equals("APPLIED"))throw new IOException("Isolated text transaction "+outcome.status()+"; no verified implementation or merge");
+      dev.mikoto2000.rei.core.TextDocumentTransaction.cleanupOwned(root,id,changes,journal.get());
+    }
     return edits.stream().map(Edit::path).toList();
   }
   public static String sha256(byte[] content) {
