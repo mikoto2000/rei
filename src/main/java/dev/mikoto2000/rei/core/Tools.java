@@ -120,12 +120,22 @@ public class Tools {
     return new TestReportCollectionDiagnosisService().read(currentWorkingDirectory(),directory);
   }
 
-  @Tool(description = "変更pathからJavaの逆import、TS/JS/Rust/Go/Pythonのheuristic local importとテスト命名候補を探索します。changedFiles省略時はProjectのGitステージ済み・未ステージ・未追跡変更を読み取り取得します（HEAD必須、最大64path）。明示時はProject相対pathを1〜64件、limitは1〜100（既定20）。semantic resolverやcoverageではなく、partial/warningsを確認して広い回帰テストも実施してください。")
+  @Tool(description = "変更pathからJavaの逆import、TS/JS/Rust/Go/Pythonのheuristic local importとテスト命名候補を探索します。changedFiles省略時はProjectのGitステージ済み・未ステージ・未追跡変更を読み取り取得します（HEAD必須、最大64path）。明示時はProject相対pathを1〜64件、limitは1〜100（既定20）。coverageReportsでJaCoCo/Cobertura XML・LCOVの保存reportを最大8件指定できます。changedLinesはpath/first/last（包括）で最大64range/256line。両変更指定省略時はGit HEAD-to-worktree hunks。coverageは独立したpartialな行観測で現source revisionやtest成功の証明ではありません。未計測/stale/証拠なしを区別し、広い回帰も実施してください。")
   ChangeTestImpactService.Result changeTestImpact(@org.springframework.ai.tool.annotation.ToolParam(required = false) List<String> changedFiles,
-      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) throws IOException {
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) List<CoverageImpactService.Range> changedLines,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) List<String> coverageReports) throws IOException {
     var service=new ChangeTestImpactService(repositoryMaps);int bounded=limit==null?20:limit;
+    if(coverageReports!=null||changedLines!=null){
+      var reports=coverageReports==null?List.<String>of():coverageReports;
+      if(changedFiles==null&&changedLines==null)return service.analyzeGit(currentWorkingDirectory(),bounded,reports);
+      var ranges=changedLines==null?List.<CoverageImpactService.Range>of():changedLines;
+      var paths=changedFiles==null?ranges.stream().map(CoverageImpactService.Range::path).distinct().toList():changedFiles;
+      return service.analyze(currentWorkingDirectory(),paths,bounded,ranges,reports);
+    }
     return changedFiles==null?service.analyzeGit(currentWorkingDirectory(),bounded):service.analyze(currentWorkingDirectory(),changedFiles,bounded);
   }
+  ChangeTestImpactService.Result changeTestImpact(List<String> changedFiles,Integer limit)throws IOException{return changeTestImpact(changedFiles,limit,null,null);}
 
   @Autowired
   void setRepositoryMaps(RepositoryMapService service) { this.repositoryMaps = service; }

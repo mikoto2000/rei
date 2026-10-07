@@ -15,7 +15,12 @@ public final class ChangeTestImpactService {
   public record RegressionAssessment(String scope,List<String> reasons,List<String> affectedModules,
       List<IntegrationCandidate> integrationCandidates,boolean partial) {}
   public record Result(String root,String version,Instant scannedAt,boolean partial,List<String> warnings,
-      List<String> changedFiles,List<String> unindexedChanges,List<Candidate> candidates,RegressionAssessment regressionAssessment) {}
+      List<String> changedFiles,List<String> unindexedChanges,List<Candidate> candidates,RegressionAssessment regressionAssessment,CoverageImpactService.Result coverage) {
+    public Result(String root,String version,Instant scannedAt,boolean partial,List<String> warnings,List<String> changedFiles,
+        List<String> unindexedChanges,List<Candidate> candidates,RegressionAssessment regressionAssessment){
+      this(root,version,scannedAt,partial,warnings,changedFiles,unindexedChanges,candidates,regressionAssessment,CoverageImpactService.absent());
+    }
+  }
   private final RepositoryMapService maps;
   public ChangeTestImpactService(RepositoryMapService maps){this.maps=maps;}
   public Result analyzeGit(Path root,int limit)throws IOException {
@@ -29,6 +34,15 @@ public final class ChangeTestImpactService {
     return new Result(result.root(),result.version(),result.scannedAt(),result.partial(),List.copyOf(warnings),result.changedFiles(),
         result.unindexedChanges(),result.candidates(),result.regressionAssessment());
   }
+  public Result analyzeGit(Path root,int limit,List<String> reports)throws IOException {
+    if(limit<1||limit>100)throw new IllegalArgumentException("Limit must be 1 to 100");
+    Path actual=root.toRealPath();var git=new GitChangedFiles(new dev.mikoto2000.rei.externalagent.ExternalAgentProcessRunner());
+    var paths=git.collect(actual);var lines=git.changedLines(actual,new HashSet<>(paths.paths()));
+    var result=analyzePaths(actual,paths.paths(),limit,paths.excluded(),lines.ranges(),reports,true);
+    var warnings=new ArrayList<>(result.warnings());warnings.addAll(lines.warnings());
+    warnings.add("Git paths, hunks and reports are separate bounded observations; not an atomic patch snapshot");
+    return new Result(result.root(),result.version(),result.scannedAt(),result.partial(),List.copyOf(warnings),result.changedFiles(),result.unindexedChanges(),result.candidates(),result.regressionAssessment(),result.coverage());
+  }
   public Result analyze(Path root,List<String> changedFiles,int limit)throws IOException {
     RunCancellation.propagate(null);
     if(changedFiles==null || changedFiles.isEmpty() || changedFiles.size()>64 || limit<1 || limit>100)
@@ -36,6 +50,14 @@ public final class ChangeTestImpactService {
     return analyzePaths(root,changedFiles,limit,false);
   }
   private Result analyzePaths(Path root,List<String> changedFiles,int limit,boolean incompleteInventory)throws IOException {
+    return analyzePaths(root,changedFiles,limit,incompleteInventory,List.of(),List.of(),false);
+  }
+  public Result analyze(Path root,List<String> changedFiles,int limit,List<CoverageImpactService.Range> ranges,List<String> reports)throws IOException {
+    if(changedFiles==null||changedFiles.isEmpty()||changedFiles.size()>64||limit<1||limit>100)throw new IllegalArgumentException("Require 1 to 64 changed paths and limit 1 to 100");
+    return analyzePaths(root,changedFiles,limit,false,ranges,reports,true);
+  }
+  private Result analyzePaths(Path root,List<String> changedFiles,int limit,boolean incompleteInventory,
+      List<CoverageImpactService.Range> ranges,List<String> reports,boolean coverageRequested)throws IOException {
     var changes=new LinkedHashSet<String>();
     for(String name:changedFiles){
       if(name==null || name.isBlank() || name.length()>1024)throw new IllegalArgumentException("Invalid changed path");
@@ -44,6 +66,10 @@ public final class ChangeTestImpactService {
       changes.add(path.toString().replace('\\','/'));
     }
     var snapshot=maps.snapshot(root);var warnings=new ArrayList<>(snapshot.warnings());
+    if(ranges==null||reports==null)throw new IllegalArgumentException("Coverage selections must be lists");
+    for(var range:ranges)if(range==null||!changes.contains(range.path()))throw new IllegalArgumentException("Coverage ranges must select changed paths");
+    var coverage=coverageRequested?new CoverageImpactService(maps).analyze(snapshot,ranges,reports):CoverageImpactService.absent();
+    if(coverageRequested)warnings.addAll(coverage.warnings());
     Set<String> indexed=new HashSet<>();snapshot.items().forEach(f->indexed.add(f.path()));
     var missing=changes.stream().filter(p->!indexed.contains(p)).toList();
     if(!missing.isEmpty())warnings.add("Unindexed changes: deleted, excluded, unavailable or outside the index budget; broader regression required");
@@ -60,11 +86,11 @@ public final class ChangeTestImpactService {
     }
     if(found.size()>limit)warnings.add("Candidate output limited; refine changed paths or run broader regression");
     warnings.add("Structural candidates only, not coverage evidence: same-package references, wildcard imports, reflection, resources and build configuration may affect additional tests");
-    boolean partial=incompleteInventory || snapshot.partial() || !missing.isEmpty() || found.size()>limit;
+    boolean partial=incompleteInventory || snapshot.partial() || !missing.isEmpty() || found.size()>limit || coverageRequested&&coverage.partial();
     var assessment=assess(snapshot,changes,missing,found.values(),partial);
     if(assessment.partial()&&!partial)warnings.add("Regression assessment output limited; broader regression required");
     return new Result(snapshot.root(),snapshot.version(),snapshot.scannedAt(),partial||assessment.partial(),List.copyOf(warnings),List.copyOf(changes),missing,
-        found.values().stream().sorted(Comparator.comparing(Candidate::testCandidate).reversed().thenComparingInt(Candidate::distance).thenComparing(Candidate::path)).limit(limit).toList(),assessment);
+        found.values().stream().sorted(Comparator.comparing(Candidate::testCandidate).reversed().thenComparingInt(Candidate::distance).thenComparing(Candidate::path)).limit(limit).toList(),assessment,coverage);
   }
   private static RegressionAssessment assess(RepositoryMapService.View snapshot,Set<String> changes,List<String> missing,
       Collection<Candidate> affected,boolean partial) {

@@ -586,3 +586,31 @@ JDK compiler無し、SQLite mixed metadata、曖昧候補、source編集/cache/o
 
 多言語Map Java全体回帰: 672 suites / 3649 tests、failure/error/skipped各0で成功。
 Native120、React25/99とtypecheck成功。実装・ローカル検証完了、Git統合を実施する。
+
+多言語Map Git receipt: feature `9dd80460`、main merge `507445ee15aae543aed16291158cba71150d507a`、両方push済み。
+統合後Java関連6 suites / 43 tests、Native120、React25/99とtypecheck成功、failure/error/skipped各0。
+
+## Phase 5: Coverage / Test Impact
+
+branch `codex/coverage-test-impact`、fetch済み基準main `507445ee`。
+既存Impactは構造候補のみで、pom/clientにcoverage生成設定はない。JaCoCo/LCOVを中心に保存reportの
+行観測を既存Impactへ接続し、coverage不在・未計測・stale/曖昧source・aggregateとtest別を区別する。
+公式JaCoCo DTDとLCOV tracefile仕様を確認。外部DTDを取得せず、実テスト実行の証明と混同しない。
+参照: https://github.com/jacoco/jacoco/blob/master/org.jacoco.report/src/org/jacoco/report/xml/report.dtd 、
+https://github.com/linux-test-project/lcov/blob/master/docs/man/geninfo.rst 。
+
+Coverage TDD: 未実装parser、既存Impactへのoverload/coverage欄、Git/Tool接続の各Redを確認。
+JaCoCo/Cobertura/LCOVを安全に解析し、明示line rangeまたはGit HEAD-to-worktreeの行へ観測を接続した。
+既存reverse dependencyとtest candidateを維持。報告positive/zero、未計測、stale、no reports、
+利用不能/invalid/曖昧sourceを区別。aggregateからcovering testを推測しない。
+同一Map snapshotとcurrent source SHA、report SHA/timeを返すがsource revisionとtest成功は未証明なので
+coverageは常にpartial、広い回帰を要求。report generationやtest実行はREAD Toolに追加しない。
+上限: report8件/各2MiB、range64/合計256line、10秒/10Krows/XMLdepth32等。
+外部DTD/XXE/escape/link/secretTN/不完全document/cancelを制御。敏感な変更pathのdiff bodyは取得しない。
+関連Java5 suites / 44 tests、failure/error/skipped各0。Native120、React25/99とtypecheck成功。
+API例・状態・対応format・限界はcoverage-test-impact.md。Java全体回帰を実行中。
+
+初回全体回帰: 673 suites / 3659 tests、failure/error/skipped各0。
+追加監査でGit本文のheader類似文字列によるpath誤対応をRedで再現し、header読み取り境界を修正。
+関連3 suites / 24 tests成功（Coverage9・Git9・Impact6）。最終codeの全体回帰を再実行する。
+最終Coverage Java全体回帰: 673 suites / 3660 tests、failure/error/skipped各0。Native120、React25/99とtypecheck成功。Git統合を実施する。
