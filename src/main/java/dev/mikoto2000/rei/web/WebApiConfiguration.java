@@ -11,7 +11,7 @@ import org.springframework.context.annotation.*;
 import org.springframework.scheduling.annotation.*;
 
 @Configuration(proxyBeanMethods = false)
-@Import({dev.mikoto2000.rei.conversation.SessionHistoryConfiguration.class,dev.mikoto2000.rei.application.task.TaskManagerConfiguration.class,dev.mikoto2000.rei.artifact.ArtifactConfiguration.class,dev.mikoto2000.rei.github.GitHubWebhookConfiguration.class})
+@Import({dev.mikoto2000.rei.conversation.SessionHistoryConfiguration.class,dev.mikoto2000.rei.application.task.TaskManagerConfiguration.class,dev.mikoto2000.rei.artifact.ArtifactConfiguration.class,dev.mikoto2000.rei.github.GitHubWebhookConfiguration.class,dev.mikoto2000.rei.planning.DailyPlanningConfiguration.class})
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @EnableScheduling
@@ -23,8 +23,9 @@ public class WebApiConfiguration {
   @Bean RunRegistry webRunRegistry(Clock clock,
       @org.springframework.beans.factory.annotation.Qualifier("memoryConsolidationDataSource") org.springframework.beans.factory.ObjectProvider<javax.sql.DataSource> source,
       @org.springframework.beans.factory.annotation.Value("${rei.conversation.concurrent-enabled:false}") boolean enabled,
-      @org.springframework.beans.factory.annotation.Value("${rei.task-manager.enabled:false}") boolean tasksEnabled) {
-    return new RunRegistry(clock,enabled||tasksEnabled?source.getObject():null);
+      @org.springframework.beans.factory.annotation.Value("${rei.task-manager.enabled:false}") boolean tasksEnabled,
+      @org.springframework.beans.factory.annotation.Value("${rei.today.enabled:false}") boolean todayEnabled) {
+    return new RunRegistry(clock,enabled||tasksEnabled||todayEnabled?source.getObject():null);
   }
   @Bean dev.mikoto2000.rei.application.project.ProjectQueryService webProjectQueryService(ProjectRegistry projects) {
     return new dev.mikoto2000.rei.application.project.ProjectQueryService(projects);
