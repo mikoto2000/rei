@@ -8,7 +8,7 @@
 全件依頼のPriority 1–6では、会話並行化、Task Manager、共通Artifact Delivery、
 GitHub Event Trigger、Cross-project Today、Codex隔離実装を実装・統合した。
 Claudeのresume、Change Set、並列review、隔離実装とDurable child resumeは実装・統合済み。
-Priority 7の子DAGも実装し全体回帰済み。合意形成以降は全件実装記録の進捗を参照する。実モデル・実サービス検証とは区別する。
+Priority 7の子DAGも実装し全体回帰済み。合意形成も保存回答/evidence比較と任意judgeを実装・全体回帰済み。Priority 8以降は全件実装記録の進捗を参照する。実モデル・実サービス検証とは区別する。
 
 元の依頼は「現在のリポジトリ・環境で安全に実装できる項目」を小さな独立機能として実装し、候補全部の無条件実装や既存機能の二重実装を避けるものだった。後続の全対応要求を受け、具体的な不足を再照合して追加実装した。過去のfollow-upの「未対応」はその記録時点の状態であり、現在の判定は[監査表](autonomy-feature-audit.md)を参照する。Deferredを実装済みへ読み替えない。
 

@@ -11,6 +11,9 @@ import org.springframework.context.annotation.*;
 public class DurableSubAgentConfiguration {
   @Bean DurableSubAgentRepository durableSubAgentRepository(@Qualifier("dataSource") DataSource source,Clock clock){return new DurableSubAgentRepository(source,clock);}
   @Bean
+  @ConditionalOnProperty(name="rei.subagents.consensus-enabled",havingValue="true")
+  SubAgentConsensusService subAgentConsensusService(SubAgentProperties properties,DurableSubAgentRepository repository,SubAgentRunner runner,SubAgentRegistry registry){return new SubAgentConsensusService(properties,repository,runner,registry);}
+  @Bean
   @ConditionalOnProperty(name="rei.subagents.dag-enabled",havingValue="true")
   SubAgentDagService subAgentDagService(SubAgentProperties properties,DurableSubAgentRepository repository,SubAgentRunner runner,
       SubAgentRegistry registry,ParallelSubAgentDelegator parallel,Clock clock){return new SubAgentDagService(properties,repository,runner,registry,parallel,clock);}

@@ -15,6 +15,12 @@ public class SubAgentProperties {
   private int maxTransientReadToolRetries;
   private boolean durableEnabled;
   private boolean dagEnabled;
+  private boolean consensusEnabled;
+  private boolean consensusJudgeEnabled;
+  public boolean isConsensusEnabled(){return consensusEnabled;}
+  public void setConsensusEnabled(boolean value){consensusEnabled=value;}
+  public boolean isConsensusJudgeEnabled(){return consensusJudgeEnabled;}
+  public void setConsensusJudgeEnabled(boolean value){consensusJudgeEnabled=value;}
   private java.time.Duration dagTimeout=java.time.Duration.ofSeconds(120);
   public boolean isDagEnabled(){return dagEnabled;}
   public void setDagEnabled(boolean value){dagEnabled=value;}

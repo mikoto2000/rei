@@ -437,3 +437,33 @@ API/config/DB/security制限はdurable-subagent-dag.mdを参照。
 DAG Java全体回帰: 663 suites / 3589 tests、failure/error/skipped各0で成功。
 Claude native storage追加修正もこの全体回帰に含む。Native120、React25/99とtypecheck成功。
 今回のbounded child DAG要件は実装済み。ConsensusとPriority 8以降は引き続き実装する。
+
+DAG Git receipt: feature `40fb5a45`、main merge `d7d98102f267be4bd85feb213127537adbeefa76`、両方push済み。
+統合後Java関連27 suites / 288 tests、Native120 tests、React25 suites / 99 testsとtypecheck成功、failure/error/skipped各0。
+
+## Phase 3: SubAgent Consensus
+
+branch `codex/subagent-consensus`、fetch済み基準main `d7d98102`。
+現行の独立semantic validatorは単一回答の検証であり、複数child結果の比較APIではない。
+保存childのhash/ownershipから独立回答・evidenceを比較し、不一致・根拠不足を未解決として保持する。
+任意judgeも既存runnerと共通予算を使い、多数決やjudgeの回答を正解の証明として扱わない。
+
+Consensus実装: 保存child 2–8件の同一task/独立run ID/current result hashから回答・引用・output hashを比較するread-only APIを追加。
+異なる回答は多数側で消さずDISAGREEMENT、evidence contractなし／不足／baseline変更はUNRESOLVED。
+一致はAGREEMENT_REPORTEDであってtruthVerifiedは常にfalse。共有output hashとモデル/source相関の注意を保持する。
+provenanceはchild/run/agent/result hash/task hash/保存時刻、元回答と引用。入力131072文字/answer4096/evidence64件上限。
+任意judgeは既定OFF、EXCLUSIVE human Run、管理者定義のtools空agent、既存child runner/Run・Goal予算/deadline/cancelを再利用する。
+judge自身のdurable receiptを保持し、元の比較/未解決状態を上書きしない。新DB/tableは追加しない。
+ToolはcompareSubAgentAnswers/judgeSubAgentAnswersとして両ChatClient経路へ接続、比較はREAD。
+config/API/security/制限はsubagent-consensus.mdを参照。
+
+TDD: serviceとTool欠落のRed、および実runner結果でevidence項目なしを例外にするRedを確認し、
+根拠不足のUNRESOLVEDとして保持するよう修正。多数決で正解扱いしない、根拠の重複、定義変更、
+ownership/hash/重複/別task/入力上限、両設定opt-in起動、judge予算実消費/子receipt保存を確認。
+起動fixtureのmock beanにもSpring autowireが適用されるため、既存permission/approval依存をfixtureに追加。
+関連Java6 suites / 32 tests、Native120 tests、React25 suites / 99 testsとtypecheck成功、failure/error/skipped各0。
+Java全体回帰とGit receiptは成功後追記する。fixture評価と実モデルの判定品質は区別し、有料モデルは実行していない。
+
+Consensus Java全体回帰: 665 suites / 3599 tests、failure/error/skipped各0で成功。
+Native120、React25/99とtypecheckも成功。今回の保存回答/evidence比較と任意judge接続要件は実装済み。
+実モデルの意味判定品質は未検証であり、Priority 20の評価harnessとlive環境の確認を区別して継続する。
