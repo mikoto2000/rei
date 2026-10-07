@@ -10,6 +10,19 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ClaudeCodeExtensionsAdapterTest {
   @TempDir Path temporary;
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
+  void nativeStorageAliasIntoSourceNeverCreatesDirectoriesOrStartsCli(boolean missingBase)throws Exception {
+    Path root=Files.createDirectory(temporary.resolve("project"));Path file=Files.writeString(root.resolve("A.txt"),"before\n");Path alias=temporary.resolve("alias");
+    if(System.getProperty("os.name").startsWith("Windows")) {
+      String script="New-Item -ItemType Junction -Path '"+alias.toString().replace("'","''")+"' -Target '"+root.toString().replace("'","''")+"' | Out-Null";
+      var process=new ProcessBuilder("powershell.exe","-NoProfile","-NonInteractive","-Command",script).redirectErrorStream(true).start();String output=new String(process.getInputStream().readAllBytes());assertEquals(0,process.waitFor(),output);
+    }else Files.createSymbolicLink(alias,root);
+    var properties=new ClaudeCodeProperties();properties.setEnabled(true);properties.setPersistSessions(true);properties.setNativeSessionDirectory(missingBase?alias.resolve("sessions"):alias);
+    var adapter=new ClaudeCodeExternalAgentExecutor(properties,new ExternalAgentProcessRunner(){@Override public Output run(List<String> command,Path directory,String input,Duration total,Duration idle,int bytes,java.util.function.BooleanSupplier cancelled){throw new AssertionError("Source storage alias must be rejected before CLI probing");}});
+    var result=adapter.execute(new ExternalAgentRequest(ExternalAgentRequest.Agent.CLAUDE,ExternalAgentRequest.Action.REVIEW,"review",root,file,"","run","request"),()->false);
+    assertFalse(result.success());try(var files=Files.list(root)){assertEquals(List.of("A.txt"),files.map(path->path.getFileName().toString()).sorted().toList());}assertEquals("before\n",Files.readString(file));
+  }
   @Test void persistedSessionResumesWithToolFreeSubscriptionBoundaryAndConfirmedNativeUuid()throws Exception {
     Path root=Files.createDirectory(temporary.resolve("project"));Path file=Files.writeString(root.resolve("A.txt"),"before\n");
     var properties=new ClaudeCodeProperties();properties.setEnabled(true);properties.setPersistSessions(true);properties.setNativeSessionDirectory(temporary.resolve("sessions"));
