@@ -488,6 +488,10 @@ Reflectionのlesson候補管理は `REI_REFLECTION_LESSONS_ENABLED`（既定fals
 `REI_ATTENTION_SLACK_ENABLED`（既定false）、`BOT_TOKEN`、`CHANNEL`、`CHANNELS`（同prefix）を設定する。
 既存delivery enabled/Project allowlist/Policyも必要。Slackの送信先とsecretは管理者設定だけで指定する。
 receipt・rate limit・UNKNOWN・retryとfixture設定は [Slack通知](slack-notification-provider.md) を参照。
+
+Repository Map/ImpactはJava ASTに加えTS/JS/Rust/Go/Pythonのbounded heuristic候補を返す。
+新しいenable flagは不要。`rei.repository-map.persistent-index-enabled`（既定false）はJava metadataのみ永続化する。
+解析方式・不完全性・build境界・制限は [多言語Map](multilanguage-repository-map.md) を参照。
 version/schema、AND/OR/NOT/型比較/MATCH、UNKNOWNと各上限は[Declarative predicates](declarative-predicates.md)を参照。
 
 `rei.task-manager.enabled=true`（既定false）で認証済みHTTP/Nativeの横断Task一覧・個別操作を

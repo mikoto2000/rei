@@ -120,7 +120,7 @@ public class Tools {
     return new TestReportCollectionDiagnosisService().read(currentWorkingDirectory(),directory);
   }
 
-  @Tool(description = "変更pathからJavaの逆importとテスト命名候補を探索します。changedFiles省略時はProjectのGitステージ済み・未ステージ・未追跡変更を読み取り取得します（HEAD必須、最大64path）。明示時はProject相対pathを1〜64件、limitは1〜100（既定20）。完全なcoverageではなく、warningsを確認して広い回帰テストも実施してください。")
+  @Tool(description = "変更pathからJavaの逆import、TS/JS/Rust/Go/Pythonのheuristic local importとテスト命名候補を探索します。changedFiles省略時はProjectのGitステージ済み・未ステージ・未追跡変更を読み取り取得します（HEAD必須、最大64path）。明示時はProject相対pathを1〜64件、limitは1〜100（既定20）。semantic resolverやcoverageではなく、partial/warningsを確認して広い回帰テストも実施してください。")
   ChangeTestImpactService.Result changeTestImpact(@org.springframework.ai.tool.annotation.ToolParam(required = false) List<String> changedFiles,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) throws IOException {
     var service=new ChangeTestImpactService(repositoryMaps);int bounded=limit==null?20:limit;
@@ -130,7 +130,7 @@ public class Tools {
   @Autowired
   void setRepositoryMaps(RepositoryMapService service) { this.repositoryMaps = service; }
 
-  @Tool(description = "Git管理下の構造索引を取得します。Javaの型・method・import・mainとテスト候補。summaryは絞り込み前の走査範囲のmodule/package/入口/関連件数です。queryで表示を絞り込み、limitは1〜100、既定20。partialとwarnings、summary.partialを確認してください。")
+  @Tool(description = "Git管理下の構造索引を取得します。Java ASTとTS/JS/Rust/Go/Pythonのbounded heuristic宣言・local import・テスト候補。sourceやbuildを実行しません。language/analysisModeで解析方式を区別し、heuristicは常にpartialでsemantic resolverではありません。summaryは絞り込み前の走査範囲です。queryで表示を絞り込み、limitは1〜100、既定20。partial/warningsを確認してください。")
   RepositoryMapService.View repositoryMap(
       @org.springframework.ai.tool.annotation.ToolParam(required = false) String query,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) throws IOException {

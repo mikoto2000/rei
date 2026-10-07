@@ -1,6 +1,7 @@
 # Change/Test Impact
 
-`changeTestImpact(changedFiles, limit)` はProject相対変更pathからJavaの影響候補を返すREAD Tool。
+`changeTestImpact(changedFiles, limit)` はProject相対変更pathからJava ASTとTS/JS/Rust/Go/Python heuristicの影響候補を返すREAD Tool。
+多言語の方式・制限は[多言語Map](multilanguage-repository-map.md)を参照。
 1〜64path、limitは1〜100（既定20）。CHATと明示要求したSubAgentから利用する。
 changedFiles省略時はGitのステージ済み・未ステージ・未追跡変更を自動収集する。明示空配列は従来どおり拒否する。
 command生成、test実行・省略の決定は行わない。
@@ -23,7 +24,7 @@ Repository Mapの同じ走査・内容ハッシュcacheを再利用する。内�
 各候補はpath、test配下か、最短distance、最後のedge種別とviaを持つ。
 変更ファイル自身はCHANGED、テスト候補を優先してdistance/path順で返す。
 これはcoverage保証ではない。同一packageの暗黙参照、wildcard、reflection、resource、build設定、
-他言語による影響は未対応。warningsに必ずその限界を示す。
+他言語の意味的解決による影響は保証しない。heuristic候補は常にpartialで、warningsに必ずその限界を示す。
 
 削除・除外・走査上限などで索引に存在しない変更はunindexedChangesに入り、partial=trueとなる。
 解析不完全・候補上限でもpartial=true。partial=falseも完全な影響範囲を保証しない。
