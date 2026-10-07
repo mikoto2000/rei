@@ -15,9 +15,9 @@ class CheckpointRestartSmokeTest {
     Files.writeString(root.resolve("artifact.txt"),"changed after crash");run("resume");
   }
   void run(String mode) throws Exception {
-    String executable=Path.of(System.getProperty("java.home"),"bin",System.getProperty("os.name").startsWith("Windows")?"java.exe":"java").toString();
-    var process=new ProcessBuilder(executable,"-cp",System.getProperty("surefire.test.class.path",System.getProperty("java.class.path")),Probe.class.getName(),root.toString(),mode)
-        .redirectErrorStream(true).redirectOutput(root.resolve(mode+".log").toFile()).start();
+    var builder=new ProcessBuilder(dev.mikoto2000.rei.testsupport.JavaFixtureCommand.command(root,Probe.class,root.toString(),mode))
+        .redirectErrorStream(true).redirectOutput(root.resolve(mode+".log").toFile());
+    var process=builder.start();
     assertTrue(process.waitFor(30,java.util.concurrent.TimeUnit.SECONDS));assertEquals(0,process.exitValue(),Files.readString(root.resolve(mode+".log")));
   }
   public static class Probe {
