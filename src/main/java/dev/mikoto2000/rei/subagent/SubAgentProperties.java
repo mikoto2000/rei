@@ -13,6 +13,12 @@ public class SubAgentProperties {
   private long standaloneMaxTotalTokens;
   private int maxTransientModelRetries;
   private int maxTransientReadToolRetries;
+  private boolean durableEnabled;
+  private long durableMaxTotalTokens;
+  public boolean isDurableEnabled(){return durableEnabled;}
+  public void setDurableEnabled(boolean value){durableEnabled=value;}
+  public long getDurableMaxTotalTokens(){return durableMaxTotalTokens;}
+  public void setDurableMaxTotalTokens(long value){if(value<0)throw new IllegalArgumentException("Durable child token limit must be nonnegative");durableMaxTotalTokens=value;}
   public int getMaxTransientReadToolRetries(){return maxTransientReadToolRetries;}
   public void setMaxTransientReadToolRetries(int value){if(value<0||value>3)throw new IllegalArgumentException("Transient read Tool retries must be 0 to 3");maxTransientReadToolRetries=value;}
   public int getMaxTransientModelRetries(){return maxTransientModelRetries;}

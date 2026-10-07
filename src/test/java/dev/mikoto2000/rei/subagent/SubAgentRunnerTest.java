@@ -22,6 +22,48 @@ import reactor.core.publisher.Flux;
 
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentRunnerTest {
+  @Test void durableChildCancellationCanResumeUnderTheSameHumanWithConsumedCallsRetained() throws Exception {
+    var source=new org.sqlite.SQLiteDataSource();source.setUrl("jdbc:sqlite:"+directory.resolve("children.db"));
+    var repository=new DurableSubAgentRepository(source,Clock.systemUTC());
+    var properties=new SubAgentProperties();properties.setDurableEnabled(true);
+    var entered=new CountDownLatch(1);var calls=new AtomicInteger();maxSteps=3;schema="{\"type\":\"object\"}";
+    String finalOutput="{\"status\":\"SUCCESS\",\"summary\":\"continued result\",\"result\":{},\"warnings\":[]}";
+    var runner=runner(prompt->{if(calls.incrementAndGet()==1){entered.countDown();return Flux.never();}return Flux.just(answer(finalOutput));},"120s");
+    runner.configureDurable(properties,repository);
+    var parent=new AgentRunContext("parent","session",directory,"project");
+    var reservations=new AtomicInteger();var shared=new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation(){
+      public boolean tryReserve(){return reservations.incrementAndGet()<=5;}public int remaining(){return 5-reservations.get();}
+    };
+    var operation=CompletableFuture.supplyAsync(()->{try(var scope=AgentRunScope.open(parent)){return runner.run("reviewer","inspect",null,shared);}});
+    assertThat(entered.await(5,TimeUnit.SECONDS)).isTrue();var child=repository.list(parent,0,10).getFirst();
+    assertThat(runner.cancel(child.run())).isTrue();assertThat(operation.get(5,TimeUnit.SECONDS).status()).isEqualTo(SubAgentResult.Status.CANCELLED);
+    child=repository.get(parent,child.id());assertThat(child.consumedCalls()).isEqualTo(1);
+    var checkpoint=child;
+    assertThatThrownBy(()->runner.resumeDurable(parent,checkpoint.id(),checkpoint.revision(),"ordinary review",shared)).isInstanceOf(IllegalArgumentException.class);
+    var restartedRunner=runner(prompt->Flux.just(answer(finalOutput)),"120s");
+    restartedRunner.configureDurable(properties,new DurableSubAgentRepository(source,Clock.systemUTC()));
+    var continued=restartedRunner.resumeDurable(parent,child.id(),child.revision(),"/subagent resume "+child.id()+" "+child.revision(),shared);
+    assertThat(continued.status()).isEqualTo(SubAgentResult.Status.COMPLETED);
+    assertThat(continued.durableTaskId()).isEqualTo(child.id());
+    var complete=repository.get(parent,child.id());assertThat(complete.status()).isEqualTo("COMPLETED");
+    assertThat(complete.consumedCalls()).isEqualTo(2);assertThat(reservations.get()).isEqualTo(2);
+    assertThat(complete.result()).isEqualTo(finalOutput);assertThat(calls.get()).isEqualTo(1);
+  }
+  @Test void durableToolFailureIsUnknownAndCannotBeAutomaticallyResumed()throws Exception {
+    var source=new org.sqlite.SQLiteDataSource();source.setUrl("jdbc:sqlite:"+directory.resolve("children.db"));
+    var repository=new DurableSubAgentRepository(source,Clock.systemUTC());var properties=new SubAgentProperties();properties.setDurableEnabled(true);
+    var runner=runner(prompt->Flux.just(new ChatResponse(List.of(new Generation(AssistantMessage.builder().content("").toolCalls(List.of(new AssistantMessage.ToolCall("call","function","readMultiFile","{}"))).build())))),"120s",()->List.of(new ToolCallback(){
+      public ToolDefinition getToolDefinition(){return callback().getToolDefinition();}public String call(String input){toolCalls.incrementAndGet();throw new IllegalStateException("unknown transport result");}
+    }));runner.configureDurable(properties,repository);
+    var parent=new AgentRunContext("parent","session",directory,"project");var shared=new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation(){public boolean tryReserve(){return true;}public int remaining(){return 3;}};
+    var runs=new dev.mikoto2000.rei.application.run.RunRegistry(Clock.systemUTC());runs.register(parent);runs.transition(parent.runId(),dev.mikoto2000.rei.application.run.RunStatus.RUNNING,null);
+    var lifecycle=new dev.mikoto2000.rei.application.run.RunService(runs,new InMemoryAgentEventBus(),new AgentEventFactory(Clock.systemUTC()),cancellation,id->false);runner.setTaskTracking(true,runs,lifecycle);
+    try(var scope=AgentRunScope.open(parent)){assertThat(runner.run("reviewer","inspect",null,shared).status()).isEqualTo(SubAgentResult.Status.FAILED);}
+    var child=repository.list(parent,0,10).getFirst();assertThat(child.status()).isEqualTo("UNKNOWN");assertThat(child.operations()).hasSize(1);assertThat(child.operations().getFirst().status()).isEqualTo("UNKNOWN");
+    assertThat(runs.get(child.run()).status()).isEqualTo(dev.mikoto2000.rei.application.run.RunStatus.UNKNOWN);
+    assertThatThrownBy(()->runner.resumeDurable(parent,child.id(),child.revision(),"subagent resume "+child.id()+" "+child.revision(),shared)).isInstanceOf(IllegalArgumentException.class);assertThat(toolCalls.get()).isEqualTo(1);
+    lifecycle.close();
+  }
   @Test void taskTrackingUsesTheExistingChildRunAndCommonCancellation() throws Exception {
     var runs=new dev.mikoto2000.rei.application.run.RunRegistry(Clock.systemUTC());
     var bus=new InMemoryAgentEventBus();

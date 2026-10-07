@@ -60,10 +60,11 @@ class TaskManagerServiceTest {
     var runs=new RunRegistry(Clock.systemUTC(),data);
     var parent=new AgentRunContext("parent","session",root,project.id());runs.register(parent);
     var child=new AgentRunContext("child","subagent:child",root,project.id());
-    runs.registerChild(child,parent,"reviewer");runs.transition("child",RunStatus.RUNNING,null);
+    runs.registerChild(child,parent,"reviewer","durable-child");runs.transition("child",RunStatus.RUNNING,null);
     var tasks=new TaskManagerService(projects,runs,null,null,null,null);
     var projected=tasks.get(project.id(),"session","run:child");
     assertThat(projected.kind()).isEqualTo("SUBAGENT");assertThat(projected.parentId()).isEqualTo("run:parent");
+    assertThat(projected.results()).contains(new TaskView.Reference("SUBAGENT_CHECKPOINT","durable-child"));
     assertThat(projected.inputSupported()).isFalse();assertThat(projected.resumeSupported()).isFalse();
     assertThat(tasks.get(project.id(),"session","run:parent").childIds()).containsExactly("run:child");
     assertThat(tasks.list(project.id(),"session",100,null).items()).hasSize(2);
@@ -72,6 +73,7 @@ class TaskManagerServiceTest {
     var restored=new TaskManagerService(projects,new RunRegistry(Clock.systemUTC(),data),null,null,null,null);
     assertThat(restored.get(project.id(),"session","run:child").status()).isEqualTo("UNKNOWN");
     assertThat(restored.get(project.id(),"session","run:child").parentId()).isEqualTo("run:parent");
+    assertThat(restored.get(project.id(),"session","run:child").results()).contains(new TaskView.Reference("SUBAGENT_CHECKPOINT","durable-child"));
     assertThat(restored.get(project.id(),"session","run:parent").childIds()).containsExactly("run:child");
   }
 }

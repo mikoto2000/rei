@@ -82,7 +82,7 @@ public final class TaskManagerService {
       var owner=current.context();String task="run:"+id;runTasks.put(id,task);
       result.put(task,new TaskView(task,current.childOrigin()==null?"RUN":"SUBAGENT",id,project.id(),session(current),id,current.status().name(),owner.mode().name(),
           current.startedAt(),current.completedAt()==null?current.startedAt():current.completedAt(),current.status()==RunStatus.QUEUED?"project_queue":null,
-          current.failure()==null?null:safe(current.failure().message()),null,current.childOrigin()!=null?List.of(new TaskView.Reference("RUN",id)):owner.conversationId().isEmpty()?List.of():List.of(new TaskView.Reference("TURN",id)),
+          current.failure()==null?null:safe(current.failure().message()),null,current.childOrigin()!=null?(current.childOrigin().durableTaskId()==null?List.of(new TaskView.Reference("RUN",id)):List.of(new TaskView.Reference("RUN",id),new TaskView.Reference("SUBAGENT_CHECKPOINT",current.childOrigin().durableTaskId()))):owner.conversationId().isEmpty()?List.of():List.of(new TaskView.Reference("TURN",id)),
           null,List.of(),null,current.childOrigin()==null?null:referenceTask(project,current.childOrigin().parentRunId()),List.of(),null,!current.status().isTerminal()&&runs.ownsExecution(id),false,current.childOrigin()==null&&current.status()==RunStatus.RUNNING&&runs.ownsExecution(id),0));
     }
     var goalParents=new HashMap<String,String>();

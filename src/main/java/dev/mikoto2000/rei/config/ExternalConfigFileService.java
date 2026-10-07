@@ -290,6 +290,8 @@ public class ExternalConfigFileService {
           repository-map:
             persistent-index-enabled: ${REI_REPOSITORY_MAP_PERSISTENT_INDEX_ENABLED:false}
           subagents:
+            durable-enabled: ${REI_SUBAGENTS_DURABLE_ENABLED:false}
+            durable-max-total-tokens: ${REI_SUBAGENTS_DURABLE_MAX_TOTAL_TOKENS:0}
             max-transient-read-tool-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_READ_TOOL_RETRIES:0}
             max-transient-model-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_MODEL_RETRIES:0}
             standalone-max-llm-calls: ${REI_SUBAGENTS_STANDALONE_MAX_LLM_CALLS:0}

@@ -10,6 +10,21 @@ import org.junit.jupiter.api.io.TempDir;
 
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentToolsTest {
+  @Test void durableCallbacksUseActualRunIdentityRequestAndSharedBudget()throws Exception {
+    var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(new SubAgentToolPolicy(Set.of()),m->true));
+    var runner=mock(SubAgentRunner.class);var tools=new SubAgentTools(runner,registry);
+    var owner=new dev.mikoto2000.rei.core.chat.AgentRunContext("parent","session",directory,"project");
+    var factory=new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC());
+    var run=new dev.mikoto2000.rei.core.stagnation.RunExecutionContext("parent",new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0,3),null,factory,event->{});
+    run.setRunContext(owner);run.setUserRequest("subagent resume child-id 7");
+    var context=new org.springframework.ai.chat.model.ToolContext(java.util.Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY,run));
+    when(runner.resumeDurable(eq(owner),eq("child-id"),eq(7L),eq(run.userRequest()),any())).thenReturn(new SubAgentResult("reviewer","child-run",SubAgentResult.Status.COMPLETED,"done",Instant.now(),Instant.now()));
+    String result=tools.callback("resumeSubAgent").call("{\"childId\":\"child-id\",\"revision\":7}",context);
+    assertThat(result).contains("child-run");verify(runner).resumeDurable(eq(owner),eq("child-id"),eq(7L),eq(run.userRequest()),any());
+    when(runner.durableChildren(owner,0,10)).thenReturn(java.util.List.of());
+    assertThat(tools.callback("listDurableSubAgents").call("{\"offset\":0,\"limit\":10}",context)).isEqualTo("[]");
+    verify(runner).durableChildren(owner,0,10);
+  }
   @TempDir Path directory;
   @Test void parallelCallbackMapsRequestsAndSerializesOrderedIndividualResults() {
     var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(new SubAgentToolPolicy(Set.of()),m->true));

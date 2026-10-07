@@ -86,7 +86,7 @@ public class CheckpointReconciler {
   private static String readGit(Path root,String... args) {
     active();Process process=null;
     try {
-      var command=new ArrayList<>(List.of("git","-C",root.toString()));command.addAll(List.of(args));
+      var command=new ArrayList<>(List.of("git","--no-optional-locks","-c","core.fsmonitor=false","-C",root.toString()));command.addAll(List.of(args));
       process=new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start();var running=process;
       var output=CompletableFuture.supplyAsync(()->{
         try{return running.getInputStream().readNBytes(65537);}catch(java.io.IOException e){return new byte[0];}
