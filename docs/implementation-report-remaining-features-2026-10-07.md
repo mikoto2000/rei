@@ -801,3 +801,37 @@ invalid verdictは棄権、binary validatorのnative abstention不在も評価�
 TDD未実装API Red→Green、実validator fixtureを含む関連3 suites / 17 tests成功、各0。
 出力target/evaluation/subagent-semantic-quality.json。実モデル呼出0、truthVerified=false。
 DB/config/default runtime変更なし。Phase7末に全体回帰。仕様subagent-semantic-quality-evaluation.md。
+SubAgent evaluation Git receipt: feature `1a15c999`、main merge `8c1d674e`、両方push済み。
+統合後関連3 suites / 17 tests、failure/error/skipped各0。
+
+## Phase 7: Activity / Coaching quality evaluation
+
+branch `codex/activity-coaching-quality-evaluation`、fetch済みmain `8c1d674e`。
+既存RolePolicy/PeriodAnalysis/PeriodCoachingを使い匿名fixtureと構造的根拠性評価を追加する。
+匿名fixture healthy/unknown/ambiguous/low confidence/gap-heavy、expected project/theme。
+既存RolePolicy/PeriodAnalysis/PeriodCoachingによる分類精度・coverage・構造的助言評価。
+観測foreground、推定project/theme/duration、明示confirmation ID付きユーザーannotationを分離。
+unknown/低品質/未観測期間に助言を創作しない。golden wordingでなくdecision/reason/shareを確認。
+TDD未実装API Red→Green、正例助言と誤ラベル検出を含む関連4 suites / 31 tests成功、各0。
+128cases/16候補・confirmation/限定text/5秒、cancel伝播。DB/config/default runtime変更なし。
+target/evaluation/activity-coaching-quality.json、truthVerified=false、実visionモデル品質は未測定。
+Phase7全体回帰を開始。仕様activity-coaching-quality-evaluation.md。
+Phase7 Java全体回帰: 687 suites / 3739 tests、failure=0/error=0/skipped=0。実PlantUML指定。Native 120、React25/99、typecheck成功。
+Activity evaluation Git receipt: feature `bff87788`、main merge `b55e6279`、両方push済み。
+統合後Phase7関連8 suites / 50 tests、failure/error/skipped各0。
+
+## Phase 8: explicit live environment E2E harness
+
+branch `codex/live-environment-e2e`、fetch済みmain `b55e6279`。
+8実環境経路をlive tagと専用profileへ分離し、環境フラグ既定OFF・skip理由を追加。
+通常回帰では実モデル・外部通知を実行しない。
+live tag専用profile、全通常profileのlive除外、explicit trueのみ有効のpolicy test。
+8経路は実adapter/隔離worktree/既存Change Set/SafeCrossrefHTTP/Slack outbox claimとreceiptを呼ぶ。
+CLI60秒/idle30秒/2call/1MiB、JUnit180秒、匿名TempDir fixtureのみ。native UUID同一確認。
+Codex/Claude account-ready明示、Slack credential/channel条件、既知CLI/auth不足のみskip。
+TDD missing policy Red→Green、共有予算interfaceのcompile不足も修正。
+関連7 suites / 39 tests成功、failure/error/skipped各0。
+-Plive-e2e実行: tests8、failure0/error0/skipped8、各LIVE_DISABLED、実呼出0・実成功0。
+full profileでlive class明示選択しても除外され、policy/Slack回帰のみ成功。
+理由付きreportはtarget/evaluation/live-off.xml。仕様/config手順live-environment-e2e.md。
+認証やアカウントを未検査のまま利用可能/不足と断定していない。

@@ -32,7 +32,7 @@
 		<picocli.version>4.7.7</picocli.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-		<test.excludedGroups>integration | e2e</test.excludedGroups>
+		<test.excludedGroups>integration | e2e | live</test.excludedGroups>
 		<test.groups></test.groups>
 		<test.dataDirectory>${project.build.directory}/test-performance/data</test.dataDirectory>
 	</properties>
@@ -251,20 +251,27 @@
 		<profile>
 			<id>integration</id>
 			<properties>
-				<test.excludedGroups></test.excludedGroups>
+				<test.excludedGroups>live</test.excludedGroups>
 			</properties>
 		</profile>
 		<profile>
 			<id>full</id>
 			<properties>
-				<test.excludedGroups></test.excludedGroups>
+				<test.excludedGroups>live</test.excludedGroups>
 			</properties>
 		</profile>
 		<profile>
 			<id>integration-only</id>
 			<properties>
-				<test.excludedGroups></test.excludedGroups>
+				<test.excludedGroups>live</test.excludedGroups>
 				<test.groups>integration | e2e</test.groups>
+			</properties>
+		</profile>
+		<profile>
+			<id>live-e2e</id>
+			<properties>
+				<test.excludedGroups></test.excludedGroups>
+				<test.groups>live</test.groups>
 			</properties>
 		</profile>
 	</profiles>
