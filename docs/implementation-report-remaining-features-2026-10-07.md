@@ -276,3 +276,30 @@ HTTP fixture追加時のBean名衝突で起動失敗した。既存BusをPublish
 Native120 tests、React25 suites / 99 tests、format/build、Chrome38 testsは成功済み。
 P4はfixture/local HTTPを含む要求範囲でIMPLEMENTED。実GitHub/API adapterは任意の運用拡張点であり、
 外部送信と有料モデルは未実行。P5以降は引き続き実装対象として進める。
+
+GitHub Git receipt: feature `858404aa`、main merge `441256d3`、両方push済み。
+統合後はJava関連7 suites / 32 tests、Native全体120 tests、React25 suites / 99 testsとtypecheck成功。
+failure/error/skipped各0。mainは元checkoutでmergeし、隔離worktreeをそのmergeへdetachして検証した。
+元checkoutのLLM変更2件と追加3件は保持し、隔離worktreeは統合時clean。
+
+## Phase 2: Cross-project Todayの実装
+
+branch `codex/cross-project-today`、fetch後の基準 `441256d3`。
+明示allowlistの既存Projectのみを対象に、Task projection、保存Work Context、Goal、
+Dependency、Scheduler、Checkpointを読み取り専用で集計する。
+LLMを呼ばず、日時と保存状態で分類し、Activity観測を成果や集中の証明にしない。
+
+TDDで不足service/HTTPのRedを確認し、明示allowlist、既存Task keyset pagination、
+予定時刻、待機、blocker、current Goal、resumed/stale、保存Next Actionのcertaintyを集計した。
+既定OFFのBearer HTTPを公開し、Todayだけの有効化でも既存Run RegistryとShell登録を永続化する。
+相談modeは既存設定のまま。期限切れDependency、Goal予算、Checkpoint revision、PENDING scheduleを
+集計が変更しないことを確認した。HTTP3起動で既定OFF・認証・外部Project拒否・再起動UNKNOWNを検証した。
+Activityはbounded保存参照とOBSERVATION_ONLY、DSTはcalendar境界を使用する。
+Project/rootを開始と終了で照合し、件数/参照/収集時間の上限とpartial理由を返す。
+操作・保存状態の解釈・境界は [Cross-project Today](cross-project-today.md) を参照。
+Java全体とGit receiptは検証後に追記する。
+
+Java全体は650 suites / 3541 tests、failure/error/skipped各0で成功した。
+Native全体120 tests、React25 suites / 99 testsとtypecheck成功。
+P5は最低公開範囲として認証済みHTTPから利用可能で、決定的な読み取り集計をIMPLEMENTED。
+LLM順位付け・有料モデル・外部書込を実行せず、任意sourceの未設定と切捨てをwarningsで区別する。

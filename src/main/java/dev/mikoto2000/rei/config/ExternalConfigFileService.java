@@ -93,6 +93,10 @@ public class ExternalConfigFileService {
               enabled: false
 
         rei:
+          today:
+            enabled: ${REI_TODAY_ENABLED:false}
+            projects: ${REI_TODAY_PROJECTS:}
+            zone: ${REI_TODAY_ZONE:Asia/Tokyo}
           github:
             webhook:
               enabled: ${REI_GITHUB_WEBHOOK_ENABLED:false}
