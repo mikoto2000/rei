@@ -10,12 +10,17 @@ import org.springframework.stereotype.Component;
 /** Independent read-only predicate, never a model's completion claim. */
 @Component
 public class FileGoalVerifier {
+  private GoalCompletionGate completionGate;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setCompletionGate(GoalCompletionGate gate){completionGate=gate;}
   private boolean predicatesEnabled;
   @org.springframework.beans.factory.annotation.Autowired
   public void setPredicatesEnabled(@org.springframework.beans.factory.annotation.Value("${rei.predicates.enabled:false}") boolean enabled){predicatesEnabled=enabled;}
-  public void requireEnabledPredicates(GoalRepository.Goal goal){if(!predicatesEnabled && goal.criteria().stream().anyMatch(item->item.predicateJson()!=null))throw new IllegalStateException("Enable rei.predicates.enabled before running a predicate Goal");}
+  public void requireEnabledPredicates(GoalRepository.Goal goal){if(completionGate!=null&&completionGate.required(goal)&&goal.completion()==null)throw new IllegalStateException("Human completion definition required before running this Goal");if(!predicatesEnabled && (goal.criteria().stream().anyMatch(item->item.predicateJson()!=null)||goal.completion()!=null&&goal.completion().requiredPredicates().stream().anyMatch(item->item.predicateJson()!=null)))throw new IllegalStateException("Enable rei.predicates.enabled before running a predicate Goal");}
   public record Verification(boolean satisfied,String reason) {}
   public Verification verify(GoalRepository.Goal goal) {
+    if(completionGate!=null&&completionGate.required(goal)&&goal.completion()==null)return new Verification(false,"completion_definition_missing");
+    if(completionGate==null&&goal.completion()!=null)return new Verification(false,"completion_gate_unavailable");
     if(goal.criteria().isEmpty()||goal.criteria().size()>16)return new Verification(false,"verification_unavailable");
     for(var criterion:goal.criteria()) {
       if(criterion.jsonCriterion()) {
@@ -29,6 +34,7 @@ public class FileGoalVerifier {
       try {var result=verify(Path.of(goal.projectRoot()),criterion);if(!result.satisfied())return result;}
       catch(IllegalArgumentException error){return new Verification(false,"verification_unavailable");}
     }
+    if(completionGate!=null&&completionGate.required(goal))return completionGate.verify(goal,this);
     return new Verification(true,goal.criteria().stream().anyMatch(GoalRepository.FileCriterion::jsonCriterion)?"criteria_verified":"file_digest_verified");
   }
   private Verification verifyJson(Path root,GoalRepository.FileCriterion criterion) {

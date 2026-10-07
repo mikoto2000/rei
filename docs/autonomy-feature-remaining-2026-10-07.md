@@ -11,6 +11,7 @@ Claudeのresume、Change Set、並列review、隔離実装とDurable child resum
 Priority 7の子DAGも実装し全体回帰済み。合意形成も保存回答/evidence比較と任意judgeを実装・全体回帰済み。Priority 8のbounded宣言的Goal/Dependency Predicateも実装・全体回帰済み。Priority 9以降は全件実装記録の進捗を参照する。実モデル・実サービス検証とは区別する。
 
 Priority 9–13はReflection候補ledger、Slack通知、複数言語Map、coverage impact、診断付き承認repairを実装・統合済み。Priority 14の要件別証拠と任意の意味Patch Reviewは[機能仕様](semantic-patch-review.md)を参照。下表の未対応表記は当初の監査状態で、現在の実装状態は全件実装記録を優先する。
+Priority 15では、既存FileGoalVerifier/GoalLoop全完了経路に[定義可能なcompletion gate](goal-completion-gate.md)を追加した。全Goal強制は既定OFF、保存Review/current patch/test/artifact/predicateを独立再確認する。
 
 元の依頼は「現在のリポジトリ・環境で安全に実装できる項目」を小さな独立機能として実装し、候補全部の無条件実装や既存機能の二重実装を避けるものだった。後続の全対応要求を受け、具体的な不足を再照合して追加実装した。過去のfollow-upの「未対応」はその記録時点の状態であり、現在の判定は[監査表](autonomy-feature-audit.md)を参照する。Deferredを実装済みへ読み替えない。
 

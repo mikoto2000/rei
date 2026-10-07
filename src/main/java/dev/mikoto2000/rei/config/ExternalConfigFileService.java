@@ -297,6 +297,9 @@ public class ExternalConfigFileService {
             diagnosed-enabled: ${REI_REPAIR_DIAGNOSED_ENABLED:false}
           patch-review:
             semantic-enabled: ${REI_PATCH_REVIEW_SEMANTIC_ENABLED:false}
+          goal:
+            completion-gate:
+              require-all: ${REI_GOAL_COMPLETION_GATE_REQUIRE_ALL:false}
           subagents:
             durable-enabled: ${REI_SUBAGENTS_DURABLE_ENABLED:false}
             dag-enabled: ${REI_SUBAGENTS_DAG_ENABLED:false}

@@ -22,6 +22,9 @@ public class GoalLoopService {
   private final Gateway gateway;
   private final ToolPermissionProperties permissions;
   private final GoalEvents events;
+  private GoalCompletionGate completionGate;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setCompletionGate(GoalCompletionGate gate){completionGate=gate;}
   public GoalLoopService(GoalRepository goals,FileGoalVerifier verifier,Gateway gateway,ToolPermissionProperties permissions,GoalEvents events) {
     this.goals=goals;this.verifier=verifier;this.gateway=gateway;this.permissions=permissions;this.events=events;
   }
@@ -35,6 +38,15 @@ public class GoalLoopService {
     gateway.validate(new GoalRepository.Goal("pending",owner.projectId(),owner.projectRoot().toString(),owner.conversationId(),objective,first.relativeFile(),first.sha256(),runs,calls,0,0,"READY",null,"",criteria));
     var goal=goals.create(owner,objective,criteria,runs,calls);events.publish(goal);return goal;
   }
+  public GoalRepository.Goal create(AgentRunContext owner,String objective,java.util.List<GoalRepository.FileCriterion> criteria,GoalCompletionGate.Definition definition,int runs,int calls){
+    GoalCompletionGate.validateDefinition(definition);if(criteria==null||criteria.isEmpty())throw new IllegalArgumentException("File criteria required");var first=criteria.getFirst();gateway.validate(new GoalRepository.Goal("pending",owner.projectId(),owner.projectRoot().toString(),owner.conversationId(),objective,first.relativeFile(),first.sha256(),runs,calls,0,0,"READY",null,"",criteria));
+    var goal=goals.create(owner,objective,criteria,definition,runs,calls);events.publish(goal);return goal;
+  }
+  public GoalRepository.Goal defineCompletion(AgentRunContext owner,String id,GoalCompletionGate.Definition definition){gateway.validate(goals.get(owner.projectId(),id));var goal=goals.defineCompletion(owner,id,definition);events.publish(goal);return goal;}
+  public GoalRepository.Goal attachCompletion(AgentRunContext owner,String id,GoalCompletionGate.Proof proof){if(completionGate==null)throw new IllegalStateException("Goal gate unavailable");gateway.validate(goals.get(owner.projectId(),id));try{var goal=completionGate.attach(owner,id,proof,true);events.publish(goal);return goal;}catch(java.io.IOException invalid){throw new IllegalStateException("Goal proof unavailable",invalid);}}
+  public GoalRepository.Goal defineCompletion(String project,String id,GoalCompletionGate.Definition definition){return defineCompletion(humanCompletionOwner(project,id),id,definition);}
+  public GoalRepository.Goal attachCompletion(String project,String id,GoalCompletionGate.Proof proof){return attachCompletion(humanCompletionOwner(project,id),id,proof);}
+  private AgentRunContext humanCompletionOwner(String project,String id){var goal=goals.get(project,id);return new AgentRunContext(java.util.UUID.randomUUID().toString(),goal.sessionId(),java.nio.file.Path.of(goal.projectRoot()),goal.projectId());}
   /** Human-facing dispatch only, never a model Tool or automatic startup restoration. */
   public synchronized GoalRepository.Goal run(String project,String id) {
     if(!permissions.enabled())throw new IllegalStateException("Enable rei.tool-permission.enabled before running a Goal");
@@ -46,7 +58,7 @@ public class GoalLoopService {
   public Inspection verify(String project,String id) {
     var goal=goals.get(project,id);gateway.validate(goal);var verification=verifier.verify(goal);
     if(verification.satisfied()&&!java.util.Set.of("COMPLETED","RUNNING","CANCELLED").contains(goal.status())) {
-      goal=goals.verifiedWithoutRun(project,id);events.publish(goal);
+      goal=goals.verifiedWithoutRun(goal,verification.reason());events.publish(goal);
     }
     return new Inspection(goal,verification);
   }
@@ -92,10 +104,10 @@ public class GoalLoopService {
     }
     try {gateway.validate(claim.goal());}
     catch(RuntimeException error){goals.recordAttempt(claim,run,"BLOCKED","owner_unavailable");stop(claim,"BLOCKED","owner_unavailable");return;}
-    var verification=verifier.verify(claim.goal());
+    var verification=verifier.verify(goals.get(claim.goal().projectId(),claim.goal().id()));
     goals.recordAttempt(claim,run,verification.satisfied()?"VERIFIED":"UNVERIFIED",verification.reason());
     if(verification.satisfied()){stop(claim,"COMPLETED",verification.reason());return;}
-    if(!java.util.Set.of("digest_mismatch","json_value_mismatch","file_missing_or_not_regular").contains(verification.reason())) {
+    if(!java.util.Set.of("digest_mismatch","json_value_mismatch","predicate_mismatch","file_missing_or_not_regular","completion_evidence_missing","completion_required_tests_missing","completion_required_artifact_missing","completion_review_stale","completion_test_evidence_changed").contains(verification.reason())) {
       stop(claim,"BLOCKED",verification.reason());return;
     }
     next(claim);

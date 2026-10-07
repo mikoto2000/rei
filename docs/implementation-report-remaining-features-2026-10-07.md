@@ -667,3 +667,30 @@ TDD未実装Toolとunmapped diffによる偽成功のRed→Greenを確認。
 receipt再送無実行を確認。Java全体回帰中。Native120、React25/99/typecheck成功。
 仕様/API/DB/config/限界はsemantic-patch-review.md。
 Semantic Patch Review Java全体回帰: 676 suites / 3679 tests、failure/error/skipped各0。Native120、React25/99とtypecheck成功。Git統合を実施する。
+
+Semantic Patch Review Git receipt: feature `28ae998a`、main merge `ca97e6223b238736642923023b0560c426f81859`、両方push済み。
+統合後Java関連7 suites / 59 tests、Native120、React25/99とtypecheck成功、failure/error/skipped各0。
+広いgit addは自動承認reviewにより拒否。隔離worktreeの今回の16fileの明示stagingで解消。
+元のLLM dirty2件とuntracked3件を保持し、今回のcommitには含めていない。
+
+## Phase 5: Goal Completion Gate
+
+branch `codex/goal-completion-gate`、fetch済み基準main `ca97e622`。
+既存FileGoalVerifierとGoalLoopの全完了経路を拡張し、保存completion definition/proofを照合する。
+
+Goal completion gate: agent_goalsにnullable completion_json/proof_jsonをmigrationし、人の
+completion evidence/required tests/artifacts/predicates/review gateを保存。旧constructor/行を維持。
+FileGoalVerifierとGoalLoop/Gatewayの全完了経路に接続。全Goal強制は既定OFF。
+人のShell/strict JSON認証HTTP入口、READの定義参照、現在Goal Run限定LOCAL_WRITE証拠添付。
+実行中/terminal定義変更拒否、Project/root/session/Run/READ_ONLY制御、定義変更はproofを失効。
+既存test/static receiptのowner/24h鮮度/command SHA/必須testcase/report SHA/current patch version、
+ArtifactStoreのowner/AVAILABLE/expiry/content hash、既存scalar/declarative predicatesを照合。
+追加LLM0、30秒の共有検証予算、各type16件/tests64/JSON32KiB/depth16。
+モデル宣言だけで完了しない。不足証拠は既存Run予算内で継続、UNKNOWN/拒否は停止。
+完了時は検証したdefinition/proofをCASし、競合した定義で完了することを防ぐ。
+Reflection/verified observationもcompletion_gate_verifiedを扱い、現在の再検証を維持。
+TDD: 未実装gate/人HTTP入口と定義更新競合のRed→Green。新規Shell fixtureの不正UUIDを修正。
+関連Java14 suites / 98 tests、failure/error/skipped各0。実Git/Shell/SQLite Review→Goal完了、
+実HTTP認証/不正JSON/実行中定義変更拒否、保存再読取、current Goal Run証拠添付を確認。
+Native120、React25/99とtypecheck成功。Java全体回帰中。仕様はgoal-completion-gate.md。
+Goal completion gate Java全体回帰: 678 suites / 3691 tests、failure/error/skipped各0。Native120、React25/99とtypecheck成功。Git統合を実施する。

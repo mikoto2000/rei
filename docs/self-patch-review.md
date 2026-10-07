@@ -45,7 +45,7 @@ TDDで未実装compile失敗を確認し、順序・初回/最終失敗・変更
 実Shellを2回実行した記録、timeoutとログ上限も確認する。実LLMや外部Codexは呼ばない。
 
 C21は明示起動の静的検証サイクルとして実装。保存修正案を用いた実修正・回数管理は後述のselfRepairPatchへ追加。
-要件別deterministic checkと任意の意味的自己reviewは後続の[要件Patch Review](semantic-patch-review.md)で実装した。全Goalの強制gateは別の後続項目として扱う。
+要件別deterministic checkと任意の意味的自己reviewは後続の[要件Patch Review](semantic-patch-review.md)で実装した。全Goalへの設定可能な強制gateは[Goal completion gate](goal-completion-gate.md)で実装した。
 
 全体回帰: full profile 2834 tests / 544 suites、failure/error/skip 0。
 

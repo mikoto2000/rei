@@ -23,8 +23,12 @@ public class GoalRepository {
   public record Goal(String id,String projectId,String projectRoot,String sessionId,String objective,
       String relativeFile,String sha256,int maxRuns,int maxLlmCalls,int attempts,int llmCallsUsed,
       String status,String currentRunId,String reason,List<FileCriterion> criteria,
-      long maxTotalTokens,long totalTokens,boolean tokenUsageUnknown,int pendingLlmCalls) {
+      long maxTotalTokens,long totalTokens,boolean tokenUsageUnknown,int pendingLlmCalls,
+      GoalCompletionGate.Definition completion,GoalCompletionGate.Proof completionProof) {
     public Goal { criteria=List.copyOf(criteria); }
+    public Goal(String id,String projectId,String projectRoot,String sessionId,String objective,String relativeFile,String sha256,int maxRuns,int maxLlmCalls,int attempts,int llmCallsUsed,String status,String currentRunId,String reason,List<FileCriterion> criteria,long maxTotalTokens,long totalTokens,boolean tokenUsageUnknown,int pendingLlmCalls){
+      this(id,projectId,projectRoot,sessionId,objective,relativeFile,sha256,maxRuns,maxLlmCalls,attempts,llmCallsUsed,status,currentRunId,reason,criteria,maxTotalTokens,totalTokens,tokenUsageUnknown,pendingLlmCalls,null,null);
+    }
     public Goal(String id,String projectId,String projectRoot,String sessionId,String objective,String relativeFile,String sha256,int maxRuns,int maxLlmCalls,int attempts,int llmCallsUsed,String status,String currentRunId,String reason,List<FileCriterion> criteria) {
       this(id,projectId,projectRoot,sessionId,objective,relativeFile,sha256,maxRuns,maxLlmCalls,attempts,llmCallsUsed,status,currentRunId,reason,criteria,0,0,false,0);
     }
@@ -52,6 +56,7 @@ public class GoalRepository {
     for(String column:List.of("max_tokens","tokens_used","tokens_unknown","tokens_pending")) {
       if(!columns.contains(column))db.sql("ALTER TABLE agent_goals ADD COLUMN "+column+" INTEGER NOT NULL DEFAULT 0").update();
     }
+    for(String column:List.of("completion_json","completion_proof_json"))if(!columns.contains(column))db.sql("ALTER TABLE agent_goals ADD COLUMN "+column+" TEXT").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_goal_criteria(goal TEXT NOT NULL,ordinal INTEGER NOT NULL,file TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(goal,ordinal))").update();
     var criterionColumns=new HashSet<>(db.sql("PRAGMA table_info(agent_goal_criteria)").query((rs,n)->rs.getString("name")).list());
     for(String column:List.of("json_pointer","expected_json","predicate_json")) {
@@ -64,7 +69,29 @@ public class GoalRepository {
   private final RowMapper<Goal> ROW=(rs,n)->new Goal(rs.getString("id"),rs.getString("project"),rs.getString("root"),rs.getString("session"),
       rs.getString("objective"),rs.getString("file"),rs.getString("digest"),rs.getInt("max_runs"),rs.getInt("max_calls"),rs.getInt("attempts"),rs.getInt("used"),
       rs.getString("status"),rs.getString("run"),rs.getString("reason"),criteria(rs.getString("id"),rs.getString("file"),rs.getString("digest")),
-      rs.getLong("max_tokens"),rs.getLong("tokens_used"),rs.getBoolean("tokens_unknown"),rs.getInt("tokens_pending"));
+      rs.getLong("max_tokens"),rs.getLong("tokens_used"),rs.getBoolean("tokens_unknown"),rs.getInt("tokens_pending"),
+      completionDecode(rs.getString("completion_json"),GoalCompletionGate.Definition.class),completionDecode(rs.getString("completion_proof_json"),GoalCompletionGate.Proof.class));
+
+  private static final com.fasterxml.jackson.databind.ObjectMapper COMPLETION_JSON=new com.fasterxml.jackson.databind.ObjectMapper(
+      com.fasterxml.jackson.core.JsonFactory.builder().enable(com.fasterxml.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+          .streamReadConstraints(com.fasterxml.jackson.core.StreamReadConstraints.builder().maxNestingDepth(16).maxStringLength(8192).maxNumberLength(64).build()).build())
+      .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+  public static GoalCompletionGate.Definition parseCompletion(String json){var value=completionDecode(json,GoalCompletionGate.Definition.class);GoalCompletionGate.validateDefinition(value);return value;}
+  public static GoalCompletionGate.Proof parseCompletionProof(String json){var value=completionDecode(json,GoalCompletionGate.Proof.class);GoalCompletionGate.validateProof(value);return value;}
+  private static <T>T completionDecode(String json,Class<T> type){if(json==null)return null;try{if(json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>32768)throw new IllegalArgumentException("Completion JSON exceeds 32KiB");return COMPLETION_JSON.readValue(json,type);}catch(java.io.IOException invalid){throw new IllegalArgumentException("Invalid bounded completion JSON");}}
+  private static String completionEncode(Object value){try{String result=COMPLETION_JSON.writeValueAsString(value);if(result.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>32768)throw new IllegalArgumentException("Completion JSON exceeds 32KiB");return result;}catch(java.io.IOException invalid){throw new IllegalArgumentException("Completion JSON unavailable");}}
+  /** Human definition changes are rejected while a Run can observe them or after terminal completion. */
+  public Goal defineCompletion(AgentRunContext owner,String id,GoalCompletionGate.Definition definition){
+    GoalCompletionGate.validateDefinition(definition);String json=completionEncode(definition);var goal=get(owner.projectId(),id);completionOwner(owner,goal);
+    if(db.sql("UPDATE agent_goals SET completion_json=?,completion_proof_json=NULL WHERE id=? AND project=? AND root=? AND session=? AND status NOT IN ('RUNNING','COMPLETED','CANCELLED')")
+        .params(json,id,owner.projectId(),owner.projectRoot().toString(),owner.conversationId()).update()!=1)throw new IllegalStateException("Completion definition cannot change while running or terminal");return get(owner.projectId(),id);
+  }
+  Goal saveCompletionProof(AgentRunContext owner,String id,GoalCompletionGate.Proof proof,boolean human){
+    GoalCompletionGate.validateProof(proof);var goal=get(owner.projectId(),id);completionOwner(owner,goal);
+    if(db.sql("UPDATE agent_goals SET completion_proof_json=? WHERE id=? AND project=? AND root=? AND session=? AND completion_json IS NOT NULL AND status NOT IN ('COMPLETED','CANCELLED') AND ((status='RUNNING' AND run=?) OR (status<>'RUNNING' AND ?))")
+        .params(completionEncode(proof),id,owner.projectId(),owner.projectRoot().toString(),owner.conversationId(),owner.runId(),human).update()!=1)throw new IllegalStateException("Goal evidence owner or state changed");return get(owner.projectId(),id);
+  }
+  private static void completionOwner(AgentRunContext owner,Goal goal){if(owner==null||owner.mode()!=AgentRunContext.Mode.EXCLUSIVE||!owner.conversationId().equals(goal.sessionId())||!owner.projectRoot().toString().equals(goal.projectRoot()))throw new IllegalArgumentException("Owning exclusive Project/root/session required");}
 
   public Goal create(AgentRunContext owner,String objective,String relativeFile,String sha256,int maxRuns,int maxLlmCalls) {
     if(sha256==null||!sha256.matches("[a-fA-F0-9]{64}"))throw new IllegalArgumentException("Expected SHA-256 must contain 64 hexadecimal characters");
@@ -116,6 +143,7 @@ public class GoalRepository {
       return get(owner.projectId(),goal.id());
     });
   }
+  public Goal create(AgentRunContext owner,String objective,List<FileCriterion> criteria,GoalCompletionGate.Definition definition,int maxRuns,int maxLlmCalls){GoalCompletionGate.validateDefinition(definition);return transaction.execute(status->{var goal=create(owner,objective,criteria,maxRuns,maxLlmCalls);return defineCompletion(owner,goal.id(),definition);});}
   static void validateFile(String file) {
     if(file==null||file.isBlank()||file.length()>1024)throw new IllegalArgumentException("Relative file is required (up to 1024 characters)");
     var path=Path.of(file);
@@ -211,11 +239,17 @@ public class GoalRepository {
     });return get(claim.goal().projectId(),claim.goal().id());
   }
   public Goal verifiedWithoutRun(String project,String id) {
+    var goal=get(project,id);return verifiedWithoutRun(project,id,goal.criteria().stream().anyMatch(FileCriterion::jsonCriterion)?"criteria_verified":"file_digest_verified");
+  }
+  public Goal verifiedWithoutRun(String project,String id,String verifiedReason) {
+    return verifiedWithoutRun(get(project,id),verifiedReason);
+  }
+  public Goal verifiedWithoutRun(Goal expected,String verifiedReason) {
+    String project=expected.projectId(),id=expected.id();String definition=expected.completion()==null?null:completionEncode(expected.completion());String proof=expected.completionProof()==null?null:completionEncode(expected.completionProof());
     transaction.executeWithoutResult(status->{
-      var goal=get(project,id);
-      String reason=goal.criteria().stream().anyMatch(FileCriterion::jsonCriterion)?"criteria_verified":"file_digest_verified";
-      if(db.sql("UPDATE agent_goals SET status='COMPLETED',reason=? WHERE project=? AND id=? AND status NOT IN ('RUNNING','CANCELLED','COMPLETED')")
-          .params(reason,project,id).update()!=1)throw new IllegalStateException("Goal is running or terminal");
+      get(project,id);String reason=verifiedReason;
+      if(db.sql("UPDATE agent_goals SET status='COMPLETED',reason=? WHERE project=? AND id=? AND status NOT IN ('RUNNING','CANCELLED','COMPLETED') AND completion_json IS ? AND completion_proof_json IS ?")
+          .params(reason,project,id,definition,proof).update()!=1)throw new IllegalStateException("Goal is running, terminal, or completion definition/evidence changed");
       history(id,"COMPLETED",reason);
     });return get(project,id);
   }

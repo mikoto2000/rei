@@ -13,11 +13,13 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
   private final GoalLoopService loop;
   private final ProjectService projects;
   @Spec picocli.CommandLine.Model.CommandSpec spec;
-  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|create|show|run|verify|cancel|history|reconcile") String action;
+  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|create|show|run|verify|cancel|history|reconcile|completion") String action;
   @Parameters(index="1",arity="0..1",paramLabel="goalId|objective") String value;
   @Option(names="--file",description="Project-relative completion file") String file;
   @Option(names="--sha256",description="Exact expected file SHA-256") String digest;
   @Option(names="--criteria-json",description="JSON array of 1..16 {relativeFile,sha256} or {relativeFile,jsonPointer,expectedJson} scalar criteria; all must match") String criteriaJson;
+  @Option(names="--completion-json",description="Human completion definition: evidence, required tests/artifacts/predicates and review gate") String completionJson;
+  @Option(names="--proof-json",description="Saved Review and Artifact exact ID/SHA references for a stopped Goal") String proofJson;
   @Option(names="--run-id",description="Observed uncertain Run ID; use none for a claim without an attempt") String expectedRunId;
   @Option(names="--acknowledge-uncertain-side-effects",description="Acknowledge that previous effects must be inspected before explicit resume") boolean acknowledgeUncertain;
   @Option(names="--max-runs",defaultValue="3") int maxRuns;
@@ -41,13 +43,20 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
           yield loop.reconcile(project.id(),requiredValue(),expectedRunId.equals("none")?null:expectedRunId);
         }
         case "cancel" -> loop.cancel(project.id(),requiredValue());
+        case "completion" -> {
+          var goal=goals.get(project.id(),requiredValue());var owner=new AgentRunContext(UUID.randomUUID().toString(),projects.currentSessionId(),project.root(),project.id());
+          if((completionJson==null)==(proofJson==null))throw new IllegalArgumentException("Use exactly --completion-json or --proof-json");
+          yield completionJson!=null?loop.defineCompletion(owner,goal.id(),GoalRepository.parseCompletion(completionJson)):loop.attachCompletion(owner,goal.id(),GoalRepository.parseCompletionProof(proofJson));
+        }
         case "create" -> {
           String session=projects.currentSessionId();
           if(session==null||session.isBlank())throw new IllegalArgumentException("Create or select a Session before creating a Goal");
           var owner=new AgentRunContext(UUID.randomUUID().toString(),session,project.root(),project.id());
+          if(proofJson!=null)throw new IllegalArgumentException("Attach proof to an existing Goal with completion");
+          if(completionJson!=null)yield loop.create(owner,requiredValue(),criteriaJson==null?java.util.List.of(new GoalRepository.FileCriterion(file,digest)):parseCriteria(),GoalRepository.parseCompletion(completionJson),maxRuns,maxCalls);
           yield criteriaJson==null?loop.create(owner,requiredValue(),file,digest,maxRuns,maxCalls):loop.create(owner,requiredValue(),parseCriteria(),maxRuns,maxCalls);
         }
-        default -> throw new IllegalArgumentException("Use /goal list|create|show|run|verify|cancel|history|reconcile");
+        default -> throw new IllegalArgumentException("Use /goal list|create|show|run|verify|cancel|history|reconcile|completion");
       };
       writer.println(dev.mikoto2000.rei.event.CredentialRedactor.redact(String.valueOf(result)));return 0;
     } catch(RuntimeException error){writer.println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));return 2;}

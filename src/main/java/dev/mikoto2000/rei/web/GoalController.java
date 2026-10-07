@@ -19,6 +19,10 @@ public class GoalController {
  public record History(List<GoalRepository.History> history,List<GoalRepository.Attempt> attempts) {}
  @GetMapping("/{id}/history") public History history(@PathVariable String projectId,@PathVariable String id){return new History(repository.history(projectId,id),repository.attempts(projectId,id));}
  @PostMapping("/{id}/verify") public GoalLoopService.Inspection verify(@PathVariable String projectId,@PathVariable String id){return control(()->loop.verify(projectId,id));}
+ @PutMapping("/{id}/completion") public GoalRepository.Goal defineCompletionJson(@PathVariable String projectId,@PathVariable String id,@RequestBody String json){return defineCompletion(projectId,id,GoalRepository.parseCompletion(json));}
+ public GoalRepository.Goal defineCompletion(String projectId,String id,GoalCompletionGate.Definition definition){return control(()->loop.defineCompletion(projectId,id,definition));}
+ @PostMapping("/{id}/completion-evidence") public GoalRepository.Goal attachCompletionJson(@PathVariable String projectId,@PathVariable String id,@RequestBody String json){return attachCompletion(projectId,id,GoalRepository.parseCompletionProof(json));}
+ public GoalRepository.Goal attachCompletion(String projectId,String id,GoalCompletionGate.Proof proof){return control(()->loop.attachCompletion(projectId,id,proof));}
  @PostMapping("/{id}/run") public GoalRepository.Goal run(@PathVariable String projectId,@PathVariable String id){return control(()->loop.run(projectId,id));}
  @PostMapping("/{id}/cancel") public GoalRepository.Goal cancel(@PathVariable String projectId,@PathVariable String id){return control(()->loop.cancel(projectId,id));}
  public record ReconcileRequest(String expectedRunId,boolean acknowledgeUncertainSideEffects) {}
