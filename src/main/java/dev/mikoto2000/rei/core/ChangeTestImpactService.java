@@ -59,7 +59,7 @@ public final class ChangeTestImpactService {
       }
     }
     if(found.size()>limit)warnings.add("Candidate output limited; refine changed paths or run broader regression");
-    warnings.add("Structural candidates only: same-package references, wildcard imports, reflection, resources and build configuration may affect additional tests");
+    warnings.add("Structural candidates only, not coverage evidence: same-package references, wildcard imports, reflection, resources and build configuration may affect additional tests");
     boolean partial=incompleteInventory || snapshot.partial() || !missing.isEmpty() || found.size()>limit;
     var assessment=assess(snapshot,changes,missing,found.values(),partial);
     if(assessment.partial()&&!partial)warnings.add("Regression assessment output limited; broader regression required");
@@ -104,5 +104,5 @@ public final class ChangeTestImpactService {
     return Set.of("pom.xml","build.gradle","build.gradle.kts","settings.gradle","settings.gradle.kts","gradle.properties","package.json","Cargo.toml","Makefile").contains(name)
         ||path.startsWith(".github/workflows/");
   }
-  private static boolean isTest(String path){return path.contains("/test/")||path.startsWith("test/")||path.contains("/it/")||path.startsWith("it/")||path.contains("/integration/");}
+  private static boolean isTest(String path){return HeuristicSourceIndex.test(path);}
 }

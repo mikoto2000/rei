@@ -10,4 +10,7 @@ snapshotは最大1024 Javaファイル、1 payload 64KiB、合計8MiB。各file�
 
 全metadataを検証後、DELETE/INSERTを同じtransactionで保存する。失敗・取消でrollbackし、既存snapshotを残す。DB障害・破損・profile不一致は現在ソースのAST解析へ戻る。ログへDB診断本文を出さない。追加LLM、コンパイル、annotation processor、ソース実行は行わない。
 
-同じDBを複数process/rootが更新すると最後の完全snapshotが残り、別rootは再解析する。多言語AST、意味的依存解決、学習/品質評価はこの索引では実装したとは扱わない。
+同じDBを複数process/rootが更新すると最後の完全snapshotが残り、別rootは再解析する。
+多言語heuristicのpartial警告だけがあるmixed Projectでは、完全に解析できたJava metadataを更新する。
+他の走査不足・source失敗がある場合は従来どおり前回snapshotを保持する。
+heuristic metadataはこのtableに保存しない。多言語AST、意味的依存解決、学習/品質評価はこの索引では実装したとは扱わない。

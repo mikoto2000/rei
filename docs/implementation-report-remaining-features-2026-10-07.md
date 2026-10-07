@@ -559,3 +559,30 @@ Native120、React25/99とtypecheck成功。実Slack送信は行っていない�
 
 Slack Java全体回帰: 670 suites / 3636 tests、failure/error/skipped各0で成功。
 Native120、React25/99とtypecheck成功。実装・ローカル検証完了、Git統合を実施する。
+
+Slack Git receipt: feature `81413147`、main merge `1a8e27548cd5a96b6e5c7c5b9ff3da187410f68d`、両方push済み。
+統合後Java関連6 suites / 46 tests、Native120、React25/99とtypecheck成功、failure/error/skipped各0。
+
+## Phase 5: Multilanguage Repository Map / Impact
+
+branch `codex/multilanguage-repository-map`、fetch済み基準main `1a8e2754`。
+既存Java AST parseのみで、TS/JS/Rust/Go/PythonはINVENTORY_ONLY。
+同じMapと逆依存Impactへbounded heuristic構造解析を追加し、semantic resolverとの区別と不完全性を明示する。
+read-only inventoryのfsmonitor設定をChange Impactと揃え、既存Java persistent metadataとroot境界を維持する。
+
+同じRepositoryMap/ImpactへTS/JS/Rust/Go/Pythonのbounded lexical/line-oriented heuristicを追加。
+language/analysisMode、宣言/symbol/function/method/type、package/namespace、build roots、local imports、
+HEURISTIC_IMPORT/TEST_NAME_CANDIDATEと逆依存を返す。既存Java ASTと旧fields/constructorsを保持。
+heuristicは常にpartialでsemantic resolverではない。曖昧候補は任意の1つへ決めず、Impactは広い回帰を要求する。
+source/build/package managerを実行せず、source bodiesは出力/永続化しない。16MiB/128KiB/1024files/10秒等を再利用。
+build metadataは64file/16KiB、lexer32Ktokens/32commentdepth/16usedepth。secret-bearing importを秘匿。
+Java-only persistent metadataをmixed Projectでも維持し、heuristic sourceは永続化しない。
+
+TDD: language解析欠落、coverage警告、manifest namespace cache、Go module identity/version、
+secret import literalとPython build-root越境のRedを確認し修正。
+関連Java6 suites / 43 tests、failure/error/skipped各0。全言語fixture、real Git fsmonitor control、
+JDK compiler無し、SQLite mixed metadata、曖昧候補、source編集/cache/ownership/credential/boundsを確認。
+設定・API・対応範囲はmultilanguage-repository-map.mdを参照。Java全体回帰を実行する。
+
+多言語Map Java全体回帰: 672 suites / 3649 tests、failure/error/skipped各0で成功。
+Native120、React25/99とtypecheck成功。実装・ローカル検証完了、Git統合を実施する。
