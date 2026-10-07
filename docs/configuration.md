@@ -508,3 +508,11 @@ API・Shell・Native・状態保存の詳細は[並行会話Run](concurrent-conv
 拒否されたRunは登録されず、受付成功のreceiptとして扱わない。
 実行中Runの取消ではcleanup完了まで枠を保持し、待機Runの取消・完了・executor拒否では枠を解放する。
 これは予約の件数上限やモデル予算とは別に、現在の実行queueを制限する。
+# PlantUML renderer validation
+
+`REI_DOCUMENT_RENDERER_ENABLED` is false by default. Administrator-selected absolute
+canonical `REI_DOCUMENT_RENDERER_PLANTUML_JAR` and optional `REI_DOCUMENT_RENDERER_JAVA`
+enable the bounded PNG validation Tool. Blank Java uses the running JVM executable.
+Existing Artifact delivery configuration controls publishing verified PNG bytes.
+See [renderer validation](document-renderer-validation.md) for limits, security and
+the real-renderer test command. No renderer or model is installed automatically.

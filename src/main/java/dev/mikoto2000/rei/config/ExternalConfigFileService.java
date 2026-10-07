@@ -297,6 +297,10 @@ public class ExternalConfigFileService {
             diagnosed-enabled: ${REI_REPAIR_DIAGNOSED_ENABLED:false}
           patch-review:
             semantic-enabled: ${REI_PATCH_REVIEW_SEMANTIC_ENABLED:false}
+          document-renderer:
+            enabled: ${REI_DOCUMENT_RENDERER_ENABLED:false}
+            java: ${REI_DOCUMENT_RENDERER_JAVA:}
+            plantuml-jar: ${REI_DOCUMENT_RENDERER_PLANTUML_JAR:}
           goal:
             completion-gate:
               require-all: ${REI_GOAL_COMPLETION_GATE_REQUIRE_ALL:false}

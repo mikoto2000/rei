@@ -718,3 +718,35 @@ fatal stop保存再読取、second-publication failure、cancel、外部編集�
 関連8 suites / 44 tests成功、Native120、React25/99/typecheck成功。Java全体回帰中。
 仕様・DB/API/config/physical atomicity限界はmulti-file-document-change-set.md。
 Multi-file Document Change Set Java全体回帰: 680 suites / 3706 tests、failure/error/skipped各0。Native120、React25/99/typecheck成功。Git統合を実施する。
+
+Multi-file Document Git receipt: feature `a995653c`、main merge
+`209d8759787d8c748158666e4a777b5d8a40bb7a`、両方push済み。
+統合後関連8 suites / 44 tests、Native120、React25/99/typecheck成功。
+元のdirty2件とuntracked3件を保持。
+
+## Phase 6: Renderer Validation
+
+branch `codex/document-renderer-validation`、fetch済み基準main `209d8759`。
+既存document-editor profileがPlantUMLを扱うが実renderer検証・Artifact接続が不足。
+Mermaid CLIは利用可能な設定がなく、既存Markdownはtext previewを提供するため、
+最初の限定対応はPlantUML PNG。ローカルjar 1.2022.7で実構文エラーexit200、
+正常exit0・2424byte PNGとSHAを確認。管理者指定jarとSANDBOXを用いる。
+Renderer Validation: 管理者指定canonical jar/JVM、既定OFF、standalone PlantUML PNG。
+既存Tools/Policy/ArtifactStoreへ接続。source SHA前後一致、directive/function/resource
+markup拒否、SANDBOX/credential環境非継承/private TEMP、20秒process deadline、
+stdout4MiB/stderr8KiB、4096px/16Mpixel、exit/parse/full PNG decode/size/SHA確認。
+SQLite write-ahead unique Project/root/session/Run/request claimとPID/start保存。
+再送は保存receipt参照、lost operation UNKNOWN、time-out/invalid/unavailableは成功なし。
+Artifact有効時のみimmutable PNG公開、無効なら明示warningとartifactなし。
+TDD未実装API・resource markup・描画中source driftのRed→Green。
+実Windowsの環境を絞る際のTEMP不足を実rendererで検出しprivate TEMPで修正。
+一回の診断プロセスはstderr回収待ちとなり、確認済み固有PIDのみ終了して回収。
+実PlantUML error/PNG→Artifact content、子JVM deadline/cancel停止を確認。
+関連7 suites / 42 tests成功、Native120、React25/99/typecheck成功。Java全体回帰中。
+仕様/API/DB/config/rendererなし時のskipはdocument-renderer-validation.md。
+有料モデル・実Slack・ユーザーsourceへの自動Applyは実行していない。Renderer初回全体回帰: 682 suites / 3716 tests、failure0/error1/skipped0。
+ArtifactRecoveryTestのready markerが作成直後・内容書込前に見え、空IDでgetして
+ResourceNotFoundになり得た。fixture markerを同directoryのatomic move公開へ変更し、
+finallyのprocess終了待機も追加。productionのArtifact判定を弱めず復旧harnessを修正。
+全体成功扱いにはせず、関連復旧→全体回帰を再実施する。
+Renderer Validation再全体回帰: 682 suites / 3716 tests、failure/error/skipped各0。実PlantUML fixtureを明示指定。Native120、React25/99/typecheck成功。Git統合を実施する。
