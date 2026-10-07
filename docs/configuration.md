@@ -479,6 +479,10 @@ SubAgentの永続child checkpointは `REI_SUBAGENTS_DURABLE_ENABLED` で明示�
 一致と正しさの区別、入力契約、共通予算は[SubAgent Consensus](subagent-consensus.md)を参照。
 
 Goal/Dependencyの宣言的JSON条件は `REI_PREDICATES_ENABLED`（既定false）で有効にする。
+
+Reflectionのlesson候補管理は `REI_REFLECTION_LESSONS_ENABLED`（既定false）。
+人による明示レビュー、反復証拠、反例・修正・鮮度のgateを持ち、自動で長期記憶に保存しない。
+操作と制限は [Reflection lessons](reflection-lessons.md) を参照。
 version/schema、AND/OR/NOT/型比較/MATCH、UNKNOWNと各上限は[Declarative predicates](declarative-predicates.md)を参照。
 
 `rei.task-manager.enabled=true`（既定false）で認証済みHTTP/Nativeの横断Task一覧・個別操作を

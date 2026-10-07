@@ -501,3 +501,30 @@ Java全体回帰とGit receiptは成功後追記する。API/config/DB/security/
 Predicate Java全体回帰: 667 suites / 3611 tests、failure/error/skipped各0で成功。
 Native120、React25/99とtypecheckも成功。今回のbounded宣言的Predicate要件は実装済み。
 Reflection意味一般化とPriority 10以降を継続する。
+
+Predicate Git receipt: feature `c2b6f6fa`、main merge `d2595a14c85730e941f13ea93a1f0fa486ff07d6`、両方push済み。
+統合後Java関連30 suites / 126 tests、Native120、React25/99とtypecheck成功、failure/error/skipped各0。
+
+## Phase 4: Reflection lesson candidates
+
+branch `codex/reflection-lesson-candidates`、fetch済み基準main `d2595a14`。
+既存Run/Goal Reflectionはevent事実と固定knowledge候補、PROJECT_STATEの独立proof付き明示昇格を持つ。
+意味的lessonの状態/evidence/counterexample/頻度/freshness/ユーザー修正/忘却を独立に検証し、既存proof昇格を維持する。
+
+Reflection lesson ledgerを実装。Run/Goalの期待と実測をsource snapshotへ結び、FAILURE_PATTERN、
+独立Goal verification付きSUCCESSFUL_STRATEGY、人が明示記録するREPEATED_CORRECTIONを扱う。
+OBSERVATION/CANDIDATE_LESSON/VALIDATED_LESSON/REJECTEDを分離し、3 distinct origins、30日以内、
+完全性、source hash、owner/Project/canonical root/Session、revision、反例レビューを昇格gateへ持たせる。
+通常Run完了報告は成功証拠にならない。反例と修正はREJECTEDへ移し、忘却statement tombstoneを永続化する。
+忘却は新規生成だけでなく既存の等価候補の昇格も止める。Shellの明示操作のみ、モデルToolなし、LTM自動保存なし。
+既存PROJECT_STATE proof付き昇格とarchived memory再生成防止を保持する。
+
+TDD: class欠落、human correction観測欠落、Shell接続欠落、等価候補の忘却漏れとcancel昇格漏れのRedを確認。
+関連Java5 suites / 40 tests、failure/error/skipped各0。real SQLite restart、実source event、
+一時ファイルの独立Goal verificationと変更拒否、Shell、scope、revision、redaction、忘却を確認。
+Native120、React25 suites / 99 testsとtypecheck成功。Java全体回帰を実行中。
+意味一般化のstatementは人の提案であり、gate合格は記録scope内のレビュー済みrecommendationを表す。
+普遍的な正しさや実モデル意味品質を主張しない。設定・API・制限はreflection-lessons.mdを参照。
+
+Reflection Java全体回帰: 668 suites / 3622 tests、failure/error/skipped各0で成功。
+Native120、React25/99とtypecheckも成功。実装・ローカル検証完了、Git統合を実施する。
