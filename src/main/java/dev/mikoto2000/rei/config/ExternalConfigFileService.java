@@ -293,6 +293,8 @@ public class ExternalConfigFileService {
             enabled: ${REI_PREDICATES_ENABLED:false}
           reflection:
             lessons-enabled: ${REI_REFLECTION_LESSONS_ENABLED:false}
+          repair:
+            diagnosed-enabled: ${REI_REPAIR_DIAGNOSED_ENABLED:false}
           subagents:
             durable-enabled: ${REI_SUBAGENTS_DURABLE_ENABLED:false}
             dag-enabled: ${REI_SUBAGENTS_DAG_ENABLED:false}

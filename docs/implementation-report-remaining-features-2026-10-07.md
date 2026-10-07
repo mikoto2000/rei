@@ -614,3 +614,29 @@ API例・状態・対応format・限界はcoverage-test-impact.md。Java全体�
 追加監査でGit本文のheader類似文字列によるpath誤対応をRedで再現し、header読み取り境界を修正。
 関連3 suites / 24 tests成功（Coverage9・Git9・Impact6）。最終codeの全体回帰を再実行する。
 最終Coverage Java全体回帰: 673 suites / 3660 tests、failure/error/skipped各0。Native120、React25/99とtypecheck成功。Git統合を実施する。
+
+Coverage Git receipt: feature `e463d90a`、main merge `17c7258bc3fc308ddddc20e892fa88fbe344eec1`、両方push済み。
+統合後Java関連5 suites / 45 tests、Native120、React25/99とtypecheck成功、failure/error/skipped各0。
+
+## Phase 5: Failure Diagnosis → Repair
+
+branch `codex/diagnosis-repair-flow`、fetch済み基準main `17c7258b`。
+既存SelfPatchRepairは保存案・完全失敗・再検証・最大3修正/180秒を実装済み。
+不足していた失敗report identity→patch→修正Change Setの保存接続と人の明示承認を追加する。
+
+Diagnosis→Repair: 保存JUnitの完全な失敗観測・SHA/time、Git patch version、既存Text Change Setと
+明示command/timeoutを同一DataSource transactionで結び、Project/root/session別receipt hashを保存。
+propose/inspect/apply Toolと/repair show|apply Shell入口を追加。自動repairは既定OFF。
+人の実際の現在requestが正確な/repair apply ID receiptHashと一致する場合だけ適用可能。
+既存全能力Policyに加え、Text Change Set保存guardで通常Apply/selfRepairによる迂回を防止。
+READ_ONLYは案を参照できるがWRITEを拒否。stale/future/不完全report、変更patch、別session、
+使用済み/結果不明案、再観測した失敗identity不一致を拒否。一回CAS claimの後、同じ
+SelfPatchRepairで失敗→適用→test→static review→final test。元の失敗と全round/receiptを保存。
+共有180秒を診断preflightから渡し、補充しない。1保存修正/2round/4tests、各1..60秒、
+patch32files、text64KiB、history128/Project、record128KiB。追加LLM/外部呼出しは0。
+STARTED/crash/UNKNOWNや失敗の自動再送なし。成功repeatは歴史receipt読取でwriterを再実行しない。
+TDD: 未実装接続、caller deadline、Tool/人入口、READ_ONLY参照、通常Apply迂回のRedを確認。
+実Git/実Shell/SQLiteのJUnit失敗更新→承認→Apply→3回command/最終成功、index不変を確認。
+関連Java7 suites / 40 tests、failure/error/skipped各0。Native120、React25/99とtypecheck成功。
+設定/API/限界はdiagnosed-repair-flow.md。Java全体回帰を実行中。
+Diagnosis→Repair Java全体回帰: 674 suites / 3667 tests、failure/error/skipped各0。Native120、React25/99とtypecheck成功。Git統合を実施する。

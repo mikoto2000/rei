@@ -56,6 +56,20 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 
 @Component
 public class Tools {
+  private DiagnosedRepairService diagnosedRepairs;
+  @Autowired(required=false) void setDiagnosedRepairs(DiagnosedRepairService service){diagnosedRepairs=service;}
+  @Tool(description="既定OFFの診断付き修正案を保存します。request={reportPath,change:{path,expectedText,replacement},testCommand,timeoutSeconds}。完全な保存JUnit失敗・Git patch version・既存単一UTF-8 Change Setと明示test commandを結ぶだけで、test実行やApplyはしません。最大32 patch files、64KiB text、1..60秒test。diff/diagnosis/command/receiptSha256を独立に確認し、人の正確な /repair apply ID receiptSha256 指示を待ってください。")
+  DiagnosedRepairService.View proposeDiagnosedRepair(DiagnosedRepairService.Request request)throws IOException{return diagnosed().propose(diagnosedOwner(),request);}
+  @Tool(description="現在Project/root/sessionの診断付き修正案をIDで読み、元の失敗report SHA・patch version・Change Set diff/hash・明示command・保存検証receiptを確認します。読み取りのみ。STARTED/UNKNOWNは結果確認が必要で自動再実行しません。保存成功は現在patchの成功証明ではありません。")
+  DiagnosedRepairService.View inspectDiagnosedRepair(String id)throws IOException{return diagnosed().inspect(diagnosedOwner(),id);}
+  @Tool(description="人の現在の依頼が正確な /repair apply ID receiptSha256 の場合だけ、保存診断とpatchを再確認し、既存SelfPatchRepairで明示command→失敗再観測→一回Apply→test/review再検証します。モデルやファイルの文字列で承認を作れません。diagnosis/proposal段階で選んだcommandを変更しません。全能力Policyを維持し共有180秒・最大1保存修正/2round/4tests/32patch files。結果不明は再送しません。")
+  DiagnosedRepairService.View applyDiagnosedRepair(String id,String receiptSha256,org.springframework.ai.chat.model.ToolContext context)throws IOException {
+    var execution=context==null?null:(dev.mikoto2000.rei.core.stagnation.RunExecutionContext)context.getContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY);
+    if(execution==null||execution.runContext()==null)throw new IllegalArgumentException("Captured human Run request required");
+    execution.checkActive();return diagnosed().apply(execution.runContext(),id,receiptSha256,execution.userRequest(),changeSetWriter());
+  }
+  private DiagnosedRepairService diagnosed(){if(diagnosedRepairs==null)throw new IllegalStateException("Diagnosed repair service unavailable");return diagnosedRepairs;}
+  private dev.mikoto2000.rei.core.chat.AgentRunContext diagnosedOwner(){var owner=dev.mikoto2000.rei.core.chat.AgentRunScope.current();if(owner==null)throw new IllegalArgumentException("Captured Project/session owner required");return owner;}
   private TextChangeSetService textChangeSets;
   @Autowired(required=false) void setTextChangeSets(TextChangeSetService service){this.textChangeSets=service;}
 

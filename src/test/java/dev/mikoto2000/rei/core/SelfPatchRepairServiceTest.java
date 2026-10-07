@@ -8,6 +8,13 @@ import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.*;
 
 class SelfPatchRepairServiceTest {
+  @Test void callerDeadlineIsSharedWithoutReplenishment()throws Exception {
+    long deadline=System.nanoTime()+java.time.Duration.ofSeconds(2).toNanos();
+    var service=new SelfPatchRepairService((r,q,d)->{assertEquals(deadline,d);return round("VERIFIED_CHECKS","v1");},(r,d)->snapshot("v1"),(r,f,d)->{fail("no repair");return null;});
+    assertEquals("VERIFIED_CHECKS",service.verify(root,request(),deadline).status());
+    var exhausted=new SelfPatchRepairService((r,q,d)->{fail("no exhausted command");return null;},(r,d)->snapshot("v1"),(r,f,d)->null);
+    assertEquals("BLOCKED",exhausted.verify(root,request(),System.nanoTime()-1).status());
+  }
   @TempDir Path root;
   SelfPatchReviewService.Result round(String status,String version) {
     return new SelfPatchReviewService.Result(root.toString(),status,version,version,List.of("A.java"),

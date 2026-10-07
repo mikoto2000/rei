@@ -30,6 +30,24 @@ class SelfPatchReviewGitTest {
           BuildTestFailureDiagnosis.command("completed",0,false,"","",null));});
   }
   SelfPatchReviewService.Result verify()throws Exception{return service().verify(root,new SelfPatchReviewService.Request("controlled fixture",10));}
+  @Test void diagnosedRepairConnectsRealFailureReportApprovalApplyAndRealShellVerification()throws Exception {
+    Files.createDirectories(root.resolve("build"));Files.writeString(root.resolve("A.txt"),"broken\n");
+    String failed="<testsuite tests=\"1\" failures=\"1\" errors=\"0\" skipped=\"0\"><testcase classname=\"Fixture\" name=\"value\"><failure message=\"broken\">assertion</failure></testcase></testsuite>";
+    String passed="<testsuite tests=\"1\" failures=\"0\" errors=\"0\" skipped=\"0\"><testcase classname=\"Fixture\" name=\"value\"/></testsuite>";
+    Files.writeString(root.resolve("build/TEST.xml"),failed);
+    String command=System.getProperty("os.name").toLowerCase().contains("win")?
+        "Add-Content build/runs.txt run; if ((Get-Content A.txt -Raw).Trim() -eq 'fixed') { Set-Content build/TEST.xml '"+passed+"'; exit 0 }; Set-Content build/TEST.xml '"+failed+"'; exit 1":
+        "printf '%s\\n' run >> build/runs.txt; if [ \"$(cat A.txt)\" = fixed ]; then printf '%s' '"+passed+"' > build/TEST.xml; exit 0; fi; printf '%s' '"+failed+"' > build/TEST.xml; exit 1";
+    var ds=new org.springframework.jdbc.datasource.DriverManagerDataSource("jdbc:sqlite:"+root.resolve("build/changes.db"));
+    var service=new DiagnosedRepairService(ds,new TextChangeSetService(new TextChangeSetRepository(ds)),java.time.Clock.systemUTC(),true,new dev.mikoto2000.rei.core.service.SystemShellService());
+    var owner=new dev.mikoto2000.rei.core.chat.AgentRunContext("run","session",root,UUID.randomUUID().toString());
+    var proposal=service.propose(owner,new DiagnosedRepairService.Request("build/TEST.xml",new TextChangeSetService.Request("A.txt","broken\n","fixed\n"),command,10));
+    byte[] index=Files.readAllBytes(root.resolve(".git/index"));
+    var result=service.apply(owner,proposal.id(),proposal.receiptSha256(),"/repair apply "+proposal.id()+" "+proposal.receiptSha256(),(p,o,n)->Files.writeString(p,n));
+    assertEquals("VERIFIED_CHECKS",result.status(),result.toString());assertEquals(3,Files.readAllLines(root.resolve("build/runs.txt")).size());assertEquals("fixed\n",Files.readString(root.resolve("A.txt")));
+    assertEquals(1,result.verification().rounds().getFirst().initialTest().exitCode());assertEquals(0,result.verification().rounds().getLast().finalTest().exitCode());
+    assertTrue(new TestReportDiagnosisService().read(root,"build/TEST.xml").failedTests().isEmpty());assertArrayEquals(index,Files.readAllBytes(root.resolve(".git/index")));
+  }
   @Test void savedChangeSetRepairsRealGitFindingThenRunsFinalRealShellTest() throws Exception {
     Files.createDirectories(root.resolve("build"));Files.writeString(root.resolve("A.txt"),"after \n");
     var project=new dev.mikoto2000.rei.core.project.ProjectContext(UUID.randomUUID().toString(),"fixture",root);
