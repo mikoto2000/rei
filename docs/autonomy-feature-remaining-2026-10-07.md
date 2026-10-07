@@ -1,5 +1,15 @@
 # 自律機能候補の残件再評価（2026-10-07）
 
+## 2026-10-08の全件再監査結果
+
+今回依頼のPriority1–22とcrash consistencyは要求されたbounded contractを実装し、
+Java693 suites/3762 tests（failure/error/skip0）、Native120、React99/typecheckを検証した。
+[最終Before/After・実環境制約・Git receipt](implementation-report-remaining-features-2026-10-07.md)を参照。
+[復旧補修](final-crash-consistency.md)は実子JVM hard kill4経路、UNKNOWNと明示metadata照合を含む。
+[Live E2E](live-environment-e2e.md)は8経路を実装したが今回は全てLIVE_DISABLEDでskip。
+実モデル/実サービスの成功とは記録していない。Sparse実providerも未設定でoptional境界まで。
+以下の表や未対応候補は過去の依頼の記録であり、今回の最終状態は上記の全件表を優先する。
+
 ## 新しい全件再監査
 
 後続の全件実装依頼については、最新main `905cd4ee` を基準にした
@@ -32,7 +42,7 @@ Priority 18の[RAG/Skill品質評価harness](retrieval-quality-evaluation.md)は
 | C21 | 明示test→静的diff確認→保存修正案Apply→全サイクル再検証 | bounded実装済み。意味的自己reviewや全Goal強制gateは追加候補 |
 | D | 既存UTF-8文書/Mermaid/PlantUML自然言語編集案、保存差分/明示Apply、Paper Provider条件検査/保存/引用/再起動fixture | bounded実装済み。複数ファイル/binary編集・renderer・live provider E2Eは未対応 |
 
-## 未実装候補と次の条件
+## 過去の未実装候補・記録時の条件
 
 | Priority | 候補 | 現在の制約 / 次に必要なもの |
 |---|---|---|
