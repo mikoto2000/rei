@@ -232,3 +232,47 @@ Taskの所有Sessionが異なる不足をTDDで再現し、Registryの親Session
 Native全体119 tests、最終React25 suites / 99 testsとformat/build/typecheckが成功。
 Chrome desktop/mobile全体36 tests（PNG decode、Runリンク、Task結果、明示保存を含む）が成功。
 有料モデル・外部サービスへの書き込みは実行していない。
+
+Artifact Git receipt: feature `76a27198`、main merge `12a7dbc6`、両方push済み。
+統合後mainはJava関連14 suites / 45 tests、Native全体119 tests、React25 suites / 99 testsと
+型検査成功。failure/error/skipped各0。隔離worktreeは統合時clean、元checkoutの変更は保持した。
+Phase 1のP1/P2/P3は今回の実装範囲でIMPLEMENTED。P4以降と外部環境による未検証は残る。
+
+## Phase 2: GitHub Event Triggerの実装
+
+branch `codex/github-event-trigger`、基準はfetch後の `12a7dbc6`。
+既存Scheduler event trigger、Dependency、Notification InboxへのGitHub adapterを実装する。
+署名済みpayloadから固定の事実だけを抽出し、Agentの指示として本文やコメントを渡さない。
+GitHub公式のsignature/delivery/payload仕様を確認した。
+
+HMAC検証前にJSONを読まず、duplicate key/depth/size/time/header confusionを拒否する。
+raw本文やコメントを保存・Agent instructionに変換しない。署名済み固定factsだけをProject/root/Sessionへ
+mappingし、既存のreview済みScheduler triggerへ渡す。receipt/fact/trigger/Inbox/通知発行待ちは
+SQLite transactionで同時保存し、途中のInbox失敗を注入して全体rollbackを確認した。
+delivery/body digestの永続重複排除は再起動後も保持し、容量超過は拒否する。
+任意の読み取り専用StateVerifierは要求時に未設定/不明/否定を拒否し、既処理再送は再確認しない。
+
+Review通知、CI失敗のみのtrigger、特定PR merge Dependency、TaskのGitHub fact参照を接続した。
+通知発行待ちは固定event IDで再送し、既存の許可制metadata配送へ接続した。
+通知確認は実行許可・再開を行わない。Native HTTP fixtureで同一のInbox/Task表現を検証し、
+Chrome desktop/mobileでGitHub通知とTaskの参照表示を確認した。
+
+Native全体120 tests、React25 suites / 99 testsとbuild、Chrome全体38 testsが成功。
+Java全体とGit receiptは完了後に記録する。実GitHub、外部配送、有料モデルは呼んでいない。
+操作・設定・保存上限・再確認境界は [GitHub Event Trigger](github-event-trigger.md) を参照。
+
+最初のJava全体は648 suites / 3533 tests、failure 0/error 1/skipped 0。
+HTTP fixture追加時のBean名衝突で起動失敗した。既存BusをPublisherとして公開するよう修正し、
+さらに条件付きBean登録が登録順でoutboxを省く不足を発見した。
+有効なadapterではoutboxを必須登録し、実HTTP3起動とoutbox Bean存在確認が成功した。
+この修正を含むJava全体を再実行する。最初の失敗を完成検証の成功とは扱わない。
+
+修正後のJava全体は648 suites / 3533 tests、failure/error/skipped各0で成功した。
+追加レビューで、削除・移動したProjectの旧root通知が後続通知を塞ぐ不足を再現した。
+旧root通知は送信済みと区別して保存・抑止し、日時の文字列順も実時刻順へ修正した。
+この最後の通知修正はGitHub/Inbox/Scheduler/Taskの関連回帰で確認する。
+
+最後の通知修正後はJava関連7 suites / 32 testsが成功し、failure/error/skipped各0。
+Native120 tests、React25 suites / 99 tests、format/build、Chrome38 testsは成功済み。
+P4はfixture/local HTTPを含む要求範囲でIMPLEMENTED。実GitHub/API adapterは任意の運用拡張点であり、
+外部送信と有料モデルは未実行。P5以降は引き続き実装対象として進める。

@@ -13,7 +13,7 @@ import dev.mikoto2000.rei.core.policy.*;
 @Component
 @EnableConfigurationProperties(AttentionDeliveryProperties.class)
 public class AttentionDeliveryService {
-  private static final Set<String> KINDS=Set.of("APPROVAL_REQUIRED","POLICY_DENIED","LONG_WAIT","STAGNATION_STOPPED","GOAL_STOPPED","RUN_COMPLETED","RUN_FAILED","DEPENDENCY_COMPLETED","DEPENDENCY_FAILED","DECISION_REQUIRED");
+  private static final Set<String> KINDS=Set.of("APPROVAL_REQUIRED","POLICY_DENIED","LONG_WAIT","STAGNATION_STOPPED","GOAL_STOPPED","RUN_COMPLETED","RUN_FAILED","DEPENDENCY_COMPLETED","DEPENDENCY_FAILED","DECISION_REQUIRED","GITHUB_REVIEW_SUBMITTED","GITHUB_CI_FAILED","GITHUB_PR_MERGED");
   private static final org.slf4j.Logger LOG=org.slf4j.LoggerFactory.getLogger(AttentionDeliveryService.class);
   private final AttentionDeliveryProperties properties; private final AttentionRepository inbox; private final AttentionDeliveryRepository outbox;
   private final AgentEventBus bus; private final ToolPermissionPolicy policy; private final JdkAttentionSender sender;

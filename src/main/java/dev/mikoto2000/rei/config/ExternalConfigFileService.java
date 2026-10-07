@@ -93,6 +93,11 @@ public class ExternalConfigFileService {
               enabled: false
 
         rei:
+          github:
+            webhook:
+              enabled: ${REI_GITHUB_WEBHOOK_ENABLED:false}
+              secret: ${REI_GITHUB_WEBHOOK_SECRET:}
+              mappings: [] # Explicit repository, project-id, session-id, branch/PR filters.
           artifacts:
             enabled: ${REI_ARTIFACTS_ENABLED:false}
             max-bytes: ${REI_ARTIFACTS_MAX_BYTES:33554432}

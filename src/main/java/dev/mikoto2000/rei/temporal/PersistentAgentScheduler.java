@@ -108,6 +108,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
     history(id,"SCHEDULED",reason);
   }
   private static final Set<AgentEventType> TERMINAL_EVENTS=Set.of(
+      AgentEventType.GITHUB_PR_UPDATED,AgentEventType.GITHUB_PR_MERGED,AgentEventType.GITHUB_REVIEW_SUBMITTED,AgentEventType.GITHUB_CI_FAILED,AgentEventType.GITHUB_WORKFLOW_COMPLETED,
       AgentEventType.AGENT_RUN_COMPLETED,AgentEventType.AGENT_RUN_FAILED,AgentEventType.AGENT_RUN_CANCELLED,
       AgentEventType.EXECUTION_COMPLETED,AgentEventType.EXECUTION_FAILED,AgentEventType.EXECUTION_CANCELLED,
       AgentEventType.DEPENDENCY_COMPLETED,AgentEventType.DEPENDENCY_FAILED,AgentEventType.DEPENDENCY_CANCELLED);
@@ -133,6 +134,12 @@ public class PersistentAgentScheduler implements AgentScheduler {
   }
   /** Event facts make an activated wait due; no model or external action executes here. */
   private static String eventSource(AgentEvent event) {
+    if(event.type().name().startsWith("GITHUB_")) {
+      if(!(event.payload() instanceof dev.mikoto2000.rei.event.GitHubLifecyclePayload payload)
+          ||payload.sourceId()==null||payload.fact()==null||!payload.sourceId().equals(payload.fact().sourceId())||!payload.sourceId().equals(event.correlationId())||event.runId()!=null
+          ||!("GITHUB_"+payload.fact().type()).equals(event.type().name()))return null;
+      return payload.sourceId();
+    }
     String state=switch(event.type()) {
       case DEPENDENCY_COMPLETED->"COMPLETED";case DEPENDENCY_FAILED->"FAILED";case DEPENDENCY_CANCELLED->"CANCELLED";
       default->null;
@@ -143,12 +150,15 @@ public class PersistentAgentScheduler implements AgentScheduler {
     return dependency.dependencyId();
   }
   public void signalEvent(AgentEvent event) {
+    signalExternalEvent(event,null);
+  }
+  public void signalExternalEvent(AgentEvent event,java.nio.file.Path root) {
     if(event==null||!TERMINAL_EVENTS.contains(event.type())||event.projectId()==null||event.sessionId()==null
         ||event.id().length()>128||event.timestamp().isAfter(clock.instant()))return;
     String source=eventSource(event);if(source==null||source.length()>128)return;
     transaction.executeWithoutResult(status->{
-      var entries=db.sql("UPDATE agent_schedules SET status='SCHEDULED',due=? WHERE project=? AND session=? AND status='WAITING_EVENT' AND id IN (SELECT id FROM agent_schedule_events WHERE source_run=? AND type=? AND activated<=? AND expires>? AND expires>=?) RETURNING *")
-          .params(clock.millis(),event.projectId(),event.sessionId(),source,event.type().name(),event.timestamp().toEpochMilli(),clock.millis(),event.timestamp().toEpochMilli())
+      var entries=db.sql("UPDATE agent_schedules SET status='SCHEDULED',due=? WHERE project=? AND session=? AND (? IS NULL OR root=?) AND status='WAITING_EVENT' AND id IN (SELECT id FROM agent_schedule_events WHERE source_run=? AND type=? AND activated<=? AND expires>? AND expires>=?) RETURNING *")
+          .params(clock.millis(),event.projectId(),event.sessionId(),root==null?null:root.toString(),root==null?null:root.toString(),source,event.type().name(),event.timestamp().toEpochMilli(),clock.millis(),event.timestamp().toEpochMilli())
           .query(ROW).list();
       for(var entry:entries) {
         db.sql("UPDATE agent_schedule_events SET matched_event=? WHERE id=?").params(event.id(),entry.task().id()).update();

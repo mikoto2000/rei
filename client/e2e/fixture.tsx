@@ -195,19 +195,23 @@ const call = (async (
       items: [
         {
           id: "run:12345678-1234-1234-1234-123456789012",
-          kind: "CHECKPOINT",
+          kind: location.search.includes("github=1")
+            ? "SCHEDULE"
+            : "CHECKPOINT",
           sourceId: "checkpoint-task",
           projectId: "p",
           sessionId: "session",
           runId: "old",
-          status: "SUSPENDED",
+          status: location.search.includes("github=1") ? "QUEUED" : "SUSPENDED",
           mode: "EXCLUSIVE",
-          results: [{ kind: "ARTIFACT", id: artifact.artifactId }],
+          results: location.search.includes("github=1")
+            ? [{ kind: "GITHUB_EVENT", id: "github-fact" }]
+            : [{ kind: "ARTIFACT", id: artifact.artifactId }],
           dependencyIds: [],
           childIds: [],
           revision: 9,
           cancelSupported: false,
-          resumeSupported: true,
+          resumeSupported: !location.search.includes("github=1"),
           inputSupported: false,
         },
       ],
@@ -498,12 +502,20 @@ const call = (async (
               : [
                   {
                     id: "notice",
-                    title: "RUN_FAILED",
+                    title: location.search.includes("github=1")
+                      ? "GITHUB_REVIEW_SUBMITTED"
+                      : "RUN_FAILED",
                     fields: [
                       ["Project", "p"],
                       ["Session", "session"],
                       ["Status", "OPEN"],
-                      ["Message", "Fixture failure requires review"],
+                      [
+                        "Message",
+                        location.search.includes("github=1")
+                          ? "GitHub review received; inspect the saved fact"
+                          : "Fixture failure requires review",
+                      ],
+                      ["Reference", "github-fact"],
                     ],
                   },
                 ]

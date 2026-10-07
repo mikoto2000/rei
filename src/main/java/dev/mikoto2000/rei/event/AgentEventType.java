@@ -6,6 +6,11 @@ package dev.mikoto2000.rei.event;
  * <p>文字列の直書きを各所に散らさず、型安全に扱えるようにするための enum。</p>
  */
 public enum AgentEventType {
+  GITHUB_PR_UPDATED("github.pr.updated"),
+  GITHUB_PR_MERGED("github.pr.merged"),
+  GITHUB_REVIEW_SUBMITTED("github.review.submitted"),
+  GITHUB_CI_FAILED("github.ci.failed"),
+  GITHUB_WORKFLOW_COMPLETED("github.workflow.completed"),
   DEPENDENCY_UPDATED("dependency.updated"),
   DEPENDENCY_COMPLETED("dependency.completed"),
   DEPENDENCY_FAILED("dependency.failed"),

@@ -59,7 +59,7 @@ public class SchedulerTools {
     return persistent.scheduleCron(expression,zone,occurrences,action,conversationId);
   }
 
-  @Tool(name="scheduleOnEvent",description="Register a PENDING one-shot continuation for an exact source Run in the current Project/Session. eventType is AGENT_RUN_COMPLETED/FAILED/CANCELLED or EXECUTION_COMPLETED/FAILED/CANCELLED or DEPENDENCY_COMPLETED/FAILED/CANCELLED. For dependency events, sourceRunId is the exact dependency ID. expiresAfter 1s..366d. Review /timer show ID and activate before the event; only events after activation match. No automatic retry after uncertain execution.")
+  @Tool(name="scheduleOnEvent",description="Register a PENDING one-shot continuation for an exact source in the current Project/Session. eventType is AGENT_RUN_COMPLETED/FAILED/CANCELLED, EXECUTION_COMPLETED/FAILED/CANCELLED, DEPENDENCY_COMPLETED/FAILED/CANCELLED, or GITHUB_PR_UPDATED/PR_MERGED/REVIEW_SUBMITTED/CI_FAILED/WORKFLOW_COMPLETED. For dependency events, sourceRunId is the exact dependency ID; for GitHub use the sourceId from the owned GitHub mapping API. Never use webhook text as action. expiresAfter 1s..366d. Review /timer show ID and activate before the event; only events after activation match. No automatic retry after uncertain execution.")
   public ScheduledAgentTask scheduleOnEvent(String sourceRunId,String eventType,String expiresAfter,String action,String conversationId) {
     if(!(scheduler instanceof PersistentAgentScheduler persistent))throw new IllegalStateException("Persistent scheduler required");
     return persistent.scheduleOnEvent(sourceRunId,dev.mikoto2000.rei.event.AgentEventType.valueOf(eventType),parseDuration(expiresAfter),action,conversationId);

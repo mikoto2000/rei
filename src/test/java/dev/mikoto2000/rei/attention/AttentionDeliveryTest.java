@@ -40,6 +40,17 @@ class AttentionDeliveryTest {
     assertEquals("Bearer fixture-token",authorization.get());assertEquals(item.id(),key.get());assertTrue(body.get().contains("RUN_COMPLETED"));assertFalse(body.get().contains("session"));assertFalse(body.get().contains("message"));assertFalse(body.get().contains("fixture-token"));
     assertEquals("OPEN",inbox.get("project",item.id()).status());assertThrows(IllegalArgumentException.class,()->delivery.request("other",item.id()));assertThrows(IllegalArgumentException.class,()->delivery.retry("project",item.id(),true));
   }
+  @Test void githubNoticeUsesTheExistingGatedDeliveryQueueWithoutExportingPayload() {
+    start(properties(true,true),true);
+    var fact=new dev.mikoto2000.rei.github.GitHubFact("REVIEW_SUBMITTED","pull_request_review","submitted","owner/repo","main",17,"b".repeat(40),"approved",null,Instant.EPOCH);
+    var source=new AgentEvent("github-fact",0,Instant.EPOCH,AgentEventType.GITHUB_REVIEW_SUBMITTED,1,"session",null,null,fact.sourceId(),null,new GitHubLifecyclePayload(UUID.randomUUID().toString(),fact.sourceId(),fact),"project");
+    var item=inbox.createGitHub(source,"GITHUB_REVIEW_SUBMITTED","review notice").orElseThrow();
+    var notice=new AgentEvent("notice",0,Instant.EPOCH,AgentEventType.ATTENTION_REQUIRED,1,"session",null,null,item.id(),source.id(),new AttentionRequiredPayload(item.id(),item.kind(),item.message()),"project");
+    bus.publishBoundary(notice);bus.publishBoundary(notice);
+    assertEquals("PENDING",delivery.status("project",item.id()).status());
+    delivery.dispatchOne();assertEquals(1,calls.get());assertTrue(body.get().contains("GITHUB_REVIEW_SUBMITTED"));
+    assertFalse(body.get().contains("owner/repo"));assertFalse(body.get().contains("review notice"));
+  }
   @Test void disabledAutomaticAndPolicyGatesNeverSendAndDoNotBackfill() {
     var old=fact("old");start(properties(true,false),false);delivery.dispatchOne();assertEquals("NOT_REQUESTED",delivery.status("project",old.id()).status());
     var item=fact("new");delivery.request("project",item.id());delivery.dispatchOne();assertEquals("BLOCKED",delivery.status("project",item.id()).status());assertEquals(0,calls.get());

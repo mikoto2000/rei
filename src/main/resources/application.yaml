@@ -58,6 +58,10 @@ management:
       show-details: never
       show-components: never
 rei:
+  github:
+    webhook:
+      enabled: ${REI_GITHUB_WEBHOOK_ENABLED:false}
+      secret: ${REI_GITHUB_WEBHOOK_SECRET:}
   artifacts:
     enabled: ${REI_ARTIFACTS_ENABLED:false}
     max-bytes: ${REI_ARTIFACTS_MAX_BYTES:33554432}

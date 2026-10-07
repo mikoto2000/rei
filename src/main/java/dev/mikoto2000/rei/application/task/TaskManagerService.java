@@ -130,10 +130,14 @@ public final class TaskManagerService {
       String state=switch(schedule.status()){case "PENDING","SCHEDULED"->"QUEUED";case "WAITING_EVENT"->"WAITING";default->schedule.status();};
       if(state.equals("RUNNING")&&run(project,schedule.task().conversationId(),schedule.runId())==null)state="UNKNOWN";
       var history=schedules.history(project.id(),schedule.task().id());Instant updated=history.isEmpty()?schedule.task().createdAt():history.getLast().timestamp();
+      var references=new ArrayList<TaskView.Reference>();
+      if(schedule.runId()!=null)references.add(new TaskView.Reference("RUN",schedule.runId()));
+      schedules.eventTrigger(project.id(),schedule.task().id()).filter(trigger->trigger.sourceRunId().startsWith("github:")&&trigger.matchedEventId()!=null)
+          .ifPresent(trigger->references.add(new TaskView.Reference("GITHUB_EVENT",trigger.matchedEventId())));
       result.put(id,new TaskView(id,"SCHEDULE",schedule.task().id(),project.id(),schedule.task().conversationId(),schedule.runId(),state,"EXCLUSIVE",
           schedule.task().createdAt(),updated,state.equals("QUEUED")?"due: "+schedule.task().executeAt():state.equals("WAITING")?"event_wait":null,
           state.equals("FAILED")||state.equals("UNKNOWN")?safe(schedule.outcome()):null,null,
-          schedule.runId()==null?List.of():List.of(new TaskView.Reference("RUN",schedule.runId())),null,List.of(),schedule.task().id(),null,List.of(),null,
+          references,null,List.of(),schedule.task().id(),null,List.of(),null,
           Set.of("PENDING","SCHEDULED","WAITING_EVENT").contains(schedule.status()),false,false,history.size()));
     }
     parents.putAll(goalParents);
