@@ -6,6 +6,10 @@ import org.springframework.web.bind.annotation.*;
 
 @RestControllerAdvice(basePackages = "dev.mikoto2000.rei.web")
 public class ApiExceptionHandler {
+  @ExceptionHandler(dev.mikoto2000.rei.core.chat.ProjectRunQueue.CapacityExceededException.class)
+  public ResponseEntity<Error> runCapacity() {
+    return ResponseEntity.status(429).body(new Error("Run admission capacity reached"));
+  }
   @ExceptionHandler(dev.mikoto2000.rei.checkpoint.CheckpointException.class)
   public ResponseEntity<Error> checkpoint(dev.mikoto2000.rei.checkpoint.CheckpointException error) {
     int status=switch(error.code()) {

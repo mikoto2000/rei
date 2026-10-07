@@ -14,6 +14,23 @@ import static org.assertj.core.api.Assertions.*;
 @org.junit.jupiter.api.Tag("integration")
 class ChatControllerTest {
   @TempDir Path directory;
+  @Test void fullRunQueueRejectsAdmissionWithoutLeakingInternalError() throws Exception {
+    var projects = new ProjectRegistry(directory.resolve("projects.json"));
+    var project = projects.resolve(directory);
+    var clock = Clock.systemUTC();
+    var registry = new RunRegistry(clock);
+    var service = new ChatSubmitService(projects, new SessionRegistry(clock), registry,
+        new dev.mikoto2000.rei.conversation.FileSessionRepository(directory.resolve("sessions.json")), clock,
+        (context, prompt) -> { throw new dev.mikoto2000.rei.core.chat.ProjectRunQueue.CapacityExceededException(); });
+    var mvc = MockMvcBuilders.standaloneSetup(new ChatController(service))
+        .setControllerAdvice(new ApiExceptionHandler()).build();
+    mvc.perform(post("/api/v1/chat").contentType("application/json")
+        .content("{\"message\":\"hello\",\"projectId\":\"" + project.id() + "\"}"))
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.message").value("Run admission capacity reached"));
+    assertThat(registry.runIds()).isEmpty();
+  }
+
   @Test void acceptedResponseHasLocationAndInvalidRequestsHaveExplicitStatuses() throws Exception {
     var projects = new ProjectRegistry(directory.resolve("projects.json"));
     var project = projects.resolve(directory);

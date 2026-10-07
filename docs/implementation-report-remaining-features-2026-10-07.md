@@ -51,6 +51,13 @@ Spring Boot / Spring AI の更新を含む。開始時のローカルmainとorig
 Paper実provider、Slack実配送、有料モデル品質は現時点で確認していない。
 fixture/local harnessの不足をcredential不足として免除しない。
 
+| 外部確認事項 | 開始時分類 | 未確認理由 |
+|---|---|---|
+| CLIの実認証・実モデルreview/resume/implementation | BLOCKED_BY_EXTERNAL_ENVIRONMENT | モデル利用許可・accountの確認を行っていない。CLI存在だけで成功にしない |
+| Paper実provider E2E | BLOCKED_BY_EXTERNAL_ENVIRONMENT | live providerの有効化/credential/実接続を今回確認していない |
+| Slack実配送 | BLOCKED_BY_EXTERNAL_ENVIRONMENT | destination/credential/実送信許可がない。transport実装不足とは分離 |
+| 実モデル検索・意味検証品質 | BLOCKED_BY_EXTERNAL_ENVIRONMENT | 有料モデルを実行していない。stub評価pipelineの不足は別に実装対象とする |
+
 ## 既存10機能との照合
 
 | 対象 | 開始時状態 | 利用経路・今回の判断 |
@@ -86,5 +93,27 @@ workspaceのMaven cache指定ではAccessDeniedのためテストは開始しな
 `-Pfull` で4クラスの再確認も成功した。件数は下記receiptへ記録する。
 過去reportの3329件を今回の実行件数へ転記しない。
 
-監査branch: `codex/remaining-features-audit`。feature/merge commitは未作成。
-DB migration/API/configの追加はまだない。production変更と各Phaseの完了はまだない。
+監査branch: `codex/remaining-features-audit`。feature `8ddfa487`、merge `0ccd6898`、両方push済み。
+監査時点ではDB migration/API/configの追加はない。各Phase全体の完了はまだない。
+
+## Phase 1前提: bounded Run admission
+
+独立branch `codex/bounded-run-admission`。既存ProjectRunQueueに同Project64/全体256の
+実行中を含む受付上限を追加し、上限到達は専用CapacityExceededExceptionとして同期拒否する。
+新しいqueue/frameworkは追加しない。HTTPはこの専用例外だけを429へ変換する。
+一般executor障害を容量不足と誤表示しない。ChatSubmitServiceの既存rollbackが拒否Runを削除する。
+Project FIFO/他Project並行/個別cancel/cleanup前の書込枠保持を維持する。
+この変更でREAD並行化やTask Managerが完成したとは扱わない。
+
+TDD: constructor未実装compile Red → queue Green → HTTP期待429/実際500のbehavior Red
+→ 専用例外/HTTP mapping Green。境界値、不正limit、待機取消、完了による枠解放、
+executor拒否、32同時受付の全体上限、HTTP拒否後ghost Runなしを検証する。
+Run/Session/mailbox/Background operation関連の9クラス回帰は成功。
+初回Java全体回帰は3463 tests、failure 15/error 1/skipped 0。
+失敗はWindowsの長classpathによる実プロセス起動に集中したため、成功と扱わない。
+独立harness修正 `5d5f74ee` / main merge `123ad0f8` を先に統合した。
+再起動/外部プロセス/Background Process/診断/長classpathの5 suites・26 testsは成功した。
+全ソースのclean compile後の全体回帰は624 suites / 3466 tests、failure/error/skipped各0で成功した。
+実行: JDK25、`mvnw.cmd -q -Pfull clean test`。
+DB migrationなし、config追加なし、固定上限の利用説明をconfiguration.mdへ追加した。
+Native/Reactは変更していない。実サービス・モデルは実行していない。

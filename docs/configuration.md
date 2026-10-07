@@ -457,3 +457,13 @@ rei:
 ## Claude Code 外部レビュー
 
 `rei.external-agents.claude.enabled` / `REI_CLAUDE_ENABLED` は既定false。`command` / `REI_CLAUDE_COMMAND` はnative `claude`（Windowsは `claude.exe`）。既存外部設定へclaude節を追加すると有効化できる。CLIは2.1.286以上、claude.aiのサブスクリプションで事前ログインし、API/cloud fallbackを行わない。対象のUTF-8 snapshot上限、Tool無効化、Run/Goal予算・履歴・取消は[Claude Code reviews](claude-code-reviews.md)を参照。
+
+## Agent Runの受付上限
+
+既存 `ProjectRunQueue` の受付は、実行中を含めて同Project最大64 Run、
+全Project合計最大256 Runに制限される。この上限は固定の安全上限で、追加設定は不要。
+通常Chat、Goal、Scheduler、およびHTTPのBackground operationは同じqueueを使う。
+上限到達時のHTTP受付は `429` と `Run admission capacity reached` を返す。
+拒否されたRunは登録されず、受付成功のreceiptとして扱わない。
+実行中Runの取消ではcleanup完了まで枠を保持し、待機Runの取消・完了・executor拒否では枠を解放する。
+これは予約の件数上限やモデル予算とは別に、現在の実行queueを制限する。
