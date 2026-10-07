@@ -4,18 +4,18 @@ import java.net.URI;
 import java.util.*;
 
 public record DependencySpec(Kind kind,String target,String expected) {
-  public enum Kind { FILE_EXISTS, FILE_SHA256, FILE_CHANGED, GIT_STATE_CHANGED, PROCESS_EXIT, HTTP_STATUS, HTTP_BODY_SHA256, HTTP_JSON_VALUE, USER_ANSWER, GITHUB_PR_MERGED }
+  public enum Kind { FILE_EXISTS, FILE_SHA256, FILE_CHANGED, FILE_JSON_PREDICATE, GIT_STATE_CHANGED, PROCESS_EXIT, HTTP_STATUS, HTTP_BODY_SHA256, HTTP_JSON_VALUE, USER_ANSWER, GITHUB_PR_MERGED }
   public boolean network(){return kind==Kind.HTTP_STATUS||kind==Kind.HTTP_BODY_SHA256||kind==Kind.HTTP_JSON_VALUE;}
   public DependencySpec {
     if(kind==null||target==null||target.isBlank()||target.length()>2048||expected!=null&&expected.length()>4096)
       throw new IllegalArgumentException("Bounded dependency kind and target required");
     switch(kind) {
-      case FILE_EXISTS,FILE_SHA256,FILE_CHANGED -> {
+      case FILE_EXISTS,FILE_SHA256,FILE_CHANGED,FILE_JSON_PREDICATE -> {
         var path=Path.of(target);if(target.length()>1024||path.isAbsolute()||path.getRoot()!=null||target.contains(":"))throw new IllegalArgumentException("Project-relative file required");
         for(var part:path)if(part.toString().equals(".."))throw new IllegalArgumentException("Parent traversal rejected");
         if(kind==Kind.FILE_SHA256&&(expected==null||!expected.matches("[a-fA-F0-9]{64}")))throw new IllegalArgumentException("SHA-256 required");
         if(kind==Kind.FILE_CHANGED&&(expected==null||!expected.equals("missing")&&!expected.matches("[a-fA-F0-9]{64}")))throw new IllegalArgumentException("File fingerprint baseline required");
-        expected=kind==Kind.FILE_EXISTS?null:expected.toLowerCase(Locale.ROOT);
+        expected=kind==Kind.FILE_JSON_PREDICATE?dev.mikoto2000.rei.core.predicate.DeclarativePredicate.parse(expected).json():kind==Kind.FILE_EXISTS?null:expected.toLowerCase(Locale.ROOT);
       }
       case HTTP_STATUS,HTTP_BODY_SHA256,HTTP_JSON_VALUE -> {
         var uri=URI.create(target);

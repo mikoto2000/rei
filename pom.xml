@@ -37,6 +37,12 @@
 		<test.dataDirectory>${project.build.directory}/test-performance/data</test.dataDirectory>
 	</properties>
 	<dependencies>
+		<!-- Linear-time matching for the bounded declarative predicate DSL. -->
+		<dependency>
+			<groupId>com.google.re2j</groupId>
+			<artifactId>re2j</artifactId>
+			<version>1.8</version>
+		</dependency>
 		<!-- Direct use of the PDFBox version already supplied by Tika. -->
 		<dependency>
 			<groupId>org.apache.pdfbox</groupId>

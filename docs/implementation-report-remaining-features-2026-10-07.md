@@ -467,3 +467,37 @@ Java全体回帰とGit receiptは成功後追記する。fixture評価と実モ�
 Consensus Java全体回帰: 665 suites / 3599 tests、failure/error/skipped各0で成功。
 Native120、React25/99とtypecheckも成功。今回の保存回答/evidence比較と任意judge接続要件は実装済み。
 実モデルの意味判定品質は未検証であり、Priority 20の評価harnessとlive環境の確認を区別して継続する。
+
+Consensus Git receipt: feature `7de1f118`、main merge `176222fea040a5b12a7718a27052a6575d83dae6`、両方push済み。
+統合後Java関連26 suites / 287 tests、Native120、React25/99とtypecheck成功、failure/error/skipped各0。
+Phase 3のCodex/Claude隔離実装・Durable child/DAG/Consensusの実装を統合済み。
+
+## Phase 4: Declarative completion/dependency predicates
+
+branch `codex/declarative-completion-predicates`、fetch済み基準main `176222fe`。
+現行はJSON Pointerの単一scalar等値のみ。共通bounded DSLを既存Goal/Dependency観測へ接続する。
+任意コードevalは追加せず、version/schema/size/depth/regex/time制限とmissing観測のUNKNOWNを保持する。
+
+Predicate実装: common DeclarativePredicate version 1へAND/OR/NOT/EQ/NE/LT/LTE/GT/GTE/MATCH/EXISTSを追加。
+任意code evalは導入せず、strict schema/duplicate keys/version/型比較を検証する。
+DSL4096文字/32 nodes/depth8、body64KiB、pointer256/16segments、regex256/program512、評価250ms上限。
+RE2/J 1.8を追加し、backreference/lookaroundとcounted repetitionは拒否。compile展開とbacktrackingの危険を抑える。
+missing比較/型不正/無効JSON/deadline/cancelはUNKNOWN、NOT/NEで成功に転じない。EXISTSは有効JSONの存在観測。
+
+既存Goal criteriaへnullable predicate_json columnを追加し、旧SHA/scalar constructors/dataを保持する。
+既存bounded file reader、GoalLoop/Reflection/認証HTTP verifyを再利用する。
+FILE_JSON_PREDICATEとHTTP_JSON_VALUEの{status,predicate} variantを既存Dependency観測へ接続。
+既定OFFのrei.predicates.enabled、network authority、watcher opt-in、Project/root/session境界を維持。
+無効時のGoal runはclaim/モデルdispatch前に拒否し、HTTPはrequest前にBLOCKED。
+UNKNOWNはDependency BLOCKED、不一致はWAITING、SATISFIEDだけCOMPLETED。private bodyをreceiptへ出さない。
+
+TDD: common DSL欠落、Goal/HTTP接続欠落、file Dependency未定義、無効Predicate Goalのdispatch、EXISTS未定義のRedを確認し修正。
+型/精度/OR/NOT/missing/version overflow/duplicate fields/complexity/regex/deadline/UTF-8、SQLite再生成、
+local HTTP、実Bearer Goal HTTP verifyとモデルdispatch0、既存Goal/Dependency/設定templateの回帰を確認。
+関連Java30 suites / 126 tests、Native120、React25/99とtypecheck成功、failure/error/skipped各0。
+Java全体回帰とGit receiptは成功後追記する。API/config/DB/security/制限はdeclarative-predicates.mdを参照。
+参照: https://github.com/google/re2j 、 https://github.com/google/re2j/releases/tag/re2j-1.8 。
+
+Predicate Java全体回帰: 667 suites / 3611 tests、failure/error/skipped各0で成功。
+Native120、React25/99とtypecheckも成功。今回のbounded宣言的Predicate要件は実装済み。
+Reflection意味一般化とPriority 10以降を継続する。

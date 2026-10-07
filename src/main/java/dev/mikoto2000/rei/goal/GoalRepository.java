@@ -15,9 +15,10 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 /** Durable goal identity, claims and pre-call reservations. Resume never replenishes a budget. */
 @Repository
 public class GoalRepository {
-  public record FileCriterion(String relativeFile,String sha256,String jsonPointer,String expectedJson) {
+  public record FileCriterion(String relativeFile,String sha256,String jsonPointer,String expectedJson,String predicateJson) {
+    public FileCriterion(String relativeFile,String sha256,String jsonPointer,String expectedJson){this(relativeFile,sha256,jsonPointer,expectedJson,null);}
     public FileCriterion(String relativeFile,String sha256){this(relativeFile,sha256,null,null);}
-    public boolean jsonCriterion(){return jsonPointer!=null||expectedJson!=null;}
+    public boolean jsonCriterion(){return jsonPointer!=null||expectedJson!=null||predicateJson!=null;}
   }
   public record Goal(String id,String projectId,String projectRoot,String sessionId,String objective,
       String relativeFile,String sha256,int maxRuns,int maxLlmCalls,int attempts,int llmCallsUsed,
@@ -53,7 +54,7 @@ public class GoalRepository {
     }
     db.sql("CREATE TABLE IF NOT EXISTS agent_goal_criteria(goal TEXT NOT NULL,ordinal INTEGER NOT NULL,file TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(goal,ordinal))").update();
     var criterionColumns=new HashSet<>(db.sql("PRAGMA table_info(agent_goal_criteria)").query((rs,n)->rs.getString("name")).list());
-    for(String column:List.of("json_pointer","expected_json")) {
+    for(String column:List.of("json_pointer","expected_json","predicate_json")) {
       if(!criterionColumns.contains(column))db.sql("ALTER TABLE agent_goal_criteria ADD COLUMN "+column+" TEXT").update();
     }
     db.sql("CREATE UNIQUE INDEX IF NOT EXISTS agent_goals_running_session ON agent_goals(project,session) WHERE status='RUNNING'").update();
@@ -84,8 +85,8 @@ public class GoalRepository {
     });return get(owner.projectId(),id);
   }
   private List<FileCriterion> criteria(String id,String file,String digest) {
-    var items=db.sql("SELECT file,digest,json_pointer,expected_json FROM agent_goal_criteria WHERE goal=? ORDER BY ordinal").param(id)
-        .query((rs,n)->new FileCriterion(rs.getString("file"),rs.getString("digest"),rs.getString("json_pointer"),rs.getString("expected_json"))).list();
+    var items=db.sql("SELECT file,digest,json_pointer,expected_json,predicate_json FROM agent_goal_criteria WHERE goal=? ORDER BY ordinal").param(id)
+        .query((rs,n)->new FileCriterion(rs.getString("file"),rs.getString("digest"),rs.getString("json_pointer"),rs.getString("expected_json"),rs.getString("predicate_json"))).list();
     return items.isEmpty()?List.of(new FileCriterion(file,digest)):items;
   }
   public Goal create(AgentRunContext owner,String objective,List<FileCriterion> criteria,int maxRuns,int maxLlmCalls) {
@@ -95,11 +96,11 @@ public class GoalRepository {
       if(item==null)throw new IllegalArgumentException("File criterion is required");
       validateFile(item.relativeFile());var path=Path.of(item.relativeFile()).normalize();
       String relative=path.toString().replace('\\','/');
-      if(!paths.add(new CriterionKey(path,item.jsonCriterion()?"json:"+item.jsonPointer():"digest")))throw new IllegalArgumentException("Duplicate completion criterion");
+      if(!paths.add(new CriterionKey(path,item.predicateJson()!=null?"predicate":item.jsonCriterion()?"json:"+item.jsonPointer():"digest")))throw new IllegalArgumentException("Duplicate completion criterion");
       if(item.jsonCriterion()) {
         if(item.sha256()!=null&&!item.sha256().isEmpty())throw new IllegalArgumentException("Use SHA-256 or JSON scalar criteria");
-        var condition=JsonFileGoalCondition.parse(item.jsonPointer(),item.expectedJson());
-        normalized.add(new FileCriterion(relative,"",condition.pointer(),condition.expectedJson()));
+        if(item.predicateJson()!=null){if(item.jsonPointer()!=null || item.expectedJson()!=null)throw new IllegalArgumentException("Use scalar or declarative JSON predicate");var predicate=dev.mikoto2000.rei.core.predicate.DeclarativePredicate.parse(item.predicateJson());normalized.add(new FileCriterion(relative,"",null,null,predicate.json()));}
+        else {var condition=JsonFileGoalCondition.parse(item.jsonPointer(),item.expectedJson());normalized.add(new FileCriterion(relative,"",condition.pointer(),condition.expectedJson()));}
       } else {
         if(item.sha256()==null||!item.sha256().matches("[a-fA-F0-9]{64}"))throw new IllegalArgumentException("Expected SHA-256 must contain 64 hexadecimal characters");
         normalized.add(new FileCriterion(relative,item.sha256().toLowerCase(Locale.ROOT)));
@@ -109,8 +110,8 @@ public class GoalRepository {
       var first=normalized.getFirst();var goal=createBase(owner,objective,first.relativeFile(),first.sha256(),maxRuns,maxLlmCalls);
       for(int i=0;i<normalized.size();i++) {
         var item=normalized.get(i);
-        db.sql("INSERT INTO agent_goal_criteria(goal,ordinal,file,digest,json_pointer,expected_json) VALUES(?,?,?,?,?,?)")
-            .params(goal.id(),i,item.relativeFile(),item.sha256(),item.jsonPointer(),item.expectedJson()).update();
+        db.sql("INSERT INTO agent_goal_criteria(goal,ordinal,file,digest,json_pointer,expected_json,predicate_json) VALUES(?,?,?,?,?,?,?)")
+            .params(goal.id(),i,item.relativeFile(),item.sha256(),item.jsonPointer(),item.expectedJson(),item.predicateJson()).update();
       }
       return get(owner.projectId(),goal.id());
     });

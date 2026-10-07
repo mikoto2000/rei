@@ -10,6 +10,10 @@ import org.springframework.stereotype.Component;
 /** Independent read-only predicate, never a model's completion claim. */
 @Component
 public class FileGoalVerifier {
+  private boolean predicatesEnabled;
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setPredicatesEnabled(@org.springframework.beans.factory.annotation.Value("${rei.predicates.enabled:false}") boolean enabled){predicatesEnabled=enabled;}
+  public void requireEnabledPredicates(GoalRepository.Goal goal){if(!predicatesEnabled && goal.criteria().stream().anyMatch(item->item.predicateJson()!=null))throw new IllegalStateException("Enable rei.predicates.enabled before running a predicate Goal");}
   public record Verification(boolean satisfied,String reason) {}
   public Verification verify(GoalRepository.Goal goal) {
     if(goal.criteria().isEmpty()||goal.criteria().size()>16)return new Verification(false,"verification_unavailable");
@@ -29,7 +33,10 @@ public class FileGoalVerifier {
   }
   private Verification verifyJson(Path root,GoalRepository.FileCriterion criterion) {
     if(Thread.currentThread().isInterrupted())return new Verification(false,"verification_cancelled");
-    var condition=JsonFileGoalCondition.parse(criterion.jsonPointer(),criterion.expectedJson());
+    if(criterion.predicateJson()!=null && !predicatesEnabled)return new Verification(false,"predicate_disabled");
+    if(criterion.predicateJson()!=null && (criterion.jsonPointer()!=null || criterion.expectedJson()!=null))return new Verification(false,"verification_unavailable");
+    var predicate=criterion.predicateJson()==null?null:dev.mikoto2000.rei.core.predicate.DeclarativePredicate.parse(criterion.predicateJson());
+    var condition=predicate==null?JsonFileGoalCondition.parse(criterion.jsonPointer(),criterion.expectedJson()):null;
     if(criterion.sha256()!=null&&!criterion.sha256().isEmpty())return new Verification(false,"verification_unavailable");
     var safe=fingerprint(root,criterion.relativeFile(),false);
     if(!safe.available())return new Verification(false,safe.reason());
@@ -41,6 +48,7 @@ public class FileGoalVerifier {
         if(!buffer.hasRemaining())return new Verification(false,"json_file_too_large");
       }
       var bytes=java.util.Arrays.copyOf(buffer.array(),buffer.position());
+      if(predicate!=null){var observed=predicate.evaluate(bytes);return new Verification(observed==dev.mikoto2000.rei.core.predicate.DeclarativePredicate.Result.SATISFIED,switch(observed){case SATISFIED->"predicate_verified";case UNSATISFIED->"predicate_mismatch";case UNKNOWN->"predicate_unknown";});}
       boolean matches=condition.matches(bytes);
       return new Verification(matches,matches?"json_value_verified":"json_value_mismatch");
     }catch(java.io.IOException invalid){return new Verification(false,Thread.currentThread().isInterrupted()?"verification_cancelled":"json_file_invalid");}

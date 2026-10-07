@@ -8,6 +8,9 @@ import org.springframework.stereotype.Component;
 /** No redirects, credentials or response-body exposure; one bounded request per probe. */
 @Component
 public class JavaHttpDependencyProbe implements DependencyHttpProbe,AutoCloseable {
+  private boolean predicatesEnabled;
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setPredicatesEnabled(@org.springframework.beans.factory.annotation.Value("${rei.predicates.enabled:false}") boolean enabled){predicatesEnabled=enabled;}
   private final HttpClient client=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).followRedirects(HttpClient.Redirect.NEVER).build();
   @Override public DependencyObservation probe(String id,String url,int expectedStatus) {
     new DependencySpec(DependencySpec.Kind.HTTP_STATUS,url,Integer.toString(expectedStatus));
@@ -43,12 +46,14 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe,AutoCloseabl
   private static final class BodyLimitExceeded extends java.io.IOException {}
   @Override public DependencyObservation probeJson(String id,String url,String expected) {
     new DependencySpec(DependencySpec.Kind.HTTP_JSON_VALUE,url,expected);var condition=HttpJsonCondition.parse(expected);
+    if(condition.predicate()!=null && !predicatesEnabled)return new DependencyObservation(id,DependencyState.BLOCKED,"predicate_disabled");
     if(Thread.currentThread().isInterrupted())throw new CancellationException("HTTP observation cancelled");
     var request=HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(2)).GET().build();
     var pending=client.sendAsync(request,response->new JsonSubscriber());
     try {
       var response=pending.get(2,TimeUnit.SECONDS);
       if(response.statusCode()!=condition.status())return new DependencyObservation(id,DependencyState.WAITING,"http_status_mismatch");
+      if(condition.predicate()!=null){var observed=condition.predicate().evaluate(response.body());return new DependencyObservation(id,switch(observed){case SATISFIED->DependencyState.COMPLETED;case UNSATISFIED->DependencyState.WAITING;case UNKNOWN->DependencyState.BLOCKED;},switch(observed){case SATISFIED->"predicate_verified";case UNSATISFIED->"predicate_mismatch";case UNKNOWN->"predicate_unknown";});}
       boolean matches=condition.matches(response.body());
       return new DependencyObservation(id,matches?DependencyState.COMPLETED:DependencyState.WAITING,matches?"http_json_value_verified":"http_json_value_mismatch");
     }catch(InterruptedException error){Thread.currentThread().interrupt();throw new CancellationException("HTTP observation cancelled");}
