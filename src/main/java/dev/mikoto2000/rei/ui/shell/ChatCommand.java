@@ -23,7 +23,7 @@ import picocli.CommandLine.Parameters;
 
 @Command(
 name = "chat",
-description = "Chat with AI")
+description = "AI と会話します")
 @Component
 public class ChatCommand implements Runnable {
 

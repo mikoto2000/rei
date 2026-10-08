@@ -14,7 +14,7 @@ import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 import picocli.CommandLine.Model.CommandSpec;
 
-@Command(name = "summarize", description = "Summarize a web page")
+@Command(name = "summarize", description = "Web ページを要約します")
 @Component
 public class SummarizeCommand implements java.util.concurrent.Callable<Integer> {
 

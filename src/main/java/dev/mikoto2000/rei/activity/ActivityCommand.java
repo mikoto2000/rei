@@ -4,7 +4,7 @@ import org.springframework.stereotype.Component;
 import picocli.CommandLine.*;
 
 @Component
-@Command(name="activity",description="Activity timeline and classification",subcommands={ActivityCommand.SummaryCommand.class,ActivityCommand.BehaviorCommand.class,ActivityCommand.ClassificationCommand.class,ActivityCommand.WeeklyCommand.class,ActivityCommand.MonthlyCommand.class,ActivityCommand.CoachingCommand.class,ActivityCommand.ContextCommand.class})
+@Command(name="activity",description="活動の時系列と分類を表示します",subcommands={ActivityCommand.SummaryCommand.class,ActivityCommand.BehaviorCommand.class,ActivityCommand.ClassificationCommand.class,ActivityCommand.WeeklyCommand.class,ActivityCommand.MonthlyCommand.class,ActivityCommand.CoachingCommand.class,ActivityCommand.ContextCommand.class})
 public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   private final ActivityTimeline timeline;
   private final ActivityCapture capture;

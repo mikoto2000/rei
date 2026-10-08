@@ -8,7 +8,7 @@ import dev.mikoto2000.rei.event.CredentialRedactor;
 import picocli.CommandLine.*;
 
 @Component
-@Command(name="dependency",description="Inspect, cancel or answer durable dependency watches")
+@Command(name="dependency",description="保存された依存関係の監視を確認・キャンセル・回答します")
 public class DependencyCommand implements java.util.concurrent.Callable<Integer> {
   private final PersistentDependencyRepository repo;private final DependencyObservationService service;private final ProjectService projects;private final ToolPermissionGuard guard;
   @Spec picocli.CommandLine.Model.CommandSpec spec;

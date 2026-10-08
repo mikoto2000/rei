@@ -6,7 +6,7 @@ import dev.mikoto2000.rei.application.session.ShellConversationService;
 
 /** Explicit human instruction enters the existing exclusive conversation queue. No model-supplied approval. */
 @Component
-@Command(name="repair",description="Inspect a diagnosed repair or explicitly approve its exact saved receipt hash")
+@Command(name="repair",description="診断済みの修復を確認し、保存された修復記録のハッシュを指定して明示的に承認します")
 public final class RepairCommand implements java.util.concurrent.Callable<Integer> {
   private final ShellConversationService conversations;
   @Parameters(index="0",paramLabel="show|apply") String action;

@@ -5,7 +5,7 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import picocli.CommandLine.*;
 
 @Component
-@Command(name="timer",description="Review, activate and inspect persistent continuations")
+@Command(name="timer",description="保存された継続実行の予定を確認・有効化します")
 public class TimerCommand implements java.util.concurrent.Callable<Integer> {
   private final PersistentAgentScheduler scheduler;
   private final ProjectService projects;

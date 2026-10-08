@@ -5,7 +5,7 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import picocli.CommandLine.*;
 
 @Component
-@Command(name="reflection",description="Inspect saved Goal, Task and Run evidence and review suggestions")
+@Command(name="reflection",description="保存された目標・タスク・実行の証拠とレビュー提案を確認します")
 public class ReflectionCommand implements java.util.concurrent.Callable<Integer> {
   private final GoalReflectionRepository repository;
   private final GoalReflectionService service;

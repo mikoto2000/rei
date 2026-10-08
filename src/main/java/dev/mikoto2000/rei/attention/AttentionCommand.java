@@ -5,7 +5,7 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import picocli.CommandLine.*;
 
 @Component
-@Command(name="attention",description="Inspect and acknowledge persistent attention items")
+@Command(name="attention",description="保存された注意事項を確認・確認済みにします")
 public class AttentionCommand implements java.util.concurrent.Callable<Integer> {
   private final AttentionRepository repository;
   private final ProjectService projects;

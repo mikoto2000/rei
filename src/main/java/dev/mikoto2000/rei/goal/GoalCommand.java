@@ -7,7 +7,7 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import picocli.CommandLine.*;
 
 @Component
-@Command(name="goal",description="Persistent file goals with independent verification and bounded Chat planning")
+@Command(name="goal",description="ファイルの達成目標を保存し、独立した検証と上限付きの対話計画を行います")
 public class GoalCommand implements java.util.concurrent.Callable<Integer> {
   private final GoalRepository goals;
   private final GoalLoopService loop;

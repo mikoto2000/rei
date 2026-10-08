@@ -7,7 +7,7 @@ import picocli.CommandLine.*;
 import picocli.CommandLine.Model.CommandSpec;
 
 @Component
-@Command(name = "subagent", description = "SubAgent definitions", subcommands = {
+@Command(name = "subagent", description = "サブエージェントの定義を管理します", subcommands = {
     SubAgentCommand.ListCommand.class, SubAgentCommand.ShowCommand.class, SubAgentCommand.ReloadCommand.class,
     SubAgentCommand.ValidateCommand.class, SubAgentCommand.InitCommand.class })
 public class SubAgentCommand implements Callable<Integer> {

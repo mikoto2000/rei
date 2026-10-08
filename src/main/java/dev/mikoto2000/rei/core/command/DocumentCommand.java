@@ -4,7 +4,7 @@ import picocli.CommandLine.*;
 import dev.mikoto2000.rei.application.session.ShellConversationService;
 /** Human recovery stays inside the existing captured exclusive conversation boundary. */
 @Component
-@Command(name="document",description="Inspect multi-file proposals or explicitly recover owned text/staging")
+@Command(name="document",description="複数ファイルの変更提案を確認し、管理対象のテキストやステージングを明示的に復旧します")
 public final class DocumentCommand implements java.util.concurrent.Callable<Integer> {
   private final ShellConversationService conversations;
   @Parameters(index="0",paramLabel="show|rollback|clean|reconcile-single") String action;

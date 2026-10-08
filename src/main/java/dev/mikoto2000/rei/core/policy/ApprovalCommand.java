@@ -5,7 +5,7 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import picocli.CommandLine.*;
 
 @Component
-@Command(name="approval",description="Review and decide one-time Tool approvals")
+@Command(name="approval",description="ツールの一回限りの実行承認を確認・判断します")
 public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
   private final ToolApprovalRepository repository;
   private final ProjectService projects;
