@@ -48,12 +48,16 @@ final class FileSnapshots {
     var snapshot=new Snapshot(path,hash(content),content);files.put(path,snapshot);bytes+=content.length;return snapshot;
   }
   static Path resolve(Path directory,Path input)throws IOException {
+    var path=resolveInventoryPath(directory,input);
+    if(!Files.isRegularFile(path,LinkOption.NOFOLLOW_LINKS))throw new NoSuchFileException(path.toString());
+    return path;
+  }
+  static Path resolveInventoryPath(Path directory,Path input)throws IOException {
     if(input.toString().length()>1024)throw new IOException("Path exceeds 1024 characters");
     var root=directory.toRealPath();var path=(input.isAbsolute()?input:root.resolve(input)).normalize();
     if(!path.startsWith(root) || RepositoryMapService.sensitive(root.relativize(path)))throw new IOException("Excluded or outside Project path");
     var cursor=root;for(var part:root.relativize(path)){cursor=cursor.resolve(part);if(Files.isSymbolicLink(cursor) || Files.exists(cursor,LinkOption.NOFOLLOW_LINKS) && !cursor.toRealPath().equals(cursor))throw new IOException("Linked or aliased paths are unsupported");}
-    if(!Files.isRegularFile(path,LinkOption.NOFOLLOW_LINKS))throw new NoSuchFileException(path.toString());
-    if(!path.toRealPath().startsWith(root))throw new IOException("Outside Project path");return path;
+    if(Files.exists(path,LinkOption.NOFOLLOW_LINKS) && !path.toRealPath().startsWith(root))throw new IOException("Outside Project path");return path;
   }
   static String hash(byte[] content){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));}catch(NoSuchAlgorithmException error){throw new IllegalStateException(error);}}
 }

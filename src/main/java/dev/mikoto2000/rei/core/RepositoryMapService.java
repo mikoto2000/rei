@@ -47,6 +47,23 @@ public final class RepositoryMapService {
     return build(directory,query,limit,false);
   }
   synchronized View snapshot(Path directory)throws IOException { return build(directory,"",100,true); }
+  /** Reuse the same Java AST and hash-keyed metadata cache without rereading source bytes. */
+  synchronized File describeSnapshot(Path directory,FileSnapshots.Snapshot snapshot)throws IOException {
+    RunCancellation.propagate(null);Path root=directory.toRealPath();Path path=snapshot.path();
+    if(!path.startsWith(root) || sensitive(root.relativize(path)))throw new IOException("Outside/excluded repository snapshot");
+    String name=root.relativize(path).toString().replace('\\','/');byte[] bytes=snapshot.bytes();
+    Parsed parsed;
+    var previous=caches.getOrDefault(root,Map.of());var cached=previous.get(name);
+    if(bytes.length>131072)parsed=new Parsed("","TOO_LARGE",List.of(),List.of());
+    else if(cached!=null && cached.digest().equals(snapshot.version()))parsed=cached.parsed();
+    else if(compiler==null)parsed=new Parsed("","COMPILER_UNAVAILABLE",List.of(),List.of());
+    else try(var manager=compiler.getStandardFileManager(null,Locale.ROOT,StandardCharsets.UTF_8)){
+      parsed=parse(compiler,manager,path,StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString());
+    }catch(java.nio.charset.CharacterCodingException invalid){parsed=new Parsed("","UNREADABLE",List.of(),List.of());}
+    var next=new TreeMap<>(previous);next.put(name,new Cached(snapshot.version(),parsed));while(next.size()>1024)next.pollFirstEntry();
+    caches.put(root,Map.copyOf(next));while(caches.size()>2)caches.remove(caches.keySet().iterator().next());
+    return new File(name,module(name),parsed.packageName(),snapshot.version(),parsed.status(),parsed.symbols(),parsed.imports());
+  }
   private View build(Path directory,String query,int limit,boolean complete)throws IOException {
     RunCancellation.propagate(null);
     if(limit<1 || limit>100 || (query!=null && query.length()>256))throw new IllegalArgumentException("Map limit must be 1 to 100 and query at most 256 characters");

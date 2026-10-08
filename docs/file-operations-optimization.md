@@ -97,3 +97,11 @@ Phase 1 の追加テスト11件と既存 Tools テスト111件は failure / erro
 | 中央値 ns | 76,567,800 | 101,419,200 |
 
 入力 JSON は97.9%減、出力 JSON は95.9%減。実 LLM token 削減率ではない。安全な staging / 再検証によってこのケースの読み取りは50%増、中央値は32.5%増。書き込みは部分入力でもファイル全体の atomic replacement なので byte 数は減っていない。3ケースすべてで保存 receipt と変更後の内容を検証したが、実 LLM のタスク成功率・失敗率は未測定。
+
+## Phase 3: 検索順位と結果予算
+
+候補収集は各 query/file の先頭4 hit を上限とし、先頭ファイルの大量 hit で後続ファイルを隠さない。未走査 hit があり得るときは truncated を返す。順位は明示 preferredPaths +10000、AST 宣言名完全一致 +800、ファイル名 stem 完全一致 +450 / 部分一致 +150、path +70、body 完全一致 +40 / その他 +10、複数 hit +3（最大16 hit）、Working Set +30。同点は path 昇順。正規表現も名前順位の signal は pattern 自体の文字列であり、意味的関連性の保証ではない。Java AST enrichment は preliminary 順の最大32ファイルだけ。同じ snapshot と既存 Javac parser / hash cache を再利用し、制限・解析失敗は matchedBy に表示する。
+
+追加 request は maxBytes（256–65536、既定65536）、maxTokens（256–32000、既定8000）、maxLines（1–5000）、preferredPaths（最大20）。順位決定後、最大8ファイルに均等な初期予算を配分する。JSON metadata / escaping を含む byte と conservative token 推定の両方で縮小し、可能な限り複数候補を残す。次の読み取りは version-bound nextRead、削除した visible match の数は omittedMatches。未走査 hit の総数ではない。予算に metadata すら入らない場合は明示エラー。推定は tool 出力の選別だけに使い、ModelCallBudget の実 usage に加算しない。既存 RawToolResultStore / Compressor 経路は継続する。
+
+TDD: ranking API 未実装の Red、順位・ノイズ・日本語巨大行・whole JSON 予算・同点・Working Set の Green、Project 外一覧取得の Red と共通パス検証による Green。欠落ディレクトリは既存の空一覧契約を維持する。関連 Repository Map / persistent index / Compressor 回帰も検証。
