@@ -24,8 +24,8 @@ class JLineCompletionInputTest {
   }
   String read(String input) throws Exception {
     var command = new CommandLine(CommandSpec.create()).addSubcommand("project", new ProjectCommand());
-    try (var terminal = TerminalBuilder.builder().system(false).type("xterm")
-        .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream()).build()) {
+    try (var terminal = new org.jline.terminal.impl.DumbTerminal("fixture", "xterm",
+        new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream(), java.nio.charset.StandardCharsets.UTF_8)) {
       terminal.setSize(new Size(100, 30));
       var reader = LineReaderBuilder.builder().terminal(terminal).parser(ReiLineReaderFactory.parser())
           .completer(new JLineCompletionAdapter(command, ReiLineReaderFactory.completionEngine(), () -> root)).build();
@@ -77,8 +77,8 @@ class JLineCompletionInputTest {
     // An injected home keeps this test independent of the developer's real files.
     Files.createDirectory(root.resolve("reports"));
     var command = new CommandLine(CommandSpec.create()).addSubcommand("project", new ProjectCommand());
-    try (var terminal = TerminalBuilder.builder().system(false).type("xterm")
-        .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream()).build()) {
+    try (var terminal = new org.jline.terminal.impl.DumbTerminal("fixture", "xterm",
+        new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream(), java.nio.charset.StandardCharsets.UTF_8)) {
       terminal.setSize(new Size(100, 30));
       var reader = LineReaderBuilder.builder().terminal(terminal).parser(new ShellCompletionParser(root))
           .completer(new JLineCompletionAdapter(command, ReiLineReaderFactory.completionEngine(), () -> root)).build();

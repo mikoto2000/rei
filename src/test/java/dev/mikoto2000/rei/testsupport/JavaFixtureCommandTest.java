@@ -9,6 +9,16 @@ import static org.assertj.core.api.Assertions.*;
 @Tag("integration")
 class JavaFixtureCommandTest {
   @TempDir Path root;
+  @Test void preservesUnicodeWithWesternNativeEncoding() throws Exception {
+    String previous = System.getProperty("native.encoding");
+    try {
+      System.setProperty("native.encoding", "windows-1252");
+      launchesLongClasspathWithoutChangingLiteralArguments();
+    } finally {
+      if (previous == null) System.clearProperty("native.encoding");
+      else System.setProperty("native.encoding", previous);
+    }
+  }
   @Test void launchesLongClasspathWithoutChangingLiteralArguments() throws Exception {
     String classpath = String.join(java.io.File.pathSeparator, Collections.nCopies(1200, root.toString()))
         + java.io.File.pathSeparator + System.getProperty("java.class.path");

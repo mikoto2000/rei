@@ -115,3 +115,11 @@ LF 前提の YAML fixture は Git の自動 CRLF 変換を無効にしてチェ�
 端末通知の unit test は実 system terminal の代わりに明示的な入出力ストリームを持つ
 非 system terminal を使う。headless runner で各ケースに約150秒の待機が発生していたため。
 既存テストの選択・アサーションは維持し、全体 CI のテスト除外は追加しない。
+
+最新 CI ではパス・改行の不一致が解消し、3817件中 error 10 / failure 0 / skipped 1。
+残りは欧文 native.encoding で日本語を argument file に書けない1件と、
+JLine の native terminal provider 探索による入力テストのタイムアウト9件だった。
+windows-1252 を明示する Red テストで文字コードエラーを再現し、classpath は argument file に残したまま、
+表現できない引数を Unicode のプロセス引数として渡す修正で Green を確認した。
+端末 fixture は provider 探索を行わない DumbTerminal を直接生成し、実 JLine reader と既存 assertions は維持する。
+関連22件成功（入力13件、通知7件、長いclasspathと文字コード2件）。全体 CI の除外は追加しない。
