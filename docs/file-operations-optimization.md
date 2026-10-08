@@ -122,4 +122,49 @@ TDD: ranking API 未実装の Red、順位・ノイズ・日本語巨大行・wh
 
 巨大宣言は JSON 全体の byte / conservative token 予算（64KiB / 8000、batch共有）と行上限で打ち切る。nextRead をそのまま渡す。symbolOffset は選択した declaration＋指定文脈の開始からの UTF-16 offset で、通常行読みの offset と区別する。version が変われば続きは拒否する。symbol と line ranges / charset の混在も拒否する。
 
+index 処理は symbol request ごと10秒を上限とし、file 間・解析後に中断 / deadline を確認する。クラス header の raw Unicode escapes は Java の前処理で delimiter が変わるため、signature-only read は明示エラー。本文付き read は可能。未確定 header を宣言全体の signature に置き換えず、Repository Map から本文が漏れない。最終レビューで escaped 外側 delimiter と通常の method brace の混在を Red にして修正した。
+
 TDD: 新 API / metadata 不在の Red → generic overload、constructor / field / nested class / package、Javadoc / annotation / signature、BOM / CRLF、version更新と巨大メソッド継続の Green。さらに全体同名候補、shared snapshot の実読取回数、record / enum / interface / annotation、compiler不在 / oversized / outside、実 Tool callback JSON を確認した。既存 Map が field 初期値を返してしまう回帰を検出して修正し、既存テストを変更せず再検証した。
+
+## 固定計測の最終比較
+
+raw JSON は [file-operations-benchmark](file-operations-benchmark) に保存した。各値は同じ source fixture / 同じ JFR filter / 同じ Jackson 設定。探索結果に version / 順位 / 継続情報を加えた分、小さい検索ケースの JSON は増えている。中央値は小サンプルのローカル時間で、速度改善の保証ではない。
+
+| 2-pattern search（10回） | Baseline | Phase 1 | Phase 2 | Phase 3 | Phase 4 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| source read bytes | 35,910 | 11,970 | 11,970 | 11,970 | 11,970 |
+| JFR FileRead events | 60 | 10 | 10 | 10 | 10 |
+| returned JSON bytes | 5,320 | 6,250 | 6,250 | 6,980 | 6,980 |
+| median ms | 1.4501 | 7.5369 | 6.3457 | 6.5566 | 8.6482 |
+
+| 小規模編集（3回） | Baseline | Phase 2 | Phase 3 | Phase 4 |
+| --- | ---: | ---: | ---: | ---: |
+| Tool calls | 9 | 9 | 9 | 9 |
+| input JSON bytes | 53,994 | 1,128 | 1,128 | 1,128 |
+| output JSON bytes | 143,142 | 5,874 | 5,874 | 6,021 |
+| source/stage read bytes | 151,038 | 226,557 | 226,557 | 226,557 |
+| source/stage write bytes | 25,173 | 25,173 | 25,173 | 25,173 |
+| median ms | 76.5678 | 101.4192 | 108.6972 | 107.7265 |
+
+Phase 1 の編集ケースは未測定。最終編集入力97.9%減 / 出力95.8%減に対し、I/O再検証は読み取り50%増、中央値は40.7%増。
+
+| Java method 読み取り（5回） | Baseline（既知 path 全文） | Phase 4（既知 path + symbol） |
+| --- | ---: | ---: |
+| Tool calls | 5 | 5 |
+| source read bytes | 52,930 | 52,930 |
+| returned JSON bytes | 58,505 | 2,915 |
+| median ms | 0.3749 | 229.4343 |
+
+500行の周辺 comment と4行の method を含む同じ UTF-8 source を使った。出力 JSON は95.0%減。毎回新しい Tools / AST cache で測る cold case なので、Javac 初期化・解析による時間増加が大きい。warm cache 時間は未測定。source hash の鮮度確認に全文 bytes が必要なので読み取り byte 数は減っていない。
+
+実 LLM 入出力 token / 実タスク成功率・失敗率 / heap peak / syscall open 数 / inventory走査回数は未測定。各ケースの返却行と内容、編集3回の Apply receipt / 最終保存内容はテストで検証した。token budget の推定は上限検証用であり、この table の JSON byte 削減率を実 token 削減率に読み替えない。
+
+再測定は `./mvnw -Pfull -Dtest=FileOperationsBenchmarkTest test`。baseline に同じ benchmark test をコピーして実行し、read/search の旧 API と部分編集・symbol API の追加有無を reflection で選ぶ。JFR は EOF event を含み、FileRead events は open 数ではない。SQLite native I/O は未計測。
+
+## 全体回帰で見つかった既存テストの修正
+
+最初の full run は AttentionDeliveryTest と SubAgentEventTest が失敗した。どちらも変更前 `dc833e53` の同じテストで再現した。前者は端末 REI_API_KEY と injected 固定 test key の不一致で immutable properties の再 bind が失敗したため、test fixture に同じ `rei.api-key=secret` を明示した。認証 / Project owner / 明示配送の assertions は残した。後者は現行 Shell の answer 中通知遅延と古い即時表示 assertion の不一致。通知は完了後に検証し、全ての run prefix / 内容 assertion を維持し、answer 中に child 通知が出ないことと parent text が連続する assertion を追加した。recent-event 表示は answer 完了後に確認する。Production Shell / Attention コードは変更していない。
+
+署名境界の最終修正後、別出力先の `verify -Pintegration` は全 Java suite と Spring Boot package まで exit 0。Java は3,804件、failure 0 / error 0 / skip 1（3,803成功）。既存 DocumentRendererProcessTest の real PlantUML case は `rei.test.plantuml.jar` 未設定の assumption skip。live profile は既存設定で除外。新テストの skip / disable は追加していない。Client は25 files / 99 tests成功、typecheck＋Vite build＋ESLint成功。Native は120 tests成功、`cargo check --locked --features native` 成功。UI 変更がないため browser E2E / 実 Native window E2E は実行していない。
+
+通常 target の Spring Boot repackage は既存 JAR rename 失敗で終了した。実行中の Rei JAR process が存在するため停止・削除せず、検証専用 POM で build.directory / finalName だけを一時的に変更して別出力先の verify を行った。source / dependencies / compiler / plugin 設定は同じで、最終 source の全テストと再コンパイル、package を完了した。一時 POM は削除した。成功 artifact は `target/file-operations-package/rei-file-operations-verify.jar`、ログは `target/file-operations-isolated-verify.log`。通常 target の verify 全体を成功と読み替えない。Java 専用 lint plugin は既存 POM にないため compile、path / atomic Apply / schema / bounds の差分レビューと `git diff --check` を実施した。
