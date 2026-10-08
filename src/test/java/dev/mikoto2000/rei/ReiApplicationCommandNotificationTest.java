@@ -44,7 +44,8 @@ class ReiApplicationCommandNotificationTest {
         // EscCancellationMonitor: immediately return the future result without blocking
         escCancellationMonitor = mock(EscCancellationMonitor.class);
         chatResponseNarrator = mock(ChatResponseNarrator.class);
-        terminal = TerminalBuilder.builder().dumb(true).build();
+        terminal = TerminalBuilder.builder().system(false).dumb(true)
+            .streams(java.io.InputStream.nullInputStream(), java.io.OutputStream.nullOutputStream()).build();
         commandExecutor = Executors.newSingleThreadExecutor();
     }
 

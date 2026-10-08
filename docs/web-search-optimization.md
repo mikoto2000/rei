@@ -104,3 +104,14 @@ CI 成功とレビュー要件を確認後、Phase 0 をマージして後続 Ph
 続行前のレビューで、推定トークンを既存の共通予算管理と同じ `TokenEstimator` に統一した。
 日本語・英語混在の Red テストで expected 10 / actual 5 の不一致を確認後に修正。
 これによって Web 独自の推定式を追加せず、モデル入力の計測・予算と整合する。
+
+### CI 環境の整合
+
+旧コミットの CI は最新版への置換で停止したが、取得したログに既存回帰失敗があるため保存・報告する。
+Windows runner の `C:\Users\RUNNER~1` 形式の一時パスと `toRealPath()` が返す
+`C:\Users\runneradmin` の差が、Project / Task の所有確認を含む既存テストの不一致を起こしていた。
+CI は runner の正規の一時ディレクトリを TMP / TEMP / java.io.tmpdir に指定する。
+LF 前提の YAML fixture は Git の自動 CRLF 変換を無効にしてチェックアウトする。
+端末通知の unit test は実 system terminal の代わりに明示的な入出力ストリームを持つ
+非 system terminal を使う。headless runner で各ケースに約150秒の待機が発生していたため。
+既存テストの選択・アサーションは維持し、全体 CI のテスト除外は追加しない。
