@@ -64,3 +64,36 @@ Phase ごとの計測値と最終回帰結果は実行後に追記する。実 L
 読み取り byte 数は 66.7%減。小さなファイルではパス・属性・hash 検証の費用が元の読み取り費用を上回った。返却 JSON は version / continuation / metadata の追加により17.5%増。初回計測の wall time は JVM / filesystem / JFR に依存し、タスク全体の速度や token 削減の証明ではない。追加 fixture による読み取り抽象の count は2条件検索＋本文取得で1回、並列20回の同一 snapshot 取得でも1回。実 LLM token、タスク成功率、編集失敗率、最大メモリ、全タスク時間は未測定。
 
 Phase 1 の追加テスト11件と既存 Tools テスト111件は failure / error / skipped 0 を確認した。検索の query error を黙って落とす旧挙動は変更し、成功結果に続いて明示した error result を返す。grep の path / version メタデータも予算から差し引き、file errors は全 query 合計32件と omittedErrors を返す。
+
+## Phase 2: 既存 Change Set の部分編集
+
+新規 Tool は追加せず `proposeTextChangeSet` の Request を拡張した。従来の `{path,expectedText,replacement}` と次の部分編集を選択できる。両方式の併用は拒否する。
+
+```json
+{"request":{"path":"src/App.java","baseVersion":"<readMultiFile の version>","edits":[{"oldText":"int timeout = 30;","newText":"int timeout = 60;"},{"oldText":"return null;","newText":"return result;"}]}}
+```
+
+`baseVersion` は裸の SHA-256 hex または `sha256:` prefix 付き。全 hunk は同じ元版に照合する。oldText は空でなく一意に一致しなければならない。範囲の重複を拒否し、入力順で前の変更が後の一致判定を変えることはない。newText は空文字列も可能。最大64 hunk、old/new text 合計64 KiB、元と提案も既存の各64 KiBまで。UTF-8、BOM、CRLF/LF、末尾改行を文字列の正確な置換で保持する。
+
+検証後は既存の永続化、Project 所有権、proposal hash、状態遷移、Apply/Discard を使う。保存形式は変更前後の全文を保持する既存形式なので旧保存データの移行は不要。外部変更を Apply 直前にも検証し、APPLIED receipt を再取得しても writer を再実行しない。既存の LOCAL_WRITE と SubAgent の境界を維持する。部分編集入力は承認を作らず、ToolPermissionGuard による拒否は従来どおり callback 前に発生する。
+
+単一ファイルの Tool writer は `TextDocumentTransaction` の既存 staging / permission copy / atomic move を再利用する。UTF-8 bytes を同じディレクトリの一時ファイルへ書き、force、権限コピー、baseline と stage の再検証を行ってから置換する。atomic move 非対応時は非 atomic 書き込みへ fallback せずエラー。通常の move 失敗では target を変更しない。変更された一時ファイルは削除せず、cleanup エラーを元の例外に付ける。OS の rename は外部 writer に対する content compare-and-swap ではなく、最終検証と置換間の非協調な外部書き込みを完全に排除する保証はない。複数ファイルの完全な atomic transaction は保証せず、既存の journal / rollback / UNKNOWN フローを利用する。
+
+差分表示は既存の正確な replacement renderer の前後にある同一行を省略し、変更範囲の前後3行を残す。離れた変更間の同一行は表示するので、常に最小 multi-hunk diff になる保証はない。プレビューは実行可能 patch ではない。`exportProposal` は完全な提案内容を保持し、Apply は省略されたプレビューから内容を復元しない。
+
+新しい入力と差分表示の Red を確認後 Green / Refactor を実施した。`MultiHunkChangeSetTest` の9件が成功し、既存単一・複数ファイル Change Set / Tool / DiagnosedRepair の回帰も成功した。
+
+### 小規模編集の固定ケース
+
+500行 / 8,391 bytes の fixture で timeout の1行を変更。3回、既存の Read → Propose → Apply Tool 経路を使う。baseline は全文読み取りと全文入力、Phase 2 は1行＋version 読み取りと partial input。JFR は target と owned staging の read/write だけを集計し、SQLite native I/O は含めない。JSON はオフラインの同じ Jackson 設定で計測し、実 LLM token と区別する。
+
+| 3回合計（中央値のみ1タスクあたり） | Baseline | Phase 2 |
+| --- | ---: | ---: |
+| Tool 呼び出し | 9 | 9 |
+| 入力 JSON bytes | 53,994 | 1,128 |
+| 出力 JSON bytes | 143,142 | 5,874 |
+| 読み取り bytes | 151,038 | 226,557 |
+| 書き込み bytes | 25,173 | 25,173 |
+| 中央値 ns | 76,567,800 | 101,419,200 |
+
+入力 JSON は97.9%減、出力 JSON は95.9%減。実 LLM token 削減率ではない。安全な staging / 再検証によってこのケースの読み取りは50%増、中央値は32.5%増。書き込みは部分入力でもファイル全体の atomic replacement なので byte 数は減っていない。3ケースすべてで保存 receipt と変更後の内容を検証したが、実 LLM のタスク成功率・失敗率は未測定。

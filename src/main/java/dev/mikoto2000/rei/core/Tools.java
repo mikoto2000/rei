@@ -119,7 +119,7 @@ public class Tools {
     workingSet.recordRead(project.root().resolve(baseline.path()));return baseline;
   }
 
-  @Tool(description="保存済みの単一UTF-8ファイルについて、完全なexpectedTextとreplacementからChange Setを提案・SQLite保存します。各64KiB以内。対象ファイルは変更しません。返されたdiffとproposalSha256を確認し、明示applyTextChangeSetで適用します。Modelの自然言語編集結果もこの提案として確認できます。")
+  @Tool(description="単一UTF-8ファイルのChange Setを提案・保存します。全文方式は{path,expectedText,replacement}。部分編集は{path,baseVersion,edits:[{oldText,newText}]}で最大64 hunk、入力合計64KiB、全oldTextを元版に一意に照合し重複範囲・古いSHAを拒否。baseVersionは読み取りのSHA-256。提案は対象fileを変更しません。diff/proposalSha256を確認し、既存の明示Apply/Discardフローを使います。")
   TextChangeSetService.View proposeTextChangeSet(TextChangeSetService.Request request)throws IOException {
     return changeSets().propose(changeSetProject(),request);
   }
@@ -138,7 +138,7 @@ public class Tools {
     return changeSets().apply(changeSetProject(),id,proposalSha256,changeSetWriter());
   }
   private TextChangeSetService.Writer changeSetWriter(){return (path,oldText,newText)->{
-      Files.writeString(path,newText,StandardCharsets.UTF_8,StandardOpenOption.TRUNCATE_EXISTING,java.nio.file.LinkOption.NOFOLLOW_LINKS);
+      TextDocumentTransaction.writeSingle(path,oldText,newText);
       recordTextEdit(path);
     };}
   private TextChangeSetService changeSets(){if(textChangeSets==null)throw new IllegalStateException("Change Set service unavailable");return textChangeSets;}
