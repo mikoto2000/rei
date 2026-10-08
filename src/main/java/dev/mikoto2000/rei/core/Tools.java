@@ -47,7 +47,6 @@ import dev.mikoto2000.rei.core.process.RunCommandResult;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.recentchanges.RecentChanges;
 import dev.mikoto2000.rei.core.relatedgraph.RelatedFileGraph;
-import dev.mikoto2000.rei.core.searchcache.SearchCacheKey;
 import dev.mikoto2000.rei.core.searchcache.SearchResultCache;
 import dev.mikoto2000.rei.core.service.SystemShellService;
 import dev.mikoto2000.rei.core.working.WorkingSet;
@@ -56,6 +55,7 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 
 @Component
 public class Tools {
+  private static final com.fasterxml.jackson.databind.ObjectMapper FILE_RESULT_JSON=new com.fasterxml.jackson.databind.ObjectMapper();
   private DocumentRendererService documentRenderer;
   @Autowired(required=false) void setDocumentRenderer(DocumentRendererService service){documentRenderer=service;}
   @Tool(description="既定OFFの管理者指定PlantUML rendererで現在の.puml/.plantumlと正確なsourceSha256をPNG検証します。directive/function/resource link禁止、SANDBOX、20秒/4MiB/4096px、exit/parse/画像/size/hashを記録。file Applyはせず、Artifact有効時だけ既存deliveryへ公開。モデルの説明は描画証拠ではありません。")
@@ -606,9 +606,10 @@ public class Tools {
         IO.println(String.format("%s は存在しません", resolvedBaseDir));
         return List.of();
       }
-      return Files.walk(resolvedBaseDir, 20)
-        .map(p -> p.toFile().getAbsolutePath())
-        .toList();
+      try(var paths=Files.walk(resolvedBaseDir,20)) {
+        return paths.filter(p->Files.isRegularFile(p,java.nio.file.LinkOption.NOFOLLOW_LINKS))
+          .limit(FileSnapshots.MAX_FILES+1).map(p->p.toFile().getAbsolutePath()).toList();
+      }
     }
 
     // git ls-files already applies baseDir as a pathspec. Filtering the returned
@@ -683,25 +684,48 @@ public class Tools {
 
   List<GrepQueryResult> grepMultiQuery(List<GrepQuery> queries, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
+    return boundedFileResult(grepMultiQuery(queries, workingDirectory, newSnapshots()));
+  }
+
+  private List<GrepQueryResult> grepMultiQuery(List<GrepQuery> queries, java.nio.file.Path workingDirectory,
+      FileSnapshots snapshots) throws IOException, InterruptedException {
     if (queries == null || queries.isEmpty()) {
       throw new IllegalArgumentException("queries must not be empty");
     }
     if (queries.size() > MAX_GREP_QUERIES) {
       throw new IllegalArgumentException("too many queries: " + queries.size() + " (max " + MAX_GREP_QUERIES + ")");
     }
+    for(var query:queries){
+      if(query==null)throw new IllegalArgumentException("query required");
+      for(String value:new String[]{query.pattern(),query.baseDir(),query.includeGlob(),query.excludeGlob(),query.charset()})
+        if(value!=null && value.length()>1024)throw new IllegalArgumentException("Search argument exceeds 1024 characters");
+    }
     List<GrepQueryResult> results = new ArrayList<>();
+    TextReadBudget resultBudget=new TextReadBudget();
+    int returnedErrors=0;
     int totalMatches = 0;
     for (int i = 0; i < queries.size(); i++) {
       GrepQuery query = queries.get(i);
       try {
-        GrepScanResult scanResult = cachedGrepMatches(query, workingDirectory);
+        GrepScanResult scanResult = scanGrepMatches(query, workingDirectory, snapshots);
         List<GrepMatch> matches = scanResult.matches();
         int remaining = MAX_GREP_TOTAL_MATCHES - totalMatches;
         if (matches.size() > remaining) {
           matches = matches.subList(0, Math.max(0, remaining));
         }
-        totalMatches += matches.size();
-        results.add(new GrepQueryResult(i, query.pattern(), matches, null, scanResult.fileErrors()));
+        var bounded=new ArrayList<GrepMatch>();boolean truncated=scanResult.truncated() || matches.size()<scanResult.matches().size();
+        ReadFileRequest nextRead=null;
+        for(var match:matches){
+          if(!resultBudget.reserve(160+match.path().getBytes(StandardCharsets.UTF_8).length*6)){truncated=true;nextRead=new ReadFileRequest(match.path(),match.line(),null,match.version(),0,query.charset());break;}
+          var slice=resultBudget.take(List.of(match.content()),0,1,0,1);
+          if(!slice.lines().isEmpty())bounded.add(new GrepMatch(match.path(),match.line(),slice.lines().getFirst(),match.matched(),match.version()));
+          if(slice.truncated()){truncated=true;nextRead=new ReadFileRequest(match.path(),match.line(),null,match.version(),slice.nextOffset(),query.charset());break;}
+        }
+        totalMatches += bounded.size();
+        if(truncated && nextRead==null && !bounded.isEmpty()){var last=bounded.getLast();nextRead=new ReadFileRequest(last.path(),last.line()+1,null,last.version(),0,query.charset());}
+        int errorsToReturn=Math.min(32-returnedErrors,scanResult.fileErrors().size());
+        int omittedErrors=scanResult.fileErrors().size()-errorsToReturn;returnedErrors+=errorsToReturn;
+        results.add(new GrepQueryResult(i, query.pattern(), bounded, null, scanResult.fileErrors().subList(0,errorsToReturn),truncated || omittedErrors>0,nextRead,omittedErrors));
       } catch (IllegalArgumentException e) {
         results.add(new GrepQueryResult(i, query.pattern(), List.of(), e.getMessage(), List.of()));
       }
@@ -746,39 +770,6 @@ public class Tools {
     }
   }
 
-  /** キャッシュを利用して 1 query の検索結果を返す。失敗結果はキャッシュしない。 */
-  private GrepScanResult cachedGrepMatches(GrepQuery query, java.nio.file.Path workingDirectory)
-      throws IOException, InterruptedException {
-    SearchCacheKey key = grepCacheKey(query);
-    Object cached = searchResultCache.get(key).orElse(null);
-    if (cached != null) {
-      IO.println("search cache hit: " + key.canonical());
-      return (GrepScanResult) cached;
-    }
-    GrepScanResult result = scanGrepMatches(query, workingDirectory);
-    searchResultCache.put(key, result);
-    return result;
-  }
-
-  /** grep query から決定的なキャッシュキーを作成する。 */
-  private SearchCacheKey grepCacheKey(GrepQuery query) {
-    StringBuilder sb = new StringBuilder();
-    sb.append("pattern=").append(query.pattern()).append('|');
-    sb.append("baseDir=").append(query.baseDir()).append('|');
-    sb.append("ignoreCase=").append(query.ignoreCase()).append('|');
-    sb.append("fixedString=").append(query.fixedString()).append('|');
-    sb.append("invertMatch=").append(query.invertMatch()).append('|');
-    sb.append("fileNamesOnly=").append(query.fileNamesOnly()).append('|');
-    sb.append("beforeContext=").append(query.beforeContext()).append('|');
-    sb.append("afterContext=").append(query.afterContext()).append('|');
-    sb.append("maxMatches=").append(query.maxMatches()).append('|');
-    sb.append("includeLineNumber=").append(query.includeLineNumber()).append('|');
-    sb.append("includeGlob=").append(query.includeGlob()).append('|');
-    sb.append("excludeGlob=").append(query.excludeGlob()).append('|');
-    sb.append("charset=").append(query.charset());
-    return new SearchCacheKey("grepMultiQuery", sb.toString());
-  }
-
   /** 1 query の検索を実行し、構造化された match のリストを返す。 */
   private List<GrepMatch> grepMatches(GrepQuery query, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
@@ -787,44 +778,53 @@ public class Tools {
 
   private GrepScanResult scanGrepMatches(GrepQuery query, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
+    return scanGrepMatches(query, workingDirectory, new FileSnapshots());
+  }
+
+  private GrepScanResult scanGrepMatches(GrepQuery query, java.nio.file.Path workingDirectory,
+      FileSnapshots snapshots) throws IOException, InterruptedException {
     if (query.pattern() == null || query.pattern().isBlank()) {
       throw new IllegalArgumentException("pattern must not be blank");
     }
     if (query.baseDir() == null || query.baseDir().isBlank()) {
       throw new IllegalArgumentException("baseDir must not be blank");
     }
+    if(query.pattern().length()>1024 || query.baseDir().length()>1024)throw new IllegalArgumentException("pattern/baseDir limit is 1024 characters");
     boolean effectiveIgnoreCase = Boolean.TRUE.equals(query.ignoreCase());
     boolean effectiveFixedString = Boolean.TRUE.equals(query.fixedString());
     boolean effectiveInvertMatch = Boolean.TRUE.equals(query.invertMatch());
     boolean effectiveFileNamesOnly = Boolean.TRUE.equals(query.fileNamesOnly());
-    int effectiveBeforeContext = Math.max(0, query.beforeContext() == null ? 0 : query.beforeContext());
-    int effectiveAfterContext = Math.max(0, query.afterContext() == null ? 0 : query.afterContext());
+    int effectiveBeforeContext = Math.min(1000,Math.max(0, query.beforeContext() == null ? 0 : query.beforeContext()));
+    int effectiveAfterContext = Math.min(1000,Math.max(0, query.afterContext() == null ? 0 : query.afterContext()));
     int effectiveMaxMatches = query.maxMatches() == null || query.maxMatches() <= 0
-        ? MAX_GREP_MATCHES_PER_QUERY : query.maxMatches();
+        ? MAX_GREP_MATCHES_PER_QUERY : Math.min(MAX_GREP_MATCHES_PER_QUERY, query.maxMatches());
     Pattern compiled = compileGrepPattern(query.pattern(), effectiveIgnoreCase, effectiveFixedString);
     PathMatcher includeMatcher = globMatcher(query.includeGlob(), workingDirectory);
     PathMatcher excludeMatcher = globMatcher(query.excludeGlob(), workingDirectory);
 
-    List<String> candidates = listFile(query.baseDir(), workingDirectory);
+    List<String> candidates = snapshots.inventory(query.baseDir(),()->listFile(query.baseDir(),workingDirectory));
     List<GrepMatch> matches = new ArrayList<>();
     List<GrepFileError> fileErrors = new ArrayList<>();
     for (String relativePath : candidates) {
+      dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
       if (!matchesGlob(relativePath, includeMatcher, excludeMatcher, workingDirectory)) {
         continue;
       }
       java.nio.file.Path filePath = workingDirectory.resolve(relativePath);
-      if (!Files.isRegularFile(filePath)) {
-        continue;
-      }
       List<String> lines;
+      String version;
       try {
-        lines = readTextFileLines(filePath, relativePath, query.charset());
+        var snapshot = snapshots.get(workingDirectory, filePath);
+        version = snapshot.version();
+        lines = snapshotLines(snapshot, query.charset());
       } catch (IOException ex) {
-        fileErrors.add(new GrepFileError(relativePath, "Unable to decode file: " + ex.getMessage()));
+        String message=String.valueOf(ex.getMessage());
+        fileErrors.add(new GrepFileError(relativePath, "Unable to read file: " + message.substring(0,Math.min(512,message.length()))));
         continue;
       }
       Set<Integer> contextLineIndexes = new LinkedHashSet<>();
       for (int i = 0; i < lines.size(); i++) {
+        if((i & 31)==0)dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
         String line = lines.get(i);
         boolean matched = compiled.matcher(line).find();
         if (effectiveInvertMatch) {
@@ -832,28 +832,30 @@ public class Tools {
         }
         if (matched) {
           if (effectiveFileNamesOnly) {
-            matches.add(new GrepMatch(relativePath, i + 1, line, true));
+            matches.add(new GrepMatch(relativePath, i + 1, line, true, version));
             break;
           }
           int from = Math.max(0, i - effectiveBeforeContext);
           int to = Math.min(lines.size() - 1, i + effectiveAfterContext);
           for (int contextIndex = from; contextIndex <= to; contextIndex++) {
             contextLineIndexes.add(contextIndex);
+            if(contextLineIndexes.size()>=effectiveMaxMatches)break;
           }
+          if(contextLineIndexes.size()>=effectiveMaxMatches)break;
         }
       }
 
       if (!effectiveFileNamesOnly) {
         for (Integer lineIndex : contextLineIndexes) {
           matches.add(new GrepMatch(relativePath, lineIndex + 1, lines.get(lineIndex),
-              isMatchedLine(compiled, lines.get(lineIndex), effectiveInvertMatch)));
+              isMatchedLine(compiled, lines.get(lineIndex), effectiveInvertMatch), version));
           if (matches.size() >= effectiveMaxMatches) {
-            return new GrepScanResult(matches, fileErrors);
+            return new GrepScanResult(matches, fileErrors, true);
           }
         }
       }
       if (matches.size() >= effectiveMaxMatches) {
-        return new GrepScanResult(matches, fileErrors);
+        return new GrepScanResult(matches, fileErrors, true);
       }
     }
     return new GrepScanResult(matches, fileErrors);
@@ -883,18 +885,21 @@ public class Tools {
   }
 
   /** 1 行の grep 検索結果。 */
-  public record GrepMatch(String path, int line, String content, boolean matched) {
+  public record GrepMatch(String path, int line, String content, boolean matched, String version) {
+    public GrepMatch(String path,int line,String content,boolean matched){this(path,line,content,matched,null);}
   }
 
   /** 1 query の検索結果。queryIndex は入力順と対応する。 */
   public record GrepFileError(String path, String message) {
   }
 
-  private record GrepScanResult(List<GrepMatch> matches, List<GrepFileError> fileErrors) {
+  private record GrepScanResult(List<GrepMatch> matches, List<GrepFileError> fileErrors, boolean truncated) {
+    GrepScanResult(List<GrepMatch> matches,List<GrepFileError> fileErrors){this(matches,fileErrors,false);}
   }
 
   public record GrepQueryResult(int queryIndex, String pattern, List<GrepMatch> matches, String error,
-      List<GrepFileError> fileErrors) {
+      List<GrepFileError> fileErrors,boolean truncated,ReadFileRequest nextRead,int omittedErrors) {
+    public GrepQueryResult(int queryIndex,String pattern,List<GrepMatch> matches,String error,List<GrepFileError> fileErrors){this(queryIndex,pattern,matches,error,fileErrors,false,null,0);}
     public GrepQueryResult(int queryIndex, String pattern, List<GrepMatch> matches, String error) {
       this(queryIndex, pattern, matches, error, List.of());
     }
@@ -945,16 +950,17 @@ public class Tools {
       throw new IllegalArgumentException("too many queries: " + request.queries().size() + " (max " + MAX_GREP_QUERIES + ")");
     }
     int effectiveContextLines = request.contextLines() == null || request.contextLines() < 0
-        ? DEFAULT_SEARCH_AND_READ_CONTEXT_LINES : request.contextLines();
+        ? DEFAULT_SEARCH_AND_READ_CONTEXT_LINES : Math.min(1000, request.contextLines());
     int effectiveMaxFiles = request.maxFiles() == null || request.maxFiles() <= 0
-        ? MAX_SEARCH_AND_READ_FILES : request.maxFiles();
+        ? MAX_SEARCH_AND_READ_FILES : Math.min(MAX_SEARCH_AND_READ_FILES, request.maxFiles());
 
     String observableQuery = request.queries().stream().map(GrepQuery::pattern).collect(Collectors.joining(" | "));
     WorkingSet.SearchObservation searchObservation = workingSet.beginSearch(observableQuery, "searchAndRead");
 
     // 1. 検索を実行する（grepMultiQuery と同じ共通ロジックを再利用）
     try {
-      List<GrepQueryResult> queryResults = grepMultiQuery(request.queries(), workingDirectory);
+      FileSnapshots snapshots = newSnapshots();
+      List<GrepQueryResult> queryResults = grepMultiQuery(request.queries(), workingDirectory, snapshots);
 
     // 2. ファイルごとにヒットをまとめる（重複排除、queryIndex と line を保持）
     LinkedHashMap<String, List<SearchMatch>> fileMatches = new LinkedHashMap<>();
@@ -962,8 +968,10 @@ public class Tools {
     LinkedHashMap<String, String> fileErrors = new LinkedHashMap<>();
     for (GrepQueryResult queryResult : queryResults) {
       if (queryResult.error() != null) {
+        fileErrors.put("(query " + queryResult.queryIndex() + ")", queryResult.error());
         continue;
       }
+      if(queryResult.omittedErrors()>0)fileErrors.put("(query " + queryResult.queryIndex() + " omitted errors)",queryResult.omittedErrors()+" file errors omitted; narrow the search");
       for (GrepFileError fileError : queryResult.fileErrors()) {
         fileErrors.putIfAbsent(fileError.path(), fileError.message());
       }
@@ -983,8 +991,9 @@ public class Tools {
 
     // 3. ファイルを選び、ヒット行の前後を読み込む
     List<SearchAndReadResult> fileResults = new ArrayList<>();
+    TextReadBudget outputBudget = new TextReadBudget();
     int totalLines = 0;
-    boolean filesTruncated = false;
+    boolean filesTruncated = queryResults.stream().anyMatch(GrepQueryResult::truncated);
     for (var entry : fileMatches.entrySet()) {
       if (fileResults.size() >= effectiveMaxFiles) {
         filesTruncated = true;
@@ -992,7 +1001,8 @@ public class Tools {
       }
       try {
         SearchAndReadResult fileResult = readFileSections(entry.getKey(), entry.getValue(),
-            effectiveContextLines, fileCharsets.get(entry.getKey()), workingDirectory);
+            effectiveContextLines, fileCharsets.get(entry.getKey()), workingDirectory, snapshots,
+            Math.max(0, MAX_SEARCH_AND_READ_TOTAL_LINES - totalLines), outputBudget);
         int remaining = MAX_SEARCH_AND_READ_TOTAL_LINES - totalLines;
         if (fileResult.totalLines() > remaining) {
           fileResult = fileResult.withTruncated(true);
@@ -1008,7 +1018,7 @@ public class Tools {
       for (int i = 0; i < fileResults.size(); i++) {
         SearchAndReadResult r = fileResults.get(i);
         fileResults.set(i, new SearchAndReadResult(r.path(), r.matches(), r.sections(),
-            r.error(), r.truncated(), true));
+            r.error(), r.truncated(), true, r.version(), r.nextRead()));
       }
     }
     for (var entry : fileErrors.entrySet()) {
@@ -1020,7 +1030,7 @@ public class Tools {
     int hitCount = queryResults.stream().filter(result -> result.error() == null)
         .mapToInt(result -> (int) result.matches().stream().filter(GrepMatch::matched).count()).sum();
     workingSet.completeSearch(searchObservation, hitCount, fileMatches.size(), selectedCount, alreadyPresentCount);
-    return fileResults;
+    return boundedFileResult(fileResults);
     } catch (IOException | InterruptedException | RuntimeException e) {
       workingSet.abandonSearch(searchObservation);
       throw e;
@@ -1029,9 +1039,11 @@ public class Tools {
 
   /** 1 ファイルのヒットから、マージした範囲を読み込む。 */
   private SearchAndReadResult readFileSections(String relativePath, List<SearchMatch> matches,
-      int contextLines, String charset, java.nio.file.Path workingDirectory) throws IOException {
+      int contextLines, String charset, java.nio.file.Path workingDirectory, FileSnapshots snapshots,
+      int lineBudget, TextReadBudget budget) throws IOException {
     java.nio.file.Path filePath = resolveProjectPath(relativePath, workingDirectory);
-    List<String> lines = readTextFileLines(filePath, relativePath, charset);
+    var snapshot = snapshots.get(workingDirectory, filePath);
+    List<String> lines = snapshotLines(snapshot, charset);
     workingSet.recordRead(filePath);
 
     // ヒット行から前後コンテキストを計算し、overlapping / adjacent をマージする
@@ -1055,19 +1067,38 @@ public class Tools {
     List<ReadSection> sections = new ArrayList<>();
     int totalLines = 0;
     boolean truncated = false;
+    ReadFileRequest nextRead = null;
     for (int[] range : merged) {
       int fromIndex = range[0] - 1;
       int toIndex = Math.min(range[1], lines.size());
-      List<String> content = lines.subList(fromIndex, toIndex);
-      int remaining = MAX_SEARCH_AND_READ_LINES_PER_FILE - totalLines;
-      if (content.size() > remaining) {
-        content = content.subList(0, Math.max(0, remaining));
-        truncated = true;
-      }
+      int remaining = Math.min(MAX_SEARCH_AND_READ_LINES_PER_FILE, lineBudget) - totalLines;
+      var slice=budget.take(lines,fromIndex,toIndex,0,Math.max(0,remaining));
+      List<String> content=slice.lines();
+      truncated |= slice.truncated();
       totalLines += content.size();
-      sections.add(new ReadSection(range[0], range[0] + content.size() - 1, content, truncated));
+      if(!content.isEmpty())sections.add(new ReadSection(range[0], range[0] + content.size() - 1, content, slice.truncated()));
+      if(slice.truncated()) {nextRead=new ReadFileRequest(relativePath,slice.nextLine(),merged.getLast()[1],snapshot.version(),slice.nextOffset(),charset);break;}
     }
-    return new SearchAndReadResult(relativePath, matches, sections, null, truncated, false);
+    var boundedMatches=new ArrayList<SearchMatch>();
+    for(var match:matches){var slice=budget.take(List.of(match.content()),0,1,0,1);if(!slice.lines().isEmpty())boundedMatches.add(new SearchMatch(match.queryIndex(),match.line(),slice.lines().getFirst()));if(slice.truncated())truncated=true;}
+    return new SearchAndReadResult(relativePath, boundedMatches, sections, null, truncated, false, snapshot.version(), nextRead);
+  }
+
+  FileSnapshots newSnapshots(){return new FileSnapshots();}
+
+  private List<String> snapshotLines(FileSnapshots.Snapshot snapshot, String charset) throws IOException {
+    byte[] bytes = snapshot.bytes();
+    ResolvedTextFile decoded;
+    if (charset != null && !charset.isBlank()) decoded = new ResolvedTextFile(stripBom(decodeStrict(bytes, resolveCharset(charset))),resolveCharset(charset));
+    else {
+      decoded = decodeBom(bytes);
+      if (decoded == null) {
+        try { decoded = new ResolvedTextFile(decodeStrict(bytes, StandardCharsets.UTF_8),StandardCharsets.UTF_8); }
+        catch (CharacterCodingException error) { decoded = new ResolvedTextFile(decodeStrict(bytes, CP932),CP932); }
+      }
+    }
+    if (decoded.content().indexOf(0) >= 0) throw new IOException("Binary file is unsupported");
+    return decoded.content().lines().toList();
   }
 
   /** 1 リクエストの検索と読み込み要求。 */
@@ -1084,13 +1115,14 @@ public class Tools {
 
   /** 1 ファイルの検索と読み込み結果。 */
   public record SearchAndReadResult(String path, List<SearchMatch> matches, List<ReadSection> sections,
-      String error, boolean truncated, boolean filesTruncated) {
+      String error, boolean truncated, boolean filesTruncated, String version, ReadFileRequest nextRead) {
+    public SearchAndReadResult(String path,List<SearchMatch> matches,List<ReadSection> sections,String error,boolean truncated,boolean filesTruncated){this(path,matches,sections,error,truncated,filesTruncated,null,null);}
     int totalLines() {
       return sections == null ? 0 : sections.stream().mapToInt(s -> s.content().size()).sum();
     }
 
     SearchAndReadResult withTruncated(boolean value) {
-      return new SearchAndReadResult(path, matches, sections, error, value, filesTruncated);
+      return new SearchAndReadResult(path, matches, sections, error, value, filesTruncated, version, nextRead);
     }
   }
 
@@ -1126,11 +1158,14 @@ public class Tools {
     if (files.size() > MAX_READ_FILES) {
       throw new IllegalArgumentException("too many files: " + files.size() + " (max " + MAX_READ_FILES + ")");
     }
+    for(var request:files)if(request==null || request.path()!=null && request.path().length()>1024)throw new IllegalArgumentException("File request/path limit exceeded");
     List<ReadFileResult> results = new ArrayList<>();
+    FileSnapshots snapshots=newSnapshots();
+    TextReadBudget budget=new TextReadBudget();
     int totalLines = 0;
     for (ReadFileRequest request : files) {
       try {
-        ReadFileResult result = readSingleFile(request, workingDirectory);
+        ReadFileResult result = readSingleFile(request, workingDirectory, snapshots, budget, MAX_READ_TOTAL_LINES-totalLines);
         int remaining = MAX_READ_TOTAL_LINES - totalLines;
         if (result.content().size() > remaining) {
           result = new ReadFileResult(result.path(), result.startLine(), result.endLine(),
@@ -1142,11 +1177,19 @@ public class Tools {
         results.add(new ReadFileResult(request.path(), null, null, List.of(), false, e.getMessage()));
       }
     }
-    return results;
+    return boundedFileResult(results);
   }
 
   /** 1 ファイルの読み込みを実行する。 */
-  private ReadFileResult readSingleFile(ReadFileRequest request, java.nio.file.Path workingDirectory)
+  private static <T> List<T> boundedFileResult(List<T> result)throws IOException {
+    // Final envelope guard also covers escaping, error metadata and paths.
+    if(FILE_RESULT_JSON.writeValueAsBytes(result).length>1024*1024)
+      throw new IOException("Serialized file result exceeds 1MiB; narrow the request");
+    return result;
+  }
+
+  private ReadFileResult readSingleFile(ReadFileRequest request, java.nio.file.Path workingDirectory,
+      FileSnapshots snapshots,TextReadBudget budget,int lineBudget)
       throws IOException {
     if (request.path() == null || request.path().isBlank()) {
       throw new IllegalArgumentException("path must not be blank");
@@ -1160,28 +1203,30 @@ public class Tools {
       throw new IllegalArgumentException("endLine は startLine 以上である必要があります");
     }
     java.nio.file.Path path = resolveProjectPath(request.path(), workingDirectory);
-    List<String> lines = readTextFileLines(path, request.path(), "");
+    var snapshot=snapshots.get(workingDirectory,path);
+    if(request.expectedVersion()!=null && !request.expectedVersion().equals(snapshot.version()))throw new IOException("File version mismatch; search/read again");
+    List<String> lines = snapshotLines(snapshot, request.charset());
     workingSet.recordRead(path);
     int fromIndex = startLine == null ? 0 : startLine - 1;
     if (fromIndex >= lines.size()) {
-      return new ReadFileResult(request.path(), startLine, endLine, List.of(), false, null);
+      return new ReadFileResult(request.path(), startLine, endLine, List.of(), false, null,snapshot.version(),null,0);
     }
     int toIndex = endLine == null ? lines.size() : Math.min(endLine, lines.size());
-    List<String> content = lines.subList(fromIndex, toIndex);
-    boolean truncated = content.size() > MAX_READ_LINES_PER_FILE;
-    if (truncated) {
-      content = content.subList(0, MAX_READ_LINES_PER_FILE);
-    }
-    return new ReadFileResult(request.path(), startLine, endLine, content, truncated, null);
+    if(toIndex<fromIndex)throw new IllegalArgumentException("endLine must not precede startLine");
+    var slice=budget.take(lines,fromIndex,toIndex,request.offset()==null?0:request.offset(),Math.min(MAX_READ_LINES_PER_FILE,Math.max(0,lineBudget)));
+    var next=slice.truncated()?new ReadFileRequest(request.path(),slice.nextLine(),endLine,snapshot.version(),slice.nextOffset(),request.charset()):null;
+    return new ReadFileResult(request.path(),fromIndex+1,slice.lines().isEmpty()?null:fromIndex+slice.lines().size(),slice.lines(),slice.truncated(),null,snapshot.version(),next,slice.bytes());
   }
 
   /** 1 ファイルの読み込み要求。startLine / endLine は任意。 */
-  public record ReadFileRequest(String path, Integer startLine, Integer endLine) {
+  public record ReadFileRequest(String path, Integer startLine, Integer endLine,String expectedVersion,Integer offset,String charset) {
+    public ReadFileRequest(String path,Integer startLine,Integer endLine){this(path,startLine,endLine,null,null,null);}
   }
 
   /** 1 ファイルの読み込み結果。 */
   public record ReadFileResult(String path, Integer startLine, Integer endLine, List<String> content,
-      boolean truncated, String error) {
+      boolean truncated, String error,String version,ReadFileRequest nextRead,int returnedBytes) {
+    public ReadFileResult(String path,Integer startLine,Integer endLine,List<String> content,boolean truncated,String error){this(path,startLine,endLine,content,truncated,error,null,null,0);}
   }
 
   /** 1 リクエストあたりの最大ファイル数。 */
