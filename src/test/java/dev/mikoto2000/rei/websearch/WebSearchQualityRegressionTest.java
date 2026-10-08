@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 /** Deterministic evidence fixture: exact source recall and evidence coverage are separate assertions. */
 class WebSearchQualityRegressionTest {
-  @Test void measuresLegacyBaselineWithoutNetwork() throws Exception {
+  @Test void improvesFrozenLegacyBaselineWithoutLosingEvidence() throws Exception {
     var registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
     io.micrometer.core.instrument.Metrics.addRegistry(registry);
     try {
@@ -23,10 +23,14 @@ class WebSearchQualityRegressionTest {
       var context = new WebSearchOrchestrator(search, fetch, new WebSearchQueryPlanner(), new WebSearchAggregator())
           .search("Java", 1);
       assertEquals(1, context.allResults().size());
-      verify(search, times(3)).search(anyString(), eq(1));
-      verify(fetch, times(3)).fetch(any());
-      assertEquals(3, registry.get("rei.web.search.events").tag("event", "fetch_candidates").counter().count());
-      assertEquals(2, registry.get("rei.web.search.events").tag("event", "additional_searches").counter().count());
+      // Phase 0 measured 3 searches and 3 fetches for the same 1-result fixture.
+      verify(search, times(1)).search(anyString(), eq(1));
+      verify(fetch, times(1)).fetch(any());
+      assertEquals("evidence", context.allResults().getFirst().content());
+      assertEquals("https://example.com/", context.allResults().getFirst().url());
+      assertEquals(1, registry.get("rei.web.search.events").tag("event", "fetch_candidates").counter().count());
+      var additional = registry.find("rei.web.search.events").tag("event", "additional_searches").counter();
+      assertEquals(0, additional == null ? 0 : additional.count());
     } finally { io.micrometer.core.instrument.Metrics.removeRegistry(registry); registry.close(); }
   }
   @ParameterizedTest

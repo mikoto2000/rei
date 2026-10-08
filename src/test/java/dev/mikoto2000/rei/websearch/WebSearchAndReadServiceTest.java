@@ -142,7 +142,7 @@ class WebSearchAndReadServiceTest {
   }
 
   @Test
-  void fetchesDuplicateUrlOnlyOnceWhilePreservingResults() throws Exception {
+  void fetchesDuplicateUrlOnlyOnceWhilePreservingCitationMetadata() throws Exception {
     WebSearchResult first = new WebSearchResult("First", "https://example.com/same", "S1", null);
     WebSearchResult duplicate = new WebSearchResult("Duplicate", "https://example.com/same", "S2", null);
     org.mockito.Mockito.when(webSearchService.search("query", 2)).thenReturn(List.of(first, duplicate));
@@ -152,9 +152,9 @@ class WebSearchAndReadServiceTest {
     List<WebSearchAndReadItem> items = service.searchAndRead(
         new WebSearchAndReadRequest("query", 2, 2)).results();
 
-    assertEquals(2, items.size());
-    assertEquals(List.of("First", "Duplicate"), items.stream().map(WebSearchAndReadItem::title).toList());
-    assertEquals(List.of("shared", "shared"), items.stream().map(WebSearchAndReadItem::content).toList());
+    assertEquals(1, items.size());
+    assertEquals(List.of("First", "Duplicate"), items.getFirst().aliases().stream().map(WebSourceAlias::title).toList());
+    assertEquals("shared", items.getFirst().content());
     Mockito.verify(urlContentFetchService, Mockito.times(1)).fetch(Mockito.eq("https://example.com/same"), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class));
   }
 
@@ -170,8 +170,11 @@ class WebSearchAndReadServiceTest {
     List<WebSearchAndReadItem> items = service.searchAndRead(
         new WebSearchAndReadRequest("query", null, null)).results();
 
-    assertEquals(List.of("success", "success", "success", "not_requested", "not_requested"),
+    assertEquals(List.of("success", "not_requested", "not_requested"),
         items.stream().map(WebSearchAndReadItem::fetchStatus).toList());
+    assertEquals(List.of("https://example.com/1", "https://example.com/2", "https://example.com/3"),
+        items.getFirst().aliases().stream().map(WebSourceAlias::url).toList());
+    Mockito.verify(urlContentFetchService, Mockito.times(3)).fetch(Mockito.anyString(), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class));
   }
 
   @Test

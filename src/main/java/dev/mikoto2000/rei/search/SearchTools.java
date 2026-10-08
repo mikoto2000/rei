@@ -78,6 +78,8 @@ public class SearchTools {
           .append(" | publishedAt=").append(result.publishedAt())
           .append(" | content=").append(result.content())
           .append('\n');
+      for (var alias : result.aliases()) if (!alias.url().equals(result.url()))
+        builder.append("  - citation=").append(alias.url()).append(" | evidenceType=").append(alias.evidenceType()).append('\n');
     }
     return builder.toString().trim();
   }

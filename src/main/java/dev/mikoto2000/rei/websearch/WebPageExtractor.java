@@ -24,6 +24,8 @@ public class WebPageExtractor {
         result.publishedAt());
 
     String content = normalize(document.body() == null ? "" : document.body().text());
+    String fingerprint = content.isBlank() ? null : WebContentDeduplication.fingerprint(content + "\n"
+        + document.select("pre,code").stream().map(Element::wholeText).collect(java.util.stream.Collectors.joining("\n")));
     if (content.isBlank()) {
       content = normalize(result.snippet());
     }
@@ -32,13 +34,26 @@ public class WebPageExtractor {
       content = content.substring(0, MAX_CONTENT_LENGTH);
     }
 
-    return new WebSearchPage(
+    var page = new WebSearchPage(
         title,
         result.url(),
         result.snippet(),
         publishedAt,
         content,
-        truncated);
+        truncated,
+        fingerprint,
+        java.util.List.of(WebSourceAlias.from(result)));
+    Element canonical = document.selectFirst("link[rel=canonical][href]");
+    if (canonical != null) {
+      String claimed = WebSearchSelection.normalizeUrl(canonical.absUrl("href"));
+      String original = WebSearchSelection.normalizeUrl(result.url());
+      if (claimed != null && original != null) {
+        var claimedUri = java.net.URI.create(claimed); var originalUri = java.net.URI.create(original);
+        if (claimedUri.getScheme().equals(originalUri.getScheme()) && claimedUri.getRawAuthority().equals(originalUri.getRawAuthority()))
+          page = page.withAliases(java.util.List.of(new WebSourceAlias(claimed, title, publishedAt, "page_canonical_claim")));
+      }
+    }
+    return page;
   }
 
   private String metaContent(Document document, String property) {

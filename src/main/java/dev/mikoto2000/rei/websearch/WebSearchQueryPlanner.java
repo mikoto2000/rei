@@ -15,8 +15,9 @@ public class WebSearchQueryPlanner {
       return List.of();
     }
     queries.add(trimmed);
-    queries.add(trimmed + " official");
-    queries.add(trimmed + " latest");
+    queries.add(trimmed.toLowerCase(java.util.Locale.ROOT).matches("(?s).*(official|公式).*") ? trimmed + " reference" : trimmed + " official");
+    if (WebSearchSelection.needsFreshness(trimmed)) queries.add(trimmed + " release date");
+    else queries.add(trimmed + " reference");
     return List.copyOf(queries);
   }
 }
