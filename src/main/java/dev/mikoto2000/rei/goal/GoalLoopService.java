@@ -55,6 +55,7 @@ public class GoalLoopService {
     var claim=goals.claim(project,id);next(claim);return goals.get(project,id);
   }
   public record Inspection(GoalRepository.Goal goal,FileGoalVerifier.Verification verification) {}
+  public GoalCompletionProgress progress(String project,String id){var goal=goals.get(project,id);gateway.validate(goal);return GoalCompletionProgress.inspect(goal,goals.completionPhase(project,id),verifier);}
   public Inspection verify(String project,String id) {
     var goal=goals.get(project,id);gateway.validate(goal);var verification=verifier.verify(goal);
     if(verification.satisfied()&&!java.util.Set.of("COMPLETED","RUNNING","CANCELLED").contains(goal.status())) {
@@ -83,7 +84,9 @@ public class GoalLoopService {
     if(goal.maxTotalTokens()>0&&goal.pendingLlmCalls()>0) {stop(claim,"BLOCKED","token_usage_unknown");return;}
     if(goals.tokenExhausted(claim)) {stop(claim,"BLOCKED",goal.tokenUsageUnknown()?"token_usage_unknown":"token_budget_exhausted");return;}
     if(goal.attempts()>=goal.maxRuns()||goal.llmCallsUsed()>=goal.maxLlmCalls()) {stop(claim,"BLOCKED","budget_exhausted");return;}
-    String run=goals.beginAttempt(claim);events.publish(goals.get(goal.projectId(),goal.id()));
+    boolean repairing=goals.attempts(goal.projectId(),goal.id()).stream().reduce((a,b)->b).map(a->a.status().equals("UNVERIFIED")).orElse(false);
+    if(!goals.completionPhase(claim,repairing?"REPAIRING":"RUNNING"))return;
+    String run=goals.beginAttempt(claim);events.publish(goals.get(goal.projectId(),goal.id()),goals.completionPhase(goal.projectId(),goal.id()));
     try {gateway.dispatch(claim,run,outcome->completed(claim,run,outcome));}
     catch(RuntimeException error){if(goals.active(claim)){goals.recordAttempt(claim,run,"FAILED","admission_failed");stop(claim,"FAILED","admission_failed");}}
   }
@@ -104,10 +107,12 @@ public class GoalLoopService {
     }
     try {gateway.validate(claim.goal());}
     catch(RuntimeException error){goals.recordAttempt(claim,run,"BLOCKED","owner_unavailable");stop(claim,"BLOCKED","owner_unavailable");return;}
+    if(!goals.completionPhase(claim,"VERIFYING"))return;
+    events.publish(goals.get(claim.goal().projectId(),claim.goal().id()),"VERIFYING");
     var verification=verifier.verify(goals.get(claim.goal().projectId(),claim.goal().id()));
     goals.recordAttempt(claim,run,verification.satisfied()?"VERIFIED":"UNVERIFIED",verification.reason());
     if(verification.satisfied()){stop(claim,"COMPLETED",verification.reason());return;}
-    if(!java.util.Set.of("digest_mismatch","json_value_mismatch","predicate_mismatch","file_missing_or_not_regular","completion_evidence_missing","completion_required_tests_missing","completion_required_artifact_missing","completion_review_stale","completion_test_evidence_changed").contains(verification.reason())) {
+    if(!java.util.Set.of("digest_mismatch","json_value_mismatch","predicate_mismatch","file_missing_or_not_regular","completion_evidence_missing","completion_required_tests_missing","completion_requirement_unmet","completion_required_artifact_missing","completion_review_stale","completion_test_evidence_changed").contains(verification.reason())) {
       stop(claim,"BLOCKED",verification.reason());return;
     }
     next(claim);

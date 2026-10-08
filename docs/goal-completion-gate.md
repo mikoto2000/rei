@@ -61,3 +61,60 @@ DB migrationは `agent_goals` にnullable `completion_json` / `completion_proof_
 意味一致は確率的判断で、普遍的な正しさ・test完全性・commandとreportの独立した因果証明
 ではない。ファイル群を同時にロックするsnapshot transactionでもなく、外部からの変更は
 独立チェックの間にも起こり得る。既存ProjectのEXCLUSIVE Runとhash再確認を使う。
+
+## Phase 1：名前付き条件・受渡し・補助状態
+
+Phase 0 の main `d4895388` から独立して実装。通常チャット・旧 Goal の安全な既定値は維持する。
+既存 `/goal create --completion-json` と HTTP の completion definition を使い、新しい Goal 作成方式や
+実行ループを追加しない。既存の exact SHA、JSON Pointer、宣言型 predicate、review/test receipt、
+Artifact の所有・期限・content 検証を再利用する。
+
+## 名前付き条件
+
+completion definition に省略可能な `requirements` を追加。
+1項目は `{id,statement,required,criterion}`。最大16項目、idは一意、statementは機密値や制御文字を含めない。
+criterion は既存 `{relativeFile,sha256}` または JSON Pointer / 宣言型 predicate。存在だけの条件は拒否する。
+`required:true` が未達なら Gate は成功しない。`required:false` の未達は一覧に残すが成功を妨げない。
+旧 `completionEvidence / requiredTests / requiredArtifacts / requiredPredicates / reviewGate` は引き続き必須検証する。
+
+## 受渡し
+
+requiredArtifacts の各要素に省略可能な `deliveryRequired`（既定 false）を追加する。
+true の場合、AVAILABLE / 所有 / media type / 名前 / 期待 SHA の検証に加え、Proof の
+`deliveredArtifacts` に同じ Artifact ID / SHA が必要。これは human completion-evidence API / Shell で
+人間が受渡し確認後に追加する確認記録であり、サーバーからファイルを送信し終えたことの自動証明ではない。
+モデル側 `attachGoalCompletionEvidence` は deliveredArtifacts を送れない。添付済み Artifact と一致しない
+ID / SHA、重複、同名別 revision の代用を拒否する。
+
+Gate が `completion_delivery_pending` を返すと、自動再実行を止める。人間が確認記録を追加し、
+既存 `/goal verify` で再検証できる。中間／部分／失敗応答を禁止しない。受渡し必須を全Goalへ強制しない。
+
+## 状態と確認
+
+既存 Goal の RUNNING claim / unique index / 予算 SQL を維持し、nullable `completion_phase` TEXT を追加。
+稼働中に RUNNING / VERIFYING / REPAIRING を保存。claim が失効したら補助phaseを権限として使用しない。
+旧DBは既存列検出で追加し、旧 completion JSON は空 requirements / deliveredArtifacts として読む。
+SSE の既存 goal.updated payload は status を保持し、追加 completionPhase を通知する。
+旧 Java constructor と旧イベントJSONを維持する。Native/HTTP の旧キーは変更しない。
+
+`/goal progress ID` または `GET /api/v1/projects/{project}/goals/{id}/completion-progress` は
+read-onlyで現在の条件・SHA・未達理由・受渡し待ちを返す。確認操作はGoalを完了状態へ更新しない。
+既存statusと補助phaseをもとに RUNNING / VERIFYING / REPAIRING / WAITING / BLOCKED / COMPLETED /
+PARTIAL / FAILED / CANCELLED を区別する。READYも維持する。PARTIALは独立検証で一部必須条件成立を
+観測した未完遂の表示状態であり、既存の永続BLOCKEDを勝手に成功へ変更しない。
+WAITING_APPROVAL / PAUSED はWAITINGとして表示し、既存承認・reconcileを必要とする。
+
+旧モデルgatewayを使うPhase 0 の10シナリオ比較は旧動作を維持するため同じ期待値（70% / 30% / 30%）。
+これは新Gateを使った実モデル改善率ではない。liveモデル・ユーザー環境へのdeployは行わない。
+
+## TDD / 検証
+
+未実装 Requirement / supplemental phase / SSE field に対するコンパイルRedをそれぞれ確認して実装。
+同名別SHAの受渡し取り違えは expected completion_delivery_pending / actual completion_gate_verified の
+失敗を再現後、名前・media type・SHAと実際に確認済みIDの全照合でGreenにした。
+名前付き必須/任意、保存と受渡しの区別、モデル拒否、SQLite再起動、既存予算、read-only view、
+SSE transition、旧Gate・Goal・Reflection・Attention・Shellの回帰を実行する。
+
+安全な既定値：新 requirements の required は true / false を明示必須とし、省略時に任意へ弱めない。
+旧 definition の requirements 自体の省略は引き続き空リスト。無効JSON・未知predicate・取消等の
+検証不能を単なる未達へ置き換えず、元の理由を保持して自動修復対象にしない。
