@@ -173,3 +173,5 @@ SSE bridge の破棄時には送信完了を最大 2 秒待機します。切断
 
 - [`application.yaml`](./src/main/resources/application.yaml) にはローカル差分が入りやすいので、コミット時は注意してください
 - `<rei-data-dir>/` などの作業生成物は通常コミットしません
+
+作業完遂の独立評価・10シナリオ・基準データの再現は [評価記録](docs/goal-completion-evaluation.md) を参照してください。
