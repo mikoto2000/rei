@@ -64,4 +64,11 @@ class JavaSymbolReadTest {
     Files.writeString(root.resolve("C.java"),"class C {}");Thread.currentThread().interrupt();
     try{assertThrows(java.util.concurrent.CancellationException.class,()->new Tools().readMultiFile(List.of(request("C",true,false)),root));}finally{Thread.interrupted();}
   }
+  @Test void unicodeEscapedClassBracesNeverExposeBodiesAsSignatures()throws Exception {
+    String source="class C [OPEN] String value=\"PRIVATE_BODY_MARKER\"; void work() {} [CLOSE]".replace("[OPEN]",Character.toString(92)+"u007b").replace("[CLOSE]",Character.toString(92)+"u007d");
+    Files.writeString(root.resolve("C.java"),source);var maps=new RepositoryMapService(path->List.of("C.java"));
+    assertFalse(maps.map(root,"",10).toString().contains("PRIVATE_BODY_MARKER"));
+    assertNotNull(new Tools().readMultiFile(List.of(request("C",false,false)),root).getFirst().error());
+    assertNull(new Tools().readMultiFile(List.of(request("C",true,false)),root).getFirst().error());
+  }
 }

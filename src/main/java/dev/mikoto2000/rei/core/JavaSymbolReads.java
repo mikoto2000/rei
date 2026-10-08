@@ -42,6 +42,7 @@ final class JavaSymbolReads {
     String source=StandardCharsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(snapshot.bytes())).toString();
     int from=Boolean.FALSE.equals(request.includeJavadoc())?symbol.startOffset():symbol.javadocStartOffset();
     int to=Boolean.FALSE.equals(request.includeBody())?symbol.signatureEndOffset():symbol.endOffset();
+    if(Boolean.FALSE.equals(request.includeBody()) && RepositoryMapService.typeKind(symbol.kind()) && to<=symbol.startOffset())throw new IOException("AST class signature boundary unavailable (escaped delimiters); request includeBody=true");
     if(from<0||to<from||to>source.length())throw new IOException("AST source positions unavailable");
     if(context>0){int cursor=from;while(cursor>0&&source.charAt(cursor-1)!='\n')cursor--;for(int i=0;i<context&&cursor>0;i++){cursor--;while(cursor>0&&source.charAt(cursor-1)!='\n')cursor--;}from=cursor;
       cursor=to;while(cursor<source.length()&&source.charAt(cursor)!='\n')cursor++;for(int i=0;i<context&&cursor<source.length();i++){cursor++;while(cursor<source.length()&&source.charAt(cursor)!='\n')cursor++;}to=cursor;
