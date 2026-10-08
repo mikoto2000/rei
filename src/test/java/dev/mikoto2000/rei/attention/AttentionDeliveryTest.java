@@ -119,7 +119,7 @@ class AttentionDeliveryTest {
   }
   @Test void httpControlsAuthenticateProjectOwnershipAndOnlyQueueTheExplicitRequest() {
     start(properties(true,false),true);var item=fact("api");
-    new org.springframework.boot.test.context.runner.WebApplicationContextRunner().withPropertyValues("rei.web.enabled=true").withBean(AttentionRepository.class,()->inbox).withBean(AttentionDeliveryService.class,()->delivery).withUserConfiguration(WebConfig.class).run(context->{
+    new org.springframework.boot.test.context.runner.WebApplicationContextRunner().withPropertyValues("rei.web.enabled=true","rei.api-key=secret").withBean(AttentionRepository.class,()->inbox).withBean(AttentionDeliveryService.class,()->delivery).withUserConfiguration(WebConfig.class).run(context->{
       var mvc=org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup(context).addFilters(context.getBean("springSecurityFilterChain",jakarta.servlet.Filter.class)).build();String path="/api/v1/projects/project/attention/"+item.id()+"/delivery";
       mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(path).contentType("application/json").content("{\"retry\":false,\"acknowledgeDuplicateRisk\":false}" )).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isUnauthorized());
       mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path).header("Authorization","Bearer secret")).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.status").value("NOT_REQUESTED"));
