@@ -12,6 +12,31 @@ import java.util.zip.GZIPOutputStream;
 import org.junit.jupiter.api.*;
 
 class SafeHttpFetcherTest {
+  @Test void repeatedCacheControlDoesNotLoseAnEarlierNoStoreDirective() {
+    server.createContext("/cache-control", exchange -> {
+      exchange.getResponseHeaders().add("Cache-Control", "no-store");
+      exchange.getResponseHeaders().add("Cache-Control", "max-age=60");
+      exchange.sendResponseHeaders(200, 2); exchange.getResponseBody().write(new byte[] { 'o', 'k' }); exchange.close();
+    });
+    String control = get("/cache-control", policy(128, 128, 1, 2000, 1000)).header("cache-control");
+    assertTrue(control.contains("no-store")); assertTrue(control.contains("max-age=60"));
+  }
+  @Test void crossOriginRedirectKeepsRefreshDirectiveButDoesNotForwardValidators() {
+    URI initial = URI.create("https://first.example/page"), destination = URI.create("https://second.example/page");
+    var forwarded = new java.util.concurrent.atomic.AtomicReference<Map<String, String>>();
+    var fetcher = new SafeHttpFetcher() {
+      @Override public Response exchange(URI uri, Map<String, String> headers, HttpFetchPolicy policy, FetchOperation operation, HttpFetchObserver observer, boolean redirect) {
+        if (uri.equals(initial)) return new Response(302, Map.of("location", destination.toString()), new byte[0], uri);
+        forwarded.set(headers); return new Response(200, Map.of(), new byte[] { 'o', 'k' }, uri);
+      }
+    };
+    var result = fetcher.fetch(initial, Map.of("cache-control", "no-cache", "if-none-match", "\"a\"", "if-modified-since", "Wed, 31 Dec 2025 00:00:00 GMT"),
+        HttpFetchPolicy.html(Duration.ofSeconds(2)), FetchOperation.active(), HttpFetchObserver.NONE);
+    assertEquals(destination, result.finalUri()); assertEquals("no-cache", forwarded.get().get("cache-control"));
+    assertFalse(forwarded.get().containsKey("if-none-match")); assertFalse(forwarded.get().containsKey("if-modified-since"));
+    assertThrows(HttpFetchException.class, () -> fetcher.fetch(initial, Map.of("authorization", "Bearer private"),
+        HttpFetchPolicy.html(Duration.ofSeconds(2)), FetchOperation.active(), HttpFetchObserver.NONE));
+  }
   @Test void actualPeerMustBeBothApprovedAndAllowed() throws Exception {
     var policy = HttpFetchPolicy.html(Duration.ofSeconds(1));
     var publicIp = InetAddress.getByName("1.1.1.1"); var privateIp = InetAddress.getByName("127.0.0.1");

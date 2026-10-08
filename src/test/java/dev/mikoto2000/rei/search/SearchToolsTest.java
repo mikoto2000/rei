@@ -40,7 +40,7 @@ class SearchToolsTest {
   @Test
   void descriptionDistinguishesHybridKnowledgeSearchFromPublicWebResearch() throws Exception {
     Tool tool = SearchTools.class.getDeclaredMethod("searchKnowledge", String.class, Integer.class, Integer.class,
-        Double.class, String.class, org.springframework.ai.chat.model.ToolContext.class).getAnnotation(Tool.class);
+        Double.class, String.class, Boolean.class, org.springframework.ai.chat.model.ToolContext.class).getAnnotation(Tool.class);
 
     assertTrue(tool.description().contains("indexed knowledge base"));
     assertTrue(tool.description().contains("supplement"));

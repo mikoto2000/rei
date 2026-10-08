@@ -23,10 +23,16 @@ public class SearchTools {
       For public-web-only research, prefer webSearchAndRead.
       """)
   String searchKnowledge(String query, Integer vectorTopK, Integer webTopK, Double threshold, String source,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false, description = "Revalidate cached web sources") Boolean forceRefresh,
       org.springframework.ai.chat.model.ToolContext context) throws IOException, InterruptedException {
-    try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context)) {
+    try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context);
+        var refresh = dev.mikoto2000.rei.http.FetchScope.withForceRefresh(Boolean.TRUE.equals(forceRefresh))) {
       return searchKnowledge(query, vectorTopK, webTopK, threshold, source);
     }
+  }
+  String searchKnowledge(String query, Integer vectorTopK, Integer webTopK, Double threshold, String source,
+      org.springframework.ai.chat.model.ToolContext context) throws IOException, InterruptedException {
+    return searchKnowledge(query, vectorTopK, webTopK, threshold, source, null, context);
   }
   String searchKnowledge(String query, Integer vectorTopK, Integer webTopK, Double threshold, String source)
       throws IOException, InterruptedException {

@@ -310,3 +310,77 @@ future.cancel と worker 終了を区別し、worker の finally が済むまで
 その後、ツール出力の分類が順位を変えるケースを Red テストで再現し、sourceType を表示する順位順の出力へ変更した。
 この修正後の最終コミットも、関連回帰と全体 CI 成功を確認してからマージする。
 出力順位の修正を含む関連 full-profile 回帰126件は failure 0 / error 0 / skipped 0で成功した。
+
+最終 head `5ae36f50` の全体回帰はローカル3940件、failure 0 / error 0 / skipped 1（9分56秒、wrapper終了0）。
+CI run `37842990034` も同じ3940件で成功（8分05秒）。PR [#45](https://github.com/mikoto2000/rei/pull/45) を
+`ef83060e` で main にマージし、次のキャッシュ段階はこの main から開始した。
+
+### フェーズ4: メモリーキャッシュと同一取得の集約
+
+既存 SearchResultCache の同期 FIFO / TTL を `BoundedTtlCache` に共通化した。既存 API を保持し、
+実際に同じインスタンスの時刻を進める TTL 境界テストへ置き換えた。
+HTTP の検索メタデータと本文は同じ Spring 管理 HttpResponseCache を使用する。
+SQLite へ永続化せず、プロセス終了で内容を捨てる。手動生成する旧サービスコンストラクタは
+従来の取得動作を保つためキャッシュ無効、新しい注入コンストラクタで共通キャッシュを使用する。
+Paper の保存・取得はこのキャッシュの対象ではない。
+
+| rei.http-cache 設定 | 既定値 | 許容範囲 |
+| --- | ---: | --- |
+| enabled | true | true / false |
+| search-ttl-seconds | 30 | 1..300秒 |
+| page-ttl-seconds | 60 | 1..300秒 |
+| retention-seconds | 300 | TTL以上、最大1800秒 |
+| max-entries | 128 | 1..1024 |
+| max-bytes | 33554432 | 1..134217728 |
+| load-parallelism | 3 | 1..3 |
+| load-queue-capacity | 16 | 1..64 |
+| max-in-flight | 32 | 1..128 |
+
+環境変数は `REI_HTTP_CACHE_ENABLED` 等、application.yaml に記載する。
+容量は本文、URI、ヘッダー、固定管理費を含む保守的な推定 resident weight であり JVM ヒープ実測値ではない。
+通信中の作業バッファは別に既存 wire / decoded 上限と有限 worker / queue で制限する。
+キャッシュ有効化は Web 検索の有効化を変更しない。
+
+キーは namespace、provider / limit、正確な URI と全クエリ、すべての正規化ヘッダー、
+HTTP 方針の全フィールド、実 transport を長さ付きで SHA-256 化する。生のキーはログ・metrics に出さない。
+認証ヘッダー、許可リスト外ヘッダー、private origin、機密値を検出した URI はキャッシュも共有取得も回避する。
+公開の直接200応答だけを保持する。redirect は各 hop のキャッシュ方針を保持しないため保守的に対象外とする。
+no-store / private / must-understand / Set-Cookie / Vary:*、binary / 機密本文、エラーを保存しない。
+SensitiveInfoDetector を再利用し JSON secret / access token 等の形を追加、既存 RE2J で走査する。
+検出は完全な秘密情報判定ではなく、公開ドキュメントの例示も検出し得る保守的なパターン判定である。
+レスポンスの本文は保存・返却の境界でコピーして呼び出し元の変更による汚染を防ぐ。
+
+TTL は設定値と Cache-Control / Expires の短い方から Age、Date、応答遅延を引く。
+不正な lifetime は fresh と扱わない。no-cache / max-age=0 は validator を保持して毎回再検証する。
+重複 Cache-Control / Vary を統合し、早い no-store を最後のヘッダーで失わない。
+通常の期限切れと forceRefresh は ETag、なければ Last-Modified で検証する。
+304 は内部で送った validator と既存表現がある場合のみ本文を再利用し、取得日時 retrievedAt を保持、
+検証日時 validatedAt を更新する。失敗した検証に古い本文でフォールバックしない。
+意味と制約は [RFC 9111](https://www.rfc-editor.org/rfc/rfc9111.html) に従い、アプリ側の有限 TTL / privacy 条件を加える。
+
+既存4ツールの名前と旧引数は保持し、省略可能な forceRefresh を追加した。
+「latest」「最新」等を含むクエリも、展開クエリと並列本文取得まで再検証フラグを伝える。
+別 origin へ転送するときは ETag / Last-Modified 条件だけを外し Cache-Control を保持する。
+認証情報を転送しない従来の拒否規則、DNS / peer 検証、タイムアウトは維持する。
+
+同じキーの冷たい取得は有限 executor で一度に集約する。待機者それぞれの停止・期限を確認し、
+最初の待機者の短い期限を共有 loader に流用しない。一人の取消では他の待機者の通信を止めず、
+全員が離れると待機項目・実行タスク・HTTP を取り消す。共有 future を個別待機者から cancel しない。
+応答を読んで初めて no-store 等が分かった場合、合流した待機者にはその本文を配らず個別に再取得する。
+エラー後は次の呼び出しで再試行でき、shutdown / 飽和は FETCH_REJECTED を返す。
+後から始まった明示的再検証を、先に開始して遅く完了した取得が上書きしない。
+再検証中に始まった通常取得も、再検証結果より優先して格納しない。
+取消済みの旧 loader の後処理が、同じキーの新しい成功エントリを削除しない。
+合流元の API 予算が不足した場合、別の待機者は自身の残り予算と期限で個別に再試行する。
+metrics は `rei.web.cache.events` の namespace / event 固定ラベルだけで計測する。
+キャッシュ hit の実 HTTP request / received bytes は増えず、既存物理通信 observer を保つ。
+
+TTL、容量、深いコピー、条件分離、304、privacy、取消、共有取得、更新競合、ツールの optional schema を
+固定時刻・latch・mock transport と実 HTTP ヘッダ fixture で検証する。
+例として同一公開本文2回の fixture は raw fetch が2回から1回へ、同時2要求は1回へ集約する。
+これは固定 fixture の呼び出し数であり、実 Web の改善率やモデル実使用トークン数ではない。
+
+全体回帰の初回は3974件、failure 1 / error 0 / skipped 1（9分50秒）。
+新設定が外部設定テンプレートに不足していたため、テンプレートへ全キャッシュ設定を追加した。
+同時取得・取消・更新の競合テストも追加し、関連194件は failure 0 / error 0 / skipped 0で成功した。
+取消済みの旧取得による新規エントリ削除をさらに Red テストで再現し、後処理の格納世代を無効化した。

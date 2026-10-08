@@ -268,6 +268,16 @@ rei:
       time-zone: ${REI_GOOGLE_CALENDAR_TIME_ZONE:}
     task:
       enabled: ${REI_GOOGLE_TASK_ENABLED:true}
+  http-cache:
+    enabled: ${REI_HTTP_CACHE_ENABLED:true}
+    search-ttl-seconds: ${REI_HTTP_CACHE_SEARCH_TTL_SECONDS:30}
+    page-ttl-seconds: ${REI_HTTP_CACHE_PAGE_TTL_SECONDS:60}
+    retention-seconds: ${REI_HTTP_CACHE_RETENTION_SECONDS:300}
+    max-entries: ${REI_HTTP_CACHE_MAX_ENTRIES:128}
+    max-bytes: ${REI_HTTP_CACHE_MAX_BYTES:33554432}
+    load-parallelism: ${REI_HTTP_CACHE_LOAD_PARALLELISM:3}
+    load-queue-capacity: ${REI_HTTP_CACHE_LOAD_QUEUE_CAPACITY:16}
+    max-in-flight: ${REI_HTTP_CACHE_MAX_IN_FLIGHT:32}
   web-search:
     enabled: ${REI_WEB_SEARCH_ENABLED:true}
     timeout-seconds: ${REI_WEB_SEARCH_TIMEOUT_SECONDS:10}

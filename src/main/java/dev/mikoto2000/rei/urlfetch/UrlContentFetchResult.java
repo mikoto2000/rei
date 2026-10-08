@@ -7,7 +7,12 @@ public record UrlContentFetchResult(
     String errorMessage,
     Integer statusCode,
     String contentType,
-    String finalUrl) {
+    String finalUrl, java.time.Instant retrievedAt, java.time.Instant validatedAt) {
+
+  public UrlContentFetchResult(boolean success, String content, String errorType, String errorMessage,
+      Integer statusCode, String contentType, String finalUrl) {
+    this(success, content, errorType, errorMessage, statusCode, contentType, finalUrl, null, null);
+  }
 
   public UrlContentFetchResult(boolean success, String content, String errorType, String errorMessage,
       Integer statusCode, String contentType) { this(success, content, errorType, errorMessage, statusCode, contentType, null); }
@@ -26,6 +31,10 @@ public record UrlContentFetchResult(
   }
   public static UrlContentFetchResult success(String content, String contentType, String finalUrl) {
     return new UrlContentFetchResult(true, content, null, null, null, contentType, finalUrl);
+  }
+  public static UrlContentFetchResult success(String content, String contentType, String finalUrl,
+      java.time.Instant retrievedAt, java.time.Instant validatedAt) {
+    return new UrlContentFetchResult(true, content, null, null, null, contentType, finalUrl, retrievedAt, validatedAt);
   }
 
   public static UrlContentFetchResult failure(String errorType, String errorMessage) {
