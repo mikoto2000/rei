@@ -47,4 +47,17 @@ class SearchToolsTest {
     assertTrue(tool.description().contains("public-web-only"));
     assertTrue(tool.description().contains("webSearchAndRead"));
   }
+
+  @Test void renderedWebResultsKeepSelectedRankAcrossPrimaryAndSecondaryClassification() throws Exception {
+    var service = Mockito.mock(SearchKnowledgeService.class); var tools = new SearchTools(service);
+    var first = new WebSearchPage("first selected", "https://first.example/page", "", null, "first evidence");
+    var second = new WebSearchPage("second selected", "https://second.example/page", "", null, "second evidence");
+    when(service.search("topic", 1, 2, null, null)).thenReturn(new SearchKnowledgeResult("topic", List.of(),
+        new WebSearchContext(List.of(second), List.of(first), List.of(first, second)), null));
+    String result = tools.searchKnowledge("topic", 1, 2, null, null);
+    assertTrue(result.indexOf(first.url()) < result.indexOf(second.url()));
+    assertTrue(result.contains("sourceType=primary")); assertTrue(result.contains("sourceType=secondary"));
+    assertTrue(result.contains("first evidence")); assertTrue(result.contains("second evidence"));
+    assertTrue(result.indexOf("first evidence") == result.lastIndexOf("first evidence"));
+  }
 }

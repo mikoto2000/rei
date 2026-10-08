@@ -39,16 +39,12 @@ public class SearchTools {
         ベクトルストア検索結果:
         %s
 
-        Web 一次情報:
-        %s
-
-        Web 補足情報:
+        Web 一次情報 / Web 補足情報（検索順位順）:
         %s
         """.formatted(
         result.query(),
         formatVectorResults(result.vectorResults()),
-        formatWebResults(result.webContext().primaryResults()),
-        formatWebResults(result.webContext().secondaryResults()));
+        formatWebResults(result.webContext()));
   }
 
   private String formatVectorResults(List<VectorDocumentSearchResult> results) {
@@ -67,13 +63,15 @@ public class SearchTools {
     return builder.toString().trim();
   }
 
-  private String formatWebResults(List<WebSearchPage> results) {
+  private String formatWebResults(dev.mikoto2000.rei.websearch.WebSearchContext context) {
+    List<WebSearchPage> results = context.allResults();
     if (results.isEmpty()) {
       return "該当なし";
     }
     StringBuilder builder = new StringBuilder();
     for (WebSearchPage result : results) {
       builder.append("- title=").append(result.title())
+          .append(" | sourceType=").append(context.primaryResults().contains(result) ? "primary" : "secondary")
           .append(" | fetchStatus=").append(result.fetchStatus()).append(" | errorType=").append(result.errorType())
           .append(" | url=").append(result.url())
           .append(" | publishedAt=").append(result.publishedAt())

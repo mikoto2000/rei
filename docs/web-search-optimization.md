@@ -287,6 +287,7 @@ permit の待機・所有が終わると参照を削除し、ホスト一覧を�
 
 本文の完了順や長さで再順位付けせず、取得前に選定した順位で結果を返す。
 一次/補足分類は保持し、WebSearchContext.allResults は選定順を保持する。
+searchKnowledge のツール出力も分類ごとに並べ替えず、一つの順位順一覧で sourceType を表示する。
 失敗は fetchStatus / errorType を付け、searchKnowledge の出力にも表示する。
 失敗時に snippet を残す場合も success と表示しない。元の例外診断文は本文・認証値を含み得るため出力しない。
 レコードとサービスの既存コンストラクタは維持し、新しい状態フィールドは追加方式とする。
@@ -303,4 +304,9 @@ future.cancel と worker 終了を区別し、worker の finally が済むまで
 開始 latch を使う別テストでも3件が同時に開始することを検証する。
 これは固定のローカル遅延 fixture の一回の計測であり、実Webの速度改善率やP50/P95の測定結果ではない。
 実HTTPの同一接続先ホスト上限、期限切れによるソケット切断、部分成功も fixture で検証する。
-最終の関連 full-profile 回帰は125件、failure 0 / error 0 / skipped 0で成功した。
+関連 full-profile 回帰は125件、failure 0 / error 0 / skipped 0で成功した。
+`5e41ba67` の全体回帰はローカル3939件、failure 0 / error 0 / skipped 1、wrapper終了0（9分51秒）。
+同じ head の CI run `37840916290` も3939件で成功（7分45秒）。
+その後、ツール出力の分類が順位を変えるケースを Red テストで再現し、sourceType を表示する順位順の出力へ変更した。
+この修正後の最終コミットも、関連回帰と全体 CI 成功を確認してからマージする。
+出力順位の修正を含む関連 full-profile 回帰126件は failure 0 / error 0 / skipped 0で成功した。
