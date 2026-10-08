@@ -136,3 +136,11 @@ GitHub run 37809653438 は設定済みの30分上限を過ぎても in_progress 
 15秒ごとの進行表示と従来と同じ Maven 標準ログを残し、テスト・アサーションは除外しない。
 1秒締切の試験で124、子プロセス限定の JAVA_HOME 不備で1の伝播を実測した。
 追加のレポート・ダンプ送信は行わず、通常の CI 標準ログを診断に使う。
+
+締切付き CI run 37818179082 は全3818件を完了（10分21秒）、failure 2 / error 0 / skipped 1。
+端末入力13件は成功し、残り2件は欧文 Windows の argv で日本語が ??? に変わる fixture 引数の破損だった。
+OS のコードページで表現できない絵文字を追加し、ローカルでも文字が ?? に変わる Red を確認した。
+fixture 補助ランチャーは classpath を argument file に保持し、引数を ASCII Base64 として渡して Java 内で UTF-8 復元する。
+固定引数の個数を明示し、コマンドに後から追加される native 引数の既存契約も維持する。
+Unicode・長いclasspath・実 native 引数・端末・外部エージェントの関連33件成功。全体回帰を再実行する。
+変更前 wrapper の通常成功も全3818件、failure 0 / error 0 / skipped 1、Maven 6分47秒・wrapper終了0を確認済み。
