@@ -33,7 +33,8 @@ public final class WebSearchSelection {
       for (String planned : planner.plan(query)) {
         if (calls >= properties.getMaxSearchQueries() || SearchRequestBudget.exhausted()) break;
         FetchScope.current().check();
-        if (calls++ > 0) WebSearchMetrics.OBSERVED.add("additional_searches", 1);
+        if (!WebResearchScope.registerQuery(planned)) continue;
+        if (calls++ > 0 || WebResearchScope.queryCount() > 1) WebSearchMetrics.OBSERVED.add("additional_searches", 1);
         List<WebSearchResult> results;
         try { results = service.search(planned, limit); }
         catch (RuntimeException failed) {
@@ -88,7 +89,7 @@ public final class WebSearchSelection {
       return !day.isBefore(today.minusDays(30)) && !day.isAfter(today.plusDays(1));
     } catch (RuntimeException unknown) { return false; }
   }
-  private static boolean matchesVersion(String query, WebSearchResult result) {
+  static boolean matchesVersion(String query, WebSearchResult result) {
     var matcher = Pattern.compile("(?i)(?:\\bv?(\\d+\\.\\d+(?:\\.\\d+){0,3})|(?:java|jdk|python|spring|version|バージョン)\\s*v?(\\d+(?:\\.\\d+){0,3}))").matcher(query);
     while (matcher.find()) { String version = matcher.group(1) == null ? matcher.group(2) : matcher.group(1);
       if (!Pattern.compile("(?<![\\d.])" + Pattern.quote(version) + "(?![\\d.])").matcher(text(result)).find()) return false; }

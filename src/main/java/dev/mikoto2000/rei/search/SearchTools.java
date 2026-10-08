@@ -9,13 +9,17 @@ import org.springframework.stereotype.Component;
 
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.websearch.WebSearchPage;
-import lombok.RequiredArgsConstructor;
 
 @Component
-@RequiredArgsConstructor
 public class SearchTools {
 
   private final SearchKnowledgeService searchKnowledgeService;
+  private final dev.mikoto2000.rei.websearch.WebResultBudget resultBudget;
+  public SearchTools(SearchKnowledgeService service) { this(service,dev.mikoto2000.rei.websearch.WebResultBudget.defaults()); }
+  @org.springframework.beans.factory.annotation.Autowired
+  public SearchTools(SearchKnowledgeService service,dev.mikoto2000.rei.websearch.WebResultBudget budget) {
+    this.searchKnowledgeService=service; this.resultBudget=budget;
+  }
 
   @Tool(name = "searchKnowledge", description = """
       Search the agent's indexed knowledge base and supplement it with public-web sources.
@@ -27,7 +31,26 @@ public class SearchTools {
       org.springframework.ai.chat.model.ToolContext context) throws IOException, InterruptedException {
     try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context);
         var refresh = dev.mikoto2000.rei.http.FetchScope.withForceRefresh(Boolean.TRUE.equals(forceRefresh))) {
-      return searchKnowledge(query, vectorTopK, webTopK, threshold, source);
+      resultBudget.requireAvailable(context);
+      var result=searchKnowledgeService.search(query,vectorTopK,webTopK,threshold,source);
+      var entries=new java.util.ArrayList<String>();
+      for(var vector:result.vectorResults()) {
+        String snippet=vector.snippet();
+        if(snippet!=null&&snippet.length()>512)snippet=snippet.substring(0,Character.isHighSurrogate(snippet.charAt(511))?511:512)+" [snippet_omitted]";
+        entries.add("\nVector: "+formatVectorResults(List.of(new VectorDocumentSearchResult(vector.docId(),vector.source(),vector.chunkIndex(),vector.score(),snippet))));
+      }
+      boolean trimmed=false;
+      for(var page:result.webContext().allResults()) {
+        var fitted=resultBudget.fitPage(page);
+        if(fitted==null) { trimmed=true;entries.add("\n[Web source_exceeds_budget]"); }
+        else {
+          trimmed|=!fitted.omissions().isEmpty();
+          entries.add("\nWeb external_untrusted sourceType="+(result.webContext().primaryResults().contains(page)?"primary":"secondary")+": "+resultBudget.encoded(fitted));
+        }
+      }
+      String echo=query==null?"":query.substring(0,Math.min(query.length(),256));
+      return resultBudget.fitEntries("Question: "+echo+(java.util.Objects.equals(echo,query)?"":" [query_echo_omitted]")+
+          "\nWeb retrieval: "+resultBudget.encoded(trimmed?dev.mikoto2000.rei.websearch.WebRetrievalAssessment.unknown("output_budget"):result.webContext().assessment()),entries,context);
     }
   }
   String searchKnowledge(String query, Integer vectorTopK, Integer webTopK, Double threshold, String source,

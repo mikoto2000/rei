@@ -7,7 +7,14 @@ public record UrlContentFetchResult(
     String errorMessage,
     Integer statusCode,
     String contentType,
-    String finalUrl, java.time.Instant retrievedAt, java.time.Instant validatedAt) {
+    String finalUrl, java.time.Instant retrievedAt, java.time.Instant validatedAt,
+    boolean truncated, java.util.List<String> omissions, String dataTrust) {
+
+  public UrlContentFetchResult { omissions=omissions==null?java.util.List.of():java.util.List.copyOf(omissions); }
+  public UrlContentFetchResult(boolean success,String content,String errorType,String errorMessage,Integer statusCode,
+      String contentType,String finalUrl,java.time.Instant retrievedAt,java.time.Instant validatedAt) {
+    this(success,content,errorType,errorMessage,statusCode,contentType,finalUrl,retrievedAt,validatedAt,false,java.util.List.of(),"external_untrusted");
+  }
 
   public UrlContentFetchResult(boolean success, String content, String errorType, String errorMessage,
       Integer statusCode, String contentType, String finalUrl) {

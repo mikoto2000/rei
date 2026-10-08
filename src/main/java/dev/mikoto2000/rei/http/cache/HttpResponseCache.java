@@ -71,21 +71,24 @@ public final class HttpResponseCache implements AutoCloseable {
       return fetcher.fetch(request.uri(), HttpCacheRules.conditions(request, null, request.forceRefresh()), request.policy(), waiter, observer);
     }
     String transport = transports.computeIfAbsent(fetcher, ignored -> UUID.randomUUID().toString());
+    var transferBudget = TransferScope.current();
     String key = key(request, request.headers(), transport, false);
     Flight flight; boolean owner;
     synchronized (mutex) {
       if (closed.get()) throw new HttpFetchException(HttpFetchException.Code.FETCH_REJECTED);
       Cached cached = entries.get(key).orElse(null);
       if (!request.forceRefresh() && cached != null && cached.fresh(clock)) {
+        TransferScope.decoded(cached.response().body().length);
         event(request.namespace(), "hit"); return copy(cached.response());
       }
       event(request.namespace(), "miss");
       Map<String, String> headers = HttpCacheRules.conditions(request, cached == null ? null : cached.response(), request.forceRefresh());
-      String flightKey = key(request, headers, transport, request.forceRefresh());
+      String flightKey = key(request, headers, transport, request.forceRefresh())
+          + (transferBudget == null ? "" : "." + transferBudget.identity());
       flight = flights.get(flightKey); owner = flight == null;
       if (owner) {
         if (flights.size() >= maximumFlights) throw new HttpFetchException(HttpFetchException.Code.FETCH_REJECTED);
-        flight = new Flight(flightKey, key, request, headers, cached, observer, fetcher, FetchScope.admission());
+        flight = new Flight(flightKey, key, request, headers, cached, observer, fetcher, FetchScope.admission(), transferBudget);
         for (var earlier : flights.values()) if (earlier.key.equals(key)) {
           if (earlier.request.forceRefresh() && !request.forceRefresh()) flight.superseded = true;
           else earlier.superseded = true;
@@ -127,11 +130,12 @@ public final class HttpResponseCache implements AutoCloseable {
   private final class Flight {
     final String id, key; final Request request; final Map<String, String> headers; final Cached old;
     final HttpFetchObserver observer; final SafeHttpFetcher fetcher; final HostAdmission admission;
+    final TransferBudget transferBudget;
     final AtomicBoolean stopped = new AtomicBoolean(); final CompletableFuture<Loaded> result = new CompletableFuture<>();
     final LoadTask task; int waiters; boolean superseded;
-    Flight(String id, String key, Request request, Map<String, String> headers, Cached old, HttpFetchObserver observer, SafeHttpFetcher fetcher, HostAdmission admission) {
+    Flight(String id, String key, Request request, Map<String, String> headers, Cached old, HttpFetchObserver observer, SafeHttpFetcher fetcher, HostAdmission admission, TransferBudget transferBudget) {
       this.id = id; this.key = key; this.request = request; this.headers = headers; this.old = old;
-      this.observer = observer; this.fetcher = fetcher; this.admission = admission; task = new LoadTask(this);
+      this.observer = observer; this.fetcher = fetcher; this.admission = admission; this.transferBudget = transferBudget; task = new LoadTask(this);
     }
   }
   private void load(Flight flight) {
@@ -139,13 +143,15 @@ public final class HttpResponseCache implements AutoCloseable {
     FetchOperation operation = new FetchOperation(() -> { if (flight.stopped.get()) throw new CancellationException(); }, Long.MAX_VALUE)
         .withTimeout(request.policy().totalTimeout());
     Instant started = clock.instant();
-    try (var scope = FetchScope.enter(operation, flight.admission, request.forceRefresh())) {
+    try (var scope = FetchScope.enter(operation, flight.admission, request.forceRefresh());
+        var transfer = TransferScope.enter(flight.transferBudget)) {
       event(request.namespace(), "load");
       var response = flight.fetcher.fetch(request.uri(), flight.headers, request.policy(), operation, flight.observer);
       Instant received = clock.instant();
       if (response.status() == 304) {
         event(request.namespace(), "revalidation");
         response = HttpCacheRules.validated(flight.old == null ? null : flight.old.response(), response, flight.headers, received);
+        TransferScope.decoded(response.body().length);
       } else if (response.status() == 200) response = new SafeHttpFetcher.Response(response.status(), response.headers(), response.body(), response.finalUri(), received, received);
       boolean shareable = weight(response) <= maximumBytes && HttpCacheRules.shareable(request, response, sensitive);
       operation.check();

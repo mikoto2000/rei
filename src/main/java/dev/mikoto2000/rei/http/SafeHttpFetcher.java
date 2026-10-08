@@ -56,6 +56,7 @@ public class SafeHttpFetcher {
   public Response exchange(URI uri, Map<String, String> headers, HttpFetchPolicy policy,
       FetchOperation operation, HttpFetchObserver observer, boolean redirect) {
     operation.check(); policy.validate(uri);
+    var transferBudget = TransferScope.current();
     Set<InetAddress> approved = ConcurrentHashMap.newKeySet();
     var literal = PublicNetworkPolicy.literal(uri.getHost());
     if (literal != null) {
@@ -96,12 +97,14 @@ public class SafeHttpFetcher {
             return content.reduceWith(ByteArrayOutputStream::new, (bytes, buffer) -> {
               operation.check(); int size = buffer.readableBytes(); observer.bytes(size);
               BoundedBody.checkWireSize(bytes.size(), size, policy.maxWireBytes());
+              if (transferBudget != null) transferBudget.wire(size);
               byte[] chunk = new byte[size]; buffer.readBytes(chunk); bytes.writeBytes(chunk); return bytes;
             }).map(bytes -> new Response(status, Map.copyOf(received), bytes.toByteArray(), uri));
           }).single().timeout(operation.remaining()).toFuture();
       var wire = operation.await(future);
       var decoded = BoundedBody.decode(wire.body(), wire.header("content-encoding"),
-          policy.maxWireBytes(), policy.maxDecodedBytes(), operation::check);
+          policy.maxWireBytes(), policy.maxDecodedBytes(), operation::check,
+          size -> { if (transferBudget != null) transferBudget.decoded(size); });
       operation.check(); return new Response(wire.status(), wire.headers(), decoded, uri);
     } catch (RuntimeException failed) { throw FetchOperation.classify(failed); }
   }

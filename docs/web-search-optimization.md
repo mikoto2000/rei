@@ -384,3 +384,161 @@ TTL、容量、深いコピー、条件分離、304、privacy、取消、共有�
 新設定が外部設定テンプレートに不足していたため、テンプレートへ全キャッシュ設定を追加した。
 同時取得・取消・更新の競合テストも追加し、関連194件は failure 0 / error 0 / skipped 0で成功した。
 取消済みの旧取得による新規エントリ削除をさらに Red テストで再現し、後処理の格納世代を無効化した。
+
+フェーズ4の最終 head `c5868f3f` はローカル3977件、failure 0 / error 0 / skipped 1
+（9分51秒、wrapper終了0）。同じ head の CI run `37850087268` も3977件で成功した。
+PR [#46](https://github.com/mikoto2000/rei/pull/46) は `80570541` で main にマージした。
+
+### フェーズ5: 関連抜粋・有限の追加調査・出力予算
+
+通常の webSearchAndRead と searchKnowledge の Web 補足は WebResearchPipeline を共有する。
+元のユーザークエリを固定し、メタデータ候補を選び、既定でまず2ページを取得する。
+本文の重複、論点、公式情報、指定バージョン、複数の独立ドメインを確認し、足りなければ
+既存 planner の公式情報 / reference / release date の有限な補足クエリを使用する。
+補足で新しく見つかった URL は、旧候補の未取得ページより先に調査する。
+返却順は候補の関連度・多様性・検索順位に従い、完了時刻の順にはしない。
+同一の正規化 URL を再取得せず、失敗も取得試行数に含める。
+従来の orchestrator の取得ページだけを返す API と readTop=0 のメタデータ専用モードを維持する。
+
+```mermaid
+flowchart TD
+  Q[元の質問と Run 停止・期限] --> M[有限の検索メタデータ取得]
+  M --> C[URL 正規化・関連度・出典の多様性]
+  C --> F[まず2ページ・有限の並列取得]
+  F --> H[全本文の指紋・構造抽出・関連抜粋]
+  H --> A[根拠の不足 / 不明 / 検索上の十分性]
+  A -->|不足か不明・残予算あり| M
+  A -->|十分または上限| O[実ツール出力全体の文字・推定トークン予算]
+  O --> R[出典・抜粋位置・日時・省略理由付き結果]
+```
+
+HTML は既存 jsoup で読み、見出しの階層、段落、リスト、表、コードを最大512個の
+800文字の候補窓として扱う。質問のキーワード、メモリー上の BM25（k1=1.2, b=0.75）、
+見出し、バージョン、コード/API リテラルで順位を付け、採用箇所は元の文書順に戻す。
+コードの改行とインデントを保持し、UTF-16 のサロゲートを途中で切らない。
+既存 SqliteVectorStore の lexical query terms を LexicalTerms に共通化した。
+HybridRetriever の dense embedding、SQLite FTS の bm25、および外部 RerankService は
+ネットワーク・登録文書ストアを必要とするため、Web の毎回の処理に必須化していない。
+追加 LLM / embedding / rerank 呼び出しは行わない。
+BM25 の係数と IDF は [Lucene BM25Similarity](https://lucene.apache.org/core/9_12_3/core/org/apache/lucene/search/similarities/BM25Similarity.html)
+と同じ式を用い、tokenization はこのアプリの軽量な語句一致である。
+
+指紋は抜粋前の全可視本文とコードから作る。抜粋範囲の内容が同じだけの別文書は統合しない。
+抜粋 metadata は本文を二重に持たず content の範囲、DOM 順位、見出し、anchor、HTML source range を示す。
+[source range](https://jsoup.org/apidocs/org/jsoup/nodes/Range) は jsoup の追跡情報であり、
+HTTP バイトオフセットではない。追跡できない位置は -1。
+retrievedAt / validatedAt は HTTP の取得・再検証時刻で、文書の公開日ではない。
+旧コンストラクタや mock transport で未提供の場合は null とする。
+
+assessment の sufficient は検索上の語句・根拠条件を満たすという heuristic であり、回答の真偽や完全性を保証しない。
+本文が読めない、抽出や出力の必要箇所が省略された、最新という主張を検証できない場合は unknown とする。
+コピーの alias、canonical の自己申告、同じ本文の別 URL は独立した複数出典の証明にしない。
+公式サイト判定は既存の有限の製品・ドメイン対応表であり、未知の公式サイトを自動証明しない。
+日本語の語句と部分語の一致も保守的な heuristic で、意味的な網羅性判定ではない。
+全 Web 本文には external_untrusted を表示し、ページ中の指示を planner の入力や権限に使用しない。
+既存 Tool Permission / Policy の NETWORK_READ と Run のキャンセルを維持する。
+
+| rei.web-search 設定 | 既定値 | 許容範囲 |
+| --- | ---: | --- |
+| page-max-characters | 2000 | 128..8000 |
+| page-max-tokens | 1500 | 128..6000 |
+| max-output-characters | 16000 | 512..64000 |
+| max-output-tokens | 6000 | 256..16000 |
+| initial-page-fetches | 2 | 1..3 |
+| research-timeout-seconds | 30 | 1..300秒 |
+| total-wire-bytes | 8388608 | 1..134217728 |
+| total-decoded-bytes | 16777216 | 1..268435456 |
+
+既存 max-search-queries=3、max-search-api-calls=4、max-page-fetches=5 も調査全体で共有する。
+TTL hit は物理 HTTP 回数や wire を増やさず、返却本文の decoded bytes は論理処理量として予算を消費する。
+304 で既存本文を使う場合も同じ decoded 予算を消費する。
+通信予算は並列 worker と cache loader に明示的に引き継ぎ、受信コピー・展開書き込み前に原子的に確保する。
+既に受信したネットワーク packet は取り消せないため、拒否した最後の chunk を含む実受信 observer は
+予算カウンターより大きくなり得る。TLS / HTTP headers を含む OS 全通信量の上限ではない。
+別の調査予算の cold load は飛行中キーを分離する。最初の調査の小さい予算で別調査を失敗させないためで、
+異なる調査の cold requests を常に1本に集約する設計ではない。通常の予算なしの同一取得集約と共有 fresh hit は維持する。
+
+全体期限は DNS・queue 待機・検索・本文・抽出にまたがり、親 Run の短い期限を延長しない。
+上限到達時は partial results と unknown / 理由を返す。キャンセルと Run 停止は成功に置き換えない。
+HTML Reader は入力サイズと最大10000個の '<' の密度を parser に渡す前に確認し、各読み込みで停止を確認する。
+これは任意 HTML の厳密な DOM node / JVM heap 上限の証明ではなく、文字列中の '<' でも保守的に拒否し得る。
+
+WebResultBudget は既存 DefaultToolCallResultConverter の実際の文字列を測る。
+URL、タイトル、snippet、alias、抜粋位置、日時、エラー、assessment、JSON escaping をすべて含む。
+ページ本文文字数とページ出力推定 tokens、全ツール出力文字数と tokens の両方を制限する。
+全体 tokens は既存 ContextBudgetManager、ContextCompressionProperties の completion / safety / tool reserves、
+Run の会話 snapshot 推定量と整合させ、既定の実効上限は toolReserve の4096。
+Run に現在のモデル名がないため、設定済み context limits の最小値を保守的に使用する。
+TokenEstimator は近似で、モデル実使用 tokens として Run / Goal に課金しない。
+本文・metadata の省略を明示し、source URL を途中で切らない。URL 自体が大きすぎる場合は出典を省略する。
+JSON / HTML 文字列の一部を返す場合も、外側の JSON は完全で truncated / omissions を示す。
+knowledge は整形した引用付き entry 全体を選択し、引用の途中で切らない。
+旧 Java コンストラクタと引数は維持し、予算適用は登録されたツール境界で行う。
+URL サービスの内部 API は全本文の指紋を得るため受信上限内の本文を保持する。
+
+#### 固定 HTML での品質比較
+
+WebExtractionQualityComparisonTest の10件は、先頭・中盤・末尾、API コード、バージョン、日本語、
+リスト、テーブル、rare API、離れた2箇所を含む frozen HTML。全件同じ URL / HTML / 既定予算を使用する。
+従来の先頭2000文字抽出と関連抽出を同じ converter でシリアライズし、metadata を含む推定量を比較する。
+検索 API / HTTP / モデルは呼ばず、cache / warm-up / ネットワークの影響を含まない。
+Phase 0 の11件の小さい検索 fixture は別途回帰する。最初の Java 本文 mock は full fingerprint と
+Java という根拠を付加し、legacy の未検証文字列だけで sufficient と扱わないよう修正した。
+この10件の HTML 比較と Phase 0 の別データの結果を同一条件の数値として混ぜない。
+
+| 指標（この固定 HTML 比較） | Before | After | 改善率 |
+| --- | ---: | ---: | --- |
+| Search API 呼び出し回数 | 未計測 | 未計測 | 未計測 |
+| HTTP リクエスト回数 | 未計測 | 未計測 | 未計測 |
+| 本文取得ページ数 | 未計測 | 未計測 | 未計測 |
+| 受信バイト数 | 未計測 | 未計測 | 未計測 |
+| 検索時間 P50 | 未計測 | 未計測 | 未計測 |
+| 検索時間 P95 | 未計測 | 未計測 | 未計測 |
+| LLM 入力推定トークン合計 | 6400 | 3304 | 48.375%削減 |
+| 必要な根拠をすべて取得した率 | 1/10 (10%) | 10/10 (100%) | +90 percentage points |
+| 期待出典 URL Recall | 10/10 (100%) | 10/10 (100%) | 変化なし |
+
+推定量削減率は (6400-3304)/6400*100。根拠成功は fixture ごとに指定した全 literal が残るかで判定する。
+実 Web 全体の品質・レイテンシー・モデル実 tokens に対する改善率ではない。
+Phase 2 の同一メタデータ fixture の3→1 search / fetch、Phase 3 の単回遅延 fixture、Phase 4 の raw fetch 2→1 は
+各段階の上記記録を参照し、未計測の P50 / P95 と混同しない。
+
+#### Phase 0 の同一 fixture の最終再実行
+
+finalImplementationReplaysTheUnchangedPhaseZeroUnverifiedFixture は Phase 0 と同じ
+Java / Java official / Java latest の固定候補、本文 evidence、fingerprint 未提供、limit=1 を再現する。
+最終 planner は reference を使用するため、その query の固定検索結果は空である。
+検索サービス呼び出しは3→3（変化なし）、本文取得呼び出しは3→2（33.333%削減）、
+返却 URL / evidence は同じ1件を保持した。これは mock の呼び出しで、Search API / HTTP の実通信ではない。
+この本文は Java の根拠かも full body かも検証できないので、最終 assessment は unknown とする。
+Java evidence と full fingerprint を追加した別 fixture では3→1の早期終了を回帰するが、
+同一の Phase 0 データ比較の改善率としては使用しない。
+実通信、受信量、検索 P50 / P95、モデル入力推定量、一般的な検索 Recall はこの fixture では未計測。
+
+出典統合時の duplicate_body_http_redirect はコピー側の転送を示し、代表ページの実転送とは区別する。
+コピーの転送が代表ページの公式性を変更しない Red テストを追加して修正した。
+追加検索だけの provider 障害は先に取得した根拠を保持し、unknown / additional_search_failed を返す。
+モデル予算には会話 snapshot に加え、少なくとも4096 tokens（toolReserve 以上）の schema 余裕も確保する。
+
+#### フェーズ5の検証履歴
+
+入力・通信予算クラス未実装の Red、関連抜粋 API 未実装の Red、cache worker の予算伝播と
+別調査の同一取得分離の Red、独立根拠の追加取得の失敗を再現して各 Green を確認した。
+出力予算の初回は15件中 error 1（縮小前の source 除外）、修正後は関連27件が成功した。
+全対象の関連回帰初回264件は failure 1 / error 1。新しい初回2ページという挙動に合わせ、
+全3並列を検証する fixture には initial-page-fetches=3 を明示した。
+実 MethodToolCallback のテストには非空 ToolContext が必要で、テストの呼び出し方法を修正した。
+古い公開日の不足理由、補足 provider 障害、コピー側転送による公式性変更、巨大 optional alias による
+正常出典の消失も、それぞれ Red を確認して修正した。関連272件は failure 0 / error 0 / skipped 0。
+この後に応答メタデータのページ予算境界を追加し、最終 full-profile で再確認する。
+失敗ログは作業用 target/phase5-*.log に保持し、テストを無効化していない。
+
+応答メタデータを含むページ予算と巨大な公開日 claim の2件も Red を確認した。
+本文・出典を維持し、64文字を超える公開日 claim と、長い Content-Type / error message を
+省略理由付きで扱う。alias は最大4件、URL 2048文字以内、ページ推定 tokens の1/3以内で選び、
+optional citation metadata が主出典の根拠を圧迫しないようにした。
+最終関連 full-profile 回帰は274件、failure 0 / error 0 / skipped 0（42秒）。
+固定 HTML の測定値と Phase 0 の同一 fixture の測定値も再確認した。
+未知の公式サイト、意味的な網羅性、絶対的な最新性、モデル tokenizer との誤差は残る制限である。
+external_untrusted ラベルと既存 Policy は権限の暗黙付与を防ぐが、モデルの指示追従に対する
+prompt injection の完全な防御を保証するものではない。

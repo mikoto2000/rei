@@ -13,6 +13,10 @@ public final class BoundedBody {
       throw new HttpFetchException(HttpFetchException.Code.WIRE_LIMIT);
   }
   public static byte[] decode(byte[] body, String encoding, int maxWire, int maxDecoded, Runnable check) {
+    return decode(body, encoding, maxWire, maxDecoded, check, ignored -> {});
+  }
+  public static byte[] decode(byte[] body, String encoding, int maxWire, int maxDecoded, Runnable check,
+      java.util.function.IntConsumer decodedBudget) {
     check.run();
     checkWireSize(0, body.length, maxWire);
     if (maxDecoded <= 0) throw new IllegalArgumentException("maxDecoded must be positive");
@@ -20,6 +24,7 @@ public final class BoundedBody {
     if (coding.isEmpty() || coding.equals("identity")) {
       if (body.length > maxDecoded) throw new HttpFetchException(HttpFetchException.Code.DECODED_LIMIT);
       check.run();
+      decodedBudget.accept(body.length);
       return body.clone();
     }
     try (var input = decodedStream(body, coding, check); var output = new ByteArrayOutputStream()) {
@@ -28,6 +33,7 @@ public final class BoundedBody {
       while ((count = input.read(buffer)) != -1) {
         check.run();
         if (count > maxDecoded - output.size()) throw new HttpFetchException(HttpFetchException.Code.DECODED_LIMIT);
+        decodedBudget.accept(count);
         output.write(buffer, 0, count);
       }
       check.run();

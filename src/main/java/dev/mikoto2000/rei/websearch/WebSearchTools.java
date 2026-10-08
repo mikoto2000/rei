@@ -6,14 +6,18 @@ import java.util.List;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
-import lombok.RequiredArgsConstructor;
 
 @Component
-@RequiredArgsConstructor
 public class WebSearchTools {
 
   private final WebSearchService webSearchService;
   private final WebSearchAndReadService webSearchAndReadService;
+  private final WebResultBudget resultBudget;
+  public WebSearchTools(WebSearchService search,WebSearchAndReadService read) { this(search,read,WebResultBudget.defaults()); }
+  @org.springframework.beans.factory.annotation.Autowired
+  public WebSearchTools(WebSearchService search,WebSearchAndReadService read,WebResultBudget budget) {
+    this.webSearchService=search; this.webSearchAndReadService=read; this.resultBudget=budget;
+  }
 
   @Tool(name = "webSearch", description = """
       Search the public web and return result metadata such as titles, URLs, and snippets.
@@ -24,7 +28,9 @@ public class WebSearchTools {
       @org.springframework.ai.tool.annotation.ToolParam(required = false, description = "Revalidate cached web sources") Boolean forceRefresh,
       org.springframework.ai.chat.model.ToolContext context) throws IOException, InterruptedException {
     try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context);
-        var refresh = dev.mikoto2000.rei.http.FetchScope.withForceRefresh(Boolean.TRUE.equals(forceRefresh))) { return webSearch(query, limit); }
+        var refresh = dev.mikoto2000.rei.http.FetchScope.withForceRefresh(Boolean.TRUE.equals(forceRefresh))) {
+      resultBudget.requireAvailable(context); return resultBudget.fitMetadata(webSearch(query, limit),context);
+    }
   }
   List<WebSearchResult> webSearch(String query, Integer limit, org.springframework.ai.chat.model.ToolContext context) throws IOException, InterruptedException {
     return webSearch(query, limit, null, context);
@@ -46,7 +52,9 @@ public class WebSearchTools {
       """)
   public WebSearchAndReadResponse webSearchAndRead(WebSearchAndReadRequest request, org.springframework.ai.chat.model.ToolContext context)
       throws IOException, InterruptedException {
-    try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context)) { return webSearchAndRead(request); }
+    try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context)) {
+      resultBudget.requireAvailable(context); return resultBudget.fit(webSearchAndRead(request),context);
+    }
   }
   public WebSearchAndReadResponse webSearchAndRead(WebSearchAndReadRequest request)
       throws IOException, InterruptedException {

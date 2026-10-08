@@ -12,6 +12,37 @@ import java.util.zip.GZIPOutputStream;
 import org.junit.jupiter.api.*;
 
 class SafeHttpFetcherTest {
+  @Test void aggregateBudgetIncludesMultipleActualResponsesAndCompressedExpansion() throws Exception {
+    var bytes=new ByteArrayOutputStream();try(var gzip=new GZIPOutputStream(bytes)){gzip.write(new byte[4096]);}
+    server.createContext("/aggregate",exchange -> {
+      exchange.getResponseHeaders().set("Content-Encoding","gzip");exchange.sendResponseHeaders(200,bytes.size());
+      try(var output=exchange.getResponseBody()){output.write(bytes.toByteArray());}
+    });
+    var budget=new TransferBudget(1000,5000);
+    try(var scope=TransferScope.enter(budget)) {
+      assertEquals(4096,get("/aggregate",policy(128,5000,2,2000,1000)).body().length);
+      assertEquals(HttpFetchException.Code.TRANSFER_BUDGET,
+          assertThrows(HttpFetchException.class,()->get("/aggregate",policy(128,5000,2,2000,1000))).code());
+    }
+    assertEquals(bytes.size()*2,budget.wireBytes());assertEquals(4096,budget.decodedBytes());
+  }
+  @Test void aggregateWireLimitCancelsAnActualStreamingConnection() throws Exception {
+    var disconnected=new CountDownLatch(1);
+    server.createContext("/aggregate-stream",exchange -> {
+      exchange.sendResponseHeaders(200,0);
+      try(var output=exchange.getResponseBody()) {
+        for(int i=0;i<100;i++){output.write(new byte[8192]);output.flush();Thread.sleep(10);}
+      }catch(IOException closed){disconnected.countDown();}
+      catch(InterruptedException stopped){Thread.currentThread().interrupt();}
+      finally{exchange.close();}
+    });
+    var budget=new TransferBudget(1000,100000);
+    try(var scope=TransferScope.enter(budget)) {
+      assertEquals(HttpFetchException.Code.TRANSFER_BUDGET,
+          assertThrows(HttpFetchException.class,()->get("/aggregate-stream",policy(1000000,1000000,2,5000,1000))).code());
+    }
+    assertTrue(disconnected.await(2,TimeUnit.SECONDS));assertTrue(budget.wireBytes()<=1000);
+  }
   @Test void repeatedCacheControlDoesNotLoseAnEarlierNoStoreDirective() {
     server.createContext("/cache-control", exchange -> {
       exchange.getResponseHeaders().add("Cache-Control", "no-store");

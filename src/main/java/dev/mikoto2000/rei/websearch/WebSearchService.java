@@ -52,6 +52,7 @@ public class WebSearchService {
     long started = System.nanoTime();
     properties.validateSelection();
     try (var refresh = dev.mikoto2000.rei.http.FetchScope.withForceRefresh(query != null && WebSearchSelection.needsFreshness(query));
+        var research = WebResearchScope.enter(properties);
         var budget = SearchRequestBudget.enter(properties.getMaxSearchApiCalls())) { return searchObserved(query, limit); }
     finally { WebSearchMetrics.OBSERVED.duration("search", System.nanoTime() - started); }
   }
