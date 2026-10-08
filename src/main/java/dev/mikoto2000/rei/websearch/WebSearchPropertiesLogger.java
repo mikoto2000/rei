@@ -26,9 +26,8 @@ public class WebSearchPropertiesLogger implements ApplicationRunner {
         ? List.of()
         : providers.stream()
             .filter(provider -> provider != null)
-            .map(provider -> "%s(baseUrl=%s, apiKeyConfigured=%s)".formatted(
+            .map(provider -> "%s(apiKeyConfigured=%s)".formatted(
                 provider.getName(),
-                provider.getBaseUrl(),
                 provider.getApiKey() != null && !provider.getApiKey().isBlank()))
             .toList();
 

@@ -34,6 +34,13 @@ public class WebSearchAndReadService {
 
   public WebSearchAndReadResponse searchAndRead(WebSearchAndReadRequest request)
       throws IOException, InterruptedException {
+    long started = System.nanoTime();
+    try { return searchAndReadObserved(request); }
+    finally { WebSearchMetrics.OBSERVED.duration("total", System.nanoTime() - started); }
+  }
+
+  private WebSearchAndReadResponse searchAndReadObserved(WebSearchAndReadRequest request)
+      throws IOException, InterruptedException {
     ValidatedRequest validated = validate(request);
     List<WebSearchResult> searchResults = webSearchService.search(validated.query(), validated.maxResults());
     List<WebSearchAndReadItem> results = new ArrayList<>();
@@ -44,6 +51,8 @@ public class WebSearchAndReadService {
     }
     long successes = results.stream().filter(result -> "success".equals(result.fetchStatus())).count();
     long failures = results.stream().filter(result -> "failed".equals(result.fetchStatus())).count();
+    WebSearchMetrics.OBSERVED.add("fetch_candidates", Math.min(searchResults.size(), validated.readTop()));
+    results.forEach(item -> WebSearchMetrics.OBSERVED.text(item.content()));
     log.debug("webSearchAndRead completed: searchResults={}, fetchAttempts={}, fetchSuccesses={}, fetchFailures={}",
         results.size(), fetchCache.size(), successes, failures);
     return new WebSearchAndReadResponse(validated.query(), results);

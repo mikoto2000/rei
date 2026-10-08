@@ -28,17 +28,29 @@ public class WebSearchOrchestrator {
   }
 
   public WebSearchContext search(String query, Integer limit) throws IOException, InterruptedException {
+    long started = System.nanoTime();
+    try { return searchObserved(query, limit); }
+    finally { WebSearchMetrics.OBSERVED.duration("total", System.nanoTime() - started); }
+  }
+
+  private WebSearchContext searchObserved(String query, Integer limit) throws IOException, InterruptedException {
     Map<String, WebSearchResult> resultsByUrl = new LinkedHashMap<>();
+    int searches = 0;
     for (String plannedQuery : webSearchQueryPlanner.plan(query)) {
+      if (searches++ > 0) WebSearchMetrics.OBSERVED.add("additional_searches", 1);
       for (WebSearchResult result : webSearchService.search(plannedQuery, limit)) {
-        resultsByUrl.putIfAbsent(result.url(), result);
+        if (resultsByUrl.putIfAbsent(result.url(), result) != null)
+          WebSearchMetrics.OBSERVED.add("duplicate_urls", 1);
       }
     }
     List<WebSearchPage> pages = new ArrayList<>();
+    WebSearchMetrics.OBSERVED.add("fetch_candidates", resultsByUrl.size());
     for (WebSearchResult result : resultsByUrl.values()) {
       pages.add(fetchPage(result));
     }
-    return webSearchAggregator.aggregate(pages, limit == null ? pages.size() : limit);
+    var context = webSearchAggregator.aggregate(pages, limit == null ? pages.size() : limit);
+    context.allResults().forEach(page -> WebSearchMetrics.OBSERVED.text(page.content()));
+    return context;
   }
 
   private WebSearchPage fetchPage(WebSearchResult result) throws IOException, InterruptedException {

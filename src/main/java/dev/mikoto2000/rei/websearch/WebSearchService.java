@@ -39,6 +39,12 @@ public class WebSearchService {
   private final HttpClient httpClient = HttpClient.newHttpClient();
 
   public List<WebSearchResult> search(String query, Integer limit) throws IOException, InterruptedException {
+    long started = System.nanoTime();
+    try { return searchObserved(query, limit); }
+    finally { WebSearchMetrics.OBSERVED.duration("search", System.nanoTime() - started); }
+  }
+
+  private List<WebSearchResult> searchObserved(String query, Integer limit) throws IOException, InterruptedException {
     if (!properties.isEnabled()) {
       throw new IllegalStateException("Web search is disabled. Set REI_WEB_SEARCH_ENABLED=true to enable it.");
     }
@@ -52,7 +58,9 @@ public class WebSearchService {
     for (ProviderProperties provider : providers) {
       try {
         for (WebSearchResult result : searchWithProvider(provider, query, clampedLimit)) {
-          resultsByUrl.putIfAbsent(result.url(), result);
+          WebSearchMetrics.OBSERVED.add("results", 1);
+          if (resultsByUrl.putIfAbsent(result.url(), result) != null)
+            WebSearchMetrics.OBSERVED.add("duplicate_urls", 1);
         }
       } catch (IOException | InterruptedException | RuntimeException e) {
         if (firstError == null) {
@@ -78,7 +86,7 @@ public class WebSearchService {
 
   List<ProviderProperties> configuredProviders() {
     if (properties.getProviders() == null || properties.getProviders().isEmpty()) {
-      String detail = "enabled=%s, rawProviders=%s".formatted(properties.isEnabled(), properties.getProviders());
+      String detail = "enabled=%s, providersCount=0".formatted(properties.isEnabled());
       log.warn("Web search providers were empty at execution time: {}", detail);
       throw new IllegalStateException("No web search providers are configured. " + detail);
     }
@@ -91,7 +99,7 @@ public class WebSearchService {
       providers.add(provider);
     }
     if (providers.isEmpty()) {
-      String detail = "enabled=%s, rawProviders=%s".formatted(properties.isEnabled(), properties.getProviders());
+      String detail = "enabled=%s, providersCount=%s".formatted(properties.isEnabled(), properties.getProviders().size());
       log.warn("Web search providers were present but all invalid at execution time: {}", detail);
       throw new IllegalStateException("No web search providers are configured. " + detail);
     }
@@ -124,12 +132,12 @@ public class WebSearchService {
         .GET()
         .build();
 
-    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    HttpResponse<byte[]> response = send(request, "brave");
     if (response.statusCode() >= 400) {
-      throw new IllegalStateException("Web search failed with status " + response.statusCode() + ": " + response.body());
+      throw new IllegalStateException("Web search failed with status " + response.statusCode());
     }
 
-    return parseBraveResults(response.body(), limit);
+    return parseBraveResults(new String(response.body(), StandardCharsets.UTF_8), limit);
   }
 
   private List<WebSearchResult> searchDuckDuckGo(ProviderProperties provider, String query, int limit)
@@ -144,12 +152,12 @@ public class WebSearchService {
         .GET()
         .build();
 
-    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    HttpResponse<byte[]> response = send(request, "duckduckgo");
     if (response.statusCode() >= 400) {
-      throw new IllegalStateException("Web search failed with status " + response.statusCode() + ": " + response.body());
+      throw new IllegalStateException("Web search failed with status " + response.statusCode());
     }
 
-    return parseDuckDuckGoResults(response.body(), limit);
+    return parseDuckDuckGoResults(new String(response.body(), StandardCharsets.UTF_8), limit);
   }
 
   List<WebSearchResult> parseBraveResults(String responseBody, int limit) throws IOException {
@@ -173,6 +181,22 @@ public class WebSearchService {
     }
 
     return parsed;
+  }
+
+  private HttpResponse<byte[]> send(HttpRequest request, String provider) throws IOException, InterruptedException {
+    WebSearchMetrics.OBSERVED.provider(provider);
+    WebSearchMetrics.OBSERVED.add("search_api_calls", 1);
+    WebSearchMetrics.OBSERVED.add("http_requests", 1);
+    try {
+      var response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+      WebSearchMetrics.OBSERVED.status(response.statusCode());
+      WebSearchMetrics.OBSERVED.add("received_bytes", response.body().length);
+      return response;
+    } catch (java.net.http.HttpTimeoutException e) {
+      WebSearchMetrics.OBSERVED.add("timeouts", 1); throw e;
+    } catch (InterruptedException e) {
+      WebSearchMetrics.OBSERVED.add("cancellations", 1); throw e;
+    }
   }
 
   List<WebSearchResult> parseDuckDuckGoResults(String responseBody, int limit) {

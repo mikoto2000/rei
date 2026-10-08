@@ -10,7 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.jline.terminal.Terminal;
-import org.jline.terminal.TerminalBuilder;
+import org.jline.terminal.impl.DumbTerminal;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,7 +44,7 @@ class ReiApplicationCommandNotificationTest {
         // EscCancellationMonitor: immediately return the future result without blocking
         escCancellationMonitor = mock(EscCancellationMonitor.class);
         chatResponseNarrator = mock(ChatResponseNarrator.class);
-        terminal = TerminalBuilder.builder().dumb(true).build();
+        terminal = new DumbTerminal(java.io.InputStream.nullInputStream(), java.io.OutputStream.nullOutputStream());
         commandExecutor = Executors.newSingleThreadExecutor();
     }
 
