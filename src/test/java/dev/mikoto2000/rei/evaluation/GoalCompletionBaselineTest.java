@@ -118,5 +118,3 @@ class GoalCompletionBaselineTest {
     return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
   }
 }
-
-
