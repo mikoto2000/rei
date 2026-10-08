@@ -69,6 +69,8 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   private boolean toolInterruptedMessage;
   private String thinkingId;
   private boolean thinkingLineOpen;
+  private final java.util.List<AgentEvent> pendingNotifications = new java.util.ArrayList<>();
+  private boolean flushingNotifications;
   private final java.util.List<AgentEvent> pendingLlmCompletions = new java.util.ArrayList<>();
   private record LlmRequestKey(String runId, String requestId) { }
   private final java.util.Map<LlmRequestKey, String> llmRequestFeatures;
@@ -94,6 +96,12 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   @Override
   public synchronized void onEvent(AgentEvent event) {
+    // Notifications may overtake downstream answer chunks. Preserve the text until
+    // a stream boundary, including when a chunk ends in a newline or mid-link.
+    if (!flushingNotifications && assistantMessageId != null && deferDuringAnswer(event)) {
+      pendingNotifications.add(event);
+      return;
+    }
     if (event.payload() instanceof dev.mikoto2000.rei.event.ExternalAgentLifecyclePayload delegation) {
       closeAssistantLine();
       closeThinkingLine();
@@ -129,6 +137,19 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       return;
     }
     renderEvent(event);
+  }
+
+  private boolean deferDuringAnswer(AgentEvent event) {
+    if (isSubAgentEvent(event)) return true;
+    return switch (event.type()) {
+      case MESSAGE_STARTED, MESSAGE_DELTA, MESSAGE_COMPLETED,
+          THINKING_STARTED, THINKING_DELTA, THINKING_COMPLETED,
+          AGENT_RUN_STARTED, AGENT_RUN_COMPLETED, AGENT_RUN_FAILED, AGENT_RUN_CANCELLED,
+          TOOL_STARTED, TOOL_COMPLETED, TOOL_FAILED,
+          LLM_RESPONSE_COMPLETED,
+          ATTENTION_REQUIRED, APPLICATION_SHUTDOWN_STARTED -> false;
+      default -> true;
+    };
   }
 
   private boolean isSubAgentEvent(AgentEvent event) {
@@ -750,6 +771,16 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   }
 
   private void flushLlmCompletions() {
+    if (!flushingNotifications) {
+      flushingNotifications = true;
+      try {
+        var notifications = new java.util.ArrayList<>(pendingNotifications);
+        pendingNotifications.clear();
+        for (AgentEvent event : notifications) onEvent(event);
+      } finally {
+        flushingNotifications = false;
+      }
+    }
     for (AgentEvent event : pendingLlmCompletions) {
       renderLlmCompletion(event);
     }
