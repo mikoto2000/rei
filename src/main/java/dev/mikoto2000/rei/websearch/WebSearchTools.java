@@ -21,7 +21,7 @@ public class WebSearchTools {
       For normal public-web research that needs page content, prefer webSearchAndRead.
       """)
   List<WebSearchResult> webSearch(String query, Integer limit) throws IOException, InterruptedException {
-    IO.println(String.format("Web を検索するよ。query=%s、limit=%s", query, limit));
+    IO.println(String.format("Web を検索するよ。limit=%s", limit));
     return webSearchService.search(query, limit);
   }
 

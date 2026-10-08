@@ -65,6 +65,9 @@ OS 標準の Rei Data Directory に保存します。Windows は `%LOCALAPPDATA%
 
 ## Web 検索実装
 
+計測方法、品質回帰 fixture、現行経路と制約は
+[Web 検索の改善記録](docs/web-search-optimization.md)を参照してください。
+
 主なクラス:
 
 - [`WebSearchService.java`](./src/main/java/dev/mikoto2000/rei/websearch/WebSearchService.java)

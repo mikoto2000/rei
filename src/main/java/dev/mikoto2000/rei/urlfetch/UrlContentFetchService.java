@@ -39,6 +39,18 @@ public class UrlContentFetchService {
   }
 
   public UrlContentFetchResult fetch(String url) {
+    long started = System.nanoTime();
+    try {
+      var result = fetchObserved(url);
+      dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.add(
+          result.success() ? "fetch_successes" : "fetch_failures", 1);
+      return result;
+    } finally {
+      dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.duration("fetch", System.nanoTime() - started);
+    }
+  }
+
+  private UrlContentFetchResult fetchObserved(String url) {
     UrlContentFetchResult validation = urlValidator.validate(url);
     if (!validation.success()) {
       return validation;
@@ -50,7 +62,11 @@ public class UrlContentFetchService {
           .header("Accept", "text/plain,text/html,application/xhtml+xml,application/json")
           .GET()
           .build();
+      dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.add("http_requests", 1);
       HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+      dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.status(response.statusCode());
+      if (response.body() != null)
+        dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.add("received_bytes", response.body().length);
       if (response.statusCode() >= 400) {
         return UrlContentFetchResult.failure(
             "HTTP_ERROR",
@@ -66,8 +82,11 @@ public class UrlContentFetchService {
       Charset charset = charset(rawContentType, response.body());
       return UrlContentFetchResult.success(new String(response.body(), charset), contentType);
     } catch (IOException e) {
+      if (e instanceof java.net.http.HttpTimeoutException)
+        dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.add("timeouts", 1);
       return UrlContentFetchResult.failure("NETWORK_ERROR", "Network error: " + e.getMessage());
     } catch (InterruptedException e) {
+      dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.add("cancellations", 1);
       Thread.currentThread().interrupt();
       return UrlContentFetchResult.failure("NETWORK_ERROR", "Request interrupted");
     } catch (RuntimeException e) {
