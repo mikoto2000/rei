@@ -253,3 +253,60 @@ OpenJDK の [ProcessHandleImpl](https://github.com/openjdk/jdk/blob/master/src/j
 無関係なプロセスが候補に入る可能性を考慮した修正である。
 現在の CI 停止や別途起動した rei との因果関係はログが取得できず未確定。
 テストを除外せず、所有を検証したプロセスだけを終了するようにした。
+
+### フェーズ2完了
+
+PR [#44](https://github.com/mikoto2000/rei/pull/44) を `b0139807` で main へマージした。
+最終 head `6c9f359f` の全体回帰はローカル3920件、failure 0 / error 0 / skipped 1、
+wrapper終了0（9分47秒）。CI run `37837465243` も同じ3920件で成功（7分57秒）。
+未解決レビューコメントなし、merge state CLEAN、必須保護ルールなしを確認してマージした。
+停止した旧 run は最終状態 cancelled で、成功の検証には使っていない。
+
+### フェーズ3: 制限付き並列本文取得
+
+WebSearchAndRead と searchKnowledge は同じ Spring 管理の `WebFetchBatch` を使用する。
+従来コンストラクタも維持し、その利用時は共有の既定値 executor を使う。
+`ParallelSubAgentDelegator` / `ExternalAgentDelegationService` は LLM エージェント実行・登録・予算管理専用であるため、
+そこで使う bounded ThreadPoolExecutor の方式を採用し、HTTP の実行制御は共通 FetchOperation / FetchScope を再利用する。
+HTTP 用 executor は固定の daemon worker、有限キュー、AbortPolicy と明示的な shutdown を持つ。
+
+| 設定 | 既定値 | 許容範囲 |
+| --- | ---: | --- |
+| fetch-parallelism | 3 | 1..3 |
+| fetch-per-host | 2 | 1..fetch-parallelism |
+| fetch-queue-capacity | 32 | 1..64 |
+| fetch-batch-timeout-seconds | 30 | 1..300秒 |
+
+環境変数は `REI_WEB_SEARCH_FETCH_PARALLELISM` 等、application.yaml に記載する。
+並列数を1にするときは fetch-per-host も1にする。各設定は暫定値で、実WebのP95から調整した値ではない。
+上限は同時に実行される複数のバッチにも適用する。ホスト待機中も worker とバッチ期限の上限を保つ。
+検索候補のホスト単位で loader を制限し、共通 `http.HostAdmission` を使って SafeHttpFetcher の実接続先にも制限する。
+各 redirect hop で実接続先の permit を取り直すため、複数の元URLが同じ転送先へ集中しても上限を保つ。
+ホストは URI の hostname で判定する。ホスト名が異なる同一IPへの接続も全体 worker 上限で抑制する。
+permit の待機・所有が終わると参照を削除し、ホスト一覧を蓄積しない。
+
+本文の完了順や長さで再順位付けせず、取得前に選定した順位で結果を返す。
+一次/補足分類は保持し、WebSearchContext.allResults は選定順を保持する。
+searchKnowledge のツール出力も分類ごとに並べ替えず、一つの順位順一覧で sourceType を表示する。
+失敗は fetchStatus / errorType を付け、searchKnowledge の出力にも表示する。
+失敗時に snippet を残す場合も success と表示しない。元の例外診断文は本文・認証値を含み得るため出力しない。
+レコードとサービスの既存コンストラクタは維持し、新しい状態フィールドは追加方式とする。
+
+バッチ期限は各 HTTP 期限とは独立で、親 Run の期限が早ければその期限を使う。
+遅い先頭項目を待っている間に完了した後続の成功も残す。未完了項目は BATCH_TIMEOUT、
+キュー飽和・executor 終了は FETCH_REJECTED として明示する。
+Run の停止・割込みは全体へ伝播し、未開始タスクを取り除き、実行中の future/HTTP を取り消す。
+future.cancel と worker 終了を区別し、worker の finally が済むまで実行枠を解放しない。
+バッチ終了時は最大1秒、アプリ終了時は最大2秒を後処理の待機に使う。
+共通 HTTP は短い間隔で取消を確認し接続を閉じる。割込みを無視する独自 loader を強制終了する仕組みではない。
+
+遅延120msの3ページ fixture は同じ値・順位を返し、最終関連テスト実行時の実測は逐次368.6ms / 並列130.4ms。
+開始 latch を使う別テストでも3件が同時に開始することを検証する。
+これは固定のローカル遅延 fixture の一回の計測であり、実Webの速度改善率やP50/P95の測定結果ではない。
+実HTTPの同一接続先ホスト上限、期限切れによるソケット切断、部分成功も fixture で検証する。
+関連 full-profile 回帰は125件、failure 0 / error 0 / skipped 0で成功した。
+`5e41ba67` の全体回帰はローカル3939件、failure 0 / error 0 / skipped 1、wrapper終了0（9分51秒）。
+同じ head の CI run `37840916290` も3939件で成功（7分45秒）。
+その後、ツール出力の分類が順位を変えるケースを Red テストで再現し、sourceType を表示する順位順の出力へ変更した。
+この修正後の最終コミットも、関連回帰と全体 CI 成功を確認してからマージする。
+出力順位の修正を含む関連 full-profile 回帰126件は failure 0 / error 0 / skipped 0で成功した。

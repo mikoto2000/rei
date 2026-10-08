@@ -54,7 +54,8 @@ public class SafeHttpFetcher {
       if (!policy.allowsAddress(literal)) throw new HttpFetchException(HttpFetchException.Code.URL_NOT_ALLOWED);
       approved.add(literal);
     }
-    try (var resolver = new ValidatingResolverGroup(policy::allowsAddress, approved)) {
+    try (var lease = FetchScope.acquireConnection(uri, operation);
+        var resolver = new ValidatingResolverGroup(policy::allowsAddress, approved)) {
       var client = reactor.netty.http.client.HttpClient.newConnection()
           .compress(false).keepAlive(false).followRedirect(false).resolver(resolver)
           .option(io.netty.channel.ChannelOption.CONNECT_TIMEOUT_MILLIS, (int) policy.connectTimeout().toMillis())

@@ -200,13 +200,13 @@ class WebSearchAndReadServiceTest {
     org.mockito.Mockito.when(urlContentFetchService.fetch(Mockito.eq(result.url()), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
         .thenReturn(UrlContentFetchResult.success("broken content", "text/html"));
     org.mockito.Mockito.when(extractor.extract(result, "broken content"))
-        .thenThrow(new IllegalStateException("cannot parse"));
+        .thenThrow(new IllegalStateException("cannot parse token=private-value"));
 
     WebSearchAndReadItem item = extractingService.searchAndRead(
         new WebSearchAndReadRequest("query", 1, 1)).results().getFirst();
 
     assertEquals("failed", item.fetchStatus());
     assertEquals("EXTRACTION_ERROR", item.errorType());
-    assertEquals("cannot parse", item.errorMessage());
+    assertEquals("Failed to extract page content", item.errorMessage());
   }
 }
