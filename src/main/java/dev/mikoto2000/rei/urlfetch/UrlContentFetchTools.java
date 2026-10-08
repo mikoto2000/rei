@@ -16,6 +16,9 @@ public class UrlContentFetchTools {
       Use this primitive when the URL is already known.
       For public-web research, prefer webSearchAndRead over manually chaining webSearch and this tool.
       """)
+  public UrlContentFetchResult fetchUrlContent(String url, org.springframework.ai.chat.model.ToolContext context) {
+    try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context)) { return fetchUrlContent(url); }
+  }
   public UrlContentFetchResult fetchUrlContent(String url) {
     return urlContentFetchService.fetch(url);
   }

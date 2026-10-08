@@ -4,7 +4,12 @@ import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import java.util.concurrent.*;
 import org.springframework.ai.chat.model.ToolContext;
 
-public record PaperOperation(String sessionId, RunExecutionContext execution) {
+public record PaperOperation(String sessionId, RunExecutionContext execution, long deadlineNanos) {
+  public PaperOperation(String sessionId, RunExecutionContext execution) { this(sessionId, execution, Long.MAX_VALUE); }
+  public PaperOperation withDeadline(java.time.Duration timeout) {
+    return new PaperOperation(sessionId, execution,
+        Math.min(deadlineNanos, new dev.mikoto2000.rei.http.FetchOperation(() -> {}, Long.MAX_VALUE).withTimeout(timeout).deadlineNanos()));
+  }
   public static PaperOperation local(String session) {
     return new PaperOperation(session, null);
   }
@@ -24,10 +29,12 @@ public record PaperOperation(String sessionId, RunExecutionContext execution) {
   public void check() {
     if (Thread.currentThread().isInterrupted()) throw new CancellationException();
     if (execution != null) execution.checkActive();
+    if (deadlineNanos != Long.MAX_VALUE && System.nanoTime() >= deadlineNanos)
+      throw new PaperException(PaperException.Code.PROVIDER_TIMEOUT, "処理がタイムアウトしました");
   }
 
   public <T> T await(CompletableFuture<T> future, java.time.Duration timeout) {
-    long deadline = System.nanoTime() + timeout.toNanos();
+    long deadline = Math.min(deadlineNanos, System.nanoTime() + timeout.toNanos());
     try {
       while (true) {
         check();

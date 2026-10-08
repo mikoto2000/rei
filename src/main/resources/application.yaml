@@ -75,6 +75,14 @@ rei:
   paper:
     enabled: ${REI_PAPER_ENABLED:true}
     open-alex-api-key: ${REI_PAPER_OPEN_ALEX_API_KEY:}
+    max-pdf-bytes: ${REI_PAPER_MAX_PDF_BYTES:20000000}
+    max-decoded-pdf-bytes: ${REI_PAPER_MAX_DECODED_PDF_BYTES:20000000}
+    max-response-bytes: ${REI_PAPER_MAX_RESPONSE_BYTES:4000000}
+    max-decoded-response-bytes: ${REI_PAPER_MAX_DECODED_RESPONSE_BYTES:8000000}
+    connect-timeout: ${REI_PAPER_CONNECT_TIMEOUT:5s}
+    read-timeout: ${REI_PAPER_READ_TIMEOUT:10s}
+    timeout: ${REI_PAPER_TIMEOUT:30s}
+    max-redirects: ${REI_PAPER_MAX_REDIRECTS:5}
   context-compression:
     enabled: ${REI_CONTEXT_COMPRESSION_ENABLED:true}
     model-context-limit: ${REI_CONTEXT_MODEL_LIMIT:128000}
@@ -263,10 +271,23 @@ rei:
   web-search:
     enabled: ${REI_WEB_SEARCH_ENABLED:true}
     timeout-seconds: ${REI_WEB_SEARCH_TIMEOUT_SECONDS:10}
+    connect-timeout-seconds: ${REI_WEB_SEARCH_CONNECT_TIMEOUT_SECONDS:5}
+    read-timeout-seconds: ${REI_WEB_SEARCH_READ_TIMEOUT_SECONDS:10}
+    max-wire-bytes: ${REI_WEB_SEARCH_MAX_WIRE_BYTES:2097152}
+    max-decoded-bytes: ${REI_WEB_SEARCH_MAX_DECODED_BYTES:4194304}
+    max-redirects: ${REI_WEB_SEARCH_MAX_REDIRECTS:5}
     max-results: ${REI_WEB_SEARCH_MAX_RESULTS:5}
     providers:
       - name: duckduckgo
         base-url: ${REI_WEB_SEARCH_DUCKDUCKGO_BASE_URL:https://html.duckduckgo.com/html/}
+        allow-private-network: ${REI_WEB_SEARCH_DUCKDUCKGO_ALLOW_PRIVATE_NETWORK:false}
+  url-fetch:
+    timeout-seconds: ${REI_URL_FETCH_TIMEOUT_SECONDS:30}
+    connect-timeout-seconds: ${REI_URL_FETCH_CONNECT_TIMEOUT_SECONDS:5}
+    read-timeout-seconds: ${REI_URL_FETCH_READ_TIMEOUT_SECONDS:10}
+    max-wire-bytes: ${REI_URL_FETCH_MAX_WIRE_BYTES:2097152}
+    max-decoded-bytes: ${REI_URL_FETCH_MAX_DECODED_BYTES:4194304}
+    max-redirects: ${REI_URL_FETCH_MAX_REDIRECTS:5}
   interest:
     enabled: ${REI_INTEREST_ENABLED:false}
     lookback-days: ${REI_INTEREST_LOOKBACK_DAYS:7}

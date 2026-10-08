@@ -25,7 +25,7 @@ class UrlContentFetchToolsTest {
 
   @Test
   void descriptionRoutesKnownUrlsWithoutManualSearchChaining() throws Exception {
-    Tool tool = UrlContentFetchTools.class.getDeclaredMethod("fetchUrlContent", String.class).getAnnotation(Tool.class);
+    Tool tool = UrlContentFetchTools.class.getDeclaredMethod("fetchUrlContent", String.class, org.springframework.ai.chat.model.ToolContext.class).getAnnotation(Tool.class);
 
     org.junit.jupiter.api.Assertions.assertTrue(tool.description().contains("exact URL"));
     org.junit.jupiter.api.Assertions.assertTrue(tool.description().contains("webSearchAndRead"));

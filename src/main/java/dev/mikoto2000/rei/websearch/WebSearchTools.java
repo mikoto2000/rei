@@ -20,6 +20,9 @@ public class WebSearchTools {
       Use this primitive when result metadata or candidate URLs are sufficient.
       For normal public-web research that needs page content, prefer webSearchAndRead.
       """)
+  List<WebSearchResult> webSearch(String query, Integer limit, org.springframework.ai.chat.model.ToolContext context) throws IOException, InterruptedException {
+    try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context)) { return webSearch(query, limit); }
+  }
   List<WebSearchResult> webSearch(String query, Integer limit) throws IOException, InterruptedException {
     IO.println(String.format("Web を検索するよ。limit=%s", limit));
     return webSearchService.search(query, limit);
@@ -35,6 +38,10 @@ public class WebSearchTools {
       Set readTop = 0 to return search metadata without fetching page contents.
       Individual page fetch failures are returned per result and do not fail the whole search.
       """)
+  public WebSearchAndReadResponse webSearchAndRead(WebSearchAndReadRequest request, org.springframework.ai.chat.model.ToolContext context)
+      throws IOException, InterruptedException {
+    try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context)) { return webSearchAndRead(request); }
+  }
   public WebSearchAndReadResponse webSearchAndRead(WebSearchAndReadRequest request)
       throws IOException, InterruptedException {
     return webSearchAndReadService.searchAndRead(request);

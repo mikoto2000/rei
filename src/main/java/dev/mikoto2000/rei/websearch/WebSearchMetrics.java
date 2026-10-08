@@ -32,4 +32,21 @@ public final class WebSearchMetrics {
     add("output_characters", length);
     add("estimated_tokens", TOKENS.text(text));
   }
+  public dev.mikoto2000.rei.http.HttpFetchObserver http(String provider) {
+    return new dev.mikoto2000.rei.http.HttpFetchObserver() {
+      public void request(boolean redirect) {
+        add("http_requests", 1);
+        if (redirect) add("redirects", 1);
+        if (provider != null) { provider(provider); add("search_api_calls", 1); }
+      }
+      public void status(int status) { WebSearchMetrics.this.status(status); }
+      public void bytes(int bytes) { add("received_bytes", bytes); }
+      public void cancellation() { add("cancellations", 1); }
+      public void failure(dev.mikoto2000.rei.http.HttpFetchException.Code code) {
+        if (code == dev.mikoto2000.rei.http.HttpFetchException.Code.CONNECT_TIMEOUT
+            || code == dev.mikoto2000.rei.http.HttpFetchException.Code.READ_TIMEOUT
+            || code == dev.mikoto2000.rei.http.HttpFetchException.Code.TOTAL_TIMEOUT) add("timeouts", 1);
+      }
+    };
+  }
 }
