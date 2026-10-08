@@ -12,6 +12,22 @@ import static org.junit.jupiter.api.Assertions.*;
 @org.junit.jupiter.api.Tag("integration")
 class FileOperationsBenchmarkTest {
   @TempDir Path root;
+  @Test void measureJavaSymbolRead()throws Exception {
+    var file=root.resolve("SymbolCase.java");String text="class SymbolCase {\n"+"// unrelated context\n".repeat(250)+"void work() {\n int timeout = 30;\n System.out.println(timeout);\n}\n"+"// unrelated context\n".repeat(250)+"}\n";Files.writeString(file,text);
+    boolean symbols=Arrays.stream(Tools.ReadFileRequest.class.getRecordComponents()).anyMatch(component->component.getName().equals("symbol"));
+    var json=new com.fasterxml.jackson.databind.ObjectMapper();long returned=0,reads=0,bytes=0;var times=new ArrayList<Long>();
+    try(var recording=new Recording()){
+      recording.enable("jdk.FileRead").withThreshold(java.time.Duration.ZERO);recording.start();
+      for(int i=0;i<5;i++){
+        var tools=new Tools();Map<String,Object> input=symbols?Map.of("path","SymbolCase.java","symbol","SymbolCase#work()","includeBody",true):Map.of("path","SymbolCase.java");
+        var request=json.readValue(json.writeValueAsBytes(input),Tools.ReadFileRequest.class);long start=System.nanoTime();var result=tools.readMultiFile(List.of(request),root);times.add(System.nanoTime()-start);
+        assertNull(result.getFirst().error());assertTrue(String.join("\n",result.getFirst().content()).contains("int timeout = 30;"));returned+=json.writeValueAsBytes(result).length;
+      }
+      recording.stop();var trace=root.resolve("symbols.jfr");recording.dump(trace);for(var event:RecordingFile.readAllEvents(trace))if(event.getEventType().getName().equals("jdk.FileRead") && file.toString().equals(event.getString("path"))){reads++;bytes+=event.getLong("bytesRead");}
+    }
+    assertTrue(reads>0);Collections.sort(times);String report="{\"case\":\"java-symbol-read\",\"mode\":\""+(symbols?"symbol":"full")+"\",\"repetitions\":5,\"toolCalls\":5,\"fileReads\":"+reads+",\"bytesRead\":"+bytes+",\"returnedJsonBytes\":"+returned+",\"medianNanos\":"+times.get(2)+"}";
+    Files.writeString(Path.of("target/file-operations-symbol-benchmark.json"),report);System.out.println(report);
+  }
   @Test void measureTwoPatternSearchAndRead()throws Exception {
     var source=new StringBuilder();for(int i=0;i<150;i++)source.append(i==50?"first\n":i==100?"second\n":"context\n");
     var file=root.resolve("sample.txt");Files.writeString(file,source);

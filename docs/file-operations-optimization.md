@@ -105,3 +105,21 @@ Phase 1 の追加テスト11件と既存 Tools テスト111件は failure / erro
 追加 request は maxBytes（256–65536、既定65536）、maxTokens（256–32000、既定8000）、maxLines（1–5000）、preferredPaths（最大20）。順位決定後、最大8ファイルに均等な初期予算を配分する。JSON metadata / escaping を含む byte と conservative token 推定の両方で縮小し、可能な限り複数候補を残す。次の読み取りは version-bound nextRead、削除した visible match の数は omittedMatches。未走査 hit の総数ではない。予算に metadata すら入らない場合は明示エラー。推定は tool 出力の選別だけに使い、ModelCallBudget の実 usage に加算しない。既存 RawToolResultStore / Compressor 経路は継続する。
 
 TDD: ranking API 未実装の Red、順位・ノイズ・日本語巨大行・whole JSON 予算・同点・Working Set の Green、Project 外一覧取得の Red と共通パス検証による Green。欠落ディレクトリは既存の空一覧契約を維持する。関連 Repository Map / persistent index / Compressor 回帰も検証。
+
+## Phase 4: Java シンボルから読む
+
+既存 readMultiFile に symbol、includeBody（既定 true）、includeJavadoc（既定 true）、contextLines（0–25、既定0）、includeOwnerOverview（既定 false）を追加した。path は symbol 指定時に省略可能。全体探索は既存 Repository Map の Git inventory を使い、候補の source は request-local snapshots を共有する。コンパイラ、parse error、source 128KiB / inventory 1024 / aggregate 8MiB の上限や、途中の欠落ファイルは明示エラー。部分 index から唯一の候補を推測しない。path を指定して探索範囲を狭められる。
+
+```json
+{"files":[{"symbol":"dev.example.Client#send(String,int)","includeBody":false,"includeJavadoc":true}]}
+```
+
+既存 JavacTask / Trees の source positions から半開 UTF-16 startOffset/endOffset と1始まり開始・終了行を取り、package、class / interface / enum / record / annotation、constructor、method、field を索引する。ID は所有型の名前、`#`、メソッド名、ソース上の引数型（空白除去、varargs は AST の配列形）で構成する。constructor は `p.C#C()`、field は `p.C#field`、型は `p.C.Nested`、package は `p`。意味的型解決・型別名解決は行わない。オーバーロードの引数を省略すると最大20候補と Ambiguous エラーを返す。exact ID と path で選び直す。候補自体も予算で省略され得るので truncated を確認する。
+
+署名は annotation / 複数行 declaration を保持し、method body や field 初期値を含めない。Javadoc は宣言の直前の comment だけを関連付ける。所有型概要は最大4署名・各256文字。文脈指定は周囲の行を含むため、includeBody=false でも文脈の行に本文が含まれ得る。結果の source は表示行であり、BOM・改行を完全保存する編集 baseline は readTextChangeSetBase を使う。
+
+同じ SHA-256 の source と AST を結び付ける。optional SQLite metadata profile を v2 に更新し、古い offsets 不在 index は再解析する。Repository Map の本文非公開契約は既存回帰テストで維持する。署名の最大長2048文字、source宣言最大64個など既存解析上限は残る。
+
+巨大宣言は JSON 全体の byte / conservative token 予算（64KiB / 8000、batch共有）と行上限で打ち切る。nextRead をそのまま渡す。symbolOffset は選択した declaration＋指定文脈の開始からの UTF-16 offset で、通常行読みの offset と区別する。version が変われば続きは拒否する。symbol と line ranges / charset の混在も拒否する。
+
+TDD: 新 API / metadata 不在の Red → generic overload、constructor / field / nested class / package、Javadoc / annotation / signature、BOM / CRLF、version更新と巨大メソッド継続の Green。さらに全体同名候補、shared snapshot の実読取回数、record / enum / interface / annotation、compiler不在 / oversized / outside、実 Tool callback JSON を確認した。既存 Map が field 初期値を返してしまう回帰を検出して修正し、既存テストを変更せず再検証した。

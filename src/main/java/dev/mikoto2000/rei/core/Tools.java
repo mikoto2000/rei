@@ -1192,6 +1192,9 @@ public class Tools {
    */
   @Tool(name = "readMultiFile", description = """
       Read one or more known file paths or line ranges in a single call.
+      For Java declarations, pass symbol (e.g. p.C#work(String[])), optionally path to narrow candidates.
+      Overloaded names return candidates; select an exact symbolId. includeBody defaults true, includeJavadoc true,
+      contextLines defaults 0 (max 25), includeOwnerOverview defaults false. Use returned nextRead unchanged.
       Use this when target paths are already known. If relevant files must first be located, prefer searchAndRead.
       @param files 読み込むファイルのリスト。各要素は path と任意の startLine / endLine を持つ。
       @return ファイルごとの読み込み結果。path で識別できる。
@@ -1215,7 +1218,10 @@ public class Tools {
     int totalLines = 0;
     for (ReadFileRequest request : files) {
       try {
-        ReadFileResult result = readSingleFile(request, workingDirectory, snapshots, budget, MAX_READ_TOTAL_LINES-totalLines);
+        ReadFileResult result = request.symbol()!=null
+          ? JavaSymbolReads.read(request,workingDirectory,snapshots,repositoryMaps,budget,MAX_READ_TOTAL_LINES-totalLines,8000/files.size()-16)
+          : readSingleFile(request, workingDirectory, snapshots, budget, MAX_READ_TOTAL_LINES-totalLines);
+        if(request.symbol()!=null && result.error()==null)workingSet.recordRead(workingDirectory.resolve(result.path()));
         int remaining = MAX_READ_TOTAL_LINES - totalLines;
         if (result.content().size() > remaining) {
           result = new ReadFileResult(result.path(), result.startLine(), result.endLine(),
@@ -1227,6 +1233,7 @@ public class Tools {
         results.add(new ReadFileResult(request.path(), null, null, List.of(), false, e.getMessage()));
       }
     }
+    if(files.stream().anyMatch(request->request.symbol()!=null))FileResultBudget.require(results,65536,8000);
     return boundedFileResult(results);
   }
 
@@ -1269,13 +1276,27 @@ public class Tools {
   }
 
   /** 1 ファイルの読み込み要求。startLine / endLine は任意。 */
-  public record ReadFileRequest(String path, Integer startLine, Integer endLine,String expectedVersion,Integer offset,String charset) {
+  public record ReadFileRequest(@org.springframework.ai.tool.annotation.ToolParam(required=false) String path,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) Integer startLine,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) Integer endLine,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) String expectedVersion,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) Integer offset,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) String charset,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) String symbol,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) Boolean includeBody,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) Boolean includeJavadoc,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) Integer contextLines,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) Boolean includeOwnerOverview,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) Integer symbolOffset) {
+    public ReadFileRequest(String path,Integer startLine,Integer endLine,String expectedVersion,Integer offset,String charset){this(path,startLine,endLine,expectedVersion,offset,charset,null,null,null,null,null,null);}
     public ReadFileRequest(String path,Integer startLine,Integer endLine){this(path,startLine,endLine,null,null,null);}
   }
 
   /** 1 ファイルの読み込み結果。 */
   public record ReadFileResult(String path, Integer startLine, Integer endLine, List<String> content,
-      boolean truncated, String error,String version,ReadFileRequest nextRead,int returnedBytes) {
+      boolean truncated, String error,String version,ReadFileRequest nextRead,int returnedBytes,
+      RepositoryMapService.Symbol symbol,List<JavaSymbolReads.Candidate> candidates,List<String> ownerOverview) {
+    public ReadFileResult(String path,Integer startLine,Integer endLine,List<String> content,boolean truncated,String error,String version,ReadFileRequest nextRead,int returnedBytes){this(path,startLine,endLine,content,truncated,error,version,nextRead,returnedBytes,null,List.of(),List.of());}
     public ReadFileResult(String path,Integer startLine,Integer endLine,List<String> content,boolean truncated,String error){this(path,startLine,endLine,content,truncated,error,null,null,0);}
   }
 

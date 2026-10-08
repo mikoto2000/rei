@@ -18,7 +18,7 @@ public final class SqliteRepositoryMapIndex {
   private static final ObjectMapper JSON=com.fasterxml.jackson.databind.json.JsonMapper.builder(
       JsonFactory.builder().streamReadConstraints(StreamReadConstraints.builder().maxNestingDepth(8).maxStringLength(2048).build())
           .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build()).enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
-  private static final String PROFILE=hash(("repository-java-ast-v1/"+System.getProperty("java.vendor")+"/"+System.getProperty("java.version")).getBytes(StandardCharsets.UTF_8));
+  private static final String PROFILE=hash(("repository-java-ast-v2-source-positions/"+System.getProperty("java.vendor")+"/"+System.getProperty("java.version")).getBytes(StandardCharsets.UTF_8));
   private final DataSource data;
   public SqliteRepositoryMapIndex(DataSource data){this.data=Objects.requireNonNull(data);}
   public Map<String,Entry> load(Path root) {
@@ -68,7 +68,7 @@ public final class SqliteRepositoryMapIndex {
   private static void validate(Entry entry) {
     if(entry==null||!text(entry.path(),1024)||!entry.path().endsWith(".java")||entry.path().contains("\\")||entry.digest()==null||!entry.digest().matches("[a-f0-9]{64}")||entry.packageName()==null||entry.packageName().length()>512||entry.symbols().size()>64||entry.imports().size()>128)throw new IllegalArgumentException("Invalid repository metadata");
     Path path=Path.of(entry.path());if(path.isAbsolute()||!path.normalize().equals(path)||path.startsWith("..")||RepositoryMapService.sensitive(path))throw new IllegalArgumentException("Invalid repository path");
-    for(var symbol:entry.symbols())if(symbol==null||!text(symbol.name(),2048)||!Set.of("CLASS","INTERFACE","ENUM","RECORD","ANNOTATION_TYPE","METHOD").contains(symbol.kind())||symbol.line()<1||symbol.entryPoint()&&!symbol.kind().equals("METHOD"))throw new IllegalArgumentException("Invalid repository symbol");
+    for(var symbol:entry.symbols())if(symbol==null||!text(symbol.name(),2048)||!Set.of("CLASS","INTERFACE","ENUM","RECORD","ANNOTATION_TYPE","METHOD","CONSTRUCTOR","FIELD","PACKAGE").contains(symbol.kind())||symbol.line()<1||symbol.entryPoint()&&!symbol.kind().equals("METHOD")||symbol.symbolId()==null||symbol.symbolId().length()>2048||symbol.signature()==null||symbol.signature().length()>2048||symbol.endLine()<symbol.line()||symbol.startOffset() < -1||symbol.endOffset()<symbol.startOffset())throw new IllegalArgumentException("Invalid repository symbol");
     for(var imported:entry.imports())if(!text(imported,2048))throw new IllegalArgumentException("Invalid repository import");
   }
   private static boolean text(String value,int max){return value!=null&&!value.isBlank()&&value.length()<=max&&value.codePoints().noneMatch(Character::isISOControl);}
