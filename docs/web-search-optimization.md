@@ -234,3 +234,22 @@ same-origin canonical は `page_canonical_claim` として保存し、外部ペ�
 改善後は検索1/取得1で、返すURLと evidence を保持するテストを追加した。
 これは mock を使う決定的な回数比較であり、実Webの66.7%高速化・通信削減・Recall改善を意味しない。
 品質 fixture の期待出典と evidence を維持し、重複本文は複数行を返す代わりに全引用URLを alias に保持する。
+
+#### CI 停止の追加調査
+
+`4fce9297` のローカル全体回帰は3913件、failure 0 / error 0 / skipped 1、wrapper終了0（7分30秒）。
+CI run `37833781348` は20分のプロセス期限を越えても実行中になり、ジョブログ取得は BlobNotFound だった。
+通常キャンセルに反応しなかったため force-cancel を要求した。この run を成功とは扱わない。
+
+外部エージェントの子プロセス終了処理には、終了済み root の descendants を再列挙し、
+取得したハンドルを無条件に終了する問題があった。モックのプロセスだけを用いる境界テストで4件の失敗を再現した。
+root が生存し開始時刻を確認できる間だけ列挙し、列挙の前後で同じ開始時刻と生存を確認する。
+root より古い、開始時刻不明、現在の JVM またはその祖先のハンドルを拒否する。
+確認済みのハンドルは root 終了後も保持し、既存の子プロセスキャンセルを維持する。
+確認できないプロセスを終了しないため、瞬時に孤児化した子の追跡には限界がある。
+
+OpenJDK の [ProcessHandleImpl](https://github.com/openjdk/jdk/blob/master/src/java.base/share/classes/java/lang/ProcessHandleImpl.java)
+は parent PID と開始時刻から descendants を探索する。root 終了後の古い parent PID により、
+無関係なプロセスが候補に入る可能性を考慮した修正である。
+現在の CI 停止や別途起動した rei との因果関係はログが取得できず未確定。
+テストを除外せず、所有を検証したプロセスだけを終了するようにした。

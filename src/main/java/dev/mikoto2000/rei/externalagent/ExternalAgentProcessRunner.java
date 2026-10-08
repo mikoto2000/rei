@@ -37,7 +37,7 @@ public class ExternalAgentProcessRunner {
         catch (IOException ignored) { /* Process may exit without consuming stdin. */ }
       });
       while (true) {
-        running.descendants().forEach(descendants::add);
+        rememberDescendants(running, descendants);
         if (cancelled.getAsBoolean()) { status = Status.CANCELLED; break; }
         long now = System.nanoTime();
         if (now - start >= total.toNanos()) { status = Status.TOTAL_TIMEOUT; break; }
@@ -105,9 +105,12 @@ public class ExternalAgentProcessRunner {
     } catch (IOException ignored) { /* Closing the owned process closes its pipes. */ }
   }
   private static void cleanup(Process process, Set<ProcessHandle> known) {
-    process.descendants().forEach(known::add);
+    rememberDescendants(process, known);
     // Kill children while their parent can still reap them; retain handles across parent exit.
     List<ProcessHandle> children = new ArrayList<>(known);
+    Set<Long> protectedIds = protectedProcessIds();
+    children.removeIf(child -> protectedIds.contains(child.pid()) || !child.isAlive()
+        || child.info().startInstant().isEmpty());
     Collections.reverse(children);
     for (var child : children) if (child.isAlive()) child.destroyForcibly();
     for (var child : children) {
@@ -117,6 +120,31 @@ public class ExternalAgentProcessRunner {
     if (process.isAlive()) process.destroyForcibly();
     try { process.waitFor(1, TimeUnit.SECONDS); }
     catch (InterruptedException error) { Thread.currentThread().interrupt(); }
+  }
+  private static Set<Long> protectedProcessIds() {
+    Set<Long> ids = new HashSet<>();
+    ProcessHandle current = ProcessHandle.current();
+    ids.add(current.pid());
+    for (var parent = current.parent(); parent.isPresent(); parent = parent.get().parent()) {
+      if (!ids.add(parent.get().pid())) break;
+    }
+    return ids;
+  }
+  private static void rememberDescendants(Process process, Set<ProcessHandle> known) {
+    // Windows can retain a stale parent PID after exit. Never infer ownership from
+    // an exited root, an older process, or a snapshot taken across root exit.
+    if (!process.isAlive()) return;
+    var started = process.info().startInstant();
+    if (started.isEmpty()) return;
+    List<ProcessHandle> snapshot;
+    try (var descendants = process.descendants()) { snapshot = descendants.toList(); }
+    if (!process.isAlive() || !started.equals(process.info().startInstant())) return;
+    Set<Long> protectedIds = protectedProcessIds();
+    for (var child : snapshot) {
+      var childStarted = child.info().startInstant();
+      if (child.isAlive() && !protectedIds.contains(child.pid()) && child.pid() != process.pid()
+          && childStarted.isPresent() && !childStarted.get().isBefore(started.get())) known.add(child);
+    }
   }
   private static final class Capture {
     private final ByteArrayOutputStream stdout = new ByteArrayOutputStream();
