@@ -19,6 +19,41 @@ import dev.mikoto2000.rei.topic.TopicScoreBreakdown;
 import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
 
 class ShellAgentEventRendererTest {
+  @Test void defersNotificationsUntilAnswerIsComplete() {
+    var output = new RecordingOutput();
+    var renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.messageStarted("m1", "assistant"));
+    renderer.onEvent(events.messageDelta("m1", "[厚生労働省「ナルコレプシー治"));
+    String beforeNotification = output.text();
+    renderer.onEvent(events.executionProgress(dev.mikoto2000.rei.event.AgentEventType.STAGNATION_UPDATED,
+        "run", new dev.mikoto2000.rei.event.ExecutionProgressPayload(null, 1, 4, 0, 2, null)));
+    renderer.onEvent(events.historySearchCompleted(
+        new dev.mikoto2000.rei.event.HistorySearchCompletedPayload("project-a", "CURRENT_PROJECT_PREFERRED", 3, 2, 1)));
+    assertEquals(beforeNotification, output.text());
+    renderer.onEvent(events.messageDelta("m1", "療薬」](https://www.mhlw.go.jp/)"));
+    renderer.onEvent(events.messageCompleted("m1", "assistant", ""));
+    assertTrue(output.text().contains("[厚生労働省「ナルコレプシー治療薬」](https://www.mhlw.go.jp/)\n[stagnation] no progress: 1/4\n[history.search]"));
+    String completed = output.text();
+    renderer.onEvent(events.messageCompleted("m1", "assistant", ""));
+    assertEquals(completed, output.text());
+  }
+
+  @Test void flushesDeferredNotificationsOnCancellationWithoutLeakingIntoNextRun() {
+    var output = new RecordingOutput();
+    var renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.messageStarted("m1", "assistant"));
+    renderer.onEvent(events.messageDelta("m1", "途中\n"));
+    String beforeNotification = output.text();
+    renderer.onEvent(events.executionProgress(dev.mikoto2000.rei.event.AgentEventType.STAGNATION_UPDATED,
+        "run-1", new dev.mikoto2000.rei.event.ExecutionProgressPayload(null, 1, 4, 0, 2, null)));
+    assertEquals(beforeNotification, output.text());
+    renderer.onEvent(events.runCancelled("run-1", new ErrorInformation("cancelled", "cancelled", null)));
+    assertTrue(output.text().contains("[stagnation] no progress: 1/4\n[agent] cancelled\n"));
+    String cancelled = output.text();
+    renderer.onEvent(events.runStarted("run-2", "user", null));
+    assertEquals(cancelled + "[agent] running\n", output.text());
+  }
+
   @Test void rendersVerifiedGoalStateAndBudgets() {
     var output=new RecordingOutput();
     new ShellAgentEventRenderer(output).onEvent(new dev.mikoto2000.rei.event.AgentEvent("event",0,Instant.EPOCH,
