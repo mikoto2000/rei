@@ -22,10 +22,15 @@ public class SearchTools {
       Use this hybrid workflow when registered internal knowledge is relevant to the question.
       For public-web-only research, prefer webSearchAndRead.
       """)
+  String searchKnowledge(String query, Integer vectorTopK, Integer webTopK, Double threshold, String source,
+      org.springframework.ai.chat.model.ToolContext context) throws IOException, InterruptedException {
+    try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context)) {
+      return searchKnowledge(query, vectorTopK, webTopK, threshold, source);
+    }
+  }
   String searchKnowledge(String query, Integer vectorTopK, Integer webTopK, Double threshold, String source)
       throws IOException, InterruptedException {
-    IO.println(String.format("知識検索を実行するよ。query=%s、vectorTopK=%s、webTopK=%s、threshold=%s、source=%s",
-        query, vectorTopK, webTopK, threshold, source));
+    IO.println(String.format("知識検索を実行するよ。vectorTopK=%s、webTopK=%s", vectorTopK, webTopK));
     SearchKnowledgeResult result = searchKnowledgeService.search(query, vectorTopK, webTopK, threshold, source);
     return """
         質問:

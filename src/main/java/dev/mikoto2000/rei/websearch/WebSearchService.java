@@ -4,9 +4,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -22,12 +20,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import dev.mikoto2000.rei.websearch.WebSearchProperties.ProviderProperties;
-import lombok.RequiredArgsConstructor;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @Service
-@RequiredArgsConstructor
 public class WebSearchService {
 
   private static final Logger log = LoggerFactory.getLogger(WebSearchService.class);
@@ -36,7 +32,16 @@ public class WebSearchService {
 
   private final JsonMapper objectMapper;
 
-  private final HttpClient httpClient = HttpClient.newHttpClient();
+  private final dev.mikoto2000.rei.http.SafeHttpFetcher fetcher;
+
+  public WebSearchService(WebSearchProperties properties, JsonMapper objectMapper) {
+    this(properties, objectMapper, new dev.mikoto2000.rei.http.SafeHttpFetcher());
+  }
+  @org.springframework.beans.factory.annotation.Autowired
+  public WebSearchService(WebSearchProperties properties, JsonMapper objectMapper,
+      dev.mikoto2000.rei.http.SafeHttpFetcher fetcher) {
+    this.properties = properties; this.objectMapper = objectMapper; this.fetcher = fetcher;
+  }
 
   public List<WebSearchResult> search(String query, Integer limit) throws IOException, InterruptedException {
     long started = System.nanoTime();
@@ -63,6 +68,7 @@ public class WebSearchService {
             WebSearchMetrics.OBSERVED.add("duplicate_urls", 1);
         }
       } catch (IOException | InterruptedException | RuntimeException e) {
+        dev.mikoto2000.rei.http.FetchOperation.propagateControls(e);
         if (firstError == null) {
           firstError = e;
         }
@@ -132,9 +138,9 @@ public class WebSearchService {
         .GET()
         .build();
 
-    HttpResponse<byte[]> response = send(request, "brave");
-    if (response.statusCode() >= 400) {
-      throw new IllegalStateException("Web search failed with status " + response.statusCode());
+    var response = send(request, provider);
+    if (response.status() >= 400) {
+      throw new IllegalStateException("Web search failed with status " + response.status());
     }
 
     return parseBraveResults(new String(response.body(), StandardCharsets.UTF_8), limit);
@@ -152,9 +158,9 @@ public class WebSearchService {
         .GET()
         .build();
 
-    HttpResponse<byte[]> response = send(request, "duckduckgo");
-    if (response.statusCode() >= 400) {
-      throw new IllegalStateException("Web search failed with status " + response.statusCode());
+    var response = send(request, provider);
+    if (response.status() >= 400) {
+      throw new IllegalStateException("Web search failed with status " + response.status());
     }
 
     return parseDuckDuckGoResults(new String(response.body(), StandardCharsets.UTF_8), limit);
@@ -183,20 +189,11 @@ public class WebSearchService {
     return parsed;
   }
 
-  private HttpResponse<byte[]> send(HttpRequest request, String provider) throws IOException, InterruptedException {
-    WebSearchMetrics.OBSERVED.provider(provider);
-    WebSearchMetrics.OBSERVED.add("search_api_calls", 1);
-    WebSearchMetrics.OBSERVED.add("http_requests", 1);
-    try {
-      var response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-      WebSearchMetrics.OBSERVED.status(response.statusCode());
-      WebSearchMetrics.OBSERVED.add("received_bytes", response.body().length);
-      return response;
-    } catch (java.net.http.HttpTimeoutException e) {
-      WebSearchMetrics.OBSERVED.add("timeouts", 1); throw e;
-    } catch (InterruptedException e) {
-      WebSearchMetrics.OBSERVED.add("cancellations", 1); throw e;
-    }
+  private dev.mikoto2000.rei.http.SafeHttpFetcher.Response send(HttpRequest request, ProviderProperties provider) {
+    Map<String, String> headers = new LinkedHashMap<>();
+    request.headers().map().forEach((name, values) -> headers.put(name, String.join(",", values)));
+    return fetcher.fetch(request.uri(), headers, properties.fetchPolicy(provider),
+        dev.mikoto2000.rei.http.FetchScope.current(), WebSearchMetrics.OBSERVED.http(provider.getName()));
   }
 
   List<WebSearchResult> parseDuckDuckGoResults(String responseBody, int limit) {

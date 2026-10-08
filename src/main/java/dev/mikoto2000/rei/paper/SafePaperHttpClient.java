@@ -1,115 +1,42 @@
 package dev.mikoto2000.rei.paper;
 
-import io.netty.resolver.*;
-import io.netty.util.concurrent.*;
-import java.io.ByteArrayOutputStream;
 import java.net.*;
 import java.util.*;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Mono;
 
 @Component
 public class SafePaperHttpClient implements PaperHttpClient {
   private final PaperProperties config;
-  private final reactor.netty.http.client.HttpClient client;
-
+  private final dev.mikoto2000.rei.http.SafeHttpFetcher fetcher;
   public SafePaperHttpClient(PaperProperties config) {
-    config.validate();
-    this.config = config;
-    client =
-        reactor.netty.http.client.HttpClient.newConnection()
-            .resolver(new PublicResolverGroup())
-            .followRedirect(false)
-            .option(
-                io.netty.channel.ChannelOption.CONNECT_TIMEOUT_MILLIS,
-                (int) Math.min(Integer.MAX_VALUE, config.getTimeout().toMillis()))
-            .responseTimeout(config.getTimeout());
+    this(config, new dev.mikoto2000.rei.http.SafeHttpFetcher());
   }
-
+  @org.springframework.beans.factory.annotation.Autowired
+  public SafePaperHttpClient(PaperProperties config, dev.mikoto2000.rei.http.SafeHttpFetcher fetcher) {
+    config.validate(); this.config = config; this.fetcher = fetcher;
+  }
   public static void validateUri(URI uri) {
-    if (!Set.of("http", "https").contains(uri.getScheme())
-        || uri.getHost() == null
-        || uri.getUserInfo() != null)
+    try { dev.mikoto2000.rei.http.PublicNetworkPolicy.validate(uri); }
+    catch (dev.mikoto2000.rei.http.HttpFetchException error) {
       throw new PaperException(PaperException.Code.PDF_DOWNLOAD_FAILED, "許可されない URL");
-  }
-
-  public static boolean isPublic(InetAddress address) {
-    if (address.isAnyLocalAddress()
-        || address.isLoopbackAddress()
-        || address.isSiteLocalAddress()
-        || address.isLinkLocalAddress()
-        || address.isMulticastAddress()) return false;
-    byte[] bytes = address.getAddress();
-    int first = bytes[0] & 255, second = bytes[1] & 255;
-    if (bytes.length == 4)
-      return first != 0
-          && first != 127
-          && first < 224
-          && !(first == 100 && second >= 64 && second <= 127)
-          && !(first == 192 && second == 0)
-          && !(first == 198 && (second == 18 || second == 19));
-    return (first & 0xe0) == 0x20
-        && !(first == 0x20 && second == 0x02)
-        && !(first == 0x20
-            && second == 0x01
-            && ((bytes[2] == 0 && bytes[3] == 0)
-                || (bytes[2] == 0x0d && (bytes[3] & 255) == 0xb8)));
-  }
-
-  /** Validates actual socket destinations, avoiding DNS preflight/rebinding races. */
-  static final class PublicResolverGroup extends AddressResolverGroup<InetSocketAddress> {
-    @Override
-    protected AddressResolver<InetSocketAddress> newResolver(EventExecutor executor) {
-      var delegate = DefaultAddressResolverGroup.INSTANCE.getResolver(executor);
-      return new AbstractAddressResolver<InetSocketAddress>(executor, InetSocketAddress.class) {
-        protected boolean doIsResolved(InetSocketAddress address) {
-          return false;
-        }
-
-        protected void doResolve(InetSocketAddress address, Promise<InetSocketAddress> promise) {
-          Promise<List<InetSocketAddress>> all = executor.newPromise();
-          doResolveAll(address, all);
-          all.addListener(
-              done -> {
-                if (done.isSuccess()) promise.trySuccess(all.getNow().getFirst());
-                else promise.tryFailure(done.cause());
-              });
-        }
-
-        protected void doResolveAll(
-            InetSocketAddress address, Promise<List<InetSocketAddress>> promise) {
-          delegate
-              .resolveAll(address)
-              .addListener(
-                  done -> {
-                    if (!done.isSuccess()) {
-                      promise.tryFailure(done.cause());
-                      return;
-                    }
-                    @SuppressWarnings("unchecked")
-                    var addresses = (List<InetSocketAddress>) done.getNow();
-                    if (addresses.isEmpty()
-                        || addresses.stream()
-                            .anyMatch(a -> a.isUnresolved() || !isPublic(a.getAddress())))
-                      promise.tryFailure(
-                          new PaperException(
-                              PaperException.Code.PDF_DOWNLOAD_FAILED, "非公開アドレスは取得できません"));
-                    else promise.trySuccess(addresses);
-                  });
-        }
-      };
     }
   }
-
+  public static boolean isPublic(InetAddress address) {
+    return dev.mikoto2000.rei.http.PublicNetworkPolicy.isPublic(address);
+  }
+  static final class PublicResolverGroup extends dev.mikoto2000.rei.http.ValidatingResolverGroup {
+    PublicResolverGroup() { super(SafePaperHttpClient::isPublic, java.util.concurrent.ConcurrentHashMap.newKeySet()); }
+  }
   record Response(int status, String location, String retryAfter, byte[] body) {}
 
   @Override
   public byte[] get(URI initial, String type, int maxBytes, PaperOperation op) {
+    op = op.withDeadline(config.getTimeout());
     long started = System.nanoTime();
     for (int attempt = 0; attempt <= config.getRetries(); attempt++) {
       URI uri = initial;
       try {
-        for (int redirect = 0; redirect <= 5; redirect++) {
+        for (int redirect = 0; redirect <= config.getMaxRedirects(); redirect++) {
           op.check();
           validateUri(uri);
           // Literal IPs may bypass a resolver in the transport, so validate them here too.
@@ -119,7 +46,7 @@ public class SafePaperHttpClient implements PaperHttpClient {
           }
           Response response = exchange(uri, type, maxBytes, op);
           if (response.status() >= 300 && response.status() < 400) {
-            if (response.location() == null || redirect == 5)
+            if (response.location() == null || redirect == config.getMaxRedirects())
               throw failure("リダイレクト上限または Location がありません");
             uri = uri.resolve(response.location());
             continue;
@@ -156,7 +83,7 @@ public class SafePaperHttpClient implements PaperHttpClient {
         }
         throw e;
       } catch (Exception e) {
-        dev.mikoto2000.rei.core.chat.RunCancellation.propagate(e);
+        dev.mikoto2000.rei.http.FetchOperation.propagateControls(e);
         for (Throwable cause = e; cause != null; cause = cause.getCause()) {
           if (cause instanceof PaperException paper) throw paper;
           if (cause instanceof java.util.concurrent.TimeoutException
@@ -171,49 +98,26 @@ public class SafePaperHttpClient implements PaperHttpClient {
   }
 
   protected Response exchange(URI uri, String type, int maxBytes, PaperOperation op) {
-    var future =
-        client
-            .headers(h -> h.set("User-Agent", config.getUserAgent()).set("Accept", type))
-            .get()
-            .uri(uri.toString())
-            .response(
-                (response, content) -> {
-                  int status = response.status().code();
-                  String actual =
-                      response
-                          .responseHeaders()
-                          .get("Content-Type", "")
-                          .toLowerCase(Locale.ROOT)
-                          .split(";")[0]
-                          .strip();
-                  if (status == 200 && !actual.equals(type))
-                    return Mono.<Response>error(failure("Content-Type が一致しません"));
-                  return content
-                      .reduceWith(
-                          ByteArrayOutputStream::new,
-                          (bytes, buffer) -> {
-                            op.check();
-                            if ((long) bytes.size() + buffer.readableBytes() > maxBytes)
-                              throw failure("レスポンスサイズ上限");
-                            byte[] chunk = new byte[buffer.readableBytes()];
-                            buffer.readBytes(chunk);
-                            bytes.writeBytes(chunk);
-                            return bytes;
-                          })
-                      .map(
-                          bytes ->
-                              new Response(
-                                  status,
-                                  response.responseHeaders().get("Location"),
-                                  response.responseHeaders().get("Retry-After", ""),
-                                  bytes.toByteArray()));
-                })
-            .single()
-            .timeout(config.getTimeout())
-            .toFuture();
-    return op.await(future, config.getTimeout());
+    int decoded = "application/pdf".equals(type) ? config.getMaxDecodedPdfBytes() : config.getMaxDecodedResponseBytes();
+    var policy = new dev.mikoto2000.rei.http.HttpFetchPolicy(maxBytes, decoded,
+        config.getConnectTimeout(), config.getReadTimeout(), config.getTimeout(), config.getMaxRedirects(), type, null, false);
+    var operation = new dev.mikoto2000.rei.http.FetchOperation(op::check, op.deadlineNanos());
+    try {
+      var response = fetcher.exchange(uri, Map.of("User-Agent", config.getUserAgent(), "Accept", type),
+          policy, operation, dev.mikoto2000.rei.http.HttpFetchObserver.NONE, false);
+      return new Response(response.status(), response.header("location"), response.header("retry-after"), response.body());
+    } catch (dev.mikoto2000.rei.http.HttpFetchException failed) {
+      if (failed.code() == dev.mikoto2000.rei.http.HttpFetchException.Code.NETWORK_ERROR)
+        throw new PaperException(PaperException.Code.SEARCH_FAILED, failed.code().name(),
+            new java.util.concurrent.ExecutionException(failed));
+      boolean timeout = switch (failed.code()) {
+        case CONNECT_TIMEOUT, READ_TIMEOUT, TOTAL_TIMEOUT -> true;
+        default -> false;
+      };
+      throw new PaperException(timeout ? PaperException.Code.PROVIDER_TIMEOUT : PaperException.Code.PDF_DOWNLOAD_FAILED,
+          failed.code().name());
+    }
   }
-
   private PaperException failure(String message) {
     return new PaperException(PaperException.Code.PDF_DOWNLOAD_FAILED, message);
   }

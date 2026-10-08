@@ -8,6 +8,20 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class PaperHttpPolicyTest {
+  @Test void retriesAndRedirectsDoNotResetWholeDeadline() {
+    var p = config(); p.setTimeout(Duration.ofMillis(40));
+    var calls = new AtomicInteger();
+    var client = new SafePaperHttpClient(p) {
+      protected Response exchange(URI uri, String type, int maximum, PaperOperation operation) {
+        calls.incrementAndGet();
+        try { Thread.sleep(80); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+        return new Response(302, "/again", "", new byte[0]);
+      }
+    };
+    assertEquals(PaperException.Code.PROVIDER_TIMEOUT, assertThrows(PaperException.class, () ->
+        client.get(URI.create("https://example.org"), "application/pdf", 100, PaperOperation.local("s"))).code());
+    assertEquals(1, calls.get());
+  }
   @Test
   void wrappedConnectionFailureRetries() {
     var calls = new AtomicInteger();

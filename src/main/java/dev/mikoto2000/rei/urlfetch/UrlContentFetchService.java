@@ -27,21 +27,35 @@ public class UrlContentFetchService {
 
   private final UrlValidator urlValidator;
   private final HttpClient httpClient;
+  private final dev.mikoto2000.rei.http.SafeHttpFetcher safeFetcher;
+  private final UrlFetchProperties properties;
+
+  public UrlContentFetchService(UrlValidator urlValidator) {
+    this(urlValidator, new UrlFetchProperties(), new dev.mikoto2000.rei.http.SafeHttpFetcher());
+  }
 
   @Autowired
-  public UrlContentFetchService(UrlValidator urlValidator) {
-    this(urlValidator, HttpClient.newHttpClient());
+  public UrlContentFetchService(UrlValidator validator, UrlFetchProperties properties,
+      dev.mikoto2000.rei.http.SafeHttpFetcher fetcher) {
+    this.urlValidator = validator; this.properties = properties;
+    this.safeFetcher = fetcher; this.httpClient = null;
   }
 
   UrlContentFetchService(UrlValidator urlValidator, HttpClient httpClient) {
     this.urlValidator = urlValidator;
     this.httpClient = httpClient;
+    this.safeFetcher = null;
+    this.properties = new UrlFetchProperties();
   }
 
   public UrlContentFetchResult fetch(String url) {
+    return fetch(url, properties.fetchPolicy());
+  }
+
+  public UrlContentFetchResult fetch(String url, dev.mikoto2000.rei.http.HttpFetchPolicy policy) {
     long started = System.nanoTime();
     try {
-      var result = fetchObserved(url);
+      var result = fetchObserved(url, policy);
       dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.add(
           result.success() ? "fetch_successes" : "fetch_failures", 1);
       return result;
@@ -50,13 +64,22 @@ public class UrlContentFetchService {
     }
   }
 
-  private UrlContentFetchResult fetchObserved(String url) {
+  private UrlContentFetchResult fetchObserved(String url, dev.mikoto2000.rei.http.HttpFetchPolicy policy) {
     UrlContentFetchResult validation = urlValidator.validate(url);
     if (!validation.success()) {
       return validation;
     }
 
     try {
+      if (safeFetcher != null) {
+        var response = safeFetcher.fetch(URI.create(url), java.util.Map.of("Accept",
+            "text/plain,text/html,application/xhtml+xml,application/json"), policy,
+            dev.mikoto2000.rei.http.FetchScope.current(), dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.http(null));
+        if (response.status() >= 300) return UrlContentFetchResult.failure("HTTP_ERROR", "HTTP request failed with status: " + response.status(), response.status());
+        String rawType = response.header("content-type");
+        return UrlContentFetchResult.success(new String(response.body(), charset(rawType, response.body())), normalizeContentType(rawType));
+      }
+      policy.validate(URI.create(url));
       HttpRequest request = HttpRequest.newBuilder(URI.create(url))
           .timeout(Duration.ofSeconds(DEFAULT_TIMEOUT_SECONDS))
           .header("Accept", "text/plain,text/html,application/xhtml+xml,application/json")
@@ -84,13 +107,16 @@ public class UrlContentFetchService {
     } catch (IOException e) {
       if (e instanceof java.net.http.HttpTimeoutException)
         dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.add("timeouts", 1);
-      return UrlContentFetchResult.failure("NETWORK_ERROR", "Network error: " + e.getMessage());
+      return UrlContentFetchResult.failure("NETWORK_ERROR", "Network error");
     } catch (InterruptedException e) {
       dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.add("cancellations", 1);
       Thread.currentThread().interrupt();
-      return UrlContentFetchResult.failure("NETWORK_ERROR", "Request interrupted");
+      throw new java.util.concurrent.CancellationException();
     } catch (RuntimeException e) {
-      return UrlContentFetchResult.failure("EXTRACTION_ERROR", "Failed to fetch URL content: " + e.getMessage());
+      dev.mikoto2000.rei.http.FetchOperation.propagateControls(e);
+      if (e instanceof dev.mikoto2000.rei.http.HttpFetchException safe)
+        return UrlContentFetchResult.failure(safe.code().name(), safe.code().name());
+      return UrlContentFetchResult.failure("EXTRACTION_ERROR", "Failed to fetch URL content");
     }
   }
 

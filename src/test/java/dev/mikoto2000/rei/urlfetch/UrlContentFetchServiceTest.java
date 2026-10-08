@@ -171,15 +171,16 @@ class UrlContentFetchServiceTest {
   }
 
   @Test
-  void returnsNetworkErrorOnInterruptedException() throws Exception {
+  void propagatesCancellationOnInterruptedException() throws Exception {
     HttpClient httpClient = Mockito.mock(HttpClient.class);
     when(httpClient.send(any(), any(HttpResponse.BodyHandler.class))).thenThrow(new InterruptedException("interrupted"));
     UrlContentFetchService service = new UrlContentFetchService(new UrlValidator(), httpClient);
 
-    UrlContentFetchResult result = service.fetch("https://example.com");
-
-    assertFalse(result.success());
-    assertEquals("NETWORK_ERROR", result.errorType());
+    try {
+      org.junit.jupiter.api.Assertions.assertThrows(java.util.concurrent.CancellationException.class,
+          () -> service.fetch("https://example.com"));
+      assertTrue(Thread.currentThread().isInterrupted());
+    } finally { Thread.interrupted(); }
   }
 
   @Test

@@ -144,3 +144,55 @@ fixture 補助ランチャーは classpath を argument file に保持し、引�
 固定引数の個数を明示し、コマンドに後から追加される native 引数の既存契約も維持する。
 Unicode・長いclasspath・実 native 引数・端末・外部エージェントの関連33件成功。全体回帰を再実行する。
 変更前 wrapper の通常成功も全3818件、failure 0 / error 0 / skipped 1、Maven 6分47秒・wrapper終了0を確認済み。
+
+### フェーズ0完了
+
+PR [#42](https://github.com/mikoto2000/rei/pull/42) はマージ済み。
+最終コミット `7394b557` のローカル全体回帰は3819件、failure 0 / error 0 / skipped 1、wrapper終了0（6分49秒）。
+同じコミットの GitHub CI run `37820606493` も3819件、failure 0 / error 0 / skipped 1で成功（9分37秒）。
+保護ルール・必須レビューなし、CI成功を確認して `77c0c812` で main へマージした。
+別途起動した rei と最初のプロセス cleanup エラーの因果関係は未確定。再試行後は再発していない。
+
+### フェーズ1: 共通の安全な HTTP 取得
+
+`http.SafeHttpFetcher` を検索プロバイダー、URL本文、WebPageFetcher、Paper に共通化した。
+検索本文と URL 本文の既存文字コード判定は維持する。Paper の再試行・Content-Type 検証・公開 API も維持する。
+wire bytes は各 ByteBuf をコピーする前、decoded bytes は圧縮展開中の各書き込み前に制限する。
+Content-Length がない転送でも実測で制限し、大きい Content-Length は早期拒否する。
+identity / gzip（連結メンバーを含む）/ zlib deflate に対応し、未知の Content-Encoding は拒否する。
+接続、無通信の読み取り、処理全体の期限を別に扱う。全体期限には DNS、転送、リダイレクト、展開を含み、
+Paper のリトライと backoff でもリセットしない。待機中は実行中止を短い間隔で確認し、future・DNS問い合わせ・接続を解放する。
+
+| 設定接頭辞 | wire 上限 | decoded 上限 | 接続 / 読み取り / 全体 | redirect 上限 |
+| --- | ---: | ---: | --- | ---: |
+| rei.web-search | 2 MiB | 4 MiB | 5s / 10s / 10s | 5 |
+| rei.url-fetch | 2 MiB | 4 MiB | 5s / 10s / 30s | 5 |
+| rei.paper（API） | 4,000,000 B | 8,000,000 B | 5s / 10s / 30s | 5 |
+| rei.paper（PDF） | 20,000,000 B | 20,000,000 B | 5s / 10s / 30s | 5 |
+
+Web/URL のキーは `max-wire-bytes`, `max-decoded-bytes`, `connect-timeout-seconds`,
+`read-timeout-seconds`, `timeout-seconds`, `max-redirects`。対応する環境変数は application.yaml に記載。
+Paper は `max-response-bytes`, `max-decoded-response-bytes`, `max-pdf-bytes`, `max-decoded-pdf-bytes`,
+`connect-timeout`, `read-timeout`, `timeout`, `max-redirects` を使う。
+サイズは最大100 MiB、各期限は最大5分、redirectは最大10の設定検証を行う。
+これらは有限の暫定初期値であり、実Webのサイズ分布やP95から最適化した値ではない。
+全体期限は既存の Web 10秒 / URL 30秒 / Paper 30秒を維持し、Paper の wire 上限も既存値を維持した。
+従来の HTML 取得は無制限で実サイズ分布の記録がないため、2 MiB / 4 MiBを暫定の安全上限として設定可能にした。
+
+公開ページは http:80 / https:443 のみ、userinfo・IPv6 zone・localhost・非公開/予約/文書用 IP を拒否する。
+DNS の全応答を検証し、検証済み InetSocketAddress を transport へ渡す。
+接続後の実 peer も、その問い合わせで検証済みの IP と一致することを確認する。
+リダイレクト先でも再検証し、認証等のヘッダーは異なる origin に送らない。TLS のホスト名は元の URI を維持する。
+IP分類は [IANA IPv4 Special Registry](https://www.iana.org/assignments/iana-ipv4-special-registry/) と
+[IANA IPv6 Special Registry](https://www.iana.org/assignments/iana-ipv6-special-registry/) を参照した保守的な公開アドレス判定。
+一部の特殊用途の globally reachable アドレスも拒否する。
+
+管理者が設定する検索プロバイダーは origin を固定し、別 origin への redirect を拒否する。
+既存のローカルプロバイダーとの互換性のため、設定 origin が明示的 localhost/loopback のときだけ同じ origin の loopback 接続を認める。
+private LAN API が必要な場合だけ provider の `allow-private-network: true` を明示する。
+この例外は管理者設定の provider origin に限定され、検索結果のページ URL や fetchUrlContent には適用しない。
+
+実リクエストと受信チャンクを observer で計測し、redirect 後の通信も計数する。拒否された URL はリクエスト数に含めない。
+エラーは低カーディナリティのコードで返し、クエリ・本文・認証値をログやメトリクスへ追加しない。
+`ToolContext` の実行中止はツールスキーマに公開せず伝播し、通常の取得失敗への fallback で握りつぶさない。
+実ソケットの fixture と純粋な境界テストを使用する。ライブWebの速度・転送削減率は未測定。

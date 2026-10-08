@@ -31,6 +31,7 @@ public class SearchKnowledgeService {
           webSearchOrchestrator.search(query, webTopK),
           null);
     } catch (IllegalStateException e) {
+      dev.mikoto2000.rei.http.FetchOperation.propagateControls(e);
       return new SearchKnowledgeResult(
           query,
           vectorResults,

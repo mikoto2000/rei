@@ -57,6 +57,7 @@ public class WebSearchOrchestrator {
     try {
       return webPageFetcher.fetch(result);
     } catch (RuntimeException e) {
+      dev.mikoto2000.rei.http.FetchOperation.propagateControls(e);
       return fallbackPage(result);
     }
   }

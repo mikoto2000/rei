@@ -12,6 +12,10 @@ public class PaperProperties {
   private PaperSummary.Mode defaultSummaryMode = PaperSummary.Mode.STANDARD;
   private PaperTranslation.Mode defaultTranslationMode = PaperTranslation.Mode.TECHNICAL;
   private boolean enabled = true;
+  private int maxDecodedResponseBytes = 8_000_000;
+  private int maxDecodedPdfBytes = 20_000_000;
+  private int maxRedirects = 5;
+  private Duration connectTimeout = Duration.ofSeconds(5), readTimeout = Duration.ofSeconds(10);
   private int maxPdfBytes = 20_000_000,
       maxResponseBytes = 4_000_000,
       maxPages = 200,
@@ -33,6 +37,10 @@ public class PaperProperties {
       glossaryVersion = "1";
 
   public void validate() {
+    new dev.mikoto2000.rei.http.HttpFetchPolicy(maxResponseBytes, maxDecodedResponseBytes,
+        connectTimeout, readTimeout, timeout, maxRedirects, null, null, false);
+    new dev.mikoto2000.rei.http.HttpFetchPolicy(maxPdfBytes, maxDecodedPdfBytes,
+        connectTimeout, readTimeout, timeout, maxRedirects, null, null, false);
     if (maxPdfBytes < 1
         || maxResponseBytes < 1
         || maxPages < 1

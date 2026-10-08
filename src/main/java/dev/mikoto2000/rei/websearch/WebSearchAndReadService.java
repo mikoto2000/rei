@@ -69,6 +69,7 @@ public class WebSearchAndReadService {
       return new WebSearchAndReadItem(page.title(), page.url(), page.snippet(), page.publishedAt(),
           page.content(), fetched.contentType(), "success", null, null, page.truncated());
     } catch (RuntimeException exception) {
+      dev.mikoto2000.rei.http.FetchOperation.propagateControls(exception);
       return new WebSearchAndReadItem(result.title(), result.url(), result.snippet(), result.publishedAt(),
           null, fetched.contentType(), "failed", "EXTRACTION_ERROR",
           exception.getMessage() == null ? "Failed to extract page content" : exception.getMessage(), false);
@@ -77,8 +78,9 @@ public class WebSearchAndReadService {
 
   private UrlContentFetchResult safeFetch(String url) {
     try {
-      return urlContentFetchService.fetch(url);
+      return urlContentFetchService.fetch(url, properties.fetchPolicy());
     } catch (RuntimeException exception) {
+      dev.mikoto2000.rei.http.FetchOperation.propagateControls(exception);
       return UrlContentFetchResult.failure("FETCH_ERROR",
           exception.getMessage() == null ? "Failed to fetch URL" : exception.getMessage());
     }

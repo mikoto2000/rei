@@ -21,6 +21,10 @@ public class UrlValidator {
     if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
       return UrlContentFetchResult.failure("INPUT_ERROR", "URL scheme must be http or https");
     }
+    try { dev.mikoto2000.rei.http.PublicNetworkPolicy.validateSyntax(uri); }
+    catch (dev.mikoto2000.rei.http.HttpFetchException invalid) {
+      return UrlContentFetchResult.failure("INPUT_ERROR", "URL format is invalid or contains credentials");
+    }
     return UrlContentFetchResult.success(url);
   }
 }
