@@ -4,7 +4,7 @@ package dev.mikoto2000.rei.http;
 public class HttpFetchException extends IllegalStateException {
   public enum Code {
     URL_NOT_ALLOWED, WIRE_LIMIT, DECODED_LIMIT, UNSUPPORTED_ENCODING, INVALID_CONTENT_TYPE,
-    REDIRECT_LIMIT, CONNECT_TIMEOUT, READ_TIMEOUT, TOTAL_TIMEOUT, NETWORK_ERROR
+    REDIRECT_LIMIT, CONNECT_TIMEOUT, READ_TIMEOUT, TOTAL_TIMEOUT, NETWORK_ERROR, REQUEST_BUDGET
   }
   private final Code code;
   public HttpFetchException(Code code) { super(code.name()); this.code = code; }

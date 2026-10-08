@@ -34,6 +34,14 @@ public class WebSearchProperties {
   }
 
   private int maxResults = 5;
+  private int maxSearchQueries = 3;
+  private int maxSearchApiCalls = 4;
+  private int maxPageFetches = 5;
+  public void validateSelection() {
+    if (maxResults < 1 || maxResults > 20 || maxSearchQueries < 1 || maxSearchQueries > 3
+        || maxSearchApiCalls < 1 || maxSearchApiCalls > 12 || maxPageFetches < 1 || maxPageFetches > 20)
+      throw new IllegalArgumentException("Invalid web search selection limits");
+  }
 
   private List<ProviderProperties> providers = defaultProviders();
 

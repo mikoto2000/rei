@@ -196,3 +196,60 @@ private LAN API が必要な場合だけ provider の `allow-private-network: tr
 エラーは低カーディナリティのコードで返し、クエリ・本文・認証値をログやメトリクスへ追加しない。
 `ToolContext` の実行中止はツールスキーマに公開せず伝播し、通常の取得失敗への fallback で握りつぶさない。
 実ソケットの fixture と純粋な境界テストを使用する。ライブWebの速度・転送削減率は未測定。
+
+### フェーズ1完了
+
+PR [#43](https://github.com/mikoto2000/rei/pull/43) を `f3914e18` で main へマージした。
+`031a3ec2` のローカル全体回帰3893件、failure 0 / error 0 / skipped 1、wrapper終了0（8分05秒）。
+同じ head の CI run `37829967450` も3893件、failure 0 / error 0 / skipped 1で成功（5分38秒）。
+merge state CLEAN、未解決レビューコメントなし、必須保護ルールなしを確認してマージした。
+
+### フェーズ2: 段階的検索と取得前の選定
+
+`WebSearchSelection` を WebSearchAndRead と searchKnowledge の WebSearchOrchestrator に共通利用する。
+元の検索から始め、件数だけでなく関連語、公式ドメインと質問の製品名の対応、指定バージョン、日付、
+独立ドメイン数、正規化後の重複率で追加検索を判断する。メタデータの十分性は候補選定の目安であり回答の正しさの保証ではない。
+公式判定を任意の `docs.*` 接頭辞や `.gov` の部分一致から変更した。未知の製品は公式と断定しない。
+最新版の判定は出典が主張する日付を使う暫定30日ルールで、日付なし・解析不能・遠い未来は十分と扱わない。
+同一ホスト配下のサイトを独立した出典として数えない。ドメインの末尾2ラベルで保守的にまとめるため、
+co.jp/co.uk等の複数組織も同一グループになる場合がある。この判定で独立性を過剰に主張しない。
+
+`max-search-queries` は既定3・最大3、`max-search-api-calls` は既定4・最大12。
+後者は全クエリ/プロバイダー共通で実通信の開始時に消費し、provider redirect も含める。
+`max-page-fetches` は既定5・最大20で、最終候補数・readTopと合わせて **本文取得前** に適用する。
+`max-results` は最大20。各環境変数は application.yaml に記載した。
+関連性・出典の優先度を評価し、元の検索順位を同点時に維持しながらドメインの多様性を優先する。
+readTop=0は元クエリだけを使い、本文は取得しない。LLM/embedding呼び出しは追加しない。
+
+URLは scheme/host の小文字化、既定port・fragmentの除去、dot path の正規化、
+utm_*/gclid/fbclid/msclkidのみの除去を行う。ref/source/version/qやクエリ値のエンコード・順序は保持する。
+重複候補の元URL/タイトル/日付は alias に保存し、検索結果の本文はそのURLを使って取得する。
+本文は **切り詰める前の抽出全文** とコードの原文（字下げを含む）から SHA-256 を計算する。
+同一本文は一件にまとめ、引用 alias を統合する。旧コンストラクタや失敗snippetは全文ハッシュを持たず、
+短い出力だけで誤って重複扱いしない。HTTP redirect は実際の最終URLを `http_redirect` として保存する。
+same-origin canonical は `page_canonical_claim` として保存し、外部ページの主張だけで本文を同一視しない。
+これらは出典データであり、ツール権限やシステム指示へ昇格させない。
+
+フェーズ0の同じ固定fixture（最終一件、内容 evidence）の実測は検索3/取得3。
+改善後は検索1/取得1で、返すURLと evidence を保持するテストを追加した。
+これは mock を使う決定的な回数比較であり、実Webの66.7%高速化・通信削減・Recall改善を意味しない。
+品質 fixture の期待出典と evidence を維持し、重複本文は複数行を返す代わりに全引用URLを alias に保持する。
+
+#### CI 停止の追加調査
+
+`4fce9297` のローカル全体回帰は3913件、failure 0 / error 0 / skipped 1、wrapper終了0（7分30秒）。
+CI run `37833781348` は20分のプロセス期限を越えても実行中になり、ジョブログ取得は BlobNotFound だった。
+通常キャンセルに反応しなかったため force-cancel を要求した。この run を成功とは扱わない。
+
+外部エージェントの子プロセス終了処理には、終了済み root の descendants を再列挙し、
+取得したハンドルを無条件に終了する問題があった。モックのプロセスだけを用いる境界テストで4件の失敗を再現した。
+root が生存し開始時刻を確認できる間だけ列挙し、列挙の前後で同じ開始時刻と生存を確認する。
+root より古い、開始時刻不明、現在の JVM またはその祖先のハンドルを拒否する。
+確認済みのハンドルは root 終了後も保持し、既存の子プロセスキャンセルを維持する。
+確認できないプロセスを終了しないため、瞬時に孤児化した子の追跡には限界がある。
+
+OpenJDK の [ProcessHandleImpl](https://github.com/openjdk/jdk/blob/master/src/java.base/share/classes/java/lang/ProcessHandleImpl.java)
+は parent PID と開始時刻から descendants を探索する。root 終了後の古い parent PID により、
+無関係なプロセスが候補に入る可能性を考慮した修正である。
+現在の CI 停止や別途起動した rei との因果関係はログが取得できず未確定。
+テストを除外せず、所有を検証したプロセスだけを終了するようにした。

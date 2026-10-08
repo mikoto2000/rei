@@ -6,7 +6,11 @@ public record UrlContentFetchResult(
     String errorType,
     String errorMessage,
     Integer statusCode,
-    String contentType) {
+    String contentType,
+    String finalUrl) {
+
+  public UrlContentFetchResult(boolean success, String content, String errorType, String errorMessage,
+      Integer statusCode, String contentType) { this(success, content, errorType, errorMessage, statusCode, contentType, null); }
 
   public UrlContentFetchResult(boolean success, String content, String errorType, String errorMessage,
       Integer statusCode) {
@@ -19,6 +23,9 @@ public record UrlContentFetchResult(
 
   public static UrlContentFetchResult success(String content, String contentType) {
     return new UrlContentFetchResult(true, content, null, null, null, contentType);
+  }
+  public static UrlContentFetchResult success(String content, String contentType, String finalUrl) {
+    return new UrlContentFetchResult(true, content, null, null, null, contentType, finalUrl);
   }
 
   public static UrlContentFetchResult failure(String errorType, String errorMessage) {

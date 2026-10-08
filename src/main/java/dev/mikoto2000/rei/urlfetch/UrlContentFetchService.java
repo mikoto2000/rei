@@ -77,7 +77,7 @@ public class UrlContentFetchService {
             dev.mikoto2000.rei.http.FetchScope.current(), dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.http(null));
         if (response.status() >= 300) return UrlContentFetchResult.failure("HTTP_ERROR", "HTTP request failed with status: " + response.status(), response.status());
         String rawType = response.header("content-type");
-        return UrlContentFetchResult.success(new String(response.body(), charset(rawType, response.body())), normalizeContentType(rawType));
+        return UrlContentFetchResult.success(new String(response.body(), charset(rawType, response.body())), normalizeContentType(rawType), response.finalUri().toString());
       }
       policy.validate(URI.create(url));
       HttpRequest request = HttpRequest.newBuilder(URI.create(url))

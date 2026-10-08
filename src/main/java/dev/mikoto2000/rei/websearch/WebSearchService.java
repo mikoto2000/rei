@@ -45,7 +45,8 @@ public class WebSearchService {
 
   public List<WebSearchResult> search(String query, Integer limit) throws IOException, InterruptedException {
     long started = System.nanoTime();
-    try { return searchObserved(query, limit); }
+    properties.validateSelection();
+    try (var budget = SearchRequestBudget.enter(properties.getMaxSearchApiCalls())) { return searchObserved(query, limit); }
     finally { WebSearchMetrics.OBSERVED.duration("search", System.nanoTime() - started); }
   }
 
@@ -61,12 +62,17 @@ public class WebSearchService {
     Exception firstError = null;
 
     for (ProviderProperties provider : providers) {
+      if (SearchRequestBudget.exhausted()) break;
+      dev.mikoto2000.rei.http.FetchScope.current().check();
       try {
         for (WebSearchResult result : searchWithProvider(provider, query, clampedLimit)) {
           WebSearchMetrics.OBSERVED.add("results", 1);
-          if (resultsByUrl.putIfAbsent(result.url(), result) != null)
+          if (resultsByUrl.containsKey(result.url()))
             WebSearchMetrics.OBSERVED.add("duplicate_urls", 1);
+          resultsByUrl.merge(result.url(), result, (existing, replacement) ->
+              WebSearchSelection.priority(query, replacement) > WebSearchSelection.priority(query, existing) ? replacement : existing);
         }
+        if (WebSearchSelection.sufficient(query, new ArrayList<>(resultsByUrl.values()), clampedLimit)) break;
       } catch (IOException | InterruptedException | RuntimeException e) {
         dev.mikoto2000.rei.http.FetchOperation.propagateControls(e);
         if (firstError == null) {
@@ -192,8 +198,17 @@ public class WebSearchService {
   private dev.mikoto2000.rei.http.SafeHttpFetcher.Response send(HttpRequest request, ProviderProperties provider) {
     Map<String, String> headers = new LinkedHashMap<>();
     request.headers().map().forEach((name, values) -> headers.put(name, String.join(",", values)));
+    var observed = WebSearchMetrics.OBSERVED.http(provider.getName().trim().toLowerCase(java.util.Locale.ROOT));
+    var gate = SearchRequestBudget.captureGate();
+    var observer = new dev.mikoto2000.rei.http.HttpFetchObserver() {
+      public void request(boolean redirect) { gate.run(); observed.request(redirect); }
+      public void status(int status) { observed.status(status); }
+      public void bytes(int bytes) { observed.bytes(bytes); }
+      public void failure(dev.mikoto2000.rei.http.HttpFetchException.Code code) { observed.failure(code); }
+      public void cancellation() { observed.cancellation(); }
+    };
     return fetcher.fetch(request.uri(), headers, properties.fetchPolicy(provider),
-        dev.mikoto2000.rei.http.FetchScope.current(), WebSearchMetrics.OBSERVED.http(provider.getName()));
+        dev.mikoto2000.rei.http.FetchScope.current(), observer);
   }
 
   List<WebSearchResult> parseDuckDuckGoResults(String responseBody, int limit) {

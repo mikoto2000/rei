@@ -15,16 +15,23 @@ public class WebSearchOrchestrator {
   private final WebPageFetcher webPageFetcher;
   private final WebSearchQueryPlanner webSearchQueryPlanner;
   private final WebSearchAggregator webSearchAggregator;
+  private final WebSearchProperties properties;
 
   public WebSearchOrchestrator(
       WebSearchService webSearchService,
       WebPageFetcher webPageFetcher,
       WebSearchQueryPlanner webSearchQueryPlanner,
       WebSearchAggregator webSearchAggregator) {
+    this(webSearchService, webPageFetcher, webSearchQueryPlanner, webSearchAggregator, new WebSearchProperties());
+  }
+  @org.springframework.beans.factory.annotation.Autowired
+  public WebSearchOrchestrator(WebSearchService webSearchService, WebPageFetcher webPageFetcher,
+      WebSearchQueryPlanner webSearchQueryPlanner, WebSearchAggregator webSearchAggregator, WebSearchProperties properties) {
     this.webSearchService = webSearchService;
     this.webPageFetcher = webPageFetcher;
     this.webSearchQueryPlanner = webSearchQueryPlanner;
     this.webSearchAggregator = webSearchAggregator;
+    this.properties = properties;
   }
 
   public WebSearchContext search(String query, Integer limit) throws IOException, InterruptedException {
@@ -34,21 +41,15 @@ public class WebSearchOrchestrator {
   }
 
   private WebSearchContext searchObserved(String query, Integer limit) throws IOException, InterruptedException {
-    Map<String, WebSearchResult> resultsByUrl = new LinkedHashMap<>();
-    int searches = 0;
-    for (String plannedQuery : webSearchQueryPlanner.plan(query)) {
-      if (searches++ > 0) WebSearchMetrics.OBSERVED.add("additional_searches", 1);
-      for (WebSearchResult result : webSearchService.search(plannedQuery, limit)) {
-        if (resultsByUrl.putIfAbsent(result.url(), result) != null)
-          WebSearchMetrics.OBSERVED.add("duplicate_urls", 1);
-      }
-    }
+    int maximum = limit == null ? properties.getMaxResults() : Math.max(1, Math.min(limit, properties.getMaxResults()));
+    var selected = WebSearchSelection.search(webSearchService, webSearchQueryPlanner, query, maximum, properties);
     List<WebSearchPage> pages = new ArrayList<>();
-    WebSearchMetrics.OBSERVED.add("fetch_candidates", resultsByUrl.size());
-    for (WebSearchResult result : resultsByUrl.values()) {
-      pages.add(fetchPage(result));
+    WebSearchMetrics.OBSERVED.add("fetch_candidates", Math.min(selected.size(), properties.getMaxPageFetches()));
+    for (var candidate : selected.stream().limit(properties.getMaxPageFetches()).toList()) {
+      dev.mikoto2000.rei.http.FetchScope.current().check();
+      pages.add(fetchPage(candidate.result()).withAliases(candidate.aliases()));
     }
-    var context = webSearchAggregator.aggregate(pages, limit == null ? pages.size() : limit);
+    var context = webSearchAggregator.aggregate(WebContentDeduplication.pages(pages), maximum);
     context.allResults().forEach(page -> WebSearchMetrics.OBSERVED.text(page.content()));
     return context;
   }

@@ -14,7 +14,7 @@ public class WebSearchAggregator {
 
   public WebSearchContext aggregate(List<WebSearchPage> pages, int limit) {
     List<WebSearchPage> ranked = pages.stream()
-        .sorted(Comparator.comparingDouble(this::score).reversed().thenComparing(WebSearchPage::url))
+        .sorted(Comparator.comparingDouble(this::score).reversed())
         .limit(Math.max(1, limit))
         .toList();
 
@@ -51,7 +51,8 @@ public class WebSearchAggregator {
       OffsetDateTime.parse(page.publishedAt());
       return true;
     } catch (DateTimeParseException e) {
-      return true;
+      try { java.time.LocalDate.parse(page.publishedAt()); return true; }
+      catch (DateTimeParseException unknown) { return false; }
     }
   }
 
@@ -60,20 +61,6 @@ public class WebSearchAggregator {
   }
 
   private boolean isOfficialHost(String url) {
-    try {
-      String host = URI.create(url).getHost();
-      if (host == null) {
-        return false;
-      }
-      String lower = host.toLowerCase(Locale.ROOT);
-      return lower.startsWith("docs.")
-          || lower.startsWith("developer.")
-          || lower.startsWith("developers.")
-          || lower.startsWith("api.")
-          || lower.contains(".gov")
-          || lower.contains(".edu");
-    } catch (IllegalArgumentException e) {
-      return false;
-    }
+    return WebSearchSelection.knownOfficial(url);
   }
 }

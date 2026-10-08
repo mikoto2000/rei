@@ -23,13 +23,20 @@ public class WebSearchAndReadService {
   private final UrlContentFetchService urlContentFetchService;
   private final WebPageExtractor webPageExtractor;
   private final WebSearchProperties properties;
+  private final WebSearchQueryPlanner planner;
 
   public WebSearchAndReadService(WebSearchService webSearchService, UrlContentFetchService urlContentFetchService,
       WebPageExtractor webPageExtractor, WebSearchProperties properties) {
+    this(webSearchService, urlContentFetchService, webPageExtractor, properties, new WebSearchQueryPlanner());
+  }
+  @org.springframework.beans.factory.annotation.Autowired
+  public WebSearchAndReadService(WebSearchService webSearchService, UrlContentFetchService urlContentFetchService,
+      WebPageExtractor webPageExtractor, WebSearchProperties properties, WebSearchQueryPlanner planner) {
     this.webSearchService = webSearchService;
     this.urlContentFetchService = urlContentFetchService;
     this.webPageExtractor = webPageExtractor;
     this.properties = properties;
+    this.planner = planner;
   }
 
   public WebSearchAndReadResponse searchAndRead(WebSearchAndReadRequest request)
@@ -42,16 +49,25 @@ public class WebSearchAndReadService {
   private WebSearchAndReadResponse searchAndReadObserved(WebSearchAndReadRequest request)
       throws IOException, InterruptedException {
     ValidatedRequest validated = validate(request);
-    List<WebSearchResult> searchResults = webSearchService.search(validated.query(), validated.maxResults());
+    var metadataPlanner = validated.readTop() == 0 ? new WebSearchQueryPlanner() {
+      public List<String> plan(String query) { return List.of(query); }
+    } : planner;
+    var candidates = WebSearchSelection.search(webSearchService, metadataPlanner,
+        validated.query(), validated.maxResults(), properties);
+    List<WebSearchResult> searchResults = candidates.stream().map(WebSearchSelection.Candidate::result).toList();
     List<WebSearchAndReadItem> results = new ArrayList<>();
     Map<String, UrlContentFetchResult> fetchCache = new LinkedHashMap<>();
-    for (WebSearchResult result : searchResults) {
+    int readLimit = Math.min(validated.readTop(), properties.getMaxPageFetches());
+    for (var candidate : candidates) {
+      WebSearchResult result = candidate.result();
+      dev.mikoto2000.rei.http.FetchScope.current().check();
       if (results.size() >= validated.maxResults()) break;
-      results.add(results.size() < validated.readTop() ? fetch(result, fetchCache) : notRequested(result));
+      results.add((results.size() < readLimit ? fetch(result, fetchCache) : notRequested(result)).withAliases(candidate.aliases()));
     }
     long successes = results.stream().filter(result -> "success".equals(result.fetchStatus())).count();
     long failures = results.stream().filter(result -> "failed".equals(result.fetchStatus())).count();
-    WebSearchMetrics.OBSERVED.add("fetch_candidates", Math.min(searchResults.size(), validated.readTop()));
+    WebSearchMetrics.OBSERVED.add("fetch_candidates", Math.min(searchResults.size(), readLimit));
+    results = new ArrayList<>(WebContentDeduplication.items(results));
     results.forEach(item -> WebSearchMetrics.OBSERVED.text(item.content()));
     log.debug("webSearchAndRead completed: searchResults={}, fetchAttempts={}, fetchSuccesses={}, fetchFailures={}",
         results.size(), fetchCache.size(), successes, failures);
@@ -66,8 +82,11 @@ public class WebSearchAndReadService {
     }
     try {
       WebSearchPage page = webPageExtractor.extract(result, fetched.content());
-      return new WebSearchAndReadItem(page.title(), page.url(), page.snippet(), page.publishedAt(),
-          page.content(), fetched.contentType(), "success", null, null, page.truncated());
+      var item = new WebSearchAndReadItem(page.title(), page.url(), page.snippet(), page.publishedAt(),
+          page.content(), fetched.contentType(), "success", null, null, page.truncated(), page.fingerprint(), page.aliases());
+      if (fetched.finalUrl() != null && !fetched.finalUrl().equals(result.url()))
+        item = item.withAliases(List.of(new WebSourceAlias(fetched.finalUrl(), page.title(), page.publishedAt(), "http_redirect")));
+      return item;
     } catch (RuntimeException exception) {
       dev.mikoto2000.rei.http.FetchOperation.propagateControls(exception);
       return new WebSearchAndReadItem(result.title(), result.url(), result.snippet(), result.publishedAt(),

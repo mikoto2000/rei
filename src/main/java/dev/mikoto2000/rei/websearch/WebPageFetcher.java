@@ -25,6 +25,9 @@ public class WebPageFetcher {
   public WebSearchPage fetch(WebSearchResult result) throws IOException, InterruptedException {
     var response = fetcher.fetch(result.url(), properties.fetchPolicy());
     if (!response.success()) throw new IllegalStateException("Web page fetch failed: " + response.errorType());
-    return extractor.extract(result, response.content());
+    var page = extractor.extract(result, response.content());
+    if (response.finalUrl() != null && !response.finalUrl().equals(result.url()))
+      page = page.withAliases(java.util.List.of(new WebSourceAlias(response.finalUrl(), page.title(), page.publishedAt(), "http_redirect")));
+    return page;
   }
 }
