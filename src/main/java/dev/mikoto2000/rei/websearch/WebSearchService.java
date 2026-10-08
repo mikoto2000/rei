@@ -33,20 +33,26 @@ public class WebSearchService {
   private final JsonMapper objectMapper;
 
   private final dev.mikoto2000.rei.http.SafeHttpFetcher fetcher;
+  private final dev.mikoto2000.rei.http.cache.HttpResponseCache cache;
 
   public WebSearchService(WebSearchProperties properties, JsonMapper objectMapper) {
     this(properties, objectMapper, new dev.mikoto2000.rei.http.SafeHttpFetcher());
   }
-  @org.springframework.beans.factory.annotation.Autowired
   public WebSearchService(WebSearchProperties properties, JsonMapper objectMapper,
       dev.mikoto2000.rei.http.SafeHttpFetcher fetcher) {
-    this.properties = properties; this.objectMapper = objectMapper; this.fetcher = fetcher;
+    this(properties, objectMapper, fetcher, dev.mikoto2000.rei.http.cache.HttpResponseCache.disabled());
+  }
+  @org.springframework.beans.factory.annotation.Autowired
+  public WebSearchService(WebSearchProperties properties, JsonMapper objectMapper,
+      dev.mikoto2000.rei.http.SafeHttpFetcher fetcher, dev.mikoto2000.rei.http.cache.HttpResponseCache cache) {
+    this.properties = properties; this.objectMapper = objectMapper; this.fetcher = fetcher; this.cache = cache;
   }
 
   public List<WebSearchResult> search(String query, Integer limit) throws IOException, InterruptedException {
     long started = System.nanoTime();
     properties.validateSelection();
-    try (var budget = SearchRequestBudget.enter(properties.getMaxSearchApiCalls())) { return searchObserved(query, limit); }
+    try (var refresh = dev.mikoto2000.rei.http.FetchScope.withForceRefresh(query != null && WebSearchSelection.needsFreshness(query));
+        var budget = SearchRequestBudget.enter(properties.getMaxSearchApiCalls())) { return searchObserved(query, limit); }
     finally { WebSearchMetrics.OBSERVED.duration("search", System.nanoTime() - started); }
   }
 
@@ -144,7 +150,7 @@ public class WebSearchService {
         .GET()
         .build();
 
-    var response = send(request, provider);
+    var response = send(request, provider, limit);
     if (response.status() >= 400) {
       throw new IllegalStateException("Web search failed with status " + response.status());
     }
@@ -164,7 +170,7 @@ public class WebSearchService {
         .GET()
         .build();
 
-    var response = send(request, provider);
+    var response = send(request, provider, limit);
     if (response.status() >= 400) {
       throw new IllegalStateException("Web search failed with status " + response.status());
     }
@@ -195,7 +201,7 @@ public class WebSearchService {
     return parsed;
   }
 
-  private dev.mikoto2000.rei.http.SafeHttpFetcher.Response send(HttpRequest request, ProviderProperties provider) {
+  private dev.mikoto2000.rei.http.SafeHttpFetcher.Response send(HttpRequest request, ProviderProperties provider, int limit) {
     Map<String, String> headers = new LinkedHashMap<>();
     request.headers().map().forEach((name, values) -> headers.put(name, String.join(",", values)));
     var observed = WebSearchMetrics.OBSERVED.http(provider.getName().trim().toLowerCase(java.util.Locale.ROOT));
@@ -207,8 +213,10 @@ public class WebSearchService {
       public void failure(dev.mikoto2000.rei.http.HttpFetchException.Code code) { observed.failure(code); }
       public void cancellation() { observed.cancellation(); }
     };
-    return fetcher.fetch(request.uri(), headers, properties.fetchPolicy(provider),
-        dev.mikoto2000.rei.http.FetchScope.current(), observer);
+    return cache.fetch(new dev.mikoto2000.rei.http.cache.HttpResponseCache.Request(request.uri(), headers,
+        properties.fetchPolicy(provider), dev.mikoto2000.rei.http.cache.HttpResponseCache.Namespace.SEARCH,
+        dev.mikoto2000.rei.http.FetchScope.forceRefresh(), provider.getName().trim().toLowerCase(java.util.Locale.ROOT) + ":" + limit),
+        dev.mikoto2000.rei.http.FetchScope.current(), observer, fetcher);
   }
 
   List<WebSearchResult> parseDuckDuckGoResults(String responseBody, int limit) {

@@ -77,14 +77,12 @@ class SearchResultCacheTest {
 
   @Test
   void missAfterTtlExpires() {
-    SearchResultCache cache = cache(Instant.parse("2026-08-17T00:00:00Z"));
+    var clock = new dev.mikoto2000.rei.testsupport.AdjustableClock(Instant.parse("2026-08-17T00:00:00Z"));
+    SearchResultCache cache = new SearchResultCache(Duration.ofSeconds(60), 100, clock);
     SearchCacheKey key = new SearchCacheKey("grepMultiQuery", "pattern=UserService");
     cache.put(key, List.of("docs/UserService.java"));
-
-    SearchResultCache later = new SearchResultCache(Duration.ofSeconds(60), 100,
-        Clock.fixed(Instant.parse("2026-08-17T00:02:00Z"), ZONE));
-
-    assertFalse(later.get(key).isPresent());
+    clock.advance(Duration.ofSeconds(60));
+    assertFalse(cache.get(key).isPresent());
   }
 
   @Test

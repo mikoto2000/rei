@@ -10,7 +10,11 @@ import reactor.core.publisher.Mono;
 /** Bounded transfer, pinned DNS answers and a single operation deadline. */
 @Component
 public class SafeHttpFetcher {
-  public record Response(int status, Map<String, String> headers, byte[] body, URI finalUri) {
+  public record Response(int status, Map<String, String> headers, byte[] body, URI finalUri,
+      java.time.Instant retrievedAt, java.time.Instant validatedAt) {
+    public Response(int status, Map<String, String> headers, byte[] body, URI finalUri) {
+      this(status, headers, body, finalUri, java.time.Instant.now(), java.time.Instant.now());
+    }
     public String header(String name) { return headers.get(name.toLowerCase(Locale.ROOT)); }
   }
   public Response fetch(URI initial, Map<String, String> headers, HttpFetchPolicy policy,
@@ -26,10 +30,14 @@ public class SafeHttpFetcher {
           throw new HttpFetchException(HttpFetchException.Code.REDIRECT_LIMIT);
         try { uri = uri.resolve(response.header("location")); }
         catch (IllegalArgumentException invalid) { throw new HttpFetchException(HttpFetchException.Code.URL_NOT_ALLOWED); }
-        if (headers.keySet().stream().anyMatch(name -> !Set.of("accept", "accept-encoding", "user-agent").contains(name.toLowerCase(Locale.ROOT)))
-            && (!initial.getScheme().equalsIgnoreCase(uri.getScheme()) || !initial.getHost().equalsIgnoreCase(uri.getHost())
-                || effectivePort(initial) != effectivePort(uri)))
-          throw new HttpFetchException(HttpFetchException.Code.URL_NOT_ALLOWED);
+        if (!initial.getScheme().equalsIgnoreCase(uri.getScheme()) || !initial.getHost().equalsIgnoreCase(uri.getHost())
+            || effectivePort(initial) != effectivePort(uri)) {
+          var forwarded = new LinkedHashMap<>(headers);
+          forwarded.keySet().removeIf(name -> Set.of("if-none-match", "if-modified-since").contains(name.toLowerCase(Locale.ROOT)));
+          if (forwarded.keySet().stream().anyMatch(name -> !Set.of("accept", "accept-encoding", "user-agent", "cache-control").contains(name.toLowerCase(Locale.ROOT))))
+            throw new HttpFetchException(HttpFetchException.Code.URL_NOT_ALLOWED);
+          headers = Map.copyOf(forwarded);
+        }
       }
     } catch (CancellationException cancelled) { observer.cancellation(); throw cancelled; }
     catch (RuntimeException failed) {
@@ -71,7 +79,12 @@ public class SafeHttpFetcher {
           .response((response, content) -> {
             int status = response.status().code(); observer.status(status);
             Map<String, String> received = new HashMap<>();
-            response.responseHeaders().forEach(h -> received.put(h.getKey().toLowerCase(Locale.ROOT), h.getValue()));
+            response.responseHeaders().forEach(h -> {
+              String name = h.getKey().toLowerCase(Locale.ROOT);
+              if (Set.of("cache-control", "vary").contains(name))
+                received.merge(name, h.getValue(), (previous, value) -> previous + ", " + value);
+              else received.put(name, h.getValue());
+            });
             String length = received.get("content-length");
             if (length != null) {
               try { if (Long.parseLong(length) > policy.maxWireBytes()) return Mono.<Response>error(new HttpFetchException(HttpFetchException.Code.WIRE_LIMIT)); }

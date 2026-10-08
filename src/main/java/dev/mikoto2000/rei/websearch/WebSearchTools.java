@@ -20,8 +20,14 @@ public class WebSearchTools {
       Use this primitive when result metadata or candidate URLs are sufficient.
       For normal public-web research that needs page content, prefer webSearchAndRead.
       """)
+  List<WebSearchResult> webSearch(String query, Integer limit,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false, description = "Revalidate cached web sources") Boolean forceRefresh,
+      org.springframework.ai.chat.model.ToolContext context) throws IOException, InterruptedException {
+    try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context);
+        var refresh = dev.mikoto2000.rei.http.FetchScope.withForceRefresh(Boolean.TRUE.equals(forceRefresh))) { return webSearch(query, limit); }
+  }
   List<WebSearchResult> webSearch(String query, Integer limit, org.springframework.ai.chat.model.ToolContext context) throws IOException, InterruptedException {
-    try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context)) { return webSearch(query, limit); }
+    return webSearch(query, limit, null, context);
   }
   List<WebSearchResult> webSearch(String query, Integer limit) throws IOException, InterruptedException {
     IO.println(String.format("Web を検索するよ。limit=%s", limit));

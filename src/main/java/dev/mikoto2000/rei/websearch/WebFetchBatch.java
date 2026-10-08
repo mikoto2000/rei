@@ -41,12 +41,13 @@ public final class WebFetchBatch implements AutoCloseable {
         || candidates.size() > 20) throw new IllegalArgumentException("Invalid HTTP batch limits");
     FetchOperation parent = FetchScope.current(); parent.check();
     FetchOperation operation = parent.withTimeout(timeout);
+    boolean refresh = FetchScope.forceRefresh();
     List<OwnedTask<T>> tasks = new ArrayList<>();
     try {
       for (var candidate : candidates) {
         operation.check();
         String host = URI.create(candidate.result().url()).getHost().toLowerCase(Locale.ROOT);
-        var task = new OwnedTask<T>(() -> load(candidate, loader, host, operation));
+        var task = new OwnedTask<T>(() -> load(candidate, loader, host, operation, refresh));
         tasks.add(task); active.add(task);
         try { synchronized (admission) {
           if (closed.get()) throw new RejectedExecutionException(); executor.execute(task);
@@ -80,8 +81,8 @@ public final class WebFetchBatch implements AutoCloseable {
     while (results.size() < candidates.size()) results.add(new Outcome<>(Status.TIMEOUT, null, "BATCH_TIMEOUT"));
     return List.copyOf(results);
   }
-  private <T> Outcome<T> load(WebSearchSelection.Candidate candidate, Fetcher<T> loader, String host, FetchOperation operation) throws Exception {
-    try (var lease = loaderAdmission.acquire(host, operation); var scope = FetchScope.enter(operation, transferAdmission)) {
+  private <T> Outcome<T> load(WebSearchSelection.Candidate candidate, Fetcher<T> loader, String host, FetchOperation operation, boolean refresh) throws Exception {
+    try (var lease = loaderAdmission.acquire(host, operation); var scope = FetchScope.enter(operation, transferAdmission, refresh)) {
       operation.check();
       T value = loader.fetch(candidate); operation.check();
       return new Outcome<>(Status.SUCCESS, value, null);

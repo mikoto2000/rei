@@ -341,6 +341,16 @@ public class ExternalConfigFileService {
               failure-backoff-seconds: ${REI_SKILLS_SEMANTIC_FAILURE_BACKOFF_SECONDS:30}
               persistent-index-enabled: ${REI_SKILLS_SEMANTIC_PERSISTENT_INDEX_ENABLED:false}
               index-namespace: ${REI_SKILLS_SEMANTIC_INDEX_NAMESPACE:}
+          http-cache:
+            enabled: ${REI_HTTP_CACHE_ENABLED:true}
+            search-ttl-seconds: ${REI_HTTP_CACHE_SEARCH_TTL_SECONDS:30}
+            page-ttl-seconds: ${REI_HTTP_CACHE_PAGE_TTL_SECONDS:60}
+            retention-seconds: ${REI_HTTP_CACHE_RETENTION_SECONDS:300}
+            max-entries: ${REI_HTTP_CACHE_MAX_ENTRIES:128}
+            max-bytes: ${REI_HTTP_CACHE_MAX_BYTES:33554432}
+            load-parallelism: ${REI_HTTP_CACHE_LOAD_PARALLELISM:3}
+            load-queue-capacity: ${REI_HTTP_CACHE_LOAD_QUEUE_CAPACITY:16}
+            max-in-flight: ${REI_HTTP_CACHE_MAX_IN_FLIGHT:32}
           web-search:
             enabled: true
             providers:

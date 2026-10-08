@@ -43,7 +43,7 @@ class WebSearchToolsTest {
   void toolDescriptionExplainsWhenToUseCompositeAndPrimitiveTools() throws Exception {
     Tool composite = WebSearchTools.class.getDeclaredMethod("webSearchAndRead", WebSearchAndReadRequest.class, org.springframework.ai.chat.model.ToolContext.class)
         .getAnnotation(Tool.class);
-    Tool primitive = WebSearchTools.class.getDeclaredMethod("webSearch", String.class, Integer.class, org.springframework.ai.chat.model.ToolContext.class)
+    Tool primitive = WebSearchTools.class.getDeclaredMethod("webSearch", String.class, Integer.class, Boolean.class, org.springframework.ai.chat.model.ToolContext.class)
         .getAnnotation(Tool.class);
 
     org.junit.jupiter.api.Assertions.assertTrue(composite.description().contains("default tool"));

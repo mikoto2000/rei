@@ -40,7 +40,7 @@ public class WebSearchOrchestrator {
 
   public WebSearchContext search(String query, Integer limit) throws IOException, InterruptedException {
     long started = System.nanoTime();
-    try { return searchObserved(query, limit); }
+    try (var refresh = dev.mikoto2000.rei.http.FetchScope.withForceRefresh(query != null && WebSearchSelection.needsFreshness(query))) { return searchObserved(query, limit); }
     finally { WebSearchMetrics.OBSERVED.duration("total", System.nanoTime() - started); }
   }
 

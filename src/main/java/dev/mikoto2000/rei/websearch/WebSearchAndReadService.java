@@ -46,7 +46,10 @@ public class WebSearchAndReadService {
   public WebSearchAndReadResponse searchAndRead(WebSearchAndReadRequest request)
       throws IOException, InterruptedException {
     long started = System.nanoTime();
-    try { return searchAndReadObserved(request); }
+    try (var refresh = dev.mikoto2000.rei.http.FetchScope.withForceRefresh(request != null &&
+        (Boolean.TRUE.equals(request.forceRefresh()) || request.query() != null && WebSearchSelection.needsFreshness(request.query())))) {
+      return searchAndReadObserved(request);
+    }
     finally { WebSearchMetrics.OBSERVED.duration("total", System.nanoTime() - started); }
   }
 

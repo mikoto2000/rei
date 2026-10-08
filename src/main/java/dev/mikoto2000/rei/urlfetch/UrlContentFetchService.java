@@ -29,16 +29,21 @@ public class UrlContentFetchService {
   private final HttpClient httpClient;
   private final dev.mikoto2000.rei.http.SafeHttpFetcher safeFetcher;
   private final UrlFetchProperties properties;
+  private final dev.mikoto2000.rei.http.cache.HttpResponseCache cache;
 
   public UrlContentFetchService(UrlValidator urlValidator) {
     this(urlValidator, new UrlFetchProperties(), new dev.mikoto2000.rei.http.SafeHttpFetcher());
   }
 
-  @Autowired
   public UrlContentFetchService(UrlValidator validator, UrlFetchProperties properties,
       dev.mikoto2000.rei.http.SafeHttpFetcher fetcher) {
+    this(validator, properties, fetcher, dev.mikoto2000.rei.http.cache.HttpResponseCache.disabled());
+  }
+  @Autowired
+  public UrlContentFetchService(UrlValidator validator, UrlFetchProperties properties,
+      dev.mikoto2000.rei.http.SafeHttpFetcher fetcher, dev.mikoto2000.rei.http.cache.HttpResponseCache cache) {
     this.urlValidator = validator; this.properties = properties;
-    this.safeFetcher = fetcher; this.httpClient = null;
+    this.safeFetcher = fetcher; this.httpClient = null; this.cache = cache;
   }
 
   UrlContentFetchService(UrlValidator urlValidator, HttpClient httpClient) {
@@ -46,6 +51,7 @@ public class UrlContentFetchService {
     this.httpClient = httpClient;
     this.safeFetcher = null;
     this.properties = new UrlFetchProperties();
+    this.cache = dev.mikoto2000.rei.http.cache.HttpResponseCache.disabled();
   }
 
   public UrlContentFetchResult fetch(String url) {
@@ -72,12 +78,13 @@ public class UrlContentFetchService {
 
     try {
       if (safeFetcher != null) {
-        var response = safeFetcher.fetch(URI.create(url), java.util.Map.of("Accept",
+        var response = cache.fetch(new dev.mikoto2000.rei.http.cache.HttpResponseCache.Request(URI.create(url), java.util.Map.of("Accept",
             "text/plain,text/html,application/xhtml+xml,application/json"), policy,
-            dev.mikoto2000.rei.http.FetchScope.current(), dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.http(null));
+            dev.mikoto2000.rei.http.cache.HttpResponseCache.Namespace.PAGE, dev.mikoto2000.rei.http.FetchScope.forceRefresh()),
+            dev.mikoto2000.rei.http.FetchScope.current(), dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.http(null), safeFetcher);
         if (response.status() >= 300) return UrlContentFetchResult.failure("HTTP_ERROR", "HTTP request failed with status: " + response.status(), response.status());
         String rawType = response.header("content-type");
-        return UrlContentFetchResult.success(new String(response.body(), charset(rawType, response.body())), normalizeContentType(rawType), response.finalUri().toString());
+        return UrlContentFetchResult.success(new String(response.body(), charset(rawType, response.body())), normalizeContentType(rawType), response.finalUri().toString(), response.retrievedAt(), response.validatedAt());
       }
       policy.validate(URI.create(url));
       HttpRequest request = HttpRequest.newBuilder(URI.create(url))
