@@ -1,0 +1,1 @@
+{"case":"small-edit-tools","mode":"hunks","repetitions":3,"toolCalls":9,"inputJsonBytes":1128,"outputJsonBytes":5874,"fileReads":27,"bytesRead":226557,"fileWrites":3,"bytesWritten":25173,"medianNanos":101419200}

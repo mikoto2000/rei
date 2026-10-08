@@ -21,6 +21,21 @@ public final class TextDocumentTransaction {
   private TextDocumentTransaction() {}
   public static void preflight(Path root,String id,List<Change> changes)throws IOException{validate(root,id,changes);for(var stage:planned(changes,id))path(root,stage.temporary());for(var stage:planned(changes,id+"-rollback"))path(root,stage.temporary());}
   public static void replace(Path staged,Path target)throws IOException{if(staged==null)Files.delete(target);else Files.move(staged,target,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}
+  /** Existing staging and permission preservation, with no non-atomic fallback. */
+  public static void writeSingle(Path target,String before,String after)throws IOException{writeSingle(target,before,after,TextDocumentTransaction::replace);}
+  static void writeSingle(Path target,String before,String after,Move move)throws IOException {
+    text(before);text(after);Path root=target.toAbsolutePath().getParent().toRealPath();String name=target.getFileName().toString();
+    if(!path(root,name).equals(target.toAbsolutePath().normalize()))throw new IOException("Aliased text target rejected");
+    if(!Objects.equals(read(root,name),before))throw new IOException("Baseline changed before staging");
+    var staged=new Stage(name,temporary(name,UUID.randomUUID().toString(),0),hash(after),false);
+    try{
+      RunCancellation.propagate(null);stage(root,staged,after);RunCancellation.propagate(null);
+      if(!Objects.equals(read(root,name),before))throw new IOException("Baseline changed before atomic publication");
+      if(!Objects.equals(read(root,staged.temporary()),after))throw new IOException("Staged content changed");
+      move.replace(path(root,staged.temporary()),path(root,name));
+    }catch(IOException|RuntimeException error){try{cleanup(root,List.of(staged));}catch(IOException|RuntimeException cleanup){error.addSuppressed(cleanup);}throw error;}
+    cleanup(root,List.of(staged));
+  }
   public static Outcome apply(Path root,String id,List<Change> changes,Journal journal,Move move)throws IOException{
     validate(root,id,changes);if(!matches(root,changes,false))return new Outcome("STALE",List.of("Baseline changed before staging; no target write"));
     var stages=new ArrayList<>(planned(changes,id));stages.addAll(planned(changes,id+"-rollback"));journal.save("STAGING",List.copyOf(stages));

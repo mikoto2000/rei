@@ -25,7 +25,14 @@ public class TextChangeSetService {
   public TextDocumentChangeSetService.View rollbackDocuments(dev.mikoto2000.rei.core.chat.AgentRunContext owner,String id,String sha,String actualRequest)throws IOException{return documents().rollback(owner,id,sha,actualRequest);}
   public TextDocumentChangeSetService.View cleanDocumentStaging(dev.mikoto2000.rei.core.chat.AgentRunContext owner,String id,String sha,String actualRequest)throws IOException{return documents().cleanup(owner,id,sha,actualRequest);}
   private TextDocumentChangeSetService documents(){if(documents==null)throw new IllegalStateException("Multi-file document service unavailable");return documents;}
-  public record Request(String path,String expectedText,String replacement) {}
+  public record Edit(String oldText,String newText) {}
+  public record Request(String path,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) String expectedText,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) String replacement,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) String baseVersion,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) List<Edit> edits) {
+    public Request(String path,String expectedText,String replacement){this(path,expectedText,replacement,null,null);}
+  }
   public record Baseline(String path,String text,String sha256) {}
   public record View(String id,String projectId,String path,String status,String baselineSha256,String proposedSha256,
       String proposalSha256,String currentSha256,String diff,Instant createdAt) {}
@@ -42,9 +49,21 @@ public class TextChangeSetService {
   public View propose(ProjectContext project,Request request)throws IOException {
     RunCancellation.propagate(null);
     if(request==null)throw new IllegalArgumentException("Change Set request required");
+    String snapshotText=null;
+    if(request.edits()!=null){
+      if(request.expectedText()!=null || request.replacement()!=null)throw new IllegalArgumentException("Choose full replacement or partial edits, not both");
+      if(request.baseVersion()==null)throw new IllegalArgumentException("Partial edits require baseVersion");
+      var root=project.root().toRealPath();var file=resolve(root,request.path());String current=read(file);
+      String version=request.baseVersion().startsWith("sha256:")?request.baseVersion().substring(7):request.baseVersion();
+      if(!hash(current).equals(version))throw new IllegalArgumentException("File version mismatch; read and propose again");
+      String replacement=edit(current,request.edits());
+      // Reuse all existing validation, ownership, durable proposal identity, diff and explicit Apply.
+      snapshotText=current;request=new Request(request.path(),current,replacement);
+    }
+    if(request.baseVersion()!=null)throw new IllegalArgumentException("baseVersion requires partial edits");
     validateText(request.expectedText());validateText(request.replacement());
     if(request.expectedText().isEmpty() || request.expectedText().equals(request.replacement()))throw new IllegalArgumentException("Nonempty baseline and an actual change required");
-    var root=project.root().toRealPath();var file=resolve(root,request.path());var current=read(file);
+    var root=project.root().toRealPath();var file=resolve(root,request.path());var current=snapshotText==null?read(file):snapshotText;
     if(!current.equals(request.expectedText()))throw new IllegalArgumentException("Baseline differs; read the current file and propose again");
     var relative=root.relativize(file).toString().replace('\\','/');
     var base=hash(current);var proposed=hash(request.replacement());
@@ -124,22 +143,41 @@ public class TextChangeSetService {
     try{relative=Path.of(name);}catch(InvalidPathException error){throw new IllegalArgumentException("Invalid text path");}
     if(relative.isAbsolute() || relative.getRoot()!=null || relative.normalize().startsWith("..") || RepositoryMapService.sensitive(relative))throw new IllegalArgumentException("Excluded or outside text path");
     var file=root.resolve(relative).normalize();var cursor=root;
-    for(var part:root.relativize(file)){cursor=cursor.resolve(part);if(Files.isSymbolicLink(cursor))throw new IllegalArgumentException("Linked text paths are unsupported");}
+    for(var part:root.relativize(file)){cursor=cursor.resolve(part);if(Files.isSymbolicLink(cursor) || Files.exists(cursor,LinkOption.NOFOLLOW_LINKS) && !cursor.toRealPath().equals(cursor))throw new IllegalArgumentException("Linked or aliased text paths are unsupported");}
     if(!Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS) || !file.toRealPath().startsWith(root))throw new IllegalArgumentException("Existing regular Project text file required");
     return file;
   }
   private static String read(Path file)throws IOException {
-    try(var stream=Files.newInputStream(file,LinkOption.NOFOLLOW_LINKS)) {
-      var bytes=stream.readNBytes(65537);if(bytes.length>65536)throw new IllegalArgumentException("Text exceeds 64KiB");
+      if(Files.size(file)>65536)throw new IllegalArgumentException("Text exceeds 64KiB");
+      var bytes=new FileSnapshots().get(file.getParent(),file).bytes();if(bytes.length>65536)throw new IllegalArgumentException("Text exceeds 64KiB");
       for(byte value:bytes)if(value==0)throw new IllegalArgumentException("Binary text is unsupported");
       try{return StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString();}
       catch(java.nio.charset.CharacterCodingException error){throw new IllegalArgumentException("UTF-8 text required");}
-    }
   }
   private static void validateText(String text) {
     if(text==null || text.indexOf(0)>=0 || text.getBytes(StandardCharsets.UTF_8).length>65536)throw new IllegalArgumentException("UTF-8 replacement/baseline must be at most 64KiB");
     try{StandardCharsets.UTF_8.newEncoder().encode(java.nio.CharBuffer.wrap(text));}
     catch(java.nio.charset.CharacterCodingException error){throw new IllegalArgumentException("Valid Unicode text required");}
+  }
+  private static String edit(String baseline,List<Edit> edits) {
+    if(edits.isEmpty() || edits.size()>64)throw new IllegalArgumentException("Partial edits require 1 to 64 hunks");
+    record Hunk(int start,int end,String replacement){}
+    var hunks=new ArrayList<Hunk>();int inputBytes=0;
+    for(var edit:edits){
+      if(edit==null)throw new IllegalArgumentException("Hunk required");validateText(edit.oldText());validateText(edit.newText());
+      inputBytes+=edit.oldText().getBytes(StandardCharsets.UTF_8).length+edit.newText().getBytes(StandardCharsets.UTF_8).length;
+      if(inputBytes>65536)throw new IllegalArgumentException("Hunk input exceeds 64KiB");
+      if(edit.oldText().isEmpty())throw new IllegalArgumentException("Nonempty oldText required");
+      int start=baseline.indexOf(edit.oldText());
+      if(start<0)throw new IllegalArgumentException("Hunk oldText not found");
+      if(baseline.indexOf(edit.oldText(),start+1)>=0)throw new IllegalArgumentException("Hunk oldText is ambiguous; include more context");
+      hunks.add(new Hunk(start,start+edit.oldText().length(),edit.newText()));
+    }
+    hunks.sort(Comparator.comparingInt(Hunk::start));
+    for(int i=1;i<hunks.size();i++)if(hunks.get(i).start()<hunks.get(i-1).end())throw new IllegalArgumentException("Overlapping hunks");
+    var result=new StringBuilder();int cursor=0;
+    for(var hunk:hunks){result.append(baseline,cursor,hunk.start()).append(hunk.replacement());cursor=hunk.end();}
+    result.append(baseline,cursor,baseline.length());validateText(result.toString());return result.toString();
   }
   private static String hash(String text){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));}catch(NoSuchAlgorithmException error){throw new IllegalStateException(error);}}
   private static View view(TextChangeSetRepository.Saved saved,String current) {
@@ -147,8 +185,15 @@ public class TextChangeSetService {
         diff(saved.path(),saved.baseline(),saved.proposed()),saved.createdAt());
   }
   private static String diff(String path,String before,String after) {
-    // Complete replacement diff, including newline changes. Not a guessed minimal edit or executable patch.
-    return "--- "+path+" (baseline)\n+++ "+path+" (proposal)\n"+lines(before,"-")+lines(after,"+");
+    // Keep the existing exact replacement renderer, omitting only identical outer lines.
+    // This is a review preview, not an executable patch. Export retains the complete proposal.
+    var oldRows=before.split("\n",-1);var newRows=after.split("\n",-1);int prefix=0,suffix=0;
+    while(prefix<oldRows.length && prefix<newRows.length && oldRows[prefix].equals(newRows[prefix]))prefix++;
+    while(suffix<oldRows.length-prefix && suffix<newRows.length-prefix && oldRows[oldRows.length-suffix-1].equals(newRows[newRows.length-suffix-1]))suffix++;
+    int from=Math.max(0,prefix-3);int oldTo=Math.min(oldRows.length,oldRows.length-suffix+3),newTo=Math.min(newRows.length,newRows.length-suffix+3);
+    String oldPart=String.join("\n",Arrays.copyOfRange(oldRows,from,oldTo))+(oldTo<oldRows.length?"\n":"");
+    String newPart=String.join("\n",Arrays.copyOfRange(newRows,from,newTo))+(newTo<newRows.length?"\n":"");
+    return "--- "+path+" (baseline)\n+++ "+path+" (proposal)\n@@ -"+(from+1)+","+oldPart.lines().count()+" +"+(from+1)+","+newPart.lines().count()+" @@\n"+lines(oldPart,"-")+lines(newPart,"+");
   }
   private static String lines(String text,String prefix) {
     if(text.isEmpty())return "";

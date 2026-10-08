@@ -17,7 +17,11 @@ import org.springframework.stereotype.Component;
 @Component
 public final class RepositoryMapService {
   @FunctionalInterface public interface Inventory { List<String> files(Path root)throws IOException; }
-  public record Symbol(String name,String kind,long line,boolean entryPoint) { }
+  public record Symbol(String name,String kind,long line,boolean entryPoint,String symbolId,String signature,
+      long endLine,int startOffset,int endOffset,String owner,int signatureEndOffset,int javadocStartOffset) {
+    public Symbol(String name,String kind,long line,boolean entryPoint){this(name,kind,line,entryPoint,name,"",line,-1,-1,"",-1,-1);}
+  }
+  static boolean typeKind(String kind){return Set.of("CLASS","INTERFACE","ENUM","RECORD","ANNOTATION_TYPE").contains(kind);}
   public record File(String path,String module,String packageName,String sha256,String status,List<Symbol> symbols,List<String> imports,String language,String analysisMode) {
     public File(String path,String module,String packageName,String sha256,String status,List<Symbol> symbols,List<String> imports){this(path,module,packageName,sha256,status,symbols,imports,HeuristicSourceIndex.language(path),path.endsWith(".java")?"JAVA_AST":HeuristicSourceIndex.source(path)?"HEURISTIC":"INVENTORY_ONLY");}
   }
@@ -47,6 +51,27 @@ public final class RepositoryMapService {
     return build(directory,query,limit,false);
   }
   synchronized View snapshot(Path directory)throws IOException { return build(directory,"",100,true); }
+  List<String> javaInventory(Path directory,FileSnapshots snapshots)throws IOException {
+    try{return snapshots.inventory("java-symbols",()->inventory.files(directory.toRealPath())).stream().filter(path->path.endsWith(".java")&&!sensitive(Path.of(path))).toList();}
+    catch(InterruptedException interrupted){Thread.currentThread().interrupt();throw new java.util.concurrent.CancellationException();}
+  }
+  /** Reuse the same Java AST and hash-keyed metadata cache without rereading source bytes. */
+  synchronized File describeSnapshot(Path directory,FileSnapshots.Snapshot snapshot)throws IOException {
+    RunCancellation.propagate(null);Path root=directory.toRealPath();Path path=snapshot.path();
+    if(!path.startsWith(root) || sensitive(root.relativize(path)))throw new IOException("Outside/excluded repository snapshot");
+    String name=root.relativize(path).toString().replace('\\','/');byte[] bytes=snapshot.bytes();
+    Parsed parsed;
+    var previous=caches.getOrDefault(root,Map.of());var cached=previous.get(name);
+    if(bytes.length>131072)parsed=new Parsed("","TOO_LARGE",List.of(),List.of());
+    else if(cached!=null && cached.digest().equals(snapshot.version()))parsed=cached.parsed();
+    else if(compiler==null)parsed=new Parsed("","COMPILER_UNAVAILABLE",List.of(),List.of());
+    else try(var manager=compiler.getStandardFileManager(null,Locale.ROOT,StandardCharsets.UTF_8)){
+      parsed=parse(compiler,manager,path,StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString());
+    }catch(java.nio.charset.CharacterCodingException invalid){parsed=new Parsed("","UNREADABLE",List.of(),List.of());}
+    var next=new TreeMap<>(previous);next.put(name,new Cached(snapshot.version(),parsed));while(next.size()>1024)next.pollFirstEntry();
+    caches.put(root,Map.copyOf(next));while(caches.size()>2)caches.remove(caches.keySet().iterator().next());
+    return new File(name,module(name),parsed.packageName(),snapshot.version(),parsed.status(),parsed.symbols(),parsed.imports());
+  }
   private View build(Path directory,String query,int limit,boolean complete)throws IOException {
     RunCancellation.propagate(null);
     if(limit<1 || limit>100 || (query!=null && query.length()>256))throw new IllegalArgumentException("Map limit must be 1 to 100 and query at most 256 characters");
@@ -129,25 +154,48 @@ public final class RepositoryMapService {
   }
   private static Parsed parse(JavaCompiler compiler,StandardJavaFileManager manager,Path path,String text) {
     var diagnostics=new DiagnosticCollector<JavaFileObject>();
-    var source=new SimpleJavaFileObject(path.toUri(),JavaFileObject.Kind.SOURCE){@Override public CharSequence getCharContent(boolean ignored){return text;}};
+    String parseText=text.startsWith("\ufeff")?" "+text.substring(1):text;
+    var source=new SimpleJavaFileObject(path.toUri(),JavaFileObject.Kind.SOURCE){@Override public CharSequence getCharContent(boolean ignored){return parseText;}};
     var task=(JavacTask)compiler.getTask(null,manager,diagnostics,List.of("-proc:none"),null,List.of(source));
     try {
       var unit=task.parse().iterator().next();
       if(diagnostics.getDiagnostics().stream().anyMatch(d->d.getKind()==Diagnostic.Kind.ERROR))return new Parsed("","SYNTAX_ERROR",List.of(),List.of());
       String pkg=unit.getPackageName()==null?"":unit.getPackageName().toString();var symbols=new ArrayList<Symbol>();
       var owners=new ArrayDeque<String>();var positions=Trees.instance(task).getSourcePositions();
-      new TreeScanner<Void,Void>() {
+      new TreePathScanner<Void,Void>() {
         String owner(){return (pkg.isEmpty()?"":pkg+".")+String.join(".",owners);}
-        void add(Tree tree,String name,String kind,boolean entry){if(symbols.size()<64)symbols.add(new Symbol(name,kind,unit.getLineMap().getLineNumber(positions.getStartPosition(unit,tree)),entry));}
+        void add(Tree tree,String name,String kind,boolean entry,String id,String containing,int signatureEnd){
+          long start=positions.getStartPosition(unit,tree),end=positions.getEndPosition(unit,tree);
+          if(symbols.size()>=64 || start<0 || end<start || end>text.length())return;
+          int from=(int)start,to=(int)end,header=Math.max(from,Math.min(to,signatureEnd));
+          int docs=from,previous=from;while(previous>0 && Character.isWhitespace(text.charAt(previous-1)))previous--;
+          if(previous>=2 && text.substring(previous-2,previous).equals("*/")){int opening=text.lastIndexOf("/**",previous-2);int closing=text.lastIndexOf("*/",previous-3);if(opening>=0 && opening>closing)docs=opening;}
+          String signature=text.substring(from,header).strip();if(signature.length()>2048)signature=signature.substring(0,2048);
+          symbols.add(new Symbol(name,kind,unit.getLineMap().getLineNumber(start),entry,id,signature,
+            unit.getLineMap().getLineNumber(Math.max(start,end-1)),from,to,containing,header,docs));
+        }
+        @Override public Void visitPackage(PackageTree tree,Void ignored){add(tree,pkg,"PACKAGE",false,pkg,"",(int)positions.getEndPosition(unit,tree));return super.visitPackage(tree,ignored);}
         @Override public Void visitClass(ClassTree tree,Void ignored) {
           if(tree.getSimpleName().isEmpty())return null;
-          owners.addLast(tree.getSimpleName().toString());add(tree,owner(),tree.getKind().name(),false);super.visitClass(tree,ignored);owners.removeLast();return null;
+          String containing=owner();owners.addLast(tree.getSimpleName().toString());
+          add(tree,owner(),tree.getKind().name(),false,owner(),containing,JavaSourceHeaders.end(text,(int)positions.getStartPosition(unit,tree),(int)positions.getEndPosition(unit,tree)));
+          super.visitClass(tree,ignored);owners.removeLast();return null;
         }
         @Override public Void visitMethod(MethodTree tree,Void ignored) {
           boolean main=tree.getName().contentEquals("main") && tree.getReturnType()!=null && tree.getReturnType().toString().equals("void")
               && tree.getModifiers().getFlags().containsAll(Set.of(javax.lang.model.element.Modifier.PUBLIC,javax.lang.model.element.Modifier.STATIC))
               && tree.getParameters().size()==1 && Set.of("String[]","java.lang.String[]").contains(tree.getParameters().getFirst().getType().toString());
-          add(tree,owner()+"."+tree.getName(),"METHOD",main);return super.visitMethod(tree,ignored);
+          boolean constructor=tree.getReturnType()==null;String method=constructor?owners.getLast():tree.getName().toString();
+          String types=tree.getParameters().stream().map(parameter->parameter.getType().toString().replaceAll("\\s+","")).collect(java.util.stream.Collectors.joining(","));
+          int header=(int)(tree.getBody()==null?positions.getEndPosition(unit,tree):positions.getStartPosition(unit,tree.getBody()));
+          add(tree,owner()+"."+tree.getName(),constructor?"CONSTRUCTOR":"METHOD",main,owner()+"#"+method+"("+types+")",owner(),header);return super.visitMethod(tree,ignored);
+        }
+        @Override public Void visitVariable(VariableTree tree,Void ignored){
+          if(getCurrentPath().getParentPath()!=null && getCurrentPath().getParentPath().getLeaf() instanceof ClassTree){
+            int header=(int)positions.getEndPosition(unit,tree);
+            if(tree.getInitializer()!=null){header=(int)positions.getStartPosition(unit,tree.getInitializer());while(header>0&&Character.isWhitespace(text.charAt(header-1)))header--;if(header>0&&text.charAt(header-1)=='=')header--;}
+            add(tree,owner()+"."+tree.getName(),"FIELD",false,owner()+"#"+tree.getName(),owner(),header);
+          }return super.visitVariable(tree,ignored);
         }
       }.scan(unit,null);
       var imports=unit.getImports().stream().limit(128).map(i->(i.isStatic()?"static ":"")+i.getQualifiedIdentifier()).toList();
@@ -155,7 +203,7 @@ public final class RepositoryMapService {
     }catch(IOException | RuntimeException error){RunCancellation.propagate(error);return new Parsed("","SYNTAX_ERROR",List.of(),List.of());}
   }
   private static List<Relation> relations(List<File> files) {
-    var types=new HashMap<String,List<File>>();for(var file:files)if(file.language().equals("JAVA"))for(var symbol:file.symbols())if(!symbol.kind().equals("METHOD"))types.computeIfAbsent(symbol.name(),k->new ArrayList<>()).add(file);
+    var types=new HashMap<String,List<File>>();for(var file:files)if(file.language().equals("JAVA"))for(var symbol:file.symbols())if(typeKind(symbol.kind()))types.computeIfAbsent(symbol.name(),k->new ArrayList<>()).add(file);
     var result=new LinkedHashSet<Relation>();
     for(var file:files) {
       if(!file.language().equals("JAVA"))continue;
@@ -163,7 +211,7 @@ public final class RepositoryMapService {
         String name=imported;if(name.startsWith("static ")){name=name.substring(7);int dot=name.lastIndexOf('.');if(dot>0)name=name.substring(0,dot);}
         var targets=types.get(name);if(targets!=null && targets.size()==1 && !targets.getFirst().path().equals(file.path()))result.add(new Relation(file.path(),targets.getFirst().path(),"IMPORT"));
       }
-      if(file.path().contains("/test/") || file.path().startsWith("test/"))for(var symbol:file.symbols())if(!symbol.kind().equals("METHOD") && symbol.name().endsWith("Test")) {
+      if(file.path().contains("/test/") || file.path().startsWith("test/"))for(var symbol:file.symbols())if(typeKind(symbol.kind()) && symbol.name().endsWith("Test")) {
         var targets=types.get(symbol.name().substring(0,symbol.name().length()-4));if(targets!=null && targets.size()==1)result.add(new Relation(file.path(),targets.getFirst().path(),"TEST_NAME_CANDIDATE"));
       }
     }

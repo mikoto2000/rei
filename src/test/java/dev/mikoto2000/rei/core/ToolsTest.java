@@ -484,7 +484,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
     assertEquals(1, results.size());
     assertEquals("docs/broken.txt", results.get(0).path());
-    assertTrue(results.get(0).error().startsWith("Unable to decode file:"));
+    assertTrue(results.get(0).error().startsWith("Unable to read file:"));
   }
 
   @Test
@@ -853,9 +853,10 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
                 new Tools.GrepQuery("bar", "docs", null, null, null, null, null, null, null, null, null, null)),
             0, null), tempDir);
 
-    assertEquals(2, results.size());
+    assertEquals(3, results.size());
     assertEquals("docs/a.txt", results.get(0).path());
     assertEquals("docs/b.txt", results.get(1).path());
+    assertTrue(results.get(2).error().contains("Invalid grep pattern"));
   }
 
   @Test
@@ -953,7 +954,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
     List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
         new Tools.ReadFileRequest(text.toString(), null, null)
-    ));
+    ), tempDir);
 
     assertEquals(1, results.size());
     assertEquals(text.toString(), results.get(0).path());
@@ -973,7 +974,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
         new Tools.ReadFileRequest(a.toString(), null, null),
         new Tools.ReadFileRequest(b.toString(), null, null)
-    ));
+    ), tempDir);
 
     assertEquals(2, results.size());
     assertEquals(a.toString(), results.get(0).path());
@@ -990,7 +991,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
     List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
         new Tools.ReadFileRequest(text.toString(), 2, 3)
-    ));
+    ), tempDir);
 
     assertEquals(List.of("line2", "line3"), results.get(0).content());
     assertEquals(2, results.get(0).startLine());
@@ -1005,7 +1006,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
     List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
         new Tools.ReadFileRequest(text.toString(), 2, null)
-    ));
+    ), tempDir);
 
     assertEquals(List.of("line2", "line3"), results.get(0).content());
   }
@@ -1018,7 +1019,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
     List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
         new Tools.ReadFileRequest(text.toString(), null, null)
-    ));
+    ), tempDir);
 
     assertEquals(List.of(), results.get(0).content());
   }
@@ -1031,7 +1032,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
     List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
         new Tools.ReadFileRequest(text.toString(), 2, 99)
-    ));
+    ), tempDir);
 
     assertEquals(List.of("line2"), results.get(0).content());
   }
@@ -1046,7 +1047,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
         new Tools.ReadFileRequest(a.toString(), null, null),
         new Tools.ReadFileRequest(tempDir.resolve("missing.txt").toString(), null, null),
         new Tools.ReadFileRequest(a.toString(), null, null)
-    ));
+    ), tempDir);
 
     assertEquals(3, results.size());
     assertEquals(List.of("alpha"), results.get(0).content());
@@ -1080,7 +1081,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
     List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
         new Tools.ReadFileRequest(text.toString(), 3, 2)
-    ));
+    ), tempDir);
 
     assertTrue(results.get(0).error() != null);
   }
@@ -1091,7 +1092,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
     List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
         new Tools.ReadFileRequest("", null, null)
-    ));
+    ), tempDir);
 
     assertTrue(results.get(0).error() != null);
   }
@@ -1108,7 +1109,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
     List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
         new Tools.ReadFileRequest(text.toString(), null, null)
-    ));
+    ), tempDir);
 
     assertTrue(results.get(0).truncated());
     assertEquals(Tools.MAX_READ_LINES_PER_FILE, results.get(0).content().size());
@@ -1120,12 +1121,13 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Files.write(outside, List.of("outside"));
     Tools tools = new Tools();
 
-    // 既存 readTextFile と同じく、絶対パスはそのまま解決される（workspace 制約は既存設計に合わせる）
+    // Project 外の絶対パスは拒否し、明示された root 内の絶対パスは維持する。
     List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
         new Tools.ReadFileRequest(outside.toString(), null, null)
-    ));
+    ), tempDir);
 
-    assertEquals(List.of("outside"), results.get(0).content());
+    assertTrue(results.get(0).content().isEmpty());
+    assertTrue(results.get(0).error().contains("outside Project"));
   }
 
   @Test
@@ -1740,7 +1742,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   }
 
   @Test
-  void sameSearchTwiceInvokesUnderlyingSearchOnce() throws Exception {
+  void separateSearchesRefreshFileInventory() throws Exception {
     initGitRepo();
     Files.createDirectories(tempDir.resolve("docs"));
     Files.writeString(tempDir.resolve("docs/a.txt"), "spring\n");
@@ -1753,8 +1755,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     tools.grepMultiQuery(List.of(query), tempDir);
     tools.grepMultiQuery(List.of(query), tempDir);
 
-    // 2 回目の呼び出しはキャッシュヒットし、実検索は 1 回で済む
-    assertTrue(tools.searchResultCache().size() >= 1);
+    Files.writeString(tempDir.resolve("docs/new.txt"), "spring");
+    assertEquals(2, tools.grepMultiQuery(List.of(query), tempDir).getFirst().matches().size());
   }
 
   @Test
@@ -1822,6 +1824,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Tools tools = new Tools();
     Tools.GrepQuery query = new Tools.GrepQuery("spring", "docs", null, null, null, null, null, null, null, null, null, null);
     tools.grepMultiQuery(List.of(query), tempDir);
+    tools.searchResultCache().put(new dev.mikoto2000.rei.core.searchcache.SearchCacheKey("legacy","entry"),List.of("spring"));
     assertTrue(tools.searchResultCache().size() >= 1);
 
     tools.writeTextFile(tempDir.resolve("docs/a.txt").toString(), "spring\nchanged\n", false, "");

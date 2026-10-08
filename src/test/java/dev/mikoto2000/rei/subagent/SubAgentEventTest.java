@@ -78,6 +78,14 @@ class SubAgentEventTest {
         renderer.onEvent(factory.messageStarted("child-message", "assistant"));
         renderer.onEvent(factory.messageDelta("child-message", "child-answer"));
         renderer.onEvent(factory.messageCompleted("child-message", "assistant", "child-answer"));
+      }
+    }
+    // Notifications are intentionally deferred while the parent answer is streaming.
+    assertThat(output.toString()).doesNotContain("[subagent:","child-answer");
+    renderer.onEvent(factory.messageDelta("parent-message", "parent-after"));
+    renderer.onEvent(factory.messageCompleted("parent-message", "assistant", "parent-beforeparent-after"));
+    for (String run : java.util.List.of("first", "second", "unknown")) {
+      try (var scope = AgentRunScope.open(new AgentRunContext(run, "subagent:" + run, directory))) {
         renderer.onRecentEvent(factory.toolStarted("tool", "webSearch", "{}"));
       }
       String prefix = "[subagent:" + (run.equals("unknown") ? "" : "reviewer/") + run + "] ";
@@ -89,10 +97,8 @@ class SubAgentEventTest {
           prefix + "  ✗ webSearch: failure",
           prefix + "tool.started webSearch");
     }
-    renderer.onEvent(factory.messageDelta("parent-message", "parent-after"));
-    renderer.onEvent(factory.messageCompleted("parent-message", "assistant", "parent-beforeparent-after"));
     assertThat(output.toString()).startsWith("=== answer (" + java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
-        .withZone(java.time.ZoneId.systemDefault()).format(startedAt) + ") ===\nparent-before\n").endsWith("parent-after\n")
+        .withZone(java.time.ZoneId.systemDefault()).format(startedAt) + ") ===\nparent-beforeparent-after\n")
         .doesNotContain("child-answer");
   }
   @Test void lifecycleRoundTripsThroughExistingProjectEventStore() {

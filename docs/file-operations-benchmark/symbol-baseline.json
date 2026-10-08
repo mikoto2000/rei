@@ -1,0 +1,1 @@
+{"case":"java-symbol-read","mode":"full","repetitions":5,"toolCalls":5,"fileReads":10,"bytesRead":52930,"returnedJsonBytes":58505,"medianNanos":374900}
