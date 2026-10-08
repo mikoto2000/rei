@@ -74,6 +74,7 @@ public class SearchTools {
     StringBuilder builder = new StringBuilder();
     for (WebSearchPage result : results) {
       builder.append("- title=").append(result.title())
+          .append(" | fetchStatus=").append(result.fetchStatus()).append(" | errorType=").append(result.errorType())
           .append(" | url=").append(result.url())
           .append(" | publishedAt=").append(result.publishedAt())
           .append(" | content=").append(result.content())

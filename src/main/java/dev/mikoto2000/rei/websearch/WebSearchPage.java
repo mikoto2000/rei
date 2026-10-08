@@ -8,9 +8,15 @@ public record WebSearchPage(
     String content,
     boolean truncated,
     @com.fasterxml.jackson.annotation.JsonIgnore String fingerprint,
-    java.util.List<WebSourceAlias> aliases) {
+    java.util.List<WebSourceAlias> aliases,
+    String fetchStatus,
+    String errorType) {
 
   public WebSearchPage { aliases = aliases == null ? java.util.List.of() : java.util.List.copyOf(aliases); }
+  public WebSearchPage(String title, String url, String snippet, String publishedAt, String content,
+      boolean truncated, String fingerprint, java.util.List<WebSourceAlias> aliases) {
+    this(title, url, snippet, publishedAt, content, truncated, fingerprint, aliases, "success", null);
+  }
   public WebSearchPage(String title, String url, String snippet, String publishedAt, String content, boolean truncated) {
     this(title, url, snippet, publishedAt, content, truncated, null,
         java.util.List.of(new WebSourceAlias(url, title, publishedAt)));
@@ -18,7 +24,7 @@ public record WebSearchPage(
   public WebSearchPage withAliases(java.util.List<WebSourceAlias> additional) {
     var combined = new java.util.ArrayList<>(aliases);
     for (var alias : additional) if (!combined.contains(alias)) combined.add(alias);
-    return new WebSearchPage(title, url, snippet, publishedAt, content, truncated, fingerprint, combined);
+    return new WebSearchPage(title, url, snippet, publishedAt, content, truncated, fingerprint, combined, fetchStatus, errorType);
   }
 
   public WebSearchPage(String title, String url, String snippet, String publishedAt, String content) {

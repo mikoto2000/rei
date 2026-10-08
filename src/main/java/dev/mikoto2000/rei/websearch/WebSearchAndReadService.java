@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.websearch;
 import java.io.IOException;
 import java.util.List;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
@@ -24,19 +22,25 @@ public class WebSearchAndReadService {
   private final WebPageExtractor webPageExtractor;
   private final WebSearchProperties properties;
   private final WebSearchQueryPlanner planner;
+  private final WebFetchBatch batch;
 
   public WebSearchAndReadService(WebSearchService webSearchService, UrlContentFetchService urlContentFetchService,
       WebPageExtractor webPageExtractor, WebSearchProperties properties) {
     this(webSearchService, urlContentFetchService, webPageExtractor, properties, new WebSearchQueryPlanner());
   }
-  @org.springframework.beans.factory.annotation.Autowired
   public WebSearchAndReadService(WebSearchService webSearchService, UrlContentFetchService urlContentFetchService,
       WebPageExtractor webPageExtractor, WebSearchProperties properties, WebSearchQueryPlanner planner) {
+    this(webSearchService, urlContentFetchService, webPageExtractor, properties, planner, WebFetchBatch.sharedDefaults());
+  }
+  @org.springframework.beans.factory.annotation.Autowired
+  public WebSearchAndReadService(WebSearchService webSearchService, UrlContentFetchService urlContentFetchService,
+      WebPageExtractor webPageExtractor, WebSearchProperties properties, WebSearchQueryPlanner planner, WebFetchBatch batch) {
     this.webSearchService = webSearchService;
     this.urlContentFetchService = urlContentFetchService;
     this.webPageExtractor = webPageExtractor;
     this.properties = properties;
     this.planner = planner;
+    this.batch = batch;
   }
 
   public WebSearchAndReadResponse searchAndRead(WebSearchAndReadRequest request)
@@ -56,13 +60,18 @@ public class WebSearchAndReadService {
         validated.query(), validated.maxResults(), properties);
     List<WebSearchResult> searchResults = candidates.stream().map(WebSearchSelection.Candidate::result).toList();
     List<WebSearchAndReadItem> results = new ArrayList<>();
-    Map<String, UrlContentFetchResult> fetchCache = new LinkedHashMap<>();
     int readLimit = Math.min(validated.readTop(), properties.getMaxPageFetches());
-    for (var candidate : candidates) {
+    var toRead = candidates.stream().limit(readLimit).toList();
+    var fetched = batch.fetch(toRead, java.time.Duration.ofSeconds(properties.getFetchBatchTimeoutSeconds()), candidate -> fetch(candidate.result()));
+    for (int i = 0; i < candidates.size(); i++) {
+      var candidate = candidates.get(i);
       WebSearchResult result = candidate.result();
-      dev.mikoto2000.rei.http.FetchScope.current().check();
-      if (results.size() >= validated.maxResults()) break;
-      results.add((results.size() < readLimit ? fetch(result, fetchCache) : notRequested(result)).withAliases(candidate.aliases()));
+      WebSearchAndReadItem item;
+      if (i >= fetched.size()) item = notRequested(result);
+      else { var outcome = fetched.get(i); item = outcome.success() ? outcome.value() :
+          new WebSearchAndReadItem(result.title(), result.url(), result.snippet(), result.publishedAt(), null, null,
+              "failed", outcome.errorType(), "Page acquisition did not complete", false); }
+      results.add(item.withAliases(candidate.aliases()));
     }
     long successes = results.stream().filter(result -> "success".equals(result.fetchStatus())).count();
     long failures = results.stream().filter(result -> "failed".equals(result.fetchStatus())).count();
@@ -70,12 +79,12 @@ public class WebSearchAndReadService {
     results = new ArrayList<>(WebContentDeduplication.items(results));
     results.forEach(item -> WebSearchMetrics.OBSERVED.text(item.content()));
     log.debug("webSearchAndRead completed: searchResults={}, fetchAttempts={}, fetchSuccesses={}, fetchFailures={}",
-        results.size(), fetchCache.size(), successes, failures);
+        results.size(), toRead.size(), successes, failures);
     return new WebSearchAndReadResponse(validated.query(), results);
   }
 
-  private WebSearchAndReadItem fetch(WebSearchResult result, Map<String, UrlContentFetchResult> fetchCache) {
-    UrlContentFetchResult fetched = fetchCache.computeIfAbsent(result.url(), this::safeFetch);
+  private WebSearchAndReadItem fetch(WebSearchResult result) {
+    UrlContentFetchResult fetched = safeFetch(result.url());
     if (!fetched.success()) {
       return new WebSearchAndReadItem(result.title(), result.url(), result.snippet(), result.publishedAt(),
           null, null, "failed", fetched.errorType(), fetched.errorMessage(), false);
@@ -91,7 +100,7 @@ public class WebSearchAndReadService {
       dev.mikoto2000.rei.http.FetchOperation.propagateControls(exception);
       return new WebSearchAndReadItem(result.title(), result.url(), result.snippet(), result.publishedAt(),
           null, fetched.contentType(), "failed", "EXTRACTION_ERROR",
-          exception.getMessage() == null ? "Failed to extract page content" : exception.getMessage(), false);
+          "Failed to extract page content", false);
     }
   }
 
@@ -101,7 +110,7 @@ public class WebSearchAndReadService {
     } catch (RuntimeException exception) {
       dev.mikoto2000.rei.http.FetchOperation.propagateControls(exception);
       return UrlContentFetchResult.failure("FETCH_ERROR",
-          exception.getMessage() == null ? "Failed to fetch URL" : exception.getMessage());
+          "Failed to fetch URL");
     }
   }
 

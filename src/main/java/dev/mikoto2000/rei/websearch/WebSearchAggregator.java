@@ -1,11 +1,8 @@
 package dev.mikoto2000.rei.websearch;
 
-import java.net.URI;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 
 import org.springframework.stereotype.Component;
 
@@ -14,7 +11,6 @@ public class WebSearchAggregator {
 
   public WebSearchContext aggregate(List<WebSearchPage> pages, int limit) {
     List<WebSearchPage> ranked = pages.stream()
-        .sorted(Comparator.comparingDouble(this::score).reversed())
         .limit(Math.max(1, limit))
         .toList();
 
@@ -24,23 +20,11 @@ public class WebSearchAggregator {
     List<WebSearchPage> secondary = ranked.stream()
         .filter(page -> !isPrimary(page))
         .toList();
-    return new WebSearchContext(primary, secondary);
+    return new WebSearchContext(primary, secondary, ranked);
   }
 
   private boolean isPrimary(WebSearchPage page) {
-    return isOfficialHost(page.url()) || (hasPublishedAt(page) && contentLength(page) >= 80);
-  }
-
-  private double score(WebSearchPage page) {
-    double score = 0.0d;
-    if (isOfficialHost(page.url())) {
-      score += 3.0d;
-    }
-    if (hasPublishedAt(page)) {
-      score += 1.0d;
-    }
-    score += Math.min(contentLength(page), 500) / 500.0d;
-    return score;
+    return "success".equals(page.fetchStatus()) && (isOfficialHost(page.url()) || (hasPublishedAt(page) && contentLength(page) >= 80));
   }
 
   private boolean hasPublishedAt(WebSearchPage page) {
