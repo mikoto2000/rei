@@ -28,7 +28,8 @@ fetch_successes, fetch_failures, timeouts, cancellations, additional_searches,
 output_characters, estimated_tokens, received_bytes。
 同じURLがプロバイダー統合時・展開クエリ統合時に重複した場合は、それぞれの除外を数える。
 文字数は返却本文の量であり、実際のモデル入力・課金トークンとは区別する。
-推定トークンは UTF-16 文字数 / 2 の切り上げで、日本語も含めた保守的な予算用近似。
+推定トークンは既存の共通 `TokenEstimator.conservative()` を再利用する。
+ASCII は4文字あたり1、非ASCIIのコードポイントは1文字あたり2を目安にした予算用近似。
 
 キャッシュ、single-flight、リダイレクトは未実装なので観測値を生成しない。
 Phase 0 の received_bytes は受信 body の byte[] 長を観測する。HTTPヘッダー・TLS通信量は含まない。
@@ -90,3 +91,16 @@ Windows の Job Object 等の所有プロセス境界も比較検討し、終了
 安全性問題を報告して無理にマージしないという依頼の条件に従い、Phase 0 を保留する。
 後続 Phase は先行 Phase のマージ・main 同期が前提のため着手しない。
 全体テストの失敗を関連テストの成功で置き換えない。
+
+### 再試行と続行
+
+ユーザーの再試行・続行指示に従い、既存 Java プロセスがない状態から
+`bb4efacf` の全体回帰を再実行した。今回の XML 集計は **3816件、failure 0、error 0、skipped 1**、
+終了コード0。前回失敗した CODEX ケースを含め両外部エージェントケースが成功した。
+初回実行後に追加された baseline テスト1件も実行されたため件数が1件増えている。
+別起動の Rei が初回失敗の原因かは未確定で、初回失敗の履歴を保持する。
+CI 成功とレビュー要件を確認後、Phase 0 をマージして後続 Phase を開始する。
+
+続行前のレビューで、推定トークンを既存の共通予算管理と同じ `TokenEstimator` に統一した。
+日本語・英語混在の Red テストで expected 10 / actual 5 の不一致を確認後に修正。
+これによって Web 独自の推定式を追加せず、モデル入力の計測・予算と整合する。

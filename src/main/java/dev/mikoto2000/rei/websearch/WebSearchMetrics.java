@@ -8,6 +8,8 @@ import java.util.concurrent.TimeUnit;
 
 /** Low-cardinality observed events only; no query, URL, credential or body labels. */
 public final class WebSearchMetrics {
+  private static final dev.mikoto2000.rei.core.contextbudget.TokenEstimator TOKENS =
+      dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative();
   public static final WebSearchMetrics OBSERVED = new WebSearchMetrics(Metrics.globalRegistry);
   private final MeterRegistry registry;
   public WebSearchMetrics(MeterRegistry registry) { this.registry = registry; }
@@ -28,6 +30,6 @@ public final class WebSearchMetrics {
   public void text(String text) {
     int length = text == null ? 0 : text.length();
     add("output_characters", length);
-    add("estimated_tokens", (length + 1L) / 2);
+    add("estimated_tokens", TOKENS.text(text));
   }
 }

@@ -5,6 +5,15 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
 class WebSearchMetricsTest {
+  @Test void textUsesTheSharedBudgetEstimatorForMixedJapaneseAndEnglish() {
+    var registry = new SimpleMeterRegistry();
+    var metrics = new WebSearchMetrics(registry);
+    String text = "日本語 API 🐈";
+    metrics.text(text);
+    assertEquals(dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative().text(text),
+        registry.get("rei.web.search.events").tag("event", "estimated_tokens").counter().count());
+    assertEquals(text.length(), registry.get("rei.web.search.events").tag("event", "output_characters").counter().count());
+  }
   @Test void recordsOnlyObservedEventsAndBoundsProviderLabels() {
     var registry = new SimpleMeterRegistry();
     var metrics = new WebSearchMetrics(registry);
