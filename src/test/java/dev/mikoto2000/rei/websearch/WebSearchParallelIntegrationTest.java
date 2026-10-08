@@ -29,6 +29,7 @@ class WebSearchParallelIntegrationTest {
   }
   @Test void andReadUsesParallelPoolAndKeepsSearchRank() throws Exception {
     var properties = new WebSearchProperties(); var search = mock(WebSearchService.class);
+    properties.setInitialPageFetches(3); // Exercise the full pool; default adaptive research starts with two.
     var fetch = mock(UrlContentFetchService.class); var input = sources();
     when(search.search("topic", 3)).thenReturn(input);
     var started = new CountDownLatch(3); var release = new CountDownLatch(1);

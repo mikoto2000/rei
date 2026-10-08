@@ -353,6 +353,28 @@ public class ExternalConfigFileService {
             max-in-flight: ${REI_HTTP_CACHE_MAX_IN_FLIGHT:32}
           web-search:
             enabled: true
+            timeout-seconds: ${REI_WEB_SEARCH_TIMEOUT_SECONDS:10}
+            connect-timeout-seconds: ${REI_WEB_SEARCH_CONNECT_TIMEOUT_SECONDS:5}
+            read-timeout-seconds: ${REI_WEB_SEARCH_READ_TIMEOUT_SECONDS:10}
+            max-wire-bytes: ${REI_WEB_SEARCH_MAX_WIRE_BYTES:2097152}
+            max-decoded-bytes: ${REI_WEB_SEARCH_MAX_DECODED_BYTES:4194304}
+            max-redirects: ${REI_WEB_SEARCH_MAX_REDIRECTS:5}
+            max-results: ${REI_WEB_SEARCH_MAX_RESULTS:5}
+            max-search-queries: ${REI_WEB_SEARCH_MAX_SEARCH_QUERIES:3}
+            max-search-api-calls: ${REI_WEB_SEARCH_MAX_SEARCH_API_CALLS:4}
+            max-page-fetches: ${REI_WEB_SEARCH_MAX_PAGE_FETCHES:5}
+            fetch-parallelism: ${REI_WEB_SEARCH_FETCH_PARALLELISM:3}
+            fetch-per-host: ${REI_WEB_SEARCH_FETCH_PER_HOST:2}
+            fetch-queue-capacity: ${REI_WEB_SEARCH_FETCH_QUEUE_CAPACITY:32}
+            fetch-batch-timeout-seconds: ${REI_WEB_SEARCH_FETCH_BATCH_TIMEOUT_SECONDS:30}
+            page-max-characters: ${REI_WEB_SEARCH_PAGE_MAX_CHARACTERS:2000}
+            page-max-tokens: ${REI_WEB_SEARCH_PAGE_MAX_TOKENS:1500}
+            max-output-characters: ${REI_WEB_SEARCH_MAX_OUTPUT_CHARACTERS:16000}
+            max-output-tokens: ${REI_WEB_SEARCH_MAX_OUTPUT_TOKENS:6000}
+            initial-page-fetches: ${REI_WEB_SEARCH_INITIAL_PAGE_FETCHES:2}
+            research-timeout-seconds: ${REI_WEB_SEARCH_RESEARCH_TIMEOUT_SECONDS:30}
+            total-wire-bytes: ${REI_WEB_SEARCH_TOTAL_WIRE_BYTES:8388608}
+            total-decoded-bytes: ${REI_WEB_SEARCH_TOTAL_DECODED_BYTES:16777216}
             providers:
               - name: duckduckgo
                 base-url: ${REI_WEB_SEARCH_DUCKDUCKGO_BASE_URL:https://html.duckduckgo.com/html/}

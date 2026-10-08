@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.websearch;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 import org.springframework.stereotype.Service;
 
@@ -46,27 +44,15 @@ public class WebSearchOrchestrator {
 
   private WebSearchContext searchObserved(String query, Integer limit) throws IOException, InterruptedException {
     int maximum = limit == null ? properties.getMaxResults() : Math.max(1, Math.min(limit, properties.getMaxResults()));
-    var selected = WebSearchSelection.search(webSearchService, webSearchQueryPlanner, query, maximum, properties);
-    List<WebSearchPage> pages = new ArrayList<>();
-    WebSearchMetrics.OBSERVED.add("fetch_candidates", Math.min(selected.size(), properties.getMaxPageFetches()));
-    var toRead = selected.stream().limit(properties.getMaxPageFetches()).toList();
-    var fetched = batch.fetch(toRead, java.time.Duration.ofSeconds(properties.getFetchBatchTimeoutSeconds()),
-        candidate -> webPageFetcher.fetch(candidate.result()));
-    for (int i = 0; i < fetched.size(); i++) {
-      var candidate = toRead.get(i); var outcome = fetched.get(i);
-      pages.add((outcome.success() ? outcome.value() : fallbackPage(candidate.result(), outcome.errorType())).withAliases(candidate.aliases()));
-    }
-    var context = webSearchAggregator.aggregate(WebContentDeduplication.pages(pages), maximum);
+    var research = WebResearchPipeline.run(webSearchService,webSearchQueryPlanner,properties,batch,query,maximum,
+        properties.getMaxPageFetches(),candidate -> webPageFetcher.fetch(candidate.result()),WebResearchPipeline.PAGES);
+    WebSearchMetrics.OBSERVED.add("fetch_candidates",research.pageAttempts());
+    var aggregated = webSearchAggregator.aggregate(research.results().stream()
+        .filter(page -> !"not_requested".equals(page.fetchStatus())).toList(),maximum);
+    var context = new WebSearchContext(aggregated.primaryResults(),aggregated.secondaryResults(),aggregated.allResults(),
+        research.assessment(),research.omissions(),research.queries(),research.pageAttempts());
     context.allResults().forEach(page -> WebSearchMetrics.OBSERVED.text(page.content()));
     return context;
   }
 
-  private WebSearchPage fallbackPage(WebSearchResult result, String errorType) {
-    return new WebSearchPage(
-        result.title(),
-        result.url(),
-        result.snippet(),
-        result.publishedAt(),
-        result.snippet(), false, null, List.of(WebSourceAlias.from(result)), "failed", errorType);
-  }
 }

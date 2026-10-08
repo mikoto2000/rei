@@ -42,12 +42,13 @@ public final class WebFetchBatch implements AutoCloseable {
     FetchOperation parent = FetchScope.current(); parent.check();
     FetchOperation operation = parent.withTimeout(timeout);
     boolean refresh = FetchScope.forceRefresh();
+    var transferBudget = TransferScope.current(); String query = WebExtractionScope.query();
     List<OwnedTask<T>> tasks = new ArrayList<>();
     try {
       for (var candidate : candidates) {
         operation.check();
         String host = URI.create(candidate.result().url()).getHost().toLowerCase(Locale.ROOT);
-        var task = new OwnedTask<T>(() -> load(candidate, loader, host, operation, refresh));
+        var task = new OwnedTask<T>(() -> load(candidate, loader, host, operation, refresh, transferBudget, query));
         tasks.add(task); active.add(task);
         try { synchronized (admission) {
           if (closed.get()) throw new RejectedExecutionException(); executor.execute(task);
@@ -81,8 +82,10 @@ public final class WebFetchBatch implements AutoCloseable {
     while (results.size() < candidates.size()) results.add(new Outcome<>(Status.TIMEOUT, null, "BATCH_TIMEOUT"));
     return List.copyOf(results);
   }
-  private <T> Outcome<T> load(WebSearchSelection.Candidate candidate, Fetcher<T> loader, String host, FetchOperation operation, boolean refresh) throws Exception {
-    try (var lease = loaderAdmission.acquire(host, operation); var scope = FetchScope.enter(operation, transferAdmission, refresh)) {
+  private <T> Outcome<T> load(WebSearchSelection.Candidate candidate, Fetcher<T> loader, String host, FetchOperation operation, boolean refresh,
+      TransferBudget transferBudget, String query) throws Exception {
+    try (var lease = loaderAdmission.acquire(host, operation); var scope = FetchScope.enter(operation, transferAdmission, refresh);
+        var transfer = TransferScope.enter(transferBudget); var extraction = WebExtractionScope.enter(query)) {
       operation.check();
       T value = loader.fetch(candidate); operation.check();
       return new Outcome<>(Status.SUCCESS, value, null);

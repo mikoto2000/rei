@@ -19,7 +19,7 @@ public final class WebContentDeduplication {
         result.add(page);
       } else {
         WebSearchMetrics.OBSERVED.add("duplicate_content", 1);
-        result.set(index, result.get(index).withAliases(page.aliases()));
+        result.set(index, result.get(index).withAliases(duplicateAliases(page.aliases())));
       }
     }
     return List.copyOf(result);
@@ -33,9 +33,13 @@ public final class WebContentDeduplication {
         result.add(item);
       } else {
         WebSearchMetrics.OBSERVED.add("duplicate_content", 1);
-        result.set(index, result.get(index).withAliases(item.aliases()));
+        result.set(index, result.get(index).withAliases(duplicateAliases(item.aliases())));
       }
     }
     return List.copyOf(result);
+  }
+  private static List<WebSourceAlias> duplicateAliases(List<WebSourceAlias> aliases) {
+    return aliases.stream().map(alias -> "http_redirect".equals(alias.evidenceType())
+        ?new WebSourceAlias(alias.url(),alias.title(),alias.publishedAt(),"duplicate_body_http_redirect"):alias).toList();
   }
 }

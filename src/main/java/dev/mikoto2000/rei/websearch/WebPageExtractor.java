@@ -9,10 +9,21 @@ import org.springframework.stereotype.Component;
 @Component
 public class WebPageExtractor {
 
-  private static final int MAX_CONTENT_LENGTH = 2000;
+  private final WebSearchProperties properties;
+  public WebPageExtractor() { this(new WebSearchProperties()); }
+  @org.springframework.beans.factory.annotation.Autowired
+  public WebPageExtractor(WebSearchProperties properties) { this.properties = properties; }
 
   public WebSearchPage extract(WebSearchResult result, String html) {
-    Document document = Jsoup.parse(html, result.url());
+    return extract(result, html, WebExtractionScope.query());
+  }
+  public WebSearchPage extract(WebSearchResult result, String html, String query) {
+    properties.validateSelection();
+    Document document;
+    try (var reader = new WebHtmlReader(html, properties.getMaxDecodedBytes())) {
+      document = org.jsoup.parser.Parser.htmlParser().setTrackPosition(true).parseInput(reader, result.url());
+    }
+    dev.mikoto2000.rei.http.FetchScope.current().check();
     document.select("script,style,noscript,header,footer,nav,aside,form").remove();
 
     String title = blankToFallback(document.title(), result.title());
@@ -25,14 +36,14 @@ public class WebPageExtractor {
 
     String content = normalize(document.body() == null ? "" : document.body().text());
     String fingerprint = content.isBlank() ? null : WebContentDeduplication.fingerprint(content + "\n"
-        + document.select("pre,code").stream().map(Element::wholeText).collect(java.util.stream.Collectors.joining("\n")));
+        + document.select("pre,code").stream().filter(element -> element.parents().stream().noneMatch(parent -> parent.normalName().equals("pre")))
+            .map(Element::wholeText).collect(java.util.stream.Collectors.joining("\n")));
     if (content.isBlank()) {
       content = normalize(result.snippet());
     }
-    boolean truncated = content.length() > MAX_CONTENT_LENGTH;
-    if (truncated) {
-      content = content.substring(0, MAX_CONTENT_LENGTH);
-    }
+    var selected = query == null || query.isBlank() ? null : WebSectionExtractor.select(document, query, properties.getPageMaxCharacters(), properties.getPageMaxTokens());
+    boolean truncated = selected == null ? content.length() > properties.getPageMaxCharacters() : selected.truncated();
+    content = selected == null ? WebSectionExtractor.clip(content, properties.getPageMaxCharacters()) : selected.content();
 
     var page = new WebSearchPage(
         title,
@@ -42,7 +53,8 @@ public class WebPageExtractor {
         content,
         truncated,
         fingerprint,
-        java.util.List.of(WebSourceAlias.from(result)));
+        java.util.List.of(WebSourceAlias.from(result))).withEvidence(null, null,
+            selected == null ? java.util.List.of() : selected.excerpts(), selected == null ? java.util.List.of() : selected.omissions());
     Element canonical = document.selectFirst("link[rel=canonical][href]");
     if (canonical != null) {
       String claimed = WebSearchSelection.normalizeUrl(canonical.absUrl("href"));

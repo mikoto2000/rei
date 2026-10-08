@@ -41,6 +41,14 @@ public class WebSearchProperties {
   private int fetchPerHost = 2;
   private int fetchQueueCapacity = 32;
   private int fetchBatchTimeoutSeconds = 30;
+  private int pageMaxCharacters = 2000;
+  private int pageMaxTokens = 1500;
+  private int maxOutputCharacters = 16000;
+  private int maxOutputTokens = 6000;
+  private int initialPageFetches = 2;
+  private int researchTimeoutSeconds = 30;
+  private long totalWireBytes = 8L * 1024 * 1024;
+  private long totalDecodedBytes = 16L * 1024 * 1024;
   public void validateSelection() {
     if (maxResults < 1 || maxResults > 20 || maxSearchQueries < 1 || maxSearchQueries > 3
         || maxSearchApiCalls < 1 || maxSearchApiCalls > 12 || maxPageFetches < 1 || maxPageFetches > 20
@@ -48,6 +56,11 @@ public class WebSearchProperties {
         || fetchParallelism < 1 || fetchParallelism > 3 || fetchPerHost < 1 || fetchPerHost > fetchParallelism
         || fetchQueueCapacity < 1 || fetchQueueCapacity > 64)
       throw new IllegalArgumentException("Invalid web search selection limits");
+    if (pageMaxCharacters < 128 || pageMaxCharacters > 8000 || pageMaxTokens < 128 || pageMaxTokens > 6000
+        || maxOutputCharacters < 512 || maxOutputCharacters > 64000 || maxOutputTokens < 256 || maxOutputTokens > 16000
+        || initialPageFetches < 1 || initialPageFetches > 3 || researchTimeoutSeconds < 1 || researchTimeoutSeconds > 300
+        || totalWireBytes < 1 || totalWireBytes > 128L * 1024 * 1024 || totalDecodedBytes < 1 || totalDecodedBytes > 256L * 1024 * 1024)
+      throw new IllegalArgumentException("Invalid bounded web research budgets");
   }
 
   private List<ProviderProperties> providers = defaultProviders();

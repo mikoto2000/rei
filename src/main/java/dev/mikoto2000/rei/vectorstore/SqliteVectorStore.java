@@ -566,14 +566,7 @@ public class SqliteVectorStore implements VectorStore, VectorDocumentRepository,
   }
 
   private List<String> lexicalQueryTerms(String query) {
-    if (query == null || query.isBlank()) {
-      return List.of();
-    }
-    return java.util.Arrays.stream(query.toLowerCase(Locale.ROOT).split("[^\\p{IsAlphabetic}\\p{IsDigit}]+"))
-        .map(String::trim)
-        .filter(term -> term.length() >= 2)
-        .distinct()
-        .toList();
+    return dev.mikoto2000.rei.core.contextbudget.LexicalTerms.query(query);
   }
 
   private double lexicalScore(List<String> queryTerms, String text) {

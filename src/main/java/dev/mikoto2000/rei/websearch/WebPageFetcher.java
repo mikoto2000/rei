@@ -30,7 +30,8 @@ public class WebPageFetcher {
       catch (IllegalArgumentException | NullPointerException unknown) { code = dev.mikoto2000.rei.http.HttpFetchException.Code.NETWORK_ERROR; }
       throw new dev.mikoto2000.rei.http.HttpFetchException(code);
     }
-    var page = extractor.extract(result, response.content());
+    var extracted = extractor.extract(result, response.content());
+    var page = extracted.withEvidence(response.retrievedAt(), response.validatedAt(), extracted.excerpts(), extracted.omissions());
     if (response.finalUrl() != null && !response.finalUrl().equals(result.url()))
       page = page.withAliases(java.util.List.of(new WebSourceAlias(response.finalUrl(), page.title(), page.publishedAt(), "http_redirect")));
     return page;

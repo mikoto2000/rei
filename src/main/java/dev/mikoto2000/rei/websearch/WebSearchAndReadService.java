@@ -2,11 +2,8 @@ package dev.mikoto2000.rei.websearch;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.ArrayList;
 
 import org.springframework.stereotype.Service;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchService;
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchResult;
@@ -15,7 +12,6 @@ import dev.mikoto2000.rei.urlfetch.UrlContentFetchResult;
 @Service
 public class WebSearchAndReadService {
   static final int DEFAULT_READ_TOP = 3;
-  private static final Logger log = LoggerFactory.getLogger(WebSearchAndReadService.class);
 
   private final WebSearchService webSearchService;
   private final UrlContentFetchService urlContentFetchService;
@@ -59,33 +55,22 @@ public class WebSearchAndReadService {
     var metadataPlanner = validated.readTop() == 0 ? new WebSearchQueryPlanner() {
       public List<String> plan(String query) { return List.of(query); }
     } : planner;
-    var candidates = WebSearchSelection.search(webSearchService, metadataPlanner,
-        validated.query(), validated.maxResults(), properties);
-    List<WebSearchResult> searchResults = candidates.stream().map(WebSearchSelection.Candidate::result).toList();
-    List<WebSearchAndReadItem> results = new ArrayList<>();
-    int readLimit = Math.min(validated.readTop(), properties.getMaxPageFetches());
-    var toRead = candidates.stream().limit(readLimit).toList();
-    var fetched = batch.fetch(toRead, java.time.Duration.ofSeconds(properties.getFetchBatchTimeoutSeconds()), candidate -> fetch(candidate.result()));
-    for (int i = 0; i < candidates.size(); i++) {
-      var candidate = candidates.get(i);
-      WebSearchResult result = candidate.result();
-      WebSearchAndReadItem item;
-      if (i >= fetched.size()) item = notRequested(result);
-      else { var outcome = fetched.get(i); item = outcome.success() ? outcome.value() :
-          new WebSearchAndReadItem(result.title(), result.url(), result.snippet(), result.publishedAt(), null, null,
-              "failed", outcome.errorType(), "Page acquisition did not complete", false); }
-      results.add(item.withAliases(candidate.aliases()));
-    }
-    long successes = results.stream().filter(result -> "success".equals(result.fetchStatus())).count();
-    long failures = results.stream().filter(result -> "failed".equals(result.fetchStatus())).count();
-    WebSearchMetrics.OBSERVED.add("fetch_candidates", Math.min(searchResults.size(), readLimit));
-    results = new ArrayList<>(WebContentDeduplication.items(results));
-    results.forEach(item -> WebSearchMetrics.OBSERVED.text(item.content()));
-    log.debug("webSearchAndRead completed: searchResults={}, fetchAttempts={}, fetchSuccesses={}, fetchFailures={}",
-        results.size(), toRead.size(), successes, failures);
-    return new WebSearchAndReadResponse(validated.query(), results);
+    var research = WebResearchPipeline.run(webSearchService, metadataPlanner, properties, batch,
+        validated.query(), validated.maxResults(), validated.readTop(), candidate -> fetch(candidate.result()),
+        new WebResearchPipeline.Adapter<WebSearchAndReadItem>() {
+          public WebSearchAndReadItem failed(WebSearchResult result, String error) {
+            return WebSearchAndReadItem.fromPage(WebResearchPipeline.PAGES.failed(result,error),null,"Page acquisition did not complete");
+          }
+          public WebSearchAndReadItem notRequested(WebSearchResult result) { return WebSearchAndReadService.this.notRequested(result); }
+          public WebSearchAndReadItem aliases(WebSearchAndReadItem value,List<WebSourceAlias> aliases) { return value.withAliases(aliases); }
+          public WebSearchPage evidence(WebSearchAndReadItem value) { return value.asPage(); }
+          public List<WebSearchAndReadItem> deduplicate(List<WebSearchAndReadItem> values) { return WebContentDeduplication.items(values); }
+        });
+    WebSearchMetrics.OBSERVED.add("fetch_candidates",research.pageAttempts());
+    research.results().forEach(item -> WebSearchMetrics.OBSERVED.text(item.content()));
+    return new WebSearchAndReadResponse(validated.query(),research.results(),research.assessment(),research.omissions(),
+        research.queries(),research.pageAttempts());
   }
-
   private WebSearchAndReadItem fetch(WebSearchResult result) {
     UrlContentFetchResult fetched = safeFetch(result.url());
     if (!fetched.success()) {
@@ -94,8 +79,8 @@ public class WebSearchAndReadService {
     }
     try {
       WebSearchPage page = webPageExtractor.extract(result, fetched.content());
-      var item = new WebSearchAndReadItem(page.title(), page.url(), page.snippet(), page.publishedAt(),
-          page.content(), fetched.contentType(), "success", null, null, page.truncated(), page.fingerprint(), page.aliases());
+      var item = WebSearchAndReadItem.fromPage(page.withEvidence(fetched.retrievedAt(), fetched.validatedAt(),
+          page.excerpts(), page.omissions()), fetched.contentType(), null);
       if (fetched.finalUrl() != null && !fetched.finalUrl().equals(result.url()))
         item = item.withAliases(List.of(new WebSourceAlias(fetched.finalUrl(), page.title(), page.publishedAt(), "http_redirect")));
       return item;
