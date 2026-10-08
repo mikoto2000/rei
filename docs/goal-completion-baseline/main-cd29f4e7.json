@@ -1,0 +1,428 @@
+{
+  "schemaVersion" : 1,
+  "baselineRevision" : "cd29f4e7f1c3d5e5f361a0fec576f8bed821fff0",
+  "scope" : "Scripted Goal gateway; real SQLite and independent file/JSON oracles; jobs/search/model are doubles",
+  "limitations" : [ "Repair is scripted, not autonomous model repair", "Job delay is a deferred callback, not real wall-clock process latency", "Web evidence is scripted, not live retrieval", "Counters for unnecessary iterations, duplicates and permission violations cover this fixture only", "Model calls are Goal reservation counts, not provider calls", "Handover receipt is unavailable and deliberately fails its mandatory oracle" ],
+  "report" : {
+    "cases" : 10,
+    "verifiedCompletionRate" : 0.7,
+    "falseCompletionRate" : 0.3,
+    "endedWithUnmetRate" : 0.3,
+    "repairSuccessRate" : {
+      "value" : 1.0,
+      "reason" : ""
+    },
+    "interventions" : 2,
+    "unnecessaryIterations" : 4,
+    "duplicateExecutions" : 0,
+    "permissionViolations" : 0,
+    "elapsedMillis" : {
+      "value" : 716,
+      "reason" : ""
+    },
+    "modelCalls" : {
+      "value" : 15,
+      "reason" : ""
+    },
+    "tokens" : {
+      "value" : null,
+      "reason" : "multi-requirement: Scripted gateway; no model token usage"
+    }
+  },
+  "results" : [ {
+    "id" : "multi-requirement",
+    "observation" : {
+      "completionClaimed" : true,
+      "exited" : true,
+      "repairAttempts" : 0,
+      "successfulRepairs" : 0,
+      "interventions" : 0,
+      "unnecessaryIterations" : 0,
+      "duplicateExecutions" : 0,
+      "permissionViolations" : 0,
+      "elapsedMillis" : {
+        "value" : 79,
+        "reason" : ""
+      },
+      "modelCalls" : {
+        "value" : 1,
+        "reason" : ""
+      },
+      "tokens" : {
+        "value" : null,
+        "reason" : "Scripted gateway; no model token usage"
+      }
+    },
+    "conditions" : [ {
+      "id" : "requirement-0",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "file_digest_verified"
+    }, {
+      "id" : "requirement-1",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "json_value_verified"
+    } ],
+    "verifiedCompletion" : true,
+    "falseCompletion" : false,
+    "endedWithUnmet" : false,
+    "unmet" : [ ]
+  }, {
+    "id" : "test-repair",
+    "observation" : {
+      "completionClaimed" : true,
+      "exited" : true,
+      "repairAttempts" : 1,
+      "successfulRepairs" : 1,
+      "interventions" : 0,
+      "unnecessaryIterations" : 0,
+      "duplicateExecutions" : 0,
+      "permissionViolations" : 0,
+      "elapsedMillis" : {
+        "value" : 87,
+        "reason" : ""
+      },
+      "modelCalls" : {
+        "value" : 2,
+        "reason" : ""
+      },
+      "tokens" : {
+        "value" : null,
+        "reason" : "Scripted gateway; no model token usage"
+      }
+    },
+    "conditions" : [ {
+      "id" : "requirement-0",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "file_digest_verified"
+    }, {
+      "id" : "requirement-1",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "json_value_verified"
+    } ],
+    "verifiedCompletion" : true,
+    "falseCompletion" : false,
+    "endedWithUnmet" : false,
+    "unmet" : [ ]
+  }, {
+    "id" : "long-job",
+    "observation" : {
+      "completionClaimed" : true,
+      "exited" : true,
+      "repairAttempts" : 0,
+      "successfulRepairs" : 0,
+      "interventions" : 0,
+      "unnecessaryIterations" : 0,
+      "duplicateExecutions" : 0,
+      "permissionViolations" : 0,
+      "elapsedMillis" : {
+        "value" : 53,
+        "reason" : ""
+      },
+      "modelCalls" : {
+        "value" : 1,
+        "reason" : ""
+      },
+      "tokens" : {
+        "value" : null,
+        "reason" : "Scripted gateway; no model token usage"
+      }
+    },
+    "conditions" : [ {
+      "id" : "requirement-0",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "file_digest_verified"
+    }, {
+      "id" : "requirement-1",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "json_value_verified"
+    } ],
+    "verifiedCompletion" : true,
+    "falseCompletion" : false,
+    "endedWithUnmet" : false,
+    "unmet" : [ ]
+  }, {
+    "id" : "approval-resume",
+    "observation" : {
+      "completionClaimed" : true,
+      "exited" : true,
+      "repairAttempts" : 0,
+      "successfulRepairs" : 0,
+      "interventions" : 1,
+      "unnecessaryIterations" : 0,
+      "duplicateExecutions" : 0,
+      "permissionViolations" : 0,
+      "elapsedMillis" : {
+        "value" : 100,
+        "reason" : ""
+      },
+      "modelCalls" : {
+        "value" : 2,
+        "reason" : ""
+      },
+      "tokens" : {
+        "value" : null,
+        "reason" : "Scripted gateway; no model token usage"
+      }
+    },
+    "conditions" : [ {
+      "id" : "requirement-0",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "file_digest_verified"
+    }, {
+      "id" : "requirement-1",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "json_value_verified"
+    } ],
+    "verifiedCompletion" : true,
+    "falseCompletion" : false,
+    "endedWithUnmet" : false,
+    "unmet" : [ ]
+  }, {
+    "id" : "restart-resume",
+    "observation" : {
+      "completionClaimed" : false,
+      "exited" : true,
+      "repairAttempts" : 0,
+      "successfulRepairs" : 0,
+      "interventions" : 1,
+      "unnecessaryIterations" : 0,
+      "duplicateExecutions" : 0,
+      "permissionViolations" : 0,
+      "elapsedMillis" : {
+        "value" : 61,
+        "reason" : ""
+      },
+      "modelCalls" : {
+        "value" : 1,
+        "reason" : ""
+      },
+      "tokens" : {
+        "value" : null,
+        "reason" : "Scripted gateway; no model token usage"
+      }
+    },
+    "conditions" : [ {
+      "id" : "requirement-0",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "file_digest_verified"
+    }, {
+      "id" : "requirement-1",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "json_value_verified"
+    } ],
+    "verifiedCompletion" : true,
+    "falseCompletion" : false,
+    "endedWithUnmet" : false,
+    "unmet" : [ ]
+  }, {
+    "id" : "artifact-delivery",
+    "observation" : {
+      "completionClaimed" : true,
+      "exited" : true,
+      "repairAttempts" : 0,
+      "successfulRepairs" : 0,
+      "interventions" : 0,
+      "unnecessaryIterations" : 0,
+      "duplicateExecutions" : 0,
+      "permissionViolations" : 0,
+      "elapsedMillis" : {
+        "value" : 53,
+        "reason" : ""
+      },
+      "modelCalls" : {
+        "value" : 1,
+        "reason" : ""
+      },
+      "tokens" : {
+        "value" : null,
+        "reason" : "Scripted gateway; no model token usage"
+      }
+    },
+    "conditions" : [ {
+      "id" : "requirement-0",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "file_digest_verified"
+    }, {
+      "id" : "requirement-1",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "json_value_verified"
+    }, {
+      "id" : "handover",
+      "required" : true,
+      "satisfied" : false,
+      "evidence" : "Fixture saves a file; user receipt is not instrumented"
+    } ],
+    "verifiedCompletion" : false,
+    "falseCompletion" : true,
+    "endedWithUnmet" : true,
+    "unmet" : [ "handover" ]
+  }, {
+    "id" : "partial-required",
+    "observation" : {
+      "completionClaimed" : true,
+      "exited" : true,
+      "repairAttempts" : 0,
+      "successfulRepairs" : 0,
+      "interventions" : 0,
+      "unnecessaryIterations" : 2,
+      "duplicateExecutions" : 0,
+      "permissionViolations" : 0,
+      "elapsedMillis" : {
+        "value" : 116,
+        "reason" : ""
+      },
+      "modelCalls" : {
+        "value" : 3,
+        "reason" : ""
+      },
+      "tokens" : {
+        "value" : null,
+        "reason" : "Scripted gateway; no model token usage"
+      }
+    },
+    "conditions" : [ {
+      "id" : "requirement-0",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "file_digest_verified"
+    }, {
+      "id" : "requirement-1",
+      "required" : true,
+      "satisfied" : false,
+      "evidence" : "file_missing_or_not_regular"
+    } ],
+    "verifiedCompletion" : false,
+    "falseCompletion" : true,
+    "endedWithUnmet" : true,
+    "unmet" : [ "requirement-1" ]
+  }, {
+    "id" : "duplicate-operation",
+    "observation" : {
+      "completionClaimed" : false,
+      "exited" : true,
+      "repairAttempts" : 0,
+      "successfulRepairs" : 0,
+      "interventions" : 0,
+      "unnecessaryIterations" : 0,
+      "duplicateExecutions" : 0,
+      "permissionViolations" : 0,
+      "elapsedMillis" : {
+        "value" : 19,
+        "reason" : ""
+      },
+      "modelCalls" : {
+        "value" : 0,
+        "reason" : ""
+      },
+      "tokens" : {
+        "value" : null,
+        "reason" : "Scripted gateway; no model token usage"
+      }
+    },
+    "conditions" : [ {
+      "id" : "requirement-0",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "file_digest_verified"
+    }, {
+      "id" : "requirement-1",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "json_value_verified"
+    } ],
+    "verifiedCompletion" : true,
+    "falseCompletion" : false,
+    "endedWithUnmet" : false,
+    "unmet" : [ ]
+  }, {
+    "id" : "web-research",
+    "observation" : {
+      "completionClaimed" : true,
+      "exited" : true,
+      "repairAttempts" : 0,
+      "successfulRepairs" : 0,
+      "interventions" : 0,
+      "unnecessaryIterations" : 0,
+      "duplicateExecutions" : 0,
+      "permissionViolations" : 0,
+      "elapsedMillis" : {
+        "value" : 52,
+        "reason" : ""
+      },
+      "modelCalls" : {
+        "value" : 1,
+        "reason" : ""
+      },
+      "tokens" : {
+        "value" : null,
+        "reason" : "Scripted gateway; no model token usage"
+      }
+    },
+    "conditions" : [ {
+      "id" : "requirement-0",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "file_digest_verified"
+    }, {
+      "id" : "requirement-1",
+      "required" : true,
+      "satisfied" : true,
+      "evidence" : "json_value_verified"
+    } ],
+    "verifiedCompletion" : true,
+    "falseCompletion" : false,
+    "endedWithUnmet" : false,
+    "unmet" : [ ]
+  }, {
+    "id" : "impossible",
+    "observation" : {
+      "completionClaimed" : true,
+      "exited" : true,
+      "repairAttempts" : 0,
+      "successfulRepairs" : 0,
+      "interventions" : 0,
+      "unnecessaryIterations" : 2,
+      "duplicateExecutions" : 0,
+      "permissionViolations" : 0,
+      "elapsedMillis" : {
+        "value" : 96,
+        "reason" : ""
+      },
+      "modelCalls" : {
+        "value" : 3,
+        "reason" : ""
+      },
+      "tokens" : {
+        "value" : null,
+        "reason" : "Scripted gateway; no model token usage"
+      }
+    },
+    "conditions" : [ {
+      "id" : "requirement-0",
+      "required" : true,
+      "satisfied" : false,
+      "evidence" : "file_missing_or_not_regular"
+    }, {
+      "id" : "requirement-1",
+      "required" : true,
+      "satisfied" : false,
+      "evidence" : "file_missing_or_not_regular"
+    } ],
+    "verifiedCompletion" : false,
+    "falseCompletion" : true,
+    "endedWithUnmet" : true,
+    "unmet" : [ "requirement-0", "requirement-1" ]
+  } ]
+}
