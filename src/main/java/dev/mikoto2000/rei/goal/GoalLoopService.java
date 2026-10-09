@@ -96,14 +96,21 @@ public class GoalLoopService {
     if(result.status()==ChatExecutionResult.Status.CANCELLED||Thread.currentThread().isInterrupted()) {
       goals.recordAttempt(claim,run,"CANCELLED","run_cancelled");stop(claim,"PAUSED","run_cancelled");return;
     }
-    if(!result.success()) {
+    var current=goals.get(claim.goal().projectId(),claim.goal().id());
+    if(current.maxTotalTokens()>0&&(current.pendingLlmCalls()>0||current.tokenUsageUnknown()||current.totalTokens()>current.maxTotalTokens())) {
+      String reason=current.pendingLlmCalls()>0||current.tokenUsageUnknown()?"token_usage_unknown":"token_budget_exhausted";
+      goals.recordAttempt(claim,run,"BLOCKED",reason);stop(claim,"BLOCKED",reason);return;
+    }
+    boolean controlledBudgetEnd=current.completion()!=null&&(outcome.stopReason().equals("repair_reserve_reached")||result.stopCode().equals("llm_call_budget_exceeded"));
+    if(!result.success()&&!controlledBudgetEnd) {
       if(goals.tokenExhausted(claim)) {
         var goal=goals.get(claim.goal().projectId(),claim.goal().id());
         String reason=goal.tokenUsageUnknown()?"token_usage_unknown":"token_budget_exhausted";
         goals.recordAttempt(claim,run,"BLOCKED",reason);stop(claim,"BLOCKED",reason);return;
       }
       String state=switch(outcome.stopReason()) {case "permission_required" -> "WAITING_APPROVAL";case "policy_denied" -> "BLOCKED";default -> goals.remainingLlm(claim)==0?"BLOCKED":"FAILED";};
-      goals.recordAttempt(claim,run,state,"execution_stopped");stop(claim,state,"execution_stopped");return;
+      String reason=outcome.stopReason().isBlank()?"execution_stopped":outcome.stopReason();
+      goals.recordAttempt(claim,run,state,reason);stop(claim,state,reason);return;
     }
     try {gateway.validate(claim.goal());}
     catch(RuntimeException error){goals.recordAttempt(claim,run,"BLOCKED","owner_unavailable");stop(claim,"BLOCKED","owner_unavailable");return;}
@@ -112,9 +119,10 @@ public class GoalLoopService {
     var verification=verifier.verify(goals.get(claim.goal().projectId(),claim.goal().id()));
     goals.recordAttempt(claim,run,verification.satisfied()?"VERIFIED":"UNVERIFIED",verification.reason());
     if(verification.satisfied()){stop(claim,"COMPLETED",verification.reason());return;}
-    if(!java.util.Set.of("digest_mismatch","json_value_mismatch","predicate_mismatch","file_missing_or_not_regular","completion_evidence_missing","completion_required_tests_missing","completion_requirement_unmet","completion_required_artifact_missing","completion_review_stale","completion_test_evidence_changed").contains(verification.reason())) {
+    if(!GoalRepairDiagnosis.of(verification.reason()).repairable()) {
       stop(claim,"BLOCKED",verification.reason());return;
     }
+    if(controlledBudgetEnd&&!outcome.stopReason().equals("repair_reserve_reached")){stop(claim,"BLOCKED","budget_exhausted");return;}
     next(claim);
   }
   private void stop(GoalRepository.Claim claim,String state,String reason) {

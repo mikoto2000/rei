@@ -26,6 +26,7 @@ class GoalChatGatewayTest {
   List<AgentEvent> events;
   GoalRepository.Goal goal;
   GoalChatGateway gateway;
+  FileGoalVerifier verifier;
   ConversationInputRouter router;
   AgentEventBus bus;
   dev.mikoto2000.rei.application.run.RunService tracking;
@@ -55,7 +56,7 @@ class GoalChatGatewayTest {
     when(sessions.findById("session")).thenReturn(Optional.of(new dev.mikoto2000.rei.application.session.SessionMetadata("session",project,"test",Instant.EPOCH,Instant.EPOCH)));
     chat=mock(ChatExecutionService.class);jobs=new ArrayDeque<>();events=new ArrayList<>();
     router=new ConversationInputRouter(jobs::add,(owner,prompt,queue)->{});
-    var verifier=new FileGoalVerifier();gateway=new GoalChatGateway(goals,verifier,projects,sessions,router,chat,
+    verifier=new FileGoalVerifier();gateway=new GoalChatGateway(goals,verifier,projects,sessions,router,chat,
         new dev.mikoto2000.rei.core.service.CommandCancellationService(),new AgentEventFactory(Clock.systemUTC()),event->{events.add(event);if(bus!=null)bus.publish(event);});
     loop=new GoalLoopService(goals,verifier,gateway,new ToolPermissionProperties(true,null,null,null),new GoalEvents(events::add,Clock.systemUTC()));
     String digest=HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest("correct".getBytes()));
@@ -153,4 +154,16 @@ class GoalChatGatewayTest {
     when(chat.execute(any(),anyString(),any(),any())).thenAnswer(invocation->{assertTrue(invocation.getArgument(1,String.class).contains("unknown side effects"));return ChatExecutionResult.failed("stop");});
     loop.run(project,goal.id());jobs.remove().run();assertEquals(2,goals.get(project,goal.id()).attempts());assertEquals(1,goals.get(project,goal.id()).llmCallsUsed());
   }
-}
+  @Test void explicitGateReservesRepairCallsAndPassesCurrentUnmetConditionsToPlanner()throws Exception{
+    verifier.setCompletionGate(new GoalCompletionGate(goals,(o,r)->{throw new java.io.IOException();},(o,r)->{throw new java.io.IOException();},(r,d)->{throw new java.io.IOException();},Clock.systemUTC(),false));
+    goal=goals.defineCompletion(new AgentRunContext("human","session",dir,project),goal.id(),new GoalCompletionGate.Definition(goal.criteria(),null,List.of(),List.of(),null));
+    var attempts=new java.util.concurrent.atomic.AtomicInteger();
+    when(chat.execute(any(),anyString(),any(),any())).thenAnswer(inv->{
+      var reservation=inv.getArgument(3,OutputLimitRunBudget.LlmCallReservation.class);
+      if(attempts.incrementAndGet()==1){while(reservation.tryReserve()){}assertEquals(2,goals.get(project,goal.id()).llmCallsUsed());return ChatExecutionResult.failed("bounded","llm_call_budget_exceeded");}
+      String prompt=inv.getArgument(1);assertTrue(prompt.contains("Repair diagnosis"));assertTrue(prompt.contains("REQUIREMENT_UNMET"));assertTrue(prompt.contains("file-0"));
+      assertTrue(reservation.tryReserve());Files.writeString(dir.resolve("out.txt"),"correct");return ChatExecutionResult.success("done",false);
+    });
+    loop.run(project,goal.id());jobs.removeFirst().run();assertEquals("RUNNING",goals.get(project,goal.id()).status());jobs.removeFirst().run();
+    assertEquals("COMPLETED",goals.get(project,goal.id()).status());assertEquals(2,attempts.get());assertEquals(3,goals.get(project,goal.id()).llmCallsUsed());
+  }}

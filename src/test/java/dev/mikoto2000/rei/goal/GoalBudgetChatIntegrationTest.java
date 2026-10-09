@@ -79,6 +79,7 @@ class GoalBudgetChatIntegrationTest {
     var loop=new GoalLoopService(goals,new FileGoalVerifier(),(claim,run,done)->{
       var reservation=new OutputLimitRunBudget.LlmCallReservation(){public boolean tryReserve(){return goals.reserveLlm(claim);}public int remaining(){return goals.remainingLlm(claim);}};
       var result=chat.execute(new AgentRunContext(run,"session",dir,"project"),"Produce artifact",new UserInterventionQueue(),reservation);
+      assertEquals("llm_call_budget_exceeded",result.stopCode());
       done.accept(new GoalLoopService.Outcome(result));
     },new ToolPermissionProperties(true,null,null,null),new GoalEvents(event->{},Clock.systemUTC()));
     var stopped=loop.run("project",goal.id());assertEquals("BLOCKED",stopped.status());assertEquals(2,modelCalls.get());

@@ -3,7 +3,11 @@ import java.nio.file.Path;
 import java.util.*;
 /** Read-only completion view including optional checks and current content revisions. */
 public record GoalCompletionProgress(String goalId,String runId,String state,
-    FileGoalVerifier.Verification verification,List<Check> conditions,boolean deliveryPending) {
+    FileGoalVerifier.Verification verification,List<Check> conditions,boolean deliveryPending,GoalRepairDiagnosis diagnosis) {
+  public GoalCompletionProgress(String goalId,String runId,String state,FileGoalVerifier.Verification verification,List<Check> conditions,boolean deliveryPending) {
+    this(goalId,runId,state,verification,conditions,deliveryPending,GoalRepairDiagnosis.of(verification==null?"":verification.reason()));
+  }
+  public GoalCompletionProgress { if(diagnosis==null)diagnosis=GoalRepairDiagnosis.of(verification==null?"":verification.reason()); }
   public record Check(String id,String statement,boolean required,boolean satisfied,String reason,String revision) {}
   static GoalCompletionProgress inspect(GoalRepository.Goal goal,String phase,FileGoalVerifier verifier){
     var checks=new ArrayList<Check>();Path root=Path.of(goal.projectRoot());
@@ -17,7 +21,9 @@ public record GoalCompletionProgress(String goalId,String runId,String state,
     String state=phase;
     if(delivery&&!Set.of("RUNNING","VERIFYING","REPAIRING","CANCELLED").contains(phase))state="WAITING";
     else if(!verified.satisfied()&&Set.of("COMPLETED","BLOCKED").contains(phase)&&checks.stream().anyMatch(c->c.required()&&c.satisfied()))state="PARTIAL";
-    return new GoalCompletionProgress(goal.id(),goal.currentRunId(),state,verified,List.copyOf(checks),delivery);
+    String reason=Set.of("FAILED","WAITING_APPROVAL","BLOCKED","CANCELLED","PAUSED").contains(goal.status())&&!goal.reason().isBlank()?goal.reason():verified.reason();
+    if(goal.status().equals("WAITING_APPROVAL"))reason="permission_required";
+    return new GoalCompletionProgress(goal.id(),goal.currentRunId(),state,verified,List.copyOf(checks),delivery,GoalRepairDiagnosis.of(reason));
   }
   private static Check check(String id,String statement,boolean required,Path root,GoalRepository.FileCriterion criterion,FileGoalVerifier verifier){
     var observed=verifier.verify(root,criterion);var fingerprint=verifier.fingerprint(root,criterion.relativeFile());

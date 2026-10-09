@@ -72,8 +72,9 @@ public final class GoalCompletionGate {
       SemanticPatchReviewService.Receipt receipt=null;
       if(needsReview){
         if(proof.review()==null)return failed("completion_evidence_missing");receipt=reviews.read(owner,proof.review());var detail=receipt.detail();
-        if(detail==null||!detail.project().equals(goal.projectId())||!detail.root().equals(root.toString())||!detail.session().equals(goal.sessionId())||!receipt.status().equals(detail.status())
-            ||!Set.of("DETERMINISTIC_CHECKS_ONLY","REVIEWED_CHECKS").contains(receipt.status())||!detail.checks().isEmpty()||detail.verification()==null||!"VERIFIED_CHECKS".equals(detail.verification().status()))return failed("completion_review_not_verified");
+        if(detail==null||!detail.project().equals(goal.projectId())||!detail.root().equals(root.toString())||!detail.session().equals(goal.sessionId())||!receipt.status().equals(detail.status()))return failed("completion_review_not_verified");
+        if(detail.verification()!=null&&Set.of("INITIAL_TEST_FAILED","FINAL_TEST_FAILED").contains(detail.verification().status()))return failed("completion_tests_failed");
+        if(!Set.of("DETERMINISTIC_CHECKS_ONLY","REVIEWED_CHECKS").contains(receipt.status())||!detail.checks().isEmpty()||detail.verification()==null||!"VERIFIED_CHECKS".equals(detail.verification().status()))return failed("completion_review_not_verified");
         if(detail.checkedAt().isBefore(clock.instant().minus(Duration.ofDays(1)))||detail.checkedAt().isAfter(clock.instant().plusSeconds(60)))return failed("completion_review_stale");
         if(definition.reviewGate()!=null){
           if(!new HashSet<>(definition.reviewGate().requirements()).equals(new HashSet<>(detail.requirements())))return failed("completion_requirement_mismatch");
