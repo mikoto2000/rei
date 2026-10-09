@@ -20,10 +20,12 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
     new Asset("models/silero_vad.onnx",643854,"9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6")
   );
   private final Supplier<Path> directory;
+  private final Supplier<VoiceInferenceOptions> inference;
   private URLClassLoader loader;
   private int users;
   private boolean closing;
-  public SherpaBackendFactory(Supplier<Path> directory) { this.directory = Objects.requireNonNull(directory); }
+  public SherpaBackendFactory(Supplier<Path> directory) {this(directory,VoiceInferenceOptions::defaults);}
+  public SherpaBackendFactory(Supplier<Path> directory,Supplier<VoiceInferenceOptions> inference) {this.directory=Objects.requireNonNull(directory);this.inference=Objects.requireNonNull(inference);}
   public static void verify(Path root) throws IOException { VoiceModelManifest.pinned().verify(root); }
   /** Verify each worker's dependencies before JNI load, without making VAD hash the 3 GB ASR model. */
   static List<VoiceModelManifest.Asset> roleAssets(boolean withVad,boolean withRecognizer) {
@@ -40,6 +42,7 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
   public synchronized VoiceBackend openRecognizer(VoiceSettings settings) throws Exception {return openRole(settings,false,true);}
   private VoiceBackend openRole(VoiceSettings settings,boolean withVad,boolean withRecognizer) throws Exception {
     if (closing) throw new IllegalStateException("Voice runtime closed");
+    var options=Objects.requireNonNull(inference.get());
     Path root = directory.get().toAbsolutePath().normalize();
     verifyRole(root,withVad,withRecognizer);
     if (loader==null) loader=new URLClassLoader(new URL[]{root.resolve("jvm.jar").toUri().toURL(),
@@ -66,10 +69,10 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
       var whisper=builder("OfflineWhisperModelConfig");
       set(whisper,"setEncoder",root.resolve("models/turbo-encoder.onnx").toString());
       set(whisper,"setDecoder",root.resolve("models/turbo-decoder.onnx").toString());
-      set(whisper,"setLanguage","ja"); set(whisper,"setTask","transcribe");
+      set(whisper,"setLanguage","ja"); set(whisper,"setTask","transcribe"); set(whisper,"setTailPaddings",options.tailFrames());
       var model=builder("OfflineModelConfig"); set(model,"setWhisper",call(whisper,"build"));
       set(model,"setTokens",root.resolve("models/turbo-tokens.txt").toString());
-      set(model,"setNumThreads",1); set(model,"setProvider","cpu"); set(model,"setDebug",false);
+      set(model,"setNumThreads",options.threads()); set(model,"setProvider","cpu"); set(model,"setDebug",false);
       var config=builder("OfflineRecognizerConfig"); set(config,"setOfflineModelConfig",call(model,"build"));
       set(config,"setDecodingMethod","greedy_search");
       recognizer=construct("OfflineRecognizer",call(config,"build"));

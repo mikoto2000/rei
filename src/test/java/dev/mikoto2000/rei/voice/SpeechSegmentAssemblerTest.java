@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.*;
 class SpeechSegmentAssemblerTest {
   final Clock clock=Clock.fixed(Instant.parse("2026-10-09T00:00:00Z"),ZoneOffset.UTC);
   float[] frame(float amplitude){var frame=new float[160];Arrays.fill(frame,amplitude);return frame;}
-  SpeechSegmentAssembler assembler(){return new SpeechSegmentAssembler(VoiceSettings.defaults(),clock);}
+  SpeechSegmentAssembler assembler(){return new SpeechSegmentAssembler(new VoiceSettings(.5f,300,400,1200,25000,200),clock);}
   @Test void silenceIsFinalizedOnceAfter1200msAndRetainsPrerollAnd200msTail() {
     var assembler=assembler();
     for(int i=0;i<40;i++)assembler.accept(frame(.1f),0);

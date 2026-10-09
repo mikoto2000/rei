@@ -109,6 +109,7 @@ public final class VoiceAcceptance {
           if(event.payload() instanceof AgentRunFailedPayload){failed.set(true);completed.countDown();}
         });
         try(var voiceSubscription=context.getBean(VoiceEventPublisher.class).subscribe(new VoiceShellEventRenderer(output))) {
+          System.out.println("ACCEPTANCE MODEL: "+VoiceModelManifest.pinned().id()+" "+context.getBean(VoiceProperties.class).inference()+" "+context.getBean(VoiceProperties.class).settings());
           System.out.println("ACCEPTANCE WAITING: microphone OFF; selected "+candidates.getFirst().name());
           long deadline=System.nanoTime()+Duration.ofMinutes(10).toNanos();
           while(!Files.exists(ready)) {

@@ -1,0 +1,34 @@
+{
+  "profile": "small-int8",
+  "threads": 1,
+  "tail": 1000,
+  "silenceMs": 1200,
+  "maxWorkingSetBytes": 1394532352,
+  "exitCode": 0,
+  "samplingMs": 100,
+  "measurement": "19 distinct existing recordings plus one supplementary recording; duplicate discarded before aggregation; synthetic ten retained",
+  "rawProcesses": [
+    {
+      "profile": "small-int8",
+      "threads": 1,
+      "tail": 1000,
+      "silenceMs": 1200,
+      "pid": 67364,
+      "maxWorkingSetBytes": 1394532352,
+      "cpuSeconds": 244.40625,
+      "exitCode": 0,
+      "samplingMs": 100
+    },
+    {
+      "profile": "small-int8",
+      "threads": 1,
+      "tail": 1000,
+      "silenceMs": 1200,
+      "pid": 35316,
+      "maxWorkingSetBytes": 1080188928,
+      "cpuSeconds": 6.21875,
+      "exitCode": 0,
+      "samplingMs": 100
+    }
+  ]
+}

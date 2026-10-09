@@ -1,0 +1,34 @@
+{
+  "profile": "turbo",
+  "threads": 1,
+  "tail": 1000,
+  "silenceMs": 1200,
+  "maxWorkingSetBytes": 4424986624,
+  "exitCode": 0,
+  "samplingMs": 100,
+  "measurement": "19 distinct existing recordings plus one supplementary recording; duplicate discarded before aggregation; synthetic ten retained",
+  "rawProcesses": [
+    {
+      "profile": "turbo",
+      "threads": 1,
+      "tail": 1000,
+      "silenceMs": 1200,
+      "pid": 77560,
+      "maxWorkingSetBytes": 4424986624,
+      "cpuSeconds": 814.484375,
+      "exitCode": 0,
+      "samplingMs": 100
+    },
+    {
+      "profile": "turbo",
+      "threads": 1,
+      "tail": 1000,
+      "silenceMs": 1200,
+      "pid": 16564,
+      "maxWorkingSetBytes": 3781001216,
+      "cpuSeconds": 23.890625,
+      "exitCode": 0,
+      "samplingMs": 100
+    }
+  ]
+}

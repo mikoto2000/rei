@@ -26,7 +26,7 @@ class VoiceInputCoordinatorTest {
     void speech(int utterances){
       for(int j=0;j<utterances;j++){
         for(int i=0;i<16;i++){var frame=new float[512];Arrays.fill(frame,.6f);frames.add(frame);}
-        for(int i=0;i<38;i++)frames.add(new float[512]);
+        for(int i=0;i<60;i++)frames.add(new float[512]);
       }
     }
   }

@@ -79,3 +79,7 @@ Windows DLL/JNI・DRY (VT-4) の実マイク、日本語自然発話、実機の
 クラウドのテストでは、Javaの自動agent attachが使えないため既存Mockito JARをテストJVMの `-javaagent` で指定しました。SQLiteの実テストは公式 `sqlite-vec 0.1.9` のarchiveを配布manifestのSHAで検証してテストcacheに準備しています。SSL検証を無効化せず、製品コードやグローバル設定は変えていません。
 
 最終の `./mvnw -Pfull verify` 相当（上記クラウド用テストJVMオプション付き）は **4,278件、failures 0、errors 0、skipped 2** で成功し、Spring Boot JARも生成しました。スキップはLinux上のWindowsパス補完1件と、実PlantUML実行条件未成立1件です。音声関連97件は全件成功しています。受入試験Javaコード3本もJava25でコンパイルしました。`git diff --check` は成功しています。Windows CIと実機の未検証事項は上記の通りです。
+
+## Phase 5 での Windows 再検証
+
+2026-10-10、Windows / Java 25 で固定 FP32 一式の SHA、日本語公開音声20録音、合成診断10件の推論を確認しました。以後の既定 CPU 設定は4 threads / tail padding 1000 framesで、モデル固定値は維持しています。精度・速度と実Gateway診断の範囲は [Phase 5](voice-input-phase5.md) を参照してください。上記の1 thread計測と未検証範囲はPR #60時点の記録です。DRY (VT-4) の更新後再試験は別途実施し、公開音声の成功だけで実マイク検証済みとは扱いません。
