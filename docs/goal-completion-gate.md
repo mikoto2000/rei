@@ -122,3 +122,5 @@ SSE transition、旧Gate・Goal・Reflection・Attention・Shellの回帰を実�
 ### Phase 1 CI 回帰での並列予算競合
 
 最初の CI では既存 StandaloneSubAgentBudgetTest が、先行する子処理の token 使用量だけ確定した瞬間に後続の子処理を予約できる競合を検出した。未確定の兄弟処理が残る波では追加予約を拒否する。総予算を増やさず、既存の全 assertion を維持し、予約・部分使用量報告を直列に再現する Red → Green テストを追加した。既に開始した並列 provider の token overshoot 自体を予見できる保証ではなく、その後の追加呼び出しを止める制御である。
+
+CI の再実行では Reflection の既存並列昇格テストが SQLITE_BUSY を検出した。同じ VerifiedReflectionMemoryService singleton の人間による昇格を直列化し、証拠照会と兄弟 writer の競合を防ぐ。DB の一意制約・transaction は維持し、他プロセスまでのロック排除保証は追加していない。通常チャットの経路には変更しない。既存並列・キャンセル・rollback・再検証テストをそのまま通している。
