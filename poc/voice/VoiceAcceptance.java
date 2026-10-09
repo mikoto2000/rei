@@ -15,6 +15,20 @@ import dev.mikoto2000.rei.ui.shell.*;
 
 /** Explicit manual acceptance. No microphone opens until the new readiness marker appears. */
 public final class VoiceAcceptance {
+  /** Numeric counters only: no frame or recording retained. Read after workers have stopped. */
+  private static final class Diagnostics {
+    long frames,samples,nonzero,speechFrames;
+    double sumSquares,peak,peakProbability;
+    int recognitions;
+    void frame(float[] frame) {
+      frames++;
+      for(float sample:frame){samples++;if(sample!=0)nonzero++;sumSquares+=(double)sample*sample;peak=Math.max(peak,Math.abs(sample));}
+    }
+    void probability(float probability,float threshold){peakProbability=Math.max(peakProbability,probability);if(probability>=threshold)speechFrames++;}
+    void print(){System.out.printf(java.util.Locale.ROOT,
+      "ACCEPTANCE DIAGNOSTICS: frames=%d samples=%d nonzero=%d peak=%.6f rms=%.6f vadPeak=%.6f speechFrames=%d recognitions=%d%n",
+      frames,samples,nonzero,peak,samples==0?0:Math.sqrt(sumSquares/samples),peakProbability,speechFrames,recognitions);}
+  }
   public static void main(String[] args) throws Exception {
     if(args.length!=5)throw new IllegalArgumentException("BUNDLE DATA_DIR NEW_READY_FILE EXACT_MIC_NAME EXTERNAL_CONFIG");
     Path data=Path.of(args[1]).toAbsolutePath();
@@ -39,7 +53,7 @@ public final class VoiceAcceptance {
       "--rei.memory.auto-sleep.enabled=false","--rei.today.enabled=false","--rei.task-manager.enabled=false",
       "--spring.ai.mcp.client.enabled=false"};
     try(var context=app.run(settings)) {
-      var voice=context.getBean(VoiceInputCoordinator.class);
+      var diagnostics=new Diagnostics();
       var devices=context.getBean(AudioDeviceService.class);
       var candidates=devices.devices().stream().filter(d->d.name().equals(args[3])).toList();
       if(candidates.size()!=1)throw new IllegalStateException("Missing or ambiguous explicitly selected microphone");
@@ -49,6 +63,34 @@ public final class VoiceAcceptance {
       try(var scope=client.open();var notifications=projects.notificationsFollow(client)) {
         var conversations=context.getBean(ShellConversationService.class);
         var target=conversations.captureTarget();
+        var backend=context.getBean(SherpaBackendFactory.class);
+        var voice=new VoiceInputCoordinator(device -> {
+          var source=new JavaSoundMicrophoneCapture().open(device);
+          return new MicrophoneCaptureService.FrameSource() {
+            public float[] readFrame() throws Exception {
+              var frame=source.readFrame();
+              if(frame!=null)diagnostics.frame(frame);
+              return frame;
+            }
+            public void close(){source.close();}
+          };
+        }, settingsValue -> {
+          var nativeBackend=backend.open(settingsValue);
+          return new VoiceBackend(new VoiceActivityDetector() {
+            public float probability(float[] frame) throws Exception {
+              float probability=nativeBackend.vad().probability(frame);
+              diagnostics.probability(probability,settingsValue.threshold());
+              return probability;
+            }
+            public void close(){nativeBackend.close();}
+          }, new SpeechRecognizer() {
+            public String recognize(SpeechSegment segment) throws Exception {
+              diagnostics.recognitions++;
+              return nativeBackend.recognizer().recognize(segment);
+            }
+            public void close(){}
+          });
+        }, conversations::submit,context.getBean(VoiceEventPublisher.class),context.getBean(java.time.Clock.class));
         var completed=new CountDownLatch(1);
         var failed=new AtomicBoolean();
         var output=new ShellEventOutput(){
@@ -80,11 +122,21 @@ public final class VoiceAcceptance {
           long stopDeadline=System.nanoTime()+Duration.ofSeconds(15).toNanos();
           while(voice.state()==VoiceInputCoordinator.State.STOPPING && System.nanoTime()<stopDeadline)Thread.sleep(50);
           if(voice.state()!=VoiceInputCoordinator.State.OFF)throw new IllegalStateException("Voice did not stop cleanly: "+voice.state());
+          diagnostics.print();
           System.out.println("ACCEPTANCE MIC OFF: waiting for existing Agent response");
           var turns=context.getBean(ConversationTurnStore.class);
           if(turns.read(target.sessionId()).isEmpty())throw new IllegalStateException("No automatic voice input reached the existing Agent");
           if(!completed.await(180,TimeUnit.SECONDS)||failed.get())throw new IllegalStateException("Existing Agent response failed or timed out");
+          // Completion events precede ChatExecutionService finally/turn persistence.
+          // Wait for the terminal history as a separate observable acceptance condition.
+          long historyDeadline=System.nanoTime()+Duration.ofSeconds(15).toNanos();
           var records=turns.read(target.sessionId());
+          while(records.stream().noneMatch(t->t.status()==ConversationTurnStore.Status.COMPLETED
+              &&t.assistantMessage()!=null&&!t.assistantMessage().isBlank())
+              &&System.nanoTime()<historyDeadline) {
+            Thread.sleep(50);
+            records=turns.read(target.sessionId());
+          }
           if(records.stream().noneMatch(t->t.status()==ConversationTurnStore.Status.COMPLETED
               &&t.assistantMessage()!=null&&!t.assistantMessage().isBlank()))
             throw new IllegalStateException("No completed nonblank Agent response");
