@@ -144,7 +144,7 @@ public final class VoiceAcceptance {
               &&t.assistantMessage()!=null&&!t.assistantMessage().isBlank()))
             throw new IllegalStateException("No completed nonblank Agent response");
           for(var turn:records)System.out.println("ACCEPTANCE TURN: "+turn.status()+" / recognized="+turn.request()+" / response="+turn.assistantMessage());
-          System.out.println("ACCEPTANCE PASSED: real microphone -> raw VAD -> turbo FP32 -> common gateway -> existing Agent; no Enter submission");
+          System.out.println("ACCEPTANCE PIPELINE PASSED (accuracy/style require separate review): real microphone -> raw VAD -> turbo FP32 -> common gateway -> existing Agent; no Enter submission");
         } finally { voice.close();subscription.unsubscribe(); }
       }
     }

@@ -111,3 +111,11 @@ python poc/voice/summarize_benchmark.py
 2026-10-10、`.github/ci/full-test.ps1`（1200秒の所有プロセス制限）による全体回帰は **4,286件、failures 0、errors 0、skipped 1** で成功した（11分46秒）。スキップは実PlantUML実行の条件が成立していない `DocumentRendererProcessTest.realPlantUmlErrorAndPngAreVerifiedAndDeliveredThroughExistingStore` で、音声の成功として数えない。関連39件、録音衝突防止Pythonテスト1件、公開30音声のSHA再現、実Gateway4件のworker終了、`git diff --check`、Spring Boot JARのpackageも成功。
 
 新APIは未実装状態のRed確認後に実装してGreenを確認した。公開録音の文章ID衝突も、同一ファイル名で上書きする状態のRedを確認し、行番号を含む名前へ修正してGreenを確認した。500 framesの予備選定は全件評価で棄却し、1000 framesへ戻した後の関連テストと全体回帰を実施した。
+
+## DRY (VT-4) の診断付き再試験
+
+2026-10-10 05:24 JST、Java 25 / turbo FP32 / 4 threads / padding1000 / silence1800ms を実ログで確認し、ユーザーの新しい準備返答と「受付開始」の表示後に20秒の実マイク試験を行った。古い待機アプリは準備期限切れで終了していたため、新しい試験アプリ・readiness markerを用いた。通常利用中のアプリは停止していない。
+
+620 frames / 317,440 samples（19.84秒）、nonzero 148,806、peak .315094、RMS .025699、VAD peak .999283、speech frames 130、recognitions 1。音声はファイル保存していない。固定FP32モデルから共通Gatewayへ自動投入し、実Agent Run `501d017c-cfa2-4ee6-8ca1-f3b9d428e787` の保存状態は `COMPLETED`。音声状態OFF、所有推論worker0、試験アプリも終了、stderrは空だった。
+
+指定文は「こんにちは。音声入力のテストです。短く挨拶してください。」。実際の認識文は「こんにちは。音声入力のテストです。くしてください。」で、挨拶の指示部分が欠落した。Agentは欠けた指示の確認を含む長い応答を返した。したがって入力経路・終了処理は成功したが、全文認識と短い挨拶の受入は未達である。helperのPASS表示は経路の検証であり、認識精度や返答スタイルの成功を意味しない。録音を保持していないため、音響入力・VAD区間・ASRのどこで語句が欠けたかは断定しない。この1回を一般的な認識精度の証明とは扱わない。
