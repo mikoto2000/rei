@@ -57,7 +57,7 @@ public class RunExecutionContext {
     var previous=dependencies.put(observation.id(),observation.state());
     if(dependencies.size()>64)dependencies.remove(dependencies.keySet().iterator().next());
     if(observation.state()==dev.mikoto2000.rei.core.dependency.DependencyState.WAITING)waitingObservations++;
-    else if(previous!=observation.state())pending.add(new ProgressEvidence(ProgressEvent.NEW_INFORMATION,"Dependency state: "+observation.state(),observation.id()));
+    else if(previous!=observation.state())pending.add(new ProgressEvidence(ProgressEvent.NEW_INFORMATION,"Dependency state: "+observation.state(),observation.id(),observation.state().name()));
   }
   private final Deque<String> recentActions = new ArrayDeque<>();
   private final Set<String> completedSubgoals = new HashSet<>();
