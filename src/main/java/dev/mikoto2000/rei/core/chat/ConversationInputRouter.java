@@ -14,6 +14,9 @@ public final class ConversationInputRouter {
     void execute(AgentRunContext context, String prompt, UserInterventionQueue queue);
   }
   @FunctionalInterface public interface Subscription extends AutoCloseable { void close(); }
+  private dev.mikoto2000.rei.llm.capture.CaptureStore requestCaptures;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setRequestCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore captures){requestCaptures=captures;}
   private final Executor executor;
   private final Runner runner;
   private final ProjectRunQueue projectQueue;
@@ -97,6 +100,7 @@ public final class ConversationInputRouter {
   public boolean cancelQueued(String runId) {
     boolean removed = projectQueue.cancelQueued(runId);
     if (removed) {
+      if(requestCaptures!=null)requestCaptures.finish(runId,"CANCELLED");
       var slot = agentSlots.remove(runId);
       if (slot != null) forget(slot);
     }
@@ -125,6 +129,7 @@ public final class ConversationInputRouter {
       }, () -> { active.put(context.runId(), ActiveRun.of(context, slot.prompt())); changed(); },
           () -> { agentSlots.remove(context.runId()); forget(slot); },
           error -> {
+            if(requestCaptures!=null)requestCaptures.startFailed(context.runId());
             try { lifecycle.accept(() -> { throw error; }); }
             finally { agentSlots.remove(context.runId()); forget(slot); }
           });

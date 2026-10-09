@@ -17,6 +17,26 @@ import io.micrometer.observation.ObservationRegistry;
 @Component
 public class LlmModelProvider {
 
+  private dev.mikoto2000.rei.llm.capture.CaptureStore captureStore;
+  private java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> captureCustomizers=java.util.List.of();
+  private io.micrometer.observation.ObservationRegistry captureObservations=ObservationRegistry.NOOP;
+  private io.micrometer.core.instrument.MeterRegistry captureMeters;
+  private org.springframework.ai.model.tool.ToolCallingManager captureTools;
+  @Autowired(required=false)
+  void configureCapture(dev.mikoto2000.rei.llm.capture.CaptureStore store,
+      org.springframework.beans.factory.ObjectProvider<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> customizers,
+      org.springframework.beans.factory.ObjectProvider<io.micrometer.observation.ObservationRegistry> observations,
+      org.springframework.beans.factory.ObjectProvider<io.micrometer.core.instrument.MeterRegistry> meters,
+      org.springframework.beans.factory.ObjectProvider<org.springframework.ai.model.tool.ToolCallingManager> tools){
+    captureStore=store;captureCustomizers=customizers.orderedStream().toList();captureObservations=observations.getIfAvailable(()->ObservationRegistry.NOOP);
+    captureMeters=meters.getIfAvailable();captureTools=tools.getIfAvailable();
+  }
+  private ChatModel captureModel(ChatModel model,boolean custom){
+    if(captureStore==null||!(model instanceof OpenAiChatModel openAi))return model;
+    var configured=custom?java.util.List.<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>of(
+      builder->builder.interceptor(new ChatStreamTimeoutInterceptor()).interceptor(new ShowUiSdkRequestInterceptor())):captureCustomizers;
+    return new CapturingChatModel(openAi,captureStore,configured,custom?ObservationRegistry.NOOP:captureObservations,custom?null:captureMeters,custom?null:captureTools);
+  }
   private final ChatModel defaultChatModel;
   private final LlmProperties properties;
   private final AgentEventFactory eventFactory;
@@ -60,11 +80,12 @@ public class LlmModelProvider {
     if (LlmFeature.COMPUTER_USE.equals(feature) || LlmFeature.COMPUTER_USE_PLANNER.equals(feature) || LlmFeature.ACTIVITY.equals(feature) || LlmFeature.ACTIVITY_BEHAVIOR.equals(feature))
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(defaultChatModel);
     LlmProperties.Server server = properties.feature(feature);
-    ChatModel model = defaultChatModel;
+    ChatModel model = LlmFeature.CHAT.equals(feature) ? captureModel(defaultChatModel,false) : defaultChatModel;
     if (server != null && server.hasCustomServer()) {
       ChatModel primary = createOpenAiCompatibleChatModel(server);
+      if(LlmFeature.CHAT.equals(feature))primary=captureModel(primary,true);
       model = (LlmFeature.COMPUTER_USE.equals(feature) || LlmFeature.COMPUTER_USE_PLANNER.equals(feature) || LlmFeature.ACTIVITY.equals(feature) || LlmFeature.ACTIVITY_BEHAVIOR.equals(feature)) ? primary
-          : new FallbackChatModel(feature, primary, defaultChatModel, primary.getOptions().getModel());
+          : new FallbackChatModel(feature, primary, model, primary.getOptions().getModel());
     }
     return eventFactory == null || eventPublisher == null
         ? model

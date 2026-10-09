@@ -14,7 +14,7 @@ public final class ShowUiSdkRequestInterceptor implements Interceptor {
   public Response intercept(Chain chain) throws IOException {
     var request = chain.request();
     var body = request.body();
-    if (body == null || !request.url().encodedPath().endsWith("/chat/completions")) {
+    if (body == null || body.isOneShot() || body.isDuplex() || !request.url().encodedPath().endsWith("/chat/completions")) {
       return chain.proceed(request);
     }
     var buffer = new Buffer();

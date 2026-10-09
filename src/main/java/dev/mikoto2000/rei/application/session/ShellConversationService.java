@@ -7,6 +7,9 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 /** Selection belongs to a Shell client, never to the process or an execution thread. */
 public final class ShellConversationService {
   private final dev.mikoto2000.rei.application.input.ConversationInputGateway gateway;
+  private dev.mikoto2000.rei.llm.capture.CaptureStore captures;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore captures){this.captures=captures;}
   private final java.time.Clock clock;
   private final ProjectService projects;
   private final SessionLifecycle lifecycle;
@@ -37,7 +40,10 @@ public final class ShellConversationService {
       var input = new dev.mikoto2000.rei.application.input.ConversationInput(java.util.UUID.randomUUID(),
           dev.mikoto2000.rei.application.input.InputSource.KEYBOARD,
           new dev.mikoto2000.rei.application.input.ConversationTarget(project,currentSessionId()),message,clock.instant());
-      var context = gateway.submit(input,mode);
+            var captureStore=captures;var client=projects.currentClient();
+      var context = gateway.submit(input,mode,run->{
+        if(captureStore!=null)captureStore.accept(client,run.conversationId(),input.inputId().toString(),run.runId());
+      },run->{if(captureStore!=null)captureStore.startFailed(run.runId());});
       projects.selectSession(context.conversationId());
       return context;
     }
