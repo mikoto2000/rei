@@ -1,0 +1,11 @@
+{
+  "profile": "tiny",
+  "threads": 1,
+  "tail": 1000,
+  "silenceMs": 1200,
+  "pid": 67452,
+  "maxWorkingSetBytes": 411713536,
+  "cpuSeconds": 2.234375,
+  "exitCode": 0,
+  "samplingMs": 100
+}

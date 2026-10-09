@@ -85,22 +85,25 @@ public class VoiceCommand {
       throw new IllegalStateException("音声診断を開始できませんでした");
     spec.commandLine().getOut().println("LISTENING: 20秒間の診断を開始しました。Agent送信・録音ファイル保存はありません。");return 0;
   }); }
-  @Command(name="config",description="設定表示・変更。ミリ秒指定、変更はOFF時のみ",mixinStandardHelpOptions=true)
+  @Command(name="config",description="音声・推論設定。変更はOFF時のみ",mixinStandardHelpOptions=true)
   int config(@Option(names="--threshold") Float threshold,
       @Option(names="--pre-roll-ms") Integer preRoll,@Option(names="--min-speech-ms") Integer minSpeech,
       @Option(names="--silence-ms") Integer silence,@Option(names="--max-speech-ms") Integer maxSpeech,
-      @Option(names="--tail-ms") Integer tail,@Option(names="--confirmation",arity="0..1",fallbackValue="true") Boolean confirmation) {
+      @Option(names="--tail-ms") Integer tail,@Option(names="--confirmation",arity="0..1",fallbackValue="true") Boolean confirmation,
+      @Option(names="--asr-threads",description="ASR CPU thread数（1..4）") Integer asrThreads,
+      @Option(names="--asr-tail-frames",description="Whisper末尾補完（250..2000 frames）") Integer asrTailFrames) {
     return attempt(()-> {
-      var s=properties.settings();
-      if(threshold!=null||preRoll!=null||minSpeech!=null||silence!=null||maxSpeech!=null||tail!=null||confirmation!=null) {
+      var s=properties.settings();var inference=properties.inference();
+      if(threshold!=null||preRoll!=null||minSpeech!=null||silence!=null||maxSpeech!=null||tail!=null||confirmation!=null||asrThreads!=null||asrTailFrames!=null) {
         requireOff();
         s=new VoiceSettings(threshold==null?s.threshold():threshold,preRoll==null?s.preRollMs():preRoll,
           minSpeech==null?s.minSpeechMs():minSpeech,silence==null?s.silenceMs():silence,
           maxSpeech==null?s.maxSpeechMs():maxSpeech,tail==null?s.tailMs():tail);
-        properties.setSettings(s);
+        inference=new VoiceInferenceOptions(asrThreads==null?inference.threads():asrThreads,asrTailFrames==null?inference.tailFrames():asrTailFrames);
+        properties.setSettings(s);properties.setInference(inference);
         if(confirmation!=null){properties.setConfirmation(confirmation);if(delivery!=null)delivery.setConfirmation(confirmation);}
       }
-      spec.commandLine().getOut().println(s);spec.commandLine().getOut().println("recognition confirmation: "+properties.isConfirmation());return 0;
+      spec.commandLine().getOut().println(s);spec.commandLine().getOut().println(inference);spec.commandLine().getOut().println("recognition confirmation: "+properties.isConfirmation());return 0;
     });
   }
   private VoiceModelManager modelManager() {

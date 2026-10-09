@@ -1,0 +1,2 @@
+profile	file	reference64	hypothesis64	audioSeconds	asrMs	cpuMs	cer	segments	dropped	pipelineHypothesis64	endToAdmissionMs	loadMs	threads	tailPadding	silenceMs
+base-int8	synthetic-commands.wav	Z2l0IHN0YXR1c+OAgW12biB0ZXN044CBZ2l0IGRpZmYg44KS5a6f6KGM44GX44Gm44GP44Gg44GV44GE44CC	Z2l0IHN0YXR1cyBtdm7jgafjgZnjgahnaXTjgafooajnpLrooYzjgZfjgabjgY/jgaDjgZXjgYQ=	5.73	576.1969	593.75	0.3125	1	0	Z2l0IHN0YXR1cyBtdm7jgafjgZnjgahnaXTjgafooajnpLrlhazjgZfjgabjgY/jgaDjgZXjgYQ=	1810.0686	927.284	1	1000	1200

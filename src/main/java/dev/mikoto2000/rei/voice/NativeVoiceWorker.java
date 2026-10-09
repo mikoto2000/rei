@@ -10,10 +10,11 @@ public final class NativeVoiceWorker {
     try{run(args);}catch(Throwable failure){System.err.println("VOICE_WORKER_FAILED");System.exit(2);}
   }
   private static void run(String[] args) throws Exception {
-    if(args.length!=8||(!args[0].equals("vad")&&!args[0].equals("asr")))throw new IllegalArgumentException("Invalid worker options");
+    if((args.length!=8&&args.length!=10)||(!args[0].equals("vad")&&!args[0].equals("asr")))throw new IllegalArgumentException("Invalid worker options");
     boolean vad=args[0].equals("vad");Path root=Path.of(args[1]);
     var settings=new VoiceSettings(Float.parseFloat(args[2]),Integer.parseInt(args[3]),Integer.parseInt(args[4]),Integer.parseInt(args[5]),Integer.parseInt(args[6]),Integer.parseInt(args[7]));
-    try(var factory=new SherpaBackendFactory(()->root);var backend=vad?factory.openVad(settings):factory.openRecognizer(settings)) {
+    var options=args.length==10?new VoiceInferenceOptions(Integer.parseInt(args[8]),Integer.parseInt(args[9])):VoiceInferenceOptions.defaults();
+    try(var factory=new SherpaBackendFactory(()->root,()->options);var backend=vad?factory.openVad(settings):factory.openRecognizer(settings)) {
       var input=new DataInputStream(new BufferedInputStream(System.in,65536));var output=new DataOutputStream(new BufferedOutputStream(System.out,65536));
       output.writeInt(VoiceWorkerProcess.MAGIC);output.writeInt(VoiceWorkerProcess.VERSION);output.flush();
       while(true){int operation;try{operation=input.readInt();}catch(EOFException stopped){return;}

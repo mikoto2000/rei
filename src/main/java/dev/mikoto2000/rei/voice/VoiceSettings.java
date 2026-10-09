@@ -8,6 +8,6 @@ public record VoiceSettings(float threshold,int preRollMs,int minSpeechMs,int si
         ||minSpeechMs<1||silenceMs<1||silenceMs>10000||maxSpeechMs<minSpeechMs||maxSpeechMs>25000
         ||tailMs<0||tailMs>silenceMs)throw new IllegalArgumentException("Invalid voice settings");
   }
-  public static VoiceSettings defaults(){return new VoiceSettings(.5f,300,400,1200,25000,200);}
+  public static VoiceSettings defaults(){return new VoiceSettings(.5f,300,400,1800,25000,200);}
   public int samples(int milliseconds){return milliseconds*16;}
 }

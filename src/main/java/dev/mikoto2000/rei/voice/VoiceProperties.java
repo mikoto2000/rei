@@ -10,5 +10,7 @@ public class VoiceProperties {
   private String deviceId;
   private boolean confirmation;
   private volatile VoiceSettings settings=VoiceSettings.defaults();
+  private volatile VoiceInferenceOptions inference=VoiceInferenceOptions.defaults();
+  public VoiceInferenceOptions inference(){return java.util.Objects.requireNonNull(inference);}
   public VoiceSettings settings() { return settings; }
 }

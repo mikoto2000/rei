@@ -1,0 +1,9 @@
+[
+  {
+    "file": "synthetic-commands.wav",
+    "reference": "git status、mvn test、git diff を実行してください。",
+    "category": "command-terms",
+    "source": "Microsoft Haruka Desktop - Japanese synthetic",
+    "sha256": "4a589e776850740775184f1b55d54089f3f72f475cf66c98c283bf3ef99f6056"
+  }
+]

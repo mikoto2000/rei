@@ -194,3 +194,5 @@ SSE bridge の破棄時には送信完了を最大 2 秒待機します。切断
 音声入力の確認・訂正、Windows endpoint 監視、推論隔離と復旧操作は [Phase 4](docs/voice-input-phase4.md) を参照してください。
 
 音声認識の現行モデル、承認付き取得、旧キャッシュと検証範囲は [Whisper large-v3-turbo FP32 移行](docs/voice-input-turbo-fp32.md) を参照してください。
+
+音声認識の CPU 比較と設定選定・遅延の測定範囲は [Phase 5](docs/voice-input-phase5.md) を参照してください。

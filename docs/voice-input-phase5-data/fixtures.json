@@ -1,0 +1,493 @@
+{
+  "public_source": {
+    "source": "google/fleurs",
+    "revision": "3dfbbb3b3cfb7d48550c24defda9876bbb73f8ac",
+    "split": "validation",
+    "license": "CC-BY-4.0",
+    "selection": "first 20 rows with 3-18 second mono 16kHz; float WAV converted to PCM16; row index makes recordings unique",
+    "fixtures": [
+      {
+        "id": "1519",
+        "row_index": 0,
+        "file": "fleurs-0000-1519.wav",
+        "reference": "多くの場合、海外のギャップイヤーコースに入学することで、帰国後に実際に大学に進学しやすくなります。",
+        "seconds": 11.1,
+        "sha256": "fca3fafec905be409cbee3e2ca4f5d522a3e4e8ed218dc4c68f717dc8da1bf62",
+        "original_sha256": "9627b8f5d46806e1a433b443d692fdfb24f26a35c1a47eba26291475fc643d7b",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1607",
+        "row_index": 2,
+        "file": "fleurs-0002-1607.wav",
+        "reference": "興味をそそられる村を30分ほど散策するのは価値があります。",
+        "seconds": 7.98,
+        "sha256": "7b6b94a0291385418e05161985ad505cab03246b874da9efcb220385a1ecd877",
+        "original_sha256": "88391f365cdecc51a56ef5f9322c441c0107ab8d0c6f7a3a09f2334ffe8c56ff",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1634",
+        "row_index": 3,
+        "file": "fleurs-0003-1634.wav",
+        "reference": "日本には約7,000の島々があり、その最大は本州列島で、世界で7番目に大きい島とされています。",
+        "seconds": 12.12,
+        "sha256": "2c080cd99cca482ae72d0dba6f74a14db43e12cd75ad176c67bcee82cb38f38e",
+        "original_sha256": "091c2c7fc285593a60dc4b90db1c1c20cffa5a0551c8eb2e26df687dffbb1fd8",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1625",
+        "row_index": 4,
+        "file": "fleurs-0004-1625.wav",
+        "reference": "全国から集まった有名な歌手たちがシュリーシャムの足元にバジャン（聖歌）を捧げました。",
+        "seconds": 9.9,
+        "sha256": "4aa1ba0ea0e7f761307d71aaeec0bf4c7b748d6bf929859f24153d6633abb71a",
+        "original_sha256": "2ad888f9450c6ea557554bf3aa77e4eadd755cef17d51960629be08eafd67121",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1572",
+        "row_index": 5,
+        "file": "fleurs-0005-1572.wav",
+        "reference": "その後2時間のうちに、さらに3つの爆弾が官庁施設の付近で爆発しました。",
+        "seconds": 9.12,
+        "sha256": "479149938983c95ceff97fe5b01859f344be426c99bc2ef8c90db149318932a3",
+        "original_sha256": "0fcf82aa092043c81ba71b28cce19320242b8a56c46c667b8cab6941e7f3cd53",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1607",
+        "row_index": 7,
+        "file": "fleurs-0007-1607.wav",
+        "reference": "興味をそそられる村を30分ほど散策するのは価値があります。",
+        "seconds": 10.14,
+        "sha256": "2e5b40229485e3a798ca8ec77ca7345ad59d8335d3c4d8509e39accf3b120460",
+        "original_sha256": "3afe6e551a55f8745439bc4077408bd94f9a2fe17f96d25232cb8bd9b6bd2459",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1575",
+        "row_index": 8,
+        "file": "fleurs-0008-1575.wav",
+        "reference": "イスラエルは、この協定が結ばれれば10年間にわたる峡谷での駐留継続を要求するとしていますが、その一方でパレスチナ自治政府が同意している駐在期間は5年間のみです。",
+        "seconds": 14.82,
+        "sha256": "c383af910d78dba95f340838947ef4e11860340d604f4605d9d1bad1a7e0fdc9",
+        "original_sha256": "2cb36dfdd19dee5c1a942e1a2d2f9fb49c43dcd42d46107b3a9c8b0df8c5cb65",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1628",
+        "row_index": 9,
+        "file": "fleurs-0009-1628.wav",
+        "reference": "手工芸品は、大量生産された類似品よりも歴史は浅いのですが、骨董品と定義されることもあります。",
+        "seconds": 11.1,
+        "sha256": "344be1dfbbfde46260230d18483f80bbe98666da4e11170c9d66cad2c9289196",
+        "original_sha256": "953b419115bc0b5bbc715ad98f228e09669c637358e6eda2e36343e068c3ec47",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1598",
+        "row_index": 10,
+        "file": "fleurs-0010-1598.wav",
+        "reference": "車の衝突時には３人が家の中にいましたが、怪我人はいませんでした。",
+        "seconds": 9.24,
+        "sha256": "d01c624dd169a1076798ba5a9dd8f11ec5a56e0d85fc21b3cff757f2ca05cf44",
+        "original_sha256": "79f4e7148a35d78e986911d939c1664737209e33c4e46dae944e28bb624afdfb",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1596",
+        "row_index": 11,
+        "file": "fleurs-0011-1596.wav",
+        "reference": "自然主義者や哲学者たちは、古典書、特にラテン語で書かれた聖書に注目していました。",
+        "seconds": 9.6,
+        "sha256": "30cfdfc727b28f692734918980dfbab1b13b36350a228687012475bc81028462",
+        "original_sha256": "717d69b3f1046b35bd38f0daa995e9c1c6d8333afd16eeb1764bb8d98d98845f",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1589",
+        "row_index": 12,
+        "file": "fleurs-0012-1589.wav",
+        "reference": "サブカルチャーの特徴を決定付ける性質は、言語、美、宗教、政治、性、地理、またはそれらの要素の組み合わせかもしれません。",
+        "seconds": 17.46,
+        "sha256": "6403d239c396eaa461d9d42f2c605259fdb69c86f2816db9a7fbd8378474d4de",
+        "original_sha256": "2e4206ff73dab3b2c24cfc6e07c34283a74b46337e2bb36f72ac5894f4c20c1a",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1615",
+        "row_index": 13,
+        "file": "fleurs-0013-1615.wav",
+        "reference": "何千年も前に、アリスタルコスという学者が、太陽系は太陽の周りを移動していると言いました。",
+        "seconds": 10.2,
+        "sha256": "5aa98d7bd85c1d0c3306e5c92958a1289713492b5d808e42026f3b9305f1de4b",
+        "original_sha256": "66b2cadee94dcfd09ab9d64e0872510377435a855fcf93f27c296caecdefefec",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1641",
+        "row_index": 15,
+        "file": "fleurs-0015-1641.wav",
+        "reference": "この森林はただマングローブが生えているだけの沼地ではありません。森林には、かつてヒンドゥスターン平野を覆っていた広大なジャングルが残っている最後の場所も含まれています。",
+        "seconds": 16.44,
+        "sha256": "ed7cde8cf0f64015553c98d9b4ee752855a40517c9d54760070ba2f4c393ca7e",
+        "original_sha256": "074801df6ae4c087c00abe12a0e9271d8c9d8312ed862126064d57eca5ebc7b6",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1562",
+        "row_index": 16,
+        "file": "fleurs-0016-1562.wav",
+        "reference": "これが一般的になりましたが、鉄は馬車の木製車輪の摩耗が進む原因になりました。",
+        "seconds": 15.12,
+        "sha256": "01451351892ec21d75e489e3bb89475fe03ba122db3aa496ee42f9e8ff8cea62",
+        "original_sha256": "41e0dea340719c0ed8170aacd8aeb0aa719de6260bc8249d76bbf83dee557854",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1513",
+        "row_index": 17,
+        "file": "fleurs-0017-1513.wav",
+        "reference": "アルゼンチンは、世界最高のポロチームとポロ競技選手を擁することで有名です。",
+        "seconds": 8.46,
+        "sha256": "c0369ab1d37f22c8300524e390e8de927091072a7e25313fa66fab9b3f5adcd9",
+        "original_sha256": "e2933f26c9648af52c6cb289b4e6fd5cc2ea8c43074df42397e509a4393afc0a",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1619",
+        "row_index": 18,
+        "file": "fleurs-0018-1619.wav",
+        "reference": "しかし、カタルーニャ語が第一公用語として法律で定められているため、ほとんどの標識がカタルーニャ語のみで表示されています。",
+        "seconds": 11.64,
+        "sha256": "e56261db50f04072a28f1b757061ed7650b21a4370e2f8747f137ec6bd485654",
+        "original_sha256": "1b6182833bf39d53d2e4f67e30afcab19b3f7f57c5c2cb28a3343fd908f2dd94",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1524",
+        "row_index": 19,
+        "file": "fleurs-0019-1524.wav",
+        "reference": "メートル法の採用、絶対主義から共和主義への移行、愛国心、そして国は単独支配者ではなく国民のものであるという信念など、多くの社会的政治的影響がありました。",
+        "seconds": 17.28,
+        "sha256": "14b9bc5371d66efc7fc6a76c34ebc669f274b66cc1122e56d9935e03e992ef2c",
+        "original_sha256": "30d3fe0031029a955672a9e2c417bbb9fe51ac6d35055ce64a214747241baea5",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1644",
+        "row_index": 20,
+        "file": "fleurs-0020-1644.wav",
+        "reference": "コメントを求められたミラー氏は、「公聴会ではマイクがよくしゃべるので、私は準備をしていたので、何を言っているのかよく聞こえなかった」と述べた。",
+        "seconds": 13.56,
+        "sha256": "72efad5317cfb32290a39da4e3f079a9b514906230b81a1ae332e1ff288f1005",
+        "original_sha256": "e979a85a9abdd79eb186beac83efe73ea7a590cb3178f22c776fc1729bc2a375",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1574",
+        "row_index": 21,
+        "file": "fleurs-0021-1574.wav",
+        "reference": "気温が氷点下になることはめったにありませんが、風と湿度の関係で温度計が示す気温よりも寒く感じることがあります。",
+        "seconds": 15.72,
+        "sha256": "80dad1f295c96e0d57dc221d02eb9dacc18702e634d83af6848b511829ad4693",
+        "original_sha256": "6944bf53494adcb1210ab738be6390071ceb08809d9554827f65192a1fe59abd",
+        "category": "public-read-japanese"
+      },
+      {
+        "id": "1582",
+        "row_index": 22,
+        "file": "fleurs-0022-1582.wav",
+        "reference": "ヘブライ人家族はほとんど戸外で暮らしていました。",
+        "seconds": 7.5,
+        "sha256": "8e8c2ea4bf4592767f296cbcc283499f1f8f5447cb44987d84ef1730bf76465d",
+        "original_sha256": "669696f55ff10c76427e65fb5eee165ac80d87bbfdd64077c47a8430f023dde4",
+        "category": "public-read-japanese"
+      }
+    ]
+  },
+  "fixtures": [
+    {
+      "id": "1519",
+      "row_index": 0,
+      "file": "fleurs-0000-1519.wav",
+      "reference": "多くの場合、海外のギャップイヤーコースに入学することで、帰国後に実際に大学に進学しやすくなります。",
+      "seconds": 11.1,
+      "sha256": "fca3fafec905be409cbee3e2ca4f5d522a3e4e8ed218dc4c68f717dc8da1bf62",
+      "original_sha256": "9627b8f5d46806e1a433b443d692fdfb24f26a35c1a47eba26291475fc643d7b",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1607",
+      "row_index": 2,
+      "file": "fleurs-0002-1607.wav",
+      "reference": "興味をそそられる村を30分ほど散策するのは価値があります。",
+      "seconds": 7.98,
+      "sha256": "7b6b94a0291385418e05161985ad505cab03246b874da9efcb220385a1ecd877",
+      "original_sha256": "88391f365cdecc51a56ef5f9322c441c0107ab8d0c6f7a3a09f2334ffe8c56ff",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1634",
+      "row_index": 3,
+      "file": "fleurs-0003-1634.wav",
+      "reference": "日本には約7,000の島々があり、その最大は本州列島で、世界で7番目に大きい島とされています。",
+      "seconds": 12.12,
+      "sha256": "2c080cd99cca482ae72d0dba6f74a14db43e12cd75ad176c67bcee82cb38f38e",
+      "original_sha256": "091c2c7fc285593a60dc4b90db1c1c20cffa5a0551c8eb2e26df687dffbb1fd8",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1625",
+      "row_index": 4,
+      "file": "fleurs-0004-1625.wav",
+      "reference": "全国から集まった有名な歌手たちがシュリーシャムの足元にバジャン（聖歌）を捧げました。",
+      "seconds": 9.9,
+      "sha256": "4aa1ba0ea0e7f761307d71aaeec0bf4c7b748d6bf929859f24153d6633abb71a",
+      "original_sha256": "2ad888f9450c6ea557554bf3aa77e4eadd755cef17d51960629be08eafd67121",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1572",
+      "row_index": 5,
+      "file": "fleurs-0005-1572.wav",
+      "reference": "その後2時間のうちに、さらに3つの爆弾が官庁施設の付近で爆発しました。",
+      "seconds": 9.12,
+      "sha256": "479149938983c95ceff97fe5b01859f344be426c99bc2ef8c90db149318932a3",
+      "original_sha256": "0fcf82aa092043c81ba71b28cce19320242b8a56c46c667b8cab6941e7f3cd53",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1607",
+      "row_index": 7,
+      "file": "fleurs-0007-1607.wav",
+      "reference": "興味をそそられる村を30分ほど散策するのは価値があります。",
+      "seconds": 10.14,
+      "sha256": "2e5b40229485e3a798ca8ec77ca7345ad59d8335d3c4d8509e39accf3b120460",
+      "original_sha256": "3afe6e551a55f8745439bc4077408bd94f9a2fe17f96d25232cb8bd9b6bd2459",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1575",
+      "row_index": 8,
+      "file": "fleurs-0008-1575.wav",
+      "reference": "イスラエルは、この協定が結ばれれば10年間にわたる峡谷での駐留継続を要求するとしていますが、その一方でパレスチナ自治政府が同意している駐在期間は5年間のみです。",
+      "seconds": 14.82,
+      "sha256": "c383af910d78dba95f340838947ef4e11860340d604f4605d9d1bad1a7e0fdc9",
+      "original_sha256": "2cb36dfdd19dee5c1a942e1a2d2f9fb49c43dcd42d46107b3a9c8b0df8c5cb65",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1628",
+      "row_index": 9,
+      "file": "fleurs-0009-1628.wav",
+      "reference": "手工芸品は、大量生産された類似品よりも歴史は浅いのですが、骨董品と定義されることもあります。",
+      "seconds": 11.1,
+      "sha256": "344be1dfbbfde46260230d18483f80bbe98666da4e11170c9d66cad2c9289196",
+      "original_sha256": "953b419115bc0b5bbc715ad98f228e09669c637358e6eda2e36343e068c3ec47",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1598",
+      "row_index": 10,
+      "file": "fleurs-0010-1598.wav",
+      "reference": "車の衝突時には３人が家の中にいましたが、怪我人はいませんでした。",
+      "seconds": 9.24,
+      "sha256": "d01c624dd169a1076798ba5a9dd8f11ec5a56e0d85fc21b3cff757f2ca05cf44",
+      "original_sha256": "79f4e7148a35d78e986911d939c1664737209e33c4e46dae944e28bb624afdfb",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1596",
+      "row_index": 11,
+      "file": "fleurs-0011-1596.wav",
+      "reference": "自然主義者や哲学者たちは、古典書、特にラテン語で書かれた聖書に注目していました。",
+      "seconds": 9.6,
+      "sha256": "30cfdfc727b28f692734918980dfbab1b13b36350a228687012475bc81028462",
+      "original_sha256": "717d69b3f1046b35bd38f0daa995e9c1c6d8333afd16eeb1764bb8d98d98845f",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1589",
+      "row_index": 12,
+      "file": "fleurs-0012-1589.wav",
+      "reference": "サブカルチャーの特徴を決定付ける性質は、言語、美、宗教、政治、性、地理、またはそれらの要素の組み合わせかもしれません。",
+      "seconds": 17.46,
+      "sha256": "6403d239c396eaa461d9d42f2c605259fdb69c86f2816db9a7fbd8378474d4de",
+      "original_sha256": "2e4206ff73dab3b2c24cfc6e07c34283a74b46337e2bb36f72ac5894f4c20c1a",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1615",
+      "row_index": 13,
+      "file": "fleurs-0013-1615.wav",
+      "reference": "何千年も前に、アリスタルコスという学者が、太陽系は太陽の周りを移動していると言いました。",
+      "seconds": 10.2,
+      "sha256": "5aa98d7bd85c1d0c3306e5c92958a1289713492b5d808e42026f3b9305f1de4b",
+      "original_sha256": "66b2cadee94dcfd09ab9d64e0872510377435a855fcf93f27c296caecdefefec",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1641",
+      "row_index": 15,
+      "file": "fleurs-0015-1641.wav",
+      "reference": "この森林はただマングローブが生えているだけの沼地ではありません。森林には、かつてヒンドゥスターン平野を覆っていた広大なジャングルが残っている最後の場所も含まれています。",
+      "seconds": 16.44,
+      "sha256": "ed7cde8cf0f64015553c98d9b4ee752855a40517c9d54760070ba2f4c393ca7e",
+      "original_sha256": "074801df6ae4c087c00abe12a0e9271d8c9d8312ed862126064d57eca5ebc7b6",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1562",
+      "row_index": 16,
+      "file": "fleurs-0016-1562.wav",
+      "reference": "これが一般的になりましたが、鉄は馬車の木製車輪の摩耗が進む原因になりました。",
+      "seconds": 15.12,
+      "sha256": "01451351892ec21d75e489e3bb89475fe03ba122db3aa496ee42f9e8ff8cea62",
+      "original_sha256": "41e0dea340719c0ed8170aacd8aeb0aa719de6260bc8249d76bbf83dee557854",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1513",
+      "row_index": 17,
+      "file": "fleurs-0017-1513.wav",
+      "reference": "アルゼンチンは、世界最高のポロチームとポロ競技選手を擁することで有名です。",
+      "seconds": 8.46,
+      "sha256": "c0369ab1d37f22c8300524e390e8de927091072a7e25313fa66fab9b3f5adcd9",
+      "original_sha256": "e2933f26c9648af52c6cb289b4e6fd5cc2ea8c43074df42397e509a4393afc0a",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1619",
+      "row_index": 18,
+      "file": "fleurs-0018-1619.wav",
+      "reference": "しかし、カタルーニャ語が第一公用語として法律で定められているため、ほとんどの標識がカタルーニャ語のみで表示されています。",
+      "seconds": 11.64,
+      "sha256": "e56261db50f04072a28f1b757061ed7650b21a4370e2f8747f137ec6bd485654",
+      "original_sha256": "1b6182833bf39d53d2e4f67e30afcab19b3f7f57c5c2cb28a3343fd908f2dd94",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1524",
+      "row_index": 19,
+      "file": "fleurs-0019-1524.wav",
+      "reference": "メートル法の採用、絶対主義から共和主義への移行、愛国心、そして国は単独支配者ではなく国民のものであるという信念など、多くの社会的政治的影響がありました。",
+      "seconds": 17.28,
+      "sha256": "14b9bc5371d66efc7fc6a76c34ebc669f274b66cc1122e56d9935e03e992ef2c",
+      "original_sha256": "30d3fe0031029a955672a9e2c417bbb9fe51ac6d35055ce64a214747241baea5",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1644",
+      "row_index": 20,
+      "file": "fleurs-0020-1644.wav",
+      "reference": "コメントを求められたミラー氏は、「公聴会ではマイクがよくしゃべるので、私は準備をしていたので、何を言っているのかよく聞こえなかった」と述べた。",
+      "seconds": 13.56,
+      "sha256": "72efad5317cfb32290a39da4e3f079a9b514906230b81a1ae332e1ff288f1005",
+      "original_sha256": "e979a85a9abdd79eb186beac83efe73ea7a590cb3178f22c776fc1729bc2a375",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1574",
+      "row_index": 21,
+      "file": "fleurs-0021-1574.wav",
+      "reference": "気温が氷点下になることはめったにありませんが、風と湿度の関係で温度計が示す気温よりも寒く感じることがあります。",
+      "seconds": 15.72,
+      "sha256": "80dad1f295c96e0d57dc221d02eb9dacc18702e634d83af6848b511829ad4693",
+      "original_sha256": "6944bf53494adcb1210ab738be6390071ceb08809d9554827f65192a1fe59abd",
+      "category": "public-read-japanese"
+    },
+    {
+      "id": "1582",
+      "row_index": 22,
+      "file": "fleurs-0022-1582.wav",
+      "reference": "ヘブライ人家族はほとんど戸外で暮らしていました。",
+      "seconds": 7.5,
+      "sha256": "8e8c2ea4bf4592767f296cbcc283499f1f8f5447cb44987d84ef1730bf76465d",
+      "original_sha256": "669696f55ff10c76427e65fb5eee165ac80d87bbfdd64077c47a8430f023dde4",
+      "category": "public-read-japanese"
+    },
+    {
+      "file": "synthetic-short.wav",
+      "reference": "こんにちは。短く挨拶してください。",
+      "category": "short-question",
+      "source": "SAPI Microsoft Haruka synthetic",
+      "sha256": "47983fc83fb945b82b511bf5e55e3e1b883a3479cb8b0b4df6dda626c1729563",
+      "seconds": 4.2
+    },
+    {
+      "file": "synthetic-long.wav",
+      "reference": "音声入力の実装を確認してください。テストを実行し、失敗した原因を調べて、必要な修正を行ってください。その後で変更点と確認結果を短く報告してください。",
+      "category": "long-instruction",
+      "source": "SAPI Microsoft Haruka synthetic",
+      "sha256": "49f82db973a03256402e33ef3bc01f78ca9437cd0dacb4f65ef1c4ac8299c71c",
+      "seconds": 15.095
+    },
+    {
+      "file": "synthetic-technical.wav",
+      "reference": "JavaとSpring Bootを使います。Whisperの認識結果をGatewayに渡し、GitHubにプルリクエストを作成してください。",
+      "category": "mixed-technical",
+      "source": "SAPI Microsoft Haruka synthetic",
+      "sha256": "accf00429713e43deab0f8132814a9d04f2cb494d114d962921d4a816645851b",
+      "seconds": 9.47
+    },
+    {
+      "file": "synthetic-files.wav",
+      "reference": "pom.xmlとREADME.mdを確認して、srcディレクトリにあるVoiceCommand.javaを修正してください。",
+      "category": "filenames",
+      "source": "SAPI Microsoft Haruka synthetic",
+      "sha256": "84e83c655c11b4a89cd260f75be53ee615e38131f9ce68554f17514ea02053f1",
+      "seconds": 8.975
+    },
+    {
+      "file": "synthetic-pause-600.wav",
+      "reference": "変更内容を確認してください。それから、回帰テストを実行してください。",
+      "category": "synthetic-thought-pause-600",
+      "source": "Haruka concatenation with fixed gap; not spontaneous speech",
+      "seconds": 7.35,
+      "sha256": "e269742df1ad7d62a24691644f380d9035071a639c0af478ed1ef847f7761c2f"
+    },
+    {
+      "file": "synthetic-pause-900.wav",
+      "reference": "変更内容を確認してください。それから、回帰テストを実行してください。",
+      "category": "synthetic-thought-pause-900",
+      "source": "Haruka concatenation with fixed gap; not spontaneous speech",
+      "seconds": 7.65,
+      "sha256": "020780861c04b518df93ab4beb7a4e3eb0f6d114a73bf6fcc01ad33fdfde1e02"
+    },
+    {
+      "file": "synthetic-pause-1500.wav",
+      "reference": "変更内容を確認してください。それから、回帰テストを実行してください。",
+      "category": "synthetic-thought-pause-1500",
+      "source": "Haruka concatenation with fixed gap; not spontaneous speech",
+      "seconds": 8.25,
+      "sha256": "0ce6cda02666a30ff950f526302d41922a3fb784eed33336fb8572a61f3c933a"
+    },
+    {
+      "file": "synthetic-background.wav",
+      "reference": "こんにちは。短く挨拶してください。",
+      "category": "synthetic-background-white-noise",
+      "source": "deterministic synthetic; seed 20261010",
+      "seconds": 4.2,
+      "sha256": "38df5c22b5dc08f6d01d85cc354078c19521ccba474f8ce52c03684954266a46"
+    },
+    {
+      "file": "silence.wav",
+      "reference": "",
+      "category": "silence",
+      "source": "deterministic synthetic; seed 20261010",
+      "seconds": 3.0,
+      "sha256": "d303811b8c84619667cd0501342f84ec6cbe69f7aa3856dcf52fabda374c92b8"
+    },
+    {
+      "file": "noise.wav",
+      "reference": "",
+      "category": "white-noise",
+      "source": "deterministic synthetic; seed 20261010",
+      "seconds": 3.0,
+      "sha256": "466eea53d38f9a400ab6bf65d05efe7a625f9e3ec7cd91a6d944c2d2de5e51ad"
+    }
+  ]
+}

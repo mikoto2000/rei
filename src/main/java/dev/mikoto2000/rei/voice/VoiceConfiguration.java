@@ -29,11 +29,11 @@ public class VoiceConfiguration {
       events.publish(type,status.state()+" "+status.bytes()+"/"+status.totalBytes()+" bytes "+status.asset()+" attempt="+status.attempt()+" "+status.failure());
     });
   }
-  @Bean(destroyMethod="close") SherpaBackendFactory sherpaBackendFactory(VoiceModelManager models) {
-    return new SherpaBackendFactory(()-> {try{return models.readyDirectory();}catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}});
+  @Bean(destroyMethod="close") SherpaBackendFactory sherpaBackendFactory(VoiceModelManager models,VoiceProperties properties) {
+    return new SherpaBackendFactory(()-> {try{return models.readyDirectory();}catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}},properties::inference);
   }
-  @Bean(destroyMethod="close") IsolatedVoiceBackendFactory isolatedVoiceBackendFactory(VoiceModelManager models) {
-    return new IsolatedVoiceBackendFactory(()->{try{return models.readyDirectory();}catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}});
+  @Bean(destroyMethod="close") IsolatedVoiceBackendFactory isolatedVoiceBackendFactory(VoiceModelManager models,VoiceProperties properties) {
+    return new IsolatedVoiceBackendFactory(()->{try{return models.readyDirectory();}catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}},properties::inference);
   }
   @Bean(destroyMethod="close") VoiceInputCoordinator voiceInputCoordinator(
       IsolatedVoiceBackendFactory backend,VoiceEventPublisher events,

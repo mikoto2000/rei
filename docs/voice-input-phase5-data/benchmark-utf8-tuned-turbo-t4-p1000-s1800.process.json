@@ -1,0 +1,11 @@
+{
+  "profile": "turbo",
+  "threads": 4,
+  "tail": 1000,
+  "silenceMs": 1800,
+  "pid": 75600,
+  "maxWorkingSetBytes": 4459020288,
+  "cpuSeconds": 1590.609375,
+  "exitCode": 0,
+  "samplingMs": 100
+}
