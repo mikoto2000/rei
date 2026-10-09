@@ -1,4 +1,4 @@
-# 音声入力 Phase 0 — 調査・PoC（実装途中）
+# 音声入力 Phase 0 — 調査・PoC（PoC検証済み・統合待ち）
 
 ## 開始条件と現状
 
@@ -27,13 +27,13 @@ Phase 2 では Java Sound capture / format conversion、VAD / recognizer interfa
 
 Phase 7 の既存 AgentRunContext.Mode.CONVERSATION は並行実行の権限/排他モードであり、今回の応答スタイルとは別概念。これを会話スタイル用に上書きせず、Sessionの応答スタイルを追加してTool・Planning Loopを維持する。
 
-## 技術選定（暫定）
+## 技術選定
 
 sherpa-onnx v1.13.8 は JavaのOfflineRecognizer / Vad API とWindows x64用Java/JNI JARが同一リリースで配布される。release JARのSHA-256をGitHub asset digestと照合した。Java25/Windows x64実マイクの統合動作を確認したためCPU版sherpa-onnx v1.13.8を後続実装の採用候補として選定する。JitPackへの依存だけで再現性を保証せず、固定JARの取り込みと配布物検証を後続で設計する。
 
 ONNX Runtime JavaはMaven CentralとWindows x64 CPU/GPUを提供するが、汎用tensor/session APIだけではWhisperの音響前処理、token decode、cache loopをアプリで管理する必要がある。保守負担の大きい自前decoderを避けるためsherpaを第一候補とする。ORT直接実装の実性能比較・GPU試験は未実施。
 
-ライセンス: sherpa-onnx Apache-2.0、ONNX Runtime MIT、Whisper MIT、Silero VAD MITを上流で確認する。変換モデルの再配布条件と依存ライセンス/NOTICEは配布統合時にも確認し、本PRにはJAR・モデル・音声を含めない。
+ライセンスは上流の [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/LICENSE)（Apache-2.0）、[ONNX Runtime](https://github.com/microsoft/onnxruntime/blob/main/LICENSE)、[Whisper](https://github.com/openai/whisper/blob/main/LICENSE)、[Silero VAD](https://github.com/snakers4/silero-vad/blob/master/LICENSE)（後3件はMIT）を確認した。変換モデルの再配布条件と依存ライセンス/NOTICEは配布統合時にも確認し、本PRにはJAR・モデル・音声を含めない。
 
 - [公式Java VAD + Whisper例](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/java-api-examples/VadFromMicWithNonStreamingWhisper.java)
 - [固定Java/JNI release](https://github.com/k2-fsa/sherpa-onnx/releases/tag/v1.13.8)
@@ -62,22 +62,17 @@ prepare.ps1 に固定URLとSHAを記録した。Whisper revision `bb53ee204431c9
 
 ## 実行結果と残存リスク
 
-環境: Windows x64 / OpenJDK25 build25+36-3489。PCM変換3境界は未実装compile Red→Green。release17でPoC全クラスcompile成功。Java SoundでVT-4 DRY/MIX/WET、NVIDIA Broadcast、Insta360 Link等のPCM16対応capture lineを列挙した。既定デバイスを勝手に録音しない。
+環境: Windows x64 / OpenJDK25 build25+36-3489。ユーザー承認により対象はJava25。PoCはrelease17 compileも成功したがJava17 JVM上の実行は未検証。
 
-Microsoft Haruka Desktopによるローカル合成日本語「こんにちは。今日は音声入力の動作を確認します。日本語の文章を認識してください。」でJNI/VAD/Whisperを統合実行した。3cycleすべて1segment=10.160秒、認識は「こんにちは 今日は音声入力の動作を確認します 日本語の文を認識してください」。decode 844.4 / 853.7 / 870.9ms。日本語モデルパスでも3cycle成功、1140.6 / 1080.6 / 1081.4ms。これは少数の合成音声PoCであり、自然発話CER、P50/P95、実マイク、CPU使用率、リーク耐性、RTF目標達成とは報告しない。明示releaseはfinallyで実施しfinalizerに頼らない。
+- PCM変換: 未実装compile Red→Green。signed低byte・符号端点、奇数長拒否、short readの3境界。
+- 合成日本語WAV: Microsoft Haruka Desktopによる「こんにちは。今日は音声入力の動作を確認します。日本語の文章を認識してください。」を3起動/解放で認識。「こんにちは 今日は音声入力の動作を確認します 日本語の文を認識してください」、1segment=10.160秒、decode844.4 / 853.7 / 870.9ms。
+- 日本語モデルパス: 3起動/解放成功、decode1140.6 / 1080.6 / 1081.4ms。JNI resourceはfinallyで明示release。
+- 指定実マイク `DRY (VT-4)`: 準備5秒後に20秒メモリ内取得。319500 samples / 19.969秒、nonzero279843、peak0.721222 / RMS0.095711。3segment（3.744 / 8.288 / 5.776秒）すべてで「こんにちは、音声入力の動作を確認します。」を全文認識。decode585.1 / 689.2 / 568.0ms、終了0。録音ファイルは作成せずAgentにも送信しない。
+- 初期実機試験の失敗履歴: 10秒取得で2回VAD未検出。その後は0.992秒だけ検出し「認します」と部分認識した。ユーザーは全文発話したと確認。開始音を加えた試験は全10区間peak0.000031 / RMS0.000015でほぼ無音、VAD未検出。開始音は聞こえなかったため廃止。準備待ちと取得時間拡大後には全文認識できたが、過去の失敗原因自体は未確定。
+- JNI欠落: native JARをclasspathから除くとUnsatisfiedLinkErrorで明示失敗。PoCの障害確認であり本番CLI継続の保証ではない。
+- 既存Java回帰: 4088件、failure0 / error0 / skipped1（既存PlantUML条件）、BUILD SUCCESS、既存20分wrapper終了0。PoCは通常単体テストにネットワークやモデル取得を追加しない。
 
-ユーザー指定の `DRY (VT-4)` で10秒間のメモリ内取得を実施したが、VAD produced no speechで終了1となった。録音ファイルは作成していない。再試験でも同じVAD未検出で終了1。取得経路は開けたが実発話認識の成功は未確認で、発話タイミングまたは機器入力の確認が必要。原因切り分けのため取得サンプル数・非ゼロ数・peak/RMSを表示する診断を追加した。診断付き再試験では158500 samples / 9.906秒、非ゼロ50841、peak 0.112396 / RMS 0.008335を取得。VADは1segment=0.992秒、Whisper認識は「認します」、decode195.1ms、終了0。実機入力→VAD→日本語認識の経路は動作したが、案内した文全体の認識は未確認であり、実発話内容と開始タイミングの確認が必要。Java25維持はユーザー承認済み。Phase0完了/Phase1着手/本番機能完成とはしない。後続Phaseの実装はJava要件とPhase0のブロッカー解決、レビュー/CI/main統合後に進む。
-
-JNI JARをclasspathから除いた場合はUnsatisfiedLinkErrorで明示失敗することも確認。これはPoCの障害確認であり本番CLI継続の保証ではない。
-
-全Java回帰は既存20分期限wrapperで4088件、failure0 / error0 / skipped1（既存PlantUML条件）、BUILD SUCCESS・wrapper終了0。PoCは通常単体テストにネットワーク・モデルダウンロードを追加しない。
-
-ユーザーは診断付き試験で全文を話したと確認した。このため断片認識を実機受入成功と扱わない。次回の切り分け用にline.start後の開始音と1秒ごとのpeak/RMS表示を追加した。開始音はOS設定により聞こえない場合がある。修正版の実機試験は未実施。
-
-開始音・秒単位診断付き試験: 159500 samples / 9.969秒、nonzero36614、peak0.000031 / RMS0.000015。全10区間のpeak/RMSも同値でほぼ無音（PCM16の1量子程度）。VAD produced no speech、終了1。ASRより前の取得音声に発話波形が確認できていない。開始音の可聴性・発話タイミング・Windows/VT-4入力経路は未確認で、原因は未確定。Phase0は未完了。
-
-準備5秒・取得20秒で再試験: 319500 samples / 19.969秒、nonzero279843、peak0.721222 / RMS0.095711。3segment（3.744 / 8.288 / 5.776秒）のすべてで「こんにちは、音声入力の動作を確認します。」を認識、decode585.1 / 689.2 / 568.0ms、終了0。録音ファイルは保存していない。指定実機の全文認識経路は確認できた。過去の無音・断片認識の原因は未確定だが、準備時間を設けた本試験では再現しなかった。少数試験であり精度・P95・長時間安定性の保証ではない。
-
+少数の合成・実発話試験であり、自然発話CER、P50/P95、CPU使用率、長時間リーク耐性、RTF目標達成は未検証。実機経路の実現性確認と、本番での連続ハンズフリー・無音確定・非同期入力の受入試験を混同しない。後者はPhase2以降で検証する。
 ## 後続の依存・配布統合方針
 
 本番組み込み時はJNIをインターフェース実装内に隔離し、voice有効化時だけロードする。固定releaseのJava/JNI JARをSHA照合後にビルド用領域へ取得し、アプリ配布物に依存JARを同梱する方式を第一案とする。手動install-fileだけに依存する開発者固有ビルドにはしない。ビルドの再現と同梱した配布物のWindows起動を組み込みPhaseで検証する。モデルはアプリJARに同梱せずPhase3で同一manifest一式を管理する。必要ライセンス・NOTICEを配布物に含める。CPU版を初期対象としGPU未検証をCPU対応と混同しない。
