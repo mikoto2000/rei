@@ -4,7 +4,7 @@
 
 2026-10-09、先行 Web 検索改善 PR #42–47、作業完遂能力向上 PR #48–52 の merged/base=main と remote main `462b8ee1002b13eb2f040079922cf3331b160faf` を確認。先行チャットの Phase 0–4 完了報告も確認して開始条件監視を停止した。
 
-本番の音声入力・CLI コマンド・会話スタイルは未実装。Phase 0 は隔離 PoC と設計のみ。Java 17 指定に対し現在のアプリは Java 25 / Spring Boot 4.1.1 / Spring AI 2.0.1。Java 25 維持の可否をユーザーに確認中。アプリの Java バージョン・依存は変更していない。PoC の release 17 コンパイルは成功したが Java 17 JVM での実行は未検証。
+本番の音声入力・CLI コマンド・会話スタイルは未実装。Phase 0 は隔離 PoC と設計のみ。Java 17 指定に対し現在のアプリは Java 25 / Spring Boot 4.1.1 / Spring AI 2.0.1。2026-10-09にユーザーがJava 25維持を承認した。以降はJava 25を対象とする。アプリの Java バージョン・依存は変更していない。PoC の release 17 コンパイルは成功したが Java 17 JVM での実行は未検証。
 
 ## 既存経路と変更予定
 
@@ -66,7 +66,7 @@ prepare.ps1 に固定URLとSHAを記録した。Whisper revision `bb53ee204431c9
 
 Microsoft Haruka Desktopによるローカル合成日本語「こんにちは。今日は音声入力の動作を確認します。日本語の文章を認識してください。」でJNI/VAD/Whisperを統合実行した。3cycleすべて1segment=10.160秒、認識は「こんにちは 今日は音声入力の動作を確認します 日本語の文を認識してください」。decode 844.4 / 853.7 / 870.9ms。日本語モデルパスでも3cycle成功、1140.6 / 1080.6 / 1081.4ms。これは少数の合成音声PoCであり、自然発話CER、P50/P95、実マイク、CPU使用率、リーク耐性、RTF目標達成とは報告しない。明示releaseはfinallyで実施しfinalizerに頼らない。
 
-実マイクは使用機器のユーザー指定待ちで未試験。Java25維持の回答も待機中。Phase0完了/Phase1着手/本番機能完成とはしない。後続Phaseの実装はJava要件とPhase0のブロッカー解決、レビュー/CI/main統合後に進む。
+ユーザー指定の `DRY (VT-4)` で10秒間のメモリ内取得を実施したが、VAD produced no speechで終了1となった。録音ファイルは作成していない。取得経路は開けたが実発話認識の成功は未確認で、発話タイミングまたは機器入力の確認が必要。Java25維持はユーザー承認済み。Phase0完了/Phase1着手/本番機能完成とはしない。後続Phaseの実装はJava要件とPhase0のブロッカー解決、レビュー/CI/main統合後に進む。
 
 JNI JARをclasspathから除いた場合はUnsatisfiedLinkErrorで明示失敗することも確認。これはPoCの障害確認であり本番CLI継続の保証ではない。
 
