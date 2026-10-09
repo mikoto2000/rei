@@ -29,7 +29,7 @@ Phase 7 の既存 AgentRunContext.Mode.CONVERSATION は並行実行の権限/排
 
 ## 技術選定（暫定）
 
-sherpa-onnx v1.13.8 は JavaのOfflineRecognizer / Vad API とWindows x64用Java/JNI JARが同一リリースで配布される。release JARのSHA-256をGitHub asset digestと照合した。正式採用は実マイクと配布/ビルド統合の確認後に確定する。JitPackへの依存だけで再現性を保証せず、固定JARの取り込みと配布物検証を後続で設計する。
+sherpa-onnx v1.13.8 は JavaのOfflineRecognizer / Vad API とWindows x64用Java/JNI JARが同一リリースで配布される。release JARのSHA-256をGitHub asset digestと照合した。Java25/Windows x64実マイクの統合動作を確認したためCPU版sherpa-onnx v1.13.8を後続実装の採用候補として選定する。JitPackへの依存だけで再現性を保証せず、固定JARの取り込みと配布物検証を後続で設計する。
 
 ONNX Runtime JavaはMaven CentralとWindows x64 CPU/GPUを提供するが、汎用tensor/session APIだけではWhisperの音響前処理、token decode、cache loopをアプリで管理する必要がある。保守負担の大きい自前decoderを避けるためsherpaを第一候補とする。ORT直接実装の実性能比較・GPU試験は未実施。
 
@@ -77,3 +77,9 @@ JNI JARをclasspathから除いた場合はUnsatisfiedLinkErrorで明示失敗�
 開始音・秒単位診断付き試験: 159500 samples / 9.969秒、nonzero36614、peak0.000031 / RMS0.000015。全10区間のpeak/RMSも同値でほぼ無音（PCM16の1量子程度）。VAD produced no speech、終了1。ASRより前の取得音声に発話波形が確認できていない。開始音の可聴性・発話タイミング・Windows/VT-4入力経路は未確認で、原因は未確定。Phase0は未完了。
 
 準備5秒・取得20秒で再試験: 319500 samples / 19.969秒、nonzero279843、peak0.721222 / RMS0.095711。3segment（3.744 / 8.288 / 5.776秒）のすべてで「こんにちは、音声入力の動作を確認します。」を認識、decode585.1 / 689.2 / 568.0ms、終了0。録音ファイルは保存していない。指定実機の全文認識経路は確認できた。過去の無音・断片認識の原因は未確定だが、準備時間を設けた本試験では再現しなかった。少数試験であり精度・P95・長時間安定性の保証ではない。
+
+## 後続の依存・配布統合方針
+
+本番組み込み時はJNIをインターフェース実装内に隔離し、voice有効化時だけロードする。固定releaseのJava/JNI JARをSHA照合後にビルド用領域へ取得し、アプリ配布物に依存JARを同梱する方式を第一案とする。手動install-fileだけに依存する開発者固有ビルドにはしない。ビルドの再現と同梱した配布物のWindows起動を組み込みPhaseで検証する。モデルはアプリJARに同梱せずPhase3で同一manifest一式を管理する。必要ライセンス・NOTICEを配布物に含める。CPU版を初期対象としGPU未検証をCPU対応と混同しない。
+
+Phase0の実機PoC確認は完了したが、PRのCI・レビュー・main統合は未完了。後続Phaseはmain統合後に開始する。
