@@ -12,8 +12,16 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
   private final GoalRepository goals;
   private final GoalLoopService loop;
   private final ProjectService projects;
+  private GoalWaitService waits;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void configureWaits(GoalWaitService waits){this.waits=waits;}
+  private GoalWaitService waits(){if(waits==null)throw new IllegalStateException("Goal waiting unavailable");return waits;}
+  @Option(names="--dependency-id") String dependencyId;
+  @Option(names="--wait-reason",defaultValue="dependency_wait") String waitReason;
+  @Option(names="--wait-version") Long waitVersion;
+  private long waitVersion(){if(waitVersion==null||waitVersion<1)throw new IllegalArgumentException("Use the observed --wait-version");return waitVersion;}
   @Spec picocli.CommandLine.Model.CommandSpec spec;
-  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|create|show|progress|run|verify|cancel|history|reconcile|completion") String action;
+  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|create|show|progress|run|verify|cancel|history|reconcile|completion|wait|wait-activate|wait-resume|wait-cancel") String action;
   @Parameters(index="1",arity="0..1",paramLabel="goalId|objective") String value;
   @Option(names="--file",description="Project-relative completion file") String file;
   @Option(names="--sha256",description="Exact expected file SHA-256") String digest;
@@ -37,6 +45,14 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
         case "show" -> goals.get(project.id(),requiredValue());
         case "progress" -> loop.progress(project.id(),requiredValue());
         case "history" -> goals.history(project.id(),requiredValue())+"\nAttempts: "+goals.attempts(project.id(),requiredValue());
+        case "wait" -> {
+          var goal=goals.get(project.id(),requiredValue());
+          if(!goal.sessionId().equals(projects.currentSessionId()))throw new IllegalArgumentException("Select the owning Goal Session");
+          yield dependencyId==null?waits().show(project.id(),goal.id()):waits().waitFor(project.id(),goal.id(),dependencyId,waitReason);
+        }
+        case "wait-activate" -> waits().activate(project.id(),requiredValue(),waitVersion());
+        case "wait-resume" -> waits().resume(project.id(),requiredValue(),waitVersion());
+        case "wait-cancel" -> waits().cancel(project.id(),requiredValue(),waitVersion());
         case "run" -> loop.run(project.id(),requiredValue());
         case "verify" -> loop.verify(project.id(),requiredValue());
         case "reconcile" -> {
@@ -57,7 +73,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
           if(completionJson!=null)yield loop.create(owner,requiredValue(),criteriaJson==null?java.util.List.of(new GoalRepository.FileCriterion(file,digest)):parseCriteria(),GoalRepository.parseCompletion(completionJson),maxRuns,maxCalls);
           yield criteriaJson==null?loop.create(owner,requiredValue(),file,digest,maxRuns,maxCalls):loop.create(owner,requiredValue(),parseCriteria(),maxRuns,maxCalls);
         }
-        default -> throw new IllegalArgumentException("Use /goal list|create|show|progress|run|verify|cancel|history|reconcile|completion");
+        default -> throw new IllegalArgumentException("Use /goal list|create|show|progress|run|verify|cancel|history|reconcile|completion|wait|wait-activate|wait-resume|wait-cancel");
       };
       writer.println(dev.mikoto2000.rei.event.CredentialRedactor.redact(String.valueOf(result)));return 0;
     } catch(RuntimeException error){writer.println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));return 2;}

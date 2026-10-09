@@ -26,6 +26,9 @@ public class AgentScheduleDispatcher {
   private final java.util.function.Predicate<PersistentAgentScheduler.Entry> inFlight;
   private final java.util.concurrent.atomic.AtomicReference<PersistentAgentScheduler.Entry> currentClaim=new java.util.concurrent.atomic.AtomicReference<>();
   private final AtomicBoolean busy=new AtomicBoolean();
+  private dev.mikoto2000.rei.goal.GoalWaitService goalWaits;
+  @Autowired(required=false)
+  public void configureGoalWaits(dev.mikoto2000.rei.goal.GoalWaitService service){goalWaits=service;}
   private dev.mikoto2000.rei.application.run.RunRegistry runRegistry;
   private dev.mikoto2000.rei.application.run.RunService runLifecycle;
   @Autowired(required=false)
@@ -99,12 +102,13 @@ public class AgentScheduleDispatcher {
     try {
       var next=schedules.claimDue();if(next.isEmpty()){busy.set(false);return;}claim=next.get();currentClaim.set(claim);
       var owned=claim;
-      gateway.dispatch(owned,result->{
+      Consumer<ChatExecutionResult> completed=result->{
         try {if(schedules.activeClaim(owned))schedules.finish(owned,switch(result.status()) {
           case SUCCESS -> "COMPLETED";case FAILED -> "FAILED";case CANCELLED -> "CANCELLED";
         },result.success()?result.text():result.errorMessage());}
         finally {release(owned);}
-      });
+      };
+      if(goalWaits!=null&&goalWaits.handles(owned))goalWaits.dispatch(owned,completed);else gateway.dispatch(owned,completed);
     } catch(RuntimeException error) {
       try {if(claim!=null&&schedules.activeClaim(claim))schedules.finish(claim,"FAILED",error.getMessage());}
       finally {if(claim==null)busy.set(false);else release(claim);}

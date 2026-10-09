@@ -22,4 +22,9 @@ class GoalControllerTest {
   assertThrows(dev.mikoto2000.rei.application.state.OperationConflictException.class,()->api.reconcile("p","goal",new GoalController.ReconcileRequest("old",true)));
   verify(loop,times(1)).reconcile("p","goal","old");verifyNoMoreInteractions(loop);
  }
-}
+ @Test void waitControlsUseExplicitVersionAndNeverDispatchThroughNormalRun(){
+  var loop=mock(GoalLoopService.class);var waits=mock(GoalWaitService.class);var api=new GoalController(mock(GoalRepository.class),loop);
+  api.configureWaits(waits);api.waitFor("p","g",new GoalController.WaitRequest("dep","job_wait"));
+  api.waiting("p","g");api.resumeWait("p","g",new GoalController.WaitVersion(3));api.activateWait("p","g",new GoalController.WaitVersion(4));
+  verify(waits).waitFor("p","g","dep","job_wait");verify(waits).show("p","g");verify(waits).resume("p","g",3);verify(waits).activate("p","g",4);verifyNoInteractions(loop);
+ }}

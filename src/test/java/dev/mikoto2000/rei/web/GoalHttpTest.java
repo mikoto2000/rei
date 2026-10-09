@@ -24,6 +24,7 @@ class GoalHttpTest {
  static class Config {
   @Bean GoalRepository goals(@org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String path){return new GoalRepository(new org.springframework.jdbc.datasource.DriverManagerDataSource("jdbc:sqlite:"+Path.of(path).resolve("goals.db")),Clock.systemUTC());}
   @Bean Gateway gateway(){return new Gateway();}
+  @Bean GoalWaitService waits(){return org.mockito.Mockito.mock(GoalWaitService.class);}
   @Bean FileGoalVerifier verifier(){return new FileGoalVerifier();}
   @Bean GoalCompletionGate completionGate(GoalRepository goals){return new GoalCompletionGate(goals,(owner,ref)->{throw new java.io.IOException("fixture has no Review");},(owner,ref)->{throw new java.io.IOException("fixture has no Artifact");},(root,deadline)->{throw new java.io.IOException("fixture has no patch");},Clock.systemUTC(),false);}
   @Bean GoalLoopService loop(GoalRepository repo,Gateway gateway,FileGoalVerifier verifier){return new GoalLoopService(repo,verifier,gateway,new dev.mikoto2000.rei.core.policy.ToolPermissionProperties(true,null,null,null),org.mockito.Mockito.mock(GoalEvents.class));}
@@ -69,4 +70,24 @@ class GoalHttpTest {
    assertEquals(400,ReadHttpTest.send(client,port,"/projects/other/goals/"+goal.id(),"GET",null,true).statusCode());
   }
  }
-}
+ @Test void waitHttpControlsRequireAuthenticationAndObservedVersionWithoutNormalGoalRun()throws Exception{
+  var app=new SpringApplication(Config.class);WebApplication.configure(app,"integration-key");
+  try(var context=app.run("--rei.web.port=0","--rei.data-dir="+dir,"--logging.config=classpath:web-test-logback.xml");var client=HttpClient.newHttpClient()){
+   int port=Integer.parseInt(context.getEnvironment().getProperty("local.server.port"));
+   var repo=context.getBean(GoalRepository.class);var waits=context.getBean(GoalWaitService.class);
+   var goal=repo.create(new AgentRunContext("source","session",dir,"p"),"result","out.txt","a".repeat(64),2,5);
+   String path="/projects/p/goals/"+goal.id()+"/wait";
+   var snapshot=new GoalWaitRepository.Snapshot(context.getBean(GoalLoopService.class).progress("p",goal.id()),null,
+    new dev.mikoto2000.rei.core.dependency.DependencySpec(dev.mikoto2000.rei.core.dependency.DependencySpec.Kind.FILE_EXISTS,"ready",null),null,0,List.of(),"next");
+   var saved=new GoalWaitRepository.Wait("wait","p",goal.id(),null,0,"job_wait","dep","timer","WAITING","not_observed",1,null,snapshot);
+   org.mockito.Mockito.when(waits.waitFor("p",goal.id(),"dep","job_wait")).thenReturn(saved);org.mockito.Mockito.when(waits.show("p",goal.id())).thenReturn(saved);
+   assertEquals(401,ReadHttpTest.send(client,port,path,"POST","{\"dependencyId\":\"dep\",\"reason\":\"job_wait\"}",false).statusCode());org.mockito.Mockito.verifyNoInteractions(waits);
+   var created=ReadHttpTest.send(client,port,path,"POST","{\"dependencyId\":\"dep\",\"reason\":\"job_wait\"}",true);
+   assertEquals(200,created.statusCode());assertTrue(created.body().contains("\"state\":\"WAITING\""));
+   assertEquals(200,ReadHttpTest.send(client,port,path,"GET",null,true).statusCode());
+   assertEquals(400,ReadHttpTest.send(client,port,path+"/resume","POST","{}",true).statusCode());
+   org.mockito.Mockito.when(waits.resume("p",goal.id(),1)).thenThrow(new IllegalStateException("condition unmet"));
+   assertEquals(409,ReadHttpTest.send(client,port,path+"/resume","POST","{\"expectedVersion\":1}",true).statusCode());
+   org.mockito.Mockito.verify(waits,org.mockito.Mockito.times(1)).resume("p",goal.id(),1);assertEquals(0,context.getBean(Gateway.class).dispatched.get());
+  }
+ }}
