@@ -118,3 +118,7 @@ SSE transition、旧Gate・Goal・Reflection・Attention・Shellの回帰を実�
 安全な既定値：新 requirements の required は true / false を明示必須とし、省略時に任意へ弱めない。
 旧 definition の requirements 自体の省略は引き続き空リスト。無効JSON・未知predicate・取消等の
 検証不能を単なる未達へ置き換えず、元の理由を保持して自動修復対象にしない。
+
+### Phase 1 CI 回帰での並列予算競合
+
+最初の CI では既存 StandaloneSubAgentBudgetTest が、先行する子処理の token 使用量だけ確定した瞬間に後続の子処理を予約できる競合を検出した。未確定の兄弟処理が残る波では追加予約を拒否する。総予算を増やさず、既存の全 assertion を維持し、予約・部分使用量報告を直列に再現する Red → Green テストを追加した。既に開始した並列 provider の token overshoot 自体を予見できる保証ではなく、その後の追加呼び出しを止める制御である。

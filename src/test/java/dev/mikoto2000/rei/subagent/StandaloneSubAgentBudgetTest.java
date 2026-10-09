@@ -71,6 +71,14 @@ class StandaloneSubAgentBudgetTest {
       assertEquals(2,calls.get());
     }
   }
+  @Test void partiallySettledTokenWaveCannotAdmitAnotherChild() {
+    var budget=StandaloneSubAgentBudget.create(limits(10,5));
+    assertTrue(budget.tryReserve());assertTrue(budget.tryReserve());
+    budget.recordTotalTokens(3);
+    assertFalse(budget.tryReserve(),"An outstanding sibling may consume the remaining tokens");
+    assertThrows(dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.class,()->budget.recordTotalTokens(3));
+    assertEquals(0,budget.remaining());
+  }
   @Test void parallelInFlightUsageIsChargedAndLaterChildrenCannotBypassOvershoot() throws Exception {
     var calls=new AtomicInteger();var entered=new java.util.concurrent.CountDownLatch(2);
     var runner=runner(p->{calls.incrementAndGet();entered.countDown();try{assertTrue(entered.await(2,java.util.concurrent.TimeUnit.SECONDS));}
