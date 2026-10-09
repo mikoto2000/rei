@@ -1,0 +1,73 @@
+# 音声入力 Phase 0 — 調査・PoC（実装途中）
+
+## 開始条件と現状
+
+2026-10-09、先行 Web 検索改善 PR #42–47、作業完遂能力向上 PR #48–52 の merged/base=main と remote main `462b8ee1002b13eb2f040079922cf3331b160faf` を確認。先行チャットの Phase 0–4 完了報告も確認して開始条件監視を停止した。
+
+本番の音声入力・CLI コマンド・会話スタイルは未実装。Phase 0 は隔離 PoC と設計のみ。Java 17 指定に対し現在のアプリは Java 25 / Spring Boot 4.1.1 / Spring AI 2.0.1。Java 25 維持の可否をユーザーに確認中。アプリの Java バージョン・依存は変更していない。PoC の release 17 コンパイルは成功したが Java 17 JVM での実行は未検証。
+
+## 既存経路と変更予定
+
+| 責務 | 現在の実クラス / 経路 | 後続の変更方針 |
+|---|---|---|
+| キーボードとコマンド | ReiApplication → ActiveRunPrompt.readLine → UserInputService → Picocli ChatCommand | スラッシュコマンド解釈はキーボードのまま、会話入力だけ共通 admission へ |
+| 会話受付 / Session | ChatCommand → ShellConversationService.submit → SessionLifecycle.submit | Shell Client の Project/Session を受付時に固定。録音スレッドに ThreadLocal の選択を暗黙継承しない |
+| 順序と実行 | ConversationInputRouter / core.chat.ProjectRunQueue → ChatExecutionService | 既存 FIFO と64/project・256/totalの上限、cancelQueuedを維持。voice保留3件・入力ID重複防止を共通admissionに追加し、音声だけ別 ChatClient を作らない |
+| 追加入力 | ShellConversationService.intervene → ConversationInputRouter.offerIntervention → UserInterventionQueue | 音声は初期既定で新規会話保留。割り込みは明示 opt-in・所有者/Session一致 |
+| 出力 | ShellEventSession / ShellAgentEventRenderer → JLineShellEventOutput.printAbove | 音声状態も同じ同期出力へ。読みかけ文字列を直接 System.out で壊さない |
+| Agent / 検証 | ChatExecutionService / RunExecutionContext / ProgressEvaluator / GoalLoopService / FileGoalVerifier / GoalCompletionGate | 完了・予算・修復・Checkpoint判定を維持 |
+| Tool / 承認 | ToolPermissionGuard / ToolPermissionPolicy / CommandCancellationService | Voice を承認の代替とせず同じPolicyへ。音声由来スラッシュコマンドは実行禁止 |
+| Native / HTTP | SessionController / RunService / RunController | 既存Session lifecycleと所有境界を共有し、Native経路を複製しない |
+| 起動・終了 | ReiApplication / ApplicationShutdownNotifier | 音声Coordinatorを明示close、取得line停止、worker取消、JNI release |
+| 設定・補完 | application.yaml / 外部テンプレート / ReiLineReaderFactory / CompletionEngine | voice既定OFF、音声コマンドとヘルプをPicocliへ追加 |
+
+Phase 1 は immutable inputId/source/project/session/text/time と有限の重複 ledger・保留キューを追加する。音声のSession変更時に保留入力を新Sessionへ付け替えない。録音、VAD、segment queue（2）、ASR worker（1）、conversation pending（3）を分離し、録音をモデル/LLM待ちで停止させない。
+
+Phase 2 では Java Sound capture / format conversion、VAD / recognizer interfaces、coordinator、events を作る。JNIクラスをアプリ全体の起動時にロードせず、voice on時の失敗をCLIへ報告する。VAD単独の1200ms確定を基準にし二重の無音タイマーを足さない。最大25秒の強制区切りは通常確定と区別し送信しない。語頭pre-roll・末尾余白・short readの扱いは仮想フレームのTDDで別途保証する。
+
+Phase 7 の既存 AgentRunContext.Mode.CONVERSATION は並行実行の権限/排他モードであり、今回の応答スタイルとは別概念。これを会話スタイル用に上書きせず、Sessionの応答スタイルを追加してTool・Planning Loopを維持する。
+
+## 技術選定（暫定）
+
+sherpa-onnx v1.13.8 は JavaのOfflineRecognizer / Vad API とWindows x64用Java/JNI JARが同一リリースで配布される。release JARのSHA-256をGitHub asset digestと照合した。正式採用は実マイクと配布/ビルド統合の確認後に確定する。JitPackへの依存だけで再現性を保証せず、固定JARの取り込みと配布物検証を後続で設計する。
+
+ONNX Runtime JavaはMaven CentralとWindows x64 CPU/GPUを提供するが、汎用tensor/session APIだけではWhisperの音響前処理、token decode、cache loopをアプリで管理する必要がある。保守負担の大きい自前decoderを避けるためsherpaを第一候補とする。ORT直接実装の実性能比較・GPU試験は未実施。
+
+ライセンス: sherpa-onnx Apache-2.0、ONNX Runtime MIT、Whisper MIT、Silero VAD MITを上流で確認する。変換モデルの再配布条件と依存ライセンス/NOTICEは配布統合時にも確認し、本PRにはJAR・モデル・音声を含めない。
+
+- [公式Java VAD + Whisper例](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/java-api-examples/VadFromMicWithNonStreamingWhisper.java)
+- [固定Java/JNI release](https://github.com/k2-fsa/sherpa-onnx/releases/tag/v1.13.8)
+- [Whisper ONNX一式](https://k2-fsa.github.io/sherpa/onnx/pretrained_models/whisper/export-onnx.html)
+- [ORT Java](https://onnxruntime.ai/docs/get-started/with-java.html)
+- [Java Sound capture](https://docs.oracle.com/javase/tutorial/sound/capturing.html)
+
+公式マイク例のsigned low byte加算はPCM16変換を壊す。short readにも古いbuffer値が入る。PoC Pcm.decodeはunsigned low byte・実read長・偶数長を検証する。公式例の録音スレッド上のASR呼出しも本番には採用しない。
+
+## PoC 再現手順
+
+本番Mavenに影響しない `poc/voice`。Windows x64 JDK、ネットワーク取得は明示 `-Download` のみ。モデル一式約161MBとJAR約8.5MB。HTTPS・固定Whisper revision・全SHA照合を使用。Sileroは可変release URLだが固定SHAの不一致で拒否する。PoC手順はPhase 3の非同期/取消/全体atomicモデル管理の実装ではない。
+
+```powershell
+./poc/voice/prepare.ps1 -Download
+# Optional: Windows に Microsoft Haruka Desktop がインストール済みの場合
+./poc/voice/japanese-fixture.ps1
+$cp = 'target/voice-poc/classes;target/voice-poc/jvm.jar;target/voice-poc/native.jar'
+java --enable-native-access=ALL-UNNAMED -cp $cp VoicePoc devices
+java --enable-native-access=ALL-UNNAMED '-Dstdout.encoding=UTF-8' -cp $cp VoicePoc target/voice-poc/models path/to/japanese.wav
+```
+
+WAVは最大60秒、Java Soundで16kHz signed PCM16 monoへ変換。VAD 0.5 / window512 / speech400ms / silence1200ms、CPU1thread、Whisper base multilingual INT8 / ja transcribe。VADは最後にflushするため、これはストリーミング無音確定レイテンシの受入試験ではない。最大発話時間の自動送信禁止など本番安全条件は後続で実装する。取得音声の永続保存・既存Agentへの送信は行わない。WAVモードはローカル音声ファイルを読んで認識結果を表示する。明示 `mic MODEL_DIR EXACT_DEVICE_NAME` はPCM16対応の同名が一つだけの場合に10秒取得する。タイマーでlineをcloseし録音上限も320000 bytesとする。取得後のVAD/ASRは同期であり、連続ハンズフリーの本番パイプラインではない。実行前に利用者が対象機器を選択する。
+
+prepare.ps1 に固定URLとSHAを記録した。Whisper revision `bb53ee204431c90d314c1cc08d28d23e5b7927cc` のencoder/decoder/tokensを混在させない。不正JAR/モデルは利用しない。ローカル手動配置でもSHA照合は必須。
+
+## 実行結果と残存リスク
+
+環境: Windows x64 / OpenJDK25 build25+36-3489。PCM変換3境界は未実装compile Red→Green。release17でPoC全クラスcompile成功。Java SoundでVT-4 DRY/MIX/WET、NVIDIA Broadcast、Insta360 Link等のPCM16対応capture lineを列挙した。既定デバイスを勝手に録音しない。
+
+Microsoft Haruka Desktopによるローカル合成日本語「こんにちは。今日は音声入力の動作を確認します。日本語の文章を認識してください。」でJNI/VAD/Whisperを統合実行した。3cycleすべて1segment=10.160秒、認識は「こんにちは 今日は音声入力の動作を確認します 日本語の文を認識してください」。decode 844.4 / 853.7 / 870.9ms。日本語モデルパスでも3cycle成功、1140.6 / 1080.6 / 1081.4ms。これは少数の合成音声PoCであり、自然発話CER、P50/P95、実マイク、CPU使用率、リーク耐性、RTF目標達成とは報告しない。明示releaseはfinallyで実施しfinalizerに頼らない。
+
+実マイクは使用機器のユーザー指定待ちで未試験。Java25維持の回答も待機中。Phase0完了/Phase1着手/本番機能完成とはしない。後続Phaseの実装はJava要件とPhase0のブロッカー解決、レビュー/CI/main統合後に進む。
+
+JNI JARをclasspathから除いた場合はUnsatisfiedLinkErrorで明示失敗することも確認。これはPoCの障害確認であり本番CLI継続の保証ではない。
+
+全Java回帰は既存20分期限wrapperで4088件、failure0 / error0 / skipped1（既存PlantUML条件）、BUILD SUCCESS・wrapper終了0。PoCは通常単体テストにネットワーク・モデルダウンロードを追加しない。
