@@ -9,19 +9,23 @@ import dev.mikoto2000.rei.application.input.ConversationTarget;
 
 @Component
 @Command(name="voice",description="音声入力（初期OFF・選択したマイクのみ）",
-    mixinStandardHelpOptions=true,subcommands={VoiceCommand.Device.class,VoiceCommand.Pending.class})
+    mixinStandardHelpOptions=true,subcommands={VoiceCommand.Device.class,VoiceCommand.Pending.class,VoiceCommand.Models.class})
 public class VoiceCommand {
   private final VoiceInputCoordinator voice;
   private final AudioDeviceService devices;
   private final VoiceProperties properties;
   private final ShellConversationService shell;
+  private final VoiceModelManager models;
   private ConversationTarget target;
   @Spec private CommandSpec spec;
   /** Metadata-only construction for help/completion without Spring or native initialization. */
   public VoiceCommand() { this(null,null,null,null); }
-  @org.springframework.beans.factory.annotation.Autowired
   public VoiceCommand(VoiceInputCoordinator voice,AudioDeviceService devices,VoiceProperties properties,ShellConversationService shell) {
-    this.voice=voice;this.devices=devices;this.properties=properties;this.shell=shell;
+    this(voice,devices,properties,shell,null);
+  }
+  @org.springframework.beans.factory.annotation.Autowired
+  public VoiceCommand(VoiceInputCoordinator voice,AudioDeviceService devices,VoiceProperties properties,ShellConversationService shell,VoiceModelManager models) {
+    this.voice=voice;this.devices=devices;this.properties=properties;this.shell=shell;this.models=models;
   }
   private int attempt(IntSupplier action) {
     try {
@@ -36,7 +40,7 @@ public class VoiceCommand {
   }
   @Command(name="on",description="選択マイクで開始。確定した発話は会話入力として送信",mixinStandardHelpOptions=true)
   int on() { return attempt(()-> {
-    var selected=devices.selected(); requireOff(); target=shell.captureTarget();
+    requireOff(); requireModelsReady(); var selected=devices.selected(); target=shell.captureTarget();
     voice.start(target,selected,properties.settings());
     if(voice.awaitStartup(java.time.Duration.ofSeconds(30))!=VoiceInputCoordinator.State.LISTENING)
       throw new IllegalStateException("音声入力を開始できませんでした。/voice status を確認してください");
@@ -57,7 +61,7 @@ public class VoiceCommand {
   }); }
   @Command(name="test",description="20秒間のマイク認識診断。Agentへは送信しません",mixinStandardHelpOptions=true)
   int test() { return attempt(()-> {
-    var selected=devices.selected();requireOff();target=shell.captureTarget();
+    requireOff(); requireModelsReady(); var selected=devices.selected();target=shell.captureTarget();
     voice.startDiagnostic(target,selected,properties.settings());
     if(voice.awaitStartup(java.time.Duration.ofSeconds(30))!=VoiceInputCoordinator.State.LISTENING)
       throw new IllegalStateException("音声診断を開始できませんでした");
@@ -79,6 +83,50 @@ public class VoiceCommand {
       }
       spec.commandLine().getOut().println(s);return 0;
     });
+  }
+  private VoiceModelManager modelManager() {
+    if(models==null)throw new IllegalStateException("Voice model manager is unavailable");return models;
+  }
+  private void printModels() {
+    var manifest=modelManager().manifest();var out=spec.commandLine().getOut();
+    out.println("Whisper base multilingual INT8 / Silero VAD / sherpa-onnx Windows x64 CPU");
+    out.println("manifest: "+manifest.id()+"; total: "+manifest.totalBytes()+" bytes");
+    for(var asset:manifest.assets()) {
+      out.println(asset.path()+" / "+asset.bytes()+" bytes / "+asset.license());
+      out.println("  "+asset.url());out.println("  SHA-256: "+asset.sha256());
+    }
+    out.println("明示承認: /voice models install --approve "+manifest.id());
+    out.println("取得後に /voice on を実行してください。取得中はマイクを開きません。");
+  }
+  private void requireModelsReady() {
+    if(models==null)return; // compatibility for metadata-only and legacy injected tests
+    if(models.busy())throw new IllegalStateException("モデル取得中です。/voice models status または cancel を使ってください");
+    try {models.readyDirectory();}
+    catch(java.io.IOException missing) {printModels();throw new IllegalStateException("モデル一式が未配置または破損しています。承認後に取得するか、固定一式を手動配置してください");}
+  }
+  @Component @Command(name="models",description="固定モデル一式の案内・明示承認付き取得",mixinStandardHelpOptions=true)
+  public static class Models implements Runnable {
+    @ParentCommand VoiceCommand parent;
+    public void run(){parent.attempt(()->{parent.printModels();return 0;});}
+    @Command(name="info",description="配布元・ライセンス・サイズ・固定SHAを表示",mixinStandardHelpOptions=true)
+    int info(){return parent.attempt(()->{parent.printModels();return 0;});}
+    @Command(name="status",description="非同期取得の状態と進捗",mixinStandardHelpOptions=true)
+    int status(){return parent.attempt(()->{
+      var manager=parent.modelManager();
+      if(!manager.busy())try {parent.spec.commandLine().getOut().println("verified ready: "+manager.readyDirectory());}
+        catch(java.io.IOException unavailable){parent.spec.commandLine().getOut().println("bundle: missing or corrupt");}
+      parent.spec.commandLine().getOut().println(manager.status());
+      return 0;
+    });}
+    @Command(name="install",description="表示したmanifest IDを承認して非同期取得。失敗後は同じコマンドで再試行",mixinStandardHelpOptions=true)
+    int install(@Option(names="--approve",paramLabel="MANIFEST_ID") String approval){return parent.attempt(()->{
+      parent.requireOff();boolean started=parent.modelManager().install(approval);
+      parent.spec.commandLine().getOut().println(started?"モデル取得開始。/voice models status または cancel":"検証済み一式を再利用します。ネットワーク取得はありません");return 0;
+    });}
+    @Command(name="cancel",description="取得を取り消し、不完全な一式を破棄",mixinStandardHelpOptions=true)
+    int cancel(){return parent.attempt(()->{
+      parent.spec.commandLine().getOut().println(parent.modelManager().cancel()?"取消を受け付けました。終了は models status で確認してください":"取得は実行中ではありません");return 0;
+    });}
   }
   @Component @Command(name="device",description="入力デバイスの明示選択",mixinStandardHelpOptions=true)
   public static class Device {

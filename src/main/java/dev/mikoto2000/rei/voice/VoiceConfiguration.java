@@ -11,8 +11,15 @@ public class VoiceConfiguration {
     var devices=new AudioDeviceService(); devices.restoreSelection(properties.getDeviceId()); return devices;
   }
   @Bean VoiceEventPublisher voiceEventPublisher() { return new VoiceEventPublisher(); }
-  @Bean(destroyMethod="close") SherpaBackendFactory sherpaBackendFactory(VoiceProperties properties) {
-    return new SherpaBackendFactory(()->Path.of(properties.getBundleDirectory()));
+  @Bean(destroyMethod="close") HttpsVoiceAssetTransport voiceAssetTransport() {return new HttpsVoiceAssetTransport();}
+  @Bean(destroyMethod="close") VoiceModelManager voiceModelManager(VoiceProperties properties,HttpsVoiceAssetTransport transport,VoiceEventPublisher events) {
+    return new VoiceModelManager(Path.of(properties.getBundleDirectory()),VoiceModelManifest.pinned(),transport,status -> {
+      var type=status.state()==VoiceModelManager.State.DOWNLOADING?VoiceEventPublisher.Type.MODEL_PROGRESS:VoiceEventPublisher.Type.MODEL_STATE;
+      events.publish(type,status.state()+" "+status.bytes()+"/"+status.totalBytes()+" bytes "+status.asset()+" attempt="+status.attempt()+" "+status.failure());
+    });
+  }
+  @Bean(destroyMethod="close") SherpaBackendFactory sherpaBackendFactory(VoiceModelManager models) {
+    return new SherpaBackendFactory(()-> {try{return models.readyDirectory();}catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}});
   }
   @Bean(destroyMethod="close") VoiceInputCoordinator voiceInputCoordinator(
       SherpaBackendFactory backend,AudioDeviceService devices,VoiceEventPublisher events,
