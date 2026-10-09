@@ -174,6 +174,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
         var frame = run.source.readFrame();
         if (run.stop) break;
         if (frame == null) { fail(run, VoiceEventPublisher.Type.CAPTURE_FAILED); break; }
+        VoicePcm.validateFrame(frame);
         run.lastFrameNanos = System.nanoTime();
         var decision = assembler.accept(frame, run.backend.vad().probability(frame));
         switch (decision.reason()) {

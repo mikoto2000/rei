@@ -59,7 +59,7 @@ java --enable-native-access=ALL-UNNAMED -jar target/rei-0.0.1-SNAPSHOT.jar --rei
 
 使用マイクはユーザー指定の DRY (VT-4) です。名前の部分一致や一覧の順番で自動選択せず、devicesで表示したIDを明示選択します。device-idは rei.voice.device-id の設定でも指定できます。
 configの他のオプションは --pre-roll-ms / --min-speech-ms / --max-speech-ms / --tail-ms です。
-マイク・タイミング設定の変更はOFF/FAILED時のみです。CLIでの変更はプロセス内の設定に反映します。
+JNIを呼ぶ前にフレームの長さ・有限値・正規化範囲を検証します。マイク・タイミング設定の変更はOFF/FAILED時のみです。CLIでの変更はプロセス内の設定に反映します。
 ヘルプとサブコマンド/オプション補完はPicocliの既存経路を使います。
 
 on/testはローカル初期化完了を最大30秒待ち、LISTENING（受付中）を表示します。testは受付開始から20秒で自動停止します。開始音は前回の実機試験で聞こえなかったため、音を受付開始の根拠にしません。
@@ -80,12 +80,12 @@ sherpaのVAD JNIはdebug=falseでも初期化時の設定をnative stderrへ出�
 Phase 3: 承認付きモデル管理。Phase 4: 送信先変更・OS復帰・デバイス識別・訂正確認・診断の強化。Phase 5: 自然発話とtiny/base/smallの計測。Phase 6: GPU/ウェイクワード/割込み/話者/TTS/自己エコーの実現可能性と実装可能な項目。Phase 7: 応答スタイル。
 ### 実マイクから既存Agentまでの受入試験
 
-/poc/voice/acceptance.ps1 は、ビルド済みアプリの依存JARから手動試験用ランタイムを用意します。
+poc/voice/acceptance.ps1 は、ビルド済みアプリの依存JARから手動試験用ランタイムを用意します。
 専用のDataDirectoryを指定し、既存のユーザーDB・実行中アプリを試験用に流用しません。
-ExternalConfigは既存のLLM設定を読み取り専用で使用します。バックグラウンド話題生成、読み上げ、MCP自動接続などを試験時に無効化し、Webサーバーも起動しません。
+ExternalConfigは既存のLLM設定を読み取り専用で使用します。バックグラウンド話題生成、読み上げ、MCP自動接続などを試験時に無効化し、Webサーバーも起動しません。既存サービスの @Scheduled 定期処理を受入試験プロセス内で登録しないようにします。
 
 ~~~powershell
-./poc/voice/acceptance.ps1 -Bundle BUNDLE -DataDirectory TEST_DATA -ReadyFile NEW_READY_FILE -Microphone 'DRY (VT-4)' -ExternalConfig EXISTING_CONFIG
+.poc/voice/acceptance.ps1 -Bundle BUNDLE -DataDirectory TEST_DATA -ReadyFile NEW_READY_FILE -Microphone 'DRY (VT-4)' -ExternalConfig EXISTING_CONFIG
 ~~~
 
 新規のReadyFileが作成されるまでマイクはOFFです。WAITING表示後、発話できる時に別のターミナルで New-Item -ItemType File -Path NEW_READY_FILE を実行します。
@@ -93,3 +93,12 @@ LISTENING表示後20秒間、「こんにちは。音声入力のテストです
 20秒でマイクを停止し、既存ShellConversationService/Agent経路の応答と正常終了した会話履歴を確認します。
 成功時のみ ACCEPTANCE PASSED を表示します。音声波形は保存せず、通常の試験会話履歴を指定したTEST_DATAへ保存します。
 この試験はJLineの実端末上の編集中入力を検証する試験ではありません。対話端末の入力保護は既存JLineの回帰テストに加え、Phase 4で実端末の検証を行います。
+
+### 検証記録（PR #56）
+
+- SpringなしのRootCommand読取りでのコンストラクタ不足を既存テストで確認し、修正後のヘルプ/補完/JLineを含む56件が成功しました。
+- PR #55統合前の修正版全回帰は4,137件、failures 0、errors 0、skip 1（既存PlantUML）、10分26秒で成功しました。
+- 初回Windows CIはmainのPR #55を含む組合せで4,179件、failures 0、errors 0、skip 1、9分47秒で成功しました（code head ed372ad9）。
+- PR #55をこのブランチへ統合し、JNIへ渡す前に512サンプル・有限値・正規化範囲を確認する検査をRed/Greenで追加しました。関連38件（実JNI/WAVの3サイクルを行う1件を含む）が成功しました。
+- 最終コードの全回帰・CIは [PR #56のチェック](https://github.com/mikoto2000/rei/pull/56/checks) を参照してください。
+- 実マイク受入試験は発話準備の回答待ちです。準備用プロセスの待機中はマイクOFFで、タイムアウト時も一度も開いていません。音声入力やAgent応答の受入成功として数えていません。次回の発話準備の回答後、新規readiness markerを使って開始します。

@@ -24,7 +24,7 @@ class VoiceAudioConversionTest {
       assertThat(samples[samples.length/2]).isCloseTo(.5f,within(.01f));
     }
   }
-  @Test void unsignedAndBigEndianFormatsAreConvertedRatherThanMisdecoded() throws Exception {
+  @Test void bigEndianFormatsAreConvertedRatherThanMisdecoded() throws Exception {
     byte[] bytes={0x40,0,0x40,0};
     try(var input=new AudioInputStream(new ByteArrayInputStream(bytes),new AudioFormat(16000,16,1,true,true),2);
         var converted=AudioFormatConverter.toPcm16(input)){

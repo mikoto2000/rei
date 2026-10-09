@@ -189,4 +189,20 @@ class VoiceInputCoordinatorTest {
       assertThat(closed.get()).isEqualTo(1);
     }
   }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(ints={127,1024,-1})
+  void invalidCaptureFrameNeverReachesNativeVad(int kind) {
+    var source=new Source();var nativeCalls=new AtomicInteger();
+    float[] frame=new float[kind<0?512:kind];if(kind<0)frame[0]=Float.NaN;
+    source.frames.add(frame);
+    try(var voice=new VoiceInputCoordinator(d->source,s->new VoiceBackend(new VoiceActivityDetector(){
+      public float probability(float[] value){nativeCalls.incrementAndGet();return 0;}public void close(){}
+    },new SpeechRecognizer(){public String recognize(SpeechSegment segment){return "unused";}public void close(){}}),
+      input->{},new VoiceEventPublisher(),clock)){
+      voice.start(target,device,VoiceSettings.defaults());
+      await().atMost(Duration.ofSeconds(3)).untilAsserted(()->assertThat(voice.state()).isEqualTo(VoiceInputCoordinator.State.FAILED));
+      assertThat(nativeCalls.get()).isZero();
+    }
+  }
 }

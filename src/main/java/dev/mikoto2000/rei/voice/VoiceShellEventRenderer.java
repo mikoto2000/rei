@@ -9,7 +9,7 @@ public final class VoiceShellEventRenderer implements Consumer<VoiceEventPublish
       case STATE_CHANGED -> event.detail().equals("LISTENING") ? "LISTENING: 受付中です" : event.detail();
       case SEGMENT_QUEUE_FULL -> "認識待ちキューが満杯のため発話を破棄しました";
       case SHORT_DROPPED -> "短すぎる発話を破棄しました";
-      case MAX_DROPPED -> "25秒の上限に達した未完了発話を破棄しました";
+      case MAX_DROPPED -> "最大発話時間の上限に達した未完了発話を破棄しました";
       case RESULT_REJECTED -> "空・無効・コマンド形式の認識結果を破棄しました";
       case INPUT_REJECTED -> "会話入力を受け付けられませんでした。/voice pending と送信先Sessionを確認してください";
       case BACKEND_FAILED -> "音声モデル/JNIの初期化に失敗しました。モデル一式と --enable-native-access=ALL-UNNAMED を確認してください";

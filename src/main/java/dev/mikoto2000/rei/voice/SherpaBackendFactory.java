@@ -70,7 +70,7 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
       Object recognizer=construct("OfflineRecognizer",call(config,"build"));
       Object detector=vad; users++;
       return new VoiceBackend(new VoiceActivityDetector() {
-        public float probability(float[] frame) throws Exception { return ((Number)call(detector,"compute",frame)).floatValue(); }
+        public float probability(float[] frame) throws Exception { VoicePcm.validateFrame(frame); return ((Number)call(detector,"compute",frame)).floatValue(); }
         public void close() { try { release(detector); } finally { userReleased(); } }
       },new SpeechRecognizer() {
         public String recognize(SpeechSegment segment) throws Exception {
