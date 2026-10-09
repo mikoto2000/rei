@@ -226,3 +226,5 @@ GitHubからのReview通知、CI失敗trigger、PR merge待ちは [GitHub Event 
 自然言語による Codex 隔離実装と詳細要件・承認・条件別評価は[要件付き隔離実装ガイド](docs/llm-codex-implementation-delegation.md)を参照してください。対象だけの /agent codex implement は要件確認から進みます。
 
 LLM送信本文の明示記録は [LLM Request Capture](docs/llm-request-capture.md) を参照してください。
+
+音声認識の現行モデル、承認付き取得、旧キャッシュと検証範囲は [Whisper large-v3-turbo FP32 移行](docs/voice-input-turbo-fp32.md) を参照してください。

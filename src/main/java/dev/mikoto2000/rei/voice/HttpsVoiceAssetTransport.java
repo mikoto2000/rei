@@ -16,7 +16,7 @@ public final class HttpsVoiceAssetTransport implements VoiceAssetTransport,AutoC
     URI uri=asset.url();
     for(int redirects=0;redirects<=5;redirects++) {
       token.check();VoiceModelManifest.requireHttps(uri);
-      var request=HttpRequest.newBuilder(uri).timeout(Duration.ofMinutes(5)).header("User-Agent","Rei-Voice-Model-Manager")
+      var request=HttpRequest.newBuilder(uri).timeout(Duration.ofMinutes(10)).header("User-Agent","Rei-Voice-Model-Manager")
         .header("Accept-Encoding","identity").GET().build();
       var pending=client.sendAsync(request,HttpResponse.BodyHandlers.ofInputStream());
       HttpResponse<InputStream> response;

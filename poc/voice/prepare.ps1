@@ -1,3 +1,4 @@
+# Historical Phase 0 base INT8 baseline only. Current Rei uses /voice models install; see docs/voice-input-turbo-fp32.md.
 param([switch]$Download)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent

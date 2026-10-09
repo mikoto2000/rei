@@ -36,6 +36,18 @@ class VoiceInputCoordinatorTest {
       public void close(){vadClosed.incrementAndGet();}
     },recognizer);
   }
+  @Test void stopInterruptsSlowNativeStartupWithoutOpeningMicrophone() throws Exception {
+    var entered=new CountDownLatch(1);var interrupted=new CountDownLatch(1);var captures=new AtomicInteger();
+    try(var voice=new VoiceInputCoordinator(d->{captures.incrementAndGet();return new Source();},s->{
+      entered.countDown();try{Thread.sleep(60000);}catch(InterruptedException e){interrupted.countDown();throw e;}
+      throw new AssertionError("startup should have been interrupted");
+    },input->{},new VoiceEventPublisher(),clock)) {
+      voice.start(target,device,VoiceSettings.defaults());assertThat(entered.await(2,TimeUnit.SECONDS)).isTrue();
+      voice.off();assertThat(interrupted.await(2,TimeUnit.SECONDS)).isTrue();
+      await().atMost(Duration.ofSeconds(3)).untilAsserted(()->assertThat(voice.state()).isEqualTo(VoiceInputCoordinator.State.OFF));
+      assertThat(captures).hasValue(0);
+    }
+  }
   @Test void defaultIsOffAndUnselectedMicDoesNotOpenBackend(){
     var calls=new AtomicInteger();var source=new Source();
     try(var voice=new VoiceInputCoordinator(d->source,s->{calls.incrementAndGet();throw new IllegalStateException();},
@@ -151,7 +163,10 @@ class VoiceInputCoordinatorTest {
   @Test void offDuringNativeInitializationClosesEventuallyWithoutOpeningMic() throws Exception {
     var entered=new CountDownLatch(1);var release=new CountDownLatch(1);var opened=new AtomicInteger();var closed=new AtomicInteger();
     try(var voice=new VoiceInputCoordinator(d->{opened.incrementAndGet();return new Source();},s->{
-      entered.countDown();release.await();return backend(new SpeechRecognizer(){
+      entered.countDown();boolean interrupted=false;
+      // Model a native call that cannot react to Java interruption until it returns.
+      while(release.getCount()!=0){try{release.await();}catch(InterruptedException e){interrupted=true;}}
+      if(interrupted)Thread.currentThread().interrupt();return backend(new SpeechRecognizer(){
         public String recognize(SpeechSegment segment){return "unused";}public void close(){}
       },closed);
     },input->{},new VoiceEventPublisher(),clock)){

@@ -1,5 +1,7 @@
 # 音声入力 Phase 0 — 調査・PoC（完了）
 
+> この文書の base INT8・取得ID・時間上限・実機結果は当時の記録です。現在のモデルと取得・移行手順は [Whisper turbo FP32 移行](voice-input-turbo-fp32.md) を参照してください。
+
 ## 開始条件と現状
 
 2026-10-09、先行 Web 検索改善 PR #42–47、作業完遂能力向上 PR #48–52 の merged/base=main と remote main `462b8ee1002b13eb2f040079922cf3331b160faf` を確認。先行チャットの Phase 0–4 完了報告も確認して開始条件監視を停止した。

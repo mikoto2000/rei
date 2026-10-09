@@ -1,5 +1,7 @@
 # 音声入力 Phase 4 — 運用品質と安全性
 
+> この文書の base INT8・取得ID・時間上限・実機結果は当時の記録です。現在のモデルと取得・移行手順は [Whisper turbo FP32 移行](voice-input-turbo-fp32.md) を参照してください。
+
 ## 実装範囲
 
 Phase 3 の固定モデル管理と Phase 2 の音声処理に、Windows endpoint 監視、送信先再確認、認識確認・訂正、およびネイティブ推論のプロセス隔離を追加する。Java 25、DRY (VT-4)、CPU/base multilingual INT8 を維持する。初期状態は OFF、確認モードも初期 OFF。

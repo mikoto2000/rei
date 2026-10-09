@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 /** Explicit opt-in local integration test; no model downloads or microphone recording. */
 class SherpaBackendIT {
-  @Test void actualBaseInt8JapaneseWavAndNativeResourceRelease() throws Exception {
+  @Test void actualTurboFp32JapaneseWavAndNativeResourceRelease() throws Exception {
     String configured = System.getProperty("rei.voice.test.bundle");
     assertThat(configured).as("Supply verified local bundle with -Drei.voice.test.bundle").isNotBlank();
     Path bundle = Path.of(configured);
