@@ -183,6 +183,8 @@ SSE bridge の破棄時には送信完了を最大 2 秒待機します。切断
 永続待機・条件再検証・Checkpoint 継続は [Goal の待機統合](docs/durable-goal-resume.md) を参照してください。
 各 Phase の PR・評価指標・設定・制限は [実装記録](docs/goal-completion-implementation-report.md) を参照してください。
 
-音声入力の隔離 PoC、調査・設計と未検証範囲は [Phase 0 調査](docs/voice-input-phase0.md) を参照してください。本番機能は未実装です。
+音声入力の隔離 PoC、調査・設計と未検証範囲は [Phase 0 調査](docs/voice-input-phase0.md) を参照してください。本番機能の進捗は各Phaseの実装報告を参照してください。
 
 音声入力の共通入口と検証範囲は [Phase 1 実装報告](docs/voice-input-phase1.md) を参照してください。
+
+音声入力のPhase 2実装・検証状況は [voice-input-phase2.md](docs/voice-input-phase2.md) を参照してください。

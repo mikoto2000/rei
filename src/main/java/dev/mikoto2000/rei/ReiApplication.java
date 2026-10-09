@@ -57,6 +57,11 @@ public class ReiApplication {
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   private dev.mikoto2000.rei.core.completion.CompletionEngine completionEngine = ReiLineReaderFactory.completionEngine();
 
+  @Autowired(required = false)
+  private dev.mikoto2000.rei.voice.VoiceInputCoordinator voiceInput;
+  @Autowired(required = false)
+  private dev.mikoto2000.rei.voice.VoiceEventPublisher voiceEvents;
+
   private final RootCommand rootCommand;
   private final CommandLine.IFactory factory;
   private final ModelHolderService currentModelHolder;
@@ -181,6 +186,8 @@ public class ReiApplication {
       shellListener = new ShellAgentEventRenderer(eventOutput, notificationOptions);
     }
     ShellEventSession shellEvents = new ShellEventSession(agentEventBus, shellListener);
+    var voiceSubscription = voiceEvents == null ? null
+        : voiceEvents.subscribe(new dev.mikoto2000.rei.voice.VoiceShellEventRenderer(eventOutput));
 
     System.out.println("AI Shell");
     System.out.println("通常入力は chat として扱います。/exit で終了します。");
@@ -250,6 +257,8 @@ public class ReiApplication {
     } finally {
       shutdownNotifier.begin("shell_exit");
       commandExecutor.shutdownNow();
+      if (voiceInput != null) voiceInput.close();
+      if (voiceSubscription != null) voiceSubscription.close();
       shellEvents.close();
     }
   }

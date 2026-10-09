@@ -1,0 +1,236 @@
+package dev.mikoto2000.rei.voice;
+
+import java.time.Clock;
+import java.util.Objects;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+import dev.mikoto2000.rei.application.input.*;
+
+/** Capture and recognition have separate workers. JNI is released only after both really exit. */
+public final class VoiceInputCoordinator implements AutoCloseable {
+  public enum State { OFF, STARTING, LISTENING, STOPPING, FAILED, CLOSED }
+  private final Object guard = new Object();
+  private final MicrophoneCaptureService capture;
+  private final VoiceBackendFactory backends;
+  private final Consumer<ConversationInput> submit;
+  private final VoiceEventPublisher events;
+  private final Clock clock;
+  private final ExecutorService supervisor = Executors.newSingleThreadExecutor(r -> daemon(r, "voice-supervisor"));
+  private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor(r -> daemon(r, "voice-deadline"));
+  private volatile State state = State.OFF;
+  private Run active;
+  private boolean closed;
+
+  private static final class Run {
+    final ConversationTarget target;
+    final AudioDevice device;
+    final VoiceSettings settings;
+    final boolean diagnostic;
+    volatile long lastFrameNanos = System.nanoTime();
+    volatile ScheduledFuture<?> deadline;
+    final VoiceInputQueue segments = new VoiceInputQueue();
+    final CountDownLatch exited = new CountDownLatch(2);
+    final AtomicBoolean captureClosed = new AtomicBoolean();
+    final CountDownLatch captureReleased = new CountDownLatch(1);
+    volatile boolean stop;
+    volatile boolean failed;
+    volatile VoiceBackend backend;
+    volatile MicrophoneCaptureService.FrameSource source;
+    volatile Thread captureThread, recognitionThread;
+    Run(ConversationTarget target, AudioDevice device, VoiceSettings settings, boolean diagnostic) {
+      this.target = target; this.device = device; this.settings = settings; this.diagnostic = diagnostic;
+    }
+  }
+
+  public VoiceInputCoordinator(MicrophoneCaptureService capture, VoiceBackendFactory backends,
+      Consumer<ConversationInput> submit, VoiceEventPublisher events, Clock clock) {
+    this.capture = Objects.requireNonNull(capture); this.backends = Objects.requireNonNull(backends);
+    this.submit = Objects.requireNonNull(submit); this.events = Objects.requireNonNull(events);
+    this.clock = Objects.requireNonNull(clock);
+  }
+  private static Thread daemon(Runnable work, String name) {
+    var thread = new Thread(work, name); thread.setDaemon(true); return thread;
+  }
+  public State state() { return state; }
+  public State awaitStartup(java.time.Duration timeout) {
+    long deadline=System.nanoTime()+timeout.toNanos();
+    try {
+      synchronized(guard) {
+        while(state==State.STARTING) {
+          long remaining=deadline-System.nanoTime();
+          if(remaining<=0) break;
+          TimeUnit.NANOSECONDS.timedWait(guard,remaining);
+        }
+        if(state!=State.STARTING)return state;
+      }
+    } catch(InterruptedException e) {
+      off();Thread.currentThread().interrupt();throw new IllegalStateException("Voice initialization interrupted");
+    }
+    off();throw new IllegalStateException("Voice initialization timed out; waiting for native cleanup");
+  }
+  public int queuedSegments() { synchronized (guard) { return active == null ? 0 : active.segments.size(); } }
+  private void change(State next) {
+    state = next; guard.notifyAll(); events.publish(VoiceEventPublisher.Type.STATE_CHANGED, next.name());
+  }
+  public void start(ConversationTarget target, AudioDevice device, VoiceSettings settings) {
+    start(target, device, settings, false);
+  }
+  public void startDiagnostic(ConversationTarget target, AudioDevice device, VoiceSettings settings) {
+    start(target, device, settings, true);
+  }
+  private void start(ConversationTarget target, AudioDevice device, VoiceSettings settings, boolean diagnostic) {
+    if (target == null || device == null || settings == null) throw new IllegalArgumentException("Select a microphone and target first");
+    synchronized (guard) {
+      if (closed || active != null) throw new IllegalStateException("Voice is already active or closed");
+      var run = new Run(target, device, settings, diagnostic);
+      active = run; change(State.STARTING);
+      supervisor.execute(() -> supervise(run));
+    }
+  }
+  public void off() {
+    Run run;
+    synchronized (guard) {
+      run = active;
+      if (run == null) { if (!closed) change(State.OFF); return; }
+      run.stop = true; run.segments.clear(); change(State.STOPPING);
+    }
+    stopWorkers(run);
+  }
+  private void stopWorkers(Run run) {
+    if (run.source != null && run.captureClosed.compareAndSet(false, true)) {
+      try { run.source.close(); }
+      catch (RuntimeException e) { run.failed = true; events.publish(VoiceEventPublisher.Type.RELEASE_FAILED, "capture"); }
+      finally { run.captureReleased.countDown(); }
+    }
+    if (run.captureThread != null) run.captureThread.interrupt();
+    if (run.recognitionThread != null) run.recognitionThread.interrupt();
+  }
+  private void fail(Run run, VoiceEventPublisher.Type code) {
+    synchronized (guard) {
+      if (run.stop) return;
+      run.failed = true; run.stop = true; run.segments.clear(); change(State.STOPPING);
+    }
+    events.publish(code, "voice stopped");
+    stopWorkers(run);
+  }
+  private void supervise(Run run) {
+    boolean captureStarted = false, recognitionStarted = false;
+    try {
+      run.backend = backends.open(run.settings);
+      if (run.stop) return;
+      run.source = capture.open(run.device);
+      if (run.source == null) throw new IllegalStateException("Capture source unavailable");
+      synchronized (guard) {
+        if (run.stop) return;
+        run.captureThread = daemon(() -> captureLoop(run), "voice-capture");
+        run.recognitionThread = daemon(() -> recognizeLoop(run), "voice-recognition");
+        run.lastFrameNanos = System.nanoTime();
+        run.captureThread.start(); captureStarted = true;
+        run.recognitionThread.start(); recognitionStarted = true;
+        change(State.LISTENING);
+        if (run.diagnostic) run.deadline = timer.schedule(() -> stopDiagnostic(run), 20, TimeUnit.SECONDS);
+      }
+      while (!run.exited.await(250, TimeUnit.MILLISECONDS)) {
+        if (!run.stop && System.nanoTime()-run.lastFrameNanos > TimeUnit.SECONDS.toNanos(5))
+          fail(run, VoiceEventPublisher.Type.CAPTURE_FAILED);
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      fail(run, VoiceEventPublisher.Type.BACKEND_FAILED);
+    } catch (Exception | LinkageError e) {
+      fail(run, run.backend == null ? VoiceEventPublisher.Type.BACKEND_FAILED : VoiceEventPublisher.Type.CAPTURE_FAILED);
+    } finally {
+      run.stop = true;
+      if (run.deadline != null) run.deadline.cancel(false);
+      if (!captureStarted) run.exited.countDown();
+      if (!recognitionStarted) run.exited.countDown();
+      stopWorkers(run);
+      boolean interrupted = Thread.interrupted();
+      while (run.exited.getCount() != 0) {
+        try { run.exited.await(); } catch (InterruptedException e) { interrupted = true; }
+      }
+      if (run.source != null) {
+        while (run.captureReleased.getCount() != 0) {
+          try { run.captureReleased.await(); } catch (InterruptedException e) { interrupted = true; }
+        }
+      }
+      run.segments.clear();
+      if (run.backend != null) {
+        try { run.backend.close(); } catch (RuntimeException | LinkageError e) {
+          run.failed = true; events.publish(VoiceEventPublisher.Type.RELEASE_FAILED, "backend");
+        }
+      }
+      synchronized (guard) {
+        if (active == run) { active = null; change(closed ? State.CLOSED : run.failed ? State.FAILED : State.OFF); }
+      }
+      if (interrupted) Thread.currentThread().interrupt();
+    }
+  }
+  private void captureLoop(Run run) {
+    var assembler = new SpeechSegmentAssembler(run.settings, clock);
+    try {
+      while (!run.stop) {
+        var frame = run.source.readFrame();
+        if (run.stop) break;
+        if (frame == null) { fail(run, VoiceEventPublisher.Type.CAPTURE_FAILED); break; }
+        VoicePcm.validateFrame(frame);
+        run.lastFrameNanos = System.nanoTime();
+        var decision = assembler.accept(frame, run.backend.vad().probability(frame));
+        switch (decision.reason()) {
+          case COMPLETED -> {
+            if (!run.stop && !run.segments.offer(decision.segment())) {
+              events.publish(VoiceEventPublisher.Type.SEGMENT_QUEUE_FULL, "segment dropped");
+            }
+          }
+          case SHORT_DROPPED -> events.publish(VoiceEventPublisher.Type.SHORT_DROPPED, "segment dropped");
+          case MAX_DROPPED -> events.publish(VoiceEventPublisher.Type.MAX_DROPPED, "unfinished segment dropped");
+          default -> { }
+        }
+      }
+    } catch (InterruptedException e) {
+      if (!run.stop) fail(run, VoiceEventPublisher.Type.CAPTURE_FAILED);
+      Thread.currentThread().interrupt();
+    } catch (Exception | LinkageError e) {
+      fail(run, VoiceEventPublisher.Type.CAPTURE_FAILED);
+    } finally { assembler.reset(); run.exited.countDown(); }
+  }
+  private void recognizeLoop(Run run) {
+    try {
+      while (!run.stop) {
+        var segment = run.segments.poll(200, TimeUnit.MILLISECONDS);
+        if (segment == null) continue;
+        var result = SpeechResultFilter.filter(run.backend.recognizer().recognize(segment));
+        synchronized (guard) {
+          if (run.stop || active != run) continue;
+          if (result.isEmpty()) { events.publish(VoiceEventPublisher.Type.RESULT_REJECTED, "recognition dropped"); continue; }
+          if (run.diagnostic) { events.publish(VoiceEventPublisher.Type.DIAGNOSTIC_RESULT, result.get()); continue; }
+          try {
+            submit.accept(new ConversationInput(segment.id(), InputSource.VOICE, run.target, result.get(), segment.createdAt()));
+          } catch (RuntimeException e) {
+            events.publish(VoiceEventPublisher.Type.INPUT_REJECTED, "input rejected");
+          }
+        }
+      }
+    } catch (InterruptedException e) {
+      if (!run.stop) fail(run, VoiceEventPublisher.Type.RECOGNITION_FAILED);
+      Thread.currentThread().interrupt();
+    } catch (Exception | LinkageError e) {
+      fail(run, VoiceEventPublisher.Type.RECOGNITION_FAILED);
+    } finally { run.exited.countDown(); }
+  }
+  private void stopDiagnostic(Run run) {
+    synchronized (guard) {
+      if (active != run || run.stop) return;
+      run.stop = true; run.segments.clear(); change(State.STOPPING);
+    }
+    stopWorkers(run);
+  }
+  public void close() {
+    synchronized (guard) { if (closed) return; closed = true; }
+    off(); timer.shutdownNow(); supervisor.shutdown();
+    try { supervisor.awaitTermination(15, TimeUnit.SECONDS); }
+    catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    synchronized (guard) { if (active == null) change(State.CLOSED); }
+  }
+}
