@@ -1,7 +1,7 @@
 """Aggregate benchmark TSV without combining public CER and synthetic diagnostics."""
 import pathlib,csv,json,base64,math,statistics,sys,unicodedata
 root=pathlib.Path('target'); output=[]
-for path in sorted(list(root.glob('benchmark-main-*-t*-p*-s*.tsv'))+list(root.glob('benchmark-calibration-*-t*-p*-s*.tsv'))+list(root.glob('benchmark-tuned-*-t*-p*-s*.tsv'))+list(root.glob('benchmark-commands-*-t*-p*-s*.tsv'))):
+for path in sorted(list(root.glob('benchmark-main-*-t*-p*-s*.tsv'))+list(root.glob('benchmark-calibration-*-t*-p*-s*.tsv'))+list(root.glob('benchmark-tuned-*-t*-p*-s*.tsv'))+list(root.glob('benchmark-commands-*-t*-p*-s*.tsv'))+list(root.glob('benchmark-utf8*-*-t*-p*-s*.tsv'))):
     rows=list(csv.DictReader(path.open(encoding='utf8'),delimiter='\t'))
     if not rows:continue
     process=path.with_suffix('.process.json')
@@ -20,7 +20,7 @@ for path in sorted(list(root.glob('benchmark-main-*-t*-p*-s*.tsv'))+list(root.gl
         def percentile(values,q):return sorted(values)[math.ceil(len(values)*q)-1] if values else None
         terms={"synthetic-technical.wav":["Java","Spring Boot","Whisper","Gateway","GitHub"],"synthetic-files.wav":["pom.xml","README.md","src","VoiceCommand.java"],"synthetic-commands.wav":["git status","mvn test","git diff"]}
         exactTerms=[(term,term in text(r,"hypothesis64")) for r in subset for term in terms.get(r["file"],[])]
-        output.append(dict(exactTermsCorrect=sum(hit for term,hit in exactTerms),exactTermsTotal=len(exactTerms),label=path.name,threads=meta['threads'],tailFrames=meta['tail'],silenceMs=meta['silenceMs'],profile=rows[0]['profile'],group=name,clips=len(subset),spoken=len(spoken),corpusCer=errorCount/characterCount if characterCount else None,referenceCharacters=characterCount,characterErrors=errorCount,meanCer=statistics.mean(float(r['cer']) for r in spoken) if spoken else None,
+        output.append(dict(byteSafe=all(r.get("byteSafe")=="true" for r in rows),exactTermsCorrect=sum(hit for term,hit in exactTerms),exactTermsTotal=len(exactTerms),label=path.name,threads=meta['threads'],tailFrames=meta['tail'],silenceMs=meta['silenceMs'],profile=rows[0]['profile'],group=name,clips=len(subset),spoken=len(spoken),corpusCer=errorCount/characterCount if characterCount else None,referenceCharacters=characterCount,characterErrors=errorCount,meanCer=statistics.mean(float(r['cer']) for r in spoken) if spoken else None,
             rtfMean=statistics.mean(rtfs) if rtfs else None,rtfP95=percentile(rtfs,.95),asrP50Ms=percentile(latencies,.5),asrP95Ms=percentile(latencies,.95),
             endToFilteredEstimateP50Ms=percentile(estimates,.5),endToFilteredEstimateP95Ms=percentile(estimates,.95),missingUtterances=sum(int(r['segments'])==0 for r in spoken),
             splitUtterances=sum(int(r['segments'])>1 for r in spoken),unintendedSends=sum(int(r['segments']) for r in subset if not text(r,'reference64')),

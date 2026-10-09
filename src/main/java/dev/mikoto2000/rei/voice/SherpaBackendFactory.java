@@ -50,6 +50,7 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
     if (!loader.getUnnamedModule().isNativeAccessEnabled())
       throw new IllegalStateException("Start Java with --enable-native-access=ALL-UNNAMED before /voice on");
     Object vad=null,recognizer=null;
+    WhisperByteVocabulary vocabulary=null;
     try {
       if(withVad) {
       var silero=builder("SileroVadModelConfig");
@@ -71,13 +72,15 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
       set(whisper,"setDecoder",root.resolve("models/turbo-decoder.onnx").toString());
       set(whisper,"setLanguage","ja"); set(whisper,"setTask","transcribe"); set(whisper,"setTailPaddings",options.tailFrames());
       var model=builder("OfflineModelConfig"); set(model,"setWhisper",call(whisper,"build"));
-      set(model,"setTokens",root.resolve("models/turbo-tokens.txt").toString());
+      vocabulary=WhisperByteVocabulary.create(root.resolve("models/turbo-tokens.txt"));
+      set(model,"setTokens",vocabulary.path().toString());
       set(model,"setNumThreads",options.threads()); set(model,"setProvider","cpu"); set(model,"setDebug",false);
       var config=builder("OfflineRecognizerConfig"); set(config,"setOfflineModelConfig",call(model,"build"));
       set(config,"setDecodingMethod","greedy_search");
       recognizer=construct("OfflineRecognizer",call(config,"build"));
       }
       Object decoder=recognizer;
+      WhisperByteVocabulary ownedVocabulary=vocabulary;
       Object detector=vad; users++;
       return new VoiceBackend(new VoiceActivityDetector() {
         public float probability(float[] frame) throws Exception { if(detector==null)throw new IllegalStateException("VAD is not loaded in this worker"); VoicePcm.validateFrame(frame); return ((Number)call(detector,"compute",frame)).floatValue(); }
@@ -89,15 +92,18 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
           try {
             call(stream,"acceptWaveform",segment.samples(),VoiceSettings.SAMPLE_RATE);
             call(decoder,"decode",stream);
-            return (String)call(call(decoder,"getResult",stream),"getText");
+            return WhisperByteVocabulary.decode((String)call(call(decoder,"getResult",stream),"getText"));
           } finally { release(stream); }
         }
         public void close() {
-          if(decoder!=null)release(decoder);
+          try { if(decoder!=null)release(decoder); }
+          finally { if(ownedVocabulary!=null)try { ownedVocabulary.close(); } catch(IOException e) { throw new UncheckedIOException(e); } }
         }
       });
     } catch (Exception | LinkageError e) {
-      if (vad!=null) release(vad);
+      try { if (recognizer!=null) release(recognizer); } catch(RuntimeException cleanup) { e.addSuppressed(cleanup); }
+      try { if (vad!=null) release(vad); } catch(RuntimeException cleanup) { e.addSuppressed(cleanup); }
+      if(vocabulary!=null)try { vocabulary.close(); } catch(IOException cleanup) { e.addSuppressed(cleanup); }
       throw e;
     }
   }

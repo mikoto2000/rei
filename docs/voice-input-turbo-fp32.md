@@ -83,3 +83,6 @@ Windows DLL/JNI・DRY (VT-4) の実マイク、日本語自然発話、実機の
 ## Phase 5 での Windows 再検証
 
 2026-10-10、Windows / Java 25 で固定 FP32 一式の SHA、日本語公開音声20録音、合成診断10件の推論を確認しました。以後の既定 CPU 設定は4 threads / tail padding 1000 framesで、モデル固定値は維持しています。精度・速度と実Gateway診断の範囲は [Phase 5](voice-input-phase5.md) を参照してください。上記の1 thread計測と未検証範囲はPR #60時点の記録です。DRY (VT-4) の更新後再試験は別途実施し、公開音声の成功だけで実マイク検証済みとは扱いません。
+
+
+Phase5では固定sherpa 1.13.8のbyte-level BPE断片がUTF-8清掃で失われる問題を切り分けた。固定7ファイルのSHA・モデル重みは変更せず、ASR表示語彙だけを一時的なbyte保持表現にして、結果結合後に厳密なUTF-8復号を行う。上流修正・再測定とDRY (VT-4)の全文認識結果は [Phase5の追加切り分け](voice-input-phase5.md#受付同期修正後の比較と文字欠落の原因) に記録する。これは量子化やモデル変換ではない。

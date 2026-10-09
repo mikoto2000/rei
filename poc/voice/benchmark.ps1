@@ -1,4 +1,4 @@
-param([string]$Profile,[string]$Models,[string]$Fixtures,[int]$Threads=1,[int]$Tail=1000,[int]$Silence=1200,[string]$Runtime="target/voice-phase5-turbo",[ValidatePattern("^[A-Za-z0-9_-]+$")][string]$Label="main")
+param([string]$Profile,[string]$Models,[string]$Fixtures,[int]$Threads=1,[int]$Tail=1000,[int]$Silence=1200,[string]$Runtime="target/voice-phase5-turbo",[ValidatePattern("^[A-Za-z0-9_-]+$")][string]$Label="utf8-main")
 $ErrorActionPreference='Stop'
 $taskRoot=(Get-Location).Path
 $taskOut=Join-Path $taskRoot ('target/benchmark-'+$Label+'-'+$Profile+'-t'+$Threads+'-p'+$Tail+'-s'+$Silence)

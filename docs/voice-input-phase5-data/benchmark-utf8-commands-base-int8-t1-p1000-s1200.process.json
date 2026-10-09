@@ -1,0 +1,11 @@
+{
+  "profile": "base-int8",
+  "threads": 1,
+  "tail": 1000,
+  "silenceMs": 1200,
+  "pid": 68508,
+  "maxWorkingSetBytes": 494276608,
+  "cpuSeconds": 2.5625,
+  "exitCode": 0,
+  "samplingMs": 100
+}
