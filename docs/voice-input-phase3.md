@@ -1,5 +1,7 @@
 # 音声入力 Phase 3: 承認付きモデル管理
 
+> この文書の base INT8・取得ID・時間上限・実機結果は当時の記録です。現在のモデルと取得・移行手順は [Whisper turbo FP32 移行](voice-input-turbo-fp32.md) を参照してください。
+
 Phase 2 は PR #56（45cded4acb6453fd21cf4b5a595a7a2c54ff1ee8）でmainへ統合済みです。このmainを起点に実装しています。Java 25、Windows x64、CPU、DRY (VT-4) を維持します。
 
 ## 利用方法

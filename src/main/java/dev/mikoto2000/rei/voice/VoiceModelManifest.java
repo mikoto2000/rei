@@ -8,13 +8,15 @@ import java.util.*;
 
 /** Curated complete runtime/model set. No arbitrary ONNX file or URL is accepted by the CLI. */
 public record VoiceModelManifest(String id,List<Asset> assets) {
+  public static final long MAX_ASSET_BYTES=3L*1024*1024*1024;
+  public static final long MAX_BUNDLE_BYTES=4L*1024*1024*1024;
   public record Asset(String path,URI url,long bytes,String sha256,String license) {
     public Asset {
       if(path==null||!path.matches("[A-Za-z0-9._/-]+")||path.startsWith("/")
           ||Arrays.asList(path.split("/",-1)).stream().anyMatch(p->p.isEmpty()||p.equals(".")||p.equals("..")))
         throw new IllegalArgumentException("Unsafe voice asset path");
       requireHttps(url);
-      if(bytes<1||bytes>512L*1024*1024||sha256==null||!sha256.matches("[0-9a-f]{64}")||license==null||license.isBlank())
+      if(bytes<1||bytes>MAX_ASSET_BYTES||sha256==null||!sha256.matches("[0-9a-f]{64}")||license==null||license.isBlank())
         throw new IllegalArgumentException("Invalid fixed voice asset metadata");
     }
   }
@@ -22,6 +24,7 @@ public record VoiceModelManifest(String id,List<Asset> assets) {
     if(id==null||!id.matches("[A-Za-z0-9_-]{1,120}")||assets==null||assets.isEmpty()||assets.size()>20)
       throw new IllegalArgumentException("Invalid voice manifest");
     assets=List.copyOf(assets);
+    if(assets.stream().mapToLong(Asset::bytes).sum()>MAX_BUNDLE_BYTES)throw new IllegalArgumentException("Voice bundle exceeds fixed bound");
     if(assets.stream().map(Asset::path).distinct().count()!=assets.size())throw new IllegalArgumentException("Duplicate voice asset");
   }
   public static void requireHttps(URI url) {
@@ -39,25 +42,30 @@ public record VoiceModelManifest(String id,List<Asset> assets) {
     for(var asset:assets)verifyAsset(asset,assetPath(root,asset.path()));
   }
   public static void verifyAsset(Asset asset,Path path) throws IOException {
+    checkInterrupted();
     if(!Files.isRegularFile(path,LinkOption.NOFOLLOW_LINKS)||Files.size(path)!=asset.bytes())
       throw new IOException("Missing or invalid voice asset: "+asset.path());
     try(var input=Files.newInputStream(path)) {
       var digest=MessageDigest.getInstance("SHA-256");byte[] bytes=new byte[65536];int count;
-      while((count=input.read(bytes))!=-1)digest.update(bytes,0,count);
+      while((count=input.read(bytes))!=-1){checkInterrupted();digest.update(bytes,0,count);}
+      checkInterrupted();
       if(!HexFormat.of().formatHex(digest.digest()).equals(asset.sha256()))throw new IOException("Voice SHA-256 mismatch: "+asset.path());
     }catch(NoSuchAlgorithmException e){throw new IllegalStateException(e);}
   }
+  private static void checkInterrupted() throws InterruptedIOException {
+    if(Thread.currentThread().isInterrupted())throw new InterruptedIOException("Voice integrity verification interrupted");
+  }
   public static VoiceModelManifest pinned() {
-    String revision="bb53ee204431c90d314c1cc08d28d23e5b7927cc";
+    String revision="2ca6ff69fc878651b770880507669577ac41c2ff";
     var assets=new ArrayList<Asset>();
     for(var asset:SherpaBackendFactory.ASSETS) {
       String url;
       if(asset.path().equals("jvm.jar"))url="https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-jvm-1.13.8.jar";
       else if(asset.path().equals("native.jar"))url="https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-native-lib-win-x64-1.13.8.jar";
       else if(asset.path().contains("silero"))url="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx";
-      else url="https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base/resolve/"+revision+"/"+Path.of(asset.path()).getFileName();
-      assets.add(new Asset(asset.path(),URI.create(url),asset.bytes(),asset.sha256(),asset.path().endsWith("jar")?"Apache-2.0 (sherpa-onnx); MIT (ONNX Runtime)":asset.path().contains("base-")?"MIT (Whisper upstream; fixed converted distribution)":"MIT (Silero VAD)"));
+      else url="https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/resolve/"+revision+"/"+Path.of(asset.path()).getFileName();
+      assets.add(new Asset(asset.path(),URI.create(url),asset.bytes(),asset.sha256(),asset.path().endsWith("jar")?"Apache-2.0 (sherpa-onnx); MIT (ONNX Runtime)":asset.path().contains("turbo-")?"MIT (Whisper upstream; fixed converted distribution)":"MIT (Silero VAD)"));
     }
-    return new VoiceModelManifest("sherpa-1_13_8-whisper-base-bb53ee20-silero-9e2449e1",assets);
+    return new VoiceModelManifest("sherpa-1_13_8-whisper-turbo-fp32-2ca6ff69-silero-9e2449e1",assets);
   }
 }

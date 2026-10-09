@@ -40,7 +40,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     volatile boolean failed;
     volatile VoiceBackend backend;
     volatile MicrophoneCaptureService.FrameSource source;
-    volatile Thread captureThread, recognitionThread;
+    volatile Thread captureThread, recognitionThread, startupThread;
     Run(ConversationTarget target, AudioDevice device, VoiceSettings settings, boolean diagnostic) {
       this.target = target; this.device = device; this.settings = settings; this.diagnostic = diagnostic;
     }
@@ -107,6 +107,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     stopWorkers(run);
   }
   private void stopWorkers(Run run) {
+    synchronized(guard) {if(run.startupThread!=null&&run.startupThread!=Thread.currentThread())run.startupThread.interrupt();}
     if (run.captureThread != null) run.captureThread.interrupt();
     if (run.recognitionThread != null) run.recognitionThread.interrupt();
     if (run.source != null && run.captureClosed.compareAndSet(false, true)) {
@@ -140,7 +141,9 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     boolean captureStarted = false, recognitionStarted = false;
     try {
       if(!selected(run)){stop(run,VoiceEventPublisher.Type.TARGET_CHANGED,false);return;}
-      run.backend = backends.open(run.settings);
+      synchronized(guard){if(run.stop)return;run.startupThread=Thread.currentThread();}
+      try{run.backend = backends.open(run.settings);}
+      finally{synchronized(guard){run.startupThread=null;}}
       if (run.stop) return;
       if(!selected(run)){stop(run,VoiceEventPublisher.Type.TARGET_CHANGED,false);return;}
       run.source = capture.open(run.device);

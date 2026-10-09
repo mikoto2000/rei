@@ -120,13 +120,74 @@ class VoiceModelManagerTest {
     assertThatThrownBy(()->new VoiceModelManifest("../bad",List.of(good))).isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(()->new VoiceModelManifest("duplicate",List.of(good,good))).isInstanceOf(IllegalArgumentException.class);
   }
-  @Test void pinnedManifestMatchesPreviouslyVerifiedRuntimeAndFixedRevision() {
+  @Test void pinnedTurboFp32ManifestIncludesExternalWeightsAndImmutableRevision() {
     var m=VoiceModelManifest.pinned();
-    assertThat(m.assets()).hasSize(6);assertThat(m.totalBytes()).isEqualTo(169717680);
-    assertThat(m.assets().stream().filter(a->a.path().contains("base-")).map(a->a.url().toString())).allMatch(u->u.contains("bb53ee204431c90d314c1cc08d28d23e5b7927cc"));
+    assertThat(m.id()).isEqualTo("sherpa-1_13_8-whisper-turbo-fp32-2ca6ff69-silero-9e2449e1");
+    assertThat(m.assets()).hasSize(7);assertThat(m.totalBytes()).isEqualTo(3247195692L);
+    assertThat(m.assets().stream().filter(a->a.path().contains("turbo-")).map(a->a.url().toString()))
+      .allMatch(u->u.contains("2ca6ff69fc878651b770880507669577ac41c2ff"));
+    assertThat(m.assets().stream().map(VoiceModelManifest.Asset::path)).contains(
+      "models/turbo-encoder.onnx","models/turbo-encoder.weights","models/turbo-decoder.onnx","models/turbo-tokens.txt")
+      .noneMatch(p->p.contains("int8")||p.contains("base-"));
     for(int i=0;i<m.assets().size();i++) {
       var a=m.assets().get(i);var prior=SherpaBackendFactory.ASSETS.get(i);
       assertThat(a.path()).isEqualTo(prior.path());assertThat(a.bytes()).isEqualTo(prior.bytes());assertThat(a.sha256()).isEqualTo(prior.sha256());
     }
+  }
+  @Test void largeAssetBoundsRemainFiniteAndTotalsDoNotOverflowInt() throws Exception {
+    var a=manifest().assets().getFirst();
+    var big=new VoiceModelManifest.Asset("weights",a.url(),2600325120L,a.sha256(),a.license());
+    assertThat(new VoiceModelManifest("large",List.of(big)).totalBytes()).isEqualTo(2600325120L);
+    assertThatThrownBy(()->new VoiceModelManifest.Asset("oversize",a.url(),3L*1024*1024*1024+1,a.sha256(),a.license()))
+      .isInstanceOf(IllegalArgumentException.class);
+    var second=new VoiceModelManifest.Asset("second",a.url(),big.bytes(),a.sha256(),a.license());
+    assertThatThrownBy(()->new VoiceModelManifest("too-large",List.of(big,second))).isInstanceOf(IllegalArgumentException.class);
+  }
+  @Test void newVersionKeepsOldManagedBundleAndRequiresFreshApproval() throws Exception {
+    var old=manifest();Path oldDirectory;
+    try(var manager=manager(old,copies(new AtomicInteger()))) {
+      manager.install(old.id());assertThat(finish(manager)).isEqualTo(VoiceModelManager.State.READY);oldDirectory=manager.readyDirectory();
+    }
+    var next=new VoiceModelManifest("next-fp32",old.assets());var calls=new AtomicInteger();
+    try(var manager=manager(next,copies(calls))) {
+      assertThatThrownBy(manager::readyDirectory).isInstanceOf(IOException.class);
+      assertThatThrownBy(()->manager.install(old.id())).isInstanceOf(IllegalArgumentException.class);
+      assertThat(calls).hasValue(0);manager.install(next.id());assertThat(finish(manager)).isEqualTo(VoiceModelManager.State.READY);
+      assertThat(manager.readyDirectory()).isNotEqualTo(oldDirectory);old.verify(oldDirectory);
+    }
+  }
+  @Test void insufficientDiskFailsBeforeTransferAndNeverActivates() throws Exception {
+    var m=manifest();var calls=new AtomicInteger();
+    try(var manager=new VoiceModelManager(root,m,copies(calls),status->{},path->m.totalBytes()+VoiceModelManager.DISK_RESERVE_BYTES-1)) {
+      manager.install(m.id());assertThat(finish(manager)).isEqualTo(VoiceModelManager.State.FAILED);
+      assertThat(calls).hasValue(0);assertThat(manager.status().failure()).contains("insufficient free space");
+      assertThat(root.resolve("managed").resolve(m.id())).doesNotExist();
+      try(var stages=Files.list(root.resolve("staging"))){assertThat(stages.toList()).isEmpty();}
+    }
+  }
+  @Test void externalWeightsAreRequiredForReadyAndOfflineReuse() throws Exception {
+    var a=manifest().assets().getFirst();var weights=new VoiceModelManifest.Asset("models/encoder.weights",a.url(),a.bytes(),a.sha256(),a.license());
+    var m=new VoiceModelManifest("with-sidecar",List.of(a,weights));
+    try(var manager=manager(m,copies(new AtomicInteger()))) {
+      manager.install(m.id());assertThat(finish(manager)).isEqualTo(VoiceModelManager.State.READY);
+      var ready=manager.readyDirectory();Files.delete(ready.resolve(weights.path()));
+      assertThatThrownBy(manager::readyDirectory).isInstanceOf(IOException.class);
+      assertThat(manager.status().state()).isEqualTo(VoiceModelManager.State.CORRUPT);
+    }
+  }
+  @Test void interruptedReuseCheckDoesNotStartANewDownload() throws Exception {
+    var m=manifest();var calls=new AtomicInteger();
+    try(var manager=manager(m,copies(calls))) {
+      Thread.currentThread().interrupt();
+      try{assertThatThrownBy(()->manager.install(m.id())).isInstanceOf(IllegalStateException.class).hasMessageContaining("interrupted");}
+      finally{Thread.interrupted();}
+      assertThat(calls).hasValue(0);assertThat(manager.busy()).isFalse();assertThat(root.resolve("staging")).doesNotExist();
+    }
+  }
+  @Test void integrityHashHonorsCancellationBeforeReading() throws Exception {
+    var m=manifest();Path file=root.resolve("valid");Files.write(file,content);
+    Thread.currentThread().interrupt();
+    try{assertThatThrownBy(()->VoiceModelManifest.verifyAsset(m.assets().getFirst(),file)).isInstanceOf(InterruptedIOException.class);}
+    finally{Thread.interrupted();}
   }
 }

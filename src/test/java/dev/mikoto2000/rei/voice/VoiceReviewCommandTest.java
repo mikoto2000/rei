@@ -36,7 +36,7 @@ class VoiceReviewCommandTest {
   }
   @Test void startingCaptureBindsCurrentClientAndConfirmationBeforeOpeningMicrophone() {
     devices.select("dry");when(voice.state()).thenReturn(VoiceInputCoordinator.State.OFF);
-    when(voice.awaitStartup(Duration.ofSeconds(30))).thenReturn(VoiceInputCoordinator.State.LISTENING);
+    when(voice.awaitStartup(VoiceRuntimeLimits.COMMAND_STARTUP)).thenReturn(VoiceInputCoordinator.State.LISTENING);
     var target=new ConversationTarget(new ProjectContext(UUID.randomUUID().toString(),"test",Path.of(".")),"session");
     when(shell.captureTarget()).thenReturn(target);properties.setConfirmation(true);
     assertThat(command().execute("on")).isZero();

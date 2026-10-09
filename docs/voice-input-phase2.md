@@ -1,5 +1,7 @@
 # 音声入力 Phase 2 — マイク/VAD/ASR パイプライン
 
+> この文書の base INT8・取得ID・時間上限・実機結果は当時の記録です。現在のモデルと取得・移行手順は [Whisper turbo FP32 移行](voice-input-turbo-fp32.md) を参照してください。
+
 Phase 0 は PR #53、Phase 1 は PR #54 で main に統合済みです。
 本Phaseは実装・検証中です。実マイクから既存Agentの応答までの受入試験、全回帰、CI、PRレビュー/main統合が終わるまで完了扱いにしません。
 

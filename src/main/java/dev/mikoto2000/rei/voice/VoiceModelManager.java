@@ -11,6 +11,13 @@ import java.util.function.Consumer;
 public final class VoiceModelManager implements AutoCloseable {
   public enum State { MISSING, CORRUPT, DOWNLOADING, VERIFYING, READY, FAILED, CANCELLED, CLOSED }
   public record Status(State state,long bytes,long totalBytes,String asset,int attempt,String failure) {}
+  static final Duration DOWNLOAD_TIMEOUT=Duration.ofHours(1);
+  static final long DISK_RESERVE_BYTES=64L*1024*1024;
+  @FunctionalInterface interface AvailableSpace {long bytes(Path path) throws IOException;}
+  private static final class InsufficientStorageException extends IOException {
+    InsufficientStorageException(long required){super("insufficient free space; requires "+required+" bytes including reserve");}
+  }
+  private final AvailableSpace availableSpace;
   private final Path root;
   private final VoiceModelManifest manifest;
   private final VoiceAssetTransport transport;
@@ -24,6 +31,10 @@ public final class VoiceModelManager implements AutoCloseable {
   private volatile Thread owner;
   private long lastProgress;
   public VoiceModelManager(Path root,VoiceModelManifest manifest,VoiceAssetTransport transport,Consumer<Status> listener) {
+    this(root,manifest,transport,listener,path->Files.getFileStore(path).getUsableSpace());
+  }
+  VoiceModelManager(Path root,VoiceModelManifest manifest,VoiceAssetTransport transport,Consumer<Status> listener,AvailableSpace availableSpace) {
+    this.availableSpace=Objects.requireNonNull(availableSpace);
     this.root=Objects.requireNonNull(root).toAbsolutePath().normalize();this.manifest=Objects.requireNonNull(manifest);
     this.transport=Objects.requireNonNull(transport);this.listener=Objects.requireNonNull(listener);
     status=new Status(State.MISSING,0,manifest.totalBytes(),"",0,"");
@@ -34,8 +45,8 @@ public final class VoiceModelManager implements AutoCloseable {
   /** Hashes are checked on every reuse, including manually placed bundles, without loading JNI. */
   public Path readyDirectory() throws IOException {
     Path managed=VoiceModelManifest.assetPath(root,"managed/"+manifest.id());
-    try {manifest.verify(managed);return verifiedDirectory(managed);}catch(IOException invalidManaged) {
-      try {manifest.verify(root);return verifiedDirectory(root);}catch(IOException invalidManual){
+    try {manifest.verify(managed);return verifiedDirectory(managed);}catch(InterruptedIOException interrupted){throw interrupted;}catch(IOException invalidManaged) {
+      try {manifest.verify(root);return verifiedDirectory(root);}catch(InterruptedIOException interrupted){throw interrupted;}catch(IOException invalidManual){
         synchronized(this) {
           if(!busy&&!closed&&(status.state()==State.READY||status.state()==State.MISSING||status.state()==State.CORRUPT)) {
             boolean partial=Files.exists(managed,LinkOption.NOFOLLOW_LINKS)||manifest.assets().stream().anyMatch(a->Files.exists(root.resolve(a.path()),LinkOption.NOFOLLOW_LINKS));
@@ -54,7 +65,7 @@ public final class VoiceModelManager implements AutoCloseable {
     if(!manifest.id().equals(approvedManifestId))throw new IllegalArgumentException("Approve the displayed manifest ID with /voice models install --approve ID");
     if(closed)throw new IllegalStateException("Voice model manager closed");
     if(busy)throw new IllegalStateException("Voice download already active");
-    try {readyDirectory();update(State.READY,manifest.totalBytes(),"",0,"");return false;}catch(IOException unavailable){}
+    try {readyDirectory();update(State.READY,manifest.totalBytes(),"",0,"");return false;}catch(InterruptedIOException interrupted){throw new IllegalStateException("Voice integrity verification interrupted",interrupted);}catch(IOException unavailable){}
     cancellation=new VoiceAssetTransport.Cancellation();busy=true;update(State.DOWNLOADING,0,"",0,"");
     var token=cancellation;worker.execute(()->download(token));return true;
   }
@@ -74,10 +85,12 @@ public final class VoiceModelManager implements AutoCloseable {
     Path stage=null;State result=State.FAILED;String failure="download failed";long completed=0;
     owner=Thread.currentThread();ScheduledFuture<?> timeout=null;
     try {
-      token.check();timeout=deadlines.schedule(this::cancel,Duration.ofMinutes(15).toMillis(),TimeUnit.MILLISECONDS);
+      token.check();timeout=deadlines.schedule(this::cancel,DOWNLOAD_TIMEOUT.toMillis(),TimeUnit.MILLISECONDS);
       VoiceModelManifest.assetPath(root,"staging/safety-check");
       Files.createDirectories(root.resolve("staging"));stage=Files.createTempDirectory(root.resolve("staging"),"download-");
       for(var asset:manifest.assets()) {
+        long required=manifest.totalBytes()-completed+DISK_RESERVE_BYTES;
+        if(availableSpace.bytes(stage)<required)throw new InsufficientStorageException(required);
         token.check();Path target=VoiceModelManifest.assetPath(stage,asset.path());Files.createDirectories(target.getParent());
         IOException last=null;final long prior=completed;
         for(int attempt=1;attempt<=3;attempt++) {
@@ -107,7 +120,7 @@ public final class VoiceModelManager implements AutoCloseable {
         result=State.READY;failure="";update(State.READY,completed,"",0,"");
       }
     }catch(InterruptedException error){Thread.currentThread().interrupt();result=State.CANCELLED;failure="cancelled";}
-    catch(Exception error){result=token.cancelled()?State.CANCELLED:State.FAILED;failure=token.cancelled()?"cancelled":"download, size, integrity or activation failed";}
+    catch(Exception error){result=token.cancelled()?State.CANCELLED:State.FAILED;failure=token.cancelled()?"cancelled":error instanceof InsufficientStorageException?error.getMessage():"download, size, integrity or activation failed";}
     finally {
       if(timeout!=null)timeout.cancel(false);token.cancel();
       if(stage!=null)try{deleteStage(stage);}catch(IOException error){failure="staging cleanup failed";if(result!=State.CANCELLED)result=State.FAILED;}

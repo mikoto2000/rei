@@ -18,7 +18,7 @@ public final class VoiceModelsAcceptance {
       if(download) {
         if(Files.exists(root.resolve("managed")))throw new IllegalArgumentException("Fresh download acceptance requires an empty managed directory");
         if(!manager.install(args[2]))throw new IllegalStateException("Fresh download did not start");
-        long deadline=System.nanoTime()+Duration.ofMinutes(16).toNanos();
+        long deadline=System.nanoTime()+VoiceModelManager.DOWNLOAD_TIMEOUT.plusMinutes(1).toNanos();
         while(manager.busy()&&System.nanoTime()<deadline)Thread.sleep(100);
         if(manager.status().state()!=VoiceModelManager.State.READY)throw new IllegalStateException("Download failed: "+manager.status());
       }
@@ -49,7 +49,7 @@ public final class VoiceModelsAcceptance {
           try(var voice=new VoiceInputCoordinator(new JavaSoundMicrophoneCapture(),factory,
               input->{throw new AssertionError("Diagnostic must never submit to Agent");},events,Clock.systemUTC())) {
             voice.startDiagnostic(target,matches.getFirst(),VoiceSettings.defaults());
-            if(voice.awaitStartup(Duration.ofSeconds(30))!=VoiceInputCoordinator.State.LISTENING)throw new IllegalStateException("Newly acquired models did not start microphone input");
+            if(voice.awaitStartup(VoiceRuntimeLimits.COMMAND_STARTUP)!=VoiceInputCoordinator.State.LISTENING)throw new IllegalStateException("Newly acquired models did not start microphone input");
             Thread.sleep(1000);voice.off();long stop=System.nanoTime()+TimeUnit.SECONDS.toNanos(15);
             while(voice.state()==VoiceInputCoordinator.State.STOPPING&&System.nanoTime()<stop)Thread.sleep(20);
             if(voice.state()!=VoiceInputCoordinator.State.OFF)throw new IllegalStateException("Microphone did not stop cleanly");

@@ -19,7 +19,7 @@ class VoiceModelCommandTest {
     return new VoiceModelManifest("fixed-approved",List.of(new VoiceModelManifest.Asset("model",URI.create("https://example.org/fixed"),data.length,
       HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(data)),"MIT")));
   }
-  VoiceInputCoordinator voice(){var voice=mock(VoiceInputCoordinator.class);when(voice.state()).thenReturn(VoiceInputCoordinator.State.OFF);when(voice.awaitStartup(java.time.Duration.ofSeconds(30))).thenReturn(VoiceInputCoordinator.State.LISTENING);return voice;}
+  VoiceInputCoordinator voice(){var voice=mock(VoiceInputCoordinator.class);when(voice.state()).thenReturn(VoiceInputCoordinator.State.OFF);when(voice.awaitStartup(VoiceRuntimeLimits.COMMAND_STARTUP)).thenReturn(VoiceInputCoordinator.State.LISTENING);return voice;}
   AudioDeviceService devices(){var devices=new AudioDeviceService(()->List.of(new AudioDevice("dry","DRY (VT-4)","input","vendor","1")));devices.select("dry");return devices;}
   CommandLine command(VoiceInputCoordinator voice,ShellConversationService shell,VoiceModelManager manager,StringWriter output) {
     var command=new CommandLine(new VoiceCommand(voice,devices(),new VoiceProperties(),shell,manager));
@@ -67,6 +67,14 @@ class VoiceModelCommandTest {
       assertThat(command.execute("models","verify")).isZero();assertThat(calls).hasValue(1);
       java.nio.file.Files.writeString(manager.readyDirectory().resolve("model"),"corrupt");
       assertThat(command.execute("models","verify")).isEqualTo(2);assertThat(calls).hasValue(1);
+    }
+  }
+  @Test void infoDisclosesFp32SidecarAndLargeTotalWithoutDownloading() {
+    var output=new StringWriter();var calls=new AtomicInteger();
+    try(var manager=new VoiceModelManager(root,VoiceModelManifest.pinned(),(a,p,c,progress)->calls.incrementAndGet(),status->{})) {
+      assertThat(command(voice(),mock(ShellConversationService.class),manager,output).execute("models","info")).isZero();
+      assertThat(output.toString()).contains("large-v3-turbo multilingual FP32","turbo-encoder.weights","2600325120 bytes","3247195692 bytes");
+      assertThat(calls).hasValue(0);
     }
   }
 }

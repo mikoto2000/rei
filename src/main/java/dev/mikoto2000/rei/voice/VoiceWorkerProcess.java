@@ -59,11 +59,20 @@ public final class VoiceWorkerProcess implements AutoCloseable {
   public boolean isAlive(){return process.isAlive();}
   public void close() {
     if(!closed.compareAndSet(false,true))return;
-    boolean interrupted=false;
+    boolean interrupted=Thread.interrupted();
     try {
       if(!busy)try{output.close();}catch(IOException ignored){}else process.destroy();
-      try{if(!process.waitFor(1,TimeUnit.SECONDS)){process.destroyForcibly();process.waitFor(3,TimeUnit.SECONDS);}}
+      try{if(!process.waitFor(1,TimeUnit.SECONDS))process.destroyForcibly();}
       catch(InterruptedException stop){interrupted=true;process.destroyForcibly();}
+      // destroyForcibly is asynchronous. Wait within one monotonic budget even when
+      // cancellation has already interrupted this caller, then restore its flag.
+      if(process.isAlive()) {
+        process.destroyForcibly();long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(3);
+        while(process.isAlive()) {
+          long remaining=deadline-System.nanoTime();if(remaining<=0)break;
+          try{process.waitFor(remaining,TimeUnit.NANOSECONDS);}catch(InterruptedException stop){interrupted=true;}
+        }
+      }
     }finally{
       process.destroyForcibly();io.shutdownNow();
       try{input.close();}catch(IOException ignored){}

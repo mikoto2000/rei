@@ -20,13 +20,13 @@ public final class IsolatedVoiceBackendFactory implements VoiceBackendFactory,Au
       arguments.add("-Dloader.main="+NativeVoiceWorker.class.getName());arguments.add("-cp");arguments.add(System.getProperty("java.class.path"));arguments.add("org.springframework.boot.loader.launch.PropertiesLauncher");
     }
     arguments.addAll(List.of(role,root.toString(),Float.toString(settings.threshold()),Integer.toString(settings.preRollMs()),Integer.toString(settings.minSpeechMs()),Integer.toString(settings.silenceMs()),Integer.toString(settings.maxSpeechMs()),Integer.toString(settings.tailMs())));
-    var worker=VoiceWorkerProcess.start(arguments,Duration.ofSeconds(15),role.equals("vad")?Duration.ofSeconds(5):Duration.ofSeconds(60));
+    var worker=VoiceWorkerProcess.start(arguments,role.equals("vad")?VoiceRuntimeLimits.VAD_STARTUP:VoiceRuntimeLimits.ASR_STARTUP,role.equals("vad")?VoiceRuntimeLimits.VAD_REQUEST:VoiceRuntimeLimits.ASR_REQUEST);
     synchronized(this){if(closed){worker.close();throw new IOException("Voice worker factory closed");}workers.add(worker);}return worker;
   }
   private void release(VoiceWorkerProcess worker){try{worker.close();}finally{synchronized(this){if(worker.isAlive())throw new IllegalStateException("Owned voice worker did not exit");workers.remove(worker);}}}
   public VoiceBackend open(VoiceSettings settings) throws Exception {
     synchronized(this){if(closed)throw new IOException("Voice worker factory closed");}
-    Path root=directory.get().toAbsolutePath().normalize();SherpaBackendFactory.verify(root);
+    Path root=directory.get().toAbsolutePath().normalize();
     var vad=start("vad",root,settings);VoiceWorkerProcess recognizer=null;
     try {
       recognizer=start("asr",root,settings);var decoder=recognizer;

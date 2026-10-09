@@ -60,7 +60,7 @@ public class VoiceCommand {
   int on() { return attempt(()-> {
     requireOff(); requireModelsReady(); var selected=devices.selected(); target=shell.captureTarget();
     bindDelivery();voice.start(target,selected,properties.settings());
-    if(voice.awaitStartup(java.time.Duration.ofSeconds(30))!=VoiceInputCoordinator.State.LISTENING)
+    if(voice.awaitStartup(VoiceRuntimeLimits.COMMAND_STARTUP)!=VoiceInputCoordinator.State.LISTENING)
       throw new IllegalStateException("音声入力を開始できませんでした。/voice status を確認してください");
     spec.commandLine().getOut().println("LISTENING: 受付中です");return 0;
   }); }
@@ -81,7 +81,7 @@ public class VoiceCommand {
   int test() { return attempt(()-> {
     requireOff(); requireModelsReady(); var selected=devices.selected();target=shell.captureTarget();
     bindDelivery();voice.startDiagnostic(target,selected,properties.settings());
-    if(voice.awaitStartup(java.time.Duration.ofSeconds(30))!=VoiceInputCoordinator.State.LISTENING)
+    if(voice.awaitStartup(VoiceRuntimeLimits.COMMAND_STARTUP)!=VoiceInputCoordinator.State.LISTENING)
       throw new IllegalStateException("音声診断を開始できませんでした");
     spec.commandLine().getOut().println("LISTENING: 20秒間の診断を開始しました。Agent送信・録音ファイル保存はありません。");return 0;
   }); }
@@ -108,7 +108,7 @@ public class VoiceCommand {
   }
   private void printModels() {
     var manifest=modelManager().manifest();var out=spec.commandLine().getOut();
-    out.println("Whisper base multilingual INT8 / Silero VAD / sherpa-onnx Windows x64 CPU");
+    out.println("Whisper large-v3-turbo multilingual FP32 / Silero VAD / sherpa-onnx Windows x64 CPU");
     out.println("manifest: "+manifest.id()+"; total: "+manifest.totalBytes()+" bytes");
     for(var asset:manifest.assets()) {
       out.println(asset.path()+" / "+asset.bytes()+" bytes / "+asset.license());
