@@ -110,18 +110,20 @@ one-shot、duplex、サイズ不明のbodyは読みません。既存ShowUIに�
 
 ## 検証とTDD記録
 
-基準は2026-10-09取得のorigin/main `943a6f5975fa6bba55052f48325d05d3a35bbd22`。Java 25、Spring Boot 4.1.1、Spring AI 2.0.1、OpenAI SDK 4.49.0、OkHttp 4.12.0です。追加のテスト依存はありません。JDK HttpServerをローカルHTTPサーバーとして使用しました。
+初期調査の基準は2026-10-09取得のorigin/main `943a6f5975fa6bba55052f48325d05d3a35bbd22`。最終統合は音声入力由来の識別を保持して `0f251277` 上で実施しました。Java 25、Spring Boot 4.1.1、Spring AI 2.0.1、OpenAI SDK 4.49.0、OkHttp 4.12.0です。追加のテスト依存はありません。JDK HttpServerをローカルHTTPサーバーとして使用しました。
 
 Phase 0ではSDKの同期retry、async streaming、ShowUI変換後について、原本候補と受信bodyのbyte単位一致を確認しました。SHA-256も照合しました。ThreadLocal不伝播とReactor Contextだけでは不十分なこと、公開タグAPIの不在、専用クライアントによるID伝播を別の試験で確認しました。初期ShowUIのone-shot二重消費を再現し、修正後は1回だけ消費する試験へ更新しました。
 
-Phase 1/2/3はStore、HTTP interceptor、CLIの順に先に失敗するテストを実行（未実装クラスによるRed）、最小実装後にGreenを確認して改善しました。キュー取消・遅延executor拒否にも先にRedを確認して修正しました。独立レビューの一時Buffer上限・削除後copy・終端結果・queued cancellation指摘へ対応し、回帰試験を残しました。
+Phase 1/2/3はStore、HTTP interceptor、CLIの順に先に失敗するテストを実行（未実装クラスによるRed）、最小実装後にGreenを確認して改善しました。キュー取消・遅延executor拒否にも先にRedを確認して修正しました。独立レビューの一時Buffer上限・削除後copy・終端結果・queued cancellation指摘へ対応し、回帰試験を残しました。既存の取消失敗イベントをCANCELLEDへ分類する試験もRed→Greenで修正しました。最初の全回帰（4,230件）で検出した部分Springコンテキストの必須Store注入は任意注入に変更し、機能OFFの既存構成を維持しました。
 
 ```powershell
-.\mvnw.cmd -q -Pfull "-Dtest=RequestCapturePhaseZeroTest,CapturingChatModelHttpTest,CaptureStoreTest,CaptureInterceptorTest,CaptureCommandTest,CaptureAdmissionTest" test
+.\mvnw.cmd -q -Pfull "-Dtest=RequestCapturePhaseZeroTest,CapturingChatModelHttpTest,CaptureStoreTest,CaptureInterceptorTest,CaptureCommandTest,CaptureAdmissionTest,CaptureLifecycleTest" test
 .\.github\ci\full-test.ps1
 ```
 
 `CapturingChatModelHttpTest`は実ContextAssembler圧縮、実StagnationChatModelのTool往復、503 retry、並行A/B/background、分割stream/first chunk/取消/HTTP error、機密sentinelの非ログ出力を検証します。捕捉した完全本文は`Arrays.equals`相当のbyte[] equalityとSHA-256で照合します。Store/CLI試験は容量、件数、TTL、予約scope、ID、原本不変、明示確認、export byte一致、上書き防止、削除後非取得を確認します。
+
+最終全回帰はCIと同じ `full-test.ps1` で4,266件、Failures 0、Errors 0、Skipped 1、BUILD SUCCESS（12分09秒）。新規capture関連32件もすべて成功しました。既存のDocumentRendererProcessTest 1件はPlantUML jar未設定によるassumption skipです。必須CIを無効化したりテストを削除したりしていません。
 
 SSE/監査へのcapture本文イベントは実装していません。capture自身が追加するログもありません。既存チャットのメッセージ/ツール結果イベント・運用側の独自HTTPログ設定は別の仕組みです。
 
