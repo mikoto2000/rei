@@ -23,6 +23,11 @@ public class ExternalAgentTools {
   public ImplementationRequestService.Outcome getCodexImplementationRequest(String requestId,ToolContext toolContext){return implementationRequests.get(execution(toolContext),requestId);}
   @Tool(description="Record your independent semantic acceptance assessment for an exact saved implementation patch. Each unique criterion ID must use evaluator PARENT_LLM, exact evaluatedPatchSha256 and bounded evidence including receipt:ID and patch:SHA256. This is a parent judgment, not an objective test result. Codex success alone is insufficient; use NOT_VERIFIED without evidence. No process, merge, push or receipt deletion.")
   public ImplementationRequestService.Outcome recordCodexAcceptanceEvaluation(String requestId,String patchSha256,java.util.List<AcceptanceEvaluation> evaluations,ToolContext toolContext){return implementationRequests.evaluate(execution(toolContext),requestId,patchSha256,evaluations);}
+  /** Register the trusted callback identity separately from arbitrary same-name MCP callbacks. */
+  public org.springframework.ai.tool.ToolCallback[] callbacks() {
+    return java.util.Arrays.stream(org.springframework.ai.tool.method.MethodToolCallbackProvider.builder().toolObjects(this).build().getToolCallbacks())
+        .map(ExternalAgentToolCallback::new).toArray(org.springframework.ai.tool.ToolCallback[]::new);
+  }
   private RunExecutionContext execution(ToolContext context){return context==null?null:(RunExecutionContext)context.getContext().get(RunExecutionContext.KEY);}
   private ExternalReviewRepository history;
   @org.springframework.beans.factory.annotation.Autowired
@@ -86,4 +91,3 @@ public class ExternalAgentTools {
     try{return owner.projectRoot().toRealPath().toString();}catch(java.io.IOException error){throw new IllegalArgumentException("Current Project unavailable");}
   }
 }
-

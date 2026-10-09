@@ -39,8 +39,12 @@ public class ImplementationRequestRepository {
         .params(decision,authorization,status,clock.millis(),id).update();
   }
   public void finish(String id,String status,String receipt,String result) {
-    if(db.sql("UPDATE implementation_requests SET status=?,receipt=?,result=?,updated=? WHERE id=? AND status IN ('EXECUTING','VERIFYING')")
-        .params(status,receipt,result,clock.millis(),id).update()!=1)throw new IllegalStateException("Implementation request is not executing");
+    if(db.sql("UPDATE implementation_requests SET status=?,receipt=?,result=?,updated=? WHERE id=? AND status IN ('EXECUTING','VERIFYING','UNKNOWN')")
+        .params(status,receipt,result,clock.millis(),id).update()!=1) {
+      var saved=get(id);
+      if(!saved.executionStatus().equals(status)||!java.util.Objects.equals(saved.receiptId(),receipt)||!java.util.Objects.equals(saved.result(),result))
+        throw new IllegalStateException("Implementation request already has a different terminal result");
+    }
   }
   public void saveEvaluations(String request,String specificationHash,String receipt,String patch,String evaluations) {
     if(evaluations.length()>32768)throw new IllegalArgumentException("Evaluation exceeds 32 KiB");
@@ -55,5 +59,3 @@ public class ImplementationRequestRepository {
     return new Request(r.getString("id"),r.getInt("version"),r.getString("hash"),r.getString("project"),r.getString("root"),r.getString("session"),r.getString("origin_run"),r.getString("origin_message"),r.getString("source"),r.getString("provider"),r.getString("base"),r.getString("previous"),r.getString("spec"),r.getString("envelope"),r.getString("policy"),r.getString("authorization"),r.getString("status"),r.getString("receipt"),r.getString("result"),Instant.ofEpochMilli(r.getLong("created")),Instant.ofEpochMilli(r.getLong("updated")));
   }
 }
-
-

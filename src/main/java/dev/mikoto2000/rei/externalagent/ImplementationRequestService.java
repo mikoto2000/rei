@@ -34,7 +34,14 @@ public class ImplementationRequestService {
     var decision=decision();if(decision==PermissionDecision.DENY)return refused("Existing Policy denies implementation");
     ImplementationSpecificationValidator.Validated validated;
     try{validated=ImplementationSpecificationValidator.validate(owner.projectRoot(),specification);}
-    catch(IllegalArgumentException missing){return new Prepared(null,1,null,"NEEDS_CLARIFICATION","Confirm detailed requirements before execution",specification==null?null:specification.target(),List.of(),List.of(missing.getMessage()),false,List.of(),"Ask the user to confirm objective, instructions, existing target, allowedPaths and acceptanceCriteria");}
+    catch(IllegalArgumentException missing){
+      String draft=ImplementationSpecificationValidator.serialize(specification);
+      if(draft.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>32768)throw new IllegalArgumentException("Draft specification exceeds 32 KiB; reduce input");
+      String hash=ImplementationSpecificationValidator.hash(specification);String id=requests.find(owner.projectId(),owner.conversationId(),owner.runId(),hash,previousRequestId).map(ImplementationRequestRepository.Request::requestId).orElse(null);
+      if(id==null){id=UUID.randomUUID().toString();var now=clock.instant();requests.save(new ImplementationRequestRepository.Request(id,1,hash,owner.projectId(),realRoot(owner),owner.conversationId(),owner.runId(),owner.runId()+":human:"+ImplementationSpecificationValidator.hash(run.userRequest()),
+          run.userRequest().strip().startsWith("/agent ")?"SLASH_COMMAND":"NATURAL_LANGUAGE","codex","",previousRequestId,draft,"","NOT_EVALUATED",null,"NEEDS_CLARIFICATION",null,null,now,now));}
+      return new Prepared(id,1,null,"NEEDS_CLARIFICATION","Confirm detailed requirements before execution",specification==null?null:specification.target(),List.of(),List.of(missing.getMessage()),false,List.of(),"Ask the user to confirm objective, instructions, existing target, allowedPaths and acceptanceCriteria");
+    }
     if(previousRequestId!=null) {
       var previous=owned(owner,previousRequestId);
       if(!Set.of("UNKNOWN","EXECUTING","VERIFYING").contains(previous.executionStatus()))throw new IllegalArgumentException("Retry link requires an unknown original request");
@@ -65,9 +72,13 @@ public class ImplementationRequestService {
     if(saved.result()!=null)return evaluated(read(saved.result(),Outcome.class));
     if(Set.of("EXECUTING","VERIFYING","UNKNOWN").contains(saved.executionStatus())) {
       String status=active.contains(id)&&instance.equals(requests.claimOwner(id))?saved.executionStatus():"UNKNOWN";
+      if(status.equals("UNKNOWN")){var reconciled=reconcile(run,saved);if(reconciled!=null)return reconciled;}
       return pending(saved,status,"Inspect existing receipt/worktree read-only; never automatically re-execute an unknown attempt");
     }
     if(!Set.of("AUTHORIZED","AWAITING_APPROVAL").contains(saved.executionStatus()))return pending(saved,saved.executionStatus(),"Request is not executable");
+    if(saved.authorizationId()!=null&&!saved.authorizationId().startsWith("policy:")&&approvals.get(owner.projectId(),saved.authorizationId()).status().equals("DENIED")) {
+      requests.authorization(id,saved.policyDecision(),saved.authorizationId(),"REJECTED");return pending(saved,"REJECTED","Human approval was denied; a later automatic Policy cannot override that refusal");
+    }
     if(!enabled())return pending(saved,"REJECTED","Administrator opt-in or bounded test recipe is unavailable");
     var validated=ImplementationSpecificationValidator.validate(owner.projectRoot(),read(saved.canonicalSpecification(),ImplementationSpecification.class));
     if(!validated.canonical().equals(saved.canonicalSpecification()) || !validated.sha256().equals(saved.specificationSha256()))throw new IllegalArgumentException("Persisted canonical specification changed");
@@ -92,12 +103,7 @@ public class ImplementationRequestService {
     try {
       // Baseline and recipe are checked again by the shared engine immediately before launch.
       var receipt=delegation.executeSpecification(run,id,validated,saved.baseCommit(),properties.getImplementationTestCommand(),properties.getImplementationTestTimeoutSeconds());
-      var evaluations=AcceptanceEvaluation.unverified(validated.specification(),receipt);
-      String status=switch(receipt.status()){case "READY_FOR_APPROVAL"->"RESULT_AVAILABLE";case "FAILED"->"FAILED";case "CANCELLED"->"CANCELLED";default->"UNKNOWN";};
-      var outcome=new Outcome(id,status,receipt.id(),hash,receipt.baseline(),receipt.commitHash(),receipt.changedFiles(),receipt.patchHash(),receipt.verification(),
-          receipt.verification()==null?null:receipt.verification().review(),evaluations,List.of(receipt.diagnostic(),"READY_FOR_APPROVAL only describes technical isolation; business acceptance remains independently evaluated", "No automatic merge or push"),
-          evaluations.stream().filter(e->!e.status().equals("VERIFIED")).map(AcceptanceEvaluation::criterionId).toList(),false,false);
-      requests.finish(id,status,receipt.id(),ImplementationSpecificationValidator.serialize(outcome));return outcome;
+      return complete(saved,validated.specification(),receipt);
     }catch(RuntimeException error) {
       // Process/storage uncertainty is never turned into a fresh automatic attempt, including cancellation.
       requests.finish(id,"UNKNOWN",id,null);throw error;
@@ -107,7 +113,24 @@ public class ImplementationRequestService {
     var saved=owned(owner(run),id);run.checkActive();
     if(saved.result()!=null)return evaluated(read(saved.result(),Outcome.class));
     String status=Set.of("EXECUTING","VERIFYING").contains(saved.executionStatus())&&!active.contains(id)?"UNKNOWN":saved.executionStatus();
+    if(status.equals("UNKNOWN")){var reconciled=reconcile(run,saved);if(reconciled!=null)return reconciled;}
     return pending(saved,status,"Saved state only; use getExternalImplementation for the linked receipt. Never automatically retry UNKNOWN");
+  }
+  private Outcome reconcile(RunExecutionContext run,ImplementationRequestRepository.Request saved) {
+    if(saved.receiptId()==null)return null;
+    IsolatedImplementationService.Receipt receipt;
+    try{receipt=delegation.implementation(run,saved.receiptId());}catch(IllegalArgumentException unavailable){return null;}
+    if(receipt==null||!Set.of("READY_FOR_APPROVAL","FAILED").contains(receipt.status()))return null;
+    if(!Objects.equals(saved.baseCommit(),receipt.baseline()))return null;
+    return complete(saved,read(saved.canonicalSpecification(),ImplementationSpecification.class),receipt);
+  }
+  private Outcome complete(ImplementationRequestRepository.Request saved,ImplementationSpecification specification,IsolatedImplementationService.Receipt receipt) {
+    var evaluations=AcceptanceEvaluation.unverified(specification,receipt);
+    String status=switch(receipt.status()){case "READY_FOR_APPROVAL"->"RESULT_AVAILABLE";case "FAILED"->"FAILED";default->"UNKNOWN";};
+    var outcome=new Outcome(saved.requestId(),status,receipt.id(),saved.specificationSha256(),receipt.baseline(),receipt.commitHash(),receipt.changedFiles(),receipt.patchHash(),receipt.verification(),
+        receipt.verification()==null?null:receipt.verification().review(),evaluations,List.of(receipt.diagnostic(),"READY_FOR_APPROVAL only describes technical isolation; business acceptance remains independently evaluated","No automatic merge or push"),
+        evaluations.stream().filter(e->!e.status().equals("VERIFIED")).map(AcceptanceEvaluation::criterionId).toList(),false,false);
+    requests.finish(saved.requestId(),status,receipt.id(),ImplementationSpecificationValidator.serialize(outcome));return outcome;
   }
   /** Semantic assessment is explicitly labelled PARENT_LLM, separate from objective server checks. */
   public Outcome evaluate(RunExecutionContext run,String id,String patch,List<AcceptanceEvaluation> input) {
@@ -158,10 +181,7 @@ public class ImplementationRequestService {
     if(input==null)return false;
     if(input.strip().startsWith("/agent ")){try{var command=ExternalAgentCommandRequest.parse(input);return command.agent().equals("codex")&&command.action().equals("implement");}catch(IllegalArgumentException invalid){return false;}}
     String text=input.toLowerCase(Locale.ROOT).replaceAll("(?s)```.*?```|「[^」]*」|\"[^\"]*\"","");
-    if(text.matches("(?s).*(do not|don't|never|翻訳|という|実装しない|実装不要|実装禁止|説明して|example|translate).*"))return false;
-    return !text.contains("claude")&&text.matches("(?s).*(実装.{0,12}(して|お願い|依頼)|implement.{0,80}(please|codex)|(?:please|ask|use|have).{0,80}implement).*" );
+    if(text.matches("(?s).*(do not|don't|never|翻訳|という|実装しない|実装不要|実装禁止|説明|example|translate|explain|how to).*"))return false;
+    return !text.contains("claude")&&text.matches("(?s).*(実装(?:を)?(?:して|お願い|依頼)|^implement\\b|implement.{0,80}(please|codex)|(?:please|ask|use|have).{0,80}implement).*" );
   }
 }
-
-
-

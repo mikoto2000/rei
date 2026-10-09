@@ -31,7 +31,7 @@ The corresponding `/agent claude ...` commands use `rei.external-agents.claude.i
 The saved receipt records the provider; an explicit merge naming another provider is rejected.
 Older receipts without a provider field remain Codex receipts.
 
-The first command requires an explicit existing target and an exclusive Project Run. Absolute targets inside the parent
+For Codex, the first command now asks for detailed requirements and does not start implementation from a target alone. Use the shared requirement-driven prepare/request Tools after confirming objective, instructions, allowedPaths and acceptance criteria. See [requirement-driven implementation](llm-codex-implementation-delegation.md). The existing target syntax remains compatible. Claude retains its explicit command behavior. Execution requires an existing target and an exclusive Project Run. Absolute targets inside the parent
 are converted into worktree-relative targets. The parent must be a clean Git repository root with a HEAD commit.
 Resolve dirty files yourself before delegating; Rei does not stash, reset or discard them.
 
@@ -59,7 +59,7 @@ Unfinished saved states also mean unknown outcomes; reading a receipt after rest
 Receipts are restricted to their Project/root/session. At most 16 implementation receipts/worktrees are retained per data directory;
 quota exhaustion fails before creating another worktree. Keep failed worktrees for inspection and perform deliberate operator cleanup.
 Repositories using checkout filters require manual isolation; native hooks, fsmonitor and external diff/textconv helpers are disabled.
-Implementation and merge are application commands, outside model-selected mutation callbacks. The ordinary administrator Tool Policy
+Codex implementation preparation/execution are public structured Tools with server-side persisted-specification authorization; explicit merge remains an application command. The external review/fix Tools remain separate. The ordinary administrator Tool Policy
 still applies: running the configured project test recipe keeps the same broad capability requirements as arbitrary test commands.
 The worktree restricts proposal paths; the administrator-selected test recipe executes project code with the Rei process's existing authority.
 Admission is bounded to one isolated implementation; receipt reads remain available while another implementation runs.

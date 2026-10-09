@@ -155,8 +155,8 @@ public class StagnationChatModel implements ChatModel {
         String name = getToolDefinition().name();
         // These two domain callbacks authorize the complete persisted specification, not raw tool JSON.
         // Preparation never starts a process; execution checks Policy/approval on the server before claim.
-        if(!Set.of("prepareCodexImplementation","requestCodexImplementation").contains(name))context.checkToolPermission(name,input);
-        if (context.externalDelegationUsed() && !Set.of("requestCodexImplementation","getCodexImplementationRequest","getExternalImplementation","inspectExternalImplementation","recordCodexAcceptanceEvaluation").contains(name))
+        if(!(delegateTool instanceof dev.mikoto2000.rei.externalagent.ExternalAgentToolCallback domain && domain.authorizesSpecification()))context.checkToolPermission(name,input);
+        if (context.externalDelegationUsed() && !(delegateTool instanceof dev.mikoto2000.rei.externalagent.ExternalAgentToolCallback domain && domain.availableAfterDelegation()))
           return "External review is complete or already attempted. Evaluate the supplied result independently and answer; no further tool execution or automatic fixes are allowed in this review run.";
         var before = context.evaluator().beforeTool(name, input);
         boolean decorated=delegateTool instanceof dev.mikoto2000.rei.event.ToolEventCallbackDecorator;
@@ -189,4 +189,3 @@ public class StagnationChatModel implements ChatModel {
     return null;
   }
 }
-
