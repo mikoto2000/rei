@@ -39,7 +39,21 @@ public final class ConversationInputGateway {
   }
   public synchronized AgentRunContext submit(ConversationInput input,AgentRunContext.Mode mode,
       Consumer<AgentRunContext> beforeDispatch,Consumer<AgentRunContext> failedDispatch) {
+    return submit(input, mode, beforeDispatch, failedDispatch, () -> {});
+  }
+  /**
+   * Render once after admission, before the new run can produce output. Duplicate
+   * IDs and rejected enqueue never notify. May run on the worker before submit
+   * returns: the presentation callback must not reenter admission/selection APIs.
+   */
+  public synchronized AgentRunContext submit(ConversationInput input, AgentRunContext.Mode mode,
+      Runnable afterAccepted) {
+    return submit(input, mode, run -> {}, run -> {}, afterAccepted);
+  }
+  private AgentRunContext submit(ConversationInput input, AgentRunContext.Mode mode,
+      Consumer<AgentRunContext> beforeDispatch, Consumer<AgentRunContext> failedDispatch, Runnable afterAccepted) {
     Objects.requireNonNull(input);
+    Objects.requireNonNull(afterAccepted);
     if (mode == null) mode=AgentRunContext.Mode.EXCLUSIVE;
     if (input.source() == InputSource.VOICE && mode != AgentRunContext.Mode.EXCLUSIVE)
       throw new IllegalArgumentException("Voice uses exclusive agent execution");
@@ -58,13 +72,34 @@ public final class ConversationInputGateway {
       throw new RejectedExecutionException("Voice pending capacity reached");
     if (!input.createdAt().isAfter(clock.instant().minus(retention)))
       throw new IllegalArgumentException("Input has expired");
+    var notifyAccepted = acceptanceNotification(afterAccepted);
     var context=lifecycle.submit(input.target().project(), input.target().sessionId(), input.text(),
         AgentRunContext.RequestSource.SHELL, mode, input.source()==InputSource.VOICE, run -> {
-          beforeDispatch.accept(run);
-          try{dispatch.accept(run,input.text());}catch(RuntimeException failed){failedDispatch.accept(run);throw failed;}
+          try (var observer = router == null ? (ConversationInputRouter.Subscription) () -> {}
+              : router.beforeExecution(run.runId(), notifyAccepted)) {
+            beforeDispatch.accept(run);
+            try{dispatch.accept(run,input.text());}catch(RuntimeException failed){failedDispatch.accept(run);throw failed;}
+          }
         });
     accepted.put(input.inputId(), new Accepted(input, context, clock.instant()));
+    notifyAccepted.run();
     return context;
+  }
+  private Runnable acceptanceNotification(Runnable listener) {
+    return new Runnable() {
+      private boolean notified;
+      @Override public synchronized void run() {
+        if (notified) return;
+        notified = true;
+        // The runner must wait for the display even when the submitting thread wins
+        // this race. A CAS alone could let its answer overtake the unfinished frame.
+        try { listener.run(); }
+        catch (RuntimeException error) {
+          org.slf4j.LoggerFactory.getLogger(ConversationInputGateway.class)
+              .warn("Accepted input listener failed ({})", error.getClass().getSimpleName());
+        }
+      }
+    };
   }
   public synchronized List<ConversationInput> pending(ConversationTarget target) {
     return accepted.values().stream().filter(entry -> entry.input().source() == InputSource.VOICE)

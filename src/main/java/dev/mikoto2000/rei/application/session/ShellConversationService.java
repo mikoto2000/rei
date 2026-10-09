@@ -65,10 +65,14 @@ public final class ShellConversationService {
   }
   /** Check selection and admit the voice envelope under the same client lock as Session changes. */
   public AgentRunContext submitSelectedVoice(dev.mikoto2000.rei.core.project.ProjectClient client,dev.mikoto2000.rei.application.input.ConversationInput input) {
+    return submitSelectedVoice(client, input, () -> {});
+  }
+  public AgentRunContext submitSelectedVoice(dev.mikoto2000.rei.core.project.ProjectClient client,
+      dev.mikoto2000.rei.application.input.ConversationInput input, Runnable afterAccepted) {
     if(client==null||input.source()!=dev.mikoto2000.rei.application.input.InputSource.VOICE)throw new IllegalArgumentException("Captured VOICE client required");
     synchronized(client) {
       if(!isSelected(client,input.target()))throw new IllegalStateException("Voice target changed; restart voice for the selected Session");
-      return submit(input);
+      return gateway.submit(input, AgentRunContext.Mode.EXCLUSIVE, afterAccepted);
     }
   }
   public AgentRunContext submit(dev.mikoto2000.rei.application.input.ConversationInput input) {

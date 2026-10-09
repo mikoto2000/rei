@@ -15,6 +15,15 @@ public final class JLineShellEventOutput implements ShellEventOutput {
     this.writer = reader.getTerminal().writer();
   }
 
+  /** Print one styled, newline-delimited block without interleaving stream chunks or damaging the prompt. */
+  public synchronized void printBlock(org.jline.utils.AttributedString block) {
+    // Let JLine decide whether a prompt is active under its own lock, avoiding a
+    // readLine-start race. Do not count ANSI bytes as columns in flushCompleteLines().
+    var combined = new org.jline.utils.AttributedStringBuilder().append(pending).append(block);
+    pending.setLength(0);
+    reader.printAbove(combined.toAttributedString());
+  }
+
   @Override
   public synchronized void print(String text) {
     if (reader.isReading()) {

@@ -21,8 +21,6 @@ import org.jline.keymap.KeyMap;
 import org.jline.terminal.Attributes;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
-import org.jline.utils.AttributedStringBuilder;
-import org.jline.utils.AttributedStyle;
 import org.jline.utils.NonBlockingReader;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -44,6 +42,7 @@ import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.topic.AgentActivityTracker;
 import dev.mikoto2000.rei.ui.shell.JLineShellEventOutput;
+import dev.mikoto2000.rei.ui.shell.UserInputFrame;
 import dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer;
 import dev.mikoto2000.rei.ui.shell.ShellEventSession;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
@@ -61,6 +60,8 @@ public class ReiApplication {
   private dev.mikoto2000.rei.voice.VoiceInputCoordinator voiceInput;
   @Autowired(required = false)
   private dev.mikoto2000.rei.voice.VoiceEventPublisher voiceEvents;
+  @Autowired(required = false)
+  private dev.mikoto2000.rei.voice.VoiceDeliveryService voiceDelivery;
 
   private final RootCommand rootCommand;
   private final CommandLine.IFactory factory;
@@ -191,6 +192,8 @@ public class ReiApplication {
     ShellEventSession shellEvents = new ShellEventSession(agentEventBus, shellListener);
     var voiceSubscription = voiceEvents == null ? null
         : voiceEvents.subscribe(new dev.mikoto2000.rei.voice.VoiceShellEventRenderer(eventOutput));
+    var voiceSubmittedSubscription = voiceDelivery == null ? null
+        : voiceDelivery.onSubmitted(input -> eventOutput.printBlock(UserInputFrame.format(input.text(), now())));
 
     System.out.println("AI Shell");
     System.out.println("通常入力は chat として扱います。/exit で終了します。");
@@ -261,6 +264,7 @@ public class ReiApplication {
       shutdownNotifier.begin("shell_exit");
       commandExecutor.shutdownNow();
       if (voiceInput != null) voiceInput.close();
+      if (voiceSubmittedSubscription != null) voiceSubmittedSubscription.close();
       if (voiceSubscription != null) voiceSubscription.close();
       shellEvents.close();
     }
@@ -483,21 +487,7 @@ public class ReiApplication {
   }
 
   void printUserInput(String input, Terminal terminal) {
-    AttributedStringBuilder builder = new AttributedStringBuilder();
-    AttributedStyle style = AttributedStyle.DEFAULT.foreground(AttributedStyle.CYAN);
-
-    builder.append(System.lineSeparator());
-    builder.append(userInputHeader(), style);
-    builder.append(System.lineSeparator());
-    for (String line : input.split("\\R", -1)) {
-      builder.append(line, style);
-      builder.append(System.lineSeparator());
-    }
-    builder.append("└", style);
-    builder.append(System.lineSeparator());
-    builder.append(System.lineSeparator());
-
-    terminal.writer().print(builder.toAnsi(terminal));
+    terminal.writer().print(UserInputFrame.format(input, now()).toAnsi(terminal));
     terminal.writer().flush();
   }
 
@@ -507,20 +497,8 @@ public class ReiApplication {
     }
   }
 
-  private String userInputHeader() {
-    return "┌ User (" + now().format(DateTimeFormatter.ofPattern("HH:mm:ss")) + ")";
-  }
-
   String formatUserInput(String input) {
-    StringBuilder builder = new StringBuilder();
-    builder.append(System.lineSeparator());
-    builder.append(userInputHeader()).append(System.lineSeparator());
-    for (String line : input.split("\\R", -1)) {
-      builder.append(line).append(System.lineSeparator());
-    }
-    builder.append("└").append(System.lineSeparator());
-    builder.append(System.lineSeparator());
-    return builder.toString();
+    return UserInputFrame.format(input, now()).toString();
   }
 
   boolean confirmExitIfNeeded(ConfirmationReader confirmationReader) {
