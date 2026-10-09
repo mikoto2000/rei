@@ -182,3 +182,5 @@ SSE bridge の破棄時には送信完了を最大 2 秒待機します。切断
 検証失敗の分類・修復予算・停止条件は [Goal 修復](docs/goal-verification-repair.md) を参照してください。
 永続待機・条件再検証・Checkpoint 継続は [Goal の待機統合](docs/durable-goal-resume.md) を参照してください。
 各 Phase の PR・評価指標・設定・制限は [実装記録](docs/goal-completion-implementation-report.md) を参照してください。
+
+音声入力の隔離 PoC、調査・設計と未検証範囲は [Phase 0 調査](docs/voice-input-phase0.md) を参照してください。本番機能は未実装です。
