@@ -14,6 +14,8 @@ public class ToolPermissionPolicy {
   private static final Set<String> LOCAL_WRITE=Set.of("applyTextDiff","writeMultiFile","proposeTextChangeSet","applyTextChangeSet","discardTextChangeSet","reconcileTextChangeSet","createDirectory","copyFile","scheduleAfter","scheduleAt","scheduleInterval","scheduleCron","scheduleOnEvent","registerDependency","cancelDependency");
   private final ToolPermissionProperties properties;
   public ToolPermissionPolicy(ToolPermissionProperties properties) {this.properties=properties;}
+  /** Stable administrator policy identity for durable authorization audit. */
+  public String authorityFingerprint(){return dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256((properties.enabled()+"|"+new TreeSet<>(properties.autoApprove())+"|"+new TreeSet<>(properties.denied())+"|"+new TreeMap<>(properties.capabilities()).entrySet().stream().map(e->e.getKey()+"="+new TreeSet<>(e.getValue())).toList()).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
   public boolean enforced(){return properties.enabled();}
   public Set<ActionCapability> capabilities(String tool) {
     var configured=properties.capabilities().get(tool);
@@ -58,3 +60,4 @@ public class ToolPermissionPolicy {
     return properties.autoApprove().containsAll(required)?PermissionDecision.AUTO_APPROVE:PermissionDecision.REQUIRE_APPROVAL;
   }
 }
+

@@ -29,7 +29,7 @@ public class ImplementationRequestRepository {
   }
   public Request get(String id) {return db.sql("SELECT * FROM implementation_requests WHERE id=?").param(id).query(this::row).optional().orElseThrow(()->new IllegalArgumentException("Implementation request not found"));}
   public boolean claim(String id,String instance) {
-    return db.sql("UPDATE implementation_requests SET status='EXECUTING',claim_owner=?,updated=? WHERE id=? AND status IN ('AUTHORIZED','AWAITING_APPROVAL') AND claim_owner IS NULL")
+    return db.sql("UPDATE implementation_requests SET status='EXECUTING',receipt=id,claim_owner=?,updated=? WHERE id=? AND status IN ('AUTHORIZED','AWAITING_APPROVAL') AND claim_owner IS NULL")
         .params(instance,clock.millis(),id).update()==1;
   }
   public String claimOwner(String id){return db.sql("SELECT claim_owner FROM implementation_requests WHERE id=?").param(id).query(String.class).optional().orElse("");}
@@ -45,3 +45,4 @@ public class ImplementationRequestRepository {
     return new Request(r.getString("id"),r.getInt("version"),r.getString("hash"),r.getString("project"),r.getString("root"),r.getString("session"),r.getString("origin_run"),r.getString("origin_message"),r.getString("source"),r.getString("provider"),r.getString("base"),r.getString("previous"),r.getString("spec"),r.getString("envelope"),r.getString("policy"),r.getString("authorization"),r.getString("status"),r.getString("receipt"),r.getString("result"),Instant.ofEpochMilli(r.getLong("created")),Instant.ofEpochMilli(r.getLong("updated")));
   }
 }
+
