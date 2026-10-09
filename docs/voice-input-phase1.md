@@ -37,3 +37,5 @@ ConversationInputGatewayTest、PendingOnlyRunCancellationTestを追加。モデ�
 レビューで、取消後の後続executor拒否が取消呼出しへ伝播する既存キューの境界を再現した。Redテストを追加し、後続の拒否callbackが失敗を管理しつつ、除去済み入力の取消はtrueを返すよう最小修正した。旧実装の全回帰はこの修正のため自分のMavenプロセスを停止した（成功扱いしない）。修正後の最終全回帰を再実行する。
 
 最終影響範囲: 52件、failure0 / error0 / skipped0、BUILD SUCCESS。修正後の全Java回帰とPRのCIは未確定。
+
+修正後の最終全Java回帰: 4106件、failure0 / error0 / skipped1（既存PlantUML条件）、BUILD SUCCESS、10分26秒、wrapper終了0。GitHub CI・PRレビュー・main統合は未完了。
