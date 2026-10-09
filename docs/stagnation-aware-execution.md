@@ -104,3 +104,37 @@ payload は evidence、連続停滞回数、閾値、停滞再計画回数・上
 `StagnationChatModelTest`、`ChatExecutionStagnationTest` と既存の Shell テストで、
 状態遷移・根拠の重複排除・本番 ChatClient 経由の停止・次runの独立性・予算・通知を検証する。
 全体の標準コマンドは `./mvnw.cmd test` と `./mvnw.cmd verify`（JDK 25）。
+
+## 作業完遂 Phase 2：revision と Web 証拠
+
+`ProgressEvidence` は既存の kind / description / source に nullable `revision` を追加する。旧 constructor と旧 JSON は維持する。ファイル変更は現在の SHA-256、Change Set は APPLIED receipt の proposed/current SHA と実ファイルの一致、Dependency は対象 ID と観測状態を記録する。Change Set の再表示、古い receipt、同じファイル revision は追加進捗にならない。
+
+ファイル fingerprint は既存 FileGoalVerifier の Project 相対パス、symlink 拒否、1 MiB・キャンセル制限を再利用する。存在・ディレクトリの変化は `absent` / `directory`、観測できない状態は `unavailable` とし、未知を変更証拠に置き換えない。情報・revision・失敗の Run-local ledger は各 1024 件で飽和し、その後は保守的に追加証拠を出さない。古い要素を捨てて同じ情報を新規扱いする方式は使わない。
+
+Web は以下を分離する。
+
+| 観測 | Planning の進捗 |
+| --- | --- |
+| webSearch の呼び出し・新URL・タイトル・snippetだけ | 増やさない。既存 Web metrics が扱う |
+| webSearchAndRead / fetchUrlContent の新しい非空本文 | 本文 SHA が未観測なら NEW_INFORMATION |
+| 日時・取得件数・query・assessment・aliasesだけの変化 | 増やさない |
+| 別URL・別Webツールから同じ本文を取得 | 増やさない |
+| 取得失敗後、本文を伴う成功 | ERROR_RESOLVED、本文が新しければ NEW_INFORMATION |
+| 取得失敗後、メタデータだけの成功 | 増やさない |
+| Goal の達成 | この ledger では判定せず既存 Completion Gate が独立検証 |
+
+実際の hybrid `searchKnowledge` callback のテキストから Web 本文と indexed snippet を抽出し、質問・評価メタデータ・score は証拠から除く。Web の source は URL の SHA（`web-source:`）で識別し、生URLの認証情報を追加 payload に持たせない。revision は本文そのものの SHA。新しい本文が要求に役立つかという意味的な保証や、本文中の動的時刻の除去は行わない。意味的な妥当性・達成は Goal 条件とレビューの責務である。
+
+成功 command の同じ stdout を、command の綴りが変わっただけで再計上しない。command 出力自体の真偽はこの軽量 ledger では検証しない。テスト・レビュー・成果物は Completion Gate の既存 saved receipt と現在 SHA の検証を維持する。Git / artifact の不明なツール応答に、成功だけを理由とする新しい進捗判定は追加していない。
+
+局所停滞のカウントは既存どおり進捗で回復する。別管理の OutputLimitRunBudget の絶対再計画数・モデル呼び出し数・tokens は回復しない。新しい Web 情報が複数回続いても総上限は増えない。既存 Waiting、Permission、Cancellation、検索キャッシュ・取得数・出力予算には変更しない。追加の設定は不要で、既存停滞制御の有効化設定に従う。
+
+### TDD と評価
+
+`EvidenceProgressTest` は 15 件。URL-only、日時による再計上、hybrid query-only、Change Set 未計上、Project外読み取りを Red で再現した。revision 未実装の compilation Red、メタデータだけの復旧・本文SHA・command alias の実行 Red も確認した。既存の局所停滞回復を絶対上限と混同した変更は関連テストで検出して戻し、既存 assertion を維持したまま実際の Run 予算で検証している。実 callback、混合した成功/失敗 Web 結果、旧 JSON、巨大ファイル、ledger 飽和も検証する。
+
+関連回帰（Goal 評価、Planning / Run 予算、Web / Search）は最終 227 件成功。最後の callback / 旧 JSON / 評価 / Web callback 集中検証は 16 件成功。再現は `./mvnw.cmd -B -Pfull "-Dtest=EvidenceProgressTest,GoalCompletionBaselineTest,WebBoundedToolOutputTest" test`、全体は `./mvnw.cmd -B -Pfull test`。
+
+同じ Phase 0 fixture は検証済み完遂 70%、誤完了自己申告 30%、未達終了 30%、scripted repair 1/1、介入2、不要反復4、二重実行0、権限逸脱0、Goal予約15を維持する。この fixture は Goal gateway の double を使い Planning/Web progress ledger を通らないため、この率の改善を主張しない。実モデルの有用性・token消費の評価は未取得。個別 Red/Green は旧判定の誤進捗を再現し、修正後に同じ観測で追加進捗が出ないことを証明する。
+
+ファイル読取も、正規化した対象パスと行位置・内容を共有して readMultiFile / readTextFile / range 間の同じ行を再計上しない。異なる読取ツールの同一内容で実行 Red を確認し、新しい行だけを進捗にする Green を得た。
