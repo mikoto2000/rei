@@ -17,6 +17,7 @@ public class ImplementationRequestRepository {
   public ImplementationRequestRepository(@Qualifier("memoryConsolidationDataSource") DataSource source,Clock clock) {
     db=JdbcClient.create(source);this.clock=clock;
     db.sql("CREATE TABLE IF NOT EXISTS implementation_requests(id TEXT PRIMARY KEY,version INTEGER NOT NULL,hash TEXT NOT NULL,project TEXT NOT NULL,root TEXT NOT NULL,session TEXT NOT NULL,origin_run TEXT NOT NULL,origin_message TEXT NOT NULL,source TEXT NOT NULL,provider TEXT NOT NULL,base TEXT NOT NULL,previous TEXT,spec TEXT NOT NULL,envelope TEXT NOT NULL,policy TEXT NOT NULL,authorization TEXT,status TEXT NOT NULL,receipt TEXT,result TEXT,created INTEGER NOT NULL,updated INTEGER NOT NULL,claim_owner TEXT,UNIQUE(project,session,origin_run,hash,previous))").update();
+    db.sql("CREATE TABLE IF NOT EXISTS implementation_acceptance_evaluations(sequence INTEGER PRIMARY KEY AUTOINCREMENT,request TEXT NOT NULL,spec_hash TEXT NOT NULL,receipt TEXT NOT NULL,patch_hash TEXT NOT NULL,evaluations TEXT NOT NULL,created INTEGER NOT NULL)").update();
     db.sql("CREATE INDEX IF NOT EXISTS implementation_requests_owner ON implementation_requests(project,session,created)").update();
   }
   public void save(Request r) {
@@ -41,8 +42,18 @@ public class ImplementationRequestRepository {
     if(db.sql("UPDATE implementation_requests SET status=?,receipt=?,result=?,updated=? WHERE id=? AND status IN ('EXECUTING','VERIFYING')")
         .params(status,receipt,result,clock.millis(),id).update()!=1)throw new IllegalStateException("Implementation request is not executing");
   }
+  public void saveEvaluations(String request,String specificationHash,String receipt,String patch,String evaluations) {
+    if(evaluations.length()>32768)throw new IllegalArgumentException("Evaluation exceeds 32 KiB");
+    db.sql("INSERT INTO implementation_acceptance_evaluations(request,spec_hash,receipt,patch_hash,evaluations,created) VALUES(?,?,?,?,?,?)")
+        .params(request,specificationHash,receipt,patch,evaluations,clock.millis()).update();
+  }
+  public java.util.Optional<String> evaluations(String request,String specificationHash,String receipt,String patch) {
+    return db.sql("SELECT evaluations FROM implementation_acceptance_evaluations WHERE request=? AND spec_hash=? AND receipt=? AND patch_hash=? ORDER BY sequence DESC LIMIT 1")
+        .params(request,specificationHash,receipt,patch).query(String.class).optional();
+  }
   private Request row(java.sql.ResultSet r,int index)throws java.sql.SQLException {
     return new Request(r.getString("id"),r.getInt("version"),r.getString("hash"),r.getString("project"),r.getString("root"),r.getString("session"),r.getString("origin_run"),r.getString("origin_message"),r.getString("source"),r.getString("provider"),r.getString("base"),r.getString("previous"),r.getString("spec"),r.getString("envelope"),r.getString("policy"),r.getString("authorization"),r.getString("status"),r.getString("receipt"),r.getString("result"),Instant.ofEpochMilli(r.getLong("created")),Instant.ofEpochMilli(r.getLong("updated")));
   }
 }
+
 

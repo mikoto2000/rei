@@ -62,7 +62,7 @@ public class ImplementationRequestService {
   public Outcome execute(RunExecutionContext run,String id,int version,String hash) {
     var owner=owner(run);run.checkActive();var saved=owned(owner,id);
     if(version!=saved.specificationVersion() || !Objects.equals(hash,saved.specificationSha256()))throw new IllegalArgumentException("Saved specification version/hash mismatch");
-    if(saved.result()!=null)return read(saved.result(),Outcome.class);
+    if(saved.result()!=null)return evaluated(read(saved.result(),Outcome.class));
     if(Set.of("EXECUTING","VERIFYING","UNKNOWN").contains(saved.executionStatus())) {
       String status=active.contains(id)&&instance.equals(requests.claimOwner(id))?saved.executionStatus():"UNKNOWN";
       return pending(saved,status,"Inspect existing receipt/worktree read-only; never automatically re-execute an unknown attempt");
@@ -103,6 +103,26 @@ public class ImplementationRequestService {
       requests.finish(id,"UNKNOWN",id,null);throw error;
     }finally{active.remove(id);}
   }
+  /** Semantic assessment is explicitly labelled PARENT_LLM, separate from objective server checks. */
+  public Outcome evaluate(RunExecutionContext run,String id,String patch,List<AcceptanceEvaluation> input) {
+    var owner=owner(run);run.checkActive();var saved=owned(owner,id);
+    if(saved.result()==null)throw new IllegalArgumentException("Saved implementation outcome required");
+    var result=read(saved.result(),Outcome.class);
+    if(!Objects.equals(result.patchSha256(),patch))throw new IllegalArgumentException("Evaluation patch differs from saved result");
+    var receipt=delegation.implementation(run,result.receiptId());
+    if(!Objects.equals(receipt.patchHash(),patch))throw new IllegalArgumentException("Receipt patch changed");
+    var values=AcceptanceEvaluation.parent(read(saved.canonicalSpecification(),ImplementationSpecification.class),receipt,input);
+    requests.saveEvaluations(id,saved.specificationSha256(),receipt.id(),patch,ImplementationSpecificationValidator.serialize(values));
+    return withEvaluations(result,values);
+  }
+  private Outcome evaluated(Outcome result) {
+    return requests.evaluations(result.requestId(),result.specificationSha256(),result.receiptId(),result.patchSha256())
+        .map(value->withEvaluations(result,List.of(read(value,AcceptanceEvaluation[].class)))).orElse(result);
+  }
+  private Outcome withEvaluations(Outcome result,List<AcceptanceEvaluation> values) {
+    return new Outcome(result.requestId(),result.status(),result.receiptId(),result.specificationSha256(),result.baseCommit(),result.implementationCommit(),result.changedFiles(),result.patchSha256(),result.testResult(),result.staticReview(),values,
+        result.warnings(),values.stream().filter(e->!e.status().equals("VERIFIED")).map(AcceptanceEvaluation::criterionId).toList(),false,false);
+  }
   private PermissionDecision decision(){var result=policy.evaluate(TOOL);return result==PermissionDecision.AUTO_APPROVE&&!policy.enforced()?PermissionDecision.REQUIRE_APPROVAL:result;}
   private boolean enabled(){return properties.isEnabled()&&properties.isImplementationEnabled()&&properties.getImplementationTestCommand()!=null&&!properties.getImplementationTestCommand().isBlank()&&properties.getImplementationTestCommand().length()<=4096&&properties.getImplementationTestTimeoutSeconds()>=1&&properties.getImplementationTestTimeoutSeconds()<=60;}
   private AgentRunContext owner(RunExecutionContext run) {
@@ -136,4 +156,5 @@ public class ImplementationRequestService {
     return !text.contains("claude")&&text.matches("(?s).*(実装.{0,12}(して|お願い|依頼)|implement.{0,80}(please|codex)|(?:please|ask|use|have).{0,80}implement).*" );
   }
 }
+
 
