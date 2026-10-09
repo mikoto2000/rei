@@ -143,6 +143,38 @@ class ImplementationRequestServiceTest {
     policy(Set.of(ActionCapability.values()),Set.of(),true);when(delegation.executeSpecification(any(),anyString(),any(),anyString(),anyString(),anyInt())).thenReturn(receipt("READY_FOR_APPROVAL"));
     assertEquals("AWAITING_APPROVAL",service.execute(run,prepared.requestId(),1,prepared.specificationSha256()).status());verifyNoInteractions(delegation);
   }
+  @Test void savedClarificationCarriesActualUserIntentIntoAConfirmedFollowup() throws Exception {
+    var draft=service.prepare(run,null,null);assertEquals("NEEDS_CLARIFICATION",draft.status());
+    run.setRunContext(new AgentRunContext("followup","session",root,"project"));run.setUserRequest("対象は A.txt。指示は before を after に置換。条件は Greeting says after です。");
+    var prepared=service.prepare(run,specification,null,draft.requestId());assertEquals("AUTHORIZED",prepared.status());assertNotEquals(draft.requestId(),prepared.requestId());
+    assertTrue(repository.get(prepared.requestId()).originUserMessageId().contains(draft.requestId()));
+    when(delegation.executeSpecification(any(),anyString(),any(),anyString(),anyString(),anyInt())).thenReturn(receipt("READY_FOR_APPROVAL"));
+    assertEquals("RESULT_AVAILABLE",service.execute(run,prepared.requestId(),1,prepared.specificationSha256()).status());
+  }
+  @Test void slashClarificationKeepsTheOriginalTargetAndDoesNotTreatUnrelatedReviewAsConfirmation() throws Exception {
+    run.setUserRequest("/agent codex implement A.txt");var draft=service.prepare(run,null,null);
+    run.setRunContext(new AgentRunContext("followup","session",root,"project"));run.setUserRequest("Please review the implementation");
+    assertEquals("REJECTED",service.prepare(run,specification,null,draft.requestId()).status());
+    Files.writeString(root.resolve("B.txt"),"other");run.setUserRequest("対象は B.txt、条件は同じです");
+    var changed=new ImplementationSpecification(1,specification.objective(),specification.instructions(),"B.txt",List.of("B.txt"),specification.constraints(),specification.acceptanceCriteria(),specification.references(),"REPLACE_EXISTING_TEXT");
+    assertEquals("REJECTED",service.prepare(run,changed,null,draft.requestId()).status());verifyNoInteractions(delegation);
+  }
+  @Test void unknownRetryStillRequiresExplicitApprovalAfterRequirementsClarification() throws Exception {
+    var original=service.prepare(run,specification,null);repository.claim(original.requestId(),"dead-jvm");repository.finish(original.requestId(),"UNKNOWN",original.requestId(),null);
+    var draft=service.prepare(run,null,original.requestId());assertEquals("NEEDS_CLARIFICATION",draft.status());
+    run.setRunContext(new AgentRunContext("followup","session",root,"project"));run.setUserRequest("はい、対象と指示と条件を確定します");
+    var successor=service.prepare(run,specification,null,draft.requestId());assertEquals("AWAITING_APPROVAL",successor.status());assertEquals(original.requestId(),repository.get(successor.requestId()).previousRequestId());
+    assertEquals("AWAITING_APPROVAL",service.execute(run,successor.requestId(),1,successor.specificationSha256()).status());verifyNoInteractions(delegation);
+  }
+  @Test void clarificationExpiresAndCannotCrossSessionsOrAcceptQuotedConfirmation() {
+    var draft=service.prepare(run,null,null);
+    run.setUserRequest("`対象と指示を確定します`");assertEquals("REJECTED",service.prepare(run,specification,null,draft.requestId()).status());
+    run.setUserRequest("はい、要件を確定します");run.setRunContext(new AgentRunContext("followup","other-session",root,"project"));
+    assertThrows(IllegalArgumentException.class,()->service.prepare(run,specification,null,draft.requestId()));
+    run.setRunContext(new AgentRunContext("followup","session",root,"project"));
+    service=new ImplementationRequestService(repository,approvals,new ToolPermissionPolicy(new ToolPermissionProperties(true,Set.of(ActionCapability.values()),Set.of(),Map.of())),properties,delegation,Clock.offset(Clock.systemUTC(),Duration.ofMinutes(16)));
+    assertEquals("REJECTED",service.prepare(run,specification,null,draft.requestId()).status());verifyNoInteractions(delegation);
+  }
   IsolatedImplementationService.Receipt receipt(String status){return new IsolatedImplementationService.Receipt("receipt","project","session",root.toString(),"tree","branch","base",status,"b".repeat(64),"commit",List.of("A.txt"),Map.of(),null,"diagnostic");}
   void git(String... args)throws Exception {var command=new ArrayList<String>(List.of("git","-c","user.name=Fixture","-c","user.email=fixture@example.invalid","-c","core.hooksPath="));command.addAll(List.of(args));var p=new ProcessBuilder(command).directory(root.toFile()).redirectErrorStream(true).start();assertTrue(p.waitFor(5,java.util.concurrent.TimeUnit.SECONDS));assertEquals(0,p.exitValue(),new String(p.getInputStream().readAllBytes()));}
 }

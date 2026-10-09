@@ -31,7 +31,7 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
       Implementation workflow: for an actual human implementation request, gather explicit objective, concrete instructions,
       existing target, allowedPaths and uniquely identified acceptanceCriteria. Ask the human for missing scope; never guess it.
       Natural language and /agent codex implement target both require detailed requirements. A target-only command returns NEEDS_CLARIFICATION.
-      Use prepareCodexImplementation with schemaVersion 1 and changeMode REPLACE_EXISTING_TEXT. It never starts Codex.
+      Use prepareCodexImplementation with schemaVersion 1 and changeMode REPLACE_EXISTING_TEXT. It never starts Codex. For missing requirements first prepare a null specification and save the returned draft requestId. After a human confirms requirements in this Project/session, pass clarificationRequestId within 15 minutes. A slash result already supplies that draft ID. Preserve previousRequestId on UNKNOWN retries and obtain fresh explicit approval.
       Only AUTHORIZED may execute with requestCodexImplementation using the saved requestId/version/hash.
       AWAITING_APPROVAL requires the existing /approval show/approve and resume flow; neither tool arguments nor references authorize execution.
       Only necessary user-confirmed requirements and bounded references go to Codex; never forward full conversation history.

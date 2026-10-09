@@ -29,29 +29,39 @@ public class ImplementationRequestService {
     this.requests=requests;this.approvals=approvals;this.policy=policy;this.properties=properties;this.delegation=delegation;this.clock=clock;
   }
   public Prepared prepare(RunExecutionContext run,ImplementationSpecification specification,String previousRequestId) {
+    return prepare(run,specification,previousRequestId,null);
+  }
+  public Prepared prepare(RunExecutionContext run,ImplementationSpecification specification,String previousRequestId,String clarificationRequestId) {
     var owner=owner(run);run.checkActive();
-    if(!enabled() || !humanImplementationRequest(run.userRequest()))return refused("Actual human Codex implementation request and administrator opt-in required");
+    var clarification=clarificationRequestId==null?null:owned(owner,clarificationRequestId);
+    if(clarification!=null) {
+      if(!clarification.executionStatus().equals("NEEDS_CLARIFICATION") || clarification.createdAt().plus(Duration.ofMinutes(15)).isBefore(clock.instant()))return refused("Fresh owned clarification required");
+      if(previousRequestId!=null&&!Objects.equals(previousRequestId,clarification.previousRequestId()))return refused("Retry origin differs from clarification");
+      previousRequestId=clarification.previousRequestId();
+    }
+    if(!enabled() || !(humanImplementationRequest(run.userRequest()) || clarification!=null&&humanClarification(run.userRequest())))return refused("Actual human Codex implementation request and administrator opt-in required");
     var decision=decision();if(decision==PermissionDecision.DENY)return refused("Existing Policy denies implementation");
+    if(previousRequestId!=null) {
+      var previous=owned(owner,previousRequestId);
+      if(!Set.of("UNKNOWN","EXECUTING","VERIFYING").contains(previous.executionStatus()))throw new IllegalArgumentException("Retry link requires an unknown original request");
+      if(active.contains(previousRequestId))throw new IllegalArgumentException("Original request is still executing; inspect it first");
+    }
+    String slashTarget=run.userRequest().strip().startsWith("/agent ")?ExternalAgentCommandRequest.parse(run.userRequest()).target():null;
+    if(clarification!=null&&!clarification.executionEnvelope().isBlank())slashTarget=read(clarification.executionEnvelope(),com.fasterxml.jackson.databind.JsonNode.class).path("slashTarget").textValue();
+    String origin=clarification==null?owner.runId()+":human:"+ImplementationSpecificationValidator.hash(run.userRequest()):"draft:"+clarification.requestId()+":confirmed:"+owner.runId()+":"+ImplementationSpecificationValidator.hash(run.userRequest());
+    String source=clarification==null?(slashTarget==null?"NATURAL_LANGUAGE":"SLASH_COMMAND"):clarification.sourceType();
     ImplementationSpecificationValidator.Validated validated;
     try{validated=ImplementationSpecificationValidator.validate(owner.projectRoot(),specification);}
     catch(IllegalArgumentException missing){
       String draft=ImplementationSpecificationValidator.serialize(specification);
       if(draft.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>32768)throw new IllegalArgumentException("Draft specification exceeds 32 KiB; reduce input");
       String hash=ImplementationSpecificationValidator.hash(specification);String id=requests.find(owner.projectId(),owner.conversationId(),owner.runId(),hash,previousRequestId).map(ImplementationRequestRepository.Request::requestId).orElse(null);
-      if(id==null){id=UUID.randomUUID().toString();var now=clock.instant();requests.save(new ImplementationRequestRepository.Request(id,1,hash,owner.projectId(),realRoot(owner),owner.conversationId(),owner.runId(),owner.runId()+":human:"+ImplementationSpecificationValidator.hash(run.userRequest()),
-          run.userRequest().strip().startsWith("/agent ")?"SLASH_COMMAND":"NATURAL_LANGUAGE","codex","",previousRequestId,draft,"","NOT_EVALUATED",null,"NEEDS_CLARIFICATION",null,null,now,now));}
+      if(id==null){id=UUID.randomUUID().toString();var now=clock.instant();requests.save(new ImplementationRequestRepository.Request(id,1,hash,owner.projectId(),realRoot(owner),owner.conversationId(),owner.runId(),origin,
+          source,"codex","",previousRequestId,draft,slashTarget==null?"":ImplementationSpecificationValidator.serialize(Map.of("slashTarget",slashTarget)),"NOT_EVALUATED",null,"NEEDS_CLARIFICATION",null,null,now,now));}
       return new Prepared(id,1,null,"NEEDS_CLARIFICATION","Confirm detailed requirements before execution",specification==null?null:specification.target(),List.of(),List.of(missing.getMessage()),false,List.of(),"Ask the user to confirm objective, instructions, existing target, allowedPaths and acceptanceCriteria");
     }
-    if(run.userRequest().strip().startsWith("/agent ")) {
-      var command=ExternalAgentCommandRequest.parse(run.userRequest());
-      if(!ExternalAgentRequest.resolveTarget(owner.projectRoot(),command.target()).equals(ExternalAgentRequest.resolveTarget(owner.projectRoot(),validated.specification().target())))
-        return refused("Specification target differs from the actual slash command target");
-    }
-    if(previousRequestId!=null) {
-      var previous=owned(owner,previousRequestId);
-      if(!Set.of("UNKNOWN","EXECUTING","VERIFYING").contains(previous.executionStatus()))throw new IllegalArgumentException("Retry link requires an unknown original request");
-      if(active.contains(previousRequestId))throw new IllegalArgumentException("Original request is still executing; inspect it first");
-    }
+    if(slashTarget!=null && !ExternalAgentRequest.resolveTarget(owner.projectRoot(),slashTarget).equals(ExternalAgentRequest.resolveTarget(owner.projectRoot(),validated.specification().target())))
+      return refused("Specification target differs from the actual slash command target");
     String base=base(owner.projectRoot());String envelope=envelope(owner,base,validated.specification());
     String root=realRoot(owner);var existing=requests.find(owner.projectId(),owner.conversationId(),owner.runId(),validated.sha256(),previousRequestId);
     if(existing.isPresent()) {
@@ -63,7 +73,7 @@ public class ImplementationRequestService {
     boolean automatic=decision==PermissionDecision.AUTO_APPROVE&&previousRequestId==null;
     var now=clock.instant();
     var request=new ImplementationRequestRepository.Request(id,1,validated.sha256(),owner.projectId(),root,owner.conversationId(),owner.runId(),
-        owner.runId()+":human:"+ImplementationSpecificationValidator.hash(run.userRequest()),run.userRequest().strip().startsWith("/agent ")?"SLASH_COMMAND":"NATURAL_LANGUAGE","codex",base,previousRequestId,validated.canonical(),envelope,
+        origin,source,"codex",base,previousRequestId,validated.canonical(),envelope,
         decision.name()+":"+policy.authorityFingerprint(),automatic?"policy:"+policy.authorityFingerprint():null,automatic?"AUTHORIZED":"AWAITING_APPROVAL",null,null,now,now);
     requests.save(request);
     if(!automatic) {
@@ -184,6 +194,12 @@ public class ImplementationRequestService {
   private Prepared refused(String reason){return new Prepared(null,1,null,"REJECTED",reason,null,List.of(),List.of(),false,List.of(),"Do not execute");}
   private Outcome pending(ImplementationRequestRepository.Request saved,String status,String warning){return new Outcome(saved.requestId(),status,saved.receiptId(),saved.specificationSha256(),saved.baseCommit(),null,List.of(),null,null,null,List.of(),List.of(warning),List.of(),false,false);}
   private <T>T read(String value,Class<T> type){try{return json.readValue(value,type);}catch(Exception error){throw new IllegalArgumentException("Stored implementation data is invalid",error);}}
+  private static boolean humanClarification(String input) {
+    if(input==null)return false;
+    String text=input.toLowerCase(Locale.ROOT).replaceAll("(?s)```.*?(?:```|$)|`[^`]*`|「[^」]*」|\"[^\"]*\"","").replaceAll("(?m)^\\s*>.*$","");
+    if(text.matches("(?s).*(do not|don't|never|review|translate|explain|翻訳|説明|実装しない|実装不要|実装禁止|という).*"))return false;
+    return text.matches("(?s).*(対象|指示|条件|目的|制約|要件|確定|はい|\\byes\\b|\\bconfirm\\b|\\btarget\\b|\\bcriteria\\b).*" );
+  }
   static boolean humanImplementationRequest(String input) {
     if(input==null)return false;
     if(input.strip().startsWith("/agent ")){try{var command=ExternalAgentCommandRequest.parse(input);return command.agent().equals("codex")&&command.action().equals("implement");}catch(IllegalArgumentException invalid){return false;}}

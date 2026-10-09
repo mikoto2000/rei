@@ -126,3 +126,12 @@ Windows JDK25 で匿名 fixture の実 Codex E2E `LiveEnvironmentE2ETest#codexRe
 既に人の承認を求めた依頼は、その後 Policy が自動許可になっても明示承認を省略しない。レシピは保存済み envelope から取得し、隔離サービス側でも現行管理者設定と照合する。レビュー依頼中の implementation という名詞、Markdown 引用/コードを実装依頼として扱わない。明示実装の検出は保守的で、対応しない自然言語表現の場合はユーザーに明示的な依頼として確認する。
 
 最終 GitHub CI は最終ブランチに対して全回帰を実行する。必須 CI・レビュー条件の成功確認前にはマージせず、保護の迂回、force push、admin merge を使わない。
+
+## 不足要件の複数ターン確認
+
+`prepareCodexImplementation` は specification が null の場合も `NEEDS_CLARIFICATION` の draft ID を保存する。親は質問前にこの ID を取得し、ユーザーの具体的な回答または確認後、`clarificationRequestId` と完成した specification を渡す。初回 `/agent codex implement <target>` も同じ draft を返す。元の slash target はモデルの引数とは独立して保存し、回答後も差し替えを拒否する。
+
+同一 Project/root/session、15分以内の draft、現在の人の確認入力を必須とし、引用だけの回答や review/説明は確認に使わない。期限切れは新たな明示依頼が必要。originUserMessageId に server が生成する draft ID と確認 Run/input digest を記録する。draft 自体は実行・承認を開始しない。UNKNOWN 再試行の previousRequestId は draft を経由しても引き継ぎ、新規IDと明示承認を必須とする。未確認の自然言語表現は保守的に拒否する。
+
+追加の回帰ケースは、自然言語の継続確認、slash target 保持、UNKNOWN 再承認、期限・Session・引用拒否、実 slash draft → 同じ隔離エンジンへの接続を含む。
+不足要件の継続修正後、関連8クラス44件を再実行し、失敗0・エラー0・skip0を確認した。実 slash draft から新しい人の回答 Run を経て隔離実装に接続するケースを含む。

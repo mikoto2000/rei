@@ -39,6 +39,9 @@ public class ExternalAgentDelegationService implements AutoCloseable {
   private ClaudeCodeProperties claudeProperties=new ClaudeCodeProperties();
   @org.springframework.beans.factory.annotation.Autowired
   void claudeProperties(ClaudeCodeProperties properties){this.claudeProperties=properties;}
+  private org.springframework.beans.factory.ObjectProvider<ImplementationRequestService> implementationRequests;
+  @org.springframework.beans.factory.annotation.Autowired
+  void implementationRequests(org.springframework.beans.factory.ObjectProvider<ImplementationRequestService> requests){this.implementationRequests=requests;}
   private IsolatedImplementationService implementations;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   void implementations(IsolatedImplementationService service){this.implementations=service;}
@@ -67,6 +70,11 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     try {
       var command=ExternalAgentCommandRequest.parse(run.userRequest());
       if(!command.agent().equals(agent.name().toLowerCase(Locale.ROOT)) || !command.action().equals("implement") || !Objects.equals(command.target(),target))return ExternalAgentResult.rejected("Explicit implementation request for the selected provider and target in this Run required");
+      if(codex && implementationRequests!=null) {
+        var draft=implementationRequests.getObject().prepare(run,null,null);
+        return new ExternalAgentResult(ExternalAgentResult.Status.SUCCESS_WITH_WARNINGS,
+            ImplementationSpecificationValidator.serialize(draft),List.of(),List.of("Confirm requirements using the saved clarification requestId"),0,null,"");
+      }
       if(codex)return new ExternalAgentResult(ExternalAgentResult.Status.SUCCESS_WITH_WARNINGS,
           "NEEDS_CLARIFICATION: Confirm objective, concrete instructions, existing target, allowedPaths, constraints and acceptanceCriteria for "+target+". Then prepareCodexImplementation and execute its saved requestId/version/hash through the common implementation service.",List.of(),List.of("Target-only implementation no longer starts Codex"),0,null,"");
       var owner=run.runContext();if(owner==null || owner.projectId()==null || owner.mode()!=dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)return ExternalAgentResult.rejected("Exclusive current Project required");
