@@ -73,3 +73,5 @@ JNI JARをclasspathから除いた場合はUnsatisfiedLinkErrorで明示失敗�
 全Java回帰は既存20分期限wrapperで4088件、failure0 / error0 / skipped1（既存PlantUML条件）、BUILD SUCCESS・wrapper終了0。PoCは通常単体テストにネットワーク・モデルダウンロードを追加しない。
 
 ユーザーは診断付き試験で全文を話したと確認した。このため断片認識を実機受入成功と扱わない。次回の切り分け用にline.start後の開始音と1秒ごとのpeak/RMS表示を追加した。開始音はOS設定により聞こえない場合がある。修正版の実機試験は未実施。
+
+開始音・秒単位診断付き試験: 159500 samples / 9.969秒、nonzero36614、peak0.000031 / RMS0.000015。全10区間のpeak/RMSも同値でほぼ無音（PCM16の1量子程度）。VAD produced no speech、終了1。ASRより前の取得音声に発話波形が確認できていない。開始音の可聴性・発話タイミング・Windows/VT-4入力経路は未確認で、原因は未確定。Phase0は未完了。
