@@ -44,4 +44,3 @@ class ImplementationDelegationIntegrationTest {
   }
   void git(Path root,List<String> args)throws Exception{var cmd=new ArrayList<String>(List.of("git","-c","core.hooksPath=","-c","user.name=Fixture","-c","user.email=fixture@example.invalid"));cmd.addAll(args);var p=new ProcessBuilder(cmd).directory(root.toFile()).redirectErrorStream(true).start();assertTrue(p.waitFor(5,java.util.concurrent.TimeUnit.SECONDS));assertEquals(0,p.exitValue(),new String(p.getInputStream().readAllBytes()));}
 }
-

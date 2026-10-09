@@ -194,10 +194,13 @@ public class ImplementationRequestService {
   private Prepared refused(String reason){return new Prepared(null,1,null,"REJECTED",reason,null,List.of(),List.of(),false,List.of(),"Do not execute");}
   private Outcome pending(ImplementationRequestRepository.Request saved,String status,String warning){return new Outcome(saved.requestId(),status,saved.receiptId(),saved.specificationSha256(),saved.baseCommit(),null,List.of(),null,null,null,List.of(),List.of(warning),List.of(),false,false);}
   private <T>T read(String value,Class<T> type){try{return json.readValue(value,type);}catch(Exception error){throw new IllegalArgumentException("Stored implementation data is invalid",error);}}
+  private static boolean negativeImplementationIntent(String text) {
+    return text.matches("(?s).*(実装\\s*(?:を|は)?\\s*(?:しない|しなく|不要|禁止|しては|するな)|いいえ|確定しない|確定しません).*" );
+  }
   private static boolean humanClarification(String input) {
     if(input==null)return false;
     String text=input.toLowerCase(Locale.ROOT).replaceAll("(?s)```.*?(?:```|$)|`[^`]*`|「[^」]*」|\"[^\"]*\"","").replaceAll("(?m)^\\s*>.*$","");
-    if(text.matches("(?s).*(do not|don't|never|review|translate|explain|翻訳|説明|実装しない|実装不要|実装禁止|という).*"))return false;
+    if(negativeImplementationIntent(text) || text.matches("(?s).*(do not|don't|never|review|translate|explain|翻訳|説明|実装しない|実装不要|実装禁止|という).*"))return false;
     return text.matches("(?s).*(対象|指示|条件|目的|制約|要件|確定|はい|\\byes\\b|\\bconfirm\\b|\\btarget\\b|\\bcriteria\\b).*" );
   }
   static boolean humanImplementationRequest(String input) {
@@ -205,7 +208,7 @@ public class ImplementationRequestService {
     if(input.strip().startsWith("/agent ")){try{var command=ExternalAgentCommandRequest.parse(input);return command.agent().equals("codex")&&command.action().equals("implement");}catch(IllegalArgumentException invalid){return false;}}
     String text=input.toLowerCase(Locale.ROOT).replaceAll("(?s)```.*?(?:```|$)|`[^`]*`|「[^」]*」|\"[^\"]*\"","");
     text=text.replaceAll("(?m)^\\s*>.*$","");
-    if(text.matches("(?s).*(do not|don't|never|翻訳|という|実装しない|実装不要|実装禁止|説明|example|translate|explain|how to).*"))return false;
+    if(negativeImplementationIntent(text) || text.matches("(?s).*(do not|don't|never|翻訳|という|実装しない|実装不要|実装禁止|説明|example|translate|explain|how to).*"))return false;
     return !text.contains("claude")&&text.matches("(?s).*(実装(?:を)?(?:して|お願い|依頼)|^implement\\b|\\bimplement\\b.{0,80}(please|codex)|(?:please|ask|use|have).{0,80}\\bimplement\\b).*" );
   }
 }

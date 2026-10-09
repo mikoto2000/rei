@@ -356,6 +356,3 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     return safe.length() <= size ? safe : safe.substring(0, size);
   }
 }
-
-
-

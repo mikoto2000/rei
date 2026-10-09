@@ -175,6 +175,14 @@ class ImplementationRequestServiceTest {
     service=new ImplementationRequestService(repository,approvals,new ToolPermissionPolicy(new ToolPermissionProperties(true,Set.of(ActionCapability.values()),Set.of(),Map.of())),properties,delegation,Clock.offset(Clock.systemUTC(),Duration.ofMinutes(16)));
     assertEquals("REJECTED",service.prepare(run,specification,null,draft.requestId()).status());verifyNoInteractions(delegation);
   }
+  @Test void explicitJapaneseNegationNeverAuthorizesFreshOrClarifiedImplementation() {
+    var draft=service.prepare(run,null,null);
+    for(String text:List.of("対象 A.txt は実装をしないでください","Codex で A.txt を実装をしてはいけません","対象 A.txt は実装するな","いいえ、対象 A.txt の条件は確定しません")) {
+      run.setUserRequest(text);assertEquals("REJECTED",service.prepare(run,specification,null).status(),text);
+      assertEquals("REJECTED",service.prepare(run,specification,null,draft.requestId()).status(),text);
+    }
+    verifyNoInteractions(delegation);
+  }
   IsolatedImplementationService.Receipt receipt(String status){return new IsolatedImplementationService.Receipt("receipt","project","session",root.toString(),"tree","branch","base",status,"b".repeat(64),"commit",List.of("A.txt"),Map.of(),null,"diagnostic");}
   void git(String... args)throws Exception {var command=new ArrayList<String>(List.of("git","-c","user.name=Fixture","-c","user.email=fixture@example.invalid","-c","core.hooksPath="));command.addAll(List.of(args));var p=new ProcessBuilder(command).directory(root.toFile()).redirectErrorStream(true).start();assertTrue(p.waitFor(5,java.util.concurrent.TimeUnit.SECONDS));assertEquals(0,p.exitValue(),new String(p.getInputStream().readAllBytes()));}
 }

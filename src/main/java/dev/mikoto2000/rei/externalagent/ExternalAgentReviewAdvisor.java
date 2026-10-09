@@ -102,4 +102,3 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
   }
   @Override public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) { return response; }
 }
-

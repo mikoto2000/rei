@@ -135,3 +135,7 @@ Windows JDK25 で匿名 fixture の実 Codex E2E `LiveEnvironmentE2ETest#codexRe
 
 追加の回帰ケースは、自然言語の継続確認、slash target 保持、UNKNOWN 再承認、期限・Session・引用拒否、実 slash draft → 同じ隔離エンジンへの接続を含む。
 不足要件の継続修正後、関連8クラス44件を再実行し、失敗0・エラー0・skip0を確認した。実 slash draft から新しい人の回答 Run を経て隔離実装に接続するケースを含む。
+
+明示的な日本語の否定（実装をしない・実装をしてはいけません・実装するな・いいえ/確定しません）は、初回依頼と draft の確認回答の両方で拒否する。確認回答の誤った AUTHORIZED を assertion failure で再現した後、共通の否定検出で修正した。
+
+否定検出の修正後、最新 main の入力/取消との接点を含む関連11クラス74件が成功（失敗0・エラー0・skip0）。最新 main 統合直後の Windows 全回帰CIは4,147件成功・skip1。否定修正を含む最終コミットにも全回帰CIを実施する。

@@ -32,4 +32,3 @@ public record AcceptanceEvaluation(String criterionId,String status,List<String>
         "SERVER_EVIDENCE_LIMIT",receipt.patchHash())).toList();
   }
 }
-

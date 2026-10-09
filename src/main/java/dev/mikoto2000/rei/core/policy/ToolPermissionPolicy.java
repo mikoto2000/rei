@@ -61,5 +61,3 @@ public class ToolPermissionPolicy {
     return properties.autoApprove().containsAll(required)?PermissionDecision.AUTO_APPROVE:PermissionDecision.REQUIRE_APPROVAL;
   }
 }
-
-

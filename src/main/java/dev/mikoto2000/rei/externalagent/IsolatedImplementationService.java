@@ -138,4 +138,3 @@ public final class IsolatedImplementationService {
   }
   private static Receipt copy(Receipt r,String status,String hash,String commit,List<String> files,Map<String,String> snapshot,SelfPatchReviewService.Result verification,String diagnostic){return new Receipt(r.id(),r.projectId(),r.sessionId(),r.root(),r.worktree(),r.branch(),r.baseline(),status,hash,commit,files,snapshot,verification,diagnostic,r.provider());}
 }
-
