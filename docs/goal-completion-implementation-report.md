@@ -8,7 +8,7 @@
 | 1 | feature/goal-completion-gate | [#49](https://github.com/mikoto2000/rei/pull/49) | 必須/任意の名前付き条件、証拠とrevision、保存と受渡し、補助状態 |
 | 2 | feature/evidence-based-progress | [#50](https://github.com/mikoto2000/rei/pull/50) | 実本文・ファイルrevisionによる進捗、Web metadataと情報の区別、bounded ledger |
 | 3 | feature/goal-verification-repair | [#51](https://github.com/mikoto2000/rei/pull/51) | 失敗分類、現在の未達情報、同一予算からの修復用予約、独立再検証 |
-| 4 | feature/durable-goal-resume | Phase 4 PR | 永続待機、条件再確認、既存Scheduler / Checkpoint / Goalの継続 |
+| 4 | feature/durable-goal-resume | [#52](https://github.com/mikoto2000/rei/pull/52) | 永続待機、条件再確認、既存Scheduler / Checkpoint / Goalの継続 |
 
 ## テスト・マージ
 
@@ -18,9 +18,9 @@
 | 1 | 4036 / failure 0 / error 0 / skip 1 | 37865089908：同件数成功 | 9fe1e47740be1c9a77657024aeb989def59aa49c |
 | 2 | 4051 / failure 0 / error 0 / skip 1 | 37867365764：同件数成功 | c5bc9ab00221eb328f72ddc71557082c725b6b48 |
 | 3 | 4062 / failure 0 / error 0 / skip 1 | 37869865620：同件数成功 | db232aef9e1689f52c613efc0ae8125ec5439a5b |
-| 4 | 全件検証中 | CI 確認後にマージ | Phase 4 PR 履歴で確認 |
+| 4 | PR #52 の検証欄と target/phase4-full.log を参照 | [PR #52 checks](https://github.com/mikoto2000/rei/pull/52/checks) | PR #52 の merge commit を参照 |
 
-各 Phase で compile/runtime Red → Green を確認し、既存 assertion を弱めず関連・全件の回帰を行う。skip 1 は既存 PlantUML テスト。Phase 1 の CI で発覚した並列 token 波の競合と同一ReflectionサービスのSQLite競合を修正し、元の検証を維持した。Phase 4 の関連160件、Native Goal / Schedule / Checkpoint契約、React99件とtypecheckも確認する。全件ログは worktree の target/phaseN-full.log、CI は各 PR の checks。
+各 Phase で compile/runtime Red → Green を確認し、既存 assertion を弱めず関連・全件の回帰を行う。skip 1 は既存 PlantUML テスト。Phase 1 の CI で発覚した並列 token 波の競合と同一ReflectionサービスのSQLite競合を修正し、元の検証を維持した。Phase 4 の関連160件、Native Goal / Schedule / Checkpoint契約11件、React99件とtypecheckが成功した。全件ログは worktree の target/phaseN-full.log、CI は各 PR の checks。
 
 Phase 3 で検討したスレッドダンプとテストログの継続artifact uploadは、自動承認レビューが「機密情報を含み得る未承認の外部共有」として拒否した。追加していない。既存 CI の通常ログとローカルログで必要な検証を続行した。
 
