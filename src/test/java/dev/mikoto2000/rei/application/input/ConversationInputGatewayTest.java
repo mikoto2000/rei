@@ -47,6 +47,7 @@ class ConversationInputGatewayTest {
     assertThat(owners).extracting(AgentRunContext::conversationId).containsOnly(target.sessionId());
     assertThat(owners).extracting(AgentRunContext::requestSource).containsOnly(AgentRunContext.RequestSource.SHELL);
     assertThat(owners).extracting(AgentRunContext::mode).containsOnly(AgentRunContext.Mode.EXCLUSIVE);
+    assertThat(owners).extracting(AgentRunContext::voiceInput).containsExactly(false,true);
   }
   @Test void capturedSessionDoesNotFollowLaterSelectionOrWorkerThreadLocal() {
     ConversationTarget old;

@@ -60,7 +60,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     var state=active.get(context.runId());
     if(state==null) {
       state=PersistentCheckpoint.initial(UUID.randomUUID().toString(),context.projectId(),context.conversationId(),context.runId(),context.projectRoot(),request);
-      var initial=repository.fields(state);initial.put("mode",context.mode());initial.put("git",CheckpointReconciler.git(context.projectRoot()));state=repository.fields(initial);
+      var initial=repository.fields(state);initial.put("mode",context.mode());initial.put("voiceInput",context.voiceInput());initial.put("git",CheckpointReconciler.git(context.projectRoot()));state=repository.fields(initial);
       state=repository.save(state,0,"start:"+context.runId());
       if(!repository.acquire(state.projectId(),state.taskId(),context.runId()))throw new IllegalStateException("Task execution already owned");
       active.put(context.runId(),state);
@@ -140,7 +140,7 @@ public class PersistentCheckpointService implements AutoCloseable {
       CheckpointReconciler.active();var next=state.resume(run);var fields=repository.fields(next);fields.put("nextAction",result.nextAction());fields.put("reconciliation",result);
       next=repository.save(repository.fields(fields),state.revision(),"resume:"+run);
       active.put(run,next);
-      var context=new AgentRunContext(run,next.sessionId(),Path.of(next.projectRoot()),project,source,next.mode());
+      var context=new AgentRunContext(run,next.sessionId(),Path.of(next.projectRoot()),project,source,next.mode(),next.voiceInput());
       var registry=runs.getIfAvailable();var runner=lifecycle.getIfAvailable();
       if(registry!=null)registry.register(context);
       String prompt="保存されたタスク "+task+" を明示的に再開してください。まず現在の状態を確認し、未完了・未検証の工程を再計画してください。結果不明の副作用を再実行する前に、その項目だけをユーザーに確認してください。";

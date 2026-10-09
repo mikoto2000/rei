@@ -190,3 +190,5 @@ SSE bridge の破棄時には送信完了を最大 2 秒待機します。切断
 音声入力のPhase 2実装・検証状況は [voice-input-phase2.md](docs/voice-input-phase2.md) を参照してください。
 
 音声モデルの明示承認付き取得・オフライン再利用は [Phase 3](docs/voice-input-phase3.md) を参照してください。
+
+音声入力の確認・訂正、Windows endpoint 監視、推論隔離と復旧操作は [Phase 4](docs/voice-input-phase4.md) を参照してください。

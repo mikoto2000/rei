@@ -55,7 +55,7 @@ public final class ConversationInputGateway {
     if (!input.createdAt().isAfter(clock.instant().minus(retention)))
       throw new IllegalArgumentException("Input has expired");
     var context=lifecycle.submit(input.target().project(), input.target().sessionId(), input.text(),
-        AgentRunContext.RequestSource.SHELL, mode, run -> dispatch.accept(run, input.text()));
+        AgentRunContext.RequestSource.SHELL, mode, input.source()==InputSource.VOICE, run -> dispatch.accept(run, input.text()));
     accepted.put(input.inputId(), new Accepted(input, context, clock.instant()));
     return context;
   }

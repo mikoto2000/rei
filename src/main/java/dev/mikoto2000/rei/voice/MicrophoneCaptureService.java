@@ -4,6 +4,7 @@ public interface MicrophoneCaptureService {
   FrameSource open(AudioDevice device) throws Exception;
   interface FrameSource extends AutoCloseable {
     float[] readFrame() throws Exception;
+    default void checkHealth() throws Exception {}
     void close();
   }
 }

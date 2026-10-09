@@ -8,6 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class VoiceProperties {
   private String bundleDirectory=ReiDataDirectory.current().resolve("voice").toString();
   private String deviceId;
+  private boolean confirmation;
   private volatile VoiceSettings settings=VoiceSettings.defaults();
   public VoiceSettings settings() { return settings; }
 }

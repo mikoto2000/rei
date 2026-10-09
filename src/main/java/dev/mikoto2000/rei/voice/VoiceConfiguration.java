@@ -7,10 +7,21 @@ import dev.mikoto2000.rei.application.session.ShellConversationService;
 @Configuration(proxyBeanMethods=false)
 @EnableConfigurationProperties(VoiceProperties.class)
 public class VoiceConfiguration {
-  @Bean AudioDeviceService audioDeviceService(VoiceProperties properties) {
-    var devices=new AudioDeviceService(); devices.restoreSelection(properties.getDeviceId()); return devices;
+  @Bean AudioDeviceService audioDeviceService(VoiceProperties properties,VoiceEventPublisher events) {
+    var devices=new AudioDeviceService();devices.restoreSelection(properties.getDeviceId());
+    events.subscribe(event->{
+      if(event.type()==VoiceEventPublisher.Type.DEVICE_CHANGED||event.type()==VoiceEventPublisher.Type.CAPTURE_RESUMED||event.type()==VoiceEventPublisher.Type.CAPTURE_FAILED) {
+        devices.invalidateSelection();properties.setDeviceId(null);
+      }
+    });return devices;
   }
   @Bean VoiceEventPublisher voiceEventPublisher() { return new VoiceEventPublisher(); }
+  @Bean WindowsMicrophoneMonitor windowsMicrophoneMonitor() {
+    var endpoints=new WindowsAudioEndpoints();return new WindowsMicrophoneMonitor(endpoints::captureEndpoints);
+  }
+  @Bean VoiceDeliveryService voiceDeliveryService(ShellConversationService shell,Clock clock,VoiceEventPublisher events,VoiceProperties properties) {
+    var delivery=new VoiceDeliveryService(shell,clock,events);delivery.setConfirmation(properties.isConfirmation());return delivery;
+  }
   @Bean(destroyMethod="close") HttpsVoiceAssetTransport voiceAssetTransport() {return new HttpsVoiceAssetTransport();}
   @Bean(destroyMethod="close") VoiceModelManager voiceModelManager(VoiceProperties properties,HttpsVoiceAssetTransport transport,VoiceEventPublisher events) {
     return new VoiceModelManager(Path.of(properties.getBundleDirectory()),VoiceModelManifest.pinned(),transport,status -> {
@@ -21,9 +32,12 @@ public class VoiceConfiguration {
   @Bean(destroyMethod="close") SherpaBackendFactory sherpaBackendFactory(VoiceModelManager models) {
     return new SherpaBackendFactory(()-> {try{return models.readyDirectory();}catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}});
   }
+  @Bean(destroyMethod="close") IsolatedVoiceBackendFactory isolatedVoiceBackendFactory(VoiceModelManager models) {
+    return new IsolatedVoiceBackendFactory(()->{try{return models.readyDirectory();}catch(java.io.IOException e){throw new java.io.UncheckedIOException(e);}});
+  }
   @Bean(destroyMethod="close") VoiceInputCoordinator voiceInputCoordinator(
-      SherpaBackendFactory backend,AudioDeviceService devices,VoiceEventPublisher events,
-      ShellConversationService conversations,Clock clock) {
-    return new VoiceInputCoordinator(new JavaSoundMicrophoneCapture(),backend,conversations::submit,events,clock);
+      IsolatedVoiceBackendFactory backend,VoiceEventPublisher events,
+      VoiceDeliveryService delivery,WindowsMicrophoneMonitor monitor,Clock clock) {
+    return new VoiceInputCoordinator(new GuardedMicrophoneCapture(new JavaSoundMicrophoneCapture(),monitor),backend,delivery::accept,events,clock,delivery::targetIsCurrent,System::nanoTime);
   }
 }

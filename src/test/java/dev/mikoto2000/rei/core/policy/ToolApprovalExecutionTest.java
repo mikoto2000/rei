@@ -23,10 +23,12 @@ import reactor.core.publisher.Flux;
 @Tag("integration")
 class ToolApprovalExecutionTest {
   @TempDir Path dir;
-  @Test void resumedChatExecutesExactApprovedCallbackOnce() {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
+  void resumedChatExecutesExactApprovedCallbackOnce(boolean voice) {
     Clock clock=Clock.systemUTC();var events=new ArrayList<AgentEvent>();
     var repository=new ToolApprovalRepository(new DriverManagerDataSource("jdbc:sqlite:"+dir.resolve("approvals.db")),clock);
-    var guard=new ToolPermissionGuard(new ToolPermissionPolicy(new ToolPermissionProperties(true,Set.of(),Set.of(),Map.of())),new AgentEventFactory(clock),events::add);
+    var guard=new ToolPermissionGuard(new ToolPermissionPolicy(new ToolPermissionProperties(!voice,Set.of(),Set.of(),Map.of())),new AgentEventFactory(clock),events::add);
     guard.setApprovals(repository);
     var modelCalls=new AtomicInteger();var effects=new AtomicInteger();
     var delegate=new ChatModel() {
@@ -46,7 +48,7 @@ class ToolApprovalExecutionTest {
       modelCalls.set(0);
       var budget=new OutputLimitRunBudget(2,5);budget.tryConsumeLlmCall();
       var context=new RunExecutionContext("run"+attempt,budget,new ProgressEvaluator(dir),new AgentEventFactory(clock),events::add);
-      context.setRunContext(new AgentRunContext("run"+attempt,"session",dir,"project"));context.setToolPermissionGuard(guard);
+      var owner=new AgentRunContext("run"+attempt,"session",dir,"project");context.setRunContext(voice?owner.asVoiceInput():owner);context.setToolPermissionGuard(guard);
       var prompt=new Prompt("write",ToolCallingChatOptions.builder().toolCallbacks(callback).toolContext(Map.of(RunExecutionContext.KEY,context)).build());
       if(attempt==1)assertDoesNotThrow(()->model.stream(prompt).blockLast());
       else assertThrows(RuntimeException.class,()->model.stream(prompt).blockLast());
