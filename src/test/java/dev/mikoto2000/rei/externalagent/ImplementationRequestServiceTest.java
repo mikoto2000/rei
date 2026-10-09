@@ -124,6 +124,10 @@ class ImplementationRequestServiceTest {
     policy(Set.of(ActionCapability.READ),Set.of(),true);var prepared=service.prepare(run,specification,null);approvals.decide("project",approvals.list("project").getFirst().id(),false);
     policy(Set.of(ActionCapability.values()),Set.of(),true);assertEquals("REJECTED",service.execute(run,prepared.requestId(),1,prepared.specificationSha256()).status());verifyNoInteractions(delegation);
   }
+  @Test void slashCommandTargetCannotBeSubstitutedByTheModel() throws Exception {
+    Files.writeString(root.resolve("B.txt"),"other");run.setUserRequest("/agent codex implement B.txt");
+    assertEquals("REJECTED",service.prepare(run,specification,null).status());verifyNoInteractions(delegation);
+  }
   IsolatedImplementationService.Receipt receipt(String status){return new IsolatedImplementationService.Receipt("receipt","project","session",root.toString(),"tree","branch","base",status,"b".repeat(64),"commit",List.of("A.txt"),Map.of(),null,"diagnostic");}
   void git(String... args)throws Exception {var command=new ArrayList<String>(List.of("git","-c","user.name=Fixture","-c","user.email=fixture@example.invalid","-c","core.hooksPath="));command.addAll(List.of(args));var p=new ProcessBuilder(command).directory(root.toFile()).redirectErrorStream(true).start();assertTrue(p.waitFor(5,java.util.concurrent.TimeUnit.SECONDS));assertEquals(0,p.exitValue(),new String(p.getInputStream().readAllBytes()));}
 }

@@ -101,3 +101,20 @@ UNKNOWN では既存 receipt を読み取る。base commit と terminal READY_FO
 Phase 1 は DTO/validator/hash、Phase 2 は SQLite claim と認可、Phase 3 は既存 worktree への接続・scope manifest、Phase 4 は patch-bound acceptance、Phase 5 は公開 callback とコマンド、Phase 6 は回帰・Windows/live検証・文書化。初期 Red は未実装 API の compile failure、後の review 修正では intent 誤認・draft未保存・UNKNOWN照合・同名 callback 認可回避を assertion failure で再現し、Green を確認した。
 
 Windows JDK25 で匿名 fixture の実 Codex E2E `LiveEnvironmentE2ETest#codexRequirementDrivenImplementation` を実行し、1件成功・失敗0・skip0（28.62秒）。有料モデルの通常単体テスト実行は行わず、live-e2e Profile と明示 environment opt-in に限定する。
+
+## 必須ケースの検証対応
+
+| 要求 | 主な検証 |
+| --- | --- |
+| 1〜5 構造化・自動許可・明示承認・要件伝達・保存 | ImplementationSpecificationTest / ImplementationRequestServiceTest / SpecificationDelegationIntegrationTest |
+| 6〜8 承認捏造・引数改変・リポジトリ命令 | ImplementationRequestServiceTest / ImplementationCallbackBoundaryTest |
+| 9 Project・Session・root | ImplementationRequestServiceTest / IsolatedImplementationServiceTest |
+| 10〜12 範囲外・未対応操作・opt-in | SpecificationDelegationIntegrationTest / ImplementationSpecificationTest / ImplementationProposalTest / ImplementationRequestServiceTest |
+| 13〜14 重複・原子的 claim | ImplementationRequestRepositoryTest / ImplementationRequestServiceTest の concurrent service case |
+| 15〜16 取消・タイムアウト | SpecificationDelegationIntegrationTest の cancellation / provider timeout / administrator test timeout と既存 process / SelfPatchReview tests |
+| 17〜19 再起動・UNKNOWN・再承認 | ImplementationRequestServiceTest / ImplementationRequestRepositoryTest |
+| 20〜25 未確認・成功申告・証拠不足・失敗区別・保持・別パッチ | AcceptanceEvaluationTest / SpecificationDelegationIntegrationTest / ImplementationRequestServiceTest |
+| 26〜28 構文・不足要件・共通接続 | ImplementationCommandTest / ImplementationToolsTest / SpecificationDelegationIntegrationTest / slash target substitution case |
+| 29〜30 review/fix・既存マージ | 既存 ExternalAgent / Codex / Claude tests と ImplementationDelegationIntegrationTest / IsolatedImplementationServiceTest |
+
+追加の検証は同名の任意 callback による認可迂回、人の拒否後の Policy 変更、承認期限切れ、Windows junction、terminal receipt 保存競合、スラッシュ対象差し替えを含む。意味評価の evidence は親 LLM の観察であり、客観的 test を装わない。

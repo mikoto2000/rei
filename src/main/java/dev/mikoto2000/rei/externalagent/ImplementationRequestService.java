@@ -42,6 +42,11 @@ public class ImplementationRequestService {
           run.userRequest().strip().startsWith("/agent ")?"SLASH_COMMAND":"NATURAL_LANGUAGE","codex","",previousRequestId,draft,"","NOT_EVALUATED",null,"NEEDS_CLARIFICATION",null,null,now,now));}
       return new Prepared(id,1,null,"NEEDS_CLARIFICATION","Confirm detailed requirements before execution",specification==null?null:specification.target(),List.of(),List.of(missing.getMessage()),false,List.of(),"Ask the user to confirm objective, instructions, existing target, allowedPaths and acceptanceCriteria");
     }
+    if(run.userRequest().strip().startsWith("/agent ")) {
+      var command=ExternalAgentCommandRequest.parse(run.userRequest());
+      if(!ExternalAgentRequest.resolveTarget(owner.projectRoot(),command.target()).equals(ExternalAgentRequest.resolveTarget(owner.projectRoot(),validated.specification().target())))
+        return refused("Specification target differs from the actual slash command target");
+    }
     if(previousRequestId!=null) {
       var previous=owned(owner,previousRequestId);
       if(!Set.of("UNKNOWN","EXECUTING","VERIFYING").contains(previous.executionStatus()))throw new IllegalArgumentException("Retry link requires an unknown original request");
