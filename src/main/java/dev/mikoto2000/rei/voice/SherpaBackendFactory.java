@@ -36,7 +36,10 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
       } catch (NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
     }
   }
-  public synchronized VoiceBackend open(VoiceSettings settings) throws Exception {
+  public synchronized VoiceBackend open(VoiceSettings settings) throws Exception {return openRole(settings,true,true);}
+  public synchronized VoiceBackend openVad(VoiceSettings settings) throws Exception {return openRole(settings,true,false);}
+  public synchronized VoiceBackend openRecognizer(VoiceSettings settings) throws Exception {return openRole(settings,false,true);}
+  private VoiceBackend openRole(VoiceSettings settings,boolean withVad,boolean withRecognizer) throws Exception {
     if (closing) throw new IllegalStateException("Voice runtime closed");
     Path root = directory.get().toAbsolutePath().normalize();
     verify(root);
@@ -44,8 +47,9 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
         root.resolve("native.jar").toUri().toURL()},ClassLoader.getPlatformClassLoader());
     if (!loader.getUnnamedModule().isNativeAccessEnabled())
       throw new IllegalStateException("Start Java with --enable-native-access=ALL-UNNAMED before /voice on");
-    Object vad=null;
+    Object vad=null,recognizer=null;
     try {
+      if(withVad) {
       var silero=builder("SileroVadModelConfig");
       set(silero,"setModel",root.resolve("models/silero_vad.onnx").toString());
       set(silero,"setThreshold",settings.threshold());
@@ -58,6 +62,8 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
       set(vadConfig,"setSampleRate",VoiceSettings.SAMPLE_RATE);
       set(vadConfig,"setNumThreads",1); set(vadConfig,"setProvider","cpu"); set(vadConfig,"setDebug",false);
       vad=construct("Vad",call(vadConfig,"build"));
+      }
+      if(withRecognizer) {
       var whisper=builder("OfflineWhisperModelConfig");
       set(whisper,"setEncoder",root.resolve("models/base-encoder.int8.onnx").toString());
       set(whisper,"setDecoder",root.resolve("models/base-decoder.int8.onnx").toString());
@@ -67,22 +73,25 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
       set(model,"setNumThreads",1); set(model,"setProvider","cpu"); set(model,"setDebug",false);
       var config=builder("OfflineRecognizerConfig"); set(config,"setOfflineModelConfig",call(model,"build"));
       set(config,"setDecodingMethod","greedy_search");
-      Object recognizer=construct("OfflineRecognizer",call(config,"build"));
+      recognizer=construct("OfflineRecognizer",call(config,"build"));
+      }
+      Object decoder=recognizer;
       Object detector=vad; users++;
       return new VoiceBackend(new VoiceActivityDetector() {
-        public float probability(float[] frame) throws Exception { VoicePcm.validateFrame(frame); return ((Number)call(detector,"compute",frame)).floatValue(); }
-        public void close() { try { release(detector); } finally { userReleased(); } }
+        public float probability(float[] frame) throws Exception { if(detector==null)throw new IllegalStateException("VAD is not loaded in this worker"); VoicePcm.validateFrame(frame); return ((Number)call(detector,"compute",frame)).floatValue(); }
+        public void close() { try { if(detector!=null)release(detector); } finally { userReleased(); } }
       },new SpeechRecognizer() {
         public String recognize(SpeechSegment segment) throws Exception {
-          Object stream=call(recognizer,"createStream");
+          if(decoder==null)throw new IllegalStateException("ASR is not loaded in this worker");
+          Object stream=call(decoder,"createStream");
           try {
             call(stream,"acceptWaveform",segment.samples(),VoiceSettings.SAMPLE_RATE);
-            call(recognizer,"decode",stream);
-            return (String)call(call(recognizer,"getResult",stream),"getText");
+            call(decoder,"decode",stream);
+            return (String)call(call(decoder,"getResult",stream),"getText");
           } finally { release(stream); }
         }
         public void close() {
-          release(recognizer);
+          if(decoder!=null)release(decoder);
         }
       });
     } catch (Exception | LinkageError e) {

@@ -5,7 +5,14 @@ import java.util.Objects;
 
 /** Identity and location are captured before dispatch, never resolved at completion. */
 public record AgentRunContext(String runId, String conversationId, Path projectRoot, String projectId,
-    RequestSource requestSource, Mode mode) {
+    RequestSource requestSource, Mode mode, boolean voiceInput) {
+  /** Speech provenance adds recognition safety; RequestSource remains the caller's execution authority. */
+  public AgentRunContext(String runId,String conversationId,Path projectRoot,String projectId,RequestSource requestSource,Mode mode) {
+    this(runId,conversationId,projectRoot,projectId,requestSource,mode,false);
+  }
+  public AgentRunContext asVoiceInput() {
+    return new AgentRunContext(runId,conversationId,projectRoot,projectId,requestSource,mode,true);
+  }
   public enum RequestSource { SHELL, WEB }
   public enum Mode { EXCLUSIVE, READ_ONLY, CONVERSATION }
 

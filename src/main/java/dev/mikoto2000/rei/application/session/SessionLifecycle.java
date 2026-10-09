@@ -45,6 +45,10 @@ public final class SessionLifecycle {
   }
   public AgentRunContext submit(ProjectContext project, String sessionId, String message,
       AgentRunContext.RequestSource source, AgentRunContext.Mode mode, Consumer<AgentRunContext> enqueue) {
+    return submit(project,sessionId,message,source,mode,false,enqueue);
+  }
+  public AgentRunContext submit(ProjectContext project,String sessionId,String message,
+      AgentRunContext.RequestSource source,AgentRunContext.Mode mode,boolean voiceInput,Consumer<AgentRunContext> enqueue) {
     if (message == null || message.isBlank()) throw new IllegalArgumentException("message is required");
     // All entry points sharing this repository serialize validation, metadata update and FIFO admission.
     synchronized (repository) {
@@ -54,7 +58,7 @@ public final class SessionLifecycle {
         metadata = newMetadata(project, message, now);
         sessionId = metadata.sessionId();
       } else metadata = validate(sessionId, project.id()).touched(now);
-      var context = new AgentRunContext(UUID.randomUUID().toString(), sessionId, project.root(), project.id(), source, mode);
+      var context = new AgentRunContext(UUID.randomUUID().toString(), sessionId, project.root(), project.id(), source, mode, voiceInput);
       repository.accept(metadata, () -> enqueue.accept(context));
       selected.accept(context);
       return context;

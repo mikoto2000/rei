@@ -17,6 +17,10 @@ public final class VoiceShellEventRenderer implements Consumer<VoiceEventPublish
       case RECOGNITION_FAILED -> "音声認識に失敗して停止しました";
       case RELEASE_FAILED -> "音声資源の解放に失敗しました";
       case MODEL_PROGRESS, MODEL_STATE -> "models: "+event.detail();
+      case REVIEW_REQUIRED -> "認識の確認待ち: "+event.detail()+"。/voice pending、/voice confirm ID [--text 訂正文] または /voice pending cancel ID";
+      case TARGET_CHANGED -> "選択Project/Sessionが変わったため停止しました。新しい送信先で /voice on を実行してください";
+      case CAPTURE_RESUMED -> "録音の長い中断/時刻変更を検出し、古い発話を破棄して停止しました。マイクを再選択してください";
+      case DEVICE_CHANGED -> "選択デバイスの状態が変わり停止しました。再接続後に一覧を確認して明示的に再選択してください";
       case DIAGNOSTIC_RESULT -> "診断結果（Agent送信なし）: "+event.detail();
     };
     output.println("[voice] "+text);output.flush();

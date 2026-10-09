@@ -51,7 +51,7 @@ public final class VoiceAcceptance {
       "--rei.embedding.enabled=false","--rei.activity.enabled=false","--rei.interest.enabled=false",
       "--rei.topic-generator.enabled=false","--rei.sound-notification.enabled=false",
       "--rei.memory.auto-sleep.enabled=false","--rei.today.enabled=false","--rei.task-manager.enabled=false",
-      "--spring.ai.mcp.client.enabled=false"};
+      "--spring.ai.mcp.client.enabled=false","--rei.voice.confirmation=false"};
     try(var context=app.run(settings)) {
       var diagnostics=new Diagnostics();
       var devices=context.getBean(AudioDeviceService.class);
@@ -63,15 +63,17 @@ public final class VoiceAcceptance {
       try(var scope=client.open();var notifications=projects.notificationsFollow(client)) {
         var conversations=context.getBean(ShellConversationService.class);
         var target=conversations.captureTarget();
-        var backend=context.getBean(SherpaBackendFactory.class);
+        var backend=context.getBean(IsolatedVoiceBackendFactory.class);
+        var delivery=context.getBean(VoiceDeliveryService.class);delivery.bind(client,target);
         var voice=new VoiceInputCoordinator(device -> {
-          var source=new JavaSoundMicrophoneCapture().open(device);
+          var source=new GuardedMicrophoneCapture(new JavaSoundMicrophoneCapture(),context.getBean(WindowsMicrophoneMonitor.class)).open(device);
           return new MicrophoneCaptureService.FrameSource() {
             public float[] readFrame() throws Exception {
               var frame=source.readFrame();
               if(frame!=null)diagnostics.frame(frame);
               return frame;
             }
+            public void checkHealth() throws Exception{source.checkHealth();}
             public void close(){source.close();}
           };
         }, settingsValue -> {
@@ -90,7 +92,7 @@ public final class VoiceAcceptance {
             }
             public void close(){}
           });
-        }, conversations::submit,context.getBean(VoiceEventPublisher.class),context.getBean(java.time.Clock.class));
+        }, delivery::accept,context.getBean(VoiceEventPublisher.class),context.getBean(java.time.Clock.class),delivery::targetIsCurrent,System::nanoTime);
         var completed=new CountDownLatch(1);
         var failed=new AtomicBoolean();
         var output=new ShellEventOutput(){
@@ -122,7 +124,7 @@ public final class VoiceAcceptance {
           long stopDeadline=System.nanoTime()+Duration.ofSeconds(15).toNanos();
           while(voice.state()==VoiceInputCoordinator.State.STOPPING && System.nanoTime()<stopDeadline)Thread.sleep(50);
           if(voice.state()!=VoiceInputCoordinator.State.OFF)throw new IllegalStateException("Voice did not stop cleanly: "+voice.state());
-          diagnostics.print();
+          diagnostics.print();if(backend.liveWorkers()!=0)throw new IllegalStateException("Voice inference workers remain after OFF");
           System.out.println("ACCEPTANCE MIC OFF: waiting for existing Agent response");
           var turns=context.getBean(ConversationTurnStore.class);
           if(turns.read(target.sessionId()).isEmpty())throw new IllegalStateException("No automatic voice input reached the existing Agent");

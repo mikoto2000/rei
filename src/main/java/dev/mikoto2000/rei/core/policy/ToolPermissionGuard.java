@@ -30,7 +30,7 @@ public class ToolPermissionGuard {
     boolean matching=child!=null&&parent!=null&&child.conversationId().startsWith("subagent:")
         &&!parent.conversationId().startsWith("subagent:")&&parent.projectId()!=null
         &&parent.projectId().equals(child.projectId())&&parent.projectRoot().equals(child.projectRoot())
-        &&parent.requestSource()==child.requestSource()
+        &&parent.requestSource()==child.requestSource()&&parent.voiceInput()==child.voiceInput()
         &&policy.capabilities(tool).stream().allMatch(capability->capability==ActionCapability.READ||capability==ActionCapability.NETWORK_READ);
     check(tool,input,child,matching?parent:null);
   }
@@ -38,6 +38,10 @@ public class ToolPermissionGuard {
     boolean restricted = owner != null && (owner.mode() == AgentRunContext.Mode.CONVERSATION
         || owner.mode() == AgentRunContext.Mode.READ_ONLY && !ToolPermissionPolicy.intrinsicallyReadOnly(tool));
     var decision=restricted ? PermissionDecision.DENY : policy.evaluate(tool);
+    // Recognized text is not a calibrated confidence/intent guarantee. Retain the existing
+    // deny decision, and require the existing exact-input one-use approval for side effects.
+    if(decision==PermissionDecision.AUTO_APPROVE&&owner!=null&&owner.voiceInput()
+        &&!ToolPermissionPolicy.intrinsicallyReadOnly(tool))decision=PermissionDecision.REQUIRE_APPROVAL;
     if(decision==PermissionDecision.AUTO_APPROVE)return;
     String request=null;
     if(decision==PermissionDecision.REQUIRE_APPROVAL && approvals!=null && approvalOwner!=null && approvalOwner.projectId()!=null) {

@@ -16,6 +16,9 @@ public final class VoiceInputCoordinator implements AutoCloseable {
   private final Consumer<ConversationInput> submit;
   private final VoiceEventPublisher events;
   private final Clock clock;
+  private final java.util.function.Predicate<ConversationTarget> selected;
+  private final java.util.function.LongSupplier ticks;
+  private record FrameStamp(long nanos,java.time.Instant at) {}
   private final ExecutorService supervisor = Executors.newSingleThreadExecutor(r -> daemon(r, "voice-supervisor"));
   private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor(r -> daemon(r, "voice-deadline"));
   private volatile State state = State.OFF;
@@ -27,7 +30,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     final AudioDevice device;
     final VoiceSettings settings;
     final boolean diagnostic;
-    volatile long lastFrameNanos = System.nanoTime();
+    volatile FrameStamp lastFrame;
     volatile ScheduledFuture<?> deadline;
     final VoiceInputQueue segments = new VoiceInputQueue();
     final CountDownLatch exited = new CountDownLatch(2);
@@ -45,6 +48,12 @@ public final class VoiceInputCoordinator implements AutoCloseable {
 
   public VoiceInputCoordinator(MicrophoneCaptureService capture, VoiceBackendFactory backends,
       Consumer<ConversationInput> submit, VoiceEventPublisher events, Clock clock) {
+    this(capture,backends,submit,events,clock,target->true,System::nanoTime);
+  }
+  public VoiceInputCoordinator(MicrophoneCaptureService capture,VoiceBackendFactory backends,
+      Consumer<ConversationInput> submit,VoiceEventPublisher events,Clock clock,
+      java.util.function.Predicate<ConversationTarget> selected,java.util.function.LongSupplier ticks) {
+    this.selected=Objects.requireNonNull(selected);this.ticks=Objects.requireNonNull(ticks);
     this.capture = Objects.requireNonNull(capture); this.backends = Objects.requireNonNull(backends);
     this.submit = Objects.requireNonNull(submit); this.events = Objects.requireNonNull(events);
     this.clock = Objects.requireNonNull(clock);
@@ -98,42 +107,64 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     stopWorkers(run);
   }
   private void stopWorkers(Run run) {
-    if (run.source != null && run.captureClosed.compareAndSet(false, true)) {
-      try { run.source.close(); }
-      catch (RuntimeException e) { run.failed = true; events.publish(VoiceEventPublisher.Type.RELEASE_FAILED, "capture"); }
-      finally { run.captureReleased.countDown(); }
-    }
     if (run.captureThread != null) run.captureThread.interrupt();
     if (run.recognitionThread != null) run.recognitionThread.interrupt();
+    if (run.source != null && run.captureClosed.compareAndSet(false, true)) {
+      // A broken audio driver must not hold the Shell caller. Only one Run can remain
+      // active, and backend cleanup still waits for both workers and this real release.
+      daemon(()->{
+        try { run.source.close(); }
+        catch (RuntimeException | LinkageError e) { run.failed = true; events.publish(VoiceEventPublisher.Type.RELEASE_FAILED, "capture"); }
+        finally { run.captureReleased.countDown(); }
+      },"voice-microphone-release").start();
+    }
   }
-  private void fail(Run run, VoiceEventPublisher.Type code) {
+  private void fail(Run run, VoiceEventPublisher.Type code) {stop(run,code,true);}
+  private void stop(Run run,VoiceEventPublisher.Type code,boolean failed) {
     synchronized (guard) {
       if (run.stop) return;
-      run.failed = true; run.stop = true; run.segments.clear(); change(State.STOPPING);
+      run.failed |= failed; run.stop = true; run.segments.clear(); change(State.STOPPING);
     }
     events.publish(code, "voice stopped");
     stopWorkers(run);
   }
+  private boolean selected(Run run) {
+    try{return selected.test(run.target);}catch(RuntimeException unavailable){return false;}
+  }
+  private boolean stale(Run run) {
+    var stamp=run.lastFrame;if(stamp==null)return false;
+    long wall=java.time.Duration.between(stamp.at(),clock.instant()).toMillis();
+    return ticks.getAsLong()-stamp.nanos()>TimeUnit.SECONDS.toNanos(5)||wall>5000||wall < -5000;
+  }
   private void supervise(Run run) {
     boolean captureStarted = false, recognitionStarted = false;
     try {
+      if(!selected(run)){stop(run,VoiceEventPublisher.Type.TARGET_CHANGED,false);return;}
       run.backend = backends.open(run.settings);
       if (run.stop) return;
+      if(!selected(run)){stop(run,VoiceEventPublisher.Type.TARGET_CHANGED,false);return;}
       run.source = capture.open(run.device);
       if (run.source == null) throw new IllegalStateException("Capture source unavailable");
       synchronized (guard) {
         if (run.stop) return;
         run.captureThread = daemon(() -> captureLoop(run), "voice-capture");
         run.recognitionThread = daemon(() -> recognizeLoop(run), "voice-recognition");
-        run.lastFrameNanos = System.nanoTime();
+        run.lastFrame = new FrameStamp(ticks.getAsLong(),clock.instant());
         run.captureThread.start(); captureStarted = true;
         run.recognitionThread.start(); recognitionStarted = true;
         change(State.LISTENING);
         if (run.diagnostic) run.deadline = timer.schedule(() -> stopDiagnostic(run), 20, TimeUnit.SECONDS);
       }
       while (!run.exited.await(250, TimeUnit.MILLISECONDS)) {
-        if (!run.stop && System.nanoTime()-run.lastFrameNanos > TimeUnit.SECONDS.toNanos(5))
-          fail(run, VoiceEventPublisher.Type.CAPTURE_FAILED);
+        if(!run.stop&&!selected(run)){stop(run,VoiceEventPublisher.Type.TARGET_CHANGED,false);continue;}
+        if(!run.stop) {
+          try{run.source.checkHealth();}catch(Exception healthFailure){fail(run,VoiceEventPublisher.Type.DEVICE_CHANGED);continue;}
+          if(stale(run)) {
+            var stamp=run.lastFrame;
+            fail(run,ticks.getAsLong()-stamp.nanos()>TimeUnit.SECONDS.toNanos(5)
+              ?VoiceEventPublisher.Type.CAPTURE_FAILED:VoiceEventPublisher.Type.CAPTURE_RESUMED);
+          }
+        }
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -174,8 +205,9 @@ public final class VoiceInputCoordinator implements AutoCloseable {
         var frame = run.source.readFrame();
         if (run.stop) break;
         if (frame == null) { fail(run, VoiceEventPublisher.Type.CAPTURE_FAILED); break; }
+        if(stale(run)){fail(run,VoiceEventPublisher.Type.CAPTURE_RESUMED);break;}
         VoicePcm.validateFrame(frame);
-        run.lastFrameNanos = System.nanoTime();
+        run.lastFrame = new FrameStamp(ticks.getAsLong(),clock.instant());
         var decision = assembler.accept(frame, run.backend.vad().probability(frame));
         switch (decision.reason()) {
           case COMPLETED -> {
@@ -201,6 +233,8 @@ public final class VoiceInputCoordinator implements AutoCloseable {
         var segment = run.segments.poll(200, TimeUnit.MILLISECONDS);
         if (segment == null) continue;
         var result = SpeechResultFilter.filter(run.backend.recognizer().recognize(segment));
+        if(!selected(run)){stop(run,VoiceEventPublisher.Type.TARGET_CHANGED,false);continue;}
+        if(stale(run)){fail(run,VoiceEventPublisher.Type.CAPTURE_RESUMED);continue;}
         synchronized (guard) {
           if (run.stop || active != run) continue;
           if (result.isEmpty()) { events.publish(VoiceEventPublisher.Type.RESULT_REJECTED, "recognition dropped"); continue; }

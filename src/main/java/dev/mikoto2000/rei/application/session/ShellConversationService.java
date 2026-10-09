@@ -49,6 +49,22 @@ public final class ShellConversationService {
       return new dev.mikoto2000.rei.application.input.ConversationTarget(projects.currentContext(),currentSessionId());
     }
   }
+  public dev.mikoto2000.rei.core.project.ProjectClient captureClient(){return projects.currentClient();}
+  public boolean isSelected(dev.mikoto2000.rei.core.project.ProjectClient client,dev.mikoto2000.rei.application.input.ConversationTarget target) {
+    try {
+      var selection=projects.selectionOf(client);
+      return selection.project().id().equals(target.project().id())&&selection.project().root().equals(target.project().root())
+          &&java.util.Objects.equals(selection.conversationId(),target.sessionId());
+    }catch(RuntimeException unavailable){return false;}
+  }
+  /** Check selection and admit the voice envelope under the same client lock as Session changes. */
+  public AgentRunContext submitSelectedVoice(dev.mikoto2000.rei.core.project.ProjectClient client,dev.mikoto2000.rei.application.input.ConversationInput input) {
+    if(client==null||input.source()!=dev.mikoto2000.rei.application.input.InputSource.VOICE)throw new IllegalArgumentException("Captured VOICE client required");
+    synchronized(client) {
+      if(!isSelected(client,input.target()))throw new IllegalStateException("Voice target changed; restart voice for the selected Session");
+      return submit(input);
+    }
+  }
   public AgentRunContext submit(dev.mikoto2000.rei.application.input.ConversationInput input) {
     return gateway.submit(input,AgentRunContext.Mode.EXCLUSIVE);
   }

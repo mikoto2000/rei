@@ -71,6 +71,11 @@ public class ProjectService {
   public Path startupDirectory() { return startupDirectory; }
   public ProjectClient newClient() { return new ProjectClient(this, startupDirectory); }
   public ProjectClient currentClient() { return client(); }
+  /** Snapshot a specifically captured client's selection without worker ThreadLocal inheritance. */
+  public NotificationSelection selectionOf(ProjectClient selected) {
+    if(selected==null||selected.service!=this)throw new IllegalArgumentException("Foreign project client");
+    synchronized(selected){return new NotificationSelection(registry.resolve(selected.selection.get()),selected.sessionId);}
+  }
   public String currentSessionId() { synchronized (client()) { return client().sessionId; } }
   public void selectSession(String sessionId) { synchronized (client()) { client().sessionId = sessionId; } }
   public static String selectedShellSession() {

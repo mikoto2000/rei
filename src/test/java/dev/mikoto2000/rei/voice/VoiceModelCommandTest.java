@@ -58,4 +58,15 @@ class VoiceModelCommandTest {
       assertThat(manager.status().state()).isEqualTo(VoiceModelManager.State.CANCELLED);
     }
   }
+  @Test void explicitVerifyChecksLocalHashesWithoutDownloadingAndRejectsCorruption() throws Exception {
+    var calls=new AtomicInteger();var m=manifest();var output=new StringWriter();
+    try(var manager=new VoiceModelManager(root,m,(a,p,c,progress)->{calls.incrementAndGet();java.nio.file.Files.write(p,data);},s->{})) {
+      var command=command(voice(),mock(ShellConversationService.class),manager,output);
+      assertThat(command.execute("models","verify")).isEqualTo(2);assertThat(calls).hasValue(0);
+      manager.install(m.id());long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(3);while(manager.busy()&&System.nanoTime()<deadline)Thread.sleep(5);
+      assertThat(command.execute("models","verify")).isZero();assertThat(calls).hasValue(1);
+      java.nio.file.Files.writeString(manager.readyDirectory().resolve("model"),"corrupt");
+      assertThat(command.execute("models","verify")).isEqualTo(2);assertThat(calls).hasValue(1);
+    }
+  }
 }

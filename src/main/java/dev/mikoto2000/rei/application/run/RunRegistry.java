@@ -18,11 +18,11 @@ public final class RunRegistry implements AutoCloseable {
       .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
   private record StoredRun(int version,String runId,String sessionId,String root,String projectId,
       AgentRunContext.RequestSource source,AgentRunContext.Mode mode,RunStatus status,Instant startedAt,Instant completedAt,RunFailure failure,
-      long ownerPid,String ownerStart,String ownerInstance,RunSnapshot.ChildOrigin childOrigin) {
+      long ownerPid,String ownerStart,String ownerInstance,RunSnapshot.ChildOrigin childOrigin,boolean voiceInput) {
     static StoredRun of(RunSnapshot value,String instance) {
       var c=value.context();return new StoredRun(1,c.runId(),c.conversationId(),c.projectRoot().toString(),c.projectId(),
           c.requestSource(),c.mode(),value.status(),value.startedAt(),value.completedAt(),value.failure(),
-          ProcessHandle.current().pid(),ProcessHandle.current().info().startInstant().map(Instant::toString).orElse(null),instance,value.childOrigin());
+          ProcessHandle.current().pid(),ProcessHandle.current().info().startInstant().map(Instant::toString).orElse(null),instance,value.childOrigin(),c.voiceInput());
     }
     boolean ownerAlive() {
       return ownerPid>0 && ownerStart!=null && ProcessHandle.of(ownerPid).filter(ProcessHandle::isAlive)
@@ -30,7 +30,7 @@ public final class RunRegistry implements AutoCloseable {
     }
     RunSnapshot snapshot() {
       if(version!=1 || status==null)throw new IllegalStateException("Unsupported Run schema");
-      return new RunSnapshot(new AgentRunContext(runId,sessionId,java.nio.file.Path.of(root),projectId,source,mode),status,startedAt,completedAt,failure,childOrigin);
+      return new RunSnapshot(new AgentRunContext(runId,sessionId,java.nio.file.Path.of(root),projectId,source,mode,voiceInput),status,startedAt,completedAt,failure,childOrigin);
     }
   }
   public RunRegistry(Clock clock) { this(clock,null); }

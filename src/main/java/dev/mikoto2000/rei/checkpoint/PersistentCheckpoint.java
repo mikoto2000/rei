@@ -11,7 +11,7 @@ public record PersistentCheckpoint(int schemaVersion,long revision,Instant creat
     List<String> acceptanceCriteria,List<Map<String,Object>> plan,String currentStep,
     String status,String interruptionReason,String nextAction,List<Evidence> evidence,
     List<Operation> operations,Map<String,String> files,Map<String,String> git,List<ProcessRef> processes,
-    List<String> blockers,CheckpointReconciler.Result reconciliation,dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode) {
+    List<String> blockers,CheckpointReconciler.Result reconciliation,dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode,boolean voiceInput) {
   public PersistentCheckpoint {
     mode=mode==null?dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE:mode;
     if(schemaVersion<1||revision<0||createdAt==null||taskId==null||taskId.isBlank()||projectId==null||projectId.isBlank()
@@ -20,6 +20,17 @@ public record PersistentCheckpoint(int schemaVersion,long revision,Instant creat
     instructions=List.copyOf(instructions);acceptanceCriteria=List.copyOf(acceptanceCriteria);
     plan=plan.stream().map(Map::copyOf).toList();evidence=List.copyOf(evidence);operations=List.copyOf(operations);
     files=Map.copyOf(files);git=Map.copyOf(git);processes=List.copyOf(processes);blockers=List.copyOf(blockers);
+  }
+  public PersistentCheckpoint(int schemaVersion,long revision,Instant createdAt,String taskId,
+      String projectId,String projectRoot,String sessionId,String originalRunId,String runId,
+      String resumedFromRunId,Long resumedFromRevision,String request,List<String> instructions,
+      List<String> acceptanceCriteria,List<Map<String,Object>> plan,String currentStep,
+      String status,String interruptionReason,String nextAction,List<Evidence> evidence,
+      List<Operation> operations,Map<String,String> files,Map<String,String> git,List<ProcessRef> processes,
+      List<String> blockers,CheckpointReconciler.Result reconciliation,dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode) {
+    this(schemaVersion,revision,createdAt,taskId,projectId,projectRoot,sessionId,originalRunId,runId,
+      resumedFromRunId,resumedFromRevision,request,instructions,acceptanceCriteria,plan,currentStep,
+      status,interruptionReason,nextAction,evidence,operations,files,git,processes,blockers,reconciliation,mode,false);
   }
   public enum OperationStatus { PLANNED, STARTED, SUCCEEDED, FAILED, UNKNOWN }
   public PersistentCheckpoint(int schemaVersion,long revision,Instant createdAt,String taskId,
@@ -45,11 +56,11 @@ public record PersistentCheckpoint(int schemaVersion,long revision,Instant creat
   }
   public PersistentCheckpoint revision(long number) {
     return new PersistentCheckpoint(schemaVersion,number,Instant.now(),taskId,projectId,projectRoot,sessionId,originalRunId,runId,
-        resumedFromRunId,resumedFromRevision,request,instructions,acceptanceCriteria,plan,currentStep,status,interruptionReason,nextAction,evidence,operations,files,git,processes,blockers,reconciliation,mode);
+        resumedFromRunId,resumedFromRevision,request,instructions,acceptanceCriteria,plan,currentStep,status,interruptionReason,nextAction,evidence,operations,files,git,processes,blockers,reconciliation,mode,voiceInput);
   }
   public PersistentCheckpoint resume(String newRun) {
     return new PersistentCheckpoint(schemaVersion,revision,createdAt,taskId,projectId,projectRoot,sessionId,originalRunId,newRun,
         runId,revision,request,instructions,acceptanceCriteria,plan,currentStep,"RUNNING",null,nextAction,evidence,
-        operations.stream().map(o->o.status()==OperationStatus.STARTED?new Operation(o.toolCallId(),o.toolName(),OperationStatus.UNKNOWN,o.eventId(),o.runId()):o).toList(),files,git,processes,blockers,reconciliation,mode);
+        operations.stream().map(o->o.status()==OperationStatus.STARTED?new Operation(o.toolCallId(),o.toolName(),OperationStatus.UNKNOWN,o.eventId(),o.runId()):o).toList(),files,git,processes,blockers,reconciliation,mode,voiceInput);
   }
 }

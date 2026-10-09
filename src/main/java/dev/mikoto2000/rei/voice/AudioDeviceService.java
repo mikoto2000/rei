@@ -9,6 +9,7 @@ public final class AudioDeviceService {
   private volatile String selectedId;
   public AudioDeviceService() { this(AudioDeviceService::scan); }
   public AudioDeviceService(Supplier<List<AudioDevice>> catalog) { this.catalog = Objects.requireNonNull(catalog); }
+  public void invalidateSelection(){selectedId=null;}
   public void restoreSelection(String id) { selectedId=id; }
   public List<AudioDevice> devices() { return List.copyOf(catalog.get()); }
   public void select(String id) {
