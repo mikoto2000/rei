@@ -56,7 +56,7 @@ java --enable-native-access=ALL-UNNAMED -cp $cp VoicePoc devices
 java --enable-native-access=ALL-UNNAMED '-Dstdout.encoding=UTF-8' -cp $cp VoicePoc target/voice-poc/models path/to/japanese.wav
 ```
 
-WAVは最大60秒、Java Soundで16kHz signed PCM16 monoへ変換。VAD 0.5 / window512 / speech400ms / silence1200ms、CPU1thread、Whisper base multilingual INT8 / ja transcribe。VADは最後にflushするため、これはストリーミング無音確定レイテンシの受入試験ではない。最大発話時間の自動送信禁止など本番安全条件は後続で実装する。取得音声の永続保存・既存Agentへの送信は行わない。WAVモードはローカル音声ファイルを読んで認識結果を表示する。明示 `mic MODEL_DIR EXACT_DEVICE_NAME` はPCM16対応の同名が一つだけの場合に10秒取得する。タイマーでlineをcloseし録音上限も320000 bytesとする。取得後のVAD/ASRは同期であり、連続ハンズフリーの本番パイプラインではない。実行前に利用者が対象機器を選択する。
+WAVは最大60秒、Java Soundで16kHz signed PCM16 monoへ変換。VAD 0.5 / window512 / speech400ms / silence1200ms、CPU1thread、Whisper base multilingual INT8 / ja transcribe。VADは最後にflushするため、これはストリーミング無音確定レイテンシの受入試験ではない。最大発話時間の自動送信禁止など本番安全条件は後続で実装する。取得音声の永続保存・既存Agentへの送信は行わない。WAVモードはローカル音声ファイルを読んで認識結果を表示する。明示 `mic MODEL_DIR EXACT_DEVICE_NAME` はPCM16対応の同名が一つだけの場合に5秒の準備待ち後に20秒取得する。タイマーでlineをcloseし録音上限も640000 bytesとする。取得後のVAD/ASRは同期であり、連続ハンズフリーの本番パイプラインではない。実行前に利用者が対象機器を選択する。
 
 prepare.ps1 に固定URLとSHAを記録した。Whisper revision `bb53ee204431c90d314c1cc08d28d23e5b7927cc` のencoder/decoder/tokensを混在させない。不正JAR/モデルは利用しない。ローカル手動配置でもSHA照合は必須。
 
@@ -75,3 +75,5 @@ JNI JARをclasspathから除いた場合はUnsatisfiedLinkErrorで明示失敗�
 ユーザーは診断付き試験で全文を話したと確認した。このため断片認識を実機受入成功と扱わない。次回の切り分け用にline.start後の開始音と1秒ごとのpeak/RMS表示を追加した。開始音はOS設定により聞こえない場合がある。修正版の実機試験は未実施。
 
 開始音・秒単位診断付き試験: 159500 samples / 9.969秒、nonzero36614、peak0.000031 / RMS0.000015。全10区間のpeak/RMSも同値でほぼ無音（PCM16の1量子程度）。VAD produced no speech、終了1。ASRより前の取得音声に発話波形が確認できていない。開始音の可聴性・発話タイミング・Windows/VT-4入力経路は未確認で、原因は未確定。Phase0は未完了。
+
+準備5秒・取得20秒で再試験: 319500 samples / 19.969秒、nonzero279843、peak0.721222 / RMS0.095711。3segment（3.744 / 8.288 / 5.776秒）のすべてで「こんにちは、音声入力の動作を確認します。」を認識、decode585.1 / 689.2 / 568.0ms、終了0。録音ファイルは保存していない。指定実機の全文認識経路は確認できた。過去の無音・断片認識の原因は未確定だが、準備時間を設けた本試験では再現しなかった。少数試験であり精度・P95・長時間安定性の保証ではない。

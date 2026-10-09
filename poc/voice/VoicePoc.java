@@ -32,11 +32,13 @@ public final class VoicePoc {
     var line=(TargetDataLine)mixer.getLine(new DataLine.Info(TargetDataLine.class,FORMAT));
     var timer=java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
     try {
-      line.open(FORMAT);line.start();
-      System.out.println("CAPTURE READY: speak after the beep; 10 seconds; no audio file is written");
-      java.awt.Toolkit.getDefaultToolkit().beep();
-      timer.schedule(line::close,10,java.util.concurrent.TimeUnit.SECONDS);
-      var output=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[1024];int remaining=320000;
+      line.open(FORMAT);
+      System.out.println("Preparation: 5 seconds before capture");
+      Thread.sleep(5000);line.start();
+      System.out.println("CAPTURE READY: 20 seconds; repeat the test sentence; no audio file is written");
+
+      timer.schedule(line::close,20,java.util.concurrent.TimeUnit.SECONDS);
+      var output=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[1024];int remaining=640000;
       while(line.isOpen() && remaining>0) {
         int n=line.read(buffer,0,Math.min(remaining,buffer.length));if(n<=0)break;
         output.write(buffer,0,n);remaining-=n;
