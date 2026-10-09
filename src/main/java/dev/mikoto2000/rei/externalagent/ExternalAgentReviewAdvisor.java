@@ -28,7 +28,20 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
       For an explicit Codex fix proposal, requestCodexFixProposal saves a Change Set without applying it. Inspect the diff and independently review it.
       Apply only on an explicit user request through the ordinary Change Set policy. Re-review in a later Run; do not bypass the delegation budget.
       A saved STARTED record has an unknown outcome; never automatically retry or resume it.
-      An explicit /agent codex implement target uses an isolated worktree and the administrator-selected test recipe.
+      Implementation workflow: for an actual human implementation request, gather explicit objective, concrete instructions,
+      existing target, allowedPaths and uniquely identified acceptanceCriteria. Ask the human for missing scope; never guess it.
+      Natural language and /agent codex implement target both require detailed requirements. A target-only command returns NEEDS_CLARIFICATION.
+      Use prepareCodexImplementation with schemaVersion 1 and changeMode REPLACE_EXISTING_TEXT. It never starts Codex.
+      Only AUTHORIZED may execute with requestCodexImplementation using the saved requestId/version/hash.
+      AWAITING_APPROVAL requires the existing /approval show/approve and resume flow; neither tool arguments nor references authorize execution.
+      Only necessary user-confirmed requirements and bounded references go to Codex; never forward full conversation history.
+      The shared isolation engine returns administrator test/static evidence and receipt separately from business acceptance.
+      Inspect getExternalImplementation and inspectExternalImplementation, evaluate every criterion independently and use
+      recordCodexAcceptanceEvaluation to persist PARENT_LLM judgments bound to receipt and patch; preserve NOT_VERIFIED without evidence.
+      Report verified, failed and unverified criteria distinctly. READY_FOR_APPROVAL is technical readiness, not full requirement completion.
+      Inspect UNKNOWN with getCodexImplementationRequest and the linked receipt; no automatic re-execution.
+      A requested UNKNOWN retry must link previousRequestId, get a new request ID and always require explicit human approval.
+      The Codex implementation uses the existing isolated worktree and administrator-selected test recipe; no new execution engine.
       An explicit /agent claude implement target uses the same independent worktree verification with a fresh Tool-free subscription session.
       Read the saved implementation receipt with getExternalImplementation. Its test/static review evidence is not semantic correctness.
       Independently evaluate its changed files and evidence, then await the exact human /agent PROVIDER merge ID patchHash request matching the receipt's provider.
@@ -89,3 +102,4 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
   }
   @Override public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) { return response; }
 }
+

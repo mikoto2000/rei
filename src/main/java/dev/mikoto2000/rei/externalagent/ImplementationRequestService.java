@@ -103,6 +103,12 @@ public class ImplementationRequestService {
       requests.finish(id,"UNKNOWN",id,null);throw error;
     }finally{active.remove(id);}
   }
+  public Outcome get(RunExecutionContext run,String id) {
+    var saved=owned(owner(run),id);run.checkActive();
+    if(saved.result()!=null)return evaluated(read(saved.result(),Outcome.class));
+    String status=Set.of("EXECUTING","VERIFYING").contains(saved.executionStatus())&&!active.contains(id)?"UNKNOWN":saved.executionStatus();
+    return pending(saved,status,"Saved state only; use getExternalImplementation for the linked receipt. Never automatically retry UNKNOWN");
+  }
   /** Semantic assessment is explicitly labelled PARENT_LLM, separate from objective server checks. */
   public Outcome evaluate(RunExecutionContext run,String id,String patch,List<AcceptanceEvaluation> input) {
     var owner=owner(run);run.checkActive();var saved=owned(owner,id);
@@ -156,5 +162,6 @@ public class ImplementationRequestService {
     return !text.contains("claude")&&text.matches("(?s).*(実装.{0,12}(して|お願い|依頼)|implement.{0,80}(please|codex)|(?:please|ask|use|have).{0,80}implement).*" );
   }
 }
+
 
 

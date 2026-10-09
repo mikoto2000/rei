@@ -34,7 +34,8 @@ public class ToolPermissionPolicy {
     if("proposeDiagnosedRepair".equals(tool))return Set.of(ActionCapability.LOCAL_WRITE);
     if(Set.of("listDurableSubAgents","getDurableSubAgent","getSubAgentGraph","compareSubAgentAnswers").contains(tool))return Set.of(ActionCapability.READ);
     if("reconcileSubAgent".equals(tool))return Set.of(ActionCapability.LOCAL_WRITE);
-    if(Set.of("getExternalImplementation","inspectExternalImplementation").contains(tool))return Set.of(ActionCapability.READ);
+    if(Set.of("getCodexImplementationRequest","getExternalImplementation","inspectExternalImplementation").contains(tool))return Set.of(ActionCapability.READ);
+    if(Set.of("prepareCodexImplementation","recordCodexAcceptanceEvaluation").contains(tool))return Set.of(ActionCapability.LOCAL_WRITE);
     // Isolated tests execute administrator-selected project code and retain arbitrary-command authority.
     if("requestCodexImplementation".equals(tool))return Set.copyOf(EnumSet.allOf(ActionCapability.class));
     if("mergeExternalImplementation".equals(tool))return Set.of(ActionCapability.LOCAL_WRITE,ActionCapability.EXECUTE);
@@ -60,4 +61,5 @@ public class ToolPermissionPolicy {
     return properties.autoApprove().containsAll(required)?PermissionDecision.AUTO_APPROVE:PermissionDecision.REQUIRE_APPROVAL;
   }
 }
+
 

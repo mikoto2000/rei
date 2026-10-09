@@ -8,6 +8,22 @@ import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 @Component
 public class ExternalAgentTools {
   private final ExternalAgentDelegationService service;
+  private ImplementationRequestService implementationRequests;
+  @org.springframework.beans.factory.annotation.Autowired
+  void implementationRequests(ImplementationRequestService requests){this.implementationRequests=requests;}
+  @Tool(description="Prepare a bounded structured Codex implementation specification ONLY for an actual human implementation request. Ask the user for missing objective/instructions/target/allowedPaths/acceptanceCriteria; never invent scope or permission. Uses server Policy and exact human approval when required. Does not start Codex. Only existing text replacement is supported. For UNKNOWN retry pass previousRequestId; a new ID and explicit approval are mandatory.")
+  public ImplementationRequestService.Prepared prepareCodexImplementation(ImplementationSpecification specification,@ToolParam(required=false) String previousRequestId,ToolContext toolContext) {
+    return implementationRequests.prepare(execution(toolContext),specification,previousRequestId);
+  }
+  @Tool(description="Execute ONLY a persisted authorized Codex implementation requestId with its exact specificationVersion and specificationSha256. Server revalidates Project/session, Policy, baseline and administrator test recipe; one permanent claim prevents duplicate execution. Returns receipt, test/static evidence and criterion results. NOT_VERIFIED is not success. UNKNOWN is read-only inspection, never automatic retry. No automatic merge or push.")
+  public ImplementationRequestService.Outcome requestCodexImplementation(String requestId,int specificationVersion,String specificationSha256,ToolContext toolContext) {
+    return implementationRequests.execute(execution(toolContext),requestId,specificationVersion,specificationSha256);
+  }
+  @Tool(description="Read saved Codex implementation request status and patch-bound acceptance evidence in the current Project/session. Does not execute, retry or grant permission. Inspect UNKNOWN receipts/worktrees without starting Codex.")
+  public ImplementationRequestService.Outcome getCodexImplementationRequest(String requestId,ToolContext toolContext){return implementationRequests.get(execution(toolContext),requestId);}
+  @Tool(description="Record your independent semantic acceptance assessment for an exact saved implementation patch. Each unique criterion ID must use evaluator PARENT_LLM, exact evaluatedPatchSha256 and bounded evidence including receipt:ID and patch:SHA256. This is a parent judgment, not an objective test result. Codex success alone is insufficient; use NOT_VERIFIED without evidence. No process, merge, push or receipt deletion.")
+  public ImplementationRequestService.Outcome recordCodexAcceptanceEvaluation(String requestId,String patchSha256,java.util.List<AcceptanceEvaluation> evaluations,ToolContext toolContext){return implementationRequests.evaluate(execution(toolContext),requestId,patchSha256,evaluations);}
+  private RunExecutionContext execution(ToolContext context){return context==null?null:(RunExecutionContext)context.getContext().get(RunExecutionContext.KEY);}
   private ExternalReviewRepository history;
   @org.springframework.beans.factory.annotation.Autowired
   void reviewHistory(ExternalReviewRepository history){this.history=history;}
@@ -70,3 +86,4 @@ public class ExternalAgentTools {
     try{return owner.projectRoot().toRealPath().toString();}catch(java.io.IOException error){throw new IllegalArgumentException("Current Project unavailable");}
   }
 }
+

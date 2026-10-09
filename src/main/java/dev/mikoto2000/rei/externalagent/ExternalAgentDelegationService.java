@@ -67,6 +67,8 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     try {
       var command=ExternalAgentCommandRequest.parse(run.userRequest());
       if(!command.agent().equals(agent.name().toLowerCase(Locale.ROOT)) || !command.action().equals("implement") || !Objects.equals(command.target(),target))return ExternalAgentResult.rejected("Explicit implementation request for the selected provider and target in this Run required");
+      if(codex)return new ExternalAgentResult(ExternalAgentResult.Status.SUCCESS_WITH_WARNINGS,
+          "NEEDS_CLARIFICATION: Confirm objective, concrete instructions, existing target, allowedPaths, constraints and acceptanceCriteria for "+target+". Then prepareCodexImplementation and execute its saved requestId/version/hash through the common implementation service.",List.of(),List.of("Target-only implementation no longer starts Codex"),0,null,"");
       var owner=run.runContext();if(owner==null || owner.projectId()==null || owner.mode()!=dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)return ExternalAgentResult.rejected("Exclusive current Project required");
       run.checkToolPermission(codex?"requestCodexImplementation":"requestClaudeCodeImplementation",target);Path parentRoot=owner.projectRoot().toRealPath();String relativeTarget=parentRoot.relativize(ExternalAgentRequest.resolveTarget(parentRoot,target)).toString();
       String recipe=codex?modelBudgetProperties.getImplementationTestCommand():claudeProperties.getImplementationTestCommand();int seconds=codex?modelBudgetProperties.getImplementationTestTimeoutSeconds():claudeProperties.getImplementationTestTimeoutSeconds();
@@ -346,4 +348,6 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     return safe.length() <= size ? safe : safe.substring(0, size);
   }
 }
+
+
 
