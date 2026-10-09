@@ -33,7 +33,8 @@ public final class VoicePoc {
     var timer=java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
     try {
       line.open(FORMAT);line.start();
-      System.out.println("Selected input capture: 10 seconds; no audio file is written");
+      System.out.println("CAPTURE READY: speak after the beep; 10 seconds; no audio file is written");
+      java.awt.Toolkit.getDefaultToolkit().beep();
       timer.schedule(line::close,10,java.util.concurrent.TimeUnit.SECONDS);
       var output=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[1024];int remaining=320000;
       while(line.isOpen() && remaining>0) {
@@ -44,6 +45,11 @@ public final class VoicePoc {
       double squareSum=0,peak=0;int nonzero=0;
       for(float sample:samples){squareSum+=sample*sample;peak=Math.max(peak,Math.abs(sample));if(sample!=0)nonzero++;}
       System.out.printf(Locale.ROOT,"capture samples=%d seconds=%.3f nonzero=%d peak=%.6f rms=%.6f%n",samples.length,samples.length/16000.0,nonzero,peak,samples.length==0?0:Math.sqrt(squareSum/samples.length));
+      for(int start=0;start<samples.length;start+=16000){
+        double binSquares=0,binPeak=0;int end=Math.min(samples.length,start+16000);
+        for(int i=start;i<end;i++){binSquares+=samples[i]*samples[i];binPeak=Math.max(binPeak,Math.abs(samples[i]));}
+        System.out.printf(Locale.ROOT,"capture second=%d peak=%.6f rms=%.6f%n",start/16000,binPeak,Math.sqrt(binSquares/(end-start)));
+      }
       return samples;
     } finally {line.close();timer.shutdownNow();}
   }

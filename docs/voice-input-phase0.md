@@ -71,3 +71,5 @@ Microsoft Haruka Desktopによるローカル合成日本語「こんにちは�
 JNI JARをclasspathから除いた場合はUnsatisfiedLinkErrorで明示失敗することも確認。これはPoCの障害確認であり本番CLI継続の保証ではない。
 
 全Java回帰は既存20分期限wrapperで4088件、failure0 / error0 / skipped1（既存PlantUML条件）、BUILD SUCCESS・wrapper終了0。PoCは通常単体テストにネットワーク・モデルダウンロードを追加しない。
+
+ユーザーは診断付き試験で全文を話したと確認した。このため断片認識を実機受入成功と扱わない。次回の切り分け用にline.start後の開始音と1秒ごとのpeak/RMS表示を追加した。開始音はOS設定により聞こえない場合がある。修正版の実機試験は未実施。
