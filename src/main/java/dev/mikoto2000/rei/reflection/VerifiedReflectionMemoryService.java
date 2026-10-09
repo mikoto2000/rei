@@ -18,7 +18,8 @@ public class VerifiedReflectionMemoryService {
     this.goals=goals;this.reflections=reflections;this.memories=memories;this.verifier=verifier;this.owner=owner;this.properties=properties;this.clock=clock;
   }
   /** Human-facing only. A repeat returns the original historical proof, including archived memories. */
-  public Promotion promote(String project,String reflectionId) {
+  // Serialize this singleton's human promotions; SQLite reads can otherwise race a sibling writer.
+  public synchronized Promotion promote(String project,String reflectionId) {
     if(!properties.enabled())throw new IllegalStateException("Memory is disabled");
     var reflection=reflections.get(project,reflectionId);var goal=goals.get(project,reflection.goalId());owner.validate(goal);
     if(!"COMPLETED".equals(reflection.goalStatus())||!"VERIFIED".equals(reflection.actual())||!"COMPLETED".equals(goal.status())

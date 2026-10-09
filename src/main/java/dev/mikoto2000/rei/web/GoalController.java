@@ -16,6 +16,7 @@ public class GoalController {
  public GoalController(GoalRepository repository,GoalLoopService loop){this.repository=repository;this.loop=loop;}
  @GetMapping public List<GoalRepository.Goal> list(@PathVariable String projectId){return repository.list(projectId);}
  @GetMapping("/{id}") public GoalRepository.Goal show(@PathVariable String projectId,@PathVariable String id){return repository.get(projectId,id);}
+ @GetMapping("/{id}/completion-progress") public GoalCompletionProgress progress(@PathVariable String projectId,@PathVariable String id){return control(()->loop.progress(projectId,id));}
  public record History(List<GoalRepository.History> history,List<GoalRepository.Attempt> attempts) {}
  @GetMapping("/{id}/history") public History history(@PathVariable String projectId,@PathVariable String id){return new History(repository.history(projectId,id),repository.attempts(projectId,id));}
  @PostMapping("/{id}/verify") public GoalLoopService.Inspection verify(@PathVariable String projectId,@PathVariable String id){return control(()->loop.verify(projectId,id));}

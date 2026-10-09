@@ -56,7 +56,7 @@ public class GoalRepository {
     for(String column:List.of("max_tokens","tokens_used","tokens_unknown","tokens_pending")) {
       if(!columns.contains(column))db.sql("ALTER TABLE agent_goals ADD COLUMN "+column+" INTEGER NOT NULL DEFAULT 0").update();
     }
-    for(String column:List.of("completion_json","completion_proof_json"))if(!columns.contains(column))db.sql("ALTER TABLE agent_goals ADD COLUMN "+column+" TEXT").update();
+    for(String column:List.of("completion_json","completion_proof_json","completion_phase"))if(!columns.contains(column))db.sql("ALTER TABLE agent_goals ADD COLUMN "+column+" TEXT").update();
     db.sql("CREATE TABLE IF NOT EXISTS agent_goal_criteria(goal TEXT NOT NULL,ordinal INTEGER NOT NULL,file TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(goal,ordinal))").update();
     var criterionColumns=new HashSet<>(db.sql("PRAGMA table_info(agent_goal_criteria)").query((rs,n)->rs.getString("name")).list());
     for(String column:List.of("json_pointer","expected_json","predicate_json")) {
@@ -291,4 +291,17 @@ public class GoalRepository {
         .query((rs,n)->new History(rs.getString("status"),rs.getString("reason"),Instant.ofEpochMilli(rs.getLong("timestamp")))).list();
   }
   private void history(String id,String status,String reason) {db.sql("INSERT INTO agent_goal_history(goal,status,reason,timestamp) VALUES(?,?,?,?)").params(id,status,reason,clock.millis()).update();}
-}
+  /** Supplemental lifecycle preserving existing claims, reservations and old rows. */
+  public String completionPhase(String project,String id){
+    var goal=get(project,id);
+    if(goal.status().equals("RUNNING")){
+      String phase=db.sql("SELECT completion_phase FROM agent_goals WHERE project=? AND id=?").params(project,id).query(String.class).single();
+      return phase!=null&&Set.of("VERIFYING","REPAIRING").contains(phase)?phase:"RUNNING";
+    }
+    return switch(goal.status()){case "WAITING_APPROVAL","PAUSED"->"WAITING";default->goal.status();};
+  }
+  boolean completionPhase(Claim claim,String phase){
+    if(!Set.of("RUNNING","VERIFYING","REPAIRING").contains(phase))throw new IllegalArgumentException("Invalid active completion phase");
+    return db.sql("UPDATE agent_goals SET completion_phase=? WHERE id=? AND project=? AND token=? AND status='RUNNING'")
+      .params(phase,claim.goal().id(),claim.goal().projectId(),claim.token()).update()==1;
+  }}

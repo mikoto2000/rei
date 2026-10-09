@@ -13,7 +13,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
   private final GoalLoopService loop;
   private final ProjectService projects;
   @Spec picocli.CommandLine.Model.CommandSpec spec;
-  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|create|show|run|verify|cancel|history|reconcile|completion") String action;
+  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|create|show|progress|run|verify|cancel|history|reconcile|completion") String action;
   @Parameters(index="1",arity="0..1",paramLabel="goalId|objective") String value;
   @Option(names="--file",description="Project-relative completion file") String file;
   @Option(names="--sha256",description="Exact expected file SHA-256") String digest;
@@ -35,6 +35,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
       var project=projects.currentContext();Object result=switch(action) {
         case "list" -> goals.list(project.id());
         case "show" -> goals.get(project.id(),requiredValue());
+        case "progress" -> loop.progress(project.id(),requiredValue());
         case "history" -> goals.history(project.id(),requiredValue())+"\nAttempts: "+goals.attempts(project.id(),requiredValue());
         case "run" -> loop.run(project.id(),requiredValue());
         case "verify" -> loop.verify(project.id(),requiredValue());
@@ -56,7 +57,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
           if(completionJson!=null)yield loop.create(owner,requiredValue(),criteriaJson==null?java.util.List.of(new GoalRepository.FileCriterion(file,digest)):parseCriteria(),GoalRepository.parseCompletion(completionJson),maxRuns,maxCalls);
           yield criteriaJson==null?loop.create(owner,requiredValue(),file,digest,maxRuns,maxCalls):loop.create(owner,requiredValue(),parseCriteria(),maxRuns,maxCalls);
         }
-        default -> throw new IllegalArgumentException("Use /goal list|create|show|run|verify|cancel|history|reconcile|completion");
+        default -> throw new IllegalArgumentException("Use /goal list|create|show|progress|run|verify|cancel|history|reconcile|completion");
       };
       writer.println(dev.mikoto2000.rei.event.CredentialRedactor.redact(String.valueOf(result)));return 0;
     } catch(RuntimeException error){writer.println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));return 2;}

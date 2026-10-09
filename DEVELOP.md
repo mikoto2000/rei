@@ -175,3 +175,5 @@ SSE bridge の破棄時には送信完了を最大 2 秒待機します。切断
 - `<rei-data-dir>/` などの作業生成物は通常コミットしません
 
 作業完遂の独立評価・10シナリオ・基準データの再現は [評価記録](docs/goal-completion-evaluation.md) を参照してください。
+
+名前付き条件・受渡し・状態表示の互換性は [Goal Gate の拡張](docs/goal-completion-gate.md) を参照してください。

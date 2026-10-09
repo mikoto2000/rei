@@ -11,19 +11,26 @@ final class StandaloneSubAgentBudget implements OutputLimitRunBudget.LlmCallRese
     return new StandaloneSubAgentBudget(properties);
   }
   private final OutputLimitRunBudget budget;
+  private int pending;
+  private boolean settled;
   private StandaloneSubAgentBudget(SubAgentProperties properties) {
     budget=new OutputLimitRunBudget(0,properties.getStandaloneMaxLlmCalls()==0?Integer.MAX_VALUE:
         properties.getStandaloneMaxLlmCalls(),null,properties.getStandaloneMaxTotalTokens());
   }
-  public boolean tryReserve() {
+  public synchronized boolean tryReserve() {
     if(budget.tokenExhausted())throw new ExecutionStoppedException(budget.usageUnknown()?TOKEN_USAGE_UNKNOWN:TOKEN_BUDGET_EXCEEDED);
-    return budget.tryConsumeLlmCall();
+    // Do not start a new wave against usage still being reported by its siblings.
+    if(budget.tokenLimitEnabled()&&settled&&pending>0)return false;
+    if(!budget.tryConsumeLlmCall())return false;
+    if(budget.tokenLimitEnabled()){if(pending==0)settled=false;pending++;}
+    return true;
   }
   public int remaining(){return budget.remainingLlmCalls();}
   public boolean tokenLimitEnabled(){return budget.tokenLimitEnabled();}
   public boolean tokenExhausted(){return budget.tokenExhausted();}
   public boolean usageUnknown(){return budget.usageUnknown();}
-  public void recordTotalTokens(Integer tokens) {
+  public synchronized void recordTotalTokens(Integer tokens) {
+    if(budget.tokenLimitEnabled()){pending=Math.max(0,pending-1);settled=true;}
     budget.recordTotalTokens(tokens);
     if(budget.usageUnknown())throw new ExecutionStoppedException(TOKEN_USAGE_UNKNOWN);
     if(budget.tokenExceeded())throw new ExecutionStoppedException(TOKEN_BUDGET_EXCEEDED);
