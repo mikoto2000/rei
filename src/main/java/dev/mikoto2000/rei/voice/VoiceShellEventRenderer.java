@@ -16,6 +16,7 @@ public final class VoiceShellEventRenderer implements Consumer<VoiceEventPublish
       case CAPTURE_FAILED -> "選択マイクの録音/VADが停止しました。別マイクへは切り替えません";
       case RECOGNITION_FAILED -> "音声認識に失敗して停止しました";
       case RELEASE_FAILED -> "音声資源の解放に失敗しました";
+      case MODEL_PROGRESS, MODEL_STATE -> "models: "+event.detail();
       case DIAGNOSTIC_RESULT -> "診断結果（Agent送信なし）: "+event.detail();
     };
     output.println("[voice] "+text);output.flush();
