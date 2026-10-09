@@ -39,6 +39,9 @@ public class ExternalAgentDelegationService implements AutoCloseable {
   private ClaudeCodeProperties claudeProperties=new ClaudeCodeProperties();
   @org.springframework.beans.factory.annotation.Autowired
   void claudeProperties(ClaudeCodeProperties properties){this.claudeProperties=properties;}
+  private org.springframework.beans.factory.ObjectProvider<ImplementationRequestService> implementationRequests;
+  @org.springframework.beans.factory.annotation.Autowired
+  void implementationRequests(org.springframework.beans.factory.ObjectProvider<ImplementationRequestService> requests){this.implementationRequests=requests;}
   private IsolatedImplementationService implementations;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   void implementations(IsolatedImplementationService service){this.implementations=service;}
@@ -67,6 +70,13 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     try {
       var command=ExternalAgentCommandRequest.parse(run.userRequest());
       if(!command.agent().equals(agent.name().toLowerCase(Locale.ROOT)) || !command.action().equals("implement") || !Objects.equals(command.target(),target))return ExternalAgentResult.rejected("Explicit implementation request for the selected provider and target in this Run required");
+      if(codex && implementationRequests!=null) {
+        var draft=implementationRequests.getObject().prepare(run,null,null);
+        return new ExternalAgentResult(ExternalAgentResult.Status.SUCCESS_WITH_WARNINGS,
+            ImplementationSpecificationValidator.serialize(draft),List.of(),List.of("Confirm requirements using the saved clarification requestId"),0,null,"");
+      }
+      if(codex)return new ExternalAgentResult(ExternalAgentResult.Status.SUCCESS_WITH_WARNINGS,
+          "NEEDS_CLARIFICATION: Confirm objective, concrete instructions, existing target, allowedPaths, constraints and acceptanceCriteria for "+target+". Then prepareCodexImplementation and execute its saved requestId/version/hash through the common implementation service.",List.of(),List.of("Target-only implementation no longer starts Codex"),0,null,"");
       var owner=run.runContext();if(owner==null || owner.projectId()==null || owner.mode()!=dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)return ExternalAgentResult.rejected("Exclusive current Project required");
       run.checkToolPermission(codex?"requestCodexImplementation":"requestClaudeCodeImplementation",target);Path parentRoot=owner.projectRoot().toRealPath();String relativeTarget=parentRoot.relativize(ExternalAgentRequest.resolveTarget(parentRoot,target)).toString();
       String recipe=codex?modelBudgetProperties.getImplementationTestCommand():claudeProperties.getImplementationTestCommand();int seconds=codex?modelBudgetProperties.getImplementationTestTimeoutSeconds():claudeProperties.getImplementationTestTimeoutSeconds();
@@ -88,6 +98,31 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     catch(java.io.IOException failure){return new ExternalAgentResult(ExternalAgentResult.Status.FAILED,"Implementation storage or process unavailable; inspect receipts before retry",List.of(),List.of(),0,null,"");}
     catch(IllegalArgumentException invalid){return ExternalAgentResult.rejected(invalid.getMessage());}
   }
+  /** Only the persisted request service calls this; no model-supplied approved-request DTO. */
+  IsolatedImplementationService.Receipt executeSpecification(RunExecutionContext run,String requestId,
+      ImplementationSpecificationValidator.Validated validated,String base,String recipe,int seconds) {
+    if(closed.get() || run==null || implementations==null || !modelBudgetProperties.isEnabled() || !modelBudgetProperties.isImplementationEnabled())throw new IllegalArgumentException("Implementation opt-in/service unavailable");
+    var owner=run.runContext();
+    if(owner==null || owner.projectId()==null || owner.mode()!=dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)throw new IllegalArgumentException("Exclusive current Project required");
+    if(!Objects.equals(recipe,modelBudgetProperties.getImplementationTestCommand()) || seconds!=modelBudgetProperties.getImplementationTestTimeoutSeconds())throw new IllegalArgumentException("Administrator test recipe changed");
+    run.checkActive();run.checkModelTokenBudget();
+    if(!run.claimExternalDelegation())throw new IllegalArgumentException("Only one external delegation per Run");
+    var flag=new AtomicBoolean(run.isCancelled());var hook=cancellation.onCancel(owner.runId(),()->{flag.set(true);run.cancel();});
+    try {
+      var specification=validated.specification();
+      return implementations.implementSpecification(owner,requestId,specification.target(),specification.allowedPaths(),base,recipe,seconds,()->flag.get()||run.isCancelled(),(tree,manifest)->{
+        run.checkActive();var selected=ExternalAgentRequest.resolveTarget(tree,specification.target());
+        var snapshot=ExternalAgentSourceSnapshot.snapshot(tree,selected,()->flag.get()||run.isCancelled(),System.nanoTime()+java.time.Duration.ofSeconds(10).toNanos());
+        String context=ImplementationSpecificationValidator.serialize(Map.of("approvedAcceptanceCriteria",specification.acceptanceCriteria(),"requirementReferences",specification.references(),
+            "allowedPaths",specification.allowedPaths(),"specificationSha256",validated.sha256(),"sourceSnapshot",snapshot,"manifest",manifest));
+        var request=new ExternalAgentRequest(ExternalAgentRequest.Agent.CODEX,ExternalAgentRequest.Action.IMPLEMENT,validated.task(),tree,selected,context,owner.runId(),requestId);
+        var result=executor.execute(request,()->flag.get()||run.isCancelled(),run.modelCallBudget());run.checkActive();
+        if(!result.success()||result.implementation()==null)throw new java.io.IOException("Codex proposal "+result.status()+": "+bounded(result.summary(),800));return result.implementation();
+      });
+    }catch(java.io.IOException failure){throw new IllegalStateException("Implementation receipt unavailable; inspect request and worktree before any retry",failure);}
+    finally{hook.dispose();}
+  }
+
   public IsolatedImplementationService.Receipt implementation(RunExecutionContext run,String id) {
     if(run==null || implementations==null)throw new IllegalArgumentException("Current Project and implementation storage required");
     try{return implementations.get(run.runContext(),id);}catch(java.io.IOException error){throw new IllegalArgumentException("Implementation receipt unavailable");}

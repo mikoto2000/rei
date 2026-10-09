@@ -66,3 +66,7 @@ Policy 自体は LLM を呼びません。起動時に設定を読み込み、�
 Tool の引数（対象 path/URL/command）単位の制限、直接 slash command、背景 timer の内部処理、
 LLM provider の通信、Tool callback 以外の I/O はこの境界の対象外です。
 これを OS sandbox の代替や自律実行全体の権限保証として扱わないでください。
+
+## 要件付き Codex 実装
+
+requestCodexImplementation は既存の任意テスト実行相当の capability を維持します。Policy enabled かつ明示 AUTO_APPROVE と管理者 implementation opt-in がそろう場合だけ自動許可します。Policy disabled は自動許可の根拠になりません。仕様全文・Project・base commit・管理者 test recipe を既存の exact approval へ結び付け、実行直前に再検証します。UNKNOWN retry は新しい ID と明示承認が必要です。prepare はプロセスを起動せず、recordCodexAcceptanceEvaluation は LOCAL_WRITE、状態・receipt・diff は READ です。[具体的な設定と承認フロー](llm-codex-implementation-delegation.md#設定と認可)を参照してください。

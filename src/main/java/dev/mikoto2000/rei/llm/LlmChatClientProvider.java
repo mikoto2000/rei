@@ -286,7 +286,7 @@ public class LlmChatClientProvider {
     if (toolCallbackProvider != null) {
       builder.defaultTools(toolCallbackProvider);
     }
-    if (LlmFeature.CHAT.equals(feature) && externalAgentTools != null) builder.defaultTools(externalAgentTools);
+    if (LlmFeature.CHAT.equals(feature) && externalAgentTools != null) builder.defaultTools(externalAgentTools.callbacks());
     if (LlmFeature.CHAT.equals(feature) && subAgentTools != null && subAgentTools.getIfAvailable() != null) {
       builder.defaultTools(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
           subAgentTools.getObject().callback(), eventFactory, eventPublisher));

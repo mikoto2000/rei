@@ -30,14 +30,19 @@ public final class IsolatedImplementationService {
   public Receipt implement(AgentRunContext owner,ExternalAgentRequest.Agent agent,String target,String testCommand,int seconds,BooleanSupplier cancelled,Proposer proposer)throws IOException {
     if(agent==null)throw new IllegalArgumentException("Implementation provider required");
     if(!admission.tryAcquire())throw new IllegalArgumentException("Isolated implementation is busy");
-    try{return implementAdmitted(owner,agent,target,testCommand,seconds,cancelled,proposer);}finally{admission.release();}
+    try{return implementAdmitted(owner,agent,target,testCommand,seconds,cancelled,proposer,null,null,null);}finally{admission.release();}
   }
-  private Receipt implementAdmitted(AgentRunContext owner,ExternalAgentRequest.Agent agent,String target,String testCommand,int seconds,BooleanSupplier cancelled,Proposer proposer)throws IOException {
+  Receipt implementSpecification(AgentRunContext owner,String id,String target,List<String> allowedPaths,String base,String testCommand,int seconds,BooleanSupplier cancelled,Proposer proposer)throws IOException {
+    if(!admission.tryAcquire())throw new IllegalArgumentException("Isolated implementation is busy");
+    try{return implementAdmitted(owner,ExternalAgentRequest.Agent.CODEX,target,testCommand,seconds,cancelled,proposer,id,allowedPaths,base);}finally{admission.release();}
+  }
+  private Receipt implementAdmitted(AgentRunContext owner,ExternalAgentRequest.Agent agent,String target,String testCommand,int seconds,BooleanSupplier cancelled,Proposer proposer,String requestId,List<String> allowedPaths,String expectedBase)throws IOException {
     requireOwner(owner);Path root=owner.projectRoot().toRealPath();if(storage.startsWith(root))throw new IllegalArgumentException("Implementation storage must be outside the parent repository");
     if(testCommand==null || testCommand.isBlank() || testCommand.length()>4096 || seconds<1 || seconds>60)throw new IllegalArgumentException("A bounded administrator test recipe is required");
     long deadline=System.nanoTime()+Duration.ofMinutes(25).toNanos();String baseline=clean(root,deadline,cancelled);
     Files.createDirectories(storage);try(var files=Files.list(storage)){if(files.filter(p->p.getFileName().toString().endsWith(".json")).limit(17).count()>=16)throw new IllegalArgumentException("Implementation receipt quota reached; explicit cleanup required");}
-    String id=UUID.randomUUID().toString(),branch="codex/rei-implementation-"+id;Path worktree=storage.resolve(id);
+    if(expectedBase!=null&&!expectedBase.equals(baseline))throw new IllegalArgumentException("Approved baseline changed");
+    String id=requestId==null?UUID.randomUUID().toString():requestId;if(!id.matches("[0-9a-f-]{36}"))throw new IllegalArgumentException("Invalid request ID");if(Files.exists(storage.resolve(id+".json")))throw new IllegalArgumentException("Receipt already exists; inspect without retry");String branch="codex/rei-implementation-"+id;Path worktree=storage.resolve(id);
     var receipt=new Receipt(id,owner.projectId(),owner.conversationId(),root.toString(),worktree.toString(),branch,baseline,"STARTED",null,null,List.of(),Map.of(),null,"Unknown outcome until a terminal receipt is saved; never automatically retry",agent.name().toLowerCase(Locale.ROOT));save(receipt);
     try {
       // Configured checkout/clean filters can run programs. Reject them rather than evaluating repository code.
@@ -53,6 +58,11 @@ public final class IsolatedImplementationService {
       git(root,deadline,cancelled,"worktree","add","--quiet","-b",branch,worktree.toString(),baseline);
       Path selected=ExternalAgentRequest.resolveTarget(worktree,target);var snapshot=ExternalAgentSourceSnapshot.snapshot(worktree,selected,cancelled,deadline);
       var manifest=new TreeMap<String,String>();for(var file:snapshot)manifest.put(((String)file.get("path")).replace('\\','/'),(String)file.get("sha256"));
+      if(allowedPaths!=null) {
+        var allowed=new ArrayList<Path>();for(String name:allowedPaths)allowed.add(ExternalAgentRequest.resolveTarget(worktree,name));
+        manifest.entrySet().removeIf(entry->{Path file=worktree.resolve(entry.getKey());return allowed.stream().noneMatch(file::startsWith);});
+        if(manifest.isEmpty())throw new IllegalArgumentException("No existing snapshot files in allowedPaths");
+      }
       receipt=copy(receipt,"PROPOSING",null,null,List.of(),manifest,null,"");save(receipt);
       var proposal=proposer.propose(worktree,Collections.unmodifiableMap(manifest));check(cancelled,deadline);
       if(proposal==null)throw new IOException("No complete implementation proposal");
