@@ -6,9 +6,10 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 
 /** Selection belongs to a Shell client, never to the process or an execution thread. */
 public final class ShellConversationService {
+  private final dev.mikoto2000.rei.application.input.ConversationInputGateway gateway;
+  private final java.time.Clock clock;
   private final ProjectService projects;
   private final SessionLifecycle lifecycle;
-  private final BiConsumer<AgentRunContext, String> dispatch;
   private final boolean concurrentEnabled;
   private final dev.mikoto2000.rei.core.chat.ConversationInputRouter inputs;
   public ShellConversationService(ProjectService projects, SessionLifecycle lifecycle,
@@ -17,7 +18,13 @@ public final class ShellConversationService {
   }
   public ShellConversationService(ProjectService projects,SessionLifecycle lifecycle,BiConsumer<AgentRunContext,String> dispatch,
       boolean concurrentEnabled,dev.mikoto2000.rei.core.chat.ConversationInputRouter inputs) {
-    this.projects=projects;this.lifecycle=lifecycle;this.dispatch=dispatch;this.concurrentEnabled=concurrentEnabled;this.inputs=inputs;
+    this(projects,lifecycle,dispatch,concurrentEnabled,inputs,java.time.Clock.systemUTC());
+  }
+  public ShellConversationService(ProjectService projects,SessionLifecycle lifecycle,BiConsumer<AgentRunContext,String> dispatch,
+      boolean concurrentEnabled,dev.mikoto2000.rei.core.chat.ConversationInputRouter inputs,java.time.Clock clock) {
+    this.clock=java.util.Objects.requireNonNull(clock);
+    this.projects=projects;this.lifecycle=lifecycle;this.concurrentEnabled=concurrentEnabled;this.inputs=inputs;
+    this.gateway=new dev.mikoto2000.rei.application.input.ConversationInputGateway(lifecycle,dispatch,inputs,clock);
   }
   public AgentRunContext submit(String message) {
     return submit(message,AgentRunContext.Mode.EXCLUSIVE);
@@ -27,12 +34,30 @@ public final class ShellConversationService {
     if(mode!=AgentRunContext.Mode.EXCLUSIVE && !concurrentEnabled)throw new IllegalArgumentException("Concurrent conversations are disabled");
     synchronized (projects.currentClient()) {
       var project = projects.currentContext();
-      var context = lifecycle.submit(project, currentSessionId(), message, AgentRunContext.RequestSource.SHELL,mode,
-          run -> dispatch.accept(run, message));
+      var input = new dev.mikoto2000.rei.application.input.ConversationInput(java.util.UUID.randomUUID(),
+          dev.mikoto2000.rei.application.input.InputSource.KEYBOARD,
+          new dev.mikoto2000.rei.application.input.ConversationTarget(project,currentSessionId()),message,clock.instant());
+      var context = gateway.submit(input,mode);
       projects.selectSession(context.conversationId());
       return context;
     }
   }
+  /** Captured on the interactive thread, then safe to pass to an ASR worker. */
+  public dev.mikoto2000.rei.application.input.ConversationTarget captureTarget() {
+    synchronized(projects.currentClient()) {
+      if(currentSessionId()==null)newConversation();
+      return new dev.mikoto2000.rei.application.input.ConversationTarget(projects.currentContext(),currentSessionId());
+    }
+  }
+  public AgentRunContext submit(dev.mikoto2000.rei.application.input.ConversationInput input) {
+    return gateway.submit(input,AgentRunContext.Mode.EXCLUSIVE);
+  }
+  public java.util.List<dev.mikoto2000.rei.application.input.ConversationInput> pending(
+      dev.mikoto2000.rei.application.input.ConversationTarget target) { return gateway.pending(target); }
+  public boolean cancelPending(dev.mikoto2000.rei.application.input.ConversationTarget target,java.util.UUID inputId) {
+    return gateway.cancelPending(target,inputId);
+  }
+  public void onPendingCancellation(java.util.function.Predicate<AgentRunContext> cancellation) { gateway.onCancel(cancellation); }
   public boolean intervene(String runId,String message) {
     if(!concurrentEnabled || inputs==null)throw new IllegalArgumentException("Concurrent conversations are disabled");
     synchronized(projects.currentClient()) {

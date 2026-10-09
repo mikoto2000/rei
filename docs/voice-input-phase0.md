@@ -1,4 +1,4 @@
-# 音声入力 Phase 0 — 調査・PoC（PoC検証済み・統合待ち）
+# 音声入力 Phase 0 — 調査・PoC（完了）
 
 ## 開始条件と現状
 
@@ -77,4 +77,4 @@ prepare.ps1 に固定URLとSHAを記録した。Whisper revision `bb53ee204431c9
 
 本番組み込み時はJNIをインターフェース実装内に隔離し、voice有効化時だけロードする。固定releaseのJava/JNI JARをSHA照合後にビルド用領域へ取得し、アプリ配布物に依存JARを同梱する方式を第一案とする。手動install-fileだけに依存する開発者固有ビルドにはしない。ビルドの再現と同梱した配布物のWindows起動を組み込みPhaseで検証する。モデルはアプリJARに同梱せずPhase3で同一manifest一式を管理する。必要ライセンス・NOTICEを配布物に含める。CPU版を初期対象としGPU未検証をCPU対応と混同しない。
 
-Phase0の実機PoC確認は完了したが、PRのCI・レビュー・main統合は未完了。後続Phaseはmain統合後に開始する。
+Phase0はレビューと最新CI成功を確認し、PR #53でmainに統合済み。merge commitは536f20628b443ade2431bba856bb2dc8037cc9c6。Phase1はこのmainを起点に開始した。

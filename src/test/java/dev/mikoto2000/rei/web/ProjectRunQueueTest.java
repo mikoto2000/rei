@@ -190,4 +190,20 @@ class ProjectRunQueueTest {
     assertThat(queue.cancelQueued("second")).isTrue();assertThat(queue.containsRun("project","second")).isFalse();
     tasks.removeFirst().run();assertThat(queue.containsRun("project","second")).isFalse();
   }
-}
+  @Test void successfulCancellationSurvivesSuccessorExecutorRejection() {
+    var tasks=new ArrayList<Runnable>();
+    var reject=new java.util.concurrent.atomic.AtomicBoolean();
+    var rejected=new java.util.concurrent.atomic.AtomicInteger();
+    var queue=new ProjectRunQueue(task -> {
+      if(reject.get())throw new RejectedExecutionException("closed");
+      tasks.add(task);
+    });
+    queue.enqueue("p","cancelled",()->fail("cancelled work ran"));
+    queue.enqueue("p","successor",()->fail("rejected work ran"),()->{},()->{},error->rejected.incrementAndGet());
+    reject.set(true);
+    assertThat(queue.cancelQueued("cancelled")).isTrue();
+    assertThat(queue.containsRun("p","cancelled")).isFalse();
+    assertThat(queue.containsRun("p","successor")).isFalse();
+    assertThat(rejected.get()).isEqualTo(1);
+    tasks.removeFirst().run();
+  }}

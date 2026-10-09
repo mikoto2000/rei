@@ -79,6 +79,10 @@ public final class ProjectRunQueue {
     var queue=projects.get(projectId);
     return queue!=null&&queue.stream().anyMatch(job->job.runId.equals(runId));
   }
+  public synchronized boolean isQueued(String projectId, String runId) {
+    var queue=projects.get(projectId);
+    return queue != null && queue.stream().anyMatch(job -> job.runId.equals(runId) && !job.running);
+  }
   public boolean cancelQueued(String runId) {
     Job removed = null;
     List<Job> dispatch;
@@ -95,7 +99,12 @@ public final class ProjectRunQueue {
       if (removed != null && projects.get(removed.projectId).isEmpty()) projects.remove(removed.projectId);
       dispatch = reserve();
     }
-    dispatchAll(dispatch, null);
+    try { dispatchAll(dispatch, null); }
+    catch (RuntimeException error) {
+      // The successor's rejected callback owns that failure; the removed input stays cancelled.
+      org.slf4j.LoggerFactory.getLogger(ProjectRunQueue.class).warn(
+          "Successor dispatch rejected after queued cancellation: {}", error.getClass().getSimpleName());
+    }
     return removed != null;
   }
   /** Called under the monitor; reservation prevents another admission from dispatching the same job. */
