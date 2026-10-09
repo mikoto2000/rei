@@ -153,8 +153,10 @@ public class StagnationChatModel implements ChatModel {
         try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext())) {
         context.checkActive();
         String name = getToolDefinition().name();
-        context.checkToolPermission(name,input);
-        if (context.externalDelegationUsed())
+        // These two domain callbacks authorize the complete persisted specification, not raw tool JSON.
+        // Preparation never starts a process; execution checks Policy/approval on the server before claim.
+        if(!(delegateTool instanceof dev.mikoto2000.rei.externalagent.ExternalAgentToolCallback domain && domain.authorizesSpecification()))context.checkToolPermission(name,input);
+        if (context.externalDelegationUsed() && !(delegateTool instanceof dev.mikoto2000.rei.externalagent.ExternalAgentToolCallback domain && domain.availableAfterDelegation()))
           return "External review is complete or already attempted. Evaluate the supplied result independently and answer; no further tool execution or automatic fixes are allowed in this review run.";
         var before = context.evaluator().beforeTool(name, input);
         boolean decorated=delegateTool instanceof dev.mikoto2000.rei.event.ToolEventCallbackDecorator;

@@ -32,6 +32,9 @@ class ImplementationDelegationIntegrationTest {
     run.setRunContext(new dev.mikoto2000.rei.core.chat.AgentRunContext("run","session",root,"project"));run.setUserRequest("review this file");
     assertEquals(ExternalAgentResult.Status.REJECTED,service.implement(run,agent,"A.txt").status());assertEquals(0,calls.get());assertFalse(run.externalDelegationUsed());
     run.setUserRequest("/agent "+provider+" implement "+root.resolve("A.txt"));
+    if(agent==ExternalAgentRequest.Agent.CODEX) {
+      var clarification=service.implement(run,agent,root.resolve("A.txt").toString());assertTrue(clarification.summary().contains("NEEDS_CLARIFICATION"));assertEquals(0,calls.get());assertFalse(run.externalDelegationUsed());service.close();return;
+    }
     var result=service.implement(run,agent,root.resolve("A.txt").toString());assertTrue(result.success(),result.summary());assertEquals(1,calls.get());assertTrue(run.externalDelegationUsed());
     var receipt=service.implementation(run,result.reviewId());assertEquals("READY_FOR_APPROVAL",receipt.status());assertEquals(provider,receipt.provider());assertEquals("before\n",Files.readString(root.resolve("A.txt")));
     assertEquals(ExternalAgentResult.Status.REJECTED,service.implement(run,agent,root.resolve("A.txt").toString()).status());assertEquals(1,calls.get());

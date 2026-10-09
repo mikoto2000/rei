@@ -113,3 +113,5 @@ Shell は `[delegation] codex completed: N findings` 等を表示し、stdout �
 ## 保存レビューと再レビュー
 
 通常レビューはSQLiteへ結果を保存します。履歴Toolと明示的な再レビューの動作・保証範囲は [保存レビュー仕様](external-review-history.md) を参照してください。
+
+Codex 隔離実装は、自然言語と既存 implement コマンドを共通の詳細要件契約へ接続します。対象だけでは実行せず、prepare / request Tool と保存仕様への認可を使用します。[要件・状態・評価・制限](llm-codex-implementation-delegation.md)を参照してください。

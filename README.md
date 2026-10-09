@@ -222,3 +222,5 @@ GitHubからのReview通知、CI失敗trigger、PR merge待ちは [GitHub Event 
 今回の機能導入後に Shell から受理した会話も Session History に登録され、同じ Rei の Web API に接続した Native Client から表示・再開できます。`/session list` で ID を確認し、Shell では `/session switch <sessionId>`（`resume` も利用可）で明示的に選択できます。Session の project は作成時に固定され、異なる project の Session への切替はエラーになります。`/project cd` は移動先の最新 Session を選択し、Session がなければ次の送信で新規作成します。通常の起動では未選択で始まります。操作と状態の境界は [Shell Session commands](docs/shell-session-commands.md) を参照してください。
 
 **旧 Shell 履歴は migration / backfill せず、変更・削除しません。** 台帳にない旧履歴は Native Client の一覧・再開対象外です。受付・FIFO・保存の契約は [Session History 仕様](docs/session-history.md) を参照してください。
+
+自然言語による Codex 隔離実装と詳細要件・承認・条件別評価は[要件付き隔離実装ガイド](docs/llm-codex-implementation-delegation.md)を参照してください。対象だけの /agent codex implement は要件確認から進みます。
