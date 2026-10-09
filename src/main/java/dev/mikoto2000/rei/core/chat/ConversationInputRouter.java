@@ -93,6 +93,7 @@ public final class ConversationInputRouter {
     return slot!=null && Objects.equals(projectId,slot.context().projectId())
         && Objects.equals(sessionId,slot.context().conversationId()) && slot.queue().offer(message);
   }
+  public boolean isQueued(String projectId,String runId) { return projectQueue.isQueued(projectId,runId); }
   public boolean cancelQueued(String runId) {
     boolean removed = projectQueue.cancelQueued(runId);
     if (removed) {
