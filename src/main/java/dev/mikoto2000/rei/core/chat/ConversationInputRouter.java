@@ -26,6 +26,17 @@ public final class ConversationInputRouter {
   private final Map<String, ActiveRun> active = new java.util.concurrent.ConcurrentHashMap<>();
   private final Map<String, ActiveExecution> background = new java.util.concurrent.ConcurrentHashMap<>();
   private final List<Runnable> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
+  private final Map<String, Runnable> beforeExecution = new java.util.concurrent.ConcurrentHashMap<>();
+  /**
+   * Scoped presentation observer, captured before enqueue and run before lifecycle
+   * output. The observer must not reenter admission/selection APIs.
+   */
+  public Subscription beforeExecution(String runId, Runnable observer) {
+    if (beforeExecution.putIfAbsent(runId, Objects.requireNonNull(observer)) != null)
+      throw new IllegalStateException("Run already has an admission observer");
+    return () -> beforeExecution.remove(runId, observer);
+  }
+
   private record Slot(AgentRunContext context, String prompt, UserInterventionQueue queue) {}
 
   public ConversationInputRouter(Executor executor, Runner runner) { this(executor, runner, (c, e) -> {}); }
@@ -120,11 +131,15 @@ public final class ConversationInputRouter {
   }
   private Disposition enqueue(Slot slot, Consumer<Runnable> lifecycle) {
     var context = slot.context();
+    var admitted = beforeExecution.getOrDefault(context.runId(), () -> {});
     agentSlots.put(context.runId(), slot);
     String key = context.projectId() == null ? context.projectRoot().toString() : context.projectId();
     try {
       boolean first = projectQueue.enqueue(key, context.runId(), ProjectRunQueue.Access.valueOf(context.mode().name()), () -> {
-        try { lifecycle.accept(() -> runner.execute(context, slot.prompt(), slot.queue())); }
+        try {
+          admitted.run();
+          lifecycle.accept(() -> runner.execute(context, slot.prompt(), slot.queue()));
+        }
         finally { agentSlots.remove(context.runId()); forget(slot); }
       }, () -> { active.put(context.runId(), ActiveRun.of(context, slot.prompt())); changed(); },
           () -> { agentSlots.remove(context.runId()); forget(slot); },

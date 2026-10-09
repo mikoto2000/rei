@@ -90,4 +90,41 @@ class JLineShellEventOutputTest {
     output.flush();
     org.assertj.core.api.Assertions.assertThat(text.toString()).isEqualTo("pending");
   }
+  @Test void styledBlockIsAtomicAbovePromptAndSeparatesPendingStreamWithoutCountingAnsiBytes() {
+    var reader = mock(LineReader.class);
+    var terminal = mock(Terminal.class);
+    when(reader.getTerminal()).thenReturn(terminal);
+    when(terminal.writer()).thenReturn(new java.io.PrintWriter(System.out));
+    when(terminal.getWidth()).thenReturn(8);
+    when(reader.isReading()).thenReturn(true);
+    var output = new JLineShellEventOutput(reader);
+    var frame = UserInputFrame.format("音声入力のテスト\n2行目", java.time.LocalTime.of(1, 37, 16));
+    output.print("応答途中");
+    output.printBlock(frame);
+    output.print("応答続き");
+    output.println("");
+    var block = org.mockito.ArgumentCaptor.forClass(org.jline.utils.AttributedString.class);
+    var ordered = inOrder(reader);
+    ordered.verify(reader).printAbove(block.capture());
+    org.assertj.core.api.Assertions.assertThat(block.getValue().toString()).isEqualTo("応答途中" + frame);
+    org.assertj.core.api.Assertions.assertThat(block.getValue().styleAt(4 + frame.toString().indexOf("音声")))
+        .isEqualTo(org.jline.utils.AttributedStyle.DEFAULT.foreground(org.jline.utils.AttributedStyle.CYAN));
+    ordered.verify(reader).printAbove("応答続き");
+  }
+
+  @Test void styledBlockAlwaysUsesJLinesLockedPrintAboveEvenWithoutAnActivePrompt() {
+    var reader = mock(LineReader.class);
+    var terminal = mock(Terminal.class);
+    when(reader.getTerminal()).thenReturn(terminal);
+    when(terminal.writer()).thenReturn(new java.io.PrintWriter(System.out));
+    when(reader.isReading()).thenReturn(true);
+    var output = new JLineShellEventOutput(reader);
+    var frame = UserInputFrame.format("voice", java.time.LocalTime.NOON);
+    output.print("pending");
+    when(reader.isReading()).thenReturn(false);
+    output.printBlock(frame);
+    var block = org.mockito.ArgumentCaptor.forClass(org.jline.utils.AttributedString.class);
+    verify(reader).printAbove(block.capture());
+    org.assertj.core.api.Assertions.assertThat(block.getValue().toString()).isEqualTo("pending" + frame);
+  }
 }

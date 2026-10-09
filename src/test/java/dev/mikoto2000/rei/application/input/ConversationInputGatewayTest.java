@@ -213,4 +213,66 @@ class ConversationInputGatewayTest {
     assertThat(shell.cancelPending(target,input.inputId())).isTrue();
     while(!tasks.isEmpty())tasks.removeFirst().run();
     assertThat(executed).isEmpty();
-  }}
+  }  @Test void acceptanceDisplayPrecedesEvenAnInlineRunner() {
+    var order = new ArrayList<String>();
+    var immediateRouter = new ConversationInputRouter(Runnable::run, (owner, prompt, mailbox) -> order.add("answer"));
+    var gateway = new ConversationInputGateway(lifecycle, immediateRouter::submit, immediateRouter, clock);
+    ConversationTarget target;
+    try (var scope = projects.newClient().open()) { target = shell.captureTarget(); }
+    var input = voice(target, "voice");
+    gateway.submit(input, AgentRunContext.Mode.EXCLUSIVE, () -> order.add("user"));
+    gateway.submit(input, AgentRunContext.Mode.EXCLUSIVE, () -> order.add("duplicate"));
+    assertThat(order).containsExactly("user", "answer");
+  }
+
+  @Test void acceptanceDisplayPrecedesAnAsyncRunnerThatStartsBeforeDispatchReturns() throws Exception {
+    var order = new java.util.concurrent.CopyOnWriteArrayList<String>();
+    try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+      var startedRouter = new ConversationInputRouter(task -> {
+        try { executor.submit(task).get(3, java.util.concurrent.TimeUnit.SECONDS); }
+        catch (Exception error) { throw new IllegalStateException(error); }
+      }, (owner, prompt, mailbox) -> order.add("answer"));
+      var gateway = new ConversationInputGateway(lifecycle, startedRouter::submit, startedRouter, clock);
+      ConversationTarget target;
+      try (var scope = projects.newClient().open()) { target = shell.captureTarget(); }
+      gateway.submit(voice(target, "voice"), AgentRunContext.Mode.EXCLUSIVE, () -> order.add("user"));
+      assertThat(order).containsExactly("user", "answer");
+    }
+  }
+  @Test @Timeout(10)
+  void runnerWaitsWhenTheSubmittingThreadIsStillDisplayingAcceptance() throws Exception {
+    var jobs = new java.util.concurrent.LinkedBlockingQueue<Runnable>();
+    var rendering = new java.util.concurrent.CountDownLatch(1);
+    var finishRendering = new java.util.concurrent.CountDownLatch(1);
+    var workerStarted = new java.util.concurrent.CountDownLatch(1);
+    var answered = new java.util.concurrent.CountDownLatch(1);
+    var order = new java.util.concurrent.CopyOnWriteArrayList<String>();
+    var delayedRouter = new ConversationInputRouter(jobs::add, (owner, prompt, mailbox) -> {
+      order.add("answer"); answered.countDown();
+    });
+    var gateway = new ConversationInputGateway(lifecycle, delayedRouter::submit, delayedRouter, clock);
+    ConversationTarget target;
+    try (var scope = projects.newClient().open()) { target = shell.captureTarget(); }
+    var input = voice(target, "voice");
+    try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+      var submitting = executor.submit(() -> gateway.submit(input, AgentRunContext.Mode.EXCLUSIVE, () -> {
+        rendering.countDown();
+        try { assertThat(finishRendering.await(3, java.util.concurrent.TimeUnit.SECONDS)).isTrue(); }
+        catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new IllegalStateException(interrupted); }
+        order.add("user");
+      }));
+      java.util.concurrent.Future<?> working;
+      try {
+        assertThat(rendering.await(3, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        var job = jobs.poll(3, java.util.concurrent.TimeUnit.SECONDS);
+        assertThat(job).isNotNull();
+        working = executor.submit(() -> { workerStarted.countDown(); job.run(); });
+        assertThat(workerStarted.await(3, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        assertThat(answered.await(100, java.util.concurrent.TimeUnit.MILLISECONDS)).isFalse();
+      } finally { finishRendering.countDown(); }
+      submitting.get(3, java.util.concurrent.TimeUnit.SECONDS);
+      working.get(3, java.util.concurrent.TimeUnit.SECONDS);
+      assertThat(order).containsExactly("user", "answer");
+    }
+  }
+}
