@@ -41,6 +41,22 @@ public class RunService implements AutoCloseable {
     }
   }
   public record CancellationResult(boolean accepted, RunSnapshot run) {}
+  /** Pending input cancellation must never turn into cancellation of already executing work. */
+  public CancellationResult cancelQueuedOnly(String runId) {
+    Runnable notify; CancellationResult result;
+    synchronized(monitor()) {
+      purgeExpired();
+      var current=registry.get(runId);
+      if(current.status()!=RunStatus.QUEUED || !cancelQueued.test(runId))
+        return new CancellationResult(false,current);
+      registry.transition(runId,RunStatus.CANCELLED,null);
+      cancellation.forgetPendingCancellation(runId);
+      notify=queuedCancellation.remove(runId);
+      bus.publish(events.runCancelled(runId,null).withOwnership(current.context()));
+      result=new CancellationResult(true,registry.get(runId));
+    }
+    notifyCancellation(notify);return result;
+  }
   public CancellationResult cancel(String runId) {
     Runnable notify=null;CancellationResult result;
     synchronized (monitor()) {
