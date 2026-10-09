@@ -175,6 +175,9 @@ public class ReiApplication {
 
     ReiLineReaderFactory.Session inputSession = ReiLineReaderFactory.create(terminal, cmd, completionEngine);
     LineReader reader = inputSession.reader();
+    var llm=cmd.getSubcommands().get("llm");
+    if(llm!=null && llm.getCommand() instanceof dev.mikoto2000.rei.llm.capture.LlmCaptureCommand capture)
+      capture.setConfirmation(prompt->{try{var answer=reader.readLine(prompt);return "y".equalsIgnoreCase(answer)||"yes".equalsIgnoreCase(answer);}catch(org.jline.reader.EndOfFileException|org.jline.reader.UserInterruptException declined){return false;}});
     configureMultilineKeyBinding(reader);
     var eventOutput = new JLineShellEventOutput(reader);
     var notificationOptions = ShellAgentEventRenderer.TopicNotificationOptions.from(environment);
@@ -290,6 +293,8 @@ public class ReiApplication {
     if (subagent != null && subagent.getCommand() instanceof dev.mikoto2000.rei.subagent.SubAgentCommand command) {
       command.setShellOutput(writer);
     }
+    var llm = cmd.getSubcommands().get("llm");
+    if(llm!=null && llm.getCommand() instanceof dev.mikoto2000.rei.llm.capture.LlmCaptureCommand command)command.setShellOutput(writer);
     var runs = cmd.getSubcommands().get("runs");
     if (runs != null && runs.getCommand() instanceof dev.mikoto2000.rei.ui.shell.RunsCommand command) {
       command.setShellOutput(writer);
@@ -328,7 +333,7 @@ public class ReiApplication {
 
   protected void executeInterruptibly(CommandLine cmd, Terminal terminal, ExecutorService commandExecutor, String... args)
       throws IOException {
-    if (args.length > 0 && ("cancel".equals(args[0]) || "agent".equals(args[0]) || "history".equals(args[0]) || "summarize".equals(args[0]) || "image".equals(args[0]) || ("chat".equals(args[0])
+    if (args.length > 0 && ("llm".equals(args[0]) || "cancel".equals(args[0]) || "agent".equals(args[0]) || "history".equals(args[0]) || "summarize".equals(args[0]) || "image".equals(args[0]) || ("chat".equals(args[0])
         && cmd.getSubcommands().get("chat") != null
         && cmd.getSubcommands().get("chat").getCommand() instanceof dev.mikoto2000.rei.ui.shell.ChatCommand chat
         && chat.acceptsAsynchronously()))) {

@@ -224,3 +224,5 @@ GitHubからのReview通知、CI失敗trigger、PR merge待ちは [GitHub Event 
 **旧 Shell 履歴は migration / backfill せず、変更・削除しません。** 台帳にない旧履歴は Native Client の一覧・再開対象外です。受付・FIFO・保存の契約は [Session History 仕様](docs/session-history.md) を参照してください。
 
 自然言語による Codex 隔離実装と詳細要件・承認・条件別評価は[要件付き隔離実装ガイド](docs/llm-codex-implementation-delegation.md)を参照してください。対象だけの /agent codex implement は要件確認から進みます。
+
+LLM送信本文の明示記録は [LLM Request Capture](docs/llm-request-capture.md) を参照してください。
