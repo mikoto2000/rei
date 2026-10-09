@@ -244,7 +244,7 @@ public class ChatExecutionService {
       appendConversationLog(context.conversationId(), "user", promptText);
       if (!budget.tryConsumeLlmCall()) {
         log.warn("Chat skipped: LLM call budget exhausted before initial prompt");
-        return ChatExecutionResult.failed("LLM call budget exhausted before initial prompt");
+        return ChatExecutionResult.failed("LLM call budget exhausted before initial prompt","llm_call_budget_exceeded");
       }
       eventPublisher.publish(eventFactory.runStarted(runId, "user-request", null));
       activityTracker.ifPresent(tracker -> tracker.recordAgentStarted(java.time.Instant.now(clock)));
@@ -305,7 +305,7 @@ public class ChatExecutionService {
         if (result.status() == ChatRunStatus.CANCELLED) execution.cancel();
         eventPublisher.publish(eventFactory.runFailed(runId, terminalError(result.status())));
         if (result.status() == ChatRunStatus.CANCELLED) return ChatExecutionResult.cancelled();
-        return ChatExecutionResult.failed(terminalError(result.status()).message());
+        return ChatExecutionResult.failed(terminalError(result.status()).message(),terminalError(result.status()).code());
       }
     } catch (RuntimeException error) {
       if (!RunCancellation.isCancellation(error) && !execution.isCancelled()) throw error;

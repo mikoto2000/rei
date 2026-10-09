@@ -179,3 +179,4 @@ SSE bridge の破棄時には送信完了を最大 2 秒待機します。切断
 名前付き条件・受渡し・状態表示の互換性は [Goal Gate の拡張](docs/goal-completion-gate.md) を参照してください。
 
 証拠に基づく進捗と Web 本文の重複排除は [停滞制御 Phase 2](docs/stagnation-aware-execution.md) を参照してください。
+検証失敗の分類・修復予算・停止条件は [Goal 修復](docs/goal-verification-repair.md) を参照してください。

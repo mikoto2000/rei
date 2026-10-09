@@ -71,4 +71,23 @@ class GoalCompletionGateTest {
     String json=new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(definition(false));var command=new GoalCommand(goals,loop,projects);command.setShellOutput(new java.io.PrintWriter(new java.io.StringWriter()));assertEquals(0,new picocli.CommandLine(command).execute("create","gated","--file","out.txt","--sha256",sha("correct"),"--completion-json",json));assertNotNull(goals.list(context.id()).getFirst().completion());
     command=new GoalCommand(goals,loop,projects);command.setShellOutput(new java.io.PrintWriter(new java.io.StringWriter()));assertEquals(2,new picocli.CommandLine(command).execute("create","invalid","--file","out.txt","--sha256",sha("correct"),"--completion-json","{}"));assertEquals(1,goals.list(context.id()).size());
   }
-}
+  @Test void failedSavedTestIsClassifiedAndRepairedThroughExistingLoop()throws Exception{
+    var goal=goal();goals.defineCompletion(owner(),goal.id(),definition(false));var calls=new java.util.concurrent.atomic.AtomicInteger();
+    var loop=new GoalLoopService(goals,verifier,(claim,run,done)->{
+      assertTrue(goals.reserveLlm(claim));
+      try{
+        if(calls.incrementAndGet()==1){
+          String xml="<testsuite tests=\"1\" failures=\"1\" errors=\"0\" skipped=\"0\"><testcase classname=\"Fixture\" name=\"value\"><failure message=\"wrong result\"/></testcase></testsuite>";Files.writeString(root.resolve("TEST.xml"),xml);
+          var failed=new SelfPatchReviewService.TestObservation("completed",1,false,false,null);
+          var verified=new SelfPatchReviewService.Result(root.toString(),"INITIAL_TEST_FAILED",version,version,List.of("out.txt"),failed,null,null,List.of("inspect failure"),List.of());
+          var fact=new SemanticPatchReviewService.TestFact("TEST.xml",sha(xml),Instant.now(),List.of(),new TestReportDiagnosisService.Counts(1,1,0,0),true);
+          review=new SemanticPatchReviewService.Receipt(UUID.randomUUID().toString(),"FIX_REQUIRED","b".repeat(64),new SemanticPatchReviewService.Detail("project",root.toString(),"session",run,"FIX_REQUIRED",Instant.now(),sha("fixture-test"),definition(false).reviewGate().requirements(),List.of(new SemanticPatchReviewService.FileFact("out.txt",sha("correct"),true)),List.of(fact),List.of(),verified,null,false,List.of()));
+        }else receipt("DETERMINISTIC_CHECKS_ONLY");
+        gate.attach(new AgentRunContext(run,"session",root,"project"),goal.id(),proof(),false);
+      }catch(Exception error){throw new RuntimeException(error);}
+      done.accept(new GoalLoopService.Outcome(ChatExecutionResult.success("done",false)));
+    },new dev.mikoto2000.rei.core.policy.ToolPermissionProperties(true,null,null,null),new GoalEvents(e->{},Clock.systemUTC()));
+    assertEquals("COMPLETED",loop.run("project",goal.id()).status());assertEquals(2,calls.get());
+    assertEquals("completion_tests_failed",goals.attempts("project",goal.id()).getFirst().reason());
+    assertTrue(verifier.verify(goals.get("project",goal.id())).satisfied());
+  }}

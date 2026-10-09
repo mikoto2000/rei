@@ -1,7 +1,10 @@
 package dev.mikoto2000.rei.core.chat;
 
 public record ChatExecutionResult(Status status, String text, boolean memoryConsolidationSuggested,
-    String errorMessage) {
+    String errorMessage,String stopCode) {
+  public ChatExecutionResult {stopCode=stopCode==null?"":stopCode;}
+  public ChatExecutionResult(Status status,String text,boolean suggested,String errorMessage){this(status,text,suggested,errorMessage,"");}
+  public static ChatExecutionResult failed(String errorMessage,String stopCode){return new ChatExecutionResult(Status.FAILED,"",false,errorMessage,stopCode);}
 
   public static ChatExecutionResult success(String text, boolean memoryConsolidationSuggested) {
     return new ChatExecutionResult(Status.SUCCESS, text == null ? "" : text, memoryConsolidationSuggested, null);
