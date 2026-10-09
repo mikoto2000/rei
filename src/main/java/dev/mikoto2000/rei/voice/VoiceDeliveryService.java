@@ -11,6 +11,26 @@ public final class VoiceDeliveryService {
   private final ShellConversationService shell;
   private final VoiceReviewInbox inbox;
   private final VoiceEventPublisher events;
+  private final java.util.concurrent.CopyOnWriteArrayList<java.util.function.Consumer<ConversationInput>> submittedListeners
+      = new java.util.concurrent.CopyOnWriteArrayList<>();
+  public interface Subscription extends AutoCloseable { @Override void close(); }
+  /**
+   * Shell-only presentation observer; transcripts never enter the diagnostic publisher.
+   * May run on the agent worker before accept/confirm returns. Listeners must only
+   * render and must not call back into delivery, selection or input admission.
+   */
+  public Subscription onSubmitted(java.util.function.Consumer<ConversationInput> listener) {
+    submittedListeners.add(Objects.requireNonNull(listener));
+    return () -> submittedListeners.remove(listener);
+  }
+  private void submitted(ConversationInput input) {
+    for (var listener : submittedListeners) {
+      try { listener.accept(input); }
+      catch (RuntimeException ignored) {
+        // Display failures cannot reject or retry an already admitted conversation input.
+      }
+    }
+  }
   public VoiceDeliveryService(ShellConversationService shell,Clock clock,VoiceEventPublisher events) {
     this.shell=Objects.requireNonNull(shell);this.events=Objects.requireNonNull(events);
     inbox=new VoiceReviewInbox(this::dispatch,i->targetIsCurrent(i.target()),clock);
@@ -27,7 +47,7 @@ public final class VoiceDeliveryService {
   private void dispatch(ConversationInput input) {
     var selected=binding;
     if(selected==null||!selected.target().equals(input.target()))throw new IllegalStateException("Voice target changed");
-    shell.submitSelectedVoice(selected.client(),input);
+    shell.submitSelectedVoice(selected.client(),input,() -> submitted(input));
   }
   public void accept(ConversationInput input) {
     inbox.accept(input);if(inbox.confirmation())events.publish(VoiceEventPublisher.Type.REVIEW_REQUIRED,input.inputId().toString());
