@@ -22,7 +22,12 @@ public class CheckpointReconciler {
   void setTurns(dev.mikoto2000.rei.conversation.ConversationTurnStore store){turns=store;}
   public CheckpointReconciler(BackgroundProcessManager processes){this.processes=processes;}
   public record Result(String decision,List<String> usable,List<String> changed,List<String> recheck,
-      List<Operation> unknownOperations,List<String> blockers,String nextAction) {}
+      List<Operation> unknownOperations,List<String> blockers,String nextAction) {
+    public boolean automaticResumeSafe(){
+      return decision.equals("CONTINUE")&&unknownOperations.isEmpty()&&blockers.isEmpty()
+          &&recheck.stream().noneMatch(item->item.startsWith("Process identity/reconnection unknown:"));
+    }
+  }
   public Result check(PersistentCheckpoint saved,boolean leased) {
     active();var usable=new ArrayList<String>();var changed=new ArrayList<String>();var recheck=new ArrayList<String>();var blockers=new ArrayList<String>();
     Path root=Path.of(saved.projectRoot());

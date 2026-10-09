@@ -32,6 +32,32 @@ public class DependencyObservationService {
     if(!observed.id().equals(entry.id()))throw new IllegalStateException("Probe identity mismatch");
     var updated=repo.observe(entry,observed.state(),observed.detail());flushFacts();return updated;
   }
+  private java.time.Clock resumeClock=java.time.Clock.systemUTC();
+  @Autowired public void configureResumeClock(java.time.Clock clock){resumeClock=clock;}
+  /** Fresh read-only observation, including terminal facts and all prerequisites. Never rewrites history. */
+  public DependencyObservation recheckForResume(String project,String id) {
+    return recheck(project,id,new java.util.HashMap<>());
+  }
+  private DependencyObservation recheck(String project,String id,java.util.Map<String,DependencyObservation> visited) {
+    if(visited.containsKey(id))return visited.get(id);
+    if(visited.size()>=64)return new DependencyObservation(id,DependencyState.BLOCKED,"dependency_recheck_limit");
+    visited.put(id,new DependencyObservation(id,DependencyState.BLOCKED,"dependency_recheck_limit"));
+    var entry=repo.get(project,id);
+    if(entry.state()==DependencyState.CANCELLED||entry.state()==DependencyState.FAILED)return new DependencyObservation(id,entry.state(),entry.reason());
+    if(!entry.deadline().isAfter(resumeClock.instant()))return new DependencyObservation(id,DependencyState.BLOCKED,"dependency_deadline_expired");
+    if(!validProject(entry))return new DependencyObservation(id,DependencyState.BLOCKED,"owner_unavailable");
+    if(!policy.enforced())return new DependencyObservation(id,DependencyState.BLOCKED,"permission_policy_disabled");
+    var permission=policy.evaluate(entry.spec().network()?"checkHttpDependency":"checkDependency");
+    if(permission!=PermissionDecision.AUTO_APPROVE)return new DependencyObservation(id,DependencyState.BLOCKED,permission==PermissionDecision.DENY?"permission_denied":"permission_required");
+    for(String parent:entry.prerequisites()) {
+      var prerequisite=repo.get(project,parent);
+      if(!entry.projectRoot().equals(prerequisite.projectRoot())||!entry.sessionId().equals(prerequisite.sessionId())
+          ||recheck(project,parent,visited).state()!=DependencyState.COMPLETED)return new DependencyObservation(id,DependencyState.BLOCKED,"dependency_waiting");
+    }
+    var observed=probe.probe(entry);
+    if(!observed.id().equals(id))throw new IllegalStateException("Probe identity mismatch");
+    visited.put(id,observed);return observed;
+  }
   private boolean validProject(PersistentDependencyRepository.Entry entry) {
     try {
       var root=Path.of(entry.projectRoot());

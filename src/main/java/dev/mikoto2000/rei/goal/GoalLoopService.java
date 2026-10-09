@@ -23,6 +23,9 @@ public class GoalLoopService {
   private final ToolPermissionProperties permissions;
   private final GoalEvents events;
   private GoalCompletionGate completionGate;
+  private GoalWaitRepository waits;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void configureWaitRepository(GoalWaitRepository waits){this.waits=waits;}
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   public void setCompletionGate(GoalCompletionGate gate){completionGate=gate;}
   public GoalLoopService(GoalRepository goals,FileGoalVerifier verifier,Gateway gateway,ToolPermissionProperties permissions,GoalEvents events) {
@@ -51,8 +54,17 @@ public class GoalLoopService {
   public synchronized GoalRepository.Goal run(String project,String id) {
     if(!permissions.enabled())throw new IllegalStateException("Enable rei.tool-permission.enabled before running a Goal");
     var goal=goals.get(project,id);gateway.validate(goal);verifier.requireEnabledPredicates(goal);
+    if(waits!=null&&waits.active(project,id))throw new IllegalStateException("Use the condition-checked Goal wait resume control");
     if(!goal.status().equals("RUNNING")&&!goal.status().equals("CANCELLED")&&verifier.verify(goal).satisfied())return verify(project,id).goal();
     var claim=goals.claim(project,id);next(claim);return goals.get(project,id);
+  }
+  synchronized GoalRepository.Goal resumeWaiting(GoalRepository.Goal expected,GoalWaitRepository.Wait wait,Consumer<AgentRunContext> preparation) {
+    if(!permissions.enabled())throw new IllegalStateException("Enable tool permissions before Goal resume");
+    gateway.validate(expected);verifier.requireEnabledPredicates(expected);
+    var claim=goals.claim(expected,wait);next(claim,preparation);
+    var result=goals.get(expected.projectId(),expected.id());
+    if(result.reason().equals("admission_failed"))throw new IllegalStateException("Goal continuation admission failed");
+    return result;
   }
   public record Inspection(GoalRepository.Goal goal,FileGoalVerifier.Verification verification) {}
   public GoalCompletionProgress progress(String project,String id){var goal=goals.get(project,id);gateway.validate(goal);return GoalCompletionProgress.inspect(goal,goals.completionPhase(project,id),verifier);}
@@ -78,7 +90,8 @@ public class GoalLoopService {
     if(before.status().equals("RUNNING"))gateway.cancel(goal);
     events.publish(goal);return goal;
   }
-  private synchronized void next(GoalRepository.Claim claim) {
+  private synchronized void next(GoalRepository.Claim claim) {next(claim,null);}
+  private synchronized void next(GoalRepository.Claim claim,Consumer<AgentRunContext> preparation) {
     if(!goals.active(claim))return;
     var goal=goals.get(claim.goal().projectId(),claim.goal().id());
     if(goal.maxTotalTokens()>0&&goal.pendingLlmCalls()>0) {stop(claim,"BLOCKED","token_usage_unknown");return;}
@@ -87,11 +100,14 @@ public class GoalLoopService {
     boolean repairing=goals.attempts(goal.projectId(),goal.id()).stream().reduce((a,b)->b).map(a->a.status().equals("UNVERIFIED")).orElse(false);
     if(!goals.completionPhase(claim,repairing?"REPAIRING":"RUNNING"))return;
     String run=goals.beginAttempt(claim);events.publish(goals.get(goal.projectId(),goal.id()),goals.completionPhase(goal.projectId(),goal.id()));
-    try {gateway.dispatch(claim,run,outcome->completed(claim,run,outcome));}
-    catch(RuntimeException error){if(goals.active(claim)){goals.recordAttempt(claim,run,"FAILED","admission_failed");stop(claim,"FAILED","admission_failed");}}
+    try {
+      if(preparation!=null)preparation.accept(new AgentRunContext(run,goal.sessionId(),java.nio.file.Path.of(goal.projectRoot()),goal.projectId(),AgentRunContext.RequestSource.WEB));
+      gateway.dispatch(claim,run,outcome->completed(claim,run,outcome));
+    }
+    catch(RuntimeException error){if(goals.active(claim,run)){goals.recordAttempt(claim,run,"FAILED","admission_failed");stop(claim,"FAILED","admission_failed");}}
   }
-  private void completed(GoalRepository.Claim claim,String run,Outcome outcome) {
-    if(!goals.active(claim))return;
+  private synchronized void completed(GoalRepository.Claim claim,String run,Outcome outcome) {
+    if(!goals.active(claim,run))return;
     var result=outcome.result();
     if(result.status()==ChatExecutionResult.Status.CANCELLED||Thread.currentThread().isInterrupted()) {
       goals.recordAttempt(claim,run,"CANCELLED","run_cancelled");stop(claim,"PAUSED","run_cancelled");return;

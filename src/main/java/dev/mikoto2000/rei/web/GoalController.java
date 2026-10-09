@@ -31,5 +31,19 @@ public class GoalController {
   if(request==null||!request.acknowledgeUncertainSideEffects()||request.expectedRunId()==null||request.expectedRunId().isBlank())throw new IllegalArgumentException("Inspect effects and acknowledge the exact saved Run before reconciliation");
   return control(()->loop.reconcile(projectId,id,request.expectedRunId().equals("none")?null:request.expectedRunId()));
  }
+ private GoalWaitService waits;
+ @org.springframework.beans.factory.annotation.Autowired(required=false)
+ public void configureWaits(GoalWaitService waits){this.waits=waits;}
+ private GoalWaitService waits(){if(waits==null)throw new IllegalStateException("Goal waiting unavailable");return waits;}
+ public record WaitRequest(String dependencyId,String reason){}
+ public record WaitVersion(long expectedVersion){public WaitVersion{if(expectedVersion<1)throw new IllegalArgumentException("Positive wait version required");}}
+ @PostMapping("/{id}/wait") public GoalWaitRepository.Wait waitFor(@PathVariable String projectId,@PathVariable String id,@RequestBody WaitRequest request){
+  if(request==null)throw new IllegalArgumentException("Dependency and reason required");return control(()->waits().waitFor(projectId,id,request.dependencyId(),request.reason()));
+ }
+ @GetMapping("/{id}/wait") public GoalWaitRepository.Wait waiting(@PathVariable String projectId,@PathVariable String id){return control(()->waits().show(projectId,id));}
+ @PostMapping("/{id}/wait/activate") public GoalWaitRepository.Wait activateWait(@PathVariable String projectId,@PathVariable String id,@RequestBody WaitVersion request){return control(()->waits().activate(projectId,id,version(request)));}
+ @PostMapping("/{id}/wait/resume") public GoalWaitRepository.Wait resumeWait(@PathVariable String projectId,@PathVariable String id,@RequestBody WaitVersion request){return control(()->waits().resume(projectId,id,version(request)));}
+ @PostMapping("/{id}/wait/cancel") public GoalWaitRepository.Wait cancelWait(@PathVariable String projectId,@PathVariable String id,@RequestBody WaitVersion request){return control(()->waits().cancel(projectId,id,version(request)));}
+ private long version(WaitVersion request){if(request==null)throw new IllegalArgumentException("Wait revision required");return request.expectedVersion();}
  private static <T> T control(Supplier<T> action){try{return action.get();}catch(IllegalStateException conflict){throw new OperationConflictException();}}
 }

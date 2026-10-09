@@ -172,6 +172,14 @@ public class GoalRepository {
       history(id,"RUNNING","explicit_run");return new Claim(goal,token);
     });
   }
+  Claim claim(Goal expected,GoalWaitRepository.Wait wait) {
+    return transaction.execute(status->{
+      db.sql("UPDATE agent_goals SET attempts=attempts WHERE project=? AND id=?").params(expected.projectId(),expected.id()).update();
+      if(db.sql("SELECT COUNT(*) FROM agent_goal_waits WHERE project=? AND id=? AND goal=? AND state='RESUMING' AND version=?").params(expected.projectId(),wait.id(),expected.id(),wait.version()).query(Integer.class).single()!=1)throw new IllegalStateException("Wait admission changed");
+      if(!get(expected.projectId(),expected.id()).equals(expected))throw new IllegalStateException("Goal changed before resume admission");
+      return claim(expected.projectId(),expected.id());
+    });
+  }
   public String beginAttempt(Claim claim) {
     return transaction.execute(status->{
       String run=UUID.randomUUID().toString();
@@ -211,13 +219,21 @@ public class GoalRepository {
   }
   public dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation modelBudget(Claim claim,String run) {
     return new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation() {
-      public boolean tryReserve(){return reserveLlm(claim);}
-      public int remaining(){return remainingLlm(claim);}
+      public boolean tryReserve(){return reserveLlm(claim,run);}
+      public int remaining(){return active(claim,run)?remainingLlm(claim):0;}
       public boolean tokenLimitEnabled(){return claim.goal().maxTotalTokens()>0;}
       public boolean tokenExhausted(){return tokenLimitEnabled()&&GoalRepository.this.tokenExhausted(claim);}
       public boolean usageUnknown(){return tokenLimitEnabled()&&get(claim.goal().projectId(),claim.goal().id()).tokenUsageUnknown();}
       public void recordTotalTokens(Integer tokens){GoalRepository.this.recordTotalTokens(claim,run,tokens);}
     };
+  }
+  public boolean reserveLlm(Claim claim,String run) {
+    return db.sql("UPDATE agent_goals SET used=used+1,tokens_pending=tokens_pending+CASE WHEN max_tokens>0 THEN 1 ELSE 0 END WHERE id=? AND project=? AND token=? AND run=? AND status='RUNNING' AND used<max_calls AND (max_tokens=0 OR (tokens_unknown=0 AND tokens_used<max_tokens)) AND EXISTS(SELECT 1 FROM agent_goal_attempts WHERE goal=agent_goals.id AND run=? AND status='RUNNING')")
+        .params(claim.goal().id(),claim.goal().projectId(),claim.token(),run,run).update()==1;
+  }
+  public boolean active(Claim claim,String run) {
+    return db.sql("SELECT COUNT(*) FROM agent_goals WHERE id=? AND project=? AND token=? AND run=? AND status='RUNNING' AND EXISTS(SELECT 1 FROM agent_goal_attempts WHERE goal=agent_goals.id AND run=? AND status='RUNNING')")
+        .params(claim.goal().id(),claim.goal().projectId(),claim.token(),run,run).query(Integer.class).single()==1;
   }
   public boolean active(Claim claim) {return db.sql("SELECT COUNT(*) FROM agent_goals WHERE id=? AND project=? AND token=? AND status='RUNNING'")
       .params(claim.goal().id(),claim.goal().projectId(),claim.token()).query(Integer.class).single()==1;}

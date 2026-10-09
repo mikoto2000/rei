@@ -1,0 +1,295 @@
+{
+  "legacy" : {
+    "results" : [ {
+      "id" : "missing-named-condition",
+      "observation" : {
+        "completionClaimed" : true,
+        "exited" : true,
+        "repairAttempts" : 0,
+        "successfulRepairs" : 0,
+        "interventions" : 0,
+        "unnecessaryIterations" : 0,
+        "duplicateExecutions" : 0,
+        "permissionViolations" : 0,
+        "elapsedMillis" : {
+          "value" : 19,
+          "reason" : ""
+        },
+        "modelCalls" : {
+          "value" : 0,
+          "reason" : ""
+        },
+        "tokens" : {
+          "value" : null,
+          "reason" : "Scripted gateway; no provider usage"
+        }
+      },
+      "conditions" : [ {
+        "id" : "base-file",
+        "required" : true,
+        "satisfied" : true,
+        "evidence" : "Direct file read"
+      }, {
+        "id" : "missing-required-proof",
+        "required" : true,
+        "satisfied" : false,
+        "evidence" : "Required second output, saved test or human handover is absent"
+      } ],
+      "verifiedCompletion" : false,
+      "falseCompletion" : true,
+      "endedWithUnmet" : true,
+      "unmet" : [ "missing-required-proof" ]
+    }, {
+      "id" : "missing-test-evidence",
+      "observation" : {
+        "completionClaimed" : true,
+        "exited" : true,
+        "repairAttempts" : 0,
+        "successfulRepairs" : 0,
+        "interventions" : 0,
+        "unnecessaryIterations" : 0,
+        "duplicateExecutions" : 0,
+        "permissionViolations" : 0,
+        "elapsedMillis" : {
+          "value" : 15,
+          "reason" : ""
+        },
+        "modelCalls" : {
+          "value" : 0,
+          "reason" : ""
+        },
+        "tokens" : {
+          "value" : null,
+          "reason" : "Scripted gateway; no provider usage"
+        }
+      },
+      "conditions" : [ {
+        "id" : "base-file",
+        "required" : true,
+        "satisfied" : true,
+        "evidence" : "Direct file read"
+      }, {
+        "id" : "missing-required-proof",
+        "required" : true,
+        "satisfied" : false,
+        "evidence" : "Required second output, saved test or human handover is absent"
+      } ],
+      "verifiedCompletion" : false,
+      "falseCompletion" : true,
+      "endedWithUnmet" : true,
+      "unmet" : [ "missing-required-proof" ]
+    }, {
+      "id" : "missing-artifact-handover",
+      "observation" : {
+        "completionClaimed" : true,
+        "exited" : true,
+        "repairAttempts" : 0,
+        "successfulRepairs" : 0,
+        "interventions" : 0,
+        "unnecessaryIterations" : 0,
+        "duplicateExecutions" : 0,
+        "permissionViolations" : 0,
+        "elapsedMillis" : {
+          "value" : 15,
+          "reason" : ""
+        },
+        "modelCalls" : {
+          "value" : 0,
+          "reason" : ""
+        },
+        "tokens" : {
+          "value" : null,
+          "reason" : "Scripted gateway; no provider usage"
+        }
+      },
+      "conditions" : [ {
+        "id" : "base-file",
+        "required" : true,
+        "satisfied" : true,
+        "evidence" : "Direct file read"
+      }, {
+        "id" : "missing-required-proof",
+        "required" : true,
+        "satisfied" : false,
+        "evidence" : "Required second output, saved test or human handover is absent"
+      } ],
+      "verifiedCompletion" : false,
+      "falseCompletion" : true,
+      "endedWithUnmet" : true,
+      "unmet" : [ "missing-required-proof" ]
+    } ],
+    "report" : {
+      "cases" : 3,
+      "verifiedCompletionRate" : 0.0,
+      "falseCompletionRate" : 1.0,
+      "endedWithUnmetRate" : 1.0,
+      "repairSuccessRate" : {
+        "value" : null,
+        "reason" : "No repair attempted"
+      },
+      "interventions" : 0,
+      "unnecessaryIterations" : 0,
+      "duplicateExecutions" : 0,
+      "permissionViolations" : 0,
+      "elapsedMillis" : {
+        "value" : 49,
+        "reason" : ""
+      },
+      "modelCalls" : {
+        "value" : 0,
+        "reason" : ""
+      },
+      "tokens" : {
+        "value" : null,
+        "reason" : "missing-named-condition: Scripted gateway; no provider usage"
+      }
+    }
+  },
+  "gated" : {
+    "results" : [ {
+      "id" : "missing-named-condition",
+      "observation" : {
+        "completionClaimed" : false,
+        "exited" : true,
+        "repairAttempts" : 2,
+        "successfulRepairs" : 0,
+        "interventions" : 0,
+        "unnecessaryIterations" : 2,
+        "duplicateExecutions" : 0,
+        "permissionViolations" : 0,
+        "elapsedMillis" : {
+          "value" : 193,
+          "reason" : ""
+        },
+        "modelCalls" : {
+          "value" : 3,
+          "reason" : ""
+        },
+        "tokens" : {
+          "value" : null,
+          "reason" : "Scripted gateway; no provider usage"
+        }
+      },
+      "conditions" : [ {
+        "id" : "base-file",
+        "required" : true,
+        "satisfied" : true,
+        "evidence" : "Direct file read"
+      }, {
+        "id" : "missing-required-proof",
+        "required" : true,
+        "satisfied" : false,
+        "evidence" : "Required second output, saved test or human handover is absent"
+      } ],
+      "verifiedCompletion" : false,
+      "falseCompletion" : false,
+      "endedWithUnmet" : true,
+      "unmet" : [ "missing-required-proof" ]
+    }, {
+      "id" : "missing-test-evidence",
+      "observation" : {
+        "completionClaimed" : false,
+        "exited" : true,
+        "repairAttempts" : 2,
+        "successfulRepairs" : 0,
+        "interventions" : 0,
+        "unnecessaryIterations" : 2,
+        "duplicateExecutions" : 0,
+        "permissionViolations" : 0,
+        "elapsedMillis" : {
+          "value" : 175,
+          "reason" : ""
+        },
+        "modelCalls" : {
+          "value" : 3,
+          "reason" : ""
+        },
+        "tokens" : {
+          "value" : null,
+          "reason" : "Scripted gateway; no provider usage"
+        }
+      },
+      "conditions" : [ {
+        "id" : "base-file",
+        "required" : true,
+        "satisfied" : true,
+        "evidence" : "Direct file read"
+      }, {
+        "id" : "missing-required-proof",
+        "required" : true,
+        "satisfied" : false,
+        "evidence" : "Required second output, saved test or human handover is absent"
+      } ],
+      "verifiedCompletion" : false,
+      "falseCompletion" : false,
+      "endedWithUnmet" : true,
+      "unmet" : [ "missing-required-proof" ]
+    }, {
+      "id" : "missing-artifact-handover",
+      "observation" : {
+        "completionClaimed" : false,
+        "exited" : true,
+        "repairAttempts" : 2,
+        "successfulRepairs" : 0,
+        "interventions" : 0,
+        "unnecessaryIterations" : 2,
+        "duplicateExecutions" : 0,
+        "permissionViolations" : 0,
+        "elapsedMillis" : {
+          "value" : 167,
+          "reason" : ""
+        },
+        "modelCalls" : {
+          "value" : 3,
+          "reason" : ""
+        },
+        "tokens" : {
+          "value" : null,
+          "reason" : "Scripted gateway; no provider usage"
+        }
+      },
+      "conditions" : [ {
+        "id" : "base-file",
+        "required" : true,
+        "satisfied" : true,
+        "evidence" : "Direct file read"
+      }, {
+        "id" : "missing-required-proof",
+        "required" : true,
+        "satisfied" : false,
+        "evidence" : "Required second output, saved test or human handover is absent"
+      } ],
+      "verifiedCompletion" : false,
+      "falseCompletion" : false,
+      "endedWithUnmet" : true,
+      "unmet" : [ "missing-required-proof" ]
+    } ],
+    "report" : {
+      "cases" : 3,
+      "verifiedCompletionRate" : 0.0,
+      "falseCompletionRate" : 0.0,
+      "endedWithUnmetRate" : 1.0,
+      "repairSuccessRate" : {
+        "value" : 0.0,
+        "reason" : ""
+      },
+      "interventions" : 0,
+      "unnecessaryIterations" : 6,
+      "duplicateExecutions" : 0,
+      "permissionViolations" : 0,
+      "elapsedMillis" : {
+        "value" : 535,
+        "reason" : ""
+      },
+      "modelCalls" : {
+        "value" : 9,
+        "reason" : ""
+      },
+      "tokens" : {
+        "value" : null,
+        "reason" : "missing-named-condition: Scripted gateway; no provider usage"
+      }
+    }
+  },
+  "scope" : "Three paired incomplete adversarial cases; host COMPLETED status, not raw model text. Not comparable to the 10-case model-self-claim baseline or live-model performance."
+}

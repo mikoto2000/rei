@@ -155,7 +155,28 @@ public class PersistentCheckpointService implements AutoCloseable {
       if(!submitted){active.remove(run);repository.release(project,task,run);}
     }
   }
+  /** Attach a checked continuation to an already claimed Goal Run; no second Chat or router admission. */
+  public void prepareGoalContinuation(AgentRunContext owner,String task,String previousRun,long expectedRevision) {
+    if(!settings.isEnabled())throw new CheckpointException(CheckpointException.Code.DISABLED,"Checkpoint continuation disabled");
+    if(owner.mode()!=AgentRunContext.Mode.EXCLUSIVE)throw new IllegalArgumentException("Exclusive Goal owner required");
+    if(!repository.acquire(owner.projectId(),task,owner.runId()))throw new IllegalStateException("Checkpoint task busy");
+    boolean prepared=false;
+    try {
+      var state=get(owner.projectId(),task);
+      if(state.revision()!=expectedRevision||!state.runId().equals(previousRun)||!state.sessionId().equals(owner.conversationId())||!state.projectRoot().equals(owner.projectRoot().toString())||state.mode()!=owner.mode())throw new IllegalStateException("Owning checkpoint revision changed");
+      var result=reconciler.check(state,false);
+      if(!repository.diagnostics(owner.projectId(),task).isEmpty()||!result.automaticResumeSafe())throw new IllegalStateException("Checkpoint requires reconciliation or individual effect confirmation");
+      var next=state.resume(owner.runId());var fields=repository.fields(next);fields.put("nextAction",result.nextAction());fields.put("reconciliation",result);
+      next=repository.save(repository.fields(fields),state.revision(),"goal-resume:"+owner.runId());
+      active.put(owner.runId(),next);prepared=true;publish(next,AgentEventType.CHECKPOINT_RESUMED,result.decision());
+    } finally {if(!prepared){active.remove(owner.runId());repository.release(owner.projectId(),task,owner.runId());}}
+  }
+  public void abortPreparedGoalContinuation(String run) {
+    var state=active.get(run);
+    if(state!=null&&!executing.contains(run))finish(new AgentRunContext(run,state.sessionId(),Path.of(state.projectRoot()),state.projectId()),"INTERRUPTED");
+  }
   private void beforeBoundary(AgentEvent event) {
+    if(event.runId()==null)return;
     var state=active.get(event.runId());if(state==null)return;
     if(event.type()==AgentEventType.TOOL_STARTED&&event.payload() instanceof ToolStartedPayload tool) {
       boolean unresolved=state.operations().stream().anyMatch(o->o.status()==OperationStatus.UNKNOWN);
