@@ -14,7 +14,7 @@ import dev.mikoto2000.rei.core.stagnation.*;
 @Tag("integration")
 class SpecificationDelegationIntegrationTest {
   @TempDir Path temporary;
-  @org.junit.jupiter.params.ParameterizedTest @org.junit.jupiter.params.provider.ValueSource(ints={0,1,2,3,4})
+  @org.junit.jupiter.params.ParameterizedTest @org.junit.jupiter.params.provider.ValueSource(ints={0,1,2,3,4,5})
   void approvedRequirementsUseExistingEngineAndManifestRejectsOutsideScope(int mode) throws Exception {
     boolean outside=mode==1;var execution=new java.util.concurrent.atomic.AtomicReference<RunExecutionContext>();
     Path root=Files.createDirectory(temporary.resolve("root"));git(root,"init","--quiet");
@@ -36,7 +36,7 @@ class SpecificationDelegationIntegrationTest {
       var source=new SQLiteDataSource();source.setUrl("jdbc:sqlite:"+temporary.resolve("requests.db"));
       var repository=new ImplementationRequestRepository(source,Clock.systemUTC());var approvals=new ToolApprovalRepository(source,Clock.systemUTC());
       var service=new ImplementationRequestService(repository,approvals,new ToolPermissionPolicy(new ToolPermissionProperties(true,Set.of(ActionCapability.values()),Set.of(),Map.of())),properties,delegation,Clock.systemUTC());
-      var run=new RunExecutionContext("run",new dev.mikoto2000.rei.llm.OutputLimitRunBudget(2,10),null,null,null);run.setRunContext(new dev.mikoto2000.rei.core.chat.AgentRunContext("run","session",root,"project"));String user="A.txt を実装してください";run.setUserRequest(user);execution.set(run);
+      var run=new RunExecutionContext("run",new dev.mikoto2000.rei.llm.OutputLimitRunBudget(2,10),null,null,null);run.setRunContext(new dev.mikoto2000.rei.core.chat.AgentRunContext("run","session",root,"project"));String user=mode==5?"/agent codex implement "+root:"A.txt を実装してください";run.setUserRequest(user);execution.set(run);
       var spec=new ImplementationSpecification(1,"Improve greeting",List.of("Replace before with after"),".",List.of("A.txt"),List.of("No new files"),List.of(new ImplementationSpecification.AcceptanceCriterion("greeting","Greeting says after")),List.of(),"REPLACE_EXISTING_TEXT");
       var prepared=service.prepare(run,spec,null);assertEquals("AUTHORIZED",prepared.status());assertEquals(0,calls.get());
       if(mode==2){assertThrows(java.util.concurrent.CancellationException.class,()->service.execute(run,prepared.requestId(),1,prepared.specificationSha256()));assertEquals("UNKNOWN",repository.get(prepared.requestId()).executionStatus());assertEquals(1,calls.get());assertEquals("before\n",Files.readString(root.resolve("A.txt")));return;}

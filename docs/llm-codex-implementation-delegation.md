@@ -118,3 +118,11 @@ Windows JDK25 で匿名 fixture の実 Codex E2E `LiveEnvironmentE2ETest#codexRe
 | 29〜30 review/fix・既存マージ | 既存 ExternalAgent / Codex / Claude tests と ImplementationDelegationIntegrationTest / IsolatedImplementationServiceTest |
 
 追加の検証は同名の任意 callback による認可迂回、人の拒否後の Policy 変更、承認期限切れ、Windows junction、terminal receipt 保存競合、スラッシュ対象差し替えを含む。意味評価の evidence は親 LLM の観察であり、客観的 test を装わない。
+
+## 最終ローカル検証
+
+2026-10-09、Windows/JDK25 の `./mvnw.cmd test -B -Pfull` は4,120件・失敗0・エラー0・skip1で成功（11分7秒）。skip は既存 DocumentRendererProcessTest の実 PlantUML/Png 検証。全回帰中/後の最終レビュー修正を含む最終コードでは、関連11クラス54件を再実行し、失敗0・エラー0・skip0を確認した。新規7クラスの通常ケースは36件、追加の実 Codex live ケースは1件成功した。
+
+既に人の承認を求めた依頼は、その後 Policy が自動許可になっても明示承認を省略しない。レシピは保存済み envelope から取得し、隔離サービス側でも現行管理者設定と照合する。レビュー依頼中の implementation という名詞、Markdown 引用/コードを実装依頼として扱わない。明示実装の検出は保守的で、対応しない自然言語表現の場合はユーザーに明示的な依頼として確認する。
+
+最終 GitHub CI は最終ブランチに対して全回帰を実行する。必須 CI・レビュー条件の成功確認前にはマージせず、保護の迂回、force push、admin merge を使わない。

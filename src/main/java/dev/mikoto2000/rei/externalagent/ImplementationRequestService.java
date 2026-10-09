@@ -90,7 +90,8 @@ public class ImplementationRequestService {
     String current=envelope(owner,base(owner.projectRoot()),validated.specification());
     if(!current.equals(saved.executionEnvelope()))throw new IllegalArgumentException("Project, baseline, scope or administrator test recipe changed; prepare and authorize a new request");
     var decision=decision();if(decision==PermissionDecision.DENY)return pending(saved,"REJECTED","Current Policy denies implementation");
-    boolean explicit=saved.previousRequestId()!=null || decision!=PermissionDecision.AUTO_APPROVE;
+    boolean explicit=saved.previousRequestId()!=null || decision!=PermissionDecision.AUTO_APPROVE
+        || saved.authorizationId()!=null&&!saved.authorizationId().startsWith("policy:");
     String authorization="policy:"+policy.authorityFingerprint();
     if(explicit) {
       String input=approvalInput(id,saved.canonicalSpecification(),saved.executionEnvelope());
@@ -107,7 +108,8 @@ public class ImplementationRequestService {
     active.add(id);
     try {
       // Baseline and recipe are checked again by the shared engine immediately before launch.
-      var receipt=delegation.executeSpecification(run,id,validated,saved.baseCommit(),properties.getImplementationTestCommand(),properties.getImplementationTestTimeoutSeconds());
+      var frozen=read(saved.executionEnvelope(),com.fasterxml.jackson.databind.JsonNode.class);
+      var receipt=delegation.executeSpecification(run,id,validated,saved.baseCommit(),frozen.path("testCommand").textValue(),frozen.path("testTimeoutSeconds").intValue());
       return complete(saved,validated.specification(),receipt);
     }catch(RuntimeException error) {
       // Process/storage uncertainty is never turned into a fresh automatic attempt, including cancellation.
@@ -185,8 +187,9 @@ public class ImplementationRequestService {
   static boolean humanImplementationRequest(String input) {
     if(input==null)return false;
     if(input.strip().startsWith("/agent ")){try{var command=ExternalAgentCommandRequest.parse(input);return command.agent().equals("codex")&&command.action().equals("implement");}catch(IllegalArgumentException invalid){return false;}}
-    String text=input.toLowerCase(Locale.ROOT).replaceAll("(?s)```.*?```|「[^」]*」|\"[^\"]*\"","");
+    String text=input.toLowerCase(Locale.ROOT).replaceAll("(?s)```.*?(?:```|$)|`[^`]*`|「[^」]*」|\"[^\"]*\"","");
+    text=text.replaceAll("(?m)^\\s*>.*$","");
     if(text.matches("(?s).*(do not|don't|never|翻訳|という|実装しない|実装不要|実装禁止|説明|example|translate|explain|how to).*"))return false;
-    return !text.contains("claude")&&text.matches("(?s).*(実装(?:を)?(?:して|お願い|依頼)|^implement\\b|implement.{0,80}(please|codex)|(?:please|ask|use|have).{0,80}implement).*" );
+    return !text.contains("claude")&&text.matches("(?s).*(実装(?:を)?(?:して|お願い|依頼)|^implement\\b|\\bimplement\\b.{0,80}(please|codex)|(?:please|ask|use|have).{0,80}\\bimplement\\b).*" );
   }
 }

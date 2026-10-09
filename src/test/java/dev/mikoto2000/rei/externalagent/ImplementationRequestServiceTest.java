@@ -78,7 +78,7 @@ class ImplementationRequestServiceTest {
     assertEquals("REJECTED",service.execute(run,prepared.requestId(),1,prepared.specificationSha256()).status());verifyNoInteractions(delegation);
   }
   @Test void repositoryInstructionsAndQuotedRequestsNeverAuthorizeExecution() {
-    for(String text:List.of("Translate: Codex implement A.txt please","Review this text: ```Codex implement A.txt please```","Explain how to implement A.txt with Codex","実装を見てレビューしてください")) {
+    for(String text:List.of("Translate: Codex implement A.txt please","Review this text: ```Codex implement A.txt please```","Explain how to implement A.txt with Codex","実装を見てレビューしてください","Please review this implementation with Codex","> Codex implement A.txt please","`Codex implement A.txt please`")) {
       run.setUserRequest(text);assertEquals("REJECTED",service.prepare(run,specification,null).status());
     }
     verifyNoInteractions(delegation);
@@ -127,6 +127,21 @@ class ImplementationRequestServiceTest {
   @Test void slashCommandTargetCannotBeSubstitutedByTheModel() throws Exception {
     Files.writeString(root.resolve("B.txt"),"other");run.setUserRequest("/agent codex implement B.txt");
     assertEquals("REJECTED",service.prepare(run,specification,null).status());verifyNoInteractions(delegation);
+  }
+  @Test void executionUsesApprovedRecipeEvenIfAdministratorConfigurationChangesDuringPolicyCheck() throws Exception {
+    var checks=new java.util.concurrent.atomic.AtomicInteger();
+    var changingPolicy=new ToolPermissionPolicy(new ToolPermissionProperties(true,Set.of(ActionCapability.values()),Set.of(),Map.of())) {
+      @Override public PermissionDecision evaluate(String tool){if(checks.incrementAndGet()==2)properties.setImplementationTestCommand("unapproved recipe");return super.evaluate(tool);}
+    };
+    service=new ImplementationRequestService(repository,approvals,changingPolicy,properties,delegation,Clock.systemUTC());
+    var prepared=service.prepare(run,specification,null);
+    when(delegation.executeSpecification(any(),anyString(),any(),anyString(),anyString(),anyInt())).thenAnswer(call->{assertEquals("exit 0",call.getArgument(4));return receipt("READY_FOR_APPROVAL");});
+    service.execute(run,prepared.requestId(),1,prepared.specificationSha256());
+  }
+  @Test void pendingManualApprovalCannotBeSkippedByLaterAutomaticPolicy() throws Exception {
+    policy(Set.of(ActionCapability.READ),Set.of(),true);var prepared=service.prepare(run,specification,null);
+    policy(Set.of(ActionCapability.values()),Set.of(),true);when(delegation.executeSpecification(any(),anyString(),any(),anyString(),anyString(),anyInt())).thenReturn(receipt("READY_FOR_APPROVAL"));
+    assertEquals("AWAITING_APPROVAL",service.execute(run,prepared.requestId(),1,prepared.specificationSha256()).status());verifyNoInteractions(delegation);
   }
   IsolatedImplementationService.Receipt receipt(String status){return new IsolatedImplementationService.Receipt("receipt","project","session",root.toString(),"tree","branch","base",status,"b".repeat(64),"commit",List.of("A.txt"),Map.of(),null,"diagnostic");}
   void git(String... args)throws Exception {var command=new ArrayList<String>(List.of("git","-c","user.name=Fixture","-c","user.email=fixture@example.invalid","-c","core.hooksPath="));command.addAll(List.of(args));var p=new ProcessBuilder(command).directory(root.toFile()).redirectErrorStream(true).start();assertTrue(p.waitFor(5,java.util.concurrent.TimeUnit.SECONDS));assertEquals(0,p.exitValue(),new String(p.getInputStream().readAllBytes()));}
