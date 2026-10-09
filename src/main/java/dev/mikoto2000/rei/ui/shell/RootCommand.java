@@ -33,6 +33,7 @@ version = "v1.0.0",
 name = "",
 description = "AI shell",
 subcommands = {
+  dev.mikoto2000.rei.llm.capture.LlmCaptureCommand.class,
   dev.mikoto2000.rei.core.command.DocumentCommand.class,
   dev.mikoto2000.rei.core.command.RepairCommand.class,
   dev.mikoto2000.rei.reflection.ReflectionCommand.class,

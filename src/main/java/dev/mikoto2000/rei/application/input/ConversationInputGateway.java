@@ -35,6 +35,10 @@ public final class ConversationInputGateway {
     cancel=Objects.requireNonNull(cancellation);
   }
   public synchronized AgentRunContext submit(ConversationInput input, AgentRunContext.Mode mode) {
+    return submit(input,mode,run->{},run->{});
+  }
+  public synchronized AgentRunContext submit(ConversationInput input,AgentRunContext.Mode mode,
+      Consumer<AgentRunContext> beforeDispatch,Consumer<AgentRunContext> failedDispatch) {
     Objects.requireNonNull(input);
     if (mode == null) mode=AgentRunContext.Mode.EXCLUSIVE;
     if (input.source() == InputSource.VOICE && mode != AgentRunContext.Mode.EXCLUSIVE)
@@ -55,7 +59,10 @@ public final class ConversationInputGateway {
     if (!input.createdAt().isAfter(clock.instant().minus(retention)))
       throw new IllegalArgumentException("Input has expired");
     var context=lifecycle.submit(input.target().project(), input.target().sessionId(), input.text(),
-        AgentRunContext.RequestSource.SHELL, mode, input.source()==InputSource.VOICE, run -> dispatch.accept(run, input.text()));
+        AgentRunContext.RequestSource.SHELL, mode, input.source()==InputSource.VOICE, run -> {
+          beforeDispatch.accept(run);
+          try{dispatch.accept(run,input.text());}catch(RuntimeException failed){failedDispatch.accept(run);throw failed;}
+        });
     accepted.put(input.inputId(), new Accepted(input, context, clock.instant()));
     return context;
   }

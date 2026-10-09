@@ -183,6 +183,9 @@ public class ChatExecutionService {
     this.eventPublisher = eventPublisher;
   }
 
+  private dev.mikoto2000.rei.llm.capture.CaptureStore requestCaptures;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setRequestCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore captures){requestCaptures=captures;}
   public ChatExecutionResult execute(String promptText) {
     String conversationId = ConversationIds.currentChat();
     return execute(new AgentRunContext(UUID.randomUUID().toString(), conversationId,
@@ -199,6 +202,7 @@ public class ChatExecutionService {
     try (var scope = AgentRunScope.open(context)) {
       try { return executeInScope(context, promptText, interventions,reservation); }
       finally {
+        if(requestCaptures!=null)requestCaptures.finish(context.runId());
         cancellationService.clear();
         activityTracker.ifPresent(tracker -> tracker.recordAgentCompleted(java.time.Instant.now(clock)));
       }
