@@ -40,7 +40,11 @@ public final class VoicePoc {
         int n=line.read(buffer,0,Math.min(remaining,buffer.length));if(n<=0)break;
         output.write(buffer,0,n);remaining-=n;
       }
-      byte[] bytes=output.toByteArray();return Pcm.decode(bytes,bytes.length);
+      byte[] bytes=output.toByteArray();float[] samples=Pcm.decode(bytes,bytes.length);
+      double squareSum=0,peak=0;int nonzero=0;
+      for(float sample:samples){squareSum+=sample*sample;peak=Math.max(peak,Math.abs(sample));if(sample!=0)nonzero++;}
+      System.out.printf(Locale.ROOT,"capture samples=%d seconds=%.3f nonzero=%d peak=%.6f rms=%.6f%n",samples.length,samples.length/16000.0,nonzero,peak,samples.length==0?0:Math.sqrt(squareSum/samples.length));
+      return samples;
     } finally {line.close();timer.shutdownNow();}
   }
   static void run(Path root,float[] samples,int cycle) {
