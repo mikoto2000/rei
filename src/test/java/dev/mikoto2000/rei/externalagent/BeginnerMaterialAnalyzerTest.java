@@ -88,4 +88,10 @@ class BeginnerMaterialAnalyzerTest {
     assertTrue(result.chapters().getFirst().knowledgeAfter().isEmpty());
     assertFalse(result.complete());
   }
+  @Test void excludedDirectoryCannotBecomeTheMaterialRoot() throws Exception {
+    Path excluded = Files.createDirectory(root.resolve("secrets"));
+    Files.writeString(excluded.resolve("a.md"), "## Concepts\n- Hidden: secret\n");
+    assertThrows(IllegalArgumentException.class,
+        () -> new BeginnerMaterialAnalyzer().analyze(excluded, "a.md", List.of("a.md"), Set.of(), 1000));
+  }
 }

@@ -28,6 +28,8 @@ public final class BeginnerMaterialAnalyzer {
       Set<String> prerequisites, int byteBudget) throws IOException {
     dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
     Path root = directory.toRealPath();
+    if (root.getFileName() == null || ExternalAgentSourceSnapshot.excluded(root.getFileName()))
+      throw new IllegalArgumentException("Material root is excluded");
     if (!Files.isDirectory(root)) throw new IllegalArgumentException("Material root must be a directory");
     if (byteBudget < 1) throw new IllegalArgumentException("Positive read budget required");
     Path entryPath = resolve(root, root, entry);
