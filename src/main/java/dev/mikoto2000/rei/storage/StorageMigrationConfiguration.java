@@ -25,7 +25,12 @@ public class StorageMigrationConfiguration {
   public static final class StartupGate implements BeanFactoryPostProcessor,EnvironmentAware,PriorityOrdered {
     private static final Map<Path,Shared> OPEN=new HashMap<>();
     private Environment environment;
-    private static final class Shared { final StorageMigrationCoordinator coordinator;int users=1;Shared(StorageMigrationCoordinator coordinator){this.coordinator=coordinator;} }
+    private static final class Shared {
+      final StorageMigrationCoordinator coordinator;
+      final AutoCloseable walLifetime;
+      int users=1;
+      Shared(StorageMigrationCoordinator coordinator,AutoCloseable walLifetime){this.coordinator=coordinator;this.walLifetime=walLifetime;}
+    }
     @Override public void setEnvironment(Environment environment){this.environment=environment;}
     @Override public int getOrder(){return HIGHEST_PRECEDENCE;}
     @Override public void postProcessBeanFactory(ConfigurableListableBeanFactory factory)throws BeansException {
@@ -37,8 +42,11 @@ public class StorageMigrationConfiguration {
           shared=OPEN.get(root);
           if(shared==null) {
             var coordinator=new StorageMigrationCoordinator(root);
-            try{coordinator.prepare();}catch(Exception error){coordinator.close();throw error;}
-            shared=new Shared(coordinator);OPEN.put(root,shared);
+            try {
+              coordinator.prepare();
+              shared=new Shared(coordinator,new StorageDatabase(root).keepWalOpen());
+            }catch(Exception error){coordinator.close();throw error;}
+            OPEN.put(root,shared);
           }else {shared.coordinator.verifyCurrentReadyVersion();shared.users++;}
         }
         try {
@@ -47,8 +55,11 @@ public class StorageMigrationConfiguration {
         }catch(Exception error){release(root);throw error;}
       }catch(Exception error){throw new BeanInitializationException("Storage migration gate stopped normal startup for "+root,error);}
     }
-    private static void release(Path root)throws IOException {
-      synchronized(OPEN){var current=OPEN.get(root);if(current!=null&&--current.users==0){OPEN.remove(root);current.coordinator.close();}}
+    private static void release(Path root)throws Exception {
+      synchronized(OPEN){var current=OPEN.get(root);if(current!=null&&--current.users==0){
+        OPEN.remove(root);
+        try { current.walLifetime.close(); } finally { current.coordinator.close(); }
+      }}
     }
   }
 }
