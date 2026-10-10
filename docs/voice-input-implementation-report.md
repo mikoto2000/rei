@@ -2,7 +2,7 @@
 
 Java 25 / Windows x64 / DRY (VT-4) / Whisper large-v3-turbo FP32を使用する。
 開始前に先行改善のmain統合を確認し、各Phaseを独立PRで通常マージした後に次へ進めた。
-Phase 7は現在検証中で、全Phase完了とはまだ扱わない。
+Phase 7のローカル検証と実Agent受け入れ結果を記録する。各PhaseのCI・main統合の最終状態は、下表のPRとそのmerge commitで確認できる。
 
 ## Phaseとmain統合
 
@@ -15,7 +15,7 @@ Phase 7は現在検証中で、全Phase完了とはまだ扱わない。
 | 4 | Windows endpoint監視・VAD/ASR別JVM隔離・認識確認/訂正・復旧 | [#58](https://github.com/mikoto2000/rei/pull/58) | `0f251277502f3a79930797c4a6877fb3c9eee070` | [Phase 4](voice-input-phase4.md) |
 | 5 | turbo FP32文字欠落のbyte保持修正・実マイク・比較精度/遅延評価 | [#62](https://github.com/mikoto2000/rei/pull/62) | `2bfd903eaf97d27a7fc17d07f55f487570f71ef9` | [Phase 5](voice-input-phase5.md) |
 | 6 | 任意の呼びかけ・所有Run停止・Windows TTS・半二重自己音声抑止 | [#63](https://github.com/mikoto2000/rei/pull/63) | `11614a1b393e7635ed6dc34deb058c6efe0ef772` | [Phase 6](voice-input-phase6.md) |
-| 7 | SessionごとのNormal/Conversation・音声限定・実行能力維持 | 検証中 | 未統合 | [Phase 7](voice-input-phase7.md) |
+| 7 | SessionごとのNormal/Conversation・音声限定・実行能力維持 | [#64](https://github.com/mikoto2000/rei/pull/64) | PR #64のmerge commitを参照 | [Phase 7](voice-input-phase7.md) |
 
 補足変更として [PR #60](https://github.com/mikoto2000/rei/pull/60) のturbo FP32移行と [PR #61](https://github.com/mikoto2000/rei/pull/61) のUser枠表示をPhase 5の起点へ統合している。
 ブランチ、headコミット、CI、TDDテスト、主要クラス、設計判断、未対応事項は各Phase文書とPRに記録する。

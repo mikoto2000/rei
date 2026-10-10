@@ -27,6 +27,11 @@
     "processExited": true,
     "stderrEmpty": true
   },
-  "ci": "pending",
-  "mainIntegration": "pending"
+  "ci": {
+    "verificationLocation": "https://github.com/mikoto2000/rei/pull/64/checks"
+  },
+  "mainIntegration": {
+    "verificationLocation": "https://github.com/mikoto2000/rei/pull/64"
+  },
+  "productCommit": "62540ad1"
 }

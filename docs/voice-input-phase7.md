@@ -38,7 +38,7 @@ Session未選択で設定すると新しいSessionを作成する。statusはSes
 Session設定・旧JSON互換とCLIの先行失敗を確認して実装し、関連31件成功。追加レビュー後の関連54件も成功。
 テキスト/VOICEの実Tool呼出し、長い重要応答の完全保持、通常モードへの復帰、VOICE書込みの承認前拒否・承認後実行・再利用拒否、完了証拠不足の拒否、Session再開、保存ロールバック、履歴圧縮後のスタイル保持を確認した。
 
-全回帰4,335件（失敗0・エラー0・既存条件付きスキップ1）/ 12分30秒、package成功。配布JARの別Springプロセスから共通Gatewayで実Agentへ通常テキスト・会話テキスト・音声限定のVOICE入力を送り、3件とも非空の応答とCOMPLETED履歴を確認した。試験プロセスの終了と標準エラー空、マイクOFF・ネイティブワーカー0、音声再生・録音ファイル保存なし。VOICE入力は合成テキストのenvelopeであり、新しい実マイク/ASR試験とは扱わない。回答例は [検証データ](voice-input-phase7-data/validation.json) に保持する。GitHub CI・main統合はこの記録時点で未確認。
+全回帰4,335件（失敗0・エラー0・既存条件付きスキップ1）/ 12分30秒、package成功。配布JARの別Springプロセスから共通Gatewayで実Agentへ通常テキスト・会話テキスト・音声限定のVOICE入力を送り、3件とも非空の応答とCOMPLETED履歴を確認した。試験プロセスの終了と標準エラー空、マイクOFF・ネイティブワーカー0、音声再生・録音ファイル保存なし。VOICE入力は合成テキストのenvelopeであり、新しい実マイク/ASR試験とは扱わない。回答例は [検証データ](voice-input-phase7-data/validation.json) に保持する。GitHub CI・main統合の最終状態とheadコミットは [PR #64](https://github.com/mikoto2000/rei/pull/64) のchecks / merge記録を参照する。製品変更commitは `62540ad1`、ブランチは `codex/voice-phase7-conversation-mode`。文書以外の変更後には必要な試験を再実施する。
 
 ## Phase 6からの統合確認
 
