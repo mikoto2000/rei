@@ -8,6 +8,7 @@ import java.util.concurrent.TimeUnit;
 
 /** Read-only foreground/visible Win32 metadata probes; pixels use the existing multi-display Robot adapter. */
 public final class WindowsDesktopActivityObserver implements DesktopActivityObserver {
+  @Override public Lightweight lightweight(){return WindowsInputProbe.read();}
   private final ScreenCapture capture=new RobotScreenCapture(new AwtRobotDriver());
   @Override public CapturedScreen capture() throws Exception { return capture.captureScreen(); }
   @Override public Metadata metadata() throws Exception {
