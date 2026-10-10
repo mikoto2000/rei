@@ -543,3 +543,7 @@ enable the bounded PNG validation Tool. Blank Java uses the running JVM executab
 Existing Artifact delivery configuration controls publishing verified PNG bytes.
 See [renderer validation](document-renderer-validation.md) for limits, security and
 the real-renderer test command. No renderer or model is installed automatically.
+
+## 音声認識のLLM補正
+
+`rei.voice.correction.enabled` は既定falseです。マイクOFF時の `/voice correction --enabled=true|false` はプロセス内の切替です。専用接続は `rei.llm.features.voice-correction` に設定し、省略すると通常会話の接続を継承します。有効時はASR原文・限定した文脈・辞書がリモートへ送られる場合があります。timeout、予算、辞書保存先、自動採用と重要操作の確認、メモリ内診断は [音声LLM補正](voice-llm-correction.md) を参照してください。

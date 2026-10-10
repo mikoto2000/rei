@@ -22,6 +22,19 @@ class VoiceDeliveryServiceTest {
     delivery=new VoiceDeliveryService(shell,clock,new VoiceEventPublisher());
   }
   ConversationInput input(ConversationTarget target){return new ConversationInput(UUID.randomUUID(),InputSource.VOICE,target,"recognized",clock.instant());}
+  @Test void correctionReviewIsNotToolApprovalAndCannotDispatchWithoutExplicitConfirmation() {
+    var client=projects.newClient();ConversationTarget target;
+    try(var scope=client.open()){target=shell.captureTarget();delivery.bind(client,target);}
+    var raw=input(target);delivery.requireReview(raw);assertThat(tasks).isEmpty();
+    assertThat(delivery.pending()).containsExactly(raw);delivery.confirm(raw.inputId(),null);
+    assertThat(tasks).hasSize(1);tasks.removeFirst().run();assertThat(prompts).containsExactly(raw.text());
+  }
+  @Test void switchingAwayAndBackInvalidatesCapturedBinding() {
+    var client=projects.newClient();ConversationTarget target;
+    try(var scope=client.open()){target=shell.captureTarget();delivery.bind(client,target);shell.newConversation();shell.resume(target.sessionId());}
+    assertThat(delivery.targetIsCurrent(target)).isFalse();
+    assertThatThrownBy(()->delivery.accept(input(target))).isInstanceOf(IllegalStateException.class);assertThat(tasks).isEmpty();
+  }
   @Test void stopIdentityCannotBecomeAnAgentInputAfterDisablingInterrupt() {
     var options=new java.util.concurrent.atomic.AtomicReference<>(new VoiceAdvancedOptions(false,"れい",true,false,VoiceAdvancedOptions.defaults().ttsVoice(),800));
     delivery=new VoiceDeliveryService(shell,clock,new VoiceEventPublisher(),options::get);

@@ -44,7 +44,7 @@ public class ProjectService {
     var scopedClient=ProjectClientScope.current();
     var selected=scopedClient!=null && scopedClient.service==this?scopedClient:notificationClient;
     if(selected!=null)synchronized(selected) {
-      if(selected.sessionId==null && registry.resolve(selected.selection.get()).id().equals(projectId))selected.sessionId=conversationId;
+      if(selected.sessionId==null && registry.resolve(selected.selection.get()).id().equals(projectId)){selected.sessionId=conversationId;selected.epoch++;}
     }
   }
 
@@ -77,7 +77,7 @@ public class ProjectService {
     synchronized(selected){return new NotificationSelection(registry.resolve(selected.selection.get()),selected.sessionId);}
   }
   public String currentSessionId() { synchronized (client()) { return client().sessionId; } }
-  public void selectSession(String sessionId) { synchronized (client()) { client().sessionId = sessionId; } }
+  public void selectSession(String sessionId) { synchronized (client()) { if(!Objects.equals(client().sessionId,sessionId))client().epoch++;client().sessionId = sessionId; } }
   public static String selectedShellSession() {
     var client = ProjectClientScope.current();
     if (client == null) return null;
@@ -117,6 +117,7 @@ public class ProjectService {
     var context = registry.resolve(resolveDirectory(directory));
     synchronized (client) {
       if (!client.selection.get().equals(context.root())) {
+        client.epoch++;
         var latest = sessions == null ? List.<dev.mikoto2000.rei.application.session.SessionMetadata>of()
             : sessions.findPage(context.id(), null, 1);
         client.sessionId = latest.isEmpty() ? null : latest.getFirst().sessionId();
@@ -130,7 +131,7 @@ public class ProjectService {
     Path path = resolveDirectory(directory);
     registry.remove(path);
     synchronized (client) {
-      if (client.selection.get().equals(path)) { client.selection.set(startupDirectory); client.sessionId = null; }
+      if (client.selection.get().equals(path)) { client.epoch++;client.selection.set(startupDirectory); client.sessionId = null; }
     }
     return path;
   }

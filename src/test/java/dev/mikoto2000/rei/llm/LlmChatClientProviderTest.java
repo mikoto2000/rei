@@ -40,8 +40,9 @@ class LlmChatClientProviderTest {
     assertThat(((org.springframework.ai.model.tool.ToolCallingChatOptions)captured.getValue().getOptions()).getToolCallbacks()).isEmpty();
     org.mockito.Mockito.verifyNoInteractions(memory);
   }
-  @Test
-  void memoryProcessesOnlySuppliedEvidenceWithoutToolsOrAdvisors() {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings={"memory","voice-correction"})
+  void memoryProcessesOnlySuppliedEvidenceWithoutToolsOrAdvisors(String feature) {
     var prompts = new java.util.ArrayList<org.springframework.ai.chat.prompt.Prompt>();
     ChatModel model = new ChatModel() {
       @Override public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
@@ -55,10 +56,11 @@ class LlmChatClientProviderTest {
     };
     var models = mock(LlmModelProvider.class);
     when(models.memoryChatModel()).thenReturn(model);
+    when(models.voiceCorrectionChatModel()).thenReturn(model);
     var originalOptions = org.springframework.ai.openai.OpenAiChatOptions.builder()
         .model("memory-model").temperature(0.2).maxCompletionTokens(321)
         .toolChoice("auto").build();
-    when(models.chatOptions(LlmFeature.MEMORY, null)).thenReturn(originalOptions);
+    when(models.chatOptions(feature, null)).thenReturn(originalOptions);
     var memory = mock(ChatMemory.class);
     var system = mock(SystemPromptService.class);
     var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), system, memory,
@@ -70,7 +72,7 @@ class LlmChatClientProviderTest {
         optional(mock(dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor.class)),
         optional(null), optional(mock(dev.mikoto2000.rei.event.ToolEventCallbackProvider.class)), null, null);
 
-    assertThat(provider.chatClient(LlmFeature.MEMORY).prompt("supplied evidence").call().content()).isEqualTo("[]");
+    assertThat(provider.chatClient(feature).prompt("supplied evidence").call().content()).isEqualTo("[]");
     assertThat(prompts).hasSize(1);
     assertThat(prompts.getFirst().getInstructions()).hasSize(1);
     assertThat(prompts.getFirst().getInstructions().getFirst().getText()).isEqualTo("supplied evidence");

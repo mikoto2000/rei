@@ -8,6 +8,8 @@ public final class ProjectClient {
   final ProjectService service;
   final AtomicReference<Path> selection;
   String sessionId;
+  long epoch;
+  public synchronized long selectionEpoch(){return epoch;}
 
   ProjectClient(ProjectService service, Path startup) {
     this.service = service;

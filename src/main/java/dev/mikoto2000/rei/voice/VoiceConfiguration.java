@@ -5,8 +5,18 @@ import org.springframework.context.annotation.*;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import dev.mikoto2000.rei.application.session.ShellConversationService;
 @Configuration(proxyBeanMethods=false)
-@EnableConfigurationProperties(VoiceProperties.class)
+@EnableConfigurationProperties({VoiceProperties.class,VoiceCorrectionProperties.class})
 public class VoiceConfiguration {
+  @Bean(destroyMethod="close") VoiceCorrectionService voiceCorrectionService(VoiceCorrectionProperties properties,
+      dev.mikoto2000.rei.llm.LlmChatClientProvider clients,dev.mikoto2000.rei.llm.LlmModelProvider models,
+      dev.mikoto2000.rei.conversation.ConversationLogStore history,VoiceEventPublisher events) {
+    var context=new VoiceCorrectionContext(history,null,properties);
+    var llm=new VoiceCorrectionLlm(clients,models,properties);
+    var service=new VoiceCorrectionService(properties,context::capture,llm::call,events);
+    events.subscribe(event->{if(event.type()==VoiceEventPublisher.Type.STATE_CHANGED && !event.detail().equals("LISTENING")
+        && !event.detail().equals("STARTING"))service.cancelAll();});
+    return service;
+  }
   @Bean VoiceAudioGate voiceAudioGate(){return new VoiceAudioGate(System::nanoTime);}
   @Bean SapiVoiceOutput sapiVoiceOutput(){return new SapiVoiceOutput();}
   @Bean(destroyMethod="close") VoicePlaybackService voicePlaybackService(SapiVoiceOutput output,VoiceAudioGate gate,
@@ -55,7 +65,8 @@ public class VoiceConfiguration {
   }
   @Bean(destroyMethod="close") VoiceInputCoordinator voiceInputCoordinator(
       IsolatedVoiceBackendFactory backend,VoiceEventPublisher events,
-      VoiceDeliveryService delivery,WindowsMicrophoneMonitor monitor,Clock clock,VoiceAudioGate audioGate,VoiceProperties properties) {
-    return new VoiceInputCoordinator(new GuardedMicrophoneCapture(new JavaSoundMicrophoneCapture(),monitor),backend,delivery::accept,events,clock,delivery::targetIsCurrent,System::nanoTime,audioGate,properties::advanced);
+      VoiceDeliveryService delivery,WindowsMicrophoneMonitor monitor,Clock clock,VoiceAudioGate audioGate,VoiceProperties properties,VoiceCorrectionService correction) {
+    var coordinator=new VoiceInputCoordinator(new GuardedMicrophoneCapture(new JavaSoundMicrophoneCapture(),monitor),backend,delivery::accept,events,clock,delivery::targetIsCurrent,System::nanoTime,audioGate,properties::advanced);
+    coordinator.configureCorrection(correction,delivery::requireReview);delivery.onSubmitted(correction::submitted);return coordinator;
   }
 }

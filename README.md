@@ -235,4 +235,6 @@ LLM送信本文の明示記録は [LLM Request Capture](docs/llm-request-capture
 
 音声認識の現行モデル、承認付き取得、旧キャッシュと検証範囲は [Whisper large-v3-turbo FP32 移行](docs/voice-input-turbo-fp32.md) を参照してください。
 
+文脈と辞書を参照する音声LLM補正（既定OFF、自動採用、VOICE承認維持）は [音声LLM補正](docs/voice-llm-correction.md) を参照してください。
+
 対話Shell起動時の音声入力は、[自動開始設定](docs/configuration.md#音声入力の自動開始)で明示的に有効化できます。既定はOFFです。

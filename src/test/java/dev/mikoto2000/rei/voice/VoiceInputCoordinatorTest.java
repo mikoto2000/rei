@@ -36,6 +36,61 @@ class VoiceInputCoordinatorTest {
       public void close(){vadClosed.incrementAndGet();}
     },recognizer);
   }
+  @Test void cancellationAlsoDiscardsCorrectionAlreadyCompletedButWaitingForPriorAsrInput() throws Exception {
+    var source=new Source();var submitted=new CopyOnWriteArrayList<ConversationInput>();var firstEntered=new CountDownLatch(1);var release=new CountDownLatch(1);
+    var count=new AtomicInteger();var p=new VoiceCorrectionProperties();p.setEnabled(true);p.setMaxConcurrentRequests(2);
+    try(var correction=new VoiceCorrectionService(p,i->new VoiceCorrectionContext.Snapshot(target.project().id(),"test",List.of(),List.of()),
+        (raw,context)->{if(raw.equals("交配の話")){firstEntered.countDown();release.await();return VoiceCorrectionValidatorTest.corrected(raw,"勾配の話");}
+          return VoiceCorrectionValidatorTest.corrected(raw,"機械学習の勾配");},new VoiceEventPublisher());
+        var voice=new VoiceInputCoordinator(d->source,s->backend(new SpeechRecognizer(){
+          public String recognize(SpeechSegment segment){return count.incrementAndGet()==1?"交配の話":"機械学習の交配";}public void close(){}
+        },new AtomicInteger()),submitted::add,new VoiceEventPublisher(),clock)) {
+      voice.configureCorrection(correction,submitted::add);voice.start(target,device,VoiceSettings.defaults());source.speech(1);
+      assertThat(firstEntered.await(2,TimeUnit.SECONDS)).isTrue();source.speech(1);
+      await().atMost(Duration.ofSeconds(3)).until(()->correction.traces().stream().anyMatch(t->t.original().equals("機械学習の交配")));
+      assertThat(submitted).isEmpty();assertThat(voice.pendingCorrectionInputs()).hasSize(2);
+      var second=voice.pendingCorrectionInputs().stream().filter(i->i.text().equals("機械学習の交配")).findFirst().orElseThrow();
+      assertThat(voice.cancelPendingCorrection(second.inputId())).isTrue();release.countDown();
+      await().atMost(Duration.ofSeconds(3)).untilAsserted(()->assertThat(submitted).hasSize(1));
+      assertThat(submitted.getFirst().text()).isEqualTo("勾配の話");assertThat(voice.pendingCorrectionInputs()).isEmpty();
+    }finally{release.countDown();}
+  }
+  @Test void correctedTextIsSubmittedOnceWithOriginalVoiceIdentityAndDiagnosticNeverCallsLlm() throws Exception {
+    var source=new Source();var submitted=new CopyOnWriteArrayList<ConversationInput>();var calls=new AtomicInteger();
+    var selectedSource=new AtomicReference<>(source);var events=new CopyOnWriteArrayList<VoiceEventPublisher.Event>();var publisher=new VoiceEventPublisher();publisher.subscribe(events::add);
+    var p=new VoiceCorrectionProperties();p.setEnabled(true);p.setMaxTotalTokens(0);
+    try(var correction=new VoiceCorrectionService(p,i->new VoiceCorrectionContext.Snapshot(target.project().id(),"test",List.of("微分"),List.of()),
+        (raw,context)->{calls.incrementAndGet();return VoiceCorrectionValidatorTest.corrected(raw,"勾配の話");},new VoiceEventPublisher());
+        var voice=new VoiceInputCoordinator(d->selectedSource.get(),s->backend(new SpeechRecognizer(){
+          public String recognize(SpeechSegment segment){return "レイ、交配の話";}public void close(){}
+        },new AtomicInteger()),submitted::add,publisher,clock,t->true,System::nanoTime,new VoiceAudioGate(System::nanoTime),
+            ()->new VoiceAdvancedOptions(true,"れい",false,false,VoiceAdvancedOptions.defaults().ttsVoice(),800))) {
+      voice.configureCorrection(correction,submitted::add);voice.start(target,device,VoiceSettings.defaults());source.speech(1);
+      await().atMost(Duration.ofSeconds(3)).untilAsserted(()->assertThat(submitted).hasSize(1));
+      assertThat(submitted.getFirst().text()).isEqualTo("勾配の話");assertThat(submitted.getFirst().source()).isEqualTo(InputSource.VOICE);
+      assertThat(submitted.getFirst().target()).isEqualTo(target);voice.off();
+      assertThat(correction.traces().getFirst().original()).isEqualTo("レイ、交配の話");
+      await().atMost(Duration.ofSeconds(3)).until(()->voice.state()==VoiceInputCoordinator.State.OFF);
+      var diagnosticSource=new Source();selectedSource.set(diagnosticSource);
+      voice.startDiagnostic(target,device,VoiceSettings.defaults());diagnosticSource.speech(1);
+      await().atMost(Duration.ofSeconds(3)).until(()->events.stream().anyMatch(e->e.type()==VoiceEventPublisher.Type.DIAGNOSTIC_RESULT));
+      assertThat(calls).hasValue(1);assertThat(submitted).hasSize(1);
+    }
+  }
+  @Test void voiceOffDuringCorrectionDiscardsLateResultWithoutBlockingAsrCleanup() throws Exception {
+    var source=new Source();var submitted=new CopyOnWriteArrayList<ConversationInput>();var entered=new CountDownLatch(1);var release=new CountDownLatch(1);
+    var p=new VoiceCorrectionProperties();p.setEnabled(true);
+    try(var correction=new VoiceCorrectionService(p,i->new VoiceCorrectionContext.Snapshot(target.project().id(),"test",List.of(),List.of()),
+        (raw,context)->{entered.countDown();release.await();return VoiceCorrectionValidatorTest.corrected(raw,"勾配の話");},new VoiceEventPublisher());
+        var voice=new VoiceInputCoordinator(d->source,s->backend(new SpeechRecognizer(){
+          public String recognize(SpeechSegment segment){return "交配の話";}public void close(){}
+        },new AtomicInteger()),submitted::add,new VoiceEventPublisher(),clock)) {
+      voice.configureCorrection(correction,submitted::add);voice.start(target,device,VoiceSettings.defaults());source.speech(1);
+      assertThat(entered.await(2,TimeUnit.SECONDS)).isTrue();voice.off();
+      await().atMost(Duration.ofSeconds(3)).until(()->voice.state()==VoiceInputCoordinator.State.OFF);
+      release.countDown();assertThat(submitted).isEmpty();
+    }finally{release.countDown();}
+  }
   @Test void enabledWakePrefixIsRemovedButVoiceOwnershipAndLiteralTextRemain() {
     var source=new Source();var submitted=new CopyOnWriteArrayList<ConversationInput>();var count=new AtomicInteger();
     var options=new VoiceAdvancedOptions(true,"れい",false,false,VoiceAdvancedOptions.defaults().ttsVoice(),800);

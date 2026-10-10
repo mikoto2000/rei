@@ -23,6 +23,28 @@ public class VoiceCommand {
   private long startGeneration;
   private boolean autoStartAttempted, shellClosed;
   private Thread autoStartThread;
+  private VoiceCorrectionProperties correctionProperties;
+  private VoiceCorrectionService correctionService;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setCorrection(VoiceCorrectionProperties properties,VoiceCorrectionService service){correctionProperties=properties;correctionService=service;}
+  @Command(name="correction",description="LLM補正の設定・有界メモリ内診断。Tool承認とは別です",mixinStandardHelpOptions=true)
+  int correction(@Option(names="--enabled",arity="0..1",fallbackValue="true") Boolean enabled,
+      @Option(names="--show",description="発話IDの診断を明示表示（最大8件・2分・永続保存なし）") UUID id) {
+    return attempt(()-> {
+      if(correctionProperties==null || correctionService==null)throw new IllegalStateException("Correction service unavailable");
+      if(enabled!=null){manualChange();correctionProperties.setEnabled(enabled);correctionService.cancelAll();}
+      var out=spec.commandLine().getOut();out.println("voice correction: "+(correctionProperties.isEnabled()?"ON":"OFF"));
+      if(id!=null) {
+        var trace=correctionService.traces().stream().filter(t->t.inputId().equals(id)).findFirst().orElseThrow(()->new IllegalArgumentException("Correction trace expired or missing"));
+        out.println("ASR original: "+correctionDisplay(trace.original()));out.println("correction input: "+correctionDisplay(trace.correctionInput()));out.println("candidate JSON: "+correctionDisplay(trace.candidate()));
+        out.println("adopted: "+correctionDisplay(trace.adopted()));out.println("submitted: "+correctionDisplay(trace.submitted()));out.println("reason: "+trace.reason());
+      }else for(var trace:correctionService.traces())out.println(trace.inputId()+" "+trace.reason());
+      return 0;
+    });
+  }
+  private static String correctionDisplay(String value) {
+    return dev.mikoto2000.rei.event.CredentialRedactor.redact(java.util.Objects.toString(value)).replaceAll("[\\p{Cntrl}\\p{Cf}]"," ");
+  }
   @Spec private CommandSpec spec;
   /** Metadata-only construction for help/completion without Spring or native initialization. */
   public VoiceCommand() { this(null,null,null,null); }
@@ -269,6 +291,7 @@ public class VoiceCommand {
   public static class Pending implements Runnable {
     @ParentCommand VoiceCommand parent;
     public void run() {
+      if(parent.voice!=null)for(var input:parent.voice.pendingCorrectionInputs())parent.spec.commandLine().getOut().println("correction: "+input.inputId()+" "+correctionDisplay(input.text()));
       if(parent.delivery!=null)for(var input:parent.delivery.pending())parent.spec.commandLine().getOut().println("review: "+input.inputId()+" "+input.text());
       if(parent.target==null){parent.spec.commandLine().getOut().println("音声入力の送信先は未設定です");return;}
       for(var input:parent.shell.pending(parent.target))parent.spec.commandLine().getOut().println(input.inputId()+" "+input.text());
@@ -276,7 +299,7 @@ public class VoiceCommand {
     @Command(name="cancel",description="未実行のVOICE入力をキャンセル",mixinStandardHelpOptions=true)
     int cancel(@Parameters(paramLabel="ID") UUID id) {
       return parent.attempt(()-> {
-        if(!(parent.delivery!=null&&parent.delivery.cancel(id))&&(parent.target==null||!parent.shell.cancelPending(parent.target,id))) {
+        if(!(parent.voice!=null&&parent.voice.cancelPendingCorrection(id))&&!(parent.delivery!=null&&parent.delivery.cancel(id))&&(parent.target==null||!parent.shell.cancelPending(parent.target,id))) {
           parent.spec.commandLine().getErr().println("待機中の入力が見つかりません");return 2;
         }
         parent.spec.commandLine().getOut().println("cancelled: "+id);return 0;

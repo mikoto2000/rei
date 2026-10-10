@@ -6,6 +6,8 @@ public final class VoiceShellEventRenderer implements Consumer<VoiceEventPublish
   public VoiceShellEventRenderer(ShellEventOutput output) { this.output=output; }
   public void accept(VoiceEventPublisher.Event event) {
     String text=switch(event.type()) {
+      case ASR_TIMING, CORRECTION_TIMING -> null;
+      case CORRECTION_RESULT -> "correction: "+event.detail();
       case STATE_CHANGED -> event.detail().equals("LISTENING") ? "LISTENING: 受付中です" : event.detail();
       case SEGMENT_QUEUE_FULL -> "認識待ちキューが満杯のため発話を破棄しました";
       case SHORT_DROPPED -> "短すぎる発話を破棄しました";
@@ -26,6 +28,6 @@ public final class VoiceShellEventRenderer implements Consumer<VoiceEventPublish
       case DEVICE_CHANGED -> "選択デバイスの状態が変わり停止しました。再接続後に一覧を確認して明示的に再選択してください";
       case DIAGNOSTIC_RESULT -> "診断結果（Agent送信なし）: "+event.detail();
     };
-    output.println("[voice] "+text);output.flush();
+    if(text!=null){output.println("[voice] "+text);output.flush();}
   }
 }
