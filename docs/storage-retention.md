@@ -23,6 +23,13 @@ in their existing DB. A failed or pruned revision can leave extra protection:
 references are conservatively retained rather than removed without proof that all
 owners have stopped using the body. Existing Checkpoint limits and recovery remain
 unchanged. A missing referenced body is not fabricated or overwritten.
+Absolute Checkpoint file paths within the storage root protect the corresponding
+object, including a future body at that path. An unresolved relative path protects
+all managed objects; migration does not guess the previous process's working
+directory. Event references use the Checkpoint's owning project, which can differ
+from the physical scope of raw results for an unprefixed Session. An unknown Event
+owner conservatively protects Event objects. Public protection queries reload the
+current object so a stale snapshot cannot hide a new pin or legal hold.
 
 ## Planning and approval
 

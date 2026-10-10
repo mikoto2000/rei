@@ -55,14 +55,21 @@ public final class StorageObjectRegistry {
   static void protectCheckpoint(Connection db,Path root,dev.mikoto2000.rei.checkpoint.PersistentCheckpoint state)throws Exception {
     String owner=state.projectId()+":"+state.taskId()+":"+state.revision();
     String project=ProjectStorage.projectId(state.sessionId());Path base=project==null?root:root.resolve("projects").resolve(project);
+    String eventScope;
+    try{eventScope=UUID.fromString(state.projectId()).toString();}catch(IllegalArgumentException unknown){eventScope=null;}
     for(var evidence:state.evidence()) {
       if("RAW_RESULT_REFERENCE".equals(evidence.origin())) {
         UUID.fromString(evidence.summary());Path body=base.resolve("state/context/results").resolve(key(state.sessionId())).resolve(evidence.summary()+".json");
         addReference(db,id(root,body),"CHECKPOINT",owner);
       }
-      if(evidence.eventId()!=null)addReference(db,"event:"+scope(state.sessionId())+":"+evidence.eventId(),"CHECKPOINT",owner);
+      if(evidence.eventId()!=null)addReference(db,eventScope==null?"storage:unknown-checkpoint-event-owner":"event:"+eventScope+":"+evidence.eventId(),"CHECKPOINT",owner);
     }
-    for(var operation:state.operations())if(operation.eventId()!=null)addReference(db,"event:"+scope(state.sessionId())+":"+operation.eventId(),"CHECKPOINT",owner);
+    for(var operation:state.operations())if(operation.eventId()!=null)addReference(db,eventScope==null?"storage:unknown-checkpoint-event-owner":"event:"+eventScope+":"+operation.eventId(),"CHECKPOINT",owner);
+    for(String name:state.files().keySet()) {
+      Path file=Path.of(name);
+      if(!file.isAbsolute())addReference(db,"storage:unknown-checkpoint-path","CHECKPOINT",owner);
+      else if(file.normalize().startsWith(root))addReference(db,id(root,file),"CHECKPOINT",owner);
+    }
   }
   public Optional<StoredObject> rawObject(String conversation,String ref){return database.read(db->find(db,id(root,rawPath(conversation,ref))));}
   public List<Reference> references(String id){return database.read(db->references(db,id));}
@@ -78,11 +85,12 @@ public final class StorageObjectRegistry {
   public void pin(String id,boolean value){flag(id,"pinned",value);}
   public void legalHold(String id,boolean value){flag(id,"legal_hold",value);}
   private void flag(String id,String column,boolean value){database.transaction(db->{try(var query=db.prepareStatement("UPDATE stored_objects SET "+column+"=?,revision=revision+1 WHERE id=?")){query.setBoolean(1,value);query.setString(2,id);if(query.executeUpdate()!=1)throw new IllegalArgumentException("Unknown object");}return null;});}
-  public Optional<String> protectionReason(StoredObject object){return database.read(db->protectionReason(db,object));}
+  public Optional<String> protectionReason(StoredObject object){return database.read(db->{var current=find(db,object.id());return current.isEmpty()?Optional.of("unknown-object"):protectionReason(db,current.get());});}
   Optional<String> protectionReason(Connection db,StoredObject object)throws Exception {
     if(!object.originVerified())return Optional.of("unverified-origin");
     if(!object.status().equals("AVAILABLE"))return Optional.of("unavailable");
     if(object.pinned())return Optional.of("pinned");if(object.legalHold())return Optional.of("legal-hold");
+    try(var query=db.prepareStatement("SELECT object_id FROM object_references WHERE object_id='storage:unknown-checkpoint-path' OR (?='EVENT' AND object_id='storage:unknown-checkpoint-event-owner') LIMIT 1")){query.setString(1,object.kind());try(var rows=query.executeQuery()){if(rows.next())return Optional.of(rows.getString(1).equals("storage:unknown-checkpoint-path")?"unresolved-checkpoint-path":"unresolved-checkpoint-event-owner");}}
     try(var query=db.prepareStatement("SELECT 1 FROM object_references WHERE object_id=? LIMIT 1")){query.setString(1,object.id());try(var rows=query.executeQuery()){if(rows.next())return Optional.of("referenced");}}
     if(object.kind().equals("RAW_RESULT")) {
       try(var query=db.prepareStatement("SELECT 1 FROM turns WHERE project_id=? AND conversation_key=? AND run_id=? AND status='RUNNING' LIMIT 1")) {

@@ -134,4 +134,26 @@ class StorageReferenceProtectionTest {
     assertThat(StorageBackup.hash(root.resolve("memory-consolidation.db"))).isEqualTo(original);
     assertThat(StorageMigrationCoordinatorTest.version(root.resolve("storage.db"))).isZero();
   }
+  @Test void checkpointFileAndEventReferencesProtectTheActualOwnerEvenForUnprefixedSessions()throws Exception {
+    prepare();var registry=registry();var object=produced(registry,UUID.randomUUID().toString(),100);
+    String project=UUID.randomUUID().toString();String event=UUID.randomUUID().toString();
+    var state=dev.mikoto2000.rei.checkpoint.PersistentCheckpoint.initial("task",project,"chat","run",root,"question");
+    var fields=StorageDatabase.JSON.convertValue(state,new com.fasterxml.jackson.core.type.TypeReference<Map<String,Object>>(){});
+    fields.put("files",Map.of(root.resolve(object.relativePath()).toString(),"sha256:"+object.sha256()));
+    fields.put("evidence",List.of(Map.of("origin","TOOL_CONFIRMED","summary","done","eventId",event)));
+    registry.protectCheckpoint(StorageDatabase.JSON.convertValue(fields,dev.mikoto2000.rei.checkpoint.PersistentCheckpoint.class));
+    assertThat(new RetentionPlanner(registry).plan("activity-raw",null,10,1000).candidates()).isEmpty();
+    assertThat(registry.references("event:"+project+":"+event)).extracting(StorageObjectRegistry.Reference::kind).contains("CHECKPOINT");
+  }
+  @Test void relativeCheckpointFilePathsAreUnknownAndProtectObjectsInsteadOfGuessingACwd()throws Exception {
+    prepare();var registry=registry();produced(registry,UUID.randomUUID().toString(),100);
+    var state=dev.mikoto2000.rei.checkpoint.PersistentCheckpoint.initial("task",UUID.randomUUID().toString(),"chat","run",root,"question");
+    var fields=StorageDatabase.JSON.convertValue(state,new com.fasterxml.jackson.core.type.TypeReference<Map<String,Object>>(){});fields.put("files",Map.of("relative/file","unknown"));
+    registry.protectCheckpoint(StorageDatabase.JSON.convertValue(fields,dev.mikoto2000.rei.checkpoint.PersistentCheckpoint.class));
+    assertThat(new RetentionPlanner(registry).plan("activity-raw",null,10,1000).protectedReasons()).containsKey("unresolved-checkpoint-path");
+  }
+  @Test void aPreviouslyReadObjectCannotHideANewPinFromProtectionQueries()throws Exception {
+    prepare();var registry=registry();var object=produced(registry,UUID.randomUUID().toString(),100);registry.pin(object.id(),true);
+    assertThat(registry.protectionReason(object)).contains("pinned");
+  }
 }
