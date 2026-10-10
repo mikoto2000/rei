@@ -10,6 +10,41 @@ public final class ShellConversationService {
   private dev.mikoto2000.rei.llm.capture.CaptureStore captures;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   public void setCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore captures){this.captures=captures;}
+  private record Owned(dev.mikoto2000.rei.core.project.ProjectClient client,AgentRunContext context) {}
+  private final java.util.concurrent.ConcurrentMap<String,Owned> owned=new java.util.concurrent.ConcurrentHashMap<>();
+  private void rememberOwner(dev.mikoto2000.rei.core.project.ProjectClient client,AgentRunContext context) {
+    if(inputs!=null)owned.entrySet().removeIf(entry->!inputs.containsRun(entry.getValue().context().projectId(),entry.getKey()));
+    owned.put(context.runId(),new Owned(client,context));
+  }
+  public boolean ownsRun(dev.mikoto2000.rei.core.project.ProjectClient client,AgentRunContext context) {
+    var owner=owned.get(context.runId());return owner!=null&&owner.client()==client&&owner.context().equals(context);
+  }
+  private java.util.function.Predicate<AgentRunContext> activeCancellation=context->false;
+  public void onActiveCancellation(java.util.function.Predicate<AgentRunContext> cancellation) {
+    activeCancellation=java.util.Objects.requireNonNull(cancellation);
+  }
+  /** Voice stop is confined to this captured client and selected Session, never the whole project. */
+  public int cancelSelectedActive(dev.mikoto2000.rei.core.project.ProjectClient client,
+      dev.mikoto2000.rei.application.input.ConversationInput input) {
+    if(input.source()!=dev.mikoto2000.rei.application.input.InputSource.VOICE)throw new IllegalArgumentException("VOICE control required");
+    var target=input.target();
+    synchronized(client) {
+      if(!isSelected(client,target))throw new IllegalStateException("Voice target changed");
+      if(!gateway.isNovel(input)||inputs==null)return 0;
+      var active=inputs.activeRuns().stream().map(dev.mikoto2000.rei.core.chat.ActiveRun::runId)
+          .collect(java.util.stream.Collectors.toSet());
+      int cancelled=0;
+      for(var owner:owned.values()) {
+        var context=owner.context();
+        if(owner.client()==client && active.contains(context.runId())
+            && java.util.Objects.equals(context.projectId(),target.project().id())
+            && java.util.Objects.equals(context.conversationId(),target.sessionId())
+            && context.projectRoot().equals(target.project().root().toAbsolutePath().normalize())
+            && activeCancellation.test(context))cancelled++;
+      }
+      return cancelled;
+    }
+  }
   private final java.time.Clock clock;
   private final ProjectService projects;
   private final SessionLifecycle lifecycle;
@@ -42,6 +77,7 @@ public final class ShellConversationService {
           new dev.mikoto2000.rei.application.input.ConversationTarget(project,currentSessionId()),message,clock.instant());
             var captureStore=captures;var client=projects.currentClient();
       var context = gateway.submit(input,mode,run->{
+        rememberOwner(client,run);
         if(captureStore!=null)captureStore.accept(client,run.conversationId(),input.inputId().toString(),run.runId());
       },run->{if(captureStore!=null)captureStore.startFailed(run.runId());});
       projects.selectSession(context.conversationId());
@@ -72,7 +108,8 @@ public final class ShellConversationService {
     if(client==null||input.source()!=dev.mikoto2000.rei.application.input.InputSource.VOICE)throw new IllegalArgumentException("Captured VOICE client required");
     synchronized(client) {
       if(!isSelected(client,input.target()))throw new IllegalStateException("Voice target changed; restart voice for the selected Session");
-      return gateway.submit(input, AgentRunContext.Mode.EXCLUSIVE, afterAccepted);
+      return gateway.submit(input, AgentRunContext.Mode.EXCLUSIVE,
+          run->rememberOwner(client,run),run->owned.remove(run.runId()),afterAccepted);
     }
   }
   public AgentRunContext submit(dev.mikoto2000.rei.application.input.ConversationInput input) {

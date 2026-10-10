@@ -36,6 +36,40 @@ class VoiceInputCoordinatorTest {
       public void close(){vadClosed.incrementAndGet();}
     },recognizer);
   }
+  @Test void enabledWakePrefixIsRemovedButVoiceOwnershipAndLiteralTextRemain() {
+    var source=new Source();var submitted=new CopyOnWriteArrayList<ConversationInput>();var count=new AtomicInteger();
+    var options=new VoiceAdvancedOptions(true,"れい",false,false,VoiceAdvancedOptions.defaults().ttsVoice(),800);
+    try(var voice=new VoiceInputCoordinator(d->source,s->backend(new SpeechRecognizer(){
+      public String recognize(SpeechSegment segment){return count.incrementAndGet()==1?"れいめいを確認":"レイ、Ａ.txt を確認";}
+      public void close(){}
+    },new AtomicInteger()),submitted::add,new VoiceEventPublisher(),clock,t->true,System::nanoTime,new VoiceAudioGate(System::nanoTime),()->options)) {
+      voice.start(target,device,VoiceSettings.defaults());source.speech(2);
+      await().atMost(Duration.ofSeconds(3)).untilAsserted(()->assertThat(submitted).hasSize(1));
+      assertThat(submitted.getFirst().text()).isEqualTo("Ａ.txt を確認");
+      assertThat(submitted.getFirst().source()).isEqualTo(InputSource.VOICE);
+      assertThat(submitted.getFirst().target()).isEqualTo(target);
+    }
+  }
+  @Test void playbackDiscardsRecognitionAlreadyInFlightAndSuppressesCapturedEcho() throws Exception {
+    var source=new Source();var entered=new CountDownLatch(1);var release=new CountDownLatch(1);
+    var submitted=new CopyOnWriteArrayList<ConversationInput>();var recognized=new AtomicInteger();
+    var tick=new AtomicLong();var gate=new VoiceAudioGate(tick::get);
+    try(var voice=new VoiceInputCoordinator(d->source,s->backend(new SpeechRecognizer(){
+      public String recognize(SpeechSegment segment) throws Exception {recognized.incrementAndGet();entered.countDown();release.await();return "echo";}
+      public void close(){}
+    },new AtomicInteger()),submitted::add,new VoiceEventPublisher(),clock,t->true,System::nanoTime,gate)) {
+      voice.start(target,device,VoiceSettings.defaults());source.speech(1);
+      assertThat(entered.await(3,TimeUnit.SECONDS)).isTrue();
+      try(var playback=gate.playback(Duration.ofMillis(800))){
+        source.speech(2);release.countDown();
+        await().atMost(Duration.ofSeconds(3)).until(()->source.reads.get()>=228);
+      }
+      source.speech(1);await().atMost(Duration.ofSeconds(3)).until(()->source.reads.get()>=304);
+      assertThat(submitted).isEmpty();assertThat(recognized).hasValue(1);
+      tick.set(800_000_000L);source.speech(1);
+      await().atMost(Duration.ofSeconds(3)).untilAsserted(()->assertThat(submitted).hasSize(1));
+    } finally {release.countDown();}
+  }
   @Test void stopInterruptsSlowNativeStartupWithoutOpeningMicrophone() throws Exception {
     var entered=new CountDownLatch(1);var interrupted=new CountDownLatch(1);var captures=new AtomicInteger();
     try(var voice=new VoiceInputCoordinator(d->{captures.incrementAndGet();return new Source();},s->{

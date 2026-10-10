@@ -7,6 +7,19 @@ import static org.mockito.Mockito.*;
 import picocli.CommandLine;
 import dev.mikoto2000.rei.application.session.ShellConversationService;
 class VoiceCommandTest {
+  @Test void advancedFeaturesAreExplicitOffOnlyAndInvalidUpdatesAreAtomic() {
+    var voice=mock(VoiceInputCoordinator.class);when(voice.state()).thenReturn(VoiceInputCoordinator.State.OFF);
+    var properties=new VoiceProperties();var command=new CommandLine(new VoiceCommand(voice,new AudioDeviceService(()->List.of()),properties,mock(ShellConversationService.class)));
+    assertThat(command.execute("features","--wake","true","--wake-word","れい")).isZero();
+    assertThat(properties.advanced().wakeEnabled()).isTrue();
+    var before=properties.advanced();
+    assertThat(command.execute("features","--tts","true","--echo-tail-ms","1")).isEqualTo(2);
+    assertThat(properties.advanced()).isEqualTo(before);
+    when(voice.state()).thenReturn(VoiceInputCoordinator.State.LISTENING);
+    assertThat(command.execute("features","--wake","false")).isEqualTo(2);
+    assertThat(properties.advanced()).isEqualTo(before);
+    assertThat(command.execute("features")).isZero();
+  }
   @Test void selectionIsExplicitAndConfigurationValidatesBeforeChangingSettings() {
     var devices=new AudioDeviceService(()->List.of(new AudioDevice("dry","DRY (VT-4)","input","vendor","1")));
     var voice=mock(VoiceInputCoordinator.class); when(voice.state()).thenReturn(VoiceInputCoordinator.State.OFF);

@@ -50,7 +50,7 @@ public final class ConversationInputGateway {
       Runnable afterAccepted) {
     return submit(input, mode, run -> {}, run -> {}, afterAccepted);
   }
-  private AgentRunContext submit(ConversationInput input, AgentRunContext.Mode mode,
+  public synchronized AgentRunContext submit(ConversationInput input, AgentRunContext.Mode mode,
       Consumer<AgentRunContext> beforeDispatch, Consumer<AgentRunContext> failedDispatch, Runnable afterAccepted) {
     Objects.requireNonNull(input);
     Objects.requireNonNull(afterAccepted);
@@ -100,6 +100,13 @@ public final class ConversationInputGateway {
         }
       }
     };
+  }
+  /** Read-only identity check for a control input before any cancellation side effect. */
+  public synchronized boolean isNovel(ConversationInput input) {
+    Objects.requireNonNull(input);prune();var prior=accepted.get(input.inputId());
+    if(prior==null)return true;
+    if(!prior.input().equals(input))throw new IllegalArgumentException("Input ID already belongs to another payload");
+    return false;
   }
   public synchronized List<ConversationInput> pending(ConversationTarget target) {
     return accepted.values().stream().filter(entry -> entry.input().source() == InputSource.VOICE)

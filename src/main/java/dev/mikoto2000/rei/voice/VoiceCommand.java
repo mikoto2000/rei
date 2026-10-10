@@ -106,6 +106,27 @@ public class VoiceCommand {
       spec.commandLine().getOut().println(s);spec.commandLine().getOut().println(inference);spec.commandLine().getOut().println("recognition confirmation: "+properties.isConfirmation());return 0;
     });
   }
+  @Command(name="features",description="高度な音声機能（既定OFF）。変更は音声入力OFF時のみ",mixinStandardHelpOptions=true)
+  int features(@Option(names="--wake",arity="0..1",fallbackValue="true") Boolean wake,
+      @Option(names="--wake-word") String word,
+      @Option(names="--interrupt",arity="0..1",fallbackValue="true") Boolean interrupt,
+      @Option(names="--tts",arity="0..1",fallbackValue="true") Boolean tts,
+      @Option(names="--tts-voice") String ttsVoice,@Option(names="--echo-tail-ms") Integer tail) {
+    return attempt(()-> {
+      var current=properties.advanced();
+      if(wake!=null||word!=null||interrupt!=null||tts!=null||ttsVoice!=null||tail!=null) {
+        requireOff();
+        var changed=new VoiceAdvancedOptions(wake==null?current.wakeEnabled():wake,
+          word==null?current.wakeWord():word,interrupt==null?current.interruptEnabled():interrupt,
+          tts==null?current.ttsEnabled():tts,ttsVoice==null?current.ttsVoice():ttsVoice,
+          tail==null?current.echoTailMs():tail);
+        properties.setAdvanced(changed);
+      }
+      spec.commandLine().getOut().println(properties.advanced());
+      spec.commandLine().getOut().println("呼びかけは認識後の受付条件です。本人確認・ツール承認の代わりにはなりません。");
+      return 0;
+    });
+  }
   private VoiceModelManager modelManager() {
     if(models==null)throw new IllegalStateException("Voice model manager is unavailable");return models;
   }
