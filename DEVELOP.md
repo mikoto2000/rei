@@ -10,6 +10,8 @@ Rei の開発者向けドキュメントです。利用手順は [README.md](./R
 
 初学者教材レビューの静的解析API・CLI・品質評価は [初学者レビューガイド](docs/beginner-material-review.md) を参照してください。
 
+環境診断の範囲・状態・設定元の表示は [環境ドクターガイド](docs/environment-doctor.md) を参照してください。
+
 ## 開発環境
 
 現在の基盤は Spring Boot 4.1.1 / Spring AI 2.0.1 です。接続設定と既存履歴の互換対応は [更新ガイド](docs/spring-ai-2-upgrade.md) を参照してください。

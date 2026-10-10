@@ -33,6 +33,7 @@ version = "v1.0.0",
 name = "",
 description = "AI shell",
 subcommands = {
+  dev.mikoto2000.rei.doctor.DoctorCommand.class,
   dev.mikoto2000.rei.llm.capture.LlmCaptureCommand.class,
   dev.mikoto2000.rei.core.command.DocumentCommand.class,
   dev.mikoto2000.rei.core.command.RepairCommand.class,
@@ -87,7 +88,11 @@ public class RootCommand {
   @org.springframework.beans.factory.annotation.Value("${rei.material-review.beginner.enabled:true}")
   private boolean beginnerReviewEnabled = true;
 
+  @org.springframework.beans.factory.annotation.Value("${rei.doctor.enabled:true}")
+  private boolean doctorEnabled = true;
+
   public void configureCommands(picocli.CommandLine command) {
+    if (!doctorEnabled) command.getCommandSpec().removeSubcommand("doctor");
     if (!beginnerReviewEnabled) command.getCommandSpec().removeSubcommand("material-review");
     if (!embeddingEnabled) {
       command.getCommandSpec().removeSubcommand("embed");
