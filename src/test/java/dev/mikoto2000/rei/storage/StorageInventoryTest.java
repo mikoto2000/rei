@@ -42,6 +42,14 @@ class StorageInventoryTest {
     assertThat(new StorageInventory(Clock.systemUTC(), 100, 1024).measure(missing).categories()).isEmpty();
     assertThat(missing).doesNotExist();
   }
+  @Test void migrationBackupsAreSeparateFromLiveSessionCounts() throws Exception {
+    Files.writeString(root.resolve("sessions.json"),"[{}]");
+    Path backup=Files.createDirectories(root.resolve(".storage/backups/example/files"));
+    Files.writeString(backup.resolve("sessions.json"),"[{},{}]");
+    var report=new StorageInventory(Clock.systemUTC(),100,1024).measure(root);
+    assertThat(report.categories().get("sessions").records()).isEqualTo(1);
+    assertThat(report.categories().get("migration-backups").files()).isEqualTo(1);
+  }
 
   @Test void completeJsonWithoutTerminatingNewlineIsNotACommittedReplayRecord() throws Exception {
     Files.createDirectories(root.resolve("events"));
