@@ -214,7 +214,8 @@ GitHubからのReview通知、CI失敗trigger、PR merge待ちは [GitHub Event 
 
 明示Project allowlistから読み取り専用で今日の候補を集計するAPIは [Cross-project Today](docs/cross-project-today.md) を参照してください。
 
-デスクトップの観測・作業履歴は [Activity Capture / Timeline](docs/activity-timeline.md) を参照してください。
+デスクトップの観測・作業履歴は [Activity Capture / Timeline](docs/activity-timeline.md)、
+全景補助と時系列統合は [Desktop Context Fusion](docs/activity-desktop-context-fusion.md) を参照してください。
 初期状態は無効です。有効化後は `/activity today`、`/activity yesterday`、`/activity pause` などで操作できます。
 
 開発やテストの手順は [DEVELOP.md](DEVELOP.md)、仕様・設計は [.kiro](.kiro/README.md) を参照してください。

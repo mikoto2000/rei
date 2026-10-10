@@ -1,0 +1,10 @@
+[
+ {"id":"ide-spec-tests","process":"IDE","title":"rei tests","content":"テスト修正","background":"Spring Security 仕様","idle":false,"delaySeconds":0,"missing":false},
+ {"id":"abandoned-video","process":"IDE","title":"rei tests","content":"コード修正","background":"YouTube 放置動画","idle":false,"delaySeconds":0,"missing":false},
+ {"id":"research-to-ide","process":"Chrome","title":"rei Spring Security","content":"Spring Security 調査","background":"仕様書","idle":false,"delaySeconds":0,"missing":false},
+ {"id":"rapid-switch","process":"IDE","title":"rei tests","content":"テスト修正","background":"仕様書","idle":false,"delaySeconds":0,"missing":false},
+ {"id":"multi-monitor","process":"IDE","title":"rei tests","content":"テスト修正","background":"別モニターのテスト結果","idle":false,"delaySeconds":0,"missing":false},
+ {"id":"idle","process":"IDE","title":"rei tests","content":"コード修正","background":"仕様書","idle":true,"delaySeconds":0,"missing":false},
+ {"id":"delayed-vision","process":"IDE","title":"rei tests","content":"テスト修正","background":"仕様書","idle":false,"delaySeconds":360,"missing":false},
+ {"id":"missing-vision","process":"IDE","title":"rei tests","content":"","background":"","idle":false,"delaySeconds":0,"missing":true}
+]

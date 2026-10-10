@@ -1,5 +1,7 @@
 # 時系列の作業推定
 
+全景補助・入力履歴の統合とプライバシー設定は[デスクトップ補助情報と時系列統合](activity-desktop-context-fusion.md)を参照。
+
 ## 概要と設定
 
 直近5分の保存済みOS観測・前面の分類候補・観測時のProject/Git/Work revisionと、

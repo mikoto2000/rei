@@ -32,5 +32,31 @@ public final class ActivityQualityEvaluation {
     }
     return new Report("ActivityRolePolicy/ActivityPeriodAnalysis/PeriodCoaching",List.copyOf(rows),(double)rows.stream().filter(Row::projectMatches).count()/rows.size(),(double)rows.stream().filter(Row::themeMatches).count()/rows.size(),rows.stream().mapToInt(row->row.violations().size()).sum(),false);
   }
+  public record DesktopRow(String mode,long observedSeconds,int contextCandidates,int primaryChanges,
+      long visionCalls,long queueWaitMillis,long processingMillis,long freshnessMillis,String temporalInference) {}
+  public record DesktopReport(List<DesktopRow> rows,boolean truthVerified,String limitation) {}
+  /** Replay already-analyzed observations, without calls to Vision or disk writes. */
+  public static DesktopReport compareDesktop(List<ActivityRecord> records) {
+    if(records.isEmpty() || records.size()>120 || records.stream().map(ActivityRecord::id).distinct().count()!=records.size())throw new IllegalArgumentException("Bounded desktop fixtures required");
+    var rows=new ArrayList<DesktopRow>();long duration=records.stream().mapToLong(ActivityRecord::durationEstimate).sum();
+    int contexts=0;long foregroundCalls=0,backgroundCalls=0,wait=0,processing=0,freshness=0,foregroundWait=0,foregroundProcessing=0,foregroundFreshness=0;
+    for(var record:records) {
+      var v=VisionDiagnostics.of(record.detection());
+      for(var result:new VisionDiagnostics.Result[]{v.foreground(),v.background()})if(result!=null && result.timing()!=null && result.state()!=VisionDiagnostics.State.NOT_ATTEMPTED && result.timing().startedAt()!=null) {
+        var t=result.timing();if(t.startedAt()!=null){if(result==v.foreground())foregroundCalls++;else backgroundCalls++;}
+        if(t.imageCapturedAt()!=null && t.startedAt()!=null){long value=Math.max(0,Duration.between(t.imageCapturedAt(),t.startedAt()).toMillis());wait+=value;if(result==v.foreground())foregroundWait+=value;}
+        if(t.startedAt()!=null && t.completedAt()!=null){long value=Math.max(0,Duration.between(t.startedAt(),t.completedAt()).toMillis());processing+=value;if(result==v.foreground())foregroundProcessing+=value;}
+        if(t.completedAt()!=null){long value=Math.max(0,Duration.between(record.capturedAt(),t.completedAt()).toMillis());freshness=Math.max(freshness,value);if(result==v.foreground())foregroundFreshness=Math.max(foregroundFreshness,value);}
+      }
+      if(v.background()!=null && v.background().context()!=null)contexts+=v.background().context().candidates().size();
+    }
+    rows.add(new DesktopRow("A",duration,0,0,foregroundCalls,foregroundWait,foregroundProcessing,foregroundFreshness,""));
+    rows.add(new DesktopRow("B",duration,contexts,0,foregroundCalls+backgroundCalls,wait,processing,freshness,""));
+    var first=records.stream().map(ActivityRecord::capturedAt).min(Comparator.naturalOrder()).orElseThrow();
+    var last=records.stream().map(ActivityRecord::capturedAt).max(Comparator.naturalOrder()).orElseThrow();
+    rows.add(new DesktopRow("C",duration,contexts,0,foregroundCalls+backgroundCalls,wait,processing,freshness,
+        TemporalActivityEvidence.build(records,List.of(),first,last).ruleInference().inferredActivity()));
+    return new DesktopReport(List.copyOf(rows),false,"Replay is structural evaluation. Accuracy requires independent manual labels; CPU/RSS/SSD I/O are not measured.");
+  }
   private static void bounded(String value,int max){if(value==null||value.isBlank()||value.length()>max)throw new IllegalArgumentException("Bounded nonblank fixture value required");}
 }

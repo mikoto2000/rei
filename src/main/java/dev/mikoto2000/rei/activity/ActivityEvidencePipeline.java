@@ -16,19 +16,20 @@ final class ActivityEvidencePipeline {
   private final ActivityStore store;
   private final ScreenshotStore screenshots;
   private final Clock clock;
-  private final Executor foregroundExecutor,backgroundExecutor;
+  private final Executor foregroundExecutor;
   private final ActivityEvidenceAggregator aggregator;
   private java.util.function.Function<ActivityEvidence,ActivityClassification> classify=new ActivityClassifier()::classify;
   void useToolkit(ClassificationToolkit toolkit){classify=toolkit::classify;}
   private final AtomicBoolean observing=new AtomicBoolean();
   private final LongAdder observations=new LongAdder(),evidenceOnly=new LongAdder(),fallbacks=new LongAdder(),skipped=new LongAdder(),foregroundCalls=new LongAdder(),backgroundCalls=new LongAdder(),success=new LongAdder(),failure=new LongAdder(),timeout=new LongAdder();
   private final LongAdder outputLimits=new LongAdder(),validationFailures=new LongAdder(),unknownCount=new LongAdder(),partialCount=new LongAdder(),usableCount=new LongAdder();
-  private boolean paused,closed,foregroundBusy,backgroundBusy;
+  private boolean paused,closed,foregroundBusy;
   private long generation;
   private String continuity=UUID.randomUUID().toString();
   private ActivityRecord previous;
-  private Work pending;
-  private Instant backgroundAt;
+  private Work pending,desktopPending;
+  private final DesktopAnalysisPolicy desktopPolicy;
+  synchronized int desktopPending(){return desktopPending==null?0:1;}
   private Instant foregroundStarted,lastSucceededAt;
   private CandidateKey lastSucceededKey;
   private ActivityExtractor.Result lastSucceededResult;
@@ -51,18 +52,19 @@ final class ActivityEvidencePipeline {
     final long generation;final CapturedScreen screen;
     final Instant imageCapturedAt;
     final CandidateKey key;
+    CapturedScreen desktop;
     ActivityRecord record;
     Work(long generation,CapturedScreen screen,ActivityRecord record,Instant imageCapturedAt) {this.generation=generation;this.screen=screen;this.record=record;this.imageCapturedAt=imageCapturedAt;this.key=CandidateKey.of(record);}
   }
   ActivityEvidencePipeline(ActivityProperties p,DesktopActivityObserver observer,ActivityExtractor extractor,ActivityStore store,
       ScreenshotStore screenshots,Clock clock,Executor foregroundExecutor,Executor backgroundExecutor,List<ActivityEvidenceSource> sources) {
-    this.p=p;this.observer=observer;this.extractor=extractor;this.store=store;this.screenshots=screenshots;this.clock=clock;
-    this.foregroundExecutor=foregroundExecutor;this.backgroundExecutor=backgroundExecutor;aggregator=new ActivityEvidenceAggregator(p,sources);
+    this.p=p;this.desktopPolicy=new DesktopAnalysisPolicy(p);this.observer=observer;this.extractor=extractor;this.store=store;this.screenshots=screenshots;this.clock=clock;
+    this.foregroundExecutor=foregroundExecutor;aggregator=new ActivityEvidenceAggregator(p,sources);
   }
   synchronized void pause() {paused=true;invalidate();}
   synchronized void resume() {paused=false;invalidate();}
   synchronized void close() {closed=true;pause();}
-  private synchronized void invalidate() {generation++;pending=null;previous=null;backgroundAt=null;lastSucceededAt=null;lastSucceededKey=null;lastSucceededResult=null;lastSucceededTiming=null;continuity=UUID.randomUUID().toString();}
+  private synchronized void invalidate() {generation++;pending=null;desktopPending=null;desktopPolicy.reset();previous=null;lastSucceededAt=null;lastSucceededKey=null;lastSucceededResult=null;lastSucceededTiming=null;continuity=UUID.randomUUID().toString();}
   private synchronized boolean allowed(long token) {return p.isEnabled() && !paused && !closed && generation==token;}
   void tick() {
     if(!observing.compareAndSet(false,true))return;
@@ -78,6 +80,16 @@ final class ActivityEvidencePipeline {
       if(new CapturePolicy(p).excluded(fg)){invalidate();return;}
       var at=clock.instant();
       var evidence=aggregator.collect(at,metadata,prior);
+      boolean idle=false;
+      if(p.getDetection().isBackgroundFullScreenEnabled())try {
+        var sample=observer.lightweight();
+        boolean reliable=sample!=null && sample.reliable();
+        long age=reliable?((sample.uptimeMillis()-sample.lastInput()) & 0xffffffffL):0;
+        reliable=reliable && age<0x80000000L;
+        idle=reliable && (sample.locked() || age>=60000);
+        evidence=evidence.withInput(new ActivityEvidence.InputReference(!idle,reliable));
+      }catch(Exception ignored){}
+
       ActivityClassification classification;
       try {classification=p.getDetection().isEvidenceEnabled() && p.getDetection().getMode()!=ActivityProperties.DetectionMode.VISION_FIRST?classify.apply(evidence):unknown(fg);}
       catch(Exception e){warn("classification",e);classification=unknown(fg);}
@@ -106,8 +118,10 @@ final class ActivityEvidencePipeline {
           record.inference().activities().getFirst().type(),axes.category(),axes.application(),axes.service(),axes.project(),axes.content(),classification.usable(p.getDetection().getSkipVisionConfidence()),classification.complete(),!fallback,classification.reason());
       boolean background;
       synchronized(this) {
-        background=p.isExtractionEnabled() && p.getDetection().isVisionEnabled() && p.getDetection().isBackgroundFullScreenEnabled()
-            && !backgroundBusy && (backgroundAt==null || Duration.between(backgroundAt,at).toSeconds()>=p.getBackgroundAnalysisIntervalSeconds());
+        desktopPolicy.window(at,fg.windowId());
+        background=p.isExtractionEnabled() && p.getDetection().isVisionEnabled() && metadata.complete()
+            && desktopPolicy.due(at,idle,Objects.toString(evidence.projectId(),"")+":"+(evidence.workContext()==null?0:evidence.workContext().revision())+":"+(evidence.workContext()==null?"":Objects.toString(evidence.workContext().git()==null?null:evidence.workContext().git().branch(),""))+":"+
+                Objects.toString(metadata.visibleWindows(),"")+":"+Objects.toString(fg.bounds(),""));
       }
       boolean keep=new ScreenshotPersistencePolicy(p).shouldSave(false,ScreenshotPersistencePolicy.Outcome.SUCCESS);
       if(!fallback && !background && !keep){metrics();return;}
@@ -116,44 +130,68 @@ final class ActivityEvidencePipeline {
       Instant imageCapturedAt;
       try {screen=observer.capture();imageCapturedAt=clock.instant();}catch(Exception e){warn("screenshot",e);metrics();return;}
       if(!allowed(token) || !Objects.equals(fg,observer.foreground())) {metrics();return;}
-      var work=new Work(token,screen,record,imageCapturedAt);
+      if(p.getDetection().isBackgroundFullScreenEnabled()) {
+        var captures=screen.displays().stream().map(display->{var b=ActivityImages.physicalBounds(display.geometry());
+          return new ActivityRecord.Observation(display.geometry().id(),new ActivityRecord.Bounds(b.x,b.y,b.width,b.height),imageCapturedAt);}).toList();
+        record=new ActivityRecord(record.id(),record.capturedAt(),record.durationEstimate(),captures,record.foreground(),record.inference(),record.confidence(),record.screenshotReferences(),record.changeAmount(),record.duplicate(),record.continuityId(),record.detection());
+      }
+      CapturedScreen desktop=null;
+      if(p.getDetection().isBackgroundFullScreenEnabled()) {
+        // Verify enumeration around capture; never mask from a stale or truncated window list.
+        var after=observer.metadata();
+        if(!metadata.equals(after) || !metadata.complete()){metrics();return;}
+        var sanitized=ActivityImages.privateDesktop(screen,metadata,p,false);
+        if(sanitized==null){metrics();return;}
+        desktop=ActivityImages.selectDesktop(sanitized,p);
+        if(desktop==null)background=false;
+        screen=sanitized;
+        // Keep the main crop separate from selected desktop monitors. Full-frame fallback fails closed.
+        var front=ActivityImages.foreground(screen,fg);
+        if(fg.bounds()==null || front==screen){metrics();return;}
+        screen=front;
+      }
+      var work=new Work(token,screen,record,imageCapturedAt);work.desktop=desktop;
       if(keep) synchronized(this) {
         if(allowed(token)) {
-          try {var refs=screenshots.save(record.id(),at,screen);work.record=copy(work.record,work.record.inference(),work.record.confidence(),work.record.detection(),refs);store.replace(work.record);}
+          try {var refs=screenshots.save(record.id(),at,desktop==null?screen:desktop);work.record=copy(work.record,work.record.inference(),work.record.confidence(),work.record.detection(),refs);store.replace(work.record);}
           catch(Exception e){warn("evidence persistence",e);}
         }
       }
-      if(fallback)submitForeground(work);
-      if(background)submitBackground(work);
+      // Publish both slots before scheduling, even for synchronous test executors.
+      synchronized(this) {
+        if(!allowed(token))return;
+        if(background){desktopPending=work;desktopPolicy.started(at);}
+        if(fallback){if(pending!=null){skipped.increment();replaced.increment();}pending=work;}
+      }
+      pollForeground();
       metrics();
     } catch(Exception e){warn("observation",e);} finally {observing.set(false);}
   }
-  private void submitForeground(Work work) {
-    synchronized(this) {
-      if(!allowed(work.generation))return;
-      if(pending!=null){log.info("Activity fallback replaced: evidence_retained=true");skipped.increment();replaced.increment();}
-      pending=work;
-    }
-    pollForeground();
-  }
   void pollForeground() {
     synchronized(this) {
-      if(foregroundBusy || pending==null || !allowed(pending.generation))return;
-      if(!startDue()){deferred.increment();return;}
+      if(foregroundBusy || (pending==null && desktopPending==null))return;
+      if(pending!=null && !startDue()){deferred.increment();return;}
       foregroundBusy=true;
     }
     try {foregroundExecutor.execute(this::drain);}
-    catch(RuntimeException e){synchronized(this){foregroundBusy=false;pending=null;}warn("foreground scheduling",e);}
+    catch(RuntimeException e){synchronized(this){foregroundBusy=false;pending=null;desktopPending=null;}warn("foreground scheduling",e);}
   }
   private void drain() {
     while(true) {
-      Work work;synchronized(this){
-        work=pending;if(work==null){foregroundBusy=false;return;}
-        if(!startDue()){deferred.increment();foregroundBusy=false;return;}
-        pending=null;
-        if(duplicate(work.key,clock.instant())){duplicateSkipped.increment();if(allowed(work.generation))work.record=finishSkipped(work.record);continue;}
+      Work work;boolean background;
+      synchronized(this){
+        if(pending!=null) {
+          if(!startDue()){deferred.increment();foregroundBusy=false;return;}
+          work=pending;pending=null;background=false;
+          if(duplicate(work.key,clock.instant())){duplicateSkipped.increment();if(allowed(work.generation))work.record=finishSkipped(work.record);continue;}
+        }else {
+          work=desktopPending;desktopPending=null;background=true;
+          if(work==null){foregroundBusy=false;return;}
+          if(!allowed(work.generation) || !desktopPolicy.executionAllowed(clock.instant()) || clock.instant().isBefore(work.record.capturedAt())
+              || Duration.between(work.record.capturedAt(),clock.instant()).getSeconds()>p.getBackgroundAnalysisIntervalSeconds())continue;
+        }
       }
-      enrich(work,false);
+      enrich(work,background);
     }
   }
   private boolean startDue(){return !p.getVisionQueue().isEnabled() || foregroundStarted==null || !clock.instant().isBefore(foregroundStarted.plusSeconds(p.getVisionQueue().getMinimumStartIntervalSeconds()));}
@@ -180,26 +218,19 @@ final class ActivityEvidencePipeline {
     var detection=new ActivityRecord.Detection(d.evidence(),List.copyOf(sources),false,"EVIDENCE_PLUS_HISTORY","FINAL",weights,d.reason()+"|HISTORICAL_INFERENCE",d.fieldConfidence(),d.secondaryConfidence(),d.diagnostics(),vision);
     return copy(inferred,inferred.inference(),inferred.confidence(),detection,inferred.screenshotReferences());
   }
-  private void submitBackground(Work work) {
-    synchronized(this) {
-      if(!allowed(work.generation) || backgroundBusy)return;
-      backgroundBusy=true;backgroundAt=work.record.capturedAt();
-    }
-    try {backgroundExecutor.execute(()->{try{enrich(work,true);}finally{synchronized(this){backgroundBusy=false;}}});}
-    catch(RuntimeException e){synchronized(this){backgroundBusy=false;}warn("background scheduling",e);}
-  }
   private void enrich(Work work,boolean background) {
     long started=System.nanoTime();
     Instant apiStarted=null,apiCompleted=null;boolean supplementSaved=false;
     ActivityRecord original;synchronized(this){if(!allowed(work.generation))return;original=work.record;}
     String source=background?"VISION_BACKGROUND":"VISION_FOREGROUND";
     try(var ignored=org.slf4j.MDC.putCloseable("activityScope",background?"background":"foreground")) {
-      var image=background || !p.getDetection().isForegroundCrop()?work.screen:ActivityImages.foreground(work.screen,original.foreground());
-      if(!background && p.getDetection().isForegroundCrop() && image==work.screen) {
+      var image=background?work.desktop:!p.getDetection().isForegroundCrop() || p.getDetection().isBackgroundFullScreenEnabled()?work.screen:ActivityImages.foreground(work.screen,original.foreground());
+      if(image==null)return;
+      if(!background && !p.getDetection().isBackgroundFullScreenEnabled() && p.getDetection().isForegroundCrop() && image==work.screen) {
         skipped.increment();log.info("Activity fallback skipped: reason=foreground_bounds_unavailable evidence_retained=true");return;
       }
       apiStarted=clock.instant();
-      synchronized(this){if(!allowed(work.generation))return;if(background)backgroundCalls.increment();else{foregroundCalls.increment();foregroundStarted=apiStarted;}}
+      synchronized(this){if(!allowed(work.generation))return;if(background){desktopPolicy.executed(apiStarted);backgroundCalls.increment();}else{foregroundCalls.increment();foregroundStarted=apiStarted;}}
       recordAttempt(work,background,apiStarted);
       var result=extractor.extract(image,original.foreground());
       apiCompleted=clock.instant();
@@ -213,7 +244,7 @@ final class ActivityEvidencePipeline {
         var secondary=new ArrayList<>(d.secondaryConfidence());
         if(background)for(var candidate:merged.inference().activities())
           if(!base.inference().activities().contains(candidate))secondary.add(new ActivityClassification.Secondary(candidate,ActivityFieldConfidence.from(candidate,result.confidence()).secondary()));
-        boolean used=!base.inference().equals(merged.inference()) || !ActivityEnrichment.fields(base).equals(ActivityEnrichment.fields(merged));
+        boolean used=background?VisionDiagnostics.of(merged.detection()).background().context()!=null:!base.inference().equals(merged.inference()) || !ActivityEnrichment.fields(base).equals(ActivityEnrichment.fields(merged));
         var vision=VisionDiagnostics.of(d).with(background,used?VisionDiagnostics.State.USED:VisionDiagnostics.State.ATTEMPTED_SUCCEEDED_NOT_USED,null)
             .timing(background,new VisionDiagnostics.Timing(original.id(),work.imageCapturedAt,apiStarted,apiCompleted));
         var detection=new ActivityRecord.Detection(d.evidence(),List.copyOf(sources),true,"EVIDENCE_PLUS_VISION","FINAL",weights,d.reason(),d.fieldConfidence(),secondary,d.diagnostics(),vision);

@@ -43,6 +43,14 @@ public class ActivityProperties {
   private double visionImageScale = .5;
   private int backgroundAnalysisIntervalSeconds = 300;
   private Detection detection = new Detection();
+  private DesktopContext desktopContext=new DesktopContext();
+  @Data public static class DesktopContext {
+    /** Empty selects all connected displays. IDs come from the existing Robot capture adapter. */
+    private List<String> monitors=List.of();
+    private List<Mask> masks=List.of();
+  }
+  public record Mask(String monitor,int x,int y,int width,int height) {}
+
   private Classification classification=new Classification();
   private Summary summary=new Summary();
   private Coaching coaching=new Coaching();
@@ -127,6 +135,11 @@ public class ActivityProperties {
         || !Double.isFinite(changeThreshold) || changeThreshold < 0 || changeThreshold > 1
         || excludedProcesses == null || excludedWindowTitlePatterns == null)
       throw new IllegalArgumentException("Invalid rei.activity settings");
+    if(desktopContext==null || desktopContext.monitors==null || desktopContext.masks==null
+        || desktopContext.monitors.size()>16 || desktopContext.masks.size()>64
+        || desktopContext.monitors.stream().anyMatch(id->id==null || id.isBlank())
+        || desktopContext.masks.stream().anyMatch(m->m==null || m.monitor()==null || m.monitor().isBlank() || m.width()<=0 || m.height()<=0))
+      throw new IllegalArgumentException("Invalid desktop privacy settings");
     java.time.ZoneId.of(zone);
   }
   public int effectiveMaximumGapSeconds() {return summaryGapSeconds==null?summaryMaximumMergeGapSeconds:Math.min(summaryGapSeconds,summaryMaximumMergeGapSeconds);}

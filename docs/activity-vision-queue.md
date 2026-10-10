@@ -4,7 +4,8 @@
 
 `rei.activity.vision-queue.enabled=true`、`minimum-start-interval-seconds=30`、
 `max-refresh-interval-seconds=300` が既定値。開始間隔は前面認識の開始から次の開始まで。
-背景ワーカーは従来どおり独立し、明示有効時だけ動く。同時実行数は増やさない。
+全景は明示有効時だけ動き、前面優先の単一Visionワーカーと独立した最新待機枠を使う。
+詳細は[デスクトップ補助情報と時系列統合](activity-desktop-context-fusion.md)を参照。
 新しいタイマースレッドや待機sleepは追加せず、既存ポーリングで保留候補を再開する。
 軽量チェックで詳細観測を省略したポーリングでもキューを確認する。
 30秒は下限であり、実際の再開にはポーリング・実行中の解析・executorの遅延が加わる。
