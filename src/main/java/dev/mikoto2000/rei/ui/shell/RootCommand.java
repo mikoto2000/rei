@@ -34,6 +34,7 @@ name = "",
 description = "AI shell",
 subcommands = {
   dev.mikoto2000.rei.doctor.DoctorCommand.class,
+  dev.mikoto2000.rei.core.command.StorageCommand.class,
   dev.mikoto2000.rei.llm.capture.LlmCaptureCommand.class,
   dev.mikoto2000.rei.core.command.DocumentCommand.class,
   dev.mikoto2000.rei.core.command.RepairCommand.class,
