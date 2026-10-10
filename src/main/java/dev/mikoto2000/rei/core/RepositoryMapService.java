@@ -156,8 +156,11 @@ public final class RepositoryMapService {
     var diagnostics=new DiagnosticCollector<JavaFileObject>();
     String parseText=text.startsWith("\ufeff")?" "+text.substring(1):text;
     var source=new SimpleJavaFileObject(path.toUri(),JavaFileObject.Kind.SOURCE){@Override public CharSequence getCharContent(boolean ignored){return parseText;}};
-    var task=(JavacTask)compiler.getTask(null,manager,diagnostics,List.of("-proc:none"),null,List.of(source));
     try {
+      // -proc:none does not disable javac's auto-start Plugin discovery during parse().
+      // An explicit empty processor path prevents fallback to the host application's classpath.
+      manager.setLocationFromPaths(StandardLocation.ANNOTATION_PROCESSOR_PATH,List.of());
+      var task=(JavacTask)compiler.getTask(null,manager,diagnostics,List.of("-proc:none"),null,List.of(source));
       var unit=task.parse().iterator().next();
       if(diagnostics.getDiagnostics().stream().anyMatch(d->d.getKind()==Diagnostic.Kind.ERROR))return new Parsed("","SYNTAX_ERROR",List.of(),List.of());
       String pkg=unit.getPackageName()==null?"":unit.getPackageName().toString();var symbols=new ArrayList<Symbol>();
