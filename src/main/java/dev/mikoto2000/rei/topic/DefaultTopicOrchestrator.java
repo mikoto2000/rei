@@ -25,11 +25,22 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
   private final AgentEventPublisher eventPublisher;
   private final Clock clock;
   private final AtomicBoolean running = new AtomicBoolean(false);
+  private final java.util.concurrent.Executor refreshExecutor;
+  private final java.util.concurrent.atomic.AtomicLong refreshVersion = new java.util.concurrent.atomic.AtomicLong();
 
   public DefaultTopicOrchestrator(TopicGeneratorService topicGeneratorService, TopicCandidateStore candidateStore,
       TopicGenerationContextProvider contextProvider, AgentActivityTracker activityTracker,
       AgentMessagePublisher messagePublisher, TopicGeneratorProperties properties,
       AgentEventFactory eventFactory, AgentEventPublisher eventPublisher, Clock clock) {
+    this(topicGeneratorService, candidateStore, contextProvider, activityTracker, messagePublisher,
+        properties, eventFactory, eventPublisher, clock, Runnable::run);
+  }
+
+  public DefaultTopicOrchestrator(TopicGeneratorService topicGeneratorService, TopicCandidateStore candidateStore,
+      TopicGenerationContextProvider contextProvider, AgentActivityTracker activityTracker,
+      AgentMessagePublisher messagePublisher, TopicGeneratorProperties properties,
+      AgentEventFactory eventFactory, AgentEventPublisher eventPublisher, Clock clock,
+      java.util.concurrent.Executor refreshExecutor) {
     this.topicGeneratorService = topicGeneratorService;
     this.candidateStore = candidateStore;
     this.contextProvider = contextProvider;
@@ -39,15 +50,29 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
     this.eventFactory = eventFactory;
     this.eventPublisher = eventPublisher;
     this.clock = clock;
+    this.refreshExecutor = refreshExecutor;
   }
 
   @Override
   public void onChatCompleted() {
     if (!properties.isEnabled()) return;
-    List<TopicCandidate> candidates = topicGeneratorService.prepareCandidates(contextProvider.currentContext());
-    candidateStore.replace(candidates, Instant.now(clock));
-    eventPublisher.publish(eventFactory.topicCandidatesRefreshed(candidates.size(),
-        candidates.stream().map(TopicCandidate::topic).toList()));
+    var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    long version = refreshVersion.incrementAndGet();
+    try {
+      refreshExecutor.execute(() -> {
+        try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+          List<TopicCandidate> candidates = topicGeneratorService.prepareCandidates(contextProvider.currentContext());
+          if (refreshVersion.get() != version || Thread.currentThread().isInterrupted()) return;
+          candidateStore.replace(candidates, Instant.now(clock));
+          eventPublisher.publish(eventFactory.topicCandidatesRefreshed(candidates.size(),
+              candidates.stream().map(TopicCandidate::topic).toList()));
+        } catch (RuntimeException failure) {
+          log.warn("Topic candidate refresh failed", failure);
+        }
+      });
+    } catch (java.util.concurrent.RejectedExecutionException closing) {
+      log.debug("Topic candidate refresh skipped during shutdown");
+    }
   }
 
   @Override

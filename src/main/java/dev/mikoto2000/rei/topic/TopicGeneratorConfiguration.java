@@ -82,14 +82,25 @@ public class TopicGeneratorConfiguration {
     return new DefaultIdleTopicTrigger(properties, activityTracker);
   }
 
+  @Bean(destroyMethod = "shutdownNow")
+  java.util.concurrent.ExecutorService topicCandidateRefreshExecutor() {
+    // One active refresh and only the latest waiting request. Never run generation on the caller.
+    return new java.util.concurrent.ThreadPoolExecutor(1, 1, 0, java.util.concurrent.TimeUnit.MILLISECONDS,
+        new java.util.concurrent.ArrayBlockingQueue<>(1),
+        task -> { var thread = new Thread(task, "rei-topic-refresh"); thread.setDaemon(true); return thread; },
+        new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
+  }
+
   @Bean
   TopicOrchestrator topicOrchestrator(TopicGeneratorService topicGeneratorService,
       TopicCandidateStore candidateStore, TopicGenerationContextProvider contextProvider,
       AgentActivityTracker activityTracker, AgentMessagePublisher messagePublisher,
       TopicGeneratorProperties properties, dev.mikoto2000.rei.event.AgentEventFactory eventFactory,
-      dev.mikoto2000.rei.event.AgentEventPublisher eventPublisher, Clock clock) {
+      dev.mikoto2000.rei.event.AgentEventPublisher eventPublisher, Clock clock,
+      @org.springframework.beans.factory.annotation.Qualifier("topicCandidateRefreshExecutor")
+      java.util.concurrent.ExecutorService refreshExecutor) {
     return new DefaultTopicOrchestrator(topicGeneratorService, candidateStore, contextProvider, activityTracker,
-        messagePublisher, properties, eventFactory, eventPublisher, clock);
+        messagePublisher, properties, eventFactory, eventPublisher, clock, refreshExecutor);
   }
 
   @Bean
