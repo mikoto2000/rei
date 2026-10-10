@@ -11,8 +11,11 @@ automatically enables retention or deletes old sources.
 The new `storage.db` lives at the configured Rei data-directory root. It initially
 contained only `storage_migrations` at version 1. Version 2 adds `sessions`,
 `turns`, `storage_turn_sources` and `storage_imports`, scoped by project and
-conversation, with WAL and indexed keyset paging. Later phases add reference,
-Event and retention metadata.
+conversation, with WAL and indexed keyset paging. Version 3 adds `stored_objects`,
+`object_references`, `retention_policies`, `retention_plans`,
+`retention_candidates` and `retention_approvals`. See
+[reference protection and retention](storage-retention.md). Event storage changes
+in its own later phase.
 
 | Choice | Transaction / backup implications | Decision |
 | --- | --- | --- |

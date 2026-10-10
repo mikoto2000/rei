@@ -17,8 +17,8 @@ public class ContextCompressionConfiguration {
     return new ConversationSummaryRepository(java.nio.file.Path.of(directory));
   }
   @Bean public RawToolResultStore rawToolResultStore(
-      @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
-    return new RawToolResultStore(java.nio.file.Path.of(directory));
+      @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory,dev.mikoto2000.rei.storage.StorageObjectRegistry registry) {
+    return new RawToolResultStore(java.nio.file.Path.of(directory),registry);
   }
   @Bean public RawToolResultTools rawToolResultTools(RawToolResultStore store) { return new RawToolResultTools(store); }
   @Bean public ContextHistoryAdvisor contextHistoryAdvisor(ConversationTurnStore turns, ChatMemory memory,
