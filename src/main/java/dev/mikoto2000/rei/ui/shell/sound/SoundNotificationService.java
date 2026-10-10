@@ -20,6 +20,10 @@ public class SoundNotificationService {
 
   private final ReentrantLock notificationLock = new ReentrantLock(true);
   private final SoundNotificationProperties properties;
+  private dev.mikoto2000.rei.voice.VoiceAudioGate voiceAudioGate;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setVoiceAudioGate(dev.mikoto2000.rei.voice.VoiceAudioGate gate){this.voiceAudioGate=gate;}
+
 
   public void notify(String message) {
     notificationLock.lock();
@@ -58,7 +62,9 @@ public class SoundNotificationService {
 
   private void executeCommand(List<String> command, String message) {
     Process process = null;
-    try {
+    var gate=voiceAudioGate;
+    try (var playback=gate==null ? (dev.mikoto2000.rei.voice.VoiceAudioGate.Playback)()->{}
+        : gate.playback(java.time.Duration.ofMillis(800))) {
       process = createProcessBuilder(command).start();
       boolean finished = process.waitFor(getTimeoutSeconds(), TimeUnit.SECONDS);
       if (!finished) {

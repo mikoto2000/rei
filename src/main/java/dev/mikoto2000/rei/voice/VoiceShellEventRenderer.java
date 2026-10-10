@@ -10,7 +10,10 @@ public final class VoiceShellEventRenderer implements Consumer<VoiceEventPublish
       case SEGMENT_QUEUE_FULL -> "認識待ちキューが満杯のため発話を破棄しました";
       case SHORT_DROPPED -> "短すぎる発話を破棄しました";
       case MAX_DROPPED -> "最大発話時間の上限に達した未完了発話を破棄しました";
-      case RESULT_REJECTED -> "空・無効・コマンド形式の認識結果を破棄しました";
+      case INTERRUPT_RESULT -> event.detail().equals("cancelled") ? "このShellの実行中Runへ取消を要求しました。再開には明示的な依頼が必要です" : "このShell・Sessionの実行中Runはありません";
+      case TTS_FAILED -> "ローカル読み上げに失敗しました。画面の応答と音声設定を確認してください";
+      case TTS_DROPPED -> "読み上げの長さ・キュー上限に達しました。画面の応答を確認してください";
+      case RESULT_REJECTED -> "空・無効・コマンド形式、または呼びかけ条件外の認識結果を破棄しました";
       case INPUT_REJECTED -> "会話入力を受け付けられませんでした。/voice pending と送信先Sessionを確認してください";
       case BACKEND_FAILED -> "音声モデル/JNIの初期化に失敗しました。モデル一式と --enable-native-access=ALL-UNNAMED を確認してください";
       case CAPTURE_FAILED -> "選択マイクの録音/VADが停止しました。別マイクへは切り替えません";

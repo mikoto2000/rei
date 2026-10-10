@@ -7,6 +7,16 @@ import dev.mikoto2000.rei.application.session.ShellConversationService;
 @Configuration(proxyBeanMethods=false)
 @EnableConfigurationProperties(VoiceProperties.class)
 public class VoiceConfiguration {
+  @Bean VoiceAudioGate voiceAudioGate(){return new VoiceAudioGate(System::nanoTime);}
+  @Bean SapiVoiceOutput sapiVoiceOutput(){return new SapiVoiceOutput();}
+  @Bean(destroyMethod="close") VoicePlaybackService voicePlaybackService(SapiVoiceOutput output,VoiceAudioGate gate,
+      VoiceProperties properties,VoiceInputCoordinator voice,VoiceDeliveryService delivery,VoiceEventPublisher events) {
+    var playback=new VoicePlaybackService(output,gate,properties::advanced,
+        context->voice.state()==VoiceInputCoordinator.State.LISTENING&&delivery.ownsRun(context),events);
+    events.subscribe(event->{if(event.type()==VoiceEventPublisher.Type.STATE_CHANGED
+        && !event.detail().equals("LISTENING") && !event.detail().equals("STARTING"))playback.stop();});
+    return playback;
+  }
   @Bean AudioDeviceService audioDeviceService(VoiceProperties properties,VoiceEventPublisher events) {
     var devices=new AudioDeviceService();devices.restoreSelection(properties.getDeviceId());
     events.subscribe(event->{
@@ -19,8 +29,16 @@ public class VoiceConfiguration {
   @Bean WindowsMicrophoneMonitor windowsMicrophoneMonitor() {
     var endpoints=new WindowsAudioEndpoints();return new WindowsMicrophoneMonitor(endpoints::captureEndpoints);
   }
-  @Bean VoiceDeliveryService voiceDeliveryService(ShellConversationService shell,Clock clock,VoiceEventPublisher events,VoiceProperties properties) {
-    var delivery=new VoiceDeliveryService(shell,clock,events);delivery.setConfirmation(properties.isConfirmation());return delivery;
+  @Bean VoiceDeliveryService voiceDeliveryService(ShellConversationService shell,Clock clock,VoiceEventPublisher events,VoiceProperties properties,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.application.run.RunService> runs,
+      dev.mikoto2000.rei.core.service.CommandCancellationService cancellation) {
+    shell.onActiveCancellation(context->{
+      var runner=runs.getIfAvailable();
+      if(runner!=null)try{return runner.cancel(context.runId()).accepted();}
+        catch(dev.mikoto2000.rei.application.run.RunNotFoundException missing) { /* Legacy unregistered Run. */ }
+      return cancellation.cancelRegisteredRun(context.runId());
+    });
+    var delivery=new VoiceDeliveryService(shell,clock,events,properties::advanced);delivery.setConfirmation(properties.isConfirmation());return delivery;
   }
   @Bean(destroyMethod="close") HttpsVoiceAssetTransport voiceAssetTransport() {return new HttpsVoiceAssetTransport();}
   @Bean(destroyMethod="close") VoiceModelManager voiceModelManager(VoiceProperties properties,HttpsVoiceAssetTransport transport,VoiceEventPublisher events) {
@@ -37,7 +55,7 @@ public class VoiceConfiguration {
   }
   @Bean(destroyMethod="close") VoiceInputCoordinator voiceInputCoordinator(
       IsolatedVoiceBackendFactory backend,VoiceEventPublisher events,
-      VoiceDeliveryService delivery,WindowsMicrophoneMonitor monitor,Clock clock) {
-    return new VoiceInputCoordinator(new GuardedMicrophoneCapture(new JavaSoundMicrophoneCapture(),monitor),backend,delivery::accept,events,clock,delivery::targetIsCurrent,System::nanoTime);
+      VoiceDeliveryService delivery,WindowsMicrophoneMonitor monitor,Clock clock,VoiceAudioGate audioGate,VoiceProperties properties) {
+    return new VoiceInputCoordinator(new GuardedMicrophoneCapture(new JavaSoundMicrophoneCapture(),monitor),backend,delivery::accept,events,clock,delivery::targetIsCurrent,System::nanoTime,audioGate,properties::advanced);
   }
 }

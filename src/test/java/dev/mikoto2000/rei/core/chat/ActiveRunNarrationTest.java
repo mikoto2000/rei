@@ -11,6 +11,22 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ActiveRunNarrationTest {
+  @Test void optedInVoiceCannotFallBackToUnscopedNarrationWhenSelectionChanged() {
+    var tasks=new ArrayList<Runnable>();var executor=mock(ExecutorService.class);
+    doAnswer(call->{tasks.add(call.getArgument(0));return null;}).when(executor).execute(any());
+    var execution=mock(ChatExecutionService.class);
+    when(execution.execute(any(),anyString(),any())).thenReturn(ChatExecutionResult.success("answer",false));
+    var narrator=mock(ChatResponseNarrator.class);
+    var playback=mock(dev.mikoto2000.rei.voice.VoicePlaybackService.class);
+    when(playback.enabledFor(any())).thenReturn(true);when(playback.offer(any(),anyString())).thenReturn(false);
+    @SuppressWarnings("unchecked") var provider=(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.voice.VoicePlaybackService>)mock(org.springframework.beans.factory.ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(playback);
+    var config=new AgentRunConfiguration();config.setVoicePlayback(provider);
+    var router=config.conversationInputRouter(executor,execution,narrator,new AgentEventFactory(Clock.systemUTC()),event->{});
+    var context=new AgentRunContext("voice","session",Path.of("."),"project").asVoiceInput();
+    router.submit(context,"hello");tasks.removeFirst().run();
+    assertThat(tasks).isEmpty();verifyNoInteractions(narrator);verify(playback).offer(context,"answer");
+  }
   @Test void webChatDoesNotScheduleNarration(@org.junit.jupiter.api.io.TempDir Path directory) {
     var tasks = new ArrayList<Runnable>();
     var executor = mock(ExecutorService.class);

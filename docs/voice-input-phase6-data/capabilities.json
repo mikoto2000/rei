@@ -1,0 +1,69 @@
+{
+  "environment": {
+    "java": 25,
+    "os": "Windows x64",
+    "microphone": "DRY (VT-4)",
+    "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+    "gpuMemoryMiB": 16376,
+    "driver": "616.64"
+  },
+  "model": "sherpa-1_13_8-whisper-turbo-fp32-2ca6ff69-silero-9e2449e1",
+  "cudaProbe": {
+    "requested": "cuda",
+    "available": [
+      "CPUExecutionProvider"
+    ],
+    "actual": "cpu",
+    "gpuSupportedByPinnedBundle": false,
+    "recognizedPublicFixture": "こんにちは。短く挨拶してください。"
+  },
+  "sapiProbe": {
+    "voice": "Microsoft Haruka Desktop - Japanese",
+    "text": "読み上げのテストです。",
+    "exitCode": 0,
+    "userHeard": true,
+    "microphoneOpened": false,
+    "audioFilesCreated": false
+  },
+  "springContextProbe": {
+    "exitCode": 0,
+    "webEnabled": false,
+    "microphoneState": "OFF",
+    "nativeWorkers": 0,
+    "advancedFeaturesEnabled": false
+  },
+  "limitations": [
+    "No GPU-enabled verified JNI bundle",
+    "Post-ASR wake gate; no verified Japanese native KWS",
+    "No speaker enrollment or identification",
+    "Half-duplex suppression; no physical AEC or interruption during TTS",
+    "CI and main integration not yet complete"
+  ],
+  "fullRegression": {
+    "tests": 4322,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "elapsed": "12:16",
+    "success": true
+  },
+  "packageSuccess": true,
+  "echoProbe": {
+    "durationSeconds": 20,
+    "microphone": "DRY (VT-4)",
+    "packagedApplication": true,
+    "text": "こんにちは。音声入力のテストです。短く挨拶してください。",
+    "playbackCompleted": true,
+    "recognized": 0,
+    "faults": 0,
+    "microphoneState": "OFF",
+    "nativeWorkers": 0,
+    "processExited": true,
+    "stderrEmpty": true,
+    "agentInputSent": false,
+    "audioFilesCreated": false,
+    "userHeard": true,
+    "scope": "Half-duplex suppression in this setup; not a physical AEC evaluation",
+    "previousTrial": "Aborted on cue timeout; not counted as success"
+  }
+}

@@ -16,6 +16,8 @@ public final class VoiceInputCoordinator implements AutoCloseable {
   private final Consumer<ConversationInput> submit;
   private final VoiceEventPublisher events;
   private final Clock clock;
+  private final VoiceAudioGate audioGate;
+  private final java.util.function.Supplier<VoiceAdvancedOptions> advanced;
   private final java.util.function.Predicate<ConversationTarget> selected;
   private final java.util.function.LongSupplier ticks;
   private record FrameStamp(long nanos,java.time.Instant at) {}
@@ -33,6 +35,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     volatile FrameStamp lastFrame;
     volatile ScheduledFuture<?> deadline;
     final VoiceInputQueue segments = new VoiceInputQueue();
+    final ConcurrentMap<java.util.UUID,Long> epochs = new ConcurrentHashMap<>();
     final CountDownLatch exited = new CountDownLatch(2);
     final AtomicBoolean captureClosed = new AtomicBoolean();
     final CountDownLatch captureReleased = new CountDownLatch(1);
@@ -53,6 +56,20 @@ public final class VoiceInputCoordinator implements AutoCloseable {
   public VoiceInputCoordinator(MicrophoneCaptureService capture,VoiceBackendFactory backends,
       Consumer<ConversationInput> submit,VoiceEventPublisher events,Clock clock,
       java.util.function.Predicate<ConversationTarget> selected,java.util.function.LongSupplier ticks) {
+    this(capture,backends,submit,events,clock,selected,ticks,new VoiceAudioGate(ticks));
+  }
+  public VoiceInputCoordinator(MicrophoneCaptureService capture,VoiceBackendFactory backends,
+      Consumer<ConversationInput> submit,VoiceEventPublisher events,Clock clock,
+      java.util.function.Predicate<ConversationTarget> selected,java.util.function.LongSupplier ticks,
+      VoiceAudioGate audioGate) {
+    this(capture,backends,submit,events,clock,selected,ticks,audioGate,VoiceAdvancedOptions::defaults);
+  }
+  public VoiceInputCoordinator(MicrophoneCaptureService capture,VoiceBackendFactory backends,
+      Consumer<ConversationInput> submit,VoiceEventPublisher events,Clock clock,
+      java.util.function.Predicate<ConversationTarget> selected,java.util.function.LongSupplier ticks,
+      VoiceAudioGate audioGate,java.util.function.Supplier<VoiceAdvancedOptions> advanced) {
+    this.advanced=Objects.requireNonNull(advanced);
+    this.audioGate=Objects.requireNonNull(audioGate);
     this.selected=Objects.requireNonNull(selected);this.ticks=Objects.requireNonNull(ticks);
     this.capture = Objects.requireNonNull(capture); this.backends = Objects.requireNonNull(backends);
     this.submit = Objects.requireNonNull(submit); this.events = Objects.requireNonNull(events);
@@ -102,7 +119,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     synchronized (guard) {
       run = active;
       if (run == null) { if (!closed) change(State.OFF); return; }
-      run.stop = true; run.segments.clear(); change(State.STOPPING);
+      run.stop = true; run.segments.clear(); run.epochs.clear(); change(State.STOPPING);
     }
     stopWorkers(run);
   }
@@ -124,7 +141,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
   private void stop(Run run,VoiceEventPublisher.Type code,boolean failed) {
     synchronized (guard) {
       if (run.stop) return;
-      run.failed |= failed; run.stop = true; run.segments.clear(); change(State.STOPPING);
+      run.failed |= failed; run.stop = true; run.segments.clear(); run.epochs.clear(); change(State.STOPPING);
     }
     events.publish(code, "voice stopped");
     stopWorkers(run);
@@ -189,7 +206,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
           try { run.captureReleased.await(); } catch (InterruptedException e) { interrupted = true; }
         }
       }
-      run.segments.clear();
+      run.segments.clear(); run.epochs.clear();
       if (run.backend != null) {
         try { run.backend.close(); } catch (RuntimeException | LinkageError e) {
           run.failed = true; events.publish(VoiceEventPublisher.Type.RELEASE_FAILED, "backend");
@@ -203,6 +220,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
   }
   private void captureLoop(Run run) {
     var assembler = new SpeechSegmentAssembler(run.settings, clock);
+    long previousEpoch = audioGate.epoch();
     try {
       while (!run.stop) {
         var frame = run.source.readFrame();
@@ -211,11 +229,23 @@ public final class VoiceInputCoordinator implements AutoCloseable {
         if(stale(run)){fail(run,VoiceEventPublisher.Type.CAPTURE_RESUMED);break;}
         VoicePcm.validateFrame(frame);
         run.lastFrame = new FrameStamp(ticks.getAsLong(),clock.instant());
+        long epoch = audioGate.epoch();
+        if (epoch != previousEpoch || audioGate.suppressed()) {
+          assembler.reset(); run.segments.clear(); run.epochs.clear(); previousEpoch = epoch;
+          if (audioGate.suppressed()) {
+            run.backend.vad().probability(new float[VoiceSettings.WINDOW]);
+            continue;
+          }
+        }
         var decision = assembler.accept(frame, run.backend.vad().probability(frame));
         switch (decision.reason()) {
           case COMPLETED -> {
-            if (!run.stop && !run.segments.offer(decision.segment())) {
-              events.publish(VoiceEventPublisher.Type.SEGMENT_QUEUE_FULL, "segment dropped");
+            if (!run.stop && audioGate.allowed(epoch)) {
+              var segment=decision.segment(); run.epochs.put(segment.id(),epoch);
+              if (!run.segments.offer(segment)) {
+                run.epochs.remove(segment.id());
+                events.publish(VoiceEventPublisher.Type.SEGMENT_QUEUE_FULL, "segment dropped");
+              }
             }
           }
           case SHORT_DROPPED -> events.publish(VoiceEventPublisher.Type.SHORT_DROPPED, "segment dropped");
@@ -231,19 +261,29 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     } finally { assembler.reset(); run.exited.countDown(); }
   }
   private void recognizeLoop(Run run) {
+    var wakeGate=new VoiceWakeGate(clock);
     try {
       while (!run.stop) {
         var segment = run.segments.poll(200, TimeUnit.MILLISECONDS);
         if (segment == null) continue;
+        var epoch = run.epochs.remove(segment.id());
+        if (epoch == null || !audioGate.allowed(epoch)) continue;
         var result = SpeechResultFilter.filter(run.backend.recognizer().recognize(segment));
         if(!selected(run)){stop(run,VoiceEventPublisher.Type.TARGET_CHANGED,false);continue;}
         if(stale(run)){fail(run,VoiceEventPublisher.Type.CAPTURE_RESUMED);continue;}
         synchronized (guard) {
-          if (run.stop || active != run) continue;
+          if (run.stop || active != run || !audioGate.allowed(epoch)) continue;
           if (result.isEmpty()) { events.publish(VoiceEventPublisher.Type.RESULT_REJECTED, "recognition dropped"); continue; }
           if (run.diagnostic) { events.publish(VoiceEventPublisher.Type.DIAGNOSTIC_RESULT, result.get()); continue; }
           try {
-            submit.accept(new ConversationInput(segment.id(), InputSource.VOICE, run.target, result.get(), segment.createdAt()));
+            audioGate.ifAllowed(epoch, () -> {
+              var acceptedText=wakeGate.filter(result.get(),run.target,advanced.get());
+              if(acceptedText.isEmpty()) {
+                events.publish(VoiceEventPublisher.Type.RESULT_REJECTED,"wake gate"); return;
+              }
+              submit.accept(new ConversationInput(segment.id(), InputSource.VOICE, run.target,
+                  acceptedText.get(), segment.createdAt()));
+            });
           } catch (RuntimeException e) {
             events.publish(VoiceEventPublisher.Type.INPUT_REJECTED, "input rejected");
           }
@@ -259,7 +299,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
   private void stopDiagnostic(Run run) {
     synchronized (guard) {
       if (active != run || run.stop) return;
-      run.stop = true; run.segments.clear(); change(State.STOPPING);
+      run.stop = true; run.segments.clear(); run.epochs.clear(); change(State.STOPPING);
     }
     stopWorkers(run);
   }

@@ -6,6 +6,10 @@ import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 
 @Configuration
 public class AgentRunConfiguration {
+  private org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.voice.VoicePlaybackService> voicePlayback;
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setVoicePlayback(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.voice.VoicePlaybackService> playback){voicePlayback=playback;}
+
   @Bean
   public dev.mikoto2000.rei.application.session.ShellConversationService shellConversations(
       dev.mikoto2000.rei.core.project.ProjectService projects,
@@ -42,6 +46,10 @@ public class AgentRunConfiguration {
       try {
         var result = execution.execute(context, prompt, queue);
         if (result.success() && context.requestSource() == AgentRunContext.RequestSource.SHELL) {
+          var playback=voicePlayback==null?null:voicePlayback.getIfAvailable();
+          if(playback!=null&&playback.enabledFor(context)) {
+            playback.offer(context,result.text());return;
+          }
           // Audio can block for minutes; it is not an active AgentRun and must not hold its mailbox open.
           try {
             agentRunExecutor.execute(() -> {

@@ -11,6 +11,9 @@ public final class VoiceDeliveryService {
   private final ShellConversationService shell;
   private final VoiceReviewInbox inbox;
   private final VoiceEventPublisher events;
+  private final java.util.function.Supplier<VoiceAdvancedOptions> advanced;
+  private final Clock clock;
+  private final Map<UUID,ConversationInput> stopped=new LinkedHashMap<>();
   private final java.util.concurrent.CopyOnWriteArrayList<java.util.function.Consumer<ConversationInput>> submittedListeners
       = new java.util.concurrent.CopyOnWriteArrayList<>();
   public interface Subscription extends AutoCloseable { @Override void close(); }
@@ -32,6 +35,11 @@ public final class VoiceDeliveryService {
     }
   }
   public VoiceDeliveryService(ShellConversationService shell,Clock clock,VoiceEventPublisher events) {
+    this(shell,clock,events,VoiceAdvancedOptions::defaults);
+  }
+  public VoiceDeliveryService(ShellConversationService shell,Clock clock,VoiceEventPublisher events,
+      java.util.function.Supplier<VoiceAdvancedOptions> advanced) {
+    this.advanced=Objects.requireNonNull(advanced);this.clock=Objects.requireNonNull(clock);
     this.shell=Objects.requireNonNull(shell);this.events=Objects.requireNonNull(events);
     inbox=new VoiceReviewInbox(this::dispatch,i->targetIsCurrent(i.target()),clock);
   }
@@ -44,9 +52,30 @@ public final class VoiceDeliveryService {
   public boolean targetIsCurrent(ConversationTarget target) {
     var selected=binding;return selected!=null&&selected.target().equals(target)&&shell.isSelected(selected.client(),target);
   }
+  public boolean ownsRun(dev.mikoto2000.rei.core.chat.AgentRunContext context) {
+    var selected=binding;
+    return selected!=null && context.voiceInput()
+        && Objects.equals(context.projectId(),selected.target().project().id())
+        && context.projectRoot().equals(selected.target().project().root().toAbsolutePath().normalize())
+        && Objects.equals(context.conversationId(),selected.target().sessionId())
+        && targetIsCurrent(selected.target()) && shell.ownsRun(selected.client(),context);
+  }
   private void dispatch(ConversationInput input) {
     var selected=binding;
     if(selected==null||!selected.target().equals(input.target()))throw new IllegalStateException("Voice target changed");
+    synchronized(stopped) {
+      stopped.values().removeIf(prior->prior.createdAt().isBefore(clock.instant().minusSeconds(120)));
+      var prior=stopped.get(input.inputId());
+      if(prior!=null){if(!prior.equals(input))throw new IllegalArgumentException("Conflicting stop identity");return;}
+      if(advanced.get().interruptEnabled() && input.text().strip().replaceFirst("[。.!！]+$", "").equals("実行を停止")) {
+        if(stopped.size()>=4096)throw new IllegalStateException("Stop deduplication capacity reached");
+        // Identity and selection are checked before any cancellation side effect.
+        int count=shell.cancelSelectedActive(selected.client(),input);
+        stopped.put(input.inputId(),input);
+        events.publish(VoiceEventPublisher.Type.INTERRUPT_RESULT,count>0?"cancelled":"no owned active run");
+        return;
+      }
+    }
     shell.submitSelectedVoice(selected.client(),input,() -> submitted(input));
   }
   public void accept(ConversationInput input) {
