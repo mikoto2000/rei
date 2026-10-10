@@ -181,10 +181,19 @@ class LlmChatClientProviderTest {
         optional(null), optional(null), null, null);
     provider.setSummaryTools(optional(mock(SummaryTools.class)));
 
+    var external = mock(dev.mikoto2000.rei.externalagent.ExternalAgentTools.class);
+    var first = mock(org.springframework.ai.tool.ToolCallback.class);
+    var second = mock(org.springframework.ai.tool.ToolCallback.class);
+    when(external.callbacks()).thenReturn(new org.springframework.ai.tool.ToolCallback[]{first, second});
+    provider.setExternalAgentTools(external, null);
+
     var client = provider.chatClient(LlmFeature.CHAT);
     var requestField = client.getClass().getDeclaredField("defaultChatClientRequest");
     requestField.setAccessible(true);
     var request = requestField.get(client);
+    var directCallbacks = request.getClass().getDeclaredField("toolCallbacks");
+    directCallbacks.setAccessible(true);
+    assertThat(directCallbacks.get(request)).isEqualTo(List.of(first, second));
     var callbacksField = request.getClass().getDeclaredField("toolCallbackProviders");
     callbacksField.setAccessible(true);
     var callbacks = ((List<?>) callbacksField.get(request)).stream()

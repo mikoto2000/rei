@@ -89,7 +89,21 @@ class AiConfigurationTest {
         mockProviderReturning(null),
         provider);
 
+    var external = Mockito.mock(dev.mikoto2000.rei.externalagent.ExternalAgentTools.class);
+    var first = Mockito.mock(org.springframework.ai.tool.ToolCallback.class);
+    var second = Mockito.mock(org.springframework.ai.tool.ToolCallback.class);
+    when(first.getToolDefinition()).thenReturn(org.springframework.ai.tool.definition.ToolDefinition.builder()
+        .name("firstExternal").description("first").inputSchema("{}").build());
+    when(second.getToolDefinition()).thenReturn(org.springframework.ai.tool.definition.ToolDefinition.builder()
+        .name("secondExternal").description("second").inputSchema("{}").build());
+    when(external.callbacks()).thenReturn(new org.springframework.ai.tool.ToolCallback[]{first, second});
+    configuration.setExternalAgentTools(external, null);
     ChatClient chatClient = configuration.chatClient();
+    Object defaultRequest = getDefaultChatClientRequest(chatClient);
+    Field directCallbacks = defaultRequest.getClass().getDeclaredField("toolCallbacks");
+    directCallbacks.setAccessible(true);
+    var registered = (List<?>) directCallbacks.get(defaultRequest);
+    assertEquals(List.of(first, second), registered.subList(registered.size() - 2, registered.size()));
 
     List<?> toolCallbackProviders = getDefaultToolCallbackProviders(chatClient);
     assertEquals(1, toolCallbackProviders.size());

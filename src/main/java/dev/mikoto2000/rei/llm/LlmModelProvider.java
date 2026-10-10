@@ -21,21 +21,19 @@ public class LlmModelProvider {
   private java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> captureCustomizers=java.util.List.of();
   private io.micrometer.observation.ObservationRegistry captureObservations=ObservationRegistry.NOOP;
   private io.micrometer.core.instrument.MeterRegistry captureMeters;
-  private org.springframework.ai.model.tool.ToolCallingManager captureTools;
   @Autowired(required=false)
   void configureCapture(dev.mikoto2000.rei.llm.capture.CaptureStore store,
       org.springframework.beans.factory.ObjectProvider<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> customizers,
       org.springframework.beans.factory.ObjectProvider<io.micrometer.observation.ObservationRegistry> observations,
-      org.springframework.beans.factory.ObjectProvider<io.micrometer.core.instrument.MeterRegistry> meters,
-      org.springframework.beans.factory.ObjectProvider<org.springframework.ai.model.tool.ToolCallingManager> tools){
+      org.springframework.beans.factory.ObjectProvider<io.micrometer.core.instrument.MeterRegistry> meters){
     captureStore=store;captureCustomizers=customizers.orderedStream().toList();captureObservations=observations.getIfAvailable(()->ObservationRegistry.NOOP);
-    captureMeters=meters.getIfAvailable();captureTools=tools.getIfAvailable();
+    captureMeters=meters.getIfAvailable();
   }
   private ChatModel captureModel(ChatModel model,boolean custom){
     if(captureStore==null||!(model instanceof OpenAiChatModel openAi))return model;
     var configured=custom?java.util.List.<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>of(
       builder->builder.interceptor(new ChatStreamTimeoutInterceptor()).interceptor(new ShowUiSdkRequestInterceptor())):captureCustomizers;
-    return new CapturingChatModel(openAi,captureStore,configured,custom?ObservationRegistry.NOOP:captureObservations,custom?null:captureMeters,custom?null:captureTools);
+    return new CapturingChatModel(openAi,captureStore,configured,custom?ObservationRegistry.NOOP:captureObservations,custom?null:captureMeters);
   }
   private final ChatModel defaultChatModel;
   private final LlmProperties properties;
