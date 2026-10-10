@@ -2,7 +2,7 @@
 
 Phase 1 adds read-only inventory. Phase 2 adds a startup gate and verified backup
 foundation. Phase 3 switches Session and Turn beans to indexed rows after verified
-startup import. Event storage remains unchanged until its own migration. See
+startup import. Phase 5 switches project Event and replay Cursor beans to rows. See
 [Session and Turn storage](storage-session-turn-migration.md). No migration phase
 automatically enables retention or deletes old sources.
 
@@ -14,8 +14,9 @@ contained only `storage_migrations` at version 1. Version 2 adds `sessions`,
 conversation, with WAL and indexed keyset paging. Version 3 adds `stored_objects`,
 `object_references`, `retention_policies`, `retention_plans`,
 `retention_candidates` and `retention_approvals`. See
-[reference protection and retention](storage-retention.md). Event storage changes
-in its own later phase.
+[reference protection and retention](storage-retention.md). Version 4 adds
+`agent_events`, `event_sequences`, `event_cursors` and `event_imports`. See
+[Event and Cursor storage](storage-event-migration.md).
 
 | Choice | Transaction / backup implications | Decision |
 | --- | --- | --- |

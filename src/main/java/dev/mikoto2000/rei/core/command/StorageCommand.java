@@ -59,7 +59,8 @@ public final class StorageCommand {
         spec.commandLine().getErr().println("No current project; select a project before measuring its storage.");
         return 2;
       }
-      var report = parent.inventory.measure(project == null ? ReiDataDirectory.current() : ProjectStorage.directory(context.id()));
+      var root=parent.planner==null?ReiDataDirectory.current():parent.planner.root();
+      var report = parent.inventory.measure(project == null ? root : root.resolve("projects").resolve(context.id()));
       var out = spec.commandLine().getOut();
       out.println("storage: " + report.root());
       out.println("category files records physical_bytes(file length) logical_bytes");
@@ -70,8 +71,8 @@ public final class StorageCommand {
       out.printf("delta_bytes=%s bytes_per_second=%s complete=%s%n", report.deltaBytes(), report.bytesPerSecond(), report.complete());
       report.unknown().forEach(reason -> out.println("unknown: " + reason));
       if(parent.planner!=null)try {
-        var managed=parent.planner.status(project==null?null:context.id());
-        out.println("managed metadata scope="+(project==null?"global":context.id())+"; body bytes are recorded sizes, not a fresh content verification");
+        var managed=project==null?parent.planner.statusAll():parent.planner.status(context.id());
+        out.println("managed metadata scope="+(project==null?"all":context.id())+"; body bytes are recorded sizes, not a fresh content verification");
         managed.objects().forEach(row->out.printf("managed %s count=%d recorded_body_bytes=%d%n",row.kind(),row.count(),row.recordedBodyBytes()));
         managed.protectionReasons().forEach((reason,count)->out.printf("protected %s count=%d%n",reason,count));
         out.printf("reference_scan_limited=%s; run retention plan for bounded, verified candidates%n",managed.referenceScanLimited());

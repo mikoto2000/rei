@@ -16,6 +16,7 @@ public final class RetentionPlanner {
   public record Summary(String id,String policyId,String scope,String snapshotHash,long recoverableBytes,Instant created) {}
   private final StorageObjectRegistry registry;
   public RetentionPlanner(StorageObjectRegistry registry){this.registry=registry;}
+  public java.nio.file.Path root(){return registry.root();}
   public Policy policy(String id){return registry.database.read(db->policy(db,id));}
   static Policy policy(Connection db,String id)throws SQLException {
     try(var query=db.prepareStatement("SELECT * FROM retention_policies WHERE id=?")){query.setString(1,id);try(var rows=query.executeQuery()){if(!rows.next())throw new IllegalArgumentException("Unknown retention policy");return new Policy(id,rows.getString("kind"),nullable(rows,"retention_seconds"),nullable(rows,"max_bytes"),nullable(rows,"max_count"),rows.getBoolean("automatic"),rows.getLong("version"));}}
@@ -74,9 +75,12 @@ public final class RetentionPlanner {
   public record ObjectUsage(String kind,long count,long recordedBodyBytes) {}
   public record Status(List<ObjectUsage> objects,Map<String,Long> protectionReasons,boolean referenceScanLimited) {}
   /** Indexed metadata only; no body hashes, planning, filesystem writes or checkpoints. */
-  public Status status(String suppliedScope){String scope=suppliedScope==null?"":UUID.fromString(suppliedScope).toString();return registry.database.read(db->{
-    var usages=new ArrayList<ObjectUsage>();try(var query=db.prepareStatement("SELECT kind,count(*),COALESCE(sum(size),0) FROM stored_objects WHERE scope=? GROUP BY kind")){query.setString(1,scope);try(var rows=query.executeQuery()){while(rows.next())usages.add(new ObjectUsage(rows.getString(1),rows.getLong(2),rows.getLong(3)));}}
-    var reasons=new TreeMap<String,Long>();boolean limited=false;try(var query=db.prepareStatement("SELECT * FROM stored_objects WHERE scope=? ORDER BY id LIMIT 1001")){query.setString(1,scope);try(var rows=query.executeQuery()){int count=0;while(rows.next()){if(++count>1000){limited=true;break;}registry.protectionReason(db,StorageObjectRegistry.row(rows)).ifPresent(reason->reasons.merge(reason,1L,Long::sum));}}}
+  public Status statusAll(){return statusScope(null);}
+  public Status status(String suppliedScope){return statusScope(suppliedScope==null?"":UUID.fromString(suppliedScope).toString());}
+  private Status statusScope(String scope){return registry.database.read(db->{
+    String filter=scope==null?"":" WHERE scope=?";
+    var usages=new ArrayList<ObjectUsage>();try(var query=db.prepareStatement("SELECT kind,count(*),COALESCE(sum(size),0) FROM stored_objects"+filter+" GROUP BY kind")){if(scope!=null)query.setString(1,scope);try(var rows=query.executeQuery()){while(rows.next())usages.add(new ObjectUsage(rows.getString(1),rows.getLong(2),rows.getLong(3)));}}
+    var reasons=new TreeMap<String,Long>();boolean limited=false;try(var query=db.prepareStatement("SELECT * FROM stored_objects"+filter+" ORDER BY id LIMIT 1001")){if(scope!=null)query.setString(1,scope);try(var rows=query.executeQuery()){int count=0;while(rows.next()){if(++count>1000){limited=true;break;}registry.protectionReason(db,StorageObjectRegistry.row(rows)).ifPresent(reason->reasons.merge(reason,1L,Long::sum));}}}
     return new Status(List.copyOf(usages),Map.copyOf(reasons),limited);
   });}
 }

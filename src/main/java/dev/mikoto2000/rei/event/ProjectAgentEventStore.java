@@ -11,7 +11,6 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.stereotype.Component;
 
 /** Typed JSONL audit log. Project sequences are durable; the bus retains its process sequence API. */
-@Component
 public class ProjectAgentEventStore implements AgentEventListener {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ProjectAgentEventStore.class);
   private final Path base;

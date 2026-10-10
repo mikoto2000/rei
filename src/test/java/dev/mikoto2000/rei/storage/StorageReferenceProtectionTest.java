@@ -105,8 +105,8 @@ class StorageReferenceProtectionTest {
   @Test void versionTwoUpgradeDoesNotReimportChangedLegacySessionJsonAndKeepsRollbackAtomic()throws Exception {
     prepare();
     try(var db=java.sql.DriverManager.getConnection("jdbc:sqlite:"+root.resolve("storage.db"));var sql=db.createStatement()) {
-      for(String table:List.of("stored_objects","object_references","retention_policies","retention_plans","retention_candidates","retention_approvals"))sql.execute("DROP TABLE "+table);
-      sql.execute("DELETE FROM storage_migrations WHERE version=3");sql.execute("PRAGMA user_version=2");
+      for(String table:List.of("stored_objects","object_references","retention_policies","retention_plans","retention_candidates","retention_approvals","agent_events","event_sequences","event_cursors","event_imports"))sql.execute("DROP TABLE IF EXISTS "+table);
+      sql.execute("DELETE FROM storage_migrations WHERE version>2");sql.execute("PRAGMA user_version=2");
     }
     Files.writeString(root.resolve("sessions.json"),"not a session array");
     try(var migration=new StorageMigrationCoordinator(root,(stage,backup)->{if(stage==StorageMigrationCoordinator.Stage.ROWS_IMPORTED)throw new java.io.IOException("interrupt");})) {
