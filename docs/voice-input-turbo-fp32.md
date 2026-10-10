@@ -1,5 +1,7 @@
 # 音声認識を Whisper large-v3-turbo FP32 へ移行
 
+この文書はPR #60の移行時点の検証記録です。現在の既定は同じturbo FP32一式を用いたCPU 4 threads / tail 1000 frames / VAD silence 1800 msです。後続のPhase 5でUTF-8文字欠落のbyte保持修正、Windows / DRY (VT-4)の全文認識から実Agent応答、公開録音の比較と遅延評価を実施しました。下記のCPU 1 threadの計測や「Windows未検証」は移行当時の範囲を示します。現行の結果は [Phase 5](voice-input-phase5.md)、TTS・自己音声抑止は [Phase 6](voice-input-phase6.md)、会話スタイルは [Phase 7](voice-input-phase7.md)、利用手順と制約は [実装記録](voice-input-implementation-report.md) を参照してください。
+
 ## 変更と対象
 
 Whisper base multilingual INT8 を、sherpa-onnx 公式変換済みの **large-v3-turbo（配布名 turbo）FP32** に切り替えます。独自変換・再量子化は行いません。FP32 は FP16 より高精度な演算形式ですが、それだけで認識精度や速度が改善するとは限りません。

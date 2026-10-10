@@ -52,6 +52,7 @@ subcommands = {
   dev.mikoto2000.rei.voice.VoiceCommand.class,
   ChatCommand.class,
   SessionCommand.class,
+  ConversationModeCommand.class,
   CancelCommand.class,
   RunsCommand.class,
   HistoryCommand.class,

@@ -29,6 +29,17 @@ class ContextAssemblerTest {
         ContextHistoryAdvisor.historical(new AssistantMessage("recent"), 2),
         new UserMessage("current request and Working Set")));
   }
+  @Test void conversationReplyStyleSurvivesHistoryCompressionWithoutReplacingCharacter() {
+    var request=org.springframework.ai.chat.client.ChatClientRequest.builder().prompt(prompt("x".repeat(3000))).build();
+    var styled=new dev.mikoto2000.rei.core.chat.ConversationStyleAdvisor(dev.mikoto2000.rei.core.chat.ResponseStyle.CONVERSATION)
+        .before(request,org.mockito.Mockito.mock(org.springframework.ai.chat.client.advisor.api.AdvisorChain.class)).prompt();
+    var projected=assembler((previous,messages,budget,current)->{calls.incrementAndGet();return "old summary";})
+        .assemble(styled,"conversation","style-run",()->{});
+    assertThat(calls.get()).isGreaterThan(0);
+    assertThat(projected.getInstructions().stream().filter(m->m instanceof SystemMessage).map(Message::getText)
+        .collect(java.util.stream.Collectors.joining("\n"))).contains("system","会話スタイル","承認事項は省略しない");
+    assertThat(projected.getUserMessage().getText()).isEqualTo("current request and Working Set");
+  }
   @Test void belowThresholdKeepsOriginalMessages() {
     var p = prompt("short");
     var result = assembler((previous, messages, budget, request) -> { calls.incrementAndGet(); return "summary"; })

@@ -479,6 +479,8 @@ public class ChatExecutionService {
           .param(AgentRunContext.class.getName(), execution.runContext())
           .param(ChatMemory.CONVERSATION_ID, execution.runContext().conversationId())
           .param(AgentSkillAdvisor.ROUTING_CONTEXT_KEY, skillRoutingContext));
+    if(execution.runContext().responseStyle()==ResponseStyle.CONVERSATION)
+      requestSpec.advisors(new ConversationStyleAdvisor(ResponseStyle.CONVERSATION));
     if(mode!=AgentRunContext.Mode.EXCLUSIVE && checkpoints!=null)
       requestSpec.advisors(new RunScopedAdvisor(new dev.mikoto2000.rei.checkpoint.ResumeContextAdvisor(checkpoints)));
 

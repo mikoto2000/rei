@@ -5,13 +5,16 @@ import java.util.Objects;
 
 /** Identity and location are captured before dispatch, never resolved at completion. */
 public record AgentRunContext(String runId, String conversationId, Path projectRoot, String projectId,
-    RequestSource requestSource, Mode mode, boolean voiceInput) {
+    RequestSource requestSource, Mode mode, boolean voiceInput, ResponseStyle responseStyle) {
+  public AgentRunContext(String runId,String conversationId,Path projectRoot,String projectId,RequestSource source,Mode mode,boolean voiceInput) {
+    this(runId,conversationId,projectRoot,projectId,source,mode,voiceInput,ResponseStyle.NORMAL);
+  }
   /** Speech provenance adds recognition safety; RequestSource remains the caller's execution authority. */
   public AgentRunContext(String runId,String conversationId,Path projectRoot,String projectId,RequestSource requestSource,Mode mode) {
     this(runId,conversationId,projectRoot,projectId,requestSource,mode,false);
   }
   public AgentRunContext asVoiceInput() {
-    return new AgentRunContext(runId,conversationId,projectRoot,projectId,requestSource,mode,true);
+    return new AgentRunContext(runId,conversationId,projectRoot,projectId,requestSource,mode,true,responseStyle);
   }
   public enum RequestSource { SHELL, WEB }
   public enum Mode { EXCLUSIVE, READ_ONLY, CONVERSATION }
@@ -34,6 +37,7 @@ public record AgentRunContext(String runId, String conversationId, Path projectR
     Objects.requireNonNull(runId);
     Objects.requireNonNull(conversationId);
     Objects.requireNonNull(requestSource);
+    if (responseStyle == null) responseStyle = ResponseStyle.NORMAL;
     if (mode == null) mode = Mode.EXCLUSIVE; // Legacy persisted ownership records have no mode.
     projectRoot = Objects.requireNonNull(projectRoot).toAbsolutePath().normalize();
   }

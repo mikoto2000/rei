@@ -40,7 +40,7 @@ public final class FileSessionRepository implements SessionRepository {
       var row = existing.get();
       if (!row.projectId().equals(metadata.projectId()) || !row.title().equals(metadata.title())
           || !row.createdAt().equals(metadata.createdAt())) throw new IllegalArgumentException("Immutable session metadata");
-      next.set(next.indexOf(row), row.touched(metadata.updatedAt()));
+      next.set(next.indexOf(row), metadata.touched(row.updatedAt()));
     } else next.add(metadata);
     save(next);
     try { enqueue.run(); }

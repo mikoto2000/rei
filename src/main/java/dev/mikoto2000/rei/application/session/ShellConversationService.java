@@ -141,6 +141,18 @@ public final class ShellConversationService {
       projects.selectSession(sessionId);
     }
   }
+  public SessionMetadata currentMetadata() {
+    synchronized(projects.currentClient()) {
+      var id=currentSessionId();return id==null?null:lifecycle.validate(id,projects.currentContext().id());
+    }
+  }
+  public SessionMetadata responseStyle(dev.mikoto2000.rei.core.chat.ResponseStyle style,boolean voiceOnly) {
+    java.util.Objects.requireNonNull(style);
+    synchronized(projects.currentClient()) {
+      if(currentSessionId()==null)newConversation();
+      return lifecycle.responseStyle(projects.currentContext(),currentSessionId(),style,voiceOnly);
+    }
+  }
   public String currentSessionId() { return projects.currentSessionId(); }
   public SessionMetadata end() {
     synchronized(projects.currentClient()) {

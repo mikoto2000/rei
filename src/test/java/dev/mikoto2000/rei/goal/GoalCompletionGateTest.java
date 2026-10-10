@@ -17,6 +17,16 @@ class GoalCompletionGateTest {
   AgentRunContext owner(){return new AgentRunContext("source","session",root,"project");}
   String sha(String text)throws Exception{return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)));}
   GoalRepository.Goal goal()throws Exception{Files.writeString(root.resolve("out.txt"),"correct");return goals.create(owner(),"produce exact result","out.txt",sha("correct"),2,5);}
+  @Test void conversationalReplyStyleCannotReplaceRequiredCompletionEvidence()throws Exception {
+    var styled=new AgentRunContext("style","session",root,"project",AgentRunContext.RequestSource.SHELL,
+        AgentRunContext.Mode.EXCLUSIVE,true,ResponseStyle.CONVERSATION);
+    Files.writeString(root.resolve("out.txt"),"correct");
+    var goal=goals.create(styled,"produce exact result","out.txt",sha("correct"),2,5);
+    goals.defineCompletion(styled,goal.id(),definition(false));
+    var result=verifier.verify(goals.get("project",goal.id()));
+    assertFalse(result.satisfied());assertEquals("READY",goals.get("project",goal.id()).status());
+    assertEquals(AgentRunContext.Mode.EXCLUSIVE,styled.mode());
+  }
   @BeforeEach void setup(){goals=new GoalRepository(new DriverManagerDataSource("jdbc:sqlite:"+root.resolve("goals.db")),Clock.systemUTC());verifier=new FileGoalVerifier();configure(false);}
   void configure(boolean force){gate=new GoalCompletionGate(goals,(owner,ref)->{if(review==null||!review.id().equals(ref.id())||!review.sha256().equals(ref.sha256())||!owner.conversationId().equals(review.detail().session()))throw new IllegalArgumentException("no receipt");return review;},(owner,ref)->{if(artifact==null||!artifact.artifactId().equals(ref.id())||!artifact.sha256().equals(ref.sha256()))throw new IllegalArgumentException("no artifact");return artifact;},(r,d)->new SelfPatchReviewService.Snapshot(version,List.of("out.txt"),List.of(),true,List.of()),Clock.systemUTC(),force);verifier.setCompletionGate(gate);}
   GoalCompletionGate.Definition definition(boolean semantic)throws Exception{return new GoalCompletionGate.Definition(List.of(new GoalRepository.FileCriterion("out.txt",sha("correct"))),new GoalCompletionGate.RequiredTests(sha("fixture-test"),List.of("Fixture#value")),List.of(),List.of(),new GoalCompletionGate.ReviewGate(semantic,List.of(new SemanticPatchReviewService.Requirement("R1","produce exact result",List.of("out.txt"),List.of("Fixture#value")))));}
