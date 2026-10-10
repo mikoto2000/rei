@@ -89,4 +89,3 @@ class BeginnerMaterialAnalyzerTest {
     assertFalse(result.complete());
   }
 }
-
