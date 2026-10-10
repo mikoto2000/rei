@@ -9,4 +9,6 @@ public interface ActivityStore {
   List<ActivityRecord> findRecordsBetween(Instant start, Instant end);
   /** Bounded read capability; older adapters must not silently fall back to an unbounded read. */
   default List<ActivityRecord> findRecordsBetweenBounded(Instant start,Instant end,int maxRecords){throw new UnsupportedOperationException("Bounded Activity evidence queries are unavailable");}
+  /** Exact observation instants, end exclusive; unlike interval queries this never scans the preceding day. */
+  default List<ActivityRecord> findObservationsBetweenBounded(Instant start,Instant end,int maxRecords){throw new UnsupportedOperationException("Bounded recent observations are unavailable");}
 }

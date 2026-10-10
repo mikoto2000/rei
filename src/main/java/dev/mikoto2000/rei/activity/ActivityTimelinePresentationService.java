@@ -11,6 +11,7 @@ public record ActivityTimelinePresentationService(ActivityTimeline timeline,Beha
     var date=timeline.date(day);var zone=timeline.clock().getZone();
     var entries=new ArrayList<ActivityTimelineEntry>();
     timeline.timelineSegments(date).forEach(s->entries.add(new ActivityTimelineEntry.ActivityEntry(s)));
+    timeline.workInferences(day,null).forEach(r->entries.add(new ActivityTimelineEntry.WorkInferenceEntry(r)));
     if(behavior!=null)behavior.findEventsBetween(date.atStartOfDay(zone).toInstant(),date.plusDays(1).atStartOfDay(zone).toInstant()).stream()
         .filter(e->e.severity()!=BehaviorSeverity.NONE && (verbose || e.outcome()==BehaviorTimelineEvent.Outcome.EMITTED))
         .forEach(e->entries.add(new ActivityTimelineEntry.BehaviorEntry(e)));
@@ -26,6 +27,15 @@ public record ActivityTimelinePresentationService(ActivityTimeline timeline,Beha
     var out=new StringBuilder("画面の観測に基づく振り返りです。\n表示内容からの推定を含み、実際の操作・集中を断定するものではありません。\n");
     for(var entry:entries) {
       switch(entry) {
+        case ActivityTimelineEntry.WorkInferenceEntry w -> {
+          var r=w.inference();out.append('\n').append(time.format(r.windowEnd())).append(" 時系列推定 — ")
+              .append(ActivityEvidenceDisplayFormatter.clean(r.inferredActivity())).append('\n');
+          out.append("  confidence: ").append(r.confidence()).append("; method: ").append(r.method()).append("; 時間加算なし\n");
+          if(verbose){out.append("  inferenceRef: ").append(r.id()).append("; evidence window: ").append(r.windowStart()).append(".. ").append(r.windowEnd()).append('\n');
+            out.append("  observationIds: ").append(r.observationIds()).append('\n');
+            for(var e:r.executions())out.append("  actor=REI event=").append(e.eventId()).append(" project=").append(e.projectId()).append(" kind=").append(e.kind()).append(" outcome=").append(e.outcome()).append('\n');
+          }
+        }
         case ActivityTimelineEntry.ActivityEntry a -> {
           out.append('\n').append(activity.formatEntry(a.segment()));
           var descriptions=a.segment().evidence().stream().map(evidence::evidence).distinct().toList();

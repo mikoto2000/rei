@@ -12,4 +12,7 @@ public sealed interface ActivityTimelineEntry {
   record BehaviorEntry(BehaviorTimelineEvent event) implements ActivityTimelineEntry {
     public Instant timestamp(){return event.timestamp();}
   }
+  record WorkInferenceEntry(WorkActivityInference inference) implements ActivityTimelineEntry {
+    public Instant timestamp(){return inference.windowEnd();}
+  }
 }

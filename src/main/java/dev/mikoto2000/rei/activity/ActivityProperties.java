@@ -15,7 +15,20 @@ public class ActivityProperties {
   private boolean keepOnExtractionFailure = false;
   private int captureIntervalSeconds = 60;
   private Observation observation=new Observation();
-  private VisionQueue visionQueue=new VisionQueue();
+    private VisionQueue visionQueue=new VisionQueue();
+    private Temporal temporal=new Temporal();
+    @Data public static class Temporal {
+      private boolean enabled=true;
+      private boolean llmEnabled=false;
+      private int windowSeconds=300;
+      private int intervalSeconds=60;
+      private int maxRecords=120;
+      private int maxInputChars=12000;
+      private int maxOutputTokens=512;
+      private int maxTotalTokens=8192;
+      private int maxRetries=1;
+      private int timeoutSeconds=20;
+    }
   @Data public static class VisionQueue {
     private boolean enabled=true;
     private int minimumStartIntervalSeconds=30;
@@ -83,7 +96,12 @@ public class ActivityProperties {
   private List<String> excludedProcesses = List.of("KeePassXC.exe", "1Password.exe");
   private List<String> excludedWindowTitlePatterns = List.of("*Password*", "*Private Browsing*", "*InPrivate*");
 
-  public void validate() {
+    public void validate() {
+      if(temporal==null || temporal.windowSeconds<60 || temporal.windowSeconds>600 || temporal.intervalSeconds<60 || temporal.intervalSeconds>300
+          || temporal.maxRecords<1 || temporal.maxRecords>120 || temporal.maxInputChars<1000 || temporal.maxInputChars>16000
+          || temporal.maxOutputTokens<1 || temporal.maxOutputTokens>2048 || temporal.maxTotalTokens<1 || temporal.maxTotalTokens>32768
+          || temporal.maxRetries<0 || temporal.maxRetries>1 || temporal.timeoutSeconds<1 || temporal.timeoutSeconds>60)
+        throw new IllegalArgumentException("Invalid temporal Activity limits");
     if(visionQueue==null || visionQueue.minimumStartIntervalSeconds<0 || visionQueue.maxRefreshIntervalSeconds<1
         || visionQueue.maxRefreshIntervalSeconds<visionQueue.minimumStartIntervalSeconds)
       throw new IllegalArgumentException("Invalid activity vision queue intervals");

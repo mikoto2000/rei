@@ -22,8 +22,8 @@ public class ActivityConfiguration {
     return new VisionActivityExtractor(() -> provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),
         () -> provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get()),properties.getVisionImageScale(),properties.getDetection().getMaxOutputTokens());
   }
-  @Bean ActivityAgentEvidenceSource activityAgentEvidence(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.event.AgentEventBus> bus) {
-    return new ActivityAgentEvidenceSource(bus.getIfAvailable());
+  @Bean ActivityAgentEvidenceSource activityAgentEvidence(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.event.AgentEventBus> bus,ActivityProperties p) {
+    return new ActivityAgentEvidenceSource(bus.getIfAvailable(),()->p.isEnabled() && p.getTemporal().isEnabled());
   }
   @Bean ActivityEvidenceSource activityProjectEvidence(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.project.ProjectService> projects,
       org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextRepository> contexts,
@@ -45,11 +45,25 @@ public class ActivityConfiguration {
         ()->provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get()),Duration.ofSeconds(p.getSummary().getTimeoutSeconds())):null;
     return new DailySummaryService(aliases,writer);
   }
-  @Bean ActivityTimeline activityTimeline(ActivityStore store,ActivityProperties p,DailySummaryService dailySummary,PeriodCoachingStore scoreCriteria) {
+  @Bean ActivityTimeline activityTimeline(ActivityStore store,ActivityProperties p,DailySummaryService dailySummary,PeriodCoachingStore scoreCriteria,WorkActivityInferenceStore inferences) {
     var zone=ZoneId.of(p.getZone());
     return new ActivityTimeline(store,Clock.system(zone),new SemanticSessionPolicy(
         Duration.ofSeconds(p.effectiveNormalGapSeconds()),Duration.ofSeconds(p.effectiveMaximumGapSeconds()),
-        Duration.ofSeconds(p.getSummaryBriefSwitchSeconds()),p.getPrimaryConfidenceThreshold(),zone),dailySummary,scoreCriteria);
+        Duration.ofSeconds(p.getSummaryBriefSwitchSeconds()),p.getPrimaryConfidenceThreshold(),zone),dailySummary,scoreCriteria,p.getTemporal().isEnabled()?inferences:null);
+  }
+  @Bean WorkActivityInferenceStore workActivityInferenceStore(javax.sql.DataSource ds){return new WorkActivityInferenceStore(ds);}
+  @Bean TemporalActivityInferenceService temporalActivityInference(ActivityProperties p,ActivityStore store,WorkActivityInferenceStore inferences,
+      ActivityAgentEvidenceSource executions,ActivityCapture capture,dev.mikoto2000.rei.llm.LlmModelProvider provider,dev.mikoto2000.rei.core.service.ModelHolderService current) {
+    var clock=Clock.systemUTC();
+    var model=p.getTemporal().isLlmEnabled()?new LlmTemporalActivityModel(()->provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),
+        ()->provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get())):null;
+    return new TemporalActivityInferenceService(p,store,inferences,model,clock,()->executions.executions(clock.instant(),p.getTemporal().getWindowSeconds()),capture::isPaused);
+  }
+  @Bean ThreadPoolTaskExecutor activityTemporalExecutor(){return worker("rei-activity-temporal-");}
+  @Bean TemporalActivityJob temporalActivityJob(TemporalActivityInferenceService service,@Qualifier("activityTemporalExecutor") ThreadPoolTaskExecutor executor){return new TemporalActivityJob(service,executor);}
+  public record TemporalActivityJob(TemporalActivityInferenceService service,ThreadPoolTaskExecutor executor) {
+    @Scheduled(fixedDelayString="#{${rei.activity.temporal.interval-seconds:60} * 1000}",initialDelayString="#{${rei.activity.temporal.interval-seconds:60} * 1000}")
+    public void poll(){try{executor.execute(service::tick);}catch(org.springframework.core.task.TaskRejectedException ignored){/* No stale inference queue. */}}
   }
   @Bean ActivityTools activityTools(ActivityTimeline timeline) {return new ActivityTools(timeline);}
   @Bean PeriodCoachingStore periodCoachingStore(javax.sql.DataSource ds){return new SqlitePeriodCoachingStore(ds);}
