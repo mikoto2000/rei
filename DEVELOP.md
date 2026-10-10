@@ -10,6 +10,8 @@ Rei の開発者向けドキュメントです。利用手順は [README.md](./R
 
 初学者教材レビューの静的解析API・CLI・品質評価は [初学者レビューガイド](docs/beginner-material-review.md) を参照してください。
 
+時間計測の時計・Span・保持上限・検証方法は [時間計測ガイド](docs/run-timing.md) を参照してください。
+
 環境診断の範囲・状態・設定元の表示は [環境ドクターガイド](docs/environment-doctor.md) を参照してください。
 
 ## 開発環境
