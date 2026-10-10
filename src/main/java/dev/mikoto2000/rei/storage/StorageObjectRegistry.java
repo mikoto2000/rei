@@ -96,6 +96,10 @@ public final class StorageObjectRegistry {
   Optional<String> protectionReason(Connection db,StoredObject object)throws Exception {
     if(!object.originVerified())return Optional.of("unverified-origin");
     if(!object.status().equals("AVAILABLE"))return Optional.of("unavailable");
+    return protectionWithoutStatus(db,object);
+  }
+  Optional<String> protectionWithoutStatus(Connection db,StoredObject object)throws Exception {
+    if(!object.originVerified())return Optional.of("unverified-origin");
     if(object.pinned())return Optional.of("pinned");if(object.legalHold())return Optional.of("legal-hold");
     try(var query=db.prepareStatement("SELECT object_id FROM object_references WHERE object_id='storage:unknown-checkpoint-path' OR (?='EVENT' AND object_id='storage:unknown-checkpoint-event-owner') LIMIT 1")){query.setString(1,object.kind());try(var rows=query.executeQuery()){if(rows.next())return Optional.of(rows.getString(1).equals("storage:unknown-checkpoint-path")?"unresolved-checkpoint-path":"unresolved-checkpoint-event-owner");}}
     try(var query=db.prepareStatement("SELECT 1 FROM object_references WHERE object_id=? LIMIT 1")){query.setString(1,object.id());try(var rows=query.executeQuery()){if(rows.next())return Optional.of("referenced");}}
@@ -108,6 +112,7 @@ public final class StorageObjectRegistry {
       return Optional.of("reference-check-incomplete");
     }
     if(object.kind().equals("EVENT"))return Optional.of("reference-check-incomplete");
+    if(object.kind().equals("ACTIVITY_RAW")&&object.runId()!=null)return Optional.of("run-history");
     return Optional.empty();
   }
   boolean unchanged(StoredObject object)throws Exception {

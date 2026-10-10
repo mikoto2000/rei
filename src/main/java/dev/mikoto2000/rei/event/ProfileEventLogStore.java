@@ -32,6 +32,9 @@ public class ProfileEventLogStore implements AgentEventListener {
   private final Path file;
   private final ObjectMapper objectMapper;
   private final Object writeLock = new Object();
+  private dev.mikoto2000.rei.storage.ManagedActivityLog managed;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setManagedActivityLog(dev.mikoto2000.rei.storage.ManagedActivityLog managed){this.managed=managed;}
 
   public ProfileEventLogStore() {
     this(null, new ObjectMapper().registerModule(new JavaTimeModule()));
@@ -43,6 +46,7 @@ public class ProfileEventLogStore implements AgentEventListener {
   }
 
   public Path file() {
+    if(managed!=null&&file==null){var project=dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();return managed.legacyFile(project==null?null:project.id());}
     return file != null ? file : dev.mikoto2000.rei.core.project.ProjectStorage.currentDirectory().resolve("logs/activity.jsonl");
   }
 
@@ -56,6 +60,7 @@ public class ProfileEventLogStore implements AgentEventListener {
       return;
     }
     ProfileEventLogEntry entry = toEntry(event);
+    if(managed!=null&&this.file==null){managed.append(event.projectId(),entry);return;}
     Path file = this.file != null ? this.file : (event.projectId() != null
         ? dev.mikoto2000.rei.core.project.ProjectStorage.directory(event.projectId())
         : dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current()).resolve("logs/activity.jsonl");
@@ -71,6 +76,7 @@ public class ProfileEventLogStore implements AgentEventListener {
   }
 
   public List<ProfileEventLogEntry> readAll() {
+    if(managed!=null&&this.file==null){var project=dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();return managed.read(project==null?null:project.id());}
     Path file = file();
     if (!Files.isRegularFile(file)) {
       return List.of();
@@ -108,7 +114,7 @@ public class ProfileEventLogStore implements AgentEventListener {
     }
     Instant first = entries.isEmpty() ? null : entries.getFirst().timestamp();
     Instant last = entries.isEmpty() ? null : entries.getLast().timestamp();
-    return new ProfileSummary(file, entries.size(), first, last, countsByType, durationsByType);
+    return new ProfileSummary(file(), entries.size(), first, last, countsByType, durationsByType);
   }
 
   public List<ProfileBucket> buckets(Duration bucketSize) {

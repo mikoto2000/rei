@@ -17,6 +17,10 @@ conversation, with WAL and indexed keyset paging. Version 3 adds `stored_objects
 [reference protection and retention](storage-retention.md). Version 4 adds
 `agent_events`, `event_sequences`, `event_cursors` and `event_imports`. See
 [Event and Cursor storage](storage-event-migration.md).
+Version 5 adds execution/item/purge approval journals, owned Activity segments
+and prospective automatic-consent/run provenance. See
+[approved retention execution](storage-retention-execution.md) for limits and
+operations. Schema migration never enables automatic cleanup.
 
 | Choice | Transaction / backup implications | Decision |
 | --- | --- | --- |

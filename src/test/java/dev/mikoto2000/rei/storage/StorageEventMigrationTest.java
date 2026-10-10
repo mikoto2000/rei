@@ -126,8 +126,8 @@ class StorageEventMigrationTest {
   @Test void killedSchemaThreeUpgradeRetriesEventsAndCursorExactlyOnce()throws Exception {
     prepare();
     try(var db=DriverManager.getConnection("jdbc:sqlite:"+root.resolve("storage.db"));var sql=db.createStatement()) {
-      for(String table:List.of("agent_events","event_sequences","event_cursors","event_imports"))sql.execute("DROP TABLE "+table);
-      sql.executeUpdate("DELETE FROM storage_migrations WHERE version=4");sql.execute("PRAGMA user_version=3");
+      for(String table:List.of("agent_events","event_sequences","event_cursors","event_imports","retention_executions","retention_execution_items","retention_purge_approvals","activity_segments","retention_automatic_consents","retention_automatic_runs"))sql.execute("DROP TABLE "+table);
+      sql.executeUpdate("DELETE FROM storage_migrations WHERE version>3");sql.execute("PRAGMA user_version=3");
     }
     var legacy=new ProjectAgentEventStore(root);legacy.append(event("before","run1"));long offset=Files.size(source());legacy.append(event("after","run2"));legacyCursor(offset,false,11);String hash=StorageBackup.hash(source());
     var child=worker(StorageMigrationCrashWorker.class,"rows-imported","-Xmx64m");
