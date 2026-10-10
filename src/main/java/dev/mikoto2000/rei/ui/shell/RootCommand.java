@@ -48,6 +48,7 @@ subcommands = {
   dev.mikoto2000.rei.paper.PaperCommand.class,
   dev.mikoto2000.rei.activity.ActivityCommand.class,
   dev.mikoto2000.rei.externalagent.ExternalAgentCommand.class,
+  dev.mikoto2000.rei.externalagent.BeginnerReviewCommand.class,
   dev.mikoto2000.rei.subagent.SubAgentCommand.class,
   dev.mikoto2000.rei.voice.VoiceCommand.class,
   ChatCommand.class,
@@ -83,7 +84,11 @@ public class RootCommand {
   @org.springframework.beans.factory.annotation.Value("${rei.embedding.enabled:true}")
   private boolean embeddingEnabled = true;
 
+  @org.springframework.beans.factory.annotation.Value("${rei.material-review.beginner.enabled:true}")
+  private boolean beginnerReviewEnabled = true;
+
   public void configureCommands(picocli.CommandLine command) {
+    if (!beginnerReviewEnabled) command.getCommandSpec().removeSubcommand("material-review");
     if (!embeddingEnabled) {
       command.getCommandSpec().removeSubcommand("embed");
     }
