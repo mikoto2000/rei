@@ -1,14 +1,18 @@
 # Storage architecture
 
 Phase 1 adds read-only inventory. Phase 2 adds a startup gate and verified backup
-foundation. Session, Turn and Event repositories still use their existing formats
-in Phase 2; no historical data is converted or deleted by this phase.
+foundation. Phase 3 switches Session and Turn beans to indexed rows after verified
+startup import. Event storage remains unchanged until its own migration. See
+[Session and Turn storage](storage-session-turn-migration.md). No migration phase
+automatically enables retention or deletes old sources.
 
 ## Database boundary
 
 The new `storage.db` lives at the configured Rei data-directory root. It initially
-contains only `storage_migrations` and `PRAGMA user_version=1`. Later phases will
-add row-oriented repositories scoped by project and conversation.
+contained only `storage_migrations` at version 1. Version 2 adds `sessions`,
+`turns`, `storage_turn_sources` and `storage_imports`, scoped by project and
+conversation, with WAL and indexed keyset paging. Later phases add reference,
+Event and retention metadata.
 
 | Choice | Transaction / backup implications | Decision |
 | --- | --- | --- |

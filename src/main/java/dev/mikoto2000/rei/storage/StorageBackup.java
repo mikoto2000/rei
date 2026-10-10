@@ -48,6 +48,7 @@ public final class StorageBackup {
       });
       if (!before.equals(copied)) throw new IOException("Migration sources changed while copying");
       writeAtomic(backup.resolve("snapshot.json"), JSON.writeValueAsBytes(copied));
+      writeAtomic(backup.resolve("legacy-snapshot.json"),JSON.writeValueAsBytes(scan(root,(file,kind,hash)->{},false)));
     }
     force(manifest);
   }
@@ -69,9 +70,14 @@ public final class StorageBackup {
     Snapshot expected = JSON.readValue(metadata(backup.resolve("snapshot.json")), Snapshot.class);
     if (!expected.equals(scan(root, (file, kind, hash) -> {}))) throw new IOException("Migration sources changed; stop other writers and retry");
   }
+  static void verifyLegacySources(Path root,Path backup)throws IOException {
+    Snapshot expected=JSON.readValue(metadata(backup.resolve("legacy-snapshot.json")),Snapshot.class);
+    if(!expected.equals(scan(root,(file,kind,hash)->{},false)))throw new IOException("Legacy sources changed during schema import; source retained");
+  }
   static void markVerified(Path backup) throws IOException {
     writeAtomic(backup.resolve("verified.json"), JSON.writeValueAsBytes(Map.of(
-        "manifest",hash(backup.resolve("manifest.jsonl")),"snapshot",hash(backup.resolve("snapshot.json")))));
+        "manifest",hash(backup.resolve("manifest.jsonl")),"snapshot",hash(backup.resolve("snapshot.json")),
+        "legacySnapshot",hash(backup.resolve("legacy-snapshot.json")))));
   }
   public static void verify(Path backup) throws IOException {
     requireSafePath(backup);
@@ -79,6 +85,7 @@ public final class StorageBackup {
     if (!hash(backup.resolve("manifest.jsonl")).equals(marker.path("manifest").asText())
         || !hash(backup.resolve("snapshot.json")).equals(marker.path("snapshot").asText()))
       throw new IOException("Backup verification marker does not match manifest");
+    if(marker.has("legacySnapshot")&&!hash(backup.resolve("legacy-snapshot.json")).equals(marker.path("legacySnapshot").asText()))throw new IOException("Backup legacy snapshot verification failed");
     verifyCopied(backup);
   }
   /** Restore only to an empty directory: never overwrite data created after a storage switch. */
@@ -97,9 +104,12 @@ public final class StorageBackup {
     });
   }
   private static Snapshot scan(Path root, Visitor visitor) throws IOException {
+    return scan(root,visitor,true);
+  }
+  private static Snapshot scan(Path root,Visitor visitor,boolean includeTarget)throws IOException {
     requireSafePath(root); var total=new Accumulator();
     for(String name:List.of("sessions.json","projects.json","storage.db","memory.db","memory-consolidation.db","state","events","artifacts"))
-      scanPath(root,root.resolve(name),visitor,total);
+      if(includeTarget||!name.equals("storage.db"))scanPath(root,root.resolve(name),visitor,total);
     Path projects=root.resolve("projects"); requireSafePath(projects);
     if(Files.exists(projects,LinkOption.NOFOLLOW_LINKS))try(var directories=Files.newDirectoryStream(projects)) {
       int count=0;
