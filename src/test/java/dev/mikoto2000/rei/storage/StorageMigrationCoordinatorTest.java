@@ -182,6 +182,15 @@ class StorageMigrationCoordinatorTest {
     assertThat(StorageBackup.hash(root.resolve("storage.db"))).isEqualTo(before);
     assertThat(version(root.resolve("storage.db"))).isZero();
   }
+  @Test void negativeSchemaVersionIsRejectedBeforeChangingDatabaseOrMakingBackups()throws Exception {
+    try(var db=DriverManager.getConnection("jdbc:sqlite:"+root.resolve("storage.db"));var query=db.createStatement()) {
+      query.execute("CREATE TABLE foreign_data(value TEXT)");query.execute("INSERT INTO foreign_data VALUES('preserve')");query.execute("PRAGMA user_version=-1");
+    }
+    String original=StorageBackup.hash(root.resolve("storage.db"));
+    try(var migration=new StorageMigrationCoordinator(root)){assertThatThrownBy(migration::prepare).isInstanceOf(IOException.class);}
+    assertThat(StorageBackup.hash(root.resolve("storage.db"))).isEqualTo(original);
+    assertThat(root.resolve(".storage/backups")).doesNotExist();
+  }
   @Test void forcedProcessTerminationReleasesLeaseAndRetriesVerifiedButUnappliedBackup() throws Exception {
     Files.writeString(root.resolve("sessions.json"),"[]");
     String executable=Path.of(System.getProperty("java.home"),"bin",System.getProperty("os.name").startsWith("Windows")?"java.exe":"java").toString();
@@ -227,7 +236,7 @@ class StorageMigrationCoordinatorTest {
         var rows=query.executeQuery("SELECT count(*) FROM sqlite_schema WHERE name='partial'")){rows.next();assertThat(rows.getInt(1)).isZero();}
   }
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings={"missing-state","corrupt-backup","future-schema"})
+  @org.junit.jupiter.params.provider.ValueSource(strings={"missing-state","corrupt-backup","future-schema","negative-schema"})
   void unsafeHotJournalRecoveryIsRefusedWithoutModifyingDatabaseOrJournal(String kind)throws Exception {
     Files.writeString(root.resolve("sessions.json"),"[]");var backup=new java.util.concurrent.atomic.AtomicReference<Path>();
     try(var migration=new StorageMigrationCoordinator(root,(stage,path)->{
@@ -243,6 +252,7 @@ class StorageMigrationCoordinatorTest {
     if(kind.equals("missing-state"))Files.delete(root.resolve(".storage/migration-state.json"));
     if(kind.equals("corrupt-backup"))Files.writeString(backup.get().resolve("files/sessions.json"),"corrupt");
     if(kind.equals("future-schema"))try(var file=new java.io.RandomAccessFile(root.resolve("storage.db").toFile(),"rw")){file.seek(60);file.writeInt(99);}
+    if(kind.equals("negative-schema"))try(var file=new java.io.RandomAccessFile(root.resolve("storage.db").toFile(),"rw")){file.seek(60);file.writeInt(-1);}
     String databaseHash=StorageBackup.hash(root.resolve("storage.db")),journalHash=StorageBackup.hash(root.resolve("storage.db-journal"));
     try(var migration=new StorageMigrationCoordinator(root)){assertThatThrownBy(migration::prepare).isInstanceOf(IOException.class);}
     assertThat(StorageBackup.hash(root.resolve("storage.db"))).isEqualTo(databaseHash);

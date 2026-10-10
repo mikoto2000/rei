@@ -36,6 +36,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
     if(prepared!=null)return prepared;
     int version=version();
     sourceVersion=version;
+    if(version<0)throw new IOException("Unsupported negative storage schema version: "+version+"; source retained");
     if(version>SCHEMA_VERSION)throw new IOException("Storage schema is newer than this application: "+version);
     if(version==SCHEMA_VERSION){verifyReady();return prepared=new Result(version,null);}
     if(version>0)verifyReady(version);
@@ -83,8 +84,10 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
       byte[] header=input.readNBytes(64);
       // A newly spilled database can still have a sparse header. Fail closed on a
       // newer version field even when the interrupted header is not yet complete.
-      if(header.length==64&&java.nio.ByteBuffer.wrap(header).getInt(60)>SCHEMA_VERSION)
-        throw new IOException("Interrupted storage header is newer or unsupported by this application");
+      if(header.length==64) {
+        int headerVersion=java.nio.ByteBuffer.wrap(header).getInt(60);
+        if(headerVersion<0||headerVersion>SCHEMA_VERSION)throw new IOException("Interrupted storage header is newer or unsupported by this application");
+      }
     }
     String relative=state.path("backup").asText();boolean existed=state.path("databaseExisted").asBoolean(true);
     if(relative.isEmpty()) {

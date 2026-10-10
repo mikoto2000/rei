@@ -65,5 +65,8 @@ write failure and a live history Reader during a separate committed write. A chi
 JVM imports 100,000 Sessions with a 64 MiB maximum heap, then retrieves a bounded
 page. Another child is killed after 15,000 rows are imported but before commit:
 the prior version remains readable and restart imports exactly once. The final
-related run passed 109 tests with no failures/errors/skips. No real user data is
-used for these checks.
+related run passed 111 tests with no failures/errors/skips. This includes Red/Green
+checks that reject negative schema versions and negative hot-journal headers
+without changing the original DB/journal or making a backup. The initial PR CI
+passed 4,516 tests before these last two guard cases; final full regression and CI
+verify the final head. No real user data is used for these checks.
