@@ -2,11 +2,12 @@
 
 ## 仕様
 
-`/mode` は応答のスタイルをSessionごとに切り替える。既定はnormal。
+`/mode` は応答のスタイルをSessionごとに切り替える。既定はautoで、音声入力はconversation、文字入力はnormalへ受付時に自動切替する。
 既存の実行モード `AgentRunContext.Mode.CONVERSATION`（ツールを制限する並行相談）とは独立した `ResponseStyle` を使う。
 会話スタイルを選んでも、通常のShell会話はEXCLUSIVEの共通Gateway・ChatClient・Planning Loop・Tool・Permissionを通る。
 
 ```text
+/mode auto
 /mode normal
 /mode conversation
 /mode conversation --voice-only
@@ -16,7 +17,7 @@
 `conversation` はテキスト・音声の両方に適用し、`--voice-only` は音声だけに適用する。
 `--voice-only=false` またはオプションなしの `conversation` で両方へ戻せる。
 Session未選択で設定すると新しいSessionを作成する。statusはSessionを作らない。
-新しいSessionはnormalから開始し、別Sessionの設定を継承しない。Sessionの終了・再開やアプリ再起動後も保存した設定を維持する。
+`/mode normal` は音声も通常に固定し、`/mode auto` で自動切替へ戻す。新しいSessionはautoから開始し、別Sessionの設定を継承しない。Sessionの終了・再開やアプリ再起動後も保存した設定を維持する。
 
 応答指示は、既存の「れい」のキャラクターを保ちながら自然な会話調、原則短め、不要な前置き・反復・箇条書きの削減を促す。
 毎回無理に質問で締めくくらない。詳しい説明を求められた場合や重要な結果・失敗理由・承認事項では必要な情報を省略しない。
@@ -24,7 +25,7 @@ Session未選択で設定すると新しいSessionを作成する。statusはSes
 
 ## 実装と互換性
 
-- `SessionMetadata` にresponseStyle / voiceOnlyを保存し、`FileSessionRepository`の原子的保存・受付失敗時のロールバック・単調更新時刻を維持する。古いJSONはNORMAL / falseとして読む。
+- `SessionMetadata` にresponseStyle / voiceOnlyを保存し、`FileSessionRepository`の原子的保存・受付失敗時のロールバック・単調更新時刻を維持する。応答スタイルのない古いSession JSONはAUTO / falseとして読む。保存済みの明示NORMAL / CONVERSATION設定は維持する。Run JSONの後方互換既定はNORMALのまま。
 - `SessionLifecycle`で入力受付時の有効スタイルを `AgentRunContext` へ固定する。キュー待機中に設定を変えても、受付済みRunは途中でスタイルを変更しない。
 - `ConversationStyleAdvisor`は既存system promptに固定の会話指示を追加する。ユーザー入力・履歴・ツールオプション・予算を変更せず、コンテキスト圧縮後もスタイル指示を保持する。
 - normalではスタイルAdvisorを追加せず、既存の応答経路へ戻る。会話指示を恒久的なユーザー履歴へ保存しない。

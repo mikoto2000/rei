@@ -59,7 +59,9 @@ public final class SessionLifecycle {
         sessionId = metadata.sessionId();
       } else metadata = validate(sessionId, project.id()).touched(now);
       var context = new AgentRunContext(UUID.randomUUID().toString(), sessionId, project.root(), project.id(), source, mode, voiceInput,
-          metadata.voiceOnly() && !voiceInput ? dev.mikoto2000.rei.core.chat.ResponseStyle.NORMAL : metadata.responseStyle());
+          metadata.responseStyle()==dev.mikoto2000.rei.core.chat.ResponseStyle.AUTO
+              ? (voiceInput ? dev.mikoto2000.rei.core.chat.ResponseStyle.CONVERSATION : dev.mikoto2000.rei.core.chat.ResponseStyle.NORMAL)
+              : metadata.voiceOnly() && !voiceInput ? dev.mikoto2000.rei.core.chat.ResponseStyle.NORMAL : metadata.responseStyle());
       repository.accept(metadata, () -> enqueue.accept(context));
       selected.accept(context);
       return context;

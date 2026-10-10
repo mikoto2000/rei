@@ -17,12 +17,13 @@ class ConversationModeCommandTest {
   var shell=new ShellConversationService(projects,new SessionLifecycle(new FileSessionRepository(root.resolve("sessions.json")),Clock.systemUTC()),(c,p)->{});
   var out=new StringWriter();var cli=new CommandLine(new ConversationModeCommand(shell));cli.setOut(new PrintWriter(out));
   try(var scope=projects.newClient().open()) {
-   assertThat(cli.execute("status")).isZero();assertThat(shell.currentSessionId()).isNull();assertThat(out.toString()).contains("normal");
+   assertThat(cli.execute("status")).isZero();assertThat(shell.currentSessionId()).isNull();assertThat(out.toString()).contains("auto");
    assertThat(cli.execute("conversation","--voice-only")).isZero();
    assertThat(shell.currentMetadata().responseStyle()).isEqualTo(ResponseStyle.CONVERSATION);assertThat(shell.currentMetadata().voiceOnly()).isTrue();
-   var first=shell.currentSessionId();shell.newConversation();assertThat(cli.execute("status")).isZero();assertThat(shell.currentMetadata().responseStyle()).isEqualTo(ResponseStyle.NORMAL);
+   var first=shell.currentSessionId();shell.newConversation();assertThat(cli.execute("status")).isZero();assertThat(shell.currentMetadata().responseStyle()).isEqualTo(ResponseStyle.AUTO);
    shell.resume(first);assertThat(cli.execute("conversation")).isZero();assertThat(shell.currentMetadata().voiceOnly()).isFalse();
    assertThat(cli.execute("normal")).isZero();assertThat(shell.currentMetadata().responseStyle()).isEqualTo(ResponseStyle.NORMAL);
+   assertThat(cli.execute("auto")).isZero();assertThat(shell.currentMetadata().responseStyle()).isEqualTo(ResponseStyle.AUTO);
    var before=shell.currentMetadata();assertThat(cli.execute("conversation","--unknown")).isEqualTo(2);assertThat(shell.currentMetadata()).isEqualTo(before);
   }
  }

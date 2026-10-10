@@ -6,11 +6,11 @@ import dev.mikoto2000.rei.core.chat.ResponseStyle;
 
 public record SessionMetadata(String sessionId, String projectId, String title, Instant createdAt, Instant updatedAt, ResponseStyle responseStyle, boolean voiceOnly) {
   public SessionMetadata(String sessionId,String projectId,String title,Instant createdAt,Instant updatedAt) {
-    this(sessionId,projectId,title,createdAt,updatedAt,ResponseStyle.NORMAL,false);
+    this(sessionId,projectId,title,createdAt,updatedAt,ResponseStyle.AUTO,false);
   }
   public SessionMetadata {
-    if(responseStyle==null)responseStyle=ResponseStyle.NORMAL;
-    if(responseStyle==ResponseStyle.NORMAL)voiceOnly=false;
+    if(responseStyle==null)responseStyle=ResponseStyle.AUTO;
+    if(responseStyle!=ResponseStyle.CONVERSATION)voiceOnly=false;
     Objects.requireNonNull(sessionId); Objects.requireNonNull(projectId); Objects.requireNonNull(title);
     Objects.requireNonNull(createdAt); Objects.requireNonNull(updatedAt);
   }

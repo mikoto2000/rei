@@ -15,6 +15,8 @@ public final class ConversationModeCommand implements java.util.concurrent.Calla
  @org.springframework.beans.factory.annotation.Autowired
  public ConversationModeCommand(ShellConversationService shell){this.shell=shell;}
  public Integer call(){return status();}
+ @Command(name="auto",description="音声入力は会話、文字入力は通常へ自動切替する",mixinStandardHelpOptions=true)
+ public int auto(){return display(()->{shell.responseStyle(ResponseStyle.AUTO,false);show();});}
  @Command(name="normal",description="現在のSessionを通常の応答スタイルに戻す",mixinStandardHelpOptions=true)
  public int normal(){return display(()->{shell.responseStyle(ResponseStyle.NORMAL,false);show();});}
  @Command(name="conversation",description="現在のSessionを自然で簡潔な会話スタイルにする",mixinStandardHelpOptions=true)
@@ -25,9 +27,9 @@ public final class ConversationModeCommand implements java.util.concurrent.Calla
  public int status(){return display(this::show);}
  private void show() {
   var metadata=shell.currentMetadata();
-  var style=metadata==null?ResponseStyle.NORMAL:metadata.responseStyle();
+  var style=metadata==null?ResponseStyle.AUTO:metadata.responseStyle();
   spec.commandLine().getOut().println("Response mode: "+style.name().toLowerCase(java.util.Locale.ROOT)
-      +(metadata!=null&&metadata.voiceOnly()?" (voice only)":" (text and voice)")
+      +(style==ResponseStyle.AUTO?" (text: normal, voice: conversation)":metadata!=null&&metadata.voiceOnly()?" (voice only)":" (text and voice)")
       +(metadata==null?"; no active Session":""));
  }
  private int display(Runnable action) {
