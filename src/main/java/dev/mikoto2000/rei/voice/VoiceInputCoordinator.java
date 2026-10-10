@@ -133,6 +133,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     }
   }
   private void change(State next) {
+    if (state == next) return;
     state = next; guard.notifyAll(); events.publish(VoiceEventPublisher.Type.STATE_CHANGED, next.name());
   }
   public Startup start(ConversationTarget target, AudioDevice device, VoiceSettings settings) {
