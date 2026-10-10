@@ -79,46 +79,59 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     var thread = new Thread(work, name); thread.setDaemon(true); return thread;
   }
   public State state() { return state; }
+  /** A waiter can only cancel the Run it started, even after an OFF/ON replacement. */
+  public interface Startup { State await(java.time.Duration timeout); }
   public State awaitStartup(java.time.Duration timeout) {
+    Run starting;
+    synchronized (guard) { starting = active; }
+    return awaitStartup(starting, timeout);
+  }
+  private State awaitStartup(Run starting, java.time.Duration timeout) {
     long deadline=System.nanoTime()+timeout.toNanos();
     try {
       synchronized(guard) {
-        while(state==State.STARTING) {
+        while(active == starting && state==State.STARTING) {
           long remaining=deadline-System.nanoTime();
           if(remaining<=0) break;
           TimeUnit.NANOSECONDS.timedWait(guard,remaining);
         }
+        if (active != starting) return State.OFF;
         if(state!=State.STARTING)return state;
       }
     } catch(InterruptedException e) {
-      off();Thread.currentThread().interrupt();throw new IllegalStateException("Voice initialization interrupted");
+      off(starting);Thread.currentThread().interrupt();throw new IllegalStateException("Voice initialization interrupted");
     }
-    off();throw new IllegalStateException("Voice initialization timed out; waiting for native cleanup");
+    off(starting);throw new IllegalStateException("Voice initialization timed out; waiting for native cleanup");
   }
   public int queuedSegments() { synchronized (guard) { return active == null ? 0 : active.segments.size(); } }
   private void change(State next) {
     state = next; guard.notifyAll(); events.publish(VoiceEventPublisher.Type.STATE_CHANGED, next.name());
   }
-  public void start(ConversationTarget target, AudioDevice device, VoiceSettings settings) {
-    start(target, device, settings, false);
+  public Startup start(ConversationTarget target, AudioDevice device, VoiceSettings settings) {
+    return start(target, device, settings, false);
   }
-  public void startDiagnostic(ConversationTarget target, AudioDevice device, VoiceSettings settings) {
-    start(target, device, settings, true);
+  public Startup startDiagnostic(ConversationTarget target, AudioDevice device, VoiceSettings settings) {
+    return start(target, device, settings, true);
   }
-  private void start(ConversationTarget target, AudioDevice device, VoiceSettings settings, boolean diagnostic) {
+  private Startup start(ConversationTarget target, AudioDevice device, VoiceSettings settings, boolean diagnostic) {
     if (target == null || device == null || settings == null) throw new IllegalArgumentException("Select a microphone and target first");
     synchronized (guard) {
       if (closed || active != null) throw new IllegalStateException("Voice is already active or closed");
       var run = new Run(target, device, settings, diagnostic);
       active = run; change(State.STARTING);
       supervisor.execute(() -> supervise(run));
+      return timeout -> awaitStartup(run, timeout);
     }
   }
-  public void off() {
+  public void off() { off(null); }
+  private void off(Run expected) {
     Run run;
     synchronized (guard) {
       run = active;
+      if (expected != null && run != expected) return;
       if (run == null) { if (!closed) change(State.OFF); return; }
+      // Explicit OFF acknowledges a startup failure; cleanup errors still emit their own failure.
+      run.failed = false;
       run.stop = true; run.segments.clear(); run.epochs.clear(); change(State.STOPPING);
     }
     stopWorkers(run);

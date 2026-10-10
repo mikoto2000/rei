@@ -49,15 +49,18 @@ class VoiceCommandTest {
     var devices=new AudioDeviceService(()->List.of(new AudioDevice("dry","DRY (VT-4)","input","vendor","1")));
     devices.select("dry");
     var voice=mock(VoiceInputCoordinator.class);when(voice.state()).thenReturn(VoiceInputCoordinator.State.OFF);
-    when(voice.awaitStartup(VoiceRuntimeLimits.COMMAND_STARTUP)).thenReturn(VoiceInputCoordinator.State.LISTENING);
+    var startup = mock(VoiceInputCoordinator.Startup.class);
+    when(startup.await(VoiceRuntimeLimits.COMMAND_STARTUP)).thenReturn(VoiceInputCoordinator.State.LISTENING);
+    when(voice.start(any(),any(),any())).thenReturn(startup);
     var shell=mock(ShellConversationService.class);
     var target=new dev.mikoto2000.rei.application.input.ConversationTarget(
       new dev.mikoto2000.rei.core.project.ProjectContext(java.util.UUID.randomUUID().toString(),"test",java.nio.file.Path.of(".")),"session");
     when(shell.captureTarget()).thenReturn(target);
     var command=new CommandLine(new VoiceCommand(voice,devices,new VoiceProperties(),shell));
     assertThat(command.execute("on")).isZero();
-    var order=inOrder(voice);order.verify(voice).state();
+    var order=inOrder(voice,startup);order.verify(voice,times(2)).state();
     order.verify(voice).start(target,devices.selected(),VoiceSettings.defaults());
-    order.verify(voice).awaitStartup(VoiceRuntimeLimits.COMMAND_STARTUP);
+    order.verify(startup).await(VoiceRuntimeLimits.COMMAND_STARTUP);
+
   }
 }

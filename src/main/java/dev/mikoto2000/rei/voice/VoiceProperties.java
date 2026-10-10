@@ -9,6 +9,7 @@ public class VoiceProperties {
   private String bundleDirectory=ReiDataDirectory.current().resolve("voice").toString();
   private String deviceId;
   private boolean confirmation;
+  private boolean autoStart;
   private volatile VoiceSettings settings=VoiceSettings.defaults();
   private volatile VoiceAdvancedOptions advanced=VoiceAdvancedOptions.defaults();
   public VoiceAdvancedOptions advanced(){return java.util.Objects.requireNonNull(advanced);}

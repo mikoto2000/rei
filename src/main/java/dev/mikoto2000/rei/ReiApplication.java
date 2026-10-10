@@ -206,6 +206,7 @@ public class ReiApplication {
         var runPrompt = new dev.mikoto2000.rei.ui.shell.ActiveRunPrompt(reader, activeRuns, () -> {
           try (var scope = client.open()) { return buildPrompt(); }
         })) {
+      startVoiceAutomatically(cmd, terminal, line -> eventOutput.printBlock(new org.jline.utils.AttributedString(line)));
       shellLoop: while (true) {
         try {
           String line = runPrompt.readLine();
@@ -263,11 +264,30 @@ public class ReiApplication {
     } finally {
       shutdownNotifier.begin("shell_exit");
       commandExecutor.shutdownNow();
+      var voiceCommand = cmd.getSubcommands().get("voice");
+      if (voiceCommand != null && voiceCommand.getCommand() instanceof dev.mikoto2000.rei.voice.VoiceCommand voice)
+        voice.closeAutoStart();
       if (voiceInput != null) voiceInput.close();
       if (voiceSubmittedSubscription != null) voiceSubmittedSubscription.close();
       if (voiceSubscription != null) voiceSubscription.close();
       shellEvents.close();
     }
+  }
+
+  static void startVoiceAutomatically(CommandLine cmd, Terminal terminal, java.util.function.Consumer<String> output) {
+    var command = cmd.getSubcommands().get("voice");
+    if (command != null && command.getCommand() instanceof dev.mikoto2000.rei.voice.VoiceCommand voice)
+      voice.autoStart(isInteractiveTerminal(terminal), output);
+  }
+
+  static boolean isInteractiveTerminal(Terminal terminal) {
+    if (terminal == null || terminal.getType() == null || Terminal.TYPE_DUMB.equals(terminal.getType())
+        || Terminal.TYPE_DUMB_COLOR.equals(terminal.getType())) return false;
+    // Terminal type can be forced even with piped stdin. Require actual input-TTY evidence.
+    try {
+      return terminal instanceof org.jline.terminal.spi.TerminalExt ext && ext.getSystemStream() != null
+          && ext.getProvider() != null && ext.getProvider().isSystemStream(org.jline.terminal.spi.SystemStream.Input);
+    } catch (RuntimeException | LinkageError unavailable) { return false; }
   }
 
   static TerminalBuilder terminalBuilder(PrintStream output) {

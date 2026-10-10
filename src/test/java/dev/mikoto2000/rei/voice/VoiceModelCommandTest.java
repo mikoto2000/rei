@@ -19,7 +19,7 @@ class VoiceModelCommandTest {
     return new VoiceModelManifest("fixed-approved",List.of(new VoiceModelManifest.Asset("model",URI.create("https://example.org/fixed"),data.length,
       HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(data)),"MIT")));
   }
-  VoiceInputCoordinator voice(){var voice=mock(VoiceInputCoordinator.class);when(voice.state()).thenReturn(VoiceInputCoordinator.State.OFF);when(voice.awaitStartup(VoiceRuntimeLimits.COMMAND_STARTUP)).thenReturn(VoiceInputCoordinator.State.LISTENING);return voice;}
+  VoiceInputCoordinator voice(){var voice=mock(VoiceInputCoordinator.class);when(voice.state()).thenReturn(VoiceInputCoordinator.State.OFF);when(voice.start(any(),any(),any())).thenReturn(timeout -> VoiceInputCoordinator.State.LISTENING);return voice;}
   AudioDeviceService devices(){var devices=new AudioDeviceService(()->List.of(new AudioDevice("dry","DRY (VT-4)","input","vendor","1")));devices.select("dry");return devices;}
   CommandLine command(VoiceInputCoordinator voice,ShellConversationService shell,VoiceModelManager manager,StringWriter output) {
     var command=new CommandLine(new VoiceCommand(voice,devices(),new VoiceProperties(),shell,manager));
