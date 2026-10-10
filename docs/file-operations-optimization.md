@@ -46,6 +46,29 @@ Project 外の絶対パス、path traversal、sensitive path、途中の symboli
 
 ## 検証記録
 
+### Java構文観測のコンパイラプラグイン隔離（2026-10-10）
+
+`JavacTask.parse()` は `-proc:none` が指定されていてもプラグインの
+ServiceLoader探索を行う。processor pathを指定しない場合、アプリのclasspathへ
+フォールバックし、ファイルごとに依存JARを探索する。JFRで
+`BasicJavacTask.initPlugins` → `ServiceLoader` → `URLClassPath` → `JarFile`
+の経路を確認した。この負荷により、100個程度の小さなJavaソースでも既存の
+10秒走査上限に達し、`ChangeTestImpactServiceTest` の候補数・循環参照検証が
+不安定になっていた。
+
+共通の構文解析処理で `ANNOTATION_PROCESSOR_PATH` を明示的な空リストに設定し、
+ホストclasspathへのプラグイン探索を防ぐ。Repository Map、影響分析、snapshotを
+使うJavaシンボル操作に適用する。10秒の上限、件数・バイト上限、期待値は維持する。
+構文解析は外部型の解決を必要としないため、未解決importの記録も継続する。
+
+実際のauto-start Pluginを持つ一時JARをhost classpathに置く回帰テストを追加した。
+修正前にはscanとsingle-file snapshotの両方でPluginが実行されて2件失敗し、
+修正後は2件とも成功した。関連6クラス46件の回帰も成功した。
+今回のローカル実測では影響分析の6件が約19～21秒から2.058秒になった。
+実行時間は環境に依存し、タイミング値そのものをテストの期待値にはしていない。
+続く `.github/ci/full-test.ps1`（`-Pfull`）の全体回帰は4,392件実行、
+失敗0、エラー0、スキップ1でビルド成功（13分24秒）。CIの結果はPRの検証記録を参照する。
+
 変更前の関連テストを実行し成功を確認した (`target/file-operations-baseline.log`)。オフラインで古い workspace Maven cache を指定した初回実行は parent POM が見つからず、測定には含めていない。設定済み Maven repository を使う実行は成功した。
 
 追加した2つの不具合再現テストは変更前に失敗した。同サイズ・同 mtime の外部変更が古い検索結果になることを確認した。総行数 fixture は最初の版で grep 自体の上限にも達していたため、全ファイルに1ヒットずつ置く fixture に修正した。読み取り抽象で2条件検索＋本文取得が1ファイル1回になることを検証する。
