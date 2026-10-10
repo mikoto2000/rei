@@ -15,6 +15,12 @@ public class ActivityProperties {
   private boolean keepOnExtractionFailure = false;
   private int captureIntervalSeconds = 60;
   private Observation observation=new Observation();
+  private VisionQueue visionQueue=new VisionQueue();
+  @Data public static class VisionQueue {
+    private boolean enabled=true;
+    private int minimumStartIntervalSeconds=30;
+    private int maxRefreshIntervalSeconds=300;
+  }
   @Data public static class Observation {
     private boolean inputAwareEnabled=true;
     private int intervalSeconds=15;
@@ -78,6 +84,9 @@ public class ActivityProperties {
   private List<String> excludedWindowTitlePatterns = List.of("*Password*", "*Private Browsing*", "*InPrivate*");
 
   public void validate() {
+    if(visionQueue==null || visionQueue.minimumStartIntervalSeconds<0 || visionQueue.maxRefreshIntervalSeconds<1
+        || visionQueue.maxRefreshIntervalSeconds<visionQueue.minimumStartIntervalSeconds)
+      throw new IllegalArgumentException("Invalid activity vision queue intervals");
     if(observation==null || observation.intervalSeconds<1 || observation.maxObservationIntervalSeconds<observation.intervalSeconds)
       throw new IllegalArgumentException("Invalid activity observation intervals");
     if(coaching==null || coaching.checkIntervalSeconds<60 || coaching.checkIntervalSeconds>86400)

@@ -3,12 +3,22 @@ package dev.mikoto2000.rei.activity;
 /** Optional per-scope outcome. Legacy visionUsed means attempted, not accepted evidence. */
 public record VisionDiagnostics(Result foreground,Result background) {
   public enum State { NOT_ATTEMPTED, ATTEMPTED, ATTEMPTED_FAILED, ATTEMPTED_SUCCEEDED_NOT_USED, USED, UNKNOWN }
-  public record Result(State state,ActivityVisionFailure failure) {}
+  public record Timing(String observationId,java.time.Instant imageCapturedAt,java.time.Instant startedAt,java.time.Instant completedAt) {}
+  public record Result(State state,ActivityVisionFailure failure,Timing timing) {
+    public Result(State state,ActivityVisionFailure failure){this(state,failure,null);}
+  }
   public static VisionDiagnostics initial() {
     return new VisionDiagnostics(new Result(State.NOT_ATTEMPTED,null),new Result(State.NOT_ATTEMPTED,null));
   }
   public VisionDiagnostics with(boolean backgroundScope,State state,ActivityVisionFailure failure) {
-    return backgroundScope?new VisionDiagnostics(foreground,new Result(state,failure)):new VisionDiagnostics(new Result(state,failure),background);
+    var prior=backgroundScope?background:foreground;
+    var result=new Result(state,failure,prior==null?null:prior.timing());
+    return backgroundScope?new VisionDiagnostics(foreground,result):new VisionDiagnostics(result,background);
+  }
+  public VisionDiagnostics timing(boolean backgroundScope,Timing timing) {
+    var prior=backgroundScope?background:foreground;
+    var result=new Result(prior==null?State.UNKNOWN:prior.state(),prior==null?null:prior.failure(),timing);
+    return backgroundScope?new VisionDiagnostics(foreground,result):new VisionDiagnostics(result,background);
   }
   public static VisionDiagnostics of(ActivityRecord.Detection d) {
     if(d!=null && d.visionDiagnostics()!=null)return d.visionDiagnostics();

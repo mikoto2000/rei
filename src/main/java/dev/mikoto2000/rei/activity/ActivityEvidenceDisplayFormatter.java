@@ -16,9 +16,13 @@ public final class ActivityEvidenceDisplayFormatter {
   }
   public String evidence(ActivityRecord r) {
     var sources=sources(r);
-    return sources.isEmpty()?"Unknown":String.join(" + ",sources.stream().map(s->switch(s) {
+    var label=sources.isEmpty()?"Unknown":String.join(" + ",sources.stream().map(s->switch(s) {
       case WINDOW_METADATA -> "Window";case FOREGROUND_VISION -> "Foreground Vision";case BACKGROUND_VISION -> "Background Vision";
     }).toList());
+    var d=r.detection();var foreground=VisionDiagnostics.of(d).foreground();
+    if(d!=null && d.classificationSources().contains("HISTORY") && foreground!=null && foreground.timing()!=null
+        && !r.id().equals(foreground.timing().observationId()))label+=" + Historical Inference";
+    return label;
   }
   public String verbose(ActivityRecord r) {
     var out=new StringBuilder("    confidence: "+r.confidence()+"\n");var d=r.detection();

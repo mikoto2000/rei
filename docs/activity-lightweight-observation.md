@@ -6,6 +6,7 @@
 `max-observation-interval-seconds=300` が既定値。
 従来の `capture-interval-seconds=60` は無効時の間隔・記録長として維持する。
 無効化すれば従来の EVIDENCE_FIRST / VISION_FIRST 経路へ戻る。
+画像認識キュー最適化は[別設定](activity-vision-queue.md)で、全最適化の切戻しにはそちらも無効にする。
 
 15秒ごとに JNA で最終入力の32ビット値、64ビット uptime、前面 HWND、
 入力 desktop の名前を読む。入力内容、キー、クリック、音声内容は取得・保存しない。

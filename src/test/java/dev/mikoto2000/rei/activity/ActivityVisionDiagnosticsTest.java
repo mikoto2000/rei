@@ -21,7 +21,9 @@ class ActivityVisionDiagnosticsTest {
   @Test void failedForegroundKeepsWindowAndStoresFailureTaxonomy() throws Exception {
     var r=run(false,null,new java.net.SocketTimeoutException("private response"));
     assertEquals("Window",new ActivityEvidenceDisplayFormatter().evidence(r));
-    assertEquals(new VisionDiagnostics.Result(VisionDiagnostics.State.ATTEMPTED_FAILED,ActivityVisionFailure.TIMEOUT),r.detection().visionDiagnostics().foreground());
+    var result=r.detection().visionDiagnostics().foreground();
+    assertEquals(VisionDiagnostics.State.ATTEMPTED_FAILED,result.state());assertEquals(ActivityVisionFailure.TIMEOUT,result.failure());
+    assertEquals(r.id(),result.timing().observationId());assertNotNull(result.timing().completedAt());
     assertFalse(new ActivityEvidenceDisplayFormatter().verbose(r).contains("private response"));
   }
   @Test void foregroundUsedAndSuccessWithoutContributionAreDifferent() throws Exception {
