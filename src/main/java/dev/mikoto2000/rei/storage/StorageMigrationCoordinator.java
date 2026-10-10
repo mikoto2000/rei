@@ -10,7 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 /** Runs before ordinary Spring beans. The instance holds a process lease until application shutdown. */
 public final class StorageMigrationCoordinator implements AutoCloseable {
-  public static final int SCHEMA_VERSION=2;
+  public static final int SCHEMA_VERSION=3;
   public enum Stage { COPYING, COPIED, VERIFIED, APPLYING, SCHEMA_WRITTEN, ROWS_IMPORTED, COMPLETE }
   @FunctionalInterface interface Checkpoint { void reached(Stage stage,Path backup)throws Exception; }
   public record Result(int schemaVersion,Path backup) {}
@@ -78,7 +78,8 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
     StorageBackup.requireSafePath(Path.of(database+"-journal"));
     var state=new ObjectMapper().readTree(StorageBackup.metadata(root.resolve(".storage/migration-state.json")));
     int originalVersion=state.path("sourceVersion").asInt(-1);
-    if(state.path("targetVersion").asInt(-1)!=SCHEMA_VERSION||originalVersion<0||originalVersion>=SCHEMA_VERSION
+    int interruptedTarget=state.path("targetVersion").asInt(-1);
+    if(interruptedTarget<1||interruptedTarget>SCHEMA_VERSION||originalVersion<0||originalVersion>=interruptedTarget
         ||!state.path("stage").asText().equals("APPLYING"))throw new IOException("Hot journal is not from a recognized interrupted storage migration; normal startup stopped");
     try(var input=Files.newInputStream(database,LinkOption.NOFOLLOW_LINKS)) {
       byte[] header=input.readNBytes(64);
@@ -119,6 +120,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
         schema.executeQuery("SELECT path,source_sha256,records,row_sha256 FROM storage_imports LIMIT 0").close();
         schema.executeQuery("SELECT project_id,conversation_key,path FROM storage_turn_sources LIMIT 0").close();
       }
+      if(version>=3)ReferenceMigration.verify(db);
     }catch(SQLException error){throw new IOException("Storage schema is not a verified completed schema",error);}
   }
   synchronized void verifyCurrentReadyVersion()throws IOException {
@@ -145,13 +147,13 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
         }
         if(sourceVersion==0)statement.execute("CREATE TABLE storage_migrations(version INTEGER PRIMARY KEY,status TEXT NOT NULL CHECK(status='COMPLETE'),backup TEXT,completed TEXT NOT NULL)");
         checkpoint.reached(Stage.SCHEMA_WRITTEN,backup);
-        SessionTurnMigration.apply(db,root);
+        if(sourceVersion<2)SessionTurnMigration.apply(db,root);
+        if(sourceVersion<3)ReferenceMigration.apply(db,root);
         checkpoint.reached(Stage.ROWS_IMPORTED,backup);
         if(backup!=null){StorageBackup.verify(backup);StorageBackup.verifyLegacySources(root,backup);}
         try(var insert=db.prepareStatement("INSERT INTO storage_migrations VALUES(?, 'COMPLETE', ?, ?)")) {
           insert.setString(2,backup==null?null:root.relativize(backup).toString());insert.setString(3,Instant.now().toString());
-          if(sourceVersion==0){insert.setInt(1,1);insert.executeUpdate();}
-          insert.setInt(1,SCHEMA_VERSION);insert.executeUpdate();
+          for(int version=sourceVersion+1;version<=SCHEMA_VERSION;version++){insert.setInt(1,version);insert.executeUpdate();}
         }
         statement.execute("PRAGMA user_version="+SCHEMA_VERSION);db.commit();
       }catch(Exception error){db.rollback();throw error;}

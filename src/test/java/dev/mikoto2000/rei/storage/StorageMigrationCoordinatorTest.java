@@ -212,11 +212,15 @@ class StorageMigrationCoordinatorTest {
     assertThat(Files.readString(root.resolve("sessions.json"))).isEqualTo("[]");
     try(var backups=Files.list(root.resolve(".storage/backups"))){assertThat(backups.count()).isEqualTo(2);}
   }
-  @Test void hotJournalFromOwnedInterruptedMigrationIsRecoveredBeforeVersionProbe() throws Exception {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(ints={1,2,3})
+  void hotJournalFromOwnedInterruptedMigrationIsRecoveredBeforeVersionProbe(int interruptedTarget) throws Exception {
     Files.writeString(root.resolve("sessions.json"),"[]");
     try(var migration=new StorageMigrationCoordinator(root,(stage,backup)->{
       if(stage==StorageMigrationCoordinator.Stage.APPLYING)throw new IOException("interrupt before database creation");
     })){assertThatThrownBy(migration::prepare).isInstanceOf(IOException.class);}
+    Path stateFile=root.resolve(".storage/migration-state.json");var mapper=new com.fasterxml.jackson.databind.ObjectMapper();
+    var state=(com.fasterxml.jackson.databind.node.ObjectNode)mapper.readTree(Files.readString(stateFile));state.put("targetVersion",interruptedTarget);Files.writeString(stateFile,mapper.writeValueAsString(state));
     var child=startHotJournalWorker();
     try {
       var ready=java.util.concurrent.CompletableFuture.supplyAsync(()->{
@@ -236,7 +240,7 @@ class StorageMigrationCoordinatorTest {
         var rows=query.executeQuery("SELECT count(*) FROM sqlite_schema WHERE name='partial'")){rows.next();assertThat(rows.getInt(1)).isZero();}
   }
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings={"missing-state","corrupt-backup","future-schema","negative-schema"})
+  @org.junit.jupiter.params.provider.ValueSource(strings={"missing-state","corrupt-backup","future-schema","negative-schema","future-migration-state"})
   void unsafeHotJournalRecoveryIsRefusedWithoutModifyingDatabaseOrJournal(String kind)throws Exception {
     Files.writeString(root.resolve("sessions.json"),"[]");var backup=new java.util.concurrent.atomic.AtomicReference<Path>();
     try(var migration=new StorageMigrationCoordinator(root,(stage,path)->{
@@ -251,6 +255,7 @@ class StorageMigrationCoordinatorTest {
     }finally{child.destroyForcibly();assertThat(child.waitFor(10,java.util.concurrent.TimeUnit.SECONDS)).isTrue();}
     if(kind.equals("missing-state"))Files.delete(root.resolve(".storage/migration-state.json"));
     if(kind.equals("corrupt-backup"))Files.writeString(backup.get().resolve("files/sessions.json"),"corrupt");
+    if(kind.equals("future-migration-state")){Path file=root.resolve(".storage/migration-state.json");var mapper=new com.fasterxml.jackson.databind.ObjectMapper();var state=(com.fasterxml.jackson.databind.node.ObjectNode)mapper.readTree(Files.readString(file));state.put("targetVersion",99);Files.writeString(file,mapper.writeValueAsString(state));}
     if(kind.equals("future-schema"))try(var file=new java.io.RandomAccessFile(root.resolve("storage.db").toFile(),"rw")){file.seek(60);file.writeInt(99);}
     if(kind.equals("negative-schema"))try(var file=new java.io.RandomAccessFile(root.resolve("storage.db").toFile(),"rw")){file.seek(60);file.writeInt(-1);}
     String databaseHash=StorageBackup.hash(root.resolve("storage.db")),journalHash=StorageBackup.hash(root.resolve("storage.db-journal"));

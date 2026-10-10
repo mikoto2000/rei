@@ -16,6 +16,9 @@ public class PersistentCheckpointRepository {
   private final JdbcClient db;
   private final TransactionTemplate transaction;
   private final CheckpointProperties settings;
+  private dev.mikoto2000.rei.storage.StorageObjectRegistry objects;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setStorageObjectRegistry(dev.mikoto2000.rei.storage.StorageObjectRegistry objects){this.objects=objects;}
   private final ObjectMapper json=new ObjectMapper().registerModule(new JavaTimeModule());
   static final String OWNER=ProcessHandle.current().pid()+"@"+ProcessHandle.current().info().startInstant().orElseThrow();
   public PersistentCheckpointRepository(@Qualifier("memoryConsolidationDataSource") DataSource source,CheckpointProperties settings) {
@@ -63,6 +66,8 @@ public class PersistentCheckpointRepository {
   public PersistentCheckpoint save(PersistentCheckpoint state,long expected,String event) {
     var next=state.revision(expected+1);String encoded=encode(next);
     if(encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>settings.getMaxSnapshotBytes())throw new CheckpointException(CheckpointException.Code.CAPACITY,"Checkpoint snapshot capacity reached");
+    // Cross-DB order deliberately favors extra protection if this save fails.
+    if(objects!=null)objects.protectCheckpoint(next);
     return transaction.execute(tx->{
       db.sql("INSERT OR IGNORE INTO checkpoint_heads(project,task,revision) VALUES(?,?,0)").params(state.projectId(),state.taskId()).update();
       db.sql("UPDATE checkpoint_heads SET revision=revision WHERE project=? AND task=?").params(state.projectId(),state.taskId()).update();

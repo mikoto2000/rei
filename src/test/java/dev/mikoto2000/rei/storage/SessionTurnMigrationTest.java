@@ -85,7 +85,7 @@ class SessionTurnMigrationTest {
     Path backup;
     try(var migration=new StorageMigrationCoordinator(root)){backup=migration.prepare().backup();}
     assertThat(StorageMigrationCoordinatorTest.version(backup.resolve("files/storage.db"))).isEqualTo(1);
-    assertThat(StorageMigrationCoordinatorTest.version(root.resolve("storage.db"))).isEqualTo(2);
+    assertThat(StorageMigrationCoordinatorTest.version(root.resolve("storage.db"))).isEqualTo(StorageMigrationCoordinator.SCHEMA_VERSION);
     assertThat(new SqliteSessionRepository(root).findById("one")).contains(metadata("one"));
   }
   @Test void trailingOrBrokenTurnJsonRollsBackEvenPreviouslyImportedSessions()throws Exception {
