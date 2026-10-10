@@ -25,6 +25,31 @@ import dev.mikoto2000.rei.llm.ConversationIds;
 class DefaultTopicOrchestratorTest {
 
   @Test
+  void refreshReturnsBeforeGenerationAndDiscardsSupersededResults() {
+    var properties = enabledProperties();
+    var store = new InMemoryTopicCandidateStore();
+    var tasks = new java.util.ArrayDeque<Runnable>();
+    var events = new ArrayList<AgentEvent>();
+    var bus = new InMemoryAgentEventBus();
+    bus.subscribe(events::add);
+    var contexts = new java.util.concurrent.atomic.AtomicInteger();
+    var orchestrator = new DefaultTopicOrchestrator(service(properties, new TemplateTopicMessageGenerator()),
+        store, () -> { contexts.incrementAndGet(); return context(); },
+        new RecordingActivityTracker(now()), new RecordingMessagePublisher(), properties,
+        new AgentEventFactory(clock()), bus, clock(), tasks::add);
+
+    orchestrator.onChatCompleted();
+    orchestrator.onChatCompleted();
+    assertEquals(0, contexts.get());
+    assertTrue(store.currentCandidates(now(), Duration.ofMinutes(30)).isEmpty());
+    tasks.remove().run();
+    assertTrue(store.currentCandidates(now(), Duration.ofMinutes(30)).isEmpty());
+    tasks.remove().run();
+    assertEquals(List.of(candidate()), store.currentCandidates(now(), Duration.ofMinutes(30)));
+    assertEquals(1, events.stream().filter(e -> e.type() == AgentEventType.TOPIC_CANDIDATES_REFRESHED).count());
+  }
+
+  @Test
   void chatCompletedRefreshesCandidateStoreWithoutPublishingMessage() {
     TopicGeneratorProperties properties = enabledProperties();
     InMemoryTopicCandidateStore store = new InMemoryTopicCandidateStore();
