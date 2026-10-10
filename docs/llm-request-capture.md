@@ -2,6 +2,8 @@
 
 ## 目的と範囲
 
+`voice-correction` の補正リクエストは Capture 対象外です。音声の原文・候補の扱いは [音声LLM補正](voice-llm-correction.md) を参照してください。
+
 `/llm capture next` を明示的に実行した場合だけ、同じCLIクライアント・会話の次のキーボード送信に対応するRoot Runを記録します。起動時は必ずOFFです。Promptプレビューではなく、JSONシリアライズと既知のShowUI書換えが完了した後のHTTP本文バイト列をJVMメモリへ保存します。
 
 記録はサーバー受信成功の証明ではありません。HTTPレスポンスのステータス、LLM処理の成功、サーバー内部のchat templateやtokenizationは別の情報です。運用サーバーの受信本文を照合する機能はありません。

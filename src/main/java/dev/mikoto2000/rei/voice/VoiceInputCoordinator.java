@@ -21,11 +21,21 @@ public final class VoiceInputCoordinator implements AutoCloseable {
   private final java.util.function.Predicate<ConversationTarget> selected;
   private final java.util.function.LongSupplier ticks;
   private record FrameStamp(long nanos,java.time.Instant at) {}
+  private record Completed(ConversationInput input,VoiceCorrectionValidator.Decision decision,long audioEpoch) {}
   private final ExecutorService supervisor = Executors.newSingleThreadExecutor(r -> daemon(r, "voice-supervisor"));
   private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor(r -> daemon(r, "voice-deadline"));
   private volatile State state = State.OFF;
   private Run active;
   private boolean closed;
+  private VoiceCorrectionService correction;
+  private Consumer<ConversationInput> correctionReview;
+  /** Configure once before starting; constructors preserve the original OFF behavior. */
+  public void configureCorrection(VoiceCorrectionService service,Consumer<ConversationInput> review) {
+    synchronized(guard) {
+      if(active!=null)throw new IllegalStateException("Voice already active");
+      correction=Objects.requireNonNull(service);correctionReview=Objects.requireNonNull(review);
+    }
+  }
 
   private static final class Run {
     final ConversationTarget target;
@@ -36,6 +46,10 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     volatile ScheduledFuture<?> deadline;
     final VoiceInputQueue segments = new VoiceInputQueue();
     final ConcurrentMap<java.util.UUID,Long> epochs = new ConcurrentHashMap<>();
+    final java.util.TreeMap<Long,Completed> completed=new java.util.TreeMap<>();
+    final java.util.LinkedHashMap<java.util.UUID,ConversationInput> pending=new java.util.LinkedHashMap<>();
+    final java.util.Set<java.util.UUID> cancelled=new java.util.HashSet<>();
+    long sequence,nextDelivery;
     final CountDownLatch exited = new CountDownLatch(2);
     final AtomicBoolean captureClosed = new AtomicBoolean();
     final CountDownLatch captureReleased = new CountDownLatch(1);
@@ -104,6 +118,20 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     off(starting);throw new IllegalStateException("Voice initialization timed out; waiting for native cleanup");
   }
   public int queuedSegments() { synchronized (guard) { return active == null ? 0 : active.segments.size(); } }
+  public java.util.List<ConversationInput> pendingCorrectionInputs() {
+    synchronized(guard) {
+      if(active==null || active.stop || !selected(active))return java.util.List.of();
+      return active.pending.values().stream().filter(input->!active.cancelled.contains(input.inputId())).toList();
+    }
+  }
+  public boolean cancelPendingCorrection(java.util.UUID id) {
+    synchronized(guard) {
+      var run=active;if(run==null || !run.pending.containsKey(id) || !run.cancelled.add(id))return false;
+      // Mark before transport cancellation: a completion already waiting for the guard must also be discarded.
+      if(correction!=null)correction.cancel(id);
+      return true;
+    }
+  }
   private void change(State next) {
     state = next; guard.notifyAll(); events.publish(VoiceEventPublisher.Type.STATE_CHANGED, next.name());
   }
@@ -166,6 +194,19 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     var stamp=run.lastFrame;if(stamp==null)return false;
     long wall=java.time.Duration.between(stamp.at(),clock.instant()).toMillis();
     return ticks.getAsLong()-stamp.nanos()>TimeUnit.SECONDS.toNanos(5)||wall>5000||wall < -5000;
+  }
+  /** Preserve ASR order even when timeout/queue fallback completes before an earlier LLM. Raw stop remains immediate. */
+  private void deliver(Run run,Completed completed) {
+    run.pending.remove(completed.input().inputId());
+    if(run.cancelled.remove(completed.input().inputId()))return;
+    if(run.stop || active!=run || !selected(run) || !audioGate.allowed(completed.audioEpoch()) || completed.decision().reason().equals("cancelled"))return;
+    try {
+      audioGate.ifAllowed(completed.audioEpoch(),()-> {
+        var input=completed.input();var decision=completed.decision();
+        var accepted=new ConversationInput(input.inputId(),InputSource.VOICE,input.target(),decision.text(),input.createdAt());
+        if(decision.confirmationRequired() && correctionReview!=null)correctionReview.accept(accepted);else submit.accept(accepted);
+      });
+    }catch(RuntimeException rejected){events.publish(VoiceEventPublisher.Type.INPUT_REJECTED,"input rejected");}
   }
   private void supervise(Run run) {
     boolean captureStarted = false, recognitionStarted = false;
@@ -234,6 +275,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
   private void captureLoop(Run run) {
     var assembler = new SpeechSegmentAssembler(run.settings, clock);
     long previousEpoch = audioGate.epoch();
+    long vadNanos=0;
     try {
       while (!run.stop) {
         var frame = run.source.readFrame();
@@ -244,15 +286,18 @@ public final class VoiceInputCoordinator implements AutoCloseable {
         run.lastFrame = new FrameStamp(ticks.getAsLong(),clock.instant());
         long epoch = audioGate.epoch();
         if (epoch != previousEpoch || audioGate.suppressed()) {
-          assembler.reset(); run.segments.clear(); run.epochs.clear(); previousEpoch = epoch;
+          assembler.reset(); run.segments.clear(); run.epochs.clear(); previousEpoch = epoch;vadNanos=0;
           if (audioGate.suppressed()) {
             run.backend.vad().probability(new float[VoiceSettings.WINDOW]);
             continue;
           }
         }
-        var decision = assembler.accept(frame, run.backend.vad().probability(frame));
+        long vadStart=ticks.getAsLong();float probability=run.backend.vad().probability(frame);
+        vadNanos+=Math.max(0,ticks.getAsLong()-vadStart);
+        var decision = assembler.accept(frame, probability);
         switch (decision.reason()) {
           case COMPLETED -> {
+            events.publish(VoiceEventPublisher.Type.ASR_TIMING,"vad_ms="+vadNanos/1_000_000);vadNanos=0;
             if (!run.stop && audioGate.allowed(epoch)) {
               var segment=decision.segment(); run.epochs.put(segment.id(),epoch);
               if (!run.segments.offer(segment)) {
@@ -261,8 +306,8 @@ public final class VoiceInputCoordinator implements AutoCloseable {
               }
             }
           }
-          case SHORT_DROPPED -> events.publish(VoiceEventPublisher.Type.SHORT_DROPPED, "segment dropped");
-          case MAX_DROPPED -> events.publish(VoiceEventPublisher.Type.MAX_DROPPED, "unfinished segment dropped");
+          case SHORT_DROPPED -> {vadNanos=0;events.publish(VoiceEventPublisher.Type.SHORT_DROPPED, "segment dropped");}
+          case MAX_DROPPED -> {vadNanos=0;events.publish(VoiceEventPublisher.Type.MAX_DROPPED, "unfinished segment dropped");}
           default -> { }
         }
       }
@@ -281,25 +326,52 @@ public final class VoiceInputCoordinator implements AutoCloseable {
         if (segment == null) continue;
         var epoch = run.epochs.remove(segment.id());
         if (epoch == null || !audioGate.allowed(epoch)) continue;
-        var result = SpeechResultFilter.filter(run.backend.recognizer().recognize(segment));
+        long asrStarted=ticks.getAsLong();
+        String asrOriginal=run.backend.recognizer().recognize(segment);
+        var result = SpeechResultFilter.filter(asrOriginal);
+        events.publish(VoiceEventPublisher.Type.ASR_TIMING,"asr_ms="+Math.max(0,(ticks.getAsLong()-asrStarted)/1_000_000));
         if(!selected(run)){stop(run,VoiceEventPublisher.Type.TARGET_CHANGED,false);continue;}
         if(stale(run)){fail(run,VoiceEventPublisher.Type.CAPTURE_RESUMED);continue;}
+        ConversationInput[] prepared=new ConversationInput[1];
         synchronized (guard) {
           if (run.stop || active != run || !audioGate.allowed(epoch)) continue;
           if (result.isEmpty()) { events.publish(VoiceEventPublisher.Type.RESULT_REJECTED, "recognition dropped"); continue; }
-          if (run.diagnostic) { events.publish(VoiceEventPublisher.Type.DIAGNOSTIC_RESULT, result.get()); continue; }
+          if (run.diagnostic) { events.publish(VoiceEventPublisher.Type.DIAGNOSTIC_RESULT, asrOriginal); continue; }
           try {
             audioGate.ifAllowed(epoch, () -> {
               var acceptedText=wakeGate.filter(result.get(),run.target,advanced.get());
               if(acceptedText.isEmpty()) {
                 events.publish(VoiceEventPublisher.Type.RESULT_REJECTED,"wake gate"); return;
               }
-              submit.accept(new ConversationInput(segment.id(), InputSource.VOICE, run.target,
-                  acceptedText.get(), segment.createdAt()));
+              prepared[0]=new ConversationInput(segment.id(), InputSource.VOICE, run.target,
+                  acceptedText.get(), segment.createdAt());
             });
           } catch (RuntimeException e) {
             events.publish(VoiceEventPublisher.Type.INPUT_REJECTED, "input rejected");
           }
+        }
+        if(prepared[0]!=null) {
+          var input=prepared[0];var once=new AtomicBoolean();
+          boolean immediateStop=VoiceCorrectionValidator.controlKey(input.text()).equals("実行を停止");
+          long sequence;
+          synchronized(guard){
+            if(!immediateStop && run.sequence-run.nextDelivery>=64){events.publish(VoiceEventPublisher.Type.INPUT_REJECTED,"delivery capacity");continue;}
+            sequence=immediateStop?-1:run.sequence++;
+            if(!immediateStop)run.pending.put(input.inputId(),input);
+          }
+          java.util.function.Consumer<VoiceCorrectionValidator.Decision> complete=decision -> {
+            synchronized(guard) {
+              if(!once.compareAndSet(false,true) || run.stop || active!=run)return;
+              var item=new Completed(input,decision,epoch);
+              if(immediateStop){deliver(run,item);return;}
+              run.completed.put(sequence,item);
+              while(run.completed.containsKey(run.nextDelivery))deliver(run,run.completed.remove(run.nextDelivery++));
+            }
+          };
+          // LLM/context retrieval must not hold capture/lifecycle locks. Control is classified from raw ASR.
+          if(correction==null || VoiceCorrectionValidator.controlOrReply(input.text()))
+            complete.accept(new VoiceCorrectionValidator.Decision(input.text(),"bypassed",false));
+          else correction.correct(input,asrOriginal,()->!run.stop && selected(run) && audioGate.allowed(epoch),complete);
         }
       }
     } catch (InterruptedException e) {
@@ -318,7 +390,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
   }
   public void close() {
     synchronized (guard) { if (closed) return; closed = true; }
-    off(); timer.shutdownNow(); supervisor.shutdown();
+    off(); if(correction!=null)correction.cancelAll();timer.shutdownNow(); supervisor.shutdown();
     try { supervisor.awaitTermination(15, TimeUnit.SECONDS); }
     catch (InterruptedException e) { Thread.currentThread().interrupt(); }
     synchronized (guard) { if (active == null) change(State.CLOSED); }

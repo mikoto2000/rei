@@ -73,6 +73,7 @@ Java 側は機能ごとのパッケージ構成と、共通の `core` / `applica
 | `event` | 実行・LLM・ツール等のイベント、購読、再接続用バッファ。`AgentEvent`、`InMemoryAgentEventBus` |
 | `conversation` | Session メタデータ、Turn、日付別ログの永続化と履歴検索 |
 | `llm` | `LlmModelProvider`、`LlmChatClientProvider` による用途別のモデル・クライアント提供 |
+| `voice` | VAD/Whisperの隔離処理、VoiceInputCoordinator、任意のVoiceCorrectionService、VOICEのまま共通Gatewayへ配送。補正専用用途はTool/Agent Advisor/Captureを持たない |
 
 ## 3. 会話が処理されるまで
 

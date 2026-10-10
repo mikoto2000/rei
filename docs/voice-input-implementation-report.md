@@ -1,5 +1,7 @@
 # ハンズフリー音声入力・会話モード 実装記録
 
+ASR確定後の任意の文脈依存LLM補正（既定OFF）は [音声LLM補正](voice-llm-correction.md) を参照してください。検証済み候補の自動採用でもVOICE provenanceとTool承認を維持します。
+
 Java 25 / Windows x64 / DRY (VT-4) / Whisper large-v3-turbo FP32を使用する。
 開始前に先行改善のmain統合を確認し、各Phaseを独立PRで通常マージした後に次へ進めた。
 Phase 7のローカル検証と実Agent受け入れ結果を記録する。各PhaseのCI・main統合の最終状態は、下表のPRとそのmerge commitで確認できる。

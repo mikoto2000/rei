@@ -24,9 +24,12 @@ public final class VoiceReviewInbox {
   }
   private void prune(){pending.values().removeIf(input->!valid(input));}
   public synchronized void accept(ConversationInput input) {
+    accept(input,false);
+  }
+  public synchronized void accept(ConversationInput input,boolean forceConfirmation) {
     if(input.source()!=InputSource.VOICE)throw new IllegalArgumentException("Recognition inbox accepts VOICE only");
     prune();if(!valid(input))throw new IllegalStateException("Voice target changed or recognition expired");
-    if(!confirmation){dispatch.accept(input);return;}
+    if(!confirmation && !forceConfirmation){dispatch.accept(input);return;}
     var previous=pending.get(input.inputId());
     if(previous!=null){if(!previous.equals(input))throw new IllegalArgumentException("Conflicting recognition identity");return;}
     if(pending.size()>=CAPACITY)throw new IllegalStateException("Recognition confirmation queue is full (3)");

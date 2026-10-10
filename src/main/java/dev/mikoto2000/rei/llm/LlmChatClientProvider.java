@@ -201,10 +201,10 @@ public class LlmChatClientProvider {
 
   private ChatClient createChatClient(String feature) {
     // Extraction and summarization process supplied evidence without conversation state or tools.
-    if (LlmFeature.MEMORY.equals(feature)) {
+    if (LlmFeature.MEMORY.equals(feature) || LlmFeature.VOICE_CORRECTION.equals(feature)) {
       var options = modelProvider.chatOptions(feature, null);
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
-      return ChatClient.builder(modelProvider.memoryChatModel())
+      return ChatClient.builder(LlmFeature.VOICE_CORRECTION.equals(feature) ? modelProvider.voiceCorrectionChatModel() : modelProvider.memoryChatModel())
           .defaultOptions(options.mutate().toolCallbacks(List.of()).toolChoice("none"))
           .build();
     }

@@ -75,6 +75,15 @@ public class LlmModelProvider {
   }
 
   private ChatModel createFeatureModel(String feature) {
+    if (LlmFeature.VOICE_CORRECTION.equals(feature)) {
+      // An explicitly selected correction endpoint must never fall back to a different remote server.
+      // Reuse CHAT connection settings when no correction endpoint is configured, without its capture wrapper.
+      var server=properties.feature(feature);
+      if(server==null || !server.hasCustomServer())server=properties.feature(LlmFeature.CHAT);
+      var model=server!=null && server.hasCustomServer()?createOpenAiCompatibleChatModel(server):defaultChatModel;
+      dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+      return model; // No Agent lifecycle exception publishing (may contain request/response text).
+    }
     if (LlmFeature.COMPUTER_USE.equals(feature) || LlmFeature.COMPUTER_USE_PLANNER.equals(feature) || LlmFeature.ACTIVITY.equals(feature) || LlmFeature.ACTIVITY_BEHAVIOR.equals(feature))
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(defaultChatModel);
     LlmProperties.Server server = properties.feature(feature);
@@ -96,6 +105,12 @@ public class LlmModelProvider {
       return defaultModel != null && !defaultModel.isBlank() ? defaultModel : configuredDefaultModel();
     }
     return server.getModel();
+  }
+
+  public ChatModel voiceCorrectionChatModel() {
+    var model=chatModel(LlmFeature.VOICE_CORRECTION);
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+    return model;
   }
 
   public ChatModel computerUseChatModel() {
@@ -141,6 +156,17 @@ public class LlmModelProvider {
   }
 
   private OpenAiChatOptions.Builder chatOptionsBuilder(String feature, String defaultModel) {
+    if(LlmFeature.VOICE_CORRECTION.equals(feature)) {
+      var correction=properties.feature(feature);
+      var connection=correction!=null && correction.hasCustomServer()?correction:properties.feature(LlmFeature.CHAT);
+      var options=connection!=null && connection.hasCustomServer()
+          ?chatOptionsBuilder(connection,modelForServer(connection)).baseUrl(OpenAiCompatibleEndpoint.baseUrl(connection.getBaseUrl()))
+              .apiKey(connection.getApiKey()==null || connection.getApiKey().isBlank()?"dummy-key":connection.getApiKey())
+          :OpenAiChatOptions.builder().combineWith(defaultChatModel.getOptions().mutate());
+      if(correction!=null && correction.getModel()!=null && !correction.getModel().isBlank())options.model(correction.getModel());
+      if(correction!=null && correction.getTemperature()!=null)options.temperature(correction.getTemperature());
+      return options;
+    }
     LlmProperties.Server server = properties.feature(feature);
     OpenAiChatOptions.Builder options = chatOptionsBuilder(server, model(feature, defaultModel));
     // AI 2 uses a request's options as-is, rather than merging them with model defaults.

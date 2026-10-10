@@ -7,6 +7,18 @@ import org.mockito.Mockito;
 import org.springframework.ai.chat.model.ChatModel;
 
 class LlmModelProviderTest {
+  @Test void correctionInheritsChatEndpointAndCanOverrideOnlyItsModelWithoutCaptureOrFallback() {
+    var fallback=Mockito.mock(ChatModel.class);
+    Mockito.when(fallback.getOptions()).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().model("default").build());
+    var properties=new LlmProperties();var chat=new LlmProperties.Server();chat.setBaseUrl("https://chat.invalid/v1");chat.setApiKey("test-key");chat.setModel("chat-model");
+    properties.getFeatures().put(LlmFeature.CHAT,chat);var correction=new LlmProperties.Server();correction.setModel("corrector");
+    properties.getFeatures().put(LlmFeature.VOICE_CORRECTION,correction);var provider=new LlmModelProvider(fallback,properties);
+    var options=provider.chatOptions(LlmFeature.VOICE_CORRECTION,null);
+    assertThat(options.getBaseUrl()).isEqualTo("https://chat.invalid/v1");assertThat(options.getModel()).isEqualTo("corrector");
+    assertThat(provider.voiceCorrectionChatModel()).isInstanceOf(org.springframework.ai.openai.OpenAiChatModel.class);
+    correction.setBaseUrl("https://correction.invalid/v1");
+    assertThat(new LlmModelProvider(fallback,properties).chatOptions(LlmFeature.VOICE_CORRECTION,null).getBaseUrl()).isEqualTo("https://correction.invalid/v1");
+  }
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void featureOutputBudgetKeepsExactlyOneConfiguredTokenParameterOnTheWire(boolean completionTokens) {
