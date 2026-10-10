@@ -14,6 +14,7 @@ public final class ActivityCapture implements AutoCloseable {
   private final ScreenshotStore screenshots;
   private final Clock clock;
   private final ActivityEvidencePipeline evidencePipeline;
+  private final InputAwareObservation observation;
   private final java.util.concurrent.Executor analysisExecutor;
   private final java.util.concurrent.Executor backgroundExecutor;
   private final AtomicBoolean running = new AtomicBoolean();
@@ -61,18 +62,36 @@ public final class ActivityCapture implements AutoCloseable {
     properties.validate();
     this.properties=properties; this.observer=observer; this.extractor=extractor; this.store=store; this.screenshots=screenshots; this.clock=clock;
     this.analysisExecutor=analysisExecutor;
+    this.observation=new InputAwareObservation(clock,properties.getObservation().getIntervalSeconds(),properties.getObservation().getMaxObservationIntervalSeconds());
     this.backgroundExecutor=backgroundExecutor;
     this.evidencePipeline=new ActivityEvidencePipeline(properties,observer,extractor,store,screenshots,clock,analysisExecutor,backgroundExecutor,sources);
+    this.evidencePipeline.observation=observation;
   }
-  public synchronized void pause() { paused=true; invalidate();evidencePipeline.pause(); }
+  public synchronized void pause() { paused=true; observation.force();invalidate();evidencePipeline.pause(); }
   public void useToolkit(ClassificationToolkit toolkit){evidencePipeline.useToolkit(toolkit);}
-  public synchronized void resume() { paused=false; invalidate();evidencePipeline.resume(); }
+  public synchronized void resume() { paused=false;observation.force();invalidate();evidencePipeline.resume(); }
   public synchronized boolean isPaused() { return paused; }
+  public void forceObservation(){observation.force();}
   @Override public synchronized void close() { closed=true; pause();evidencePipeline.close(); }
   private synchronized boolean allowed(long token) { return properties.isEnabled() && !paused && !closed && token==generation; }
 
   public void tick() {
-    if(properties.getDetection().getMode()==ActivityProperties.DetectionMode.EVIDENCE_FIRST){evidencePipeline.tick();return;}
+    if(!properties.getObservation().isInputAwareEnabled()){detailTick(false);return;}
+    boolean active;synchronized(this){active=allowed(generation);}
+    if(!active){detailTick(false);return;}
+    long probeStarted=System.nanoTime();
+    var sample=lightweight();
+    boolean detailed=observation.begin(sample);
+    log.debug("Activity lightweight observation: probe_us={} reliable={} detailed={}",
+        java.util.concurrent.TimeUnit.NANOSECONDS.toMicros(System.nanoTime()-probeStarted),sample!=null && sample.reliable(),detailed);
+    if(!detailed)return;
+    try{detailTick(sample!=null);}finally{observation.end(lightweight());}
+  }
+  private DesktopActivityObserver.Lightweight lightweight() {
+    try{return observer.lightweight();}catch(Exception | LinkageError e){return new DesktopActivityObserver.Lightweight(0,0,null,null,false,false);}
+  }
+  private void detailTick(boolean optimized) {
+    if(optimized || properties.getDetection().getMode()==ActivityProperties.DetectionMode.EVIDENCE_FIRST){evidencePipeline.tick();return;}
     if (!running.compareAndSet(false,true)) return;
     long started=System.nanoTime();String status="skipped";
     try {

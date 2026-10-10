@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.*;
 final class ActivityEvidencePipeline {
   private static final org.slf4j.Logger log=org.slf4j.LoggerFactory.getLogger(ActivityEvidencePipeline.class);
   private final ActivityProperties p;
+  InputAwareObservation observation;
   private final DesktopActivityObserver observer;
   private final ActivityExtractor extractor;
   private final ActivityStore store;
@@ -58,16 +59,18 @@ final class ActivityEvidencePipeline {
       var at=clock.instant();
       var evidence=aggregator.collect(at,metadata,prior);
       ActivityClassification classification;
-      try {classification=p.getDetection().isEvidenceEnabled()?classify.apply(evidence):unknown(fg);}
+      try {classification=p.getDetection().isEvidenceEnabled() && p.getDetection().getMode()!=ActivityProperties.DetectionMode.VISION_FIRST?classify.apply(evidence):unknown(fg);}
       catch(Exception e){warn("classification",e);classification=unknown(fg);}
-      boolean fallback=p.isExtractionEnabled() && p.getDetection().isVisionEnabled() && p.getDetection().isFallbackEnabled()
+      boolean fallback=p.isExtractionEnabled() && p.getDetection().isVisionEnabled()
+          && (p.getDetection().getMode()==ActivityProperties.DetectionMode.VISION_FIRST || p.getDetection().isFallbackEnabled())
           && !classification.usable(p.getDetection().getSkipVisionConfidence());
       ActivityRecord record;
       synchronized(this) {
         if(!allowed(token))return;
         var detection=new ActivityRecord.Detection(evidence,classification.sources(),false,"EVIDENCE_ONLY",fallback?"PROVISIONAL":"FINAL",classification.sourceConfidence(),classification.reason(),classification.fieldConfidence(),classification.secondaryConfidence(),null,VisionDiagnostics.initial());
-        record=new ActivityRecord(UUID.randomUUID().toString(),at,p.getCaptureIntervalSeconds(),List.of(),fg,classification.inference(),classification.confidence(),List.of(),0,false,continuity,detection);
+        record=new ActivityRecord(UUID.randomUUID().toString(),at,p.observationDurationSeconds(p.getObservation().isInputAwareEnabled() && observation!=null && observation.lightweightAttempt()),List.of(),fg,classification.inference(),classification.confidence(),List.of(),0,false,continuity,detection);
         store.append(record);previous=record;observations.increment();
+        if(observation!=null)observation.saved();
         classificationCounts(record,1);
         if(!fallback){evidenceOnly.increment();skipped.increment();}
         else fallbacks.increment();

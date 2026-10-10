@@ -14,6 +14,13 @@ public class ActivityProperties {
   private boolean keepScreenshots = false;
   private boolean keepOnExtractionFailure = false;
   private int captureIntervalSeconds = 60;
+  private Observation observation=new Observation();
+  @Data public static class Observation {
+    private boolean inputAwareEnabled=true;
+    private int intervalSeconds=15;
+    private int maxObservationIntervalSeconds=300;
+  }
+  public int observationDurationSeconds(boolean lightweight) {return lightweight?Math.min(captureIntervalSeconds,observation.intervalSeconds):captureIntervalSeconds;}
   private double visionImageScale = .5;
   private int backgroundAnalysisIntervalSeconds = 300;
   private Detection detection = new Detection();
@@ -71,6 +78,8 @@ public class ActivityProperties {
   private List<String> excludedWindowTitlePatterns = List.of("*Password*", "*Private Browsing*", "*InPrivate*");
 
   public void validate() {
+    if(observation==null || observation.intervalSeconds<1 || observation.maxObservationIntervalSeconds<observation.intervalSeconds)
+      throw new IllegalArgumentException("Invalid activity observation intervals");
     if(coaching==null || coaching.checkIntervalSeconds<60 || coaching.checkIntervalSeconds>86400)
       throw new IllegalArgumentException("Invalid period coaching interval (60..86400 seconds)");
     if(summary==null || summary.timeoutSeconds<1 || summary.timeoutSeconds>120 || summary.projectAliasesFile==null || summary.projectAliasesFile.isBlank())

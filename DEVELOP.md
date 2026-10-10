@@ -1,5 +1,7 @@
 # DEVELOP
 
+デスクトップ監視の軽量観測・設定・限界・検証は [入力状態による軽量観測](docs/activity-lightweight-observation.md)を参照してください。
+
 Rei の開発者向けドキュメントです。利用手順は [README.md](./README.md) を参照してください。
 
 初めてコードを読む場合は、[図解付きプログラム構造ガイド](docs/program-structure.md)から始めてください。全体構成、会話の実行経路、状態と保存先、機能別の変更箇所を説明しています。

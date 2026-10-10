@@ -94,13 +94,24 @@ public class ActivityConfiguration {
     return executor;
   }
   @Bean ActivityJob activityJob(ActivityCapture capture,@Qualifier("activityExecutor") ThreadPoolTaskExecutor executor) {return new ActivityJob(capture,executor);}
+  @Bean(destroyMethod="close") AutoCloseable activityObservationSignals(ActivityCapture capture,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.event.AgentEventBus> buses,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.voice.VoiceEventPublisher> voices) {
+    var bus=buses.getIfAvailable();var voice=voices.getIfAvailable();
+    var agent=bus==null?null:bus.subscribe(e->{if(e.type()==dev.mikoto2000.rei.event.AgentEventType.COMPUTER_USE_PROGRESS)capture.forceObservation();});
+    var audio=voice==null?null:voice.subscribe(e->{switch(e.type()) {
+      case STATE_CHANGED,CAPTURE_RESUMED,CAPTURE_FAILED,REVIEW_REQUIRED -> capture.forceObservation();
+      default -> {} // Do not collect recognition text or audio.
+    }});
+    return ()->{if(agent!=null)agent.unsubscribe();if(audio!=null)audio.close();};
+  }
   @Bean ClassificationReloadJob classificationReloadJob(ClassificationToolkit toolkit){return new ClassificationReloadJob(toolkit);}
   public record ClassificationReloadJob(ClassificationToolkit toolkit) {
     @Scheduled(fixedDelay=3000,initialDelay=3000) public void poll(){toolkit.poll();}
   }
   public record ActivityJob(ActivityCapture capture,ThreadPoolTaskExecutor executor) implements AutoCloseable {
     @Override public void close() { capture.close(); }
-    @Scheduled(fixedDelayString="#{${rei.activity.capture-interval-seconds:60} * 1000}",initialDelayString="#{${rei.activity.capture-interval-seconds:60} * 1000}")
+    @Scheduled(fixedDelayString="#{${rei.activity.observation.input-aware-enabled:true} ? ${rei.activity.observation.interval-seconds:15} * 1000 : ${rei.activity.capture-interval-seconds:60} * 1000}",initialDelayString="#{${rei.activity.observation.input-aware-enabled:true} ? ${rei.activity.observation.interval-seconds:15} * 1000 : ${rei.activity.capture-interval-seconds:60} * 1000}")
     public void poll() {
       try {executor.execute(capture::tick);}catch(org.springframework.core.task.TaskRejectedException ignored) { /* Single worker is busy or shutting down; never queue screenshots. */ }
     }

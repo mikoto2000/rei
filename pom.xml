@@ -37,6 +37,10 @@
 		<test.dataDirectory>${project.build.directory}/test-performance/data</test.dataDirectory>
 	</properties>
 	<dependencies>
+		<!-- Native read-only probes; JNA is already present via Tika. -->
+		<dependency>
+			<groupId>net.java.dev.jna</groupId><artifactId>jna</artifactId><version>5.17.0</version>
+		</dependency>
 		<!-- Linear-time matching for the bounded declarative predicate DSL. -->
 		<dependency>
 			<groupId>com.google.re2j</groupId>
