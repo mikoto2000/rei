@@ -88,7 +88,7 @@ public final class ActivityCapture implements AutoCloseable {
     try{detailTick(sample!=null);}finally{observation.end(lightweight());}
   }
   private DesktopActivityObserver.Lightweight lightweight() {
-    try{return observer.lightweight();}catch(Exception | LinkageError e){return null;}
+    try{return observer.lightweight();}catch(Exception | LinkageError e){return new DesktopActivityObserver.Lightweight(0,0,null,null,false,false);}
   }
   private void detailTick(boolean optimized) {
     if(optimized || properties.getDetection().getMode()==ActivityProperties.DetectionMode.EVIDENCE_FIRST){evidencePipeline.tick();return;}

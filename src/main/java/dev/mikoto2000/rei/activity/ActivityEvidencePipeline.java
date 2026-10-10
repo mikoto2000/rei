@@ -61,7 +61,8 @@ final class ActivityEvidencePipeline {
       ActivityClassification classification;
       try {classification=p.getDetection().isEvidenceEnabled() && p.getDetection().getMode()!=ActivityProperties.DetectionMode.VISION_FIRST?classify.apply(evidence):unknown(fg);}
       catch(Exception e){warn("classification",e);classification=unknown(fg);}
-      boolean fallback=p.isExtractionEnabled() && p.getDetection().isVisionEnabled() && p.getDetection().isFallbackEnabled()
+      boolean fallback=p.isExtractionEnabled() && p.getDetection().isVisionEnabled()
+          && (p.getDetection().getMode()==ActivityProperties.DetectionMode.VISION_FIRST || p.getDetection().isFallbackEnabled())
           && !classification.usable(p.getDetection().getSkipVisionConfidence());
       ActivityRecord record;
       synchronized(this) {
