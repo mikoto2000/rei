@@ -11,7 +11,9 @@ public interface DesktopActivityObserver {
     }
   }
   default Metadata metadata() throws Exception {return new Metadata(foreground(),java.util.List.of());}
-  record Metadata(ForegroundWindow foreground,java.util.List<ActivityEvidence.VisibleWindow> visibleWindows,boolean complete) {
+  record MonitorIdentity(String id,ActivityRecord.Bounds bounds) {}
+  record Metadata(ForegroundWindow foreground,java.util.List<ActivityEvidence.VisibleWindow> visibleWindows,boolean complete,java.util.List<MonitorIdentity> monitors) {
+    public Metadata(ForegroundWindow foreground,java.util.List<ActivityEvidence.VisibleWindow> windows,boolean complete){this(foreground,windows,complete,java.util.List.of());}
     public Metadata(ForegroundWindow foreground,java.util.List<ActivityEvidence.VisibleWindow> windows){this(foreground,windows,false);}
   }
 }

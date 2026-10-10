@@ -9,13 +9,36 @@ import java.util.concurrent.TimeUnit;
 /** Read-only foreground/visible Win32 metadata probes; pixels use the existing multi-display Robot adapter. */
 public final class WindowsDesktopActivityObserver implements DesktopActivityObserver {
   @Override public Lightweight lightweight(){return WindowsInputProbe.read();}
+  private final ActivityProperties properties;
+  private volatile Metadata lastMetadata;
+  public WindowsDesktopActivityObserver(){this(null);}
+  public WindowsDesktopActivityObserver(ActivityProperties properties){this.properties=properties;}
   private final ScreenCapture capture=new RobotScreenCapture(new AwtRobotDriver());
-  @Override public CapturedScreen capture() throws Exception { return capture.captureScreen(); }
+  @Override public CapturedScreen capture() throws Exception {
+    var metadata=lastMetadata;
+    boolean identified=properties!=null && properties.getDetection().isBackgroundFullScreenEnabled();
+    if(identified && (metadata==null || !metadata.complete()))throw new IllegalStateException("Desktop identity unavailable");
+    var screen=capture.captureScreen();
+    return identified?identify(screen,metadata.monitors()):screen;
+  }
+  static CapturedScreen identify(CapturedScreen screen,java.util.List<MonitorIdentity> monitors) {
+    if(monitors==null || monitors.isEmpty() || monitors.size()>16)throw new IllegalStateException("Desktop identity unavailable");
+    var mapped=new java.util.ArrayList<DisplayCapture>();
+    for(var display:screen.displays()) {
+      var g=display.geometry();var b=ActivityImages.physicalBounds(g);
+      var matches=monitors.stream().filter(m->m!=null && m.bounds()!=null && m.id()!=null && !m.id().isBlank()
+          && m.bounds().x()==b.x && m.bounds().y()==b.y && m.bounds().width()==b.width && m.bounds().height()==b.height).toList();
+      if(matches.size()!=1)throw new IllegalStateException("Desktop identity ambiguous");
+      mapped.add(new DisplayCapture(new ScreenGeometry(matches.getFirst().id(),g.bounds(),g.virtualBounds(),g.primary(),g.scaleX(),g.scaleY()),display.image()));
+    }
+    if(mapped.stream().map(d->d.geometry().id()).distinct().count()!=mapped.size())throw new IllegalStateException("Desktop identity duplicated");
+    return new CapturedScreen(mapped);
+  }
   @Override public Metadata metadata() throws Exception {
     var node=probe("metadata.ps1",1048576);
     if(node==null)return null;
     var mapper=new com.fasterxml.jackson.databind.ObjectMapper();
-    return mapper.treeToValue(node,Metadata.class);
+    var result=mapper.treeToValue(node,Metadata.class);lastMetadata=result;return result;
   }
   @Override public ForegroundWindow foreground() throws Exception {
     var node=probe("foreground.ps1",32768);

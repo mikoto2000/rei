@@ -17,7 +17,7 @@ public class ActivityConfiguration {
     p.validate();return toolkit.wrap(new SqliteActivityStore(ds,new SessionMergePolicy(Duration.ofSeconds(p.getSessionGapSeconds()),ZoneId.of(p.getZone()))));
   }
   @Bean ScreenshotStore activityScreenshots() { return new FileScreenshotStore(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve("activity/screenshots")); }
-  @Bean DesktopActivityObserver activityObserver() { return new WindowsDesktopActivityObserver(); }
+  @Bean DesktopActivityObserver activityObserver(ActivityProperties p) { return new WindowsDesktopActivityObserver(p); }
   @Bean ActivityExtractor activityExtractor(dev.mikoto2000.rei.llm.LlmModelProvider provider,dev.mikoto2000.rei.core.service.ModelHolderService current,ActivityProperties properties) {
     return new VisionActivityExtractor(() -> provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),
         () -> provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY,current.get()),properties.getVisionImageScale(),properties.getDetection().getMaxOutputTokens());
