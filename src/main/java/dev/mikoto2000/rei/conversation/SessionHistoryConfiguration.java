@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 
 /** Shared by the interactive Shell and the Web application. */
 @Configuration(proxyBeanMethods = false)
+@Import(dev.mikoto2000.rei.storage.StorageMigrationConfiguration.class)
 public class SessionHistoryConfiguration {
   @Bean dev.mikoto2000.rei.application.session.SessionLifecycle sessionLifecycle(SessionRepository repository, java.time.Clock clock,
       org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.project.ProjectService> projects,
@@ -20,9 +21,9 @@ public class SessionHistoryConfiguration {
     return new dev.mikoto2000.rei.application.session.SessionQueryService(repository, turns);
   }
   @Bean ConversationTurnStore conversationTurnStore(@Value("${rei.data-dir}") String directory) {
-    return new ConversationTurnStore(Path.of(directory));
+    return new SqliteConversationTurnStore(Path.of(directory));
   }
   @Bean SessionRepository sessionRepository(@Value("${rei.data-dir}") String directory) {
-    return new FileSessionRepository(Path.of(directory).resolve("sessions.json"));
+    return new SqliteSessionRepository(Path.of(directory));
   }
 }

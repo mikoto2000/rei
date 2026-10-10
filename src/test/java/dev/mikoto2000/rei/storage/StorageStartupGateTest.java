@@ -16,7 +16,7 @@ class StorageStartupGateTest {
   @Configuration @Import(StorageMigrationConfiguration.class) static class Config {
     @Bean Object repository(org.springframework.core.env.Environment env) throws Exception {
       constructed.incrementAndGet();
-      assertThat(StorageMigrationCoordinatorTest.version(Path.of(env.getProperty("rei.data-dir")).resolve("storage.db"))).isEqualTo(1);
+      assertThat(StorageMigrationCoordinatorTest.version(Path.of(env.getProperty("rei.data-dir")).resolve("storage.db"))).isEqualTo(StorageMigrationCoordinator.SCHEMA_VERSION);
       return new Object();
     }
   }
@@ -49,5 +49,12 @@ class StorageStartupGateTest {
       assertThatThrownBy(second::refresh).hasRootCauseInstanceOf(java.io.IOException.class);
       assertThat(constructed.get()).isEqualTo(1);
     }
+  }
+  @Test void completionMarkerWithoutRequiredSessionSchemaStopsBeforeNormalBeans()throws Exception {
+    try(var migration=new StorageMigrationCoordinator(root)){migration.prepare();}
+    try(var db=DriverManager.getConnection("jdbc:sqlite:"+root.resolve("storage.db"));var query=db.createStatement()){query.execute("DROP TABLE sessions");}
+    constructed.set(0);
+    try(var context=context()){assertThatThrownBy(context::refresh).hasCauseInstanceOf(java.io.IOException.class).hasRootCauseInstanceOf(java.sql.SQLException.class);}
+    assertThat(constructed.get()).isZero();
   }
 }

@@ -7,6 +7,11 @@ lengths and SHA-256 hashes, `snapshot.json` records the source fingerprint, and
 never automatically deleted. They can contain private conversation and tool data;
 keep the directory's existing user access restrictions.
 
+Phase 3 additionally records `legacy-snapshot.json`, excluding only the new target
+`storage.db`. Its fingerprint is bound by `verified.json` and checked again after
+row import, before commit. Older Phase-2 backups remain independently verifiable
+and restorable without this additional snapshot.
+
 The foundation backs up migration-relevant sources: `sessions.json`, `projects.json`,
 the existing `storage.db`, `memory.db`, `memory-consolidation.db`, and global/project `state`,
 `events` and `artifacts`. The consolidation DB includes Checkpoint and Scheduler
