@@ -8,6 +8,8 @@ Rei の開発者向けドキュメントです。利用手順は [README.md](./R
 
 ファイル読み取り・検索順位・部分編集・Java シンボル読み取りの上限、互換性と計測は [ファイル操作の改善記録](docs/file-operations-optimization.md)を参照してください。
 
+初学者教材レビュー用の静的解析APIと制約は [解析基盤ガイド](docs/beginner-material-review.md) を参照してください。
+
 ## 開発環境
 
 現在の基盤は Spring Boot 4.1.1 / Spring AI 2.0.1 です。接続設定と既存履歴の互換対応は [更新ガイド](docs/spring-ai-2-upgrade.md) を参照してください。
