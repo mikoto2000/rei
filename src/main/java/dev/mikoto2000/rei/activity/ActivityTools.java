@@ -6,6 +6,8 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
 public record ActivityTools(ActivityTimeline timeline) {
+  @Tool(description="Read saved supplemental temporal work inferences with original observation IDs and REI execution references. Date today/yesterday/YYYY-MM-DD; optional projectId filters exact observation-time project identity. Inference is not user operation, task completion, observed duration, or productivity. Does not run a model.")
+  public List<WorkActivityInference> activityWorkInferences(String date,String projectId){return timeline.workInferences(date,projectId);}
   @Tool(description="Summarize observed desktop activity for 今日何してた, 昨日何してた, or a daily review. Returns compact semantic blocks with a single uncertainty disclaimer. Date is today, yesterday, or YYYY-MM-DD. Does not prove engagement or productivity.")
   public String activitySummary(@ToolParam(description="today, yesterday or YYYY-MM-DD") String date) { return timeline.summary(date); }
   @Tool(description="Read detailed fine-grained desktop observation sessions. Prefer activitySummary for a compact daily review. Date is today, yesterday, or YYYY-MM-DD in the journal timezone. Visible content does not prove engagement; gaps mean unknown.")

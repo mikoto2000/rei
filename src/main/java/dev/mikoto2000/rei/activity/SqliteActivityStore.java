@@ -136,4 +136,20 @@ public final class SqliteActivityStore implements ActivityStore {
       }
     } catch(Exception e) {throw new IllegalStateException("Activity evidence query failed",e);}
   }
+  @Override public synchronized List<ActivityRecord> findObservationsBetweenBounded(Instant start,Instant end,int maxRecords) {
+    if(!start.isBefore(end) || maxRecords<1 || maxRecords>120)throw new IllegalArgumentException("Invalid recent observation limits");
+    try {
+      initialize();var result=new ArrayList<ActivityRecord>();long bytes=0;
+      try(var c=dataSource.getConnection();var s=c.prepareStatement("SELECT payload FROM activity_records WHERE captured_at>=? AND captured_at<? ORDER BY captured_at,id LIMIT ?")) {
+        s.setLong(1,start.toEpochMilli());s.setLong(2,end.toEpochMilli());s.setInt(3,maxRecords+1);
+        try(var rows=s.executeQuery()){while(rows.next()) {
+          if(Thread.currentThread().isInterrupted())throw new IllegalStateException("Observation query cancelled");
+          String payload=rows.getString(1);
+          if(result.size()>=maxRecords || payload.length()>131072 || (bytes+=payload.getBytes(java.nio.charset.StandardCharsets.UTF_8).length)>4L*1024*1024)throw new ActivityQueryLimitException();
+          result.add(mapper.readValue(payload,ActivityRecord.class));
+        }}
+      }
+      return List.copyOf(result);
+    }catch(ActivityQueryLimitException e){throw e;}catch(Exception e){throw new IllegalStateException("Recent observation query failed",e);}
+  }
 }

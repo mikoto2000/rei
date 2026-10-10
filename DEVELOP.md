@@ -2,6 +2,7 @@
 
 デスクトップ監視の軽量観測・設定・限界・検証は [入力状態による軽量観測](docs/activity-lightweight-observation.md)を参照してください。
 前面画像認識の頻度制御・時刻診断・性能比較は [画像認識キュー](docs/activity-vision-queue.md)を参照してください。
+直近5分の証拠による補足推定・LLM予算・集計への影響は [時系列作業推定](docs/activity-temporal-inference.md)を参照してください。
 
 Rei の開発者向けドキュメントです。利用手順は [README.md](./README.md) を参照してください。
 

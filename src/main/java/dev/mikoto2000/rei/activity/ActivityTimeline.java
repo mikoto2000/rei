@@ -3,7 +3,10 @@ package dev.mikoto2000.rei.activity;
 import java.time.*;
 import java.util.*;
 
-public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPolicy summaryPolicy,DailySummaryService dailySummaries,PeriodCoachingStore scoreCriteria) {
+public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPolicy summaryPolicy,DailySummaryService dailySummaries,PeriodCoachingStore scoreCriteria,WorkActivityInferenceStore workInferences) {
+  public ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPolicy policy,DailySummaryService summaries,PeriodCoachingStore criteria) {
+    this(store,clock,policy,summaries,criteria,null);
+  }
   public ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPolicy summaryPolicy,DailySummaryService dailySummaries) {
     this(store,clock,summaryPolicy,dailySummaries,null);
   }
@@ -54,7 +57,8 @@ public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPo
   }
   /** Display-only semantic projection; raw records and persisted fine sessions are never rewritten. */
   public String summary(String day) {
-    return new ActivitySummaryFormatter(clock.getZone()).format(summarySegments(day));
+    var date=date(day);return new ActivitySummaryFormatter(clock.getZone()).format(summarySegments(day))
+        +inferenceSupplement(date.atStartOfDay(clock.getZone()).toInstant(),date.plusDays(1).atStartOfDay(clock.getZone()).toInstant());
   }
   public List<TrendSummarySegment> trendSegments(String day) {
     var date=date(day);var start=date.atStartOfDay(clock.getZone()).toInstant();
@@ -73,14 +77,16 @@ public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPo
     var date=new ActivityDateArgumentResolver(snapshot).resolve(day);
     var range=ActivityQueryRange.forDate(date,snapshot);
     var segments=range.fromInclusive().equals(range.toExclusive())?List.<SummarySegment>of():summaryBetween(range.fromInclusive(),range.toExclusive());
-    return dailySummaries.summarize(date,range,clock.getZone(),summaryPolicy.minimumConfidence(),segments);
+    return dailySummaries.summarize(date,range,clock.getZone(),summaryPolicy.minimumConfidence(),segments)+inferenceSupplement(range.fromInclusive(),range.toExclusive());
   }
   public String periodAnalysis(ActivityPeriodAnalysis.Period period,String day) {
     var comparison=periodComparison(period,day);
     return formatPeriodComparison(comparison);
   }
   public String formatPeriodComparison(PeriodComparison comparison) {
-    return new ActivityPeriodAnalysis(Clock.fixed(clock.instant(),comparison.zone()),summaryPolicy.minimumConfidence()).format(comparison.current(),comparison.previous());
+    var range=comparison.current().range();
+    return new ActivityPeriodAnalysis(Clock.fixed(clock.instant(),comparison.zone()),summaryPolicy.minimumConfidence()).format(comparison.current(),comparison.previous())
+        +inferenceSupplement(range.fromInclusive(),range.toExclusive());
   }
   public record PeriodComparison(ActivityPeriodAnalysis.Aggregate current,ActivityPeriodAnalysis.Aggregate previous,ZoneId zone) {}
   /** Null date selects the most recent completed calendar period for manual coaching. */
@@ -101,4 +107,21 @@ public record ActivityTimeline(ActivityStore store,Clock clock,SemanticSessionPo
     return new PeriodComparison(analysis.aggregate(range,currentRecords),analysis.aggregate(previous,periodRecords(previous,bounded)),snapshot.getZone());
   }
   private List<ActivityRecord> periodRecords(ActivityPeriodAnalysis.Range range,boolean bounded){return bounded?store.findRecordsBetweenBounded(range.fromInclusive(),range.toExclusive(),50000):store.findRecordsBetween(range.fromInclusive(),range.toExclusive());}
+  public List<WorkActivityInference> workInferences(String day,String projectId) {
+    var date=date(day);var rows=readInferences(date.atStartOfDay(clock.getZone()).toInstant(),date.plusDays(1).atStartOfDay(clock.getZone()).toInstant(),200);
+    return rows.stream().filter(r->projectId==null || projectId.isBlank() || projectId.equals(r.projectId())).toList();
+  }
+  private List<WorkActivityInference> readInferences(Instant start,Instant end,int limit) {
+    if(workInferences==null || !start.isBefore(end))return List.of();
+    try{return workInferences.findBetween(start,end,limit);}
+    catch(Exception e){org.slf4j.LoggerFactory.getLogger(ActivityTimeline.class).warn("Temporal supplement unavailable; base Activity retained ({})",e.getClass().getSimpleName());return List.of();}
+  }
+  private String inferenceSupplement(Instant start,Instant end) {
+    var rows=readInferences(start,end,8);if(rows.isEmpty())return "";
+    var out=new StringBuilder("\n時系列の作業推定（時間・スコアには加算しません）:\n");
+    var seen=new HashSet<String>();for(var r:rows)if(seen.add(r.inferredActivity()))
+      out.append("- ").append(ActivityEvidenceDisplayFormatter.clean(r.inferredActivity())).append(" [").append(r.method()).append(", confidence=")
+          .append(String.format(Locale.ROOT,"%.2f",r.confidence())).append(", ref=").append(r.id()).append("]\n");
+    return out.toString();
+  }
 }
