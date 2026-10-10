@@ -228,3 +228,5 @@ GitHubからのReview通知、CI失敗trigger、PR merge待ちは [GitHub Event 
 LLM送信本文の明示記録は [LLM Request Capture](docs/llm-request-capture.md) を参照してください。
 
 音声認識の現行モデル、承認付き取得、旧キャッシュと検証範囲は [Whisper large-v3-turbo FP32 移行](docs/voice-input-turbo-fp32.md) を参照してください。
+
+対話Shell起動時の音声入力は、[自動開始設定](docs/configuration.md#音声入力の自動開始)で明示的に有効化できます。既定はOFFです。

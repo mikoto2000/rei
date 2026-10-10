@@ -36,11 +36,11 @@ class VoiceReviewCommandTest {
   }
   @Test void startingCaptureBindsCurrentClientAndConfirmationBeforeOpeningMicrophone() {
     devices.select("dry");when(voice.state()).thenReturn(VoiceInputCoordinator.State.OFF);
-    when(voice.awaitStartup(VoiceRuntimeLimits.COMMAND_STARTUP)).thenReturn(VoiceInputCoordinator.State.LISTENING);
+    when(voice.start(any(),any(),any())).thenReturn(timeout -> VoiceInputCoordinator.State.LISTENING);
     var target=new ConversationTarget(new ProjectContext(UUID.randomUUID().toString(),"test",Path.of(".")),"session");
     when(shell.captureTarget()).thenReturn(target);properties.setConfirmation(true);
     assertThat(command().execute("on")).isZero();
-    var order=inOrder(delivery,voice);order.verify(voice).state();order.verify(delivery).setConfirmation(true);
+    var order=inOrder(delivery,voice);order.verify(voice,times(2)).state();order.verify(delivery).setConfirmation(true);
     order.verify(delivery).bind(null,target);order.verify(voice).start(target,devices.selected(),properties.settings());
   }
 }

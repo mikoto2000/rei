@@ -8,7 +8,7 @@ import dev.mikoto2000.rei.application.session.ShellConversationService;
 import dev.mikoto2000.rei.application.input.ConversationTarget;
 
 @Component
-@Command(name="voice",description="音声入力（初期OFF・選択したマイクのみ）",
+@Command(name="voice",description="音声入力（既定OFF・選択したマイクのみ）",
     mixinStandardHelpOptions=true,subcommands={VoiceCommand.Device.class,VoiceCommand.Pending.class,VoiceCommand.Models.class})
 public class VoiceCommand {
   private final VoiceInputCoordinator voice;
@@ -18,7 +18,11 @@ public class VoiceCommand {
   private final VoiceModelManager models;
   private final VoiceDeliveryService delivery;
   private final WindowsMicrophoneMonitor monitor;
-  private ConversationTarget target;
+  private volatile ConversationTarget target;
+  private final Object startGuard = new Object();
+  private long startGeneration;
+  private boolean autoStartAttempted, shellClosed;
+  private Thread autoStartThread;
   @Spec private CommandSpec spec;
   /** Metadata-only construction for help/completion without Spring or native initialization. */
   public VoiceCommand() { this(null,null,null,null); }
@@ -56,16 +60,95 @@ public class VoiceCommand {
     if (voice.state()!=VoiceInputCoordinator.State.OFF && voice.state()!=VoiceInputCoordinator.State.FAILED)
       throw new IllegalStateException("先に /voice off を実行し、OFFになるまで待ってください");
   }
+  /** Manual changes take precedence over an automatic start still verifying local assets. */
+  private long manualChange() {
+    synchronized (startGuard) {
+      requireOff();
+      cancelAutoStart();
+      return startGeneration;
+    }
+  }
+  private void cancelAutoStart() {
+    autoStartAttempted = true;
+    startGeneration++;
+    if (autoStartThread != null && autoStartThread != Thread.currentThread()) autoStartThread.interrupt();
+  }
+  public void closeAutoStart() {
+    synchronized (startGuard) { shellClosed = true; cancelAutoStart(); }
+  }
+  boolean autoStartRunning() {
+    synchronized (startGuard) { return autoStartThread != null; }
+  }
+  /** Called only by the ready interactive Shell; bean creation never opens a microphone. */
+  public void autoStart(boolean interactive, java.util.function.Consumer<String> output) {
+    synchronized (startGuard) {
+      if (autoStartAttempted || shellClosed) return;
+      autoStartAttempted = true;
+      if (!interactive || properties == null || !properties.isAutoStart()) return;
+      try {
+        if (voice.state() != VoiceInputCoordinator.State.OFF) return;
+        var selected = devices.selected();
+        var client = shell.captureClient();
+        var initialTarget = shell.captureTarget();
+        long generation = ++startGeneration;
+        autoStartThread = Thread.ofVirtual().name("voice-auto-start").unstarted(() -> {
+          try (var scope = client.open()) {
+            startInput(generation, selected, initialTarget, client, false, output, true);
+          } catch (RuntimeException | LinkageError failure) {
+            synchronized (startGuard) {
+              if (generation == startGeneration && !shellClosed) {
+                voice.off();
+                if (delivery != null) delivery.clear();
+                autoStartFailure(output, failure);
+              }
+            }
+          } finally {
+            synchronized (startGuard) { if (autoStartThread == Thread.currentThread()) autoStartThread = null; }
+          }
+        });
+        output.accept("[voice] 自動開始の準備中です。/voice off で取り消せます。");
+        autoStartThread.start();
+      } catch (RuntimeException | LinkageError failure) { autoStartFailure(output, failure); }
+    }
+  }
+  private static void autoStartFailure(java.util.function.Consumer<String> output, Throwable failure) {
+    output.accept("[voice] 自動開始できませんでした: " + failure.getMessage());
+    output.accept("[voice] テキスト入力を続行します。設定を確認し、/voice on で再試行してください。");
+  }
+  private void startInput(long generation, AudioDevice selected, ConversationTarget initialTarget,
+      dev.mikoto2000.rei.core.project.ProjectClient client, boolean diagnostic,
+      java.util.function.Consumer<String> output, boolean automatic) {
+    requireModelsReady(automatic);
+    if (selected == null) selected = devices.selected();
+    VoiceInputCoordinator.Startup startup;
+    synchronized (startGuard) {
+      if (shellClosed || generation != startGeneration) throw new IllegalStateException("Voice startup cancelled");
+      requireOff();
+      if (automatic && !shell.isSelected(client, initialTarget))
+        throw new IllegalStateException("選択Project/Sessionが変わったため自動開始を取り消しました");
+      target = automatic ? initialTarget : shell.captureTarget();
+      bindDelivery();
+      startup = diagnostic ? voice.startDiagnostic(target, selected, properties.settings())
+          : voice.start(target, selected, properties.settings());
+    }
+    var state = startup.await(VoiceRuntimeLimits.COMMAND_STARTUP);
+    synchronized (startGuard) {
+      if (shellClosed || generation != startGeneration) return;
+      if (state != VoiceInputCoordinator.State.LISTENING)
+        throw new IllegalStateException("音声入力を開始できませんでした。/voice status を確認してください");
+      if (!automatic) output.accept(diagnostic ? "LISTENING: 20秒間の診断を開始しました。Agent送信・録音ファイル保存はありません。"
+          : "LISTENING: 受付中です");
+    }
+  }
   @Command(name="on",description="選択マイクで開始。確定した発話は会話入力として送信",mixinStandardHelpOptions=true)
   int on() { return attempt(()-> {
-    requireOff(); requireModelsReady(); var selected=devices.selected(); target=shell.captureTarget();
-    bindDelivery();voice.start(target,selected,properties.settings());
-    if(voice.awaitStartup(VoiceRuntimeLimits.COMMAND_STARTUP)!=VoiceInputCoordinator.State.LISTENING)
-      throw new IllegalStateException("音声入力を開始できませんでした。/voice status を確認してください");
-    spec.commandLine().getOut().println("LISTENING: 受付中です");return 0;
+    startInput(manualChange(), null, null, null, false, line -> { spec.commandLine().getOut().println(line); spec.commandLine().getOut().flush(); }, false); return 0;
   }); }
   @Command(name="off",description="録音を停止し、未確定・未認識発話を破棄",mixinStandardHelpOptions=true)
-  int off() { return attempt(()-> {voice.off(); if(delivery!=null)delivery.clear(); spec.commandLine().getOut().println("voice: "+voice.state()); return 0;}); }
+  int off() { return attempt(()-> {
+    synchronized (startGuard) { cancelAutoStart(); voice.off(); if(delivery!=null)delivery.clear(); }
+    spec.commandLine().getOut().println("voice: "+voice.state()); return 0;
+  }); }
   @Command(name="status",description="音声入力と固定した送信先の状態",mixinStandardHelpOptions=true)
   int status() { return attempt(()-> {
     spec.commandLine().getOut().println("voice: "+voice.state()+", ASR queue="+voice.queuedSegments()+"/2");
@@ -79,11 +162,7 @@ public class VoiceCommand {
   }); }
   @Command(name="test",description="20秒間のマイク認識診断。Agentへは送信しません",mixinStandardHelpOptions=true)
   int test() { return attempt(()-> {
-    requireOff(); requireModelsReady(); var selected=devices.selected();target=shell.captureTarget();
-    bindDelivery();voice.startDiagnostic(target,selected,properties.settings());
-    if(voice.awaitStartup(VoiceRuntimeLimits.COMMAND_STARTUP)!=VoiceInputCoordinator.State.LISTENING)
-      throw new IllegalStateException("音声診断を開始できませんでした");
-    spec.commandLine().getOut().println("LISTENING: 20秒間の診断を開始しました。Agent送信・録音ファイル保存はありません。");return 0;
+    startInput(manualChange(), null, null, null, true, line -> { spec.commandLine().getOut().println(line); spec.commandLine().getOut().flush(); }, false); return 0;
   }); }
   @Command(name="config",description="音声・推論設定。変更はOFF時のみ",mixinStandardHelpOptions=true)
   int config(@Option(names="--threshold") Float threshold,
@@ -95,7 +174,7 @@ public class VoiceCommand {
     return attempt(()-> {
       var s=properties.settings();var inference=properties.inference();
       if(threshold!=null||preRoll!=null||minSpeech!=null||silence!=null||maxSpeech!=null||tail!=null||confirmation!=null||asrThreads!=null||asrTailFrames!=null) {
-        requireOff();
+        manualChange();
         s=new VoiceSettings(threshold==null?s.threshold():threshold,preRoll==null?s.preRollMs():preRoll,
           minSpeech==null?s.minSpeechMs():minSpeech,silence==null?s.silenceMs():silence,
           maxSpeech==null?s.maxSpeechMs():maxSpeech,tail==null?s.tailMs():tail);
@@ -115,7 +194,7 @@ public class VoiceCommand {
     return attempt(()-> {
       var current=properties.advanced();
       if(wake!=null||word!=null||interrupt!=null||tts!=null||ttsVoice!=null||tail!=null) {
-        requireOff();
+        manualChange();
         var changed=new VoiceAdvancedOptions(wake==null?current.wakeEnabled():wake,
           word==null?current.wakeWord():word,interrupt==null?current.interruptEnabled():interrupt,
           tts==null?current.ttsEnabled():tts,ttsVoice==null?current.ttsVoice():ttsVoice,
@@ -141,11 +220,11 @@ public class VoiceCommand {
     out.println("明示承認: /voice models install --approve "+manifest.id());
     out.println("取得後に /voice on を実行してください。取得中はマイクを開きません。");
   }
-  private void requireModelsReady() {
+  private void requireModelsReady(boolean automatic) {
     if(models==null)return; // compatibility for metadata-only and legacy injected tests
     if(models.busy())throw new IllegalStateException("モデル取得中です。/voice models status または cancel を使ってください");
     try {models.readyDirectory();}
-    catch(java.io.IOException missing) {printModels();throw new IllegalStateException("モデル一式が未配置または破損しています。承認後に取得するか、固定一式を手動配置してください");}
+    catch(java.io.IOException missing) {if (!automatic) printModels();throw new IllegalStateException("モデル一式が未配置または破損しています。承認後に取得するか、固定一式を手動配置してください");}
   }
   @Component @Command(name="models",description="固定モデル一式の案内・明示承認付き取得",mixinStandardHelpOptions=true)
   public static class Models implements Runnable {
@@ -169,7 +248,7 @@ public class VoiceCommand {
     });}
     @Command(name="install",description="表示したmanifest IDを承認して非同期取得。失敗後は同じコマンドで再試行",mixinStandardHelpOptions=true)
     int install(@Option(names="--approve",paramLabel="MANIFEST_ID") String approval){return parent.attempt(()->{
-      parent.requireOff();boolean started=parent.modelManager().install(approval);
+      parent.manualChange();boolean started=parent.modelManager().install(approval);
       parent.spec.commandLine().getOut().println(started?"モデル取得開始。/voice models status または cancel":"検証済み一式を再利用します。ネットワーク取得はありません");return 0;
     });}
     @Command(name="cancel",description="取得を取り消し、不完全な一式を破棄",mixinStandardHelpOptions=true)
@@ -182,7 +261,7 @@ public class VoiceCommand {
     @ParentCommand VoiceCommand parent;
     @Command(name="set",description="一覧のIDを選択（OFF時のみ）",mixinStandardHelpOptions=true)
     int set(@Parameters(paramLabel="ID") String id) {
-      return parent.attempt(()-> {parent.requireOff();parent.devices.select(id);parent.properties.setDeviceId(id);if(parent.monitor!=null)parent.monitor.reselect(id);
+      return parent.attempt(()-> {parent.manualChange();parent.devices.select(id);parent.properties.setDeviceId(id);if(parent.monitor!=null)parent.monitor.reselect(id);
         parent.spec.commandLine().getOut().println("selected: "+parent.devices.selected().name());return 0;});
     }
   }

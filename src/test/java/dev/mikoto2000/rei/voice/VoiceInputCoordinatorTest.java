@@ -82,6 +82,29 @@ class VoiceInputCoordinatorTest {
       assertThat(captures).hasValue(0);
     }
   }
+  @Test void oldStartupHandleCannotWaitOnOrCancelAReplacementRun() throws Exception {
+    var entered = new CountDownLatch(1); var opens = new AtomicInteger();
+    try (var voice = new VoiceInputCoordinator(d -> new Source(), settings -> {
+      if (opens.incrementAndGet() == 2) { entered.countDown(); Thread.sleep(60000); }
+      return backend(new SpeechRecognizer() {
+        public String recognize(SpeechSegment segment) { return "unused"; }
+        public void close() { }
+      }, new AtomicInteger());
+    }, input -> {}, new VoiceEventPublisher(), clock)) {
+      var old = voice.start(target, device, VoiceSettings.defaults());
+      assertThat(old.await(Duration.ofSeconds(3))).isEqualTo(VoiceInputCoordinator.State.LISTENING);
+      voice.off();
+      await().atMost(Duration.ofSeconds(3)).until(() -> voice.state() == VoiceInputCoordinator.State.OFF);
+      voice.start(target, device, VoiceSettings.defaults());
+      assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();
+      Thread.currentThread().interrupt();
+      try {
+        assertThat(old.await(Duration.ZERO)).isEqualTo(VoiceInputCoordinator.State.OFF);
+        assertThat(voice.state()).isEqualTo(VoiceInputCoordinator.State.STARTING);
+      } finally { Thread.interrupted(); }
+    }
+  }
+
   @Test void defaultIsOffAndUnselectedMicDoesNotOpenBackend(){
     var calls=new AtomicInteger();var source=new Source();
     try(var voice=new VoiceInputCoordinator(d->source,s->{calls.incrementAndGet();throw new IllegalStateException();},
