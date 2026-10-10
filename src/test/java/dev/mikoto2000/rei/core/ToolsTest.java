@@ -1469,11 +1469,18 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
   @Test
   void runCommandAutoReturnsEarlyNonZeroExitAsForegroundFailure() throws Exception {
-    SystemShellService shellService = new SystemShellService();
+    // This fixture must exit inside the existing one-second observation window.
+    // PowerShell/CLR startup can exceed that window under full-suite load.
+    boolean windows = System.getProperty("os.name").toLowerCase().contains("win");
+    SystemShellService shellService = new SystemShellService() {
+      @Override public String resolveShell(java.util.Map<String,String> environment, String osName) {
+        return windows ? "cmd.exe" : super.resolveShell(environment, osName);
+      }
+    };
     BackgroundProcessManager manager = new BackgroundProcessManager(shellService);
     Tools tools = new Tools(null, shellService, manager);
-    String command = System.getProperty("os.name").toLowerCase().contains("win")
-        ? "[Console]::Error.WriteLine('bad config'); exit 9"
+    String command = windows
+        ? "echo bad config 1>&2 & exit /b 9"
         : "printf 'bad config\\n' >&2; exit 9";
     try {
       RunCommandResult result = tools.runCommand(
