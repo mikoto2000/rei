@@ -64,6 +64,8 @@ import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 
 @Component
 public class ChatExecutionService {
+  private dev.mikoto2000.rei.timing.TimingExecution timing;
+  @Autowired(required=false) void setTiming(dev.mikoto2000.rei.timing.TimingExecution timing){this.timing=timing;}
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
   @Autowired
   void setToolPermissionGuard(dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {this.permissions=permissions;}
@@ -204,6 +206,11 @@ public class ChatExecutionService {
     return execute(context,promptText,interventions,null);
   }
   public ChatExecutionResult execute(AgentRunContext context,String promptText,UserInterventionQueue interventions,
+      OutputLimitRunBudget.LlmCallReservation reservation) {
+    if(timing==null)return executeOwned(context,promptText,interventions,reservation);
+    return timing.observeRun(context,()->executeOwned(context,promptText,interventions,reservation));
+  }
+  private ChatExecutionResult executeOwned(AgentRunContext context,String promptText,UserInterventionQueue interventions,
       OutputLimitRunBudget.LlmCallReservation reservation) {
     try (var scope = AgentRunScope.open(context)) {
       try { return executeInScope(context, promptText, interventions,reservation); }

@@ -64,9 +64,11 @@ public final class BoundedToolLoop {
   public Mono<Outcome> runWithHistory(ChatModel model,Prompt prompt,AtomicInteger remaining,AgentRunContext owner,Runnable checkActive,
       dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,ModelRetries retries){return iteration(model,prompt,remaining,owner,checkActive,reservation,retries);}
   private Mono<ChatResponse> response(ChatModel model,Prompt prompt,AtomicInteger remaining,Runnable checkActive,
-      dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,ModelRetries retries,boolean retrying) {
+      dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,ModelRetries retries,boolean retrying,dev.mikoto2000.rei.timing.TimingAttempt previous) {
     return Mono.defer(() -> {
       checkActive.run();
+      var timing=model instanceof dev.mikoto2000.rei.timing.TimingAwareModel observed?observed.timing():null;
+      var trace=timing!=null&&timing.enabled()?(previous==null?new dev.mikoto2000.rei.timing.TimingAttempt(UUID.randomUUID().toString(),1,new AtomicReference<>()):previous):null;
       if (remaining.getAndDecrement() <= 0) return Mono.error(new MaxStepsExceeded());
       if(reservation!=null&&!reservation.tryReserve())return Mono.error(new SharedBudgetExceeded());
       checkActive.run();
@@ -75,7 +77,7 @@ public final class BoundedToolLoop {
       var reported=new java.util.concurrent.atomic.AtomicBoolean();
       var received=new java.util.concurrent.atomic.AtomicBoolean();
       return new MessageAggregator().aggregate(reactor.core.publisher.Flux.defer(()->{
-        checkActive.run();started.set(true);if(retrying)retries.attempts.incrementAndGet();return model.stream(prompt);
+        checkActive.run();started.set(true);if(retrying)retries.attempts.incrementAndGet();var stream=model.stream(prompt);return trace==null?stream:stream.contextWrite(context->context.put(dev.mikoto2000.rei.timing.TimingAttempt.KEY,trace));
       }).doOnNext(chunk->received.set(true)).doOnError(error->retries.failure(error,received.get())), aggregated::set).then(Mono.defer(() -> {
         checkActive.run();
         var response = aggregated.get();
@@ -96,7 +98,20 @@ public final class BoundedToolLoop {
       }).onErrorResume(error->{
         if(isTransientModelFailure(error)&&!received.get()) {
           checkActive.run();
-          if(retries.reserve())return Mono.delay(java.time.Duration.ofMillis(100)).then(response(model,prompt,remaining,checkActive,reservation,retries,true));
+          if(retries.reserve()) {
+            var delay=Mono.delay(java.time.Duration.ofMillis(100));
+            if(trace!=null && prompt.getOptions() instanceof ToolCallingChatOptions options && options.getToolContext()!=null) {
+              var captured=options.getToolContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY);
+              AgentRunContext owner=captured instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution?execution.runContext():
+                  options.getToolContext().get(AgentRunContext.class.getName()) instanceof AgentRunContext context?context:null;
+              if(owner!=null) {
+                String parent=trace.physicalSpan().get();
+                var span=timing.startSpan(owner.runId(),parent==null?owner.runId():parent,trace.requestId(),Integer.toString(trace.number()+1),dev.mikoto2000.rei.timing.TimingRecorder.Category.RETRY);
+                delay=delay.doOnSuccess(value->span.finish(dev.mikoto2000.rei.timing.TimingRecorder.Status.SUCCESS)).doOnError(failure->span.finish(dev.mikoto2000.rei.timing.TimingExecution.status(failure))).doOnCancel(()->span.finish(dev.mikoto2000.rei.timing.TimingRecorder.Status.CANCELLED));
+              }
+            }
+            return delay.then(response(model,prompt,remaining,checkActive,reservation,retries,true,trace==null?null:trace.next()));
+          }
         }
         return Mono.error(error);
       });
@@ -104,7 +119,7 @@ public final class BoundedToolLoop {
   }
   private Mono<Outcome> iteration(ChatModel model,Prompt prompt,AtomicInteger remaining,AgentRunContext owner,Runnable checkActive,
       dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,ModelRetries retries) {
-    return response(model,prompt,remaining,checkActive,reservation,retries,false).flatMap(response->Mono.defer(()->{
+    return response(model,prompt,remaining,checkActive,reservation,retries,false,null).flatMap(response->Mono.defer(()->{
         checkActive.run();
         if (!response.hasToolCalls()) {
           var history = new ArrayList<Message>(prompt.getInstructions());

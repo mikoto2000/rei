@@ -12,6 +12,15 @@ import dev.mikoto2000.rei.event.CredentialRedactor;
 /** Exact, expiring grants. Atomic SQL consumption happens before the side effect, never after it. */
 @Repository
 public class ToolApprovalRepository {
+  private dev.mikoto2000.rei.timing.TimingRecorder timing;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setTiming(dev.mikoto2000.rei.timing.TimingRecorder timing){this.timing=timing;}
+  private void observe(Request request,boolean begin,boolean approved) {
+    try {if(timing==null||!timing.enabled())return;
+      if(begin && request.status().equals("PENDING"))timing.beginSpan(request.runId(),request.id(),request.runId(),null,null,dev.mikoto2000.rei.timing.TimingRecorder.Category.APPROVAL_WAIT);
+      else if(!begin)timing.endSpan(request.runId(),request.id(),approved?dev.mikoto2000.rei.timing.TimingRecorder.Status.SUCCESS:dev.mikoto2000.rei.timing.TimingRecorder.Status.FAILED);
+    }catch(RuntimeException unavailable){/* Metrics cannot change grants or consumption. */}
+  }
   public record Request(String id,String projectId,String sessionId,String runId,String tool,String argumentsPreview,
       String status,Instant expiresAt) {}
   private final JdbcClient db;
@@ -29,8 +38,9 @@ public class ToolApprovalRepository {
     String digest=actionDigest(input,owner);long expires=clock.instant().plus(Duration.ofMinutes(15)).toEpochMilli();
     db.sql("INSERT OR IGNORE INTO tool_approvals VALUES(?,?,?,?,?,?,?,?,?)")
         .params(UUID.randomUUID().toString(),owner.projectId(),owner.conversationId(),owner.runId(),tool,digest,CredentialRedactor.redact(input),"PENDING",expires).update();
-    return db.sql("SELECT * FROM tool_approvals WHERE project=? AND session=? AND run=? AND tool=? AND digest=?")
+    var request=db.sql("SELECT * FROM tool_approvals WHERE project=? AND session=? AND run=? AND tool=? AND digest=?")
         .params(owner.projectId(),owner.conversationId(),owner.runId(),tool,digest).query(ROW).single();
+    observe(request,true,false);return request;
   }
   public List<Request> list(String project) {
     return db.sql("SELECT * FROM tool_approvals WHERE project=? AND status IN ('PENDING','APPROVED') AND expires>? ORDER BY expires,id LIMIT 256")
@@ -46,7 +56,7 @@ public class ToolApprovalRepository {
     int changed=db.sql("UPDATE tool_approvals SET status=? WHERE project=? AND id=? AND status='PENDING' AND expires>?")
         .params(approved?"APPROVED":"DENIED",project,id,clock.millis()).update();
     if(changed!=1)throw new IllegalStateException("Approval is expired or already decided");
-    return get(project,id);
+    var request=get(project,id);observe(request,false,approved);return request;
   }
   public boolean consume(String tool,String input,AgentRunContext owner) {
     validate(owner);

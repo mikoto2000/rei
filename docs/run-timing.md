@@ -1,8 +1,29 @@
 # Run時間計測
 
-C1ではメモリ内計測基盤を追加しています。CLIと実処理の計測は次のC2で接続します。
-現在はTimingRecorderを注入して明示的にRun/Spanを開始・終了するAPIを利用できます。
-既存のRun実行やイベントを変更せず、別のRunエンジン、SQL永続化、HTTP本文記録を追加していません。
+テキストRunの実処理をメモリ内で観測し、現在のProject/Sessionから照会できます。
+
+```text
+/timing
+/timing last
+/timing RUN_ID
+/timing last --details
+```
+
+照会は新しいSession/RunやLLM呼び出しを作りません。別Project/Sessionの履歴は表示しません。
+`rei.timing.enabled=false` ではコマンド登録と記録を無効にします。
+別のRunエンジン、SQL永続化、HTTP本文記録は追加していません。
+
+## 実処理への接続
+
+- `ChatExecutionService` の既存実行と後処理全体を `TimingExecution` が観測します。応答・例外・権限・予算・キャンセル処理は既存経路です。
+- `AgentEventChatModel` は既存のリクエストIDをSpan IDとしてLLM呼び出し・購読を観測します。所有Runが不明なバックグラウンド呼び出しは記録しません。Activity検出は従来どおり通知しません。
+- `TimingEventObserver` は既存のツール開始/終了IDを利用します。既知の検索ツールはTOOLを親とするSEARCH Spanも作ります。イベントの引数・結果要約やリモートの所要時間はコピーしません。
+- `ToolApprovalRepository` はPENDING申請から人のAPPROVED/DENIED判断までを観測します。申請を重複計測せず、再起動後の過去の申請時刻から時間を捏造しません。未判断・期限切れは終端未取得として残り、保持期限で破棄します。
+- `BoundedToolLoop` の既存の100ms再試行待ちをRETRYとして観測します。同じ論理リクエストIDに試行番号を付け、既存の残りステップ・共有呼び出し予算をそのまま消費します。SDK内部の透過的な再送やfeatureモデルの内部fallbackは個々のHTTP試行へ分解しません。
+- `GoalChatGateway` はチャット終了後の同期完了コールバックまでRunを保持し、`FileGoalVerifier` の実際の独立検証をCOMPLETION_VALIDATIONとして記録します。通常チャットには宣言されたGoal条件がないため、この検証を捏造しません。
+
+Run終了後の承認判断は詳細に生の待機終端を表示しますが、Run内占有は終了までに切り詰めます。
+Spanの親は明示した所有Run/ツール/失敗試行です。並列の「最後に開始したSpan」から親を推測しません。
 
 ## モデルと時計
 
@@ -59,7 +80,12 @@ falseでは記録・時計読み取り・保持を行わず、未使用の上限
 計測モデルにはプロンプト・応答・ツール引数・結果・環境変数・音声・任意metadataを格納するフィールドがありません。
 LLM Request Captureの本文保持とは独立しています。
 通信の最初のデータ、SDKの最初のチャンク、生成トークン、生成テキスト観測、可視出力は別の指標です。
-未取得の指標はnull/キーなしのままとし、文字数でトークン数を作りません。
+C2で観測する最初の時刻はFIRST_FRAMEWORK_CHUNK（空/思考のみのSDKチャンクを含む）とFIRST_GENERATION_TEXT（最初の非空本文）です。
+この2つを生成トークンTTFTと呼びません。同期callでは受信完了から最初の時刻を逆算しません。
+HTTPの最初のデータ、厳密な最初の生成トークン、実際のユーザー画面/端末への表示時刻、生成期間は未取得です。
+Shellは入力中の部分行をJLineで保留するため、イベント発行やprint呼び出しを実可視時刻と見なしません。Webブラウザーでの実可視時刻もサーバーから推測しません。
+未取得の指標はnull/キーなし、CLIでは「未取得」とし、文字数でトークン数を作りません。
+usageはSDKが明示した入力/出力数のみ記録し、空のusageで既知の値を消しません。部分受信後に失敗した場合も成否とusageを別々に扱います。
 入力・出力usageと実生成トークン数を分け、TPSは実生成数とそれに対応する生成期間の両方が明示取得された場合だけ算出します。
 リクエスト全体時間をdecode時間と見なさず、reasoningやprefillなどサーバー内部情報を推測しません。
 
@@ -69,4 +95,8 @@ LLM Request Captureの本文保持とは独立しています。
 Spring統合はCaptureやモデル基盤なしで起動することを確認します。
 TimingMemoryProbeTestは既定合計上限10,000 Spanを満たし、GC後のプロセスheap差分を概測します。
 値はクラスロードやGC・共有heapの影響を受ける概測であり、厳密なdeep sizeや使用量上限保証ではありません。
-CLI・実LLM/ツール/検索/承認/完了検証への接続とオーバーヘッド評価はC2、音声や外部エージェント詳細は任意のC3です。
+C2の関連テストは `./mvnw -Pfull -Dtest=Timing*Test,AgentEventChatModel*Test,ChatExecutionTimingTest,GoalChatGatewayTest,ToolApproval*Test,SubAgentModelRetryTest test` です。
+TimingOverheadProbeTestは単一チャンクの模擬モデルを使い、有効/無効双方の応答とイベント数が同一であることを確認します。
+3組のウォームアップ後、各7組×1,000呼び出しの中央値と差分をログへ出します。実サーバーの遅延や全アプリの性能保証ではなく、観測追加の局所コストの概測です。
+音声のSTT/TTS・再生や外部エージェント詳細は任意のC3として延期しています。
+実LLM、GPU、ネイティブ音声デバイスの性能は、この決定的な自動テストでは検証していません。

@@ -43,6 +43,13 @@ class GoalChatGatewayTest {
     assertEquals("BLOCKED",goals.get(project,structured.id()).status());
     verify(chat).execute(any(),anyString(),any(),any());
   }
+  @Test void timingIncludesIndependentFinalVerificationAfterChatReturns() throws Exception {
+    var tick=new java.util.concurrent.atomic.AtomicLong();var timings=new dev.mikoto2000.rei.timing.TimingStore(true,10,20,100,Duration.ofHours(1),Clock.systemUTC(),tick::get);
+    var execution=new dev.mikoto2000.rei.timing.TimingExecution(timings);gateway.setTiming(execution);verifier.setTiming(execution);
+    when(chat.execute(any(),anyString(),any(),any())).thenAnswer(invocation->{tick.set(10);Files.writeString(dir.resolve("out.txt"),"correct");return ChatExecutionResult.success("SECRET",false);});
+    var running=loop.run(project,goal.id());jobs.remove().run();var recorded=timings.snapshot(project,"session",running.currentRunId()).orElseThrow();
+    assertEquals(dev.mikoto2000.rei.timing.TimingRecorder.Status.SUCCESS,recorded.status());assertTrue(recorded.spans().stream().filter(s->s.category()==dev.mikoto2000.rei.timing.TimingRecorder.Category.COMPLETION_VALIDATION).count()>=2);assertFalse(recorded.toString().contains("SECRET"));assertEquals("COMPLETED",goals.get(project,goal.id()).status());
+  }
   void trackRuns() {
     bus=new InMemoryAgentEventBus();registry=new dev.mikoto2000.rei.application.run.RunRegistry(Clock.systemUTC());
     tracking=new dev.mikoto2000.rei.application.run.RunService(registry,bus,new AgentEventFactory(Clock.systemUTC()),new dev.mikoto2000.rei.core.service.CommandCancellationService(),router::cancelQueued);
