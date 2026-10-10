@@ -12,6 +12,7 @@ else
 fi
 
 exec "$JAVA" \
+    --enable-native-access=ALL-UNNAMED \
     "-Djava.net.preferIPv4Stack=true" \
     "-Djava.awt.headless=false" \
     "-Drei.computer-use.diagnostics.enabled=true" \
