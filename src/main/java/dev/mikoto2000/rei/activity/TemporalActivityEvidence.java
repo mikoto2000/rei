@@ -58,30 +58,43 @@ public record TemporalActivityEvidence(Instant windowStart,Instant windowEnd,Lis
     String project="",projectId="",text="観測不足または証拠が混在しているため、具体的な作業は推定不能です。",status="UNKNOWN";double confidence=0;
     if(observationIds.size()>=2 && !groups.isEmpty() && continuous()) {
       var distinct=groups.stream().map(g->g.facts().projectId()).distinct().toList();var f=groups.getLast().facts();
-      if(distinct.size()==1 && !f.projectId().isBlank() && !f.project().isBlank()
-          && groups.stream().allMatch(g->g.facts().confidence()>=.5 && !g.facts().category().isBlank() && !"unknown".equals(g.facts().category())
-              && ActivityRolePolicy.normalize(g.facts().project()).equals(ActivityRolePolicy.normalize(g.facts().candidate())))) {
+      boolean strict=groups.stream().allMatch(g->sameProject(g.facts()));
+      boolean anchored=augmented() && groups.stream().allMatch(g->workCategory(g.facts().category())
+          && (g.facts().candidate().isBlank() || sameProject(g.facts())))
+          && groups.stream().anyMatch(g->development(g.facts().category()) && sameProject(g.facts()));
+      if(distinct.size()==1 && !f.projectId().isBlank() && !f.project().isBlank() && (strict || anchored)
+          && groups.stream().allMatch(g->g.facts().confidence()>=.5 && !g.facts().category().isBlank() && !"unknown".equals(g.facts().category()))) {
         project=f.project();projectId=f.projectId();
         text=project+" の"+(f.content().isBlank()?f.category():"「"+f.content()+"」")+"関連画面を伴う作業の可能性があります。";
-        if(groups.stream().anyMatch(g->!g.facts().desktop().isEmpty() || g.facts().input()!=null)) {
+        if(augmented()) {
           var transitions=groups.stream().map(g->g.facts().content()).filter(t->!t.isBlank())
               .map(t->t.substring(0,Math.min(60,t.length()))).distinct().limit(3).toList();
-          if(transitions.size()>1)text=project+" の「"+String.join(" → ",transitions)+"」関連画面を行き来する作業の可能性があります。";
+          if(transitions.size()>1) {
+            boolean verification=groups.stream().allMatch(g->workCategory(g.facts().category()))
+                && groups.stream().anyMatch(g->development(g.facts().category()))
+                && groups.stream().anyMatch(g->(g.facts().content()+" "+g.facts().title()).matches("(?i).*(テスト|test|maven).*"));
+            text=project+" の「"+String.join(" → ",transitions)+"」関連画面を行き来"+
+                (verification?"し、実装・検証を進めていた可能性があります。":"する作業の可能性があります。");
+          }
         }
         var supporting=groups.stream().flatMap(g->g.facts().desktop().stream())
             .filter(a->ActivityRolePolicy.normalize(a.projectCandidate()).equals(ActivityRolePolicy.normalize(f.project())))
             .filter(a->Set.of("research","development","documentation","coding").contains(a.type()))
             .map(ActivityRecord.Activity::contentTitle).filter(t->!t.isBlank()).map(t->t.substring(0,Math.min(60,t.length()))).distinct().limit(2).toList();
         if(!supporting.isEmpty())text+=" 補助画面には「"+String.join(" / ",supporting)+"」が表示されていた可能性があります（操作の証拠ではありません）。";
-        confidence=.6;status="INFERRED";
+        confidence=strict?.6:.55;status="INFERRED";
       }
     }
     if(!executions.isEmpty())text+=" れいの自動実行記録があります（ユーザー操作や成功を示すものではありません）。";
     return new WorkActivityInference(UUID.randomUUID().toString(),fingerprint,windowEnd,windowStart,windowEnd,projectId,project,text,
         observationIds,executions,confidence,status,"RULES",0,0);
   }
+  private boolean augmented(){return groups.stream().anyMatch(g->g.facts().input()!=null || !g.facts().desktop().isEmpty());}
+  private static boolean sameProject(Facts f){return !f.project().isBlank() && ActivityRolePolicy.normalize(f.project()).equals(ActivityRolePolicy.normalize(f.candidate()));}
+  private static boolean development(String category){return Set.of("development","coding").contains(category);}
+  private static boolean workCategory(String category){return Set.of("development","coding","research","documentation").contains(category);}
   private boolean continuous() {
-    if(groups.stream().allMatch(g->g.facts().input()==null && g.facts().desktop().isEmpty()))return true;
+    if(!augmented())return true;
     for(int i=0;i<groups.size();i++) {
       var current=groups.get(i);
       if(current.facts().input()!=null && current.facts().input().reliable() && !current.facts().input().recent())return false;

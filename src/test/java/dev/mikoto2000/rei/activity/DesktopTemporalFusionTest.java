@@ -44,4 +44,32 @@ class DesktopTemporalFusionTest {
     var text=input.ruleInference().inferredActivity();
     assertTrue(text.contains("コード修正"));assertTrue(text.contains("テスト検証"));assertTrue(text.contains("可能性"));
   }
+  @Test void researchWithoutProjectTitleCanJoinAnExplicitDevelopmentAnchor() {
+    var at=TemporalActivityInferenceTest.AT;
+    var code=supplemented("code",at);
+    var browser=transition("browser",at.plusSeconds(15),"Chrome","research","Spring Security 仕様","");
+    var test=transition("test",at.plusSeconds(30),"Terminal","development","Maven テスト結果","");
+    var input=TemporalActivityEvidence.build(List.of(code,browser,test),List.of(),at,at.plusSeconds(30));
+    assertEquals("INFERRED",input.ruleInference().status());
+    assertEquals("rei",input.ruleInference().project());
+    assertTrue(input.ruleInference().inferredActivity().contains("Spring Security"));
+    assertTrue(input.ruleInference().inferredActivity().contains("実装・検証"));
+    assertTrue(input.ruleInference().confidence()<=.6);
+    var unrelated=transition("video",at.plusSeconds(30),"Chrome","media","YouTube","");
+    assertEquals("UNKNOWN",TemporalActivityEvidence.build(List.of(code,browser,unrelated),List.of(),at,at.plusSeconds(30)).ruleInference().status());
+  }
+  private static ActivityRecord transition(String id,Instant at,String process,String category,String content,String candidate) {
+    var base=TemporalActivityInferenceTest.record(id,at,content);var fg=new ForegroundWindow(process,1,content,id);
+    var d=base.detection();var e=d.evidence();
+    e=new ActivityEvidence(at,fg,List.of(),e.projectName(),e.projectId(),e.events(),e.history(),e.workContext(),new ActivityEvidence.InputReference(true,true));
+    d=new ActivityRecord.Detection(e,d.classificationSources(),false,d.classificationMode(),d.status(),d.sourceConfidence(),d.reason());
+    return new ActivityRecord(id,at,15,List.of(),fg,new ActivityRecord.Inference("",List.of(new ActivityRecord.Activity("monitor",""+category,process,"",content,candidate))),.9,List.of(),0,false,base.continuityId(),d);
+  }
+  @Test void verboseTimelineShowsSupplementalInferenceWithProvenanceAndNoTimeCredit() {
+    var record=supplemented("aux-id",TemporalActivityInferenceTest.AT);
+    var text=new ActivityEvidenceDisplayFormatter().verbose(record);
+    assertTrue(text.contains("補助画面の推定"));assertTrue(text.contains("時間加算なし"));
+    assertTrue(text.contains("monitor-2"));assertTrue(text.contains("Spring Security 仕様"));
+    assertTrue(text.contains("aux-id"));assertTrue(text.contains(record.capturedAt().toString()));
+  }
 }

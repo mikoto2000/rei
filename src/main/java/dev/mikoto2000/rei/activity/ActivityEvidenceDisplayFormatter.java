@@ -43,8 +43,16 @@ public final class ActivityEvidenceDisplayFormatter {
       out.append("    classification reason: ").append(clean(d.reason())).append('\n');
     }
     var v=VisionDiagnostics.of(d);vision(out,"Foreground Vision",v.foreground());vision(out,"Background Vision",v.background());
+    var context=v.background()==null?null:v.background().context();
+    if(context!=null) {
+      out.append("    補助画面の推定（時間加算なし）: observationId=").append(code(context.observationId()))
+          .append("; observedAt=").append(context.observedAt()).append("; confidence=").append(context.confidence()).append('\n');
+      for(var candidate:context.candidates())out.append("      monitor=").append(code(candidate.monitor()))
+          .append("; candidate=").append(code(candidate.type()+" / "+candidate.application()+" / "+candidate.service()+" / "+candidate.contentTitle())).append('\n');
+    }
     return out.toString();
   }
+  private static String code(String value) {return "`"+TemporalActivityEvidence.clean(value).replace("`","'")+"`";}
   private static void vision(StringBuilder out,String label,VisionDiagnostics.Result result) {
     out.append("    ").append(label).append(": ").append(result==null?VisionDiagnostics.State.UNKNOWN:result.state());
     if(result!=null && result.failure()!=null)out.append("; reason: ").append(result.failure());
