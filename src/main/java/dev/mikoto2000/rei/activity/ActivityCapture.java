@@ -76,6 +76,9 @@ public final class ActivityCapture implements AutoCloseable {
   private synchronized boolean allowed(long token) { return properties.isEnabled() && !paused && !closed && token==generation; }
 
   public void tick() {
+    try{observationTick();}finally{evidencePipeline.pollForeground();}
+  }
+  private void observationTick() {
     if(!properties.getObservation().isInputAwareEnabled()){detailTick(false);return;}
     boolean active;synchronized(this){active=allowed(generation);}
     if(!active){detailTick(false);return;}
