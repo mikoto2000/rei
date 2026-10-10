@@ -5,10 +5,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.sound.sampled.*;
 public final class JavaSoundMicrophoneCapture implements MicrophoneCaptureService {
   public FrameSource open(AudioDevice device) throws Exception {
-    var matches = Arrays.stream(AudioSystem.getMixerInfo())
-      .filter(info -> AudioDeviceService.describe(info).equals(device)).toList();
-    if (matches.size()!=1) throw new IllegalStateException("Selected microphone disconnected or ambiguous");
-    Mixer mixer = AudioSystem.getMixer(matches.getFirst());
+    Mixer mixer = resolveMixer(device);
     AudioFormat format = selectFormat(mixer);
     var line = (TargetDataLine)mixer.getLine(new DataLine.Info(TargetDataLine.class,format));
     try {
@@ -35,6 +32,24 @@ public final class JavaSoundMicrophoneCapture implements MicrophoneCaptureServic
         }
       };
     } catch (Exception | LinkageError e) { line.close(); throw e; }
+  }
+  private Mixer resolveMixer(AudioDevice device) {
+    var matches = Arrays.stream(AudioSystem.getMixerInfo())
+      .filter(info -> AudioDeviceService.describe(info).equals(device)).toList();
+    if (matches.size()!=1) throw new IllegalStateException("Selected microphone disconnected or ambiguous");
+    return AudioSystem.getMixer(matches.getFirst());
+  }
+  /** Diagnostic acquisition only: no start, stream creation or audio read. */
+  public void acquireWithoutRecording(AudioDevice device) throws Exception {
+    if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
+    Mixer mixer = resolveMixer(device);
+    AudioFormat format = selectFormat(mixer);
+    var line = (TargetDataLine)mixer.getLine(new DataLine.Info(TargetDataLine.class,format));
+    try {
+      if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
+      line.open(format);
+      if (Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
+    } finally { line.close(); }
   }
   private AudioFormat selectFormat(Mixer mixer) {
     var preferred = AudioFormatConverter.PCM16;

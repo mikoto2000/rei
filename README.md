@@ -4,7 +4,7 @@ Web API 向けの Tauri 2 クライアント（Phase 1 / 2）は [client/README.
 
 Codex による read-only 外部レビューは `/agent codex review [target]` または明示的な自然言語依頼で利用できます。Claude Code CLI のサブスクリプション認証レビューも、明示opt-inで `/agent claude review [target]` に対応します（[利用準備・範囲](docs/claude-code-reviews.md)）。
 
-現在の設定とファイルの状態は `/doctor` でPassive診断できます。通信・推論・録音は行いません（[診断状態・設定・制約](docs/environment-doctor.md)）。
+現在の設定とファイルの状態は `/doctor` でPassive診断できます。明示的な `--check` で、既存権限に従う接続・推論・CLI・マイク取得のActive診断も実行できます（[診断状態・設定・制約](docs/environment-doctor.md)）。
 
 初学者の学習順に沿う静的レビューは `/material-review beginner --root training --entry intro.md` を使用できます（[利用方法・LLMモード・制約](docs/beginner-material-review.md)）。
 
