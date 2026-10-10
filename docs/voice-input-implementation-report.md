@@ -43,7 +43,7 @@ Phase 7のローカル検証と実Agent受け入れ結果を記録する。各Ph
 /voice models status
 ```
 
-音声だけ会話スタイルにする場合は `/mode conversation --voice-only`。通常へ戻す場合は `/mode normal`。
+既定は自動切替で、音声入力はconversation、文字入力はnormalになる。既存Sessionでnormalに固定されている場合は `/mode auto` で自動切替へ戻せる。両方を会話スタイルにする場合は `/mode conversation`、両方を通常に固定する場合は `/mode normal`。
 任意の音声応答・呼びかけ・停止機能は、マイクOFF後に明示設定する。
 
 ```text
