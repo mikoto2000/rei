@@ -52,7 +52,7 @@ public final class ManagedActivityLog {
       try(var insert=db.prepareStatement("INSERT INTO activity_segments VALUES(?,?,?,'OPEN',0,?,?,?)")){insert.setString(1,id);insert.setString(2,scope);insert.setString(3,relative);insert.setString(4,hash);insert.setString(5,now);insert.setString(6,now);insert.executeUpdate();}
       segment=new Segment(id,scope,relative,0,hash,registry.clock.instant());
     }
-    Path file=path(segment);Files.write(file,record,StandardOpenOption.APPEND);StorageBackup.force(file);
+    Path file=path(segment);Files.write(file,record,StandardOpenOption.APPEND);StorageIoObservation.written(record.length);StorageBackup.force(file);
     try(var update=db.prepareStatement("UPDATE activity_segments SET bytes=?,sha256=?,updated=? WHERE id=?")){update.setLong(1,segment.bytes()+record.length);update.setString(2,chain(segment.sha256(),record));update.setString(3,registry.clock.instant().toString());update.setString(4,segment.id());update.executeUpdate();}return null;
   });}
   /** Bounded materializing compatibility API; never returns a silently incomplete list. */

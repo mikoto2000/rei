@@ -212,7 +212,7 @@ public final class StorageBackup {
       return bytes;
     }
   }
-  static void force(Path path)throws IOException{try(var channel=FileChannel.open(path,StandardOpenOption.WRITE)){channel.force(true);}}
+  static void force(Path path)throws IOException{try(var channel=FileChannel.open(path,StandardOpenOption.WRITE)){channel.force(true);StorageIoObservation.forced();}}
   static void writeAtomic(Path target,byte[] bytes)throws IOException {
     requireSafePath(target);Files.createDirectories(target.getParent());Path temporary=Files.createTempFile(target.getParent(),"migration-",".tmp");
     try{Files.write(temporary,bytes);force(temporary);Files.move(temporary,target,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING);}
