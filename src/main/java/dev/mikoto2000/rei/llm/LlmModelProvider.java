@@ -16,6 +16,8 @@ import io.micrometer.observation.ObservationRegistry;
 
 @Component
 public class LlmModelProvider {
+  private dev.mikoto2000.rei.timing.TimingExecution timing;
+  @Autowired(required=false) void setTiming(dev.mikoto2000.rei.timing.TimingExecution timing) {this.timing=timing;}
 
   private dev.mikoto2000.rei.llm.capture.CaptureStore captureStore;
   private java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> captureCustomizers=java.util.List.of();
@@ -87,7 +89,7 @@ public class LlmModelProvider {
     }
     return eventFactory == null || eventPublisher == null
         ? model
-        : new AgentEventChatModel(feature, model, eventFactory, eventPublisher);
+        : new AgentEventChatModel(feature, model, eventFactory, eventPublisher,timing);
   }
 
   public String model(String feature, String defaultModel) {

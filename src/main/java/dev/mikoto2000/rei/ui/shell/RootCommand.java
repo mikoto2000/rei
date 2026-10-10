@@ -33,6 +33,7 @@ version = "v1.0.0",
 name = "",
 description = "AI shell",
 subcommands = {
+  dev.mikoto2000.rei.timing.TimingCommand.class,
   dev.mikoto2000.rei.doctor.DoctorCommand.class,
   dev.mikoto2000.rei.core.command.StorageCommand.class,
   dev.mikoto2000.rei.llm.capture.LlmCaptureCommand.class,
@@ -92,7 +93,10 @@ public class RootCommand {
   @org.springframework.beans.factory.annotation.Value("${rei.doctor.enabled:true}")
   private boolean doctorEnabled = true;
 
+  @org.springframework.beans.factory.annotation.Value("${rei.timing.enabled:true}")
+  private boolean timingEnabled=true;
   public void configureCommands(picocli.CommandLine command) {
+    if(!timingEnabled) command.getCommandSpec().removeSubcommand("timing");
     if (!doctorEnabled) command.getCommandSpec().removeSubcommand("doctor");
     if (!beginnerReviewEnabled) command.getCommandSpec().removeSubcommand("material-review");
     if (!embeddingEnabled) {

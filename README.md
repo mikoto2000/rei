@@ -4,7 +4,7 @@ Web API 向けの Tauri 2 クライアント（Phase 1 / 2）は [client/README.
 
 Codex による read-only 外部レビューは `/agent codex review [target]` または明示的な自然言語依頼で利用できます。Claude Code CLI のサブスクリプション認証レビューも、明示opt-inで `/agent claude review [target]` に対応します（[利用準備・範囲](docs/claude-code-reviews.md)）。
 
-Run時間計測の有界メモリ基盤と集計仕様は [時間計測ガイド](docs/run-timing.md) に記載しています。CLIへの接続は次段階です。
+`/timing [last|RUN_ID] [--details]` で現在のProject/SessionのテキストRunを照会できます。計測範囲・集計・保持設定は [時間計測ガイド](docs/run-timing.md) を参照してください。
 
 現在の設定とファイルの状態は `/doctor` でPassive診断できます。明示的な `--check` で、既存権限に従う接続・推論・CLI・マイク取得のActive診断も実行できます（[診断状態・設定・制約](docs/environment-doctor.md)）。
 

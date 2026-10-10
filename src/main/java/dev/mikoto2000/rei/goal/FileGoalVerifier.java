@@ -18,7 +18,16 @@ public class FileGoalVerifier {
   public void setPredicatesEnabled(@org.springframework.beans.factory.annotation.Value("${rei.predicates.enabled:false}") boolean enabled){predicatesEnabled=enabled;}
   public void requireEnabledPredicates(GoalRepository.Goal goal){if(completionGate!=null&&completionGate.required(goal)&&goal.completion()==null)throw new IllegalStateException("Human completion definition required before running this Goal");if(!predicatesEnabled && (goal.criteria().stream().anyMatch(item->item.predicateJson()!=null)||goal.completion()!=null&&(goal.completion().requiredPredicates().stream().anyMatch(item->item.predicateJson()!=null)||goal.completion().requirements().stream().anyMatch(item->item.required()&&item.criterion().predicateJson()!=null))))throw new IllegalStateException("Enable rei.predicates.enabled before running a predicate Goal");}
   public record Verification(boolean satisfied,String reason) {}
+  private dev.mikoto2000.rei.timing.TimingExecution timing;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setTiming(dev.mikoto2000.rei.timing.TimingExecution timing){this.timing=timing;}
   public Verification verify(GoalRepository.Goal goal) {
+    if(timing==null||!timing.enabled()||goal.currentRunId()==null)return verifyObserved(goal);
+    var span=timing.startSpan(goal.currentRunId(),goal.currentRunId(),null,null,dev.mikoto2000.rei.timing.TimingRecorder.Category.COMPLETION_VALIDATION);
+    try {var result=verifyObserved(goal);span.finish(result.satisfied()?dev.mikoto2000.rei.timing.TimingRecorder.Status.SUCCESS:dev.mikoto2000.rei.timing.TimingRecorder.Status.FAILED);return result;}
+    catch(RuntimeException failure){span.finish(dev.mikoto2000.rei.timing.TimingExecution.status(failure));throw failure;}
+  }
+  private Verification verifyObserved(GoalRepository.Goal goal) {
     if(completionGate!=null&&completionGate.required(goal)&&goal.completion()==null)return new Verification(false,"completion_definition_missing");
     if(completionGate==null&&goal.completion()!=null)return new Verification(false,"completion_gate_unavailable");
     if(goal.criteria().isEmpty()||goal.criteria().size()>16)return new Verification(false,"verification_unavailable");

@@ -13,6 +13,9 @@ import dev.mikoto2000.rei.event.*;
 /** Reuses the Project FIFO and Chat boundaries, capturing ownership before queue admission. */
 @Component
 public class GoalChatGateway implements GoalLoopService.Gateway {
+  private dev.mikoto2000.rei.timing.TimingExecution timing;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setTiming(dev.mikoto2000.rei.timing.TimingExecution timing){this.timing=timing;}
   private final GoalRepository goals;
   private final FileGoalVerifier verifier;
   private final ProjectService projects;
@@ -63,6 +66,7 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
       runLifecycle.onQueuedCancellation(run,()->completed.accept(new GoalLoopService.Outcome(ChatExecutionResult.cancelled())));
     }
     router.submitOperation(owner,()->{
+      java.util.function.Supplier<ChatExecutionResult> operation=()->{
       GoalLoopService.Outcome outcome;
       try {
         if(!goals.active(claim)) {cancellation.forgetPendingCancellation(run);outcome=new GoalLoopService.Outcome(ChatExecutionResult.cancelled());}
@@ -114,6 +118,9 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
         if(runRegistry.get(run).status()==dev.mikoto2000.rei.application.run.RunStatus.CANCELLED)outcome=new GoalLoopService.Outcome(ChatExecutionResult.cancelled());
       }
       completed.accept(outcome);
+      return outcome.result();
+      };
+      if(timing==null)operation.get();else timing.observeRun(owner,operation);
     },work->{
       Runnable execute=()->{try {work.run();}catch(RuntimeException error){completed.accept(new GoalLoopService.Outcome(ChatExecutionResult.failed("Goal admission failed")));}};
       if(runLifecycle!=null)runLifecycle.execute(owner,execute);else execute.run();
