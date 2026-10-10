@@ -5,7 +5,12 @@ import java.util.List;
 
 /** OS/app facts, separate from inferred activities. No image bytes or tool arguments. */
 public record ActivityEvidence(Instant capturedAt,ForegroundWindow foreground,List<VisibleWindow> visibleWindows,
-    String projectName,String projectId,List<RecentEvent> events,History history,WorkReference workContext) {
+    String projectName,String projectId,List<RecentEvent> events,History history,WorkReference workContext,InputReference input) {
+  public record InputReference(boolean recent,boolean reliable) {}
+  public ActivityEvidence(Instant at,ForegroundWindow fg,List<VisibleWindow> windows,String project,String projectId,List<RecentEvent> events,History history,WorkReference work) {
+    this(at,fg,windows,project,projectId,events,history,work,null);
+  }
+  public ActivityEvidence withInput(InputReference input){return new ActivityEvidence(capturedAt,foreground,visibleWindows,projectName,projectId,events,history,workContext,input);}
   public ActivityEvidence {visibleWindows=List.copyOf(visibleWindows);events=List.copyOf(events);}
   public ActivityEvidence(Instant at,ForegroundWindow foreground,List<VisibleWindow> windows,String projectName,
       String projectId,List<RecentEvent> events,History history){this(at,foreground,windows,projectName,projectId,events,history,null);}

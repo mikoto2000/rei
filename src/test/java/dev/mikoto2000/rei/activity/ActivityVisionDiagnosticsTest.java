@@ -10,6 +10,7 @@ class ActivityVisionDiagnosticsTest {
     var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setBackgroundFullScreenEnabled(background);
     var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var store=mock(ActivityStore.class);
     when(observer.foreground()).thenReturn(new ForegroundWindow("Firefox",1,background?"ホーム / X":"Mozilla Firefox","1",new ActivityRecord.Bounds(0,0,16,16)));
+    when(observer.metadata()).thenAnswer(i->new DesktopActivityObserver.Metadata(observer.foreground(),List.of(),true));
     when(observer.capture()).thenReturn(ActivityChangeScopeTest.screen(20,20));
     if(failure!=null)when(extractor.extract(any(),any())).thenThrow(failure);else when(extractor.extract(any(),any())).thenReturn(result);
     new ActivityCapture(p,observer,extractor,store,mock(ScreenshotStore.class),new ActivityChangeScopeTest.Time()).tick();

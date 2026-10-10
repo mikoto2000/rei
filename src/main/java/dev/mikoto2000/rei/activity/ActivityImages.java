@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.activity;
 import dev.mikoto2000.rei.computeruse.*;
 import java.awt.Rectangle;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Map;
 
 /** Win32 window bounds are physical pixels. Windows AWT retains physical origins but scales display sizes. */
 final class ActivityImages {
@@ -27,23 +25,53 @@ final class ActivityImages {
     }
     return selected.isEmpty()?screen:new CapturedScreen(selected);
   }
-  static Map<String,double[]> backgroundFingerprints(CapturedScreen screen,ForegroundWindow window) {
-    var result=new HashMap<String,double[]>();
-    for(var display:screen.displays()) {
-      var values=ImageChange.fingerprint(display.image());var b=physicalBounds(display.geometry());
-      if(window!=null && window.bounds()!=null) {
-        var w=window.bounds();var rect=new Rectangle(w.x(),w.y(),w.width(),w.height());
-        // Mask entire sampling cells touching foreground, including the interpolation boundary.
-        for(int y=0;y<32;y++) for(int x=0;x<32;x++) {
-          var cell=new java.awt.geom.Rectangle2D.Double(b.x+(x-.5)*b.width/32.0,b.y+(y-.5)*b.height/32.0,b.width/16.0,b.height/16.0);
-          if(cell.intersects(rect)) java.util.Arrays.fill(values,(y*32+x)*3,(y*32+x+1)*3,0);
-        }
-      }
-      result.put(display.geometry().id(),values);
-    }
-    return Map.copyOf(result);
+  /** Fail closed when the enumeration is incomplete. Copies pixels before applying masks. */
+  static CapturedScreen privateDesktop(CapturedScreen screen,DesktopActivityObserver.Metadata metadata,ActivityProperties p) {
+    return privateDesktop(screen,metadata,p,true);
   }
-  private static Rectangle physicalBounds(ScreenGeometry g) {
+  static CapturedScreen privateDesktop(CapturedScreen screen,DesktopActivityObserver.Metadata metadata,ActivityProperties p,boolean selectMonitors) {
+    if(metadata==null || !metadata.complete() || metadata.visibleWindows()==null)return null;
+    var policy=new CapturePolicy(p);var masks=new ArrayList<Rectangle>();
+    for(var w:metadata.visibleWindows()) {
+      if(w==null)return null;
+      if(!w.visible() || w.minimized() || w.offScreen())continue;
+      if(policy.excluded(w.window())) {
+        if(w.window()==null || w.window().bounds()==null)return null;
+        var b=w.window().bounds();if(b.width()<=0 || b.height()<=0)return null;
+        // Include compositor shadows/borders adjacent to excluded windows.
+        masks.add(new Rectangle(b.x()-16,b.y()-16,b.width()+32,b.height()+32));
+      }
+    }
+    var selected=new ArrayList<DisplayCapture>();
+    for(var display:screen.displays()) {
+      var g=display.geometry();
+      if(selectMonitors && !p.getDesktopContext().getMonitors().isEmpty() && !p.getDesktopContext().getMonitors().contains(g.id()))continue;
+      var image=new java.awt.image.BufferedImage(display.image().getWidth(),display.image().getHeight(),java.awt.image.BufferedImage.TYPE_INT_RGB);
+      var graphics=image.createGraphics();
+      try {
+        graphics.drawImage(display.image(),0,0,null);graphics.setColor(java.awt.Color.BLACK);
+        var b=physicalBounds(g);
+        for(var rect:masks)mask(graphics,rect,b,image);
+        for(var mask:p.getDesktopContext().getMasks())if(g.id().equals(mask.monitor()))
+          mask(graphics,new Rectangle(b.x+mask.x(),b.y+mask.y(),mask.width(),mask.height()),b,image);
+      }finally{graphics.dispose();}
+      selected.add(new DisplayCapture(g,image));
+    }
+    return selected.isEmpty()?null:new CapturedScreen(selected);
+  }
+  static CapturedScreen selectDesktop(CapturedScreen screen,ActivityProperties p) {
+    var selected=screen.displays().stream().filter(d->p.getDesktopContext().getMonitors().isEmpty() || p.getDesktopContext().getMonitors().contains(d.geometry().id())).toList();
+    return selected.isEmpty()?null:new CapturedScreen(selected);
+  }
+  private static void mask(java.awt.Graphics2D graphics,Rectangle rect,Rectangle b,java.awt.image.BufferedImage image) {
+    var r=rect.intersection(b);if(r.isEmpty())return;
+    int x=(int)Math.floor((double)(r.x-b.x)*image.getWidth()/b.width);
+    int y=(int)Math.floor((double)(r.y-b.y)*image.getHeight()/b.height);
+    int right=(int)Math.ceil((double)(r.x-b.x+r.width)*image.getWidth()/b.width);
+    int bottom=(int)Math.ceil((double)(r.y-b.y+r.height)*image.getHeight()/b.height);
+    graphics.fillRect(x,y,right-x,bottom-y);
+  }
+  static Rectangle physicalBounds(ScreenGeometry g) {
     var b=g.bounds();return new Rectangle(b.x,b.y,(int)Math.round(b.width*g.scaleX()),(int)Math.round(b.height*g.scaleY()));
   }
 }

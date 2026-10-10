@@ -15,15 +15,10 @@ class ActivityEvidenceSafetyTest {
     verify(store).append(any());verifyNoInteractions(extractor);
   }
   @Test void optInBackgroundHasOneWorkerAndEnrichesOriginalObservation() throws Exception {
-    var p=new ActivityProperties();p.setEnabled(true);p.getDetection().setBackgroundFullScreenEnabled(true);p.setBackgroundAnalysisIntervalSeconds(60);
-    var observer=mock(DesktopActivityObserver.class);var extractor=mock(ActivityExtractor.class);var store=mock(ActivityStore.class);var time=new ActivityChangeScopeTest.Time();
-    when(observer.foreground()).thenReturn(ActivityEvidenceClassifierTest.window("Firefox","ホーム / X"));when(observer.capture()).thenReturn(ActivityChangeScopeTest.screen(10,20));
-    when(extractor.extract(any(),any())).thenReturn(new ActivityExtractor.Result(new ActivityRecord.Inference("YouTube visible",List.of(new ActivityRecord.Activity("primary","media","Chrome","YouTube","",""))),.9));
-    var backgrounds=new ArrayList<Runnable>();var capture=new ActivityCapture(p,observer,extractor,store,mock(ScreenshotStore.class),time,Runnable::run,backgrounds::add);
-    capture.tick();time.advance(60);capture.tick();assertEquals(1,backgrounds.size());verify(store,times(2)).append(any());
-    backgrounds.getFirst().run();var appended=org.mockito.ArgumentCaptor.forClass(ActivityRecord.class);var updated=org.mockito.ArgumentCaptor.forClass(ActivityRecord.class);
-    verify(store,times(2)).append(appended.capture());verify(store,times(2)).replace(updated.capture());
-    assertEquals(appended.getAllValues().getFirst().id(),updated.getValue().id());assertEquals("social",new ActivityRolePolicy().classify(updated.getValue()).primary().type());
+    var f=new DesktopContextQueueTest.Fixture();f.pipeline.tick();f.time.advance(60);f.change("B");f.pipeline.tick();
+    assertEquals(1,f.tasks.size());verify(f.store,times(2)).append(any());f.run();
+    var records=org.mockito.ArgumentCaptor.forClass(ActivityRecord.class);verify(f.store,times(2)).append(records.capture());
+    verify(f.store).replace(argThat(r->r.id().equals(records.getAllValues().getFirst().id()) && r.detection().visionDiagnostics().background().state()==VisionDiagnostics.State.USED));
   }
   @Test void disabledFallbackOrVisionStillStoresUnknownObservationWithoutPixels() throws Exception {
     for(boolean disableVision:List.of(false,true)) {

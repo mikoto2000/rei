@@ -16,19 +16,14 @@ public final class ActivityCapture implements AutoCloseable {
   private final ActivityEvidencePipeline evidencePipeline;
   private final InputAwareObservation observation;
   private final java.util.concurrent.Executor analysisExecutor;
-  private final java.util.concurrent.Executor backgroundExecutor;
   private final AtomicBoolean running = new AtomicBoolean();
   private boolean analyzing;
-  private boolean analyzingBackground;
   private Frame pending;
   private static final class Frame {
     final long token,queuedAt;
     final Instant at;
     final ForegroundWindow foreground;
     final dev.mikoto2000.rei.computeruse.CapturedScreen screen;
-    // Accessed only under the ActivityCapture monitor. Never retained beyond this frame's workers.
-    ActivityRecord saved;
-    ActivityExtractor.Result backgroundResult;
     Frame(long token,Instant at,ForegroundWindow foreground,dev.mikoto2000.rei.computeruse.CapturedScreen screen,long queuedAt) {
       this.token=token;this.at=at;this.foreground=foreground;this.screen=screen;this.queuedAt=queuedAt;
     }
@@ -41,8 +36,6 @@ public final class ActivityCapture implements AutoCloseable {
   private String continuityId=UUID.randomUUID().toString();
   private ActivityRecord previous;
   private Map<String,double[]> fingerprints = Map.of();
-  private Map<String,double[]> backgroundFingerprints = Map.of();
-  private Instant backgroundCheckedAt;
   public ActivityCapture(ActivityProperties properties, DesktopActivityObserver observer, ActivityExtractor extractor,
       ActivityStore store, ScreenshotStore screenshots, Clock clock) {
     this(properties,observer,extractor,store,screenshots,clock,Runnable::run);
@@ -63,7 +56,6 @@ public final class ActivityCapture implements AutoCloseable {
     this.properties=properties; this.observer=observer; this.extractor=extractor; this.store=store; this.screenshots=screenshots; this.clock=clock;
     this.analysisExecutor=analysisExecutor;
     this.observation=new InputAwareObservation(clock,properties.getObservation().getIntervalSeconds(),properties.getObservation().getMaxObservationIntervalSeconds());
-    this.backgroundExecutor=backgroundExecutor;
     this.evidencePipeline=new ActivityEvidencePipeline(properties,observer,extractor,store,screenshots,clock,analysisExecutor,backgroundExecutor,sources);
     this.evidencePipeline.observation=observation;
   }
@@ -94,7 +86,7 @@ public final class ActivityCapture implements AutoCloseable {
     try{return observer.lightweight();}catch(Exception | LinkageError e){return new DesktopActivityObserver.Lightweight(0,0,null,null,false,false);}
   }
   private void detailTick(boolean optimized) {
-    if(optimized || properties.getDetection().getMode()==ActivityProperties.DetectionMode.EVIDENCE_FIRST){evidencePipeline.tick();return;}
+    if(optimized || properties.getDetection().isBackgroundFullScreenEnabled() || properties.getDetection().getMode()==ActivityProperties.DetectionMode.EVIDENCE_FIRST){evidencePipeline.tick();return;}
     if (!running.compareAndSet(false,true)) return;
     long started=System.nanoTime();String status="skipped";
     try {
@@ -115,9 +107,7 @@ public final class ActivityCapture implements AutoCloseable {
       long observed=System.nanoTime();
       log.info("Activity observation timing: observe_ms={} displays={}",ms(observed-started),screen.displays().size());
       var frame=new Frame(token,at,foreground,screen,observed);
-      boolean background=reserveBackground(frame);
       submit(frame);
-      if(background) submitBackground(frame);
       status="submitted";
     } catch (Exception e) { status="failed";invalidate(); failure("observation",e); }
     finally { if(!status.equals("submitted")) log.debug("Activity observation: status={} elapsed_ms={}",status,ms(System.nanoTime()-started));running.set(false); }
@@ -142,40 +132,6 @@ public final class ActivityCapture implements AutoCloseable {
       }
       analyze(frame);
     }
-  }
-  private synchronized boolean reserveBackground(Frame frame) {
-    if(!properties.getDetection().isBackgroundFullScreenEnabled() || !properties.getDetection().isVisionEnabled())return false;
-    if(!allowed(frame.token()) || !properties.isExtractionEnabled() || ActivityImages.foreground(frame.screen(),frame.foreground())==frame.screen()) return false;
-    if(analyzingBackground) {log.info("Activity background skipped: reason=busy");return false;}
-    if(backgroundCheckedAt!=null && Duration.between(backgroundCheckedAt,frame.at()).getSeconds()<properties.getBackgroundAnalysisIntervalSeconds()) return false;
-    var current=ActivityImages.backgroundFingerprints(frame.screen(),frame.foreground());
-    boolean changed=backgroundCheckedAt!=null && distance(current,backgroundFingerprints)>properties.getChangeThreshold();
-    backgroundCheckedAt=frame.at();backgroundFingerprints=current;
-    if(changed) analyzingBackground=true;
-    return changed;
-  }
-  private void submitBackground(Frame frame) {
-    try {backgroundExecutor.execute(()->analyzeBackground(frame));}
-    catch(RuntimeException e) {synchronized(this) {analyzingBackground=false;backgroundCheckedAt=null;}failure("background scheduling",e);}
-  }
-  private void analyzeBackground(Frame frame) {
-    try {
-      if(!allowed(frame.token())) return;
-      log.info("Activity analysis timing: queue_wait_ms={} scope=background duplicate=false",ms(System.nanoTime()-frame.queuedAt()));
-      var result=extract(frame.screen(),frame.foreground(),"background");
-      synchronized(this) {
-        if(!allowed(frame.token())) return;
-        frame.backgroundResult=result;
-        if(frame.saved!=null) {
-          var enriched=ActivityBackgroundMerge.merge(frame.saved,result,properties.getPrimaryConfidenceThreshold());
-          store.replace(enriched);
-          log.info("Activity background supplemented: observation_age_ms={}",Duration.between(frame.at(),clock.instant()).toMillis());
-        }
-      }
-    } catch(Exception e) {
-      saveEvidence(frame.token(),UUID.randomUUID().toString(),frame.at(),frame.screen(),false,ScreenshotPersistencePolicy.Outcome.EXTRACTION_FAILURE);
-      failure("background extraction/storage",e);
-    } finally {synchronized(this) {analyzingBackground=false;}}
   }
   private void analyze(Frame frame) {
     long token=frame.token();var at=frame.at();var foreground=frame.foreground();var screen=frame.screen();
@@ -218,8 +174,7 @@ public final class ActivityCapture implements AutoCloseable {
         var refs=duplicate ? prior.screenshotReferences() : saveEvidence(token, id, at, screen, false,
             ScreenshotPersistencePolicy.Outcome.SUCCESS);
         var record=new ActivityRecord(id,at,properties.getCaptureIntervalSeconds(),observations,foreground,result.inference(),result.confidence(),refs,change,duplicate,continuityId);
-        store.append(frame.backgroundResult==null?record:ActivityBackgroundMerge.merge(record,frame.backgroundResult,properties.getPrimaryConfidenceThreshold()));
-        frame.saved=record;
+        store.append(record);
         log.info("Activity record saved: storage_ms={} observation_age_ms={} duplicate={}",ms(System.nanoTime()-saveStarted),Duration.between(at,clock.instant()).toMillis(),duplicate);
         previous=record;
         // Compare to the last analyzed image, not the last sample: slow cumulative changes still trigger extraction.
@@ -248,7 +203,7 @@ public final class ActivityCapture implements AutoCloseable {
   private static double distance(Map<String,double[]> current,Map<String,double[]> baseline) {
     return current.keySet().equals(baseline.keySet())?current.entrySet().stream().mapToDouble(e -> ImageChange.distance(e.getValue(),baseline.get(e.getKey()))).max().orElse(1):1;
   }
-  private synchronized void resetEvidence() { previous=null; fingerprints=Map.of(); backgroundFingerprints=Map.of();backgroundCheckedAt=null;continuityId=UUID.randomUUID().toString(); }
+  private synchronized void resetEvidence() { previous=null; fingerprints=Map.of(); continuityId=UUID.randomUUID().toString(); }
   private synchronized void invalidate() {generation++;pending=null;resetEvidence();}
   private static long ms(long nanos) {return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(nanos);}
   private static boolean sameGeometry(List<ActivityRecord.Observation> a,List<ActivityRecord.Observation> b) {

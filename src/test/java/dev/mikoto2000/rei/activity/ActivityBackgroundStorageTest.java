@@ -20,7 +20,10 @@ class ActivityBackgroundStorageTest {
     store.replace(ActivityBackgroundMerge.merge(record,supplement,.5));
     var records=store.findRecordsBetween(record.capturedAt(),later.capturedAt().plusSeconds(60));
     assertEquals(2,records.size());assertEquals(120,records.stream().mapToLong(ActivityRecord::durationEstimate).sum());
-    assertTrue(records.getFirst().inference().activities().contains(media));
+    assertFalse(records.getFirst().inference().activities().contains(media));
+    var context=records.getFirst().detection().visionDiagnostics().background().context();
+    assertEquals(List.of(media,conflicting),context.candidates());assertEquals(record.id(),context.observationId());
+    assertEquals(record.capturedAt(),context.observedAt());
     assertFalse(records.getFirst().inference().activities().contains(conflicting));
     assertEquals(record.inference().summary(),records.getFirst().inference().summary());
     assertEquals(new ActivityRolePolicy().classify(record).primary(),new ActivityRolePolicy().classify(records.getFirst()).primary());

@@ -23,9 +23,11 @@ public static class ReiActivityMetadata {
   [DllImport("user32.dll")] public static extern IntPtr MonitorFromWindow(IntPtr h, uint flags);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern bool GetMonitorInfo(IntPtr h, ref MonitorInfo info);
   [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, uint attribute, out int value, int size);
+  public static bool Complete = true;
   public static IntPtr[] Windows() {
     var found=new List<IntPtr>();
-    EnumWindows(delegate(IntPtr h, IntPtr l) { if(IsWindowVisible(h) && !IsIconic(h)) found.Add(h); return found.Count<256; },IntPtr.Zero);
+    bool ok=EnumWindows(delegate(IntPtr h, IntPtr l) { if(IsWindowVisible(h) && !IsIconic(h)) found.Add(h); if(found.Count>=256) {Complete=false;return false;} return true; },IntPtr.Zero);
+    if(!ok) Complete=false;
     return found.ToArray();
   }
 }
@@ -48,21 +50,22 @@ function Read-ReiWindow([IntPtr]$handle) {
 }
 $reiFront = Read-ReiWindow $reiForeground
 $reiVisible = @()
+$reiComplete = $true
 foreach ($reiHandle in [ReiActivityMetadata]::Windows()) {
   if ($reiHandle -eq $reiForeground) { continue }
   try {
     $reiCloaked = 0
     if ([ReiActivityMetadata]::DwmGetWindowAttribute($reiHandle,14,[ref]$reiCloaked,4) -eq 0 -and $reiCloaked -ne 0) { continue }
     $reiMonitor = [ReiActivityMetadata]::MonitorFromWindow($reiHandle,0)
-    if ($reiMonitor -eq [IntPtr]::Zero) { continue }
+    if ($reiMonitor -eq [IntPtr]::Zero) { $reiComplete=$false; continue }
     $reiInfo = New-Object ReiActivityMetadata+MonitorInfo
     $reiInfo.Size = [System.Runtime.InteropServices.Marshal]::SizeOf($reiInfo)
-    if (-not [ReiActivityMetadata]::GetMonitorInfo($reiMonitor,[ref]$reiInfo)) { continue }
+    if (-not [ReiActivityMetadata]::GetMonitorInfo($reiMonitor,[ref]$reiInfo)) { $reiComplete=$false; continue }
     $reiItem = Read-ReiWindow $reiHandle
-    if ($null -eq $reiItem.bounds -or $reiItem.bounds.width -le 0 -or $reiItem.bounds.height -le 0) { continue }
+    if ($null -eq $reiItem.bounds -or $reiItem.bounds.width -le 0 -or $reiItem.bounds.height -le 0) { $reiComplete=$false; continue }
     $reiVisible += @{window=$reiItem; visible=$true; minimized=$false; offScreen=$false; monitor=$reiInfo.Device}
-    if ($reiVisible.Count -ge 32) { break }
-  } catch { continue }
+    if ($reiVisible.Count -ge 256) { $reiComplete=$false; break }
+  } catch { $reiComplete=$false; continue }
 }
 if ($reiForeground -ne [ReiActivityMetadata]::GetForegroundWindow()) { exit 1 }
-@{foreground=$reiFront; visibleWindows=@($reiVisible)} | ConvertTo-Json -Depth 6 -Compress
+@{foreground=$reiFront; visibleWindows=@($reiVisible); complete=($reiComplete -and [ReiActivityMetadata]::Complete)} | ConvertTo-Json -Depth 6 -Compress

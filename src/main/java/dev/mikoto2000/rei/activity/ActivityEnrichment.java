@@ -23,7 +23,16 @@ final class ActivityEnrichment {
     var merged=new ActivityRecord(base.id(),base.capturedAt(),base.durationEstimate(),base.observations(),base.foreground(),
         new ActivityRecord.Inference(category?result.inference().summary():base.inference().summary(),List.of(primary)),fields.overall(),base.screenshotReferences(),base.changeAmount(),base.duplicate(),base.continuityId(),detection);
     var secondary=base.inference().activities().stream().skip(1).toList();
-    return ActivityBackgroundMerge.merge(merged,new ActivityExtractor.Result(new ActivityRecord.Inference("",secondary),base.confidence()),0);
+    // Preserve existing evidence-classifier secondary candidates when desktop analysis is OFF too.
+    var candidates=new ArrayList<>(merged.inference().activities());var roles=new ActivityRolePolicy(0);
+    var selected=roles.classify(merged).primary();
+    for(var candidate:secondary) {
+      if(candidates.contains(candidate))continue;
+      candidates.add(candidate);
+      var proposed=new ActivityRecord(merged.id(),merged.capturedAt(),merged.durationEstimate(),merged.observations(),merged.foreground(),new ActivityRecord.Inference(merged.inference().summary(),candidates),merged.confidence(),merged.screenshotReferences(),merged.changeAmount(),merged.duplicate(),merged.continuityId(),merged.detection());
+      if(!Objects.equals(selected,roles.classify(proposed).primary()))candidates.removeLast();
+    }
+    return new ActivityRecord(merged.id(),merged.capturedAt(),merged.durationEstimate(),merged.observations(),merged.foreground(),new ActivityRecord.Inference(merged.inference().summary(),candidates),merged.confidence(),merged.screenshotReferences(),merged.changeAmount(),merged.duplicate(),merged.continuityId(),merged.detection());
   }
   static ActivityFieldConfidence fields(ActivityRecord record) {
     if(record.detection()!=null && record.detection().fieldConfidence()!=null)return record.detection().fieldConfidence();
