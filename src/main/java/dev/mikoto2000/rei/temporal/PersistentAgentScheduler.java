@@ -23,6 +23,12 @@ public class PersistentAgentScheduler implements AgentScheduler {
   private final JdbcClient db;
   private final Clock clock;
   private final TransactionTemplate transaction;
+  private dev.mikoto2000.rei.storage.SqliteEventCursorStore eventCursors;
+  private dev.mikoto2000.rei.storage.StorageObjectRegistry storageObjects;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setEventCursorStore(dev.mikoto2000.rei.storage.SqliteEventCursorStore cursors){eventCursors=cursors;}
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setStorageObjects(dev.mikoto2000.rei.storage.StorageObjectRegistry objects){storageObjects=objects;}
   public PersistentAgentScheduler(@Qualifier("memoryConsolidationDataSource") DataSource source,Clock clock) {
     db=JdbcClient.create(source);this.clock=clock;transaction=new TransactionTemplate(new DataSourceTransactionManager(source));
     db.sql("CREATE TABLE IF NOT EXISTS agent_schedules(id TEXT PRIMARY KEY,created INTEGER NOT NULL,due INTEGER NOT NULL,action TEXT NOT NULL,session TEXT NOT NULL,project TEXT NOT NULL,root TEXT NOT NULL,status TEXT NOT NULL,run TEXT,outcome TEXT NOT NULL DEFAULT '')").update();
@@ -156,6 +162,8 @@ public class PersistentAgentScheduler implements AgentScheduler {
     if(event==null||!TERMINAL_EVENTS.contains(event.type())||event.projectId()==null||event.sessionId()==null
         ||event.id().length()>128||event.timestamp().isAfter(clock.instant()))return;
     String source=eventSource(event);if(source==null||source.length()>128)return;
+    // Protect a fact before another DB can publish a durable pointer to it.
+    if(storageObjects!=null)storageObjects.addReference("event:"+dev.mikoto2000.rei.event.SqliteProjectAgentEventStore.scope(event.projectId())+":"+event.id(),"SCHEDULE_SIGNAL",event.projectId()+":"+source+":"+event.id());
     transaction.executeWithoutResult(status->{
       var entries=db.sql("UPDATE agent_schedules SET status='SCHEDULED',due=? WHERE project=? AND session=? AND (? IS NULL OR root=?) AND status='WAITING_EVENT' AND id IN (SELECT id FROM agent_schedule_events WHERE source_run=? AND type=? AND activated<=? AND expires>? AND expires>=?) RETURNING *")
           .params(clock.millis(),event.projectId(),event.sessionId(),root==null?null:root.toString(),root==null?null:root.toString(),source,event.type().name(),event.timestamp().toEpochMilli(),clock.millis(),event.timestamp().toEpochMilli())
@@ -175,10 +183,12 @@ public class PersistentAgentScheduler implements AgentScheduler {
   }
   public record ReplayCursor(long offset,boolean discardingLine,long generation) {}
   ReplayCursor replayCursor(String project) {
+    if(eventCursors!=null){var cursor=eventCursors.get(project);return new ReplayCursor(cursor.sequence(),false,cursor.generation());}
     return db.sql("SELECT * FROM agent_schedule_event_cursors WHERE project=?").param(project)
         .query((rs,n)->new ReplayCursor(rs.getLong("offset"),rs.getInt("discard")!=0,rs.getLong("generation"))).single();
   }
   void saveReplayCursor(String project,ReplayCursor expected,long offset,boolean discard) {
+    if(eventCursors!=null){if(discard)throw new IllegalArgumentException("SQLite cursors do not discard partial lines");eventCursors.compareAndSet(project,new dev.mikoto2000.rei.storage.SqliteEventCursorStore.Cursor(expected.offset(),expected.generation()),offset);return;}
     db.sql("UPDATE agent_schedule_event_cursors SET offset=?,discard=? WHERE project=? AND offset=? AND generation=?")
         .params(offset,discard?1:0,project,expected.offset(),expected.generation()).update();
   }
@@ -210,13 +220,16 @@ public class PersistentAgentScheduler implements AgentScheduler {
       .orElseThrow(()->new IllegalArgumentException("Schedule not found in this project"));}
   /** Human-facing control only; no Tool exposes activation. */
   public void activate(String project,String id) {
+    // Rewind before activation publishes WAITING_EVENT. A failed activation may
+    // cause extra idempotent replay, but cannot skip a newly activated wait.
+    if(eventCursors!=null){var trigger=eventTrigger(project,id);if(trigger.isPresent()&&trigger.get().expiresAt().isAfter(clock.instant())&&get(project,id).status().equals("PENDING"))eventCursors.reset(project);}
     transaction.executeWithoutResult(status->{
       var trigger=eventTrigger(project,id);
       if(trigger.isEmpty()) {transition(project,id,"PENDING","SCHEDULED");return;}
       if(!trigger.get().expiresAt().isAfter(clock.instant()))throw new IllegalStateException("Event wait already expired");
       transition(project,id,"PENDING","WAITING_EVENT");
       db.sql("UPDATE agent_schedule_events SET activated=? WHERE id=?").params(clock.millis(),id).update();
-      db.sql("INSERT INTO agent_schedule_event_cursors(project,offset,discard,generation) VALUES(?,0,0,0) ON CONFLICT(project) DO UPDATE SET offset=0,discard=0,generation=generation+1")
+      if(eventCursors==null)db.sql("INSERT INTO agent_schedule_event_cursors(project,offset,discard,generation) VALUES(?,0,0,0) ON CONFLICT(project) DO UPDATE SET offset=0,discard=0,generation=generation+1")
           .param(project).update();
     });
   }

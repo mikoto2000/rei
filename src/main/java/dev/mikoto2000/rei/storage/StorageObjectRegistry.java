@@ -17,6 +17,13 @@ public final class StorageObjectRegistry {
   final Path root;final StorageDatabase database;final Clock clock;
   public StorageObjectRegistry(Path root){this(root,Clock.systemUTC());}
   public StorageObjectRegistry(Path root,Clock clock){this.root=root.toAbsolutePath().normalize();this.database=new StorageDatabase(root);this.clock=clock;}
+  public Path root(){return root;}
+  public static void registerEvent(Connection db,dev.mikoto2000.rei.event.AgentEvent event,String record)throws Exception {
+    String scope=dev.mikoto2000.rei.event.SqliteProjectAgentEventStore.scope(event.projectId());String id="event:"+scope+":"+event.id();byte[] bytes=record.getBytes(StandardCharsets.UTF_8);
+    try(var insert=db.prepareStatement("INSERT INTO stored_objects(id,kind,scope,conversation_key,run_id,relative_path,size,sha256,created,origin_verified) VALUES(?,'EVENT',?,?,?,?,?,?,?,1)")) {
+      insert.setString(1,id);insert.setString(2,scope);insert.setString(3,event.sessionId()==null?null:key(event.sessionId()));insert.setString(4,event.runId());insert.setString(5,"sqlite/agent_events/"+scope+"/"+event.sequence());insert.setLong(6,bytes.length);insert.setString(7,HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)));insert.setString(8,event.timestamp().toString());insert.executeUpdate();
+    }
+  }
   public <T>T serialized(java.util.function.Supplier<T> action){synchronized(database.writer){return action.get();}}
   public void verifyBodyPath(Path path){Path normalized=path.toAbsolutePath().normalize();if(!normalized.startsWith(root))throw new IllegalArgumentException("Object outside storage root");try{StorageBackup.requireSafePath(normalized);}catch(java.io.IOException error){throw new IllegalStateException("Unsafe body path",error);}}
   public void verifyRawReadable(String conversation,String ref){verifyBodyPath(rawPath(conversation,ref));rawObject(conversation,ref).ifPresent(object->{if(!object.status().equals("AVAILABLE"))throw new IllegalStateException("Raw result body is unavailable");});}
@@ -100,9 +107,13 @@ public final class StorageObjectRegistry {
       // absence of a known edge cannot prove this body is disposable.
       return Optional.of("reference-check-incomplete");
     }
+    if(object.kind().equals("EVENT"))return Optional.of("reference-check-incomplete");
     return Optional.empty();
   }
-  boolean unchanged(StoredObject object)throws Exception {Path file=root.resolve(object.relativePath()).normalize();if(!file.startsWith(root))return false;StorageBackup.requireSafePath(file);return Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS)&&Files.size(file)==object.size()&&StorageBackup.hash(file).equals(object.sha256());}
+  boolean unchanged(StoredObject object)throws Exception {
+    if(object.kind().equals("EVENT"))return database.read(db->{try(var query=db.prepareStatement("SELECT length(CAST(record AS BLOB)),record FROM agent_events WHERE project_id=? AND id=?")){query.setString(1,object.scope());query.setString(2,object.id().substring(("event:"+object.scope()+":").length()));try(var rows=query.executeQuery()){if(!rows.next()||rows.getLong(1)!=object.size()||object.size()>dev.mikoto2000.rei.event.SqliteProjectAgentEventStore.MAX_RECORD_BYTES)return false;return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(rows.getString(2).getBytes(StandardCharsets.UTF_8))).equals(object.sha256());}}});
+    Path file=root.resolve(object.relativePath()).normalize();if(!file.startsWith(root))return false;StorageBackup.requireSafePath(file);return Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS)&&Files.size(file)==object.size()&&StorageBackup.hash(file).equals(object.sha256());
+  }
   static Optional<StoredObject> find(Connection db,String id)throws SQLException {try(var query=db.prepareStatement("SELECT * FROM stored_objects WHERE id=?")){query.setString(1,id);try(var rows=query.executeQuery()){return rows.next()?Optional.of(row(rows)):Optional.empty();}}}
   static StoredObject row(ResultSet rows)throws SQLException {String created=rows.getString("created");return new StoredObject(rows.getString("id"),rows.getString("kind"),rows.getString("scope"),rows.getString("conversation_key"),rows.getString("run_id"),rows.getString("relative_path"),rows.getLong("size"),rows.getString("sha256"),created==null?null:Instant.parse(created),rows.getBoolean("origin_verified"),rows.getString("status"),rows.getBoolean("pinned"),rows.getBoolean("legal_hold"),rows.getLong("revision"));}
 }
