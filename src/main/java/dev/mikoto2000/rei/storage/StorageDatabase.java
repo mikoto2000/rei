@@ -44,6 +44,8 @@ public final class StorageDatabase {
       catch(Exception error){throw new IllegalStateException("Cannot persist SQLite storage",error);}
     }
   }
+  /** Explicit maintenance statements such as VACUUM require autocommit. */
+  <T>T maintenance(Work<T> work){synchronized(writer){try(var connection=open(false)){return work.run(connection);}catch(RuntimeException error){throw error;}catch(Exception error){throw new IllegalStateException("SQLite maintenance failed; retry in another window",error);}}}
   /** SQLite BINARY compares UTF-8; this key preserves String.compareTo's UTF-16 ordering. */
   public static byte[] orderKey(String value) {
     byte[] result=new byte[Math.multiplyExact(value.length(),2)];

@@ -24,7 +24,7 @@ public final class RetentionPlanner {
   private static Long nullable(ResultSet rows,String column)throws SQLException{long value=rows.getLong(column);return rows.wasNull()?null:value;}
   public void updatePolicy(String id,Duration retention,Long maxBytes,Long maxCount) {
     if(retention!=null&&retention.getSeconds()<1||maxBytes!=null&&maxBytes<1||maxCount!=null&&maxCount<1)throw new IllegalArgumentException("Positive retention limits required (at least one second)");
-    registry.database.transaction(db->{var old=policy(db,id);if(!Set.of("RAW_RESULT","ACTIVITY_RAW","EVENT","REFLECTION").contains(old.kind())&&(retention!=null||maxBytes!=null||maxCount!=null))throw new IllegalArgumentException("This kind has no automatic retention policy");try(var update=db.prepareStatement("UPDATE retention_policies SET retention_seconds=?,max_bytes=?,max_count=?,version=version+1 WHERE id=?")){update.setObject(1,retention==null?null:retention.getSeconds());update.setObject(2,maxBytes);update.setObject(3,maxCount);update.setString(4,id);update.executeUpdate();}return null;});
+    registry.database.transaction(db->{var old=policy(db,id);if(!Set.of("RAW_RESULT","ACTIVITY_RAW","EVENT","REFLECTION").contains(old.kind())&&(retention!=null||maxBytes!=null||maxCount!=null))throw new IllegalArgumentException("This kind has no automatic retention policy");try(var update=db.prepareStatement("UPDATE retention_policies SET retention_seconds=?,max_bytes=?,max_count=?,automatic=0,version=version+1 WHERE id=?")){update.setObject(1,retention==null?null:retention.getSeconds());update.setObject(2,maxBytes);update.setObject(3,maxCount);update.setString(4,id);update.executeUpdate();}return null;});
   }
   public Plan plan(String policyId,String suppliedScope,int maxObjects,long maxBytes) {
     if(maxObjects<1||maxObjects>1000||maxBytes<1||maxBytes>1024L*1024*1024)throw new IllegalArgumentException("Plan budget must be 1..1000 objects and 1..1GiB");
@@ -32,7 +32,7 @@ public final class RetentionPlanner {
     return registry.database.transaction(db->{
       Policy policy=policy(db,policyId);Instant now=registry.clock.instant();var candidates=new ArrayList<StoredObject>();var protectedReasons=new TreeMap<String,Long>();long bytes=0,totalBytes=0,totalCount=0;boolean limited=false;
       try(var query=db.prepareStatement("SELECT COALESCE(sum(size),0),count(*) FROM stored_objects WHERE kind=? AND scope=? AND status='AVAILABLE'")){query.setString(1,policy.kind());query.setString(2,scope);try(var rows=query.executeQuery()){rows.next();totalBytes=rows.getLong(1);totalCount=rows.getLong(2);}}
-      try(var query=db.prepareStatement("SELECT * FROM stored_objects WHERE kind=? AND scope=? ORDER BY created,id LIMIT 1001")) {
+      try(var query=db.prepareStatement("SELECT * FROM stored_objects WHERE kind=? AND scope=? AND status='AVAILABLE' ORDER BY created,id LIMIT 1001")) {
         query.setString(1,policy.kind());query.setString(2,scope);try(var rows=query.executeQuery()) {
           int scanned=0;while(rows.next()) {
             if(++scanned>1000){limited=true;break;}StoredObject object=StorageObjectRegistry.row(rows);var protection=registry.protectionReason(db,object);
@@ -79,7 +79,7 @@ public final class RetentionPlanner {
   public Status status(String suppliedScope){return statusScope(suppliedScope==null?"":UUID.fromString(suppliedScope).toString());}
   private Status statusScope(String scope){return registry.database.read(db->{
     String filter=scope==null?"":" WHERE scope=?";
-    var usages=new ArrayList<ObjectUsage>();try(var query=db.prepareStatement("SELECT kind,count(*),COALESCE(sum(size),0) FROM stored_objects"+filter+" GROUP BY kind")){if(scope!=null)query.setString(1,scope);try(var rows=query.executeQuery()){while(rows.next())usages.add(new ObjectUsage(rows.getString(1),rows.getLong(2),rows.getLong(3)));}}
+    var usages=new ArrayList<ObjectUsage>();try(var query=db.prepareStatement("SELECT kind,count(*),COALESCE(sum(CASE WHEN status='DELETED' THEN 0 ELSE size END),0) FROM stored_objects"+filter+" GROUP BY kind")){if(scope!=null)query.setString(1,scope);try(var rows=query.executeQuery()){while(rows.next())usages.add(new ObjectUsage(rows.getString(1),rows.getLong(2),rows.getLong(3)));}}
     var reasons=new TreeMap<String,Long>();boolean limited=false;try(var query=db.prepareStatement("SELECT * FROM stored_objects"+filter+" ORDER BY id LIMIT 1001")){if(scope!=null)query.setString(1,scope);try(var rows=query.executeQuery()){int count=0;while(rows.next()){if(++count>1000){limited=true;break;}registry.protectionReason(db,StorageObjectRegistry.row(rows)).ifPresent(reason->reasons.merge(reason,1L,Long::sum));}}}
     return new Status(List.copyOf(usages),Map.copyOf(reasons),limited);
   });}

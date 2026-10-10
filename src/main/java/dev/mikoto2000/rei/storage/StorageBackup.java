@@ -108,7 +108,7 @@ public final class StorageBackup {
   }
   private static Snapshot scan(Path root,Visitor visitor,boolean includeTarget)throws IOException {
     requireSafePath(root); var total=new Accumulator();
-    for(String name:List.of("sessions.json","projects.json","storage.db","memory.db","memory-consolidation.db","state","events","artifacts"))
+    for(String name:List.of("sessions.json","projects.json","storage.db","memory.db","memory-consolidation.db","state","events","artifacts","logs/activity.jsonl","logs/activity-archives",".storage/quarantine"))
       if(includeTarget||!name.equals("storage.db"))scanPath(root,root.resolve(name),visitor,total);
     Path projects=root.resolve("projects"); requireSafePath(projects);
     if(Files.exists(projects,LinkOption.NOFOLLOW_LINKS))try(var directories=Files.newDirectoryStream(projects)) {
@@ -118,7 +118,7 @@ public final class StorageBackup {
         requireSafePath(project);
         if(!Files.isDirectory(project,LinkOption.NOFOLLOW_LINKS))throw new IOException("Unexpected project storage entry: "+project);
         try{UUID.fromString(project.getFileName().toString());}catch(IllegalArgumentException e){throw new IOException("Unknown project storage directory: "+project,e);}
-        for(String name:List.of("state","events","artifacts"))scanPath(root,project.resolve(name),visitor,total);
+        for(String name:List.of("state","events","artifacts","logs/activity.jsonl","logs/activity-archives"))scanPath(root,project.resolve(name),visitor,total);
       }
     }
     return total.snapshot();

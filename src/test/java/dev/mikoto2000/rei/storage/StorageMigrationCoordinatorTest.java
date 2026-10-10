@@ -94,6 +94,13 @@ class StorageMigrationCoordinatorTest {
     assertThat(Files.readString(root.resolve("sessions.json"))).isEqualTo("[]");
     assertThat(root.resolve(".storage/backups")).doesNotExist();
   }
+  @Test void verifiedBackupRestoresActivityAndQuarantineAlongsideDatabaseWithoutAdoptingOldLogs()throws Exception {
+    Path log=root.resolve("logs/activity.jsonl"),archive=root.resolve("logs/activity-archives/"+UUID.randomUUID()+".jsonl"),quarantine=root.resolve(".storage/quarantine/"+UUID.randomUUID()+"/0.body");
+    Files.createDirectories(archive.getParent());Files.createDirectories(quarantine.getParent());Files.writeString(log,"legacy unchanged");Files.writeString(archive,"closed diagnostic");Files.writeString(quarantine,"quarantined body");
+    Path backup;try(var migration=new StorageMigrationCoordinator(root)){backup=migration.prepare().backup();}StorageBackup.verify(backup);Path restored=root.resolve("restore-test");StorageBackup.restoreToEmptyDirectory(backup,restored);
+    assertThat(Files.readString(restored.resolve(root.relativize(log)))).isEqualTo("legacy unchanged");assertThat(Files.readString(restored.resolve(root.relativize(archive)))).isEqualTo("closed diagnostic");assertThat(Files.readString(restored.resolve(root.relativize(quarantine)))).isEqualTo("quarantined body");
+    assertThat(new RetentionPlanner(new StorageObjectRegistry(root)).status(null).objects()).isEmpty();
+  }
   @Test void corruptedBackupStopsBeforeSchemaSwitchAndRetryKeepsBothBackups() throws Exception {
     Files.writeString(root.resolve("sessions.json"), "[]");
     try (var migration = new StorageMigrationCoordinator(root, (stage, backup) -> {

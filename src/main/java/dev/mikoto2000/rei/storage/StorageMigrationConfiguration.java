@@ -17,6 +17,10 @@ public class StorageMigrationConfiguration {
   @Bean public static StartupGate storageStartupGate(){return new StartupGate();}
   @Bean public StorageObjectRegistry storageObjectRegistry(Environment environment){return new StorageObjectRegistry(Path.of(environment.getProperty("rei.data-dir",dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().toString())));}
   @Bean public RetentionPlanner retentionPlanner(StorageObjectRegistry registry){return new RetentionPlanner(registry);}
+  @Bean public RetentionExecutor retentionExecutor(StorageObjectRegistry registry,RetentionPlanner planner){return new RetentionExecutor(registry,planner);}
+  @Bean public ManagedActivityLog managedActivityLog(StorageObjectRegistry registry){return new ManagedActivityLog(registry);}
+  @Bean public StorageMaintenance storageMaintenance(StorageObjectRegistry registry){return new StorageMaintenance(registry);}
+  @Bean public AutomaticRetention automaticRetention(StorageObjectRegistry registry,RetentionPlanner planner,RetentionExecutor executor){return new AutomaticRetention(registry,planner,executor);}
   /** Same-version contexts in one JVM share a ready lease; another process cannot migrate underneath them. */
   public static final class StartupGate implements BeanFactoryPostProcessor,EnvironmentAware,PriorityOrdered {
     private static final Map<Path,Shared> OPEN=new HashMap<>();

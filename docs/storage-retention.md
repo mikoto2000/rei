@@ -1,5 +1,9 @@
 # Storage references and retention
 
+This document describes Phase 4's reference foundation. For Phase 6's physical
+execution, protection limits, automatic consent and commands, see
+[approved retention execution](storage-retention-execution.md).
+
 Phase 4 upgrades `storage.db` to version 3 under the existing startup gate and
 verified backup transaction. `stored_objects` records a file's relative path,
 SHA-256, recorded size, physical project scope, conversation hash, Run, creation
