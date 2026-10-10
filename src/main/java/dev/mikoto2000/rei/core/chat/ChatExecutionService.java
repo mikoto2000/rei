@@ -80,6 +80,9 @@ public class ChatExecutionService {
   @Autowired
   void setPaperCommands(dev.mikoto2000.rei.paper.PaperCommandExecutor commands) { this.paperCommands = commands; }
 
+  private dev.mikoto2000.rei.doctor.DoctorActiveService doctor;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setDoctor(dev.mikoto2000.rei.doctor.DoctorActiveService doctor) {this.doctor=doctor;}
   private dev.mikoto2000.rei.externalagent.BeginnerReviewService beginnerReviews;
   @Autowired
   void setBeginnerReviews(dev.mikoto2000.rei.externalagent.BeginnerReviewService reviews) { this.beginnerReviews = reviews; }
@@ -215,6 +218,8 @@ public class ChatExecutionService {
   private ChatExecutionResult executeInScope(AgentRunContext context, String promptText, UserInterventionQueue interventions,
       OutputLimitRunBudget.LlmCallReservation reservation) {
     boolean beginnerReview = beginnerReviews != null && dev.mikoto2000.rei.externalagent.BeginnerReviewRequest.accepts(promptText);
+    boolean doctorCommand = doctor != null && dev.mikoto2000.rei.doctor.DoctorRequest.accepts(promptText);
+    boolean structuredCommand = beginnerReview || doctorCommand;
     long startedAtNanos = System.nanoTime();
     cancellationService.begin(Thread.currentThread());
     if (cancellationService.isCancellationRequested()) return ChatExecutionResult.cancelled();
@@ -229,14 +234,14 @@ public class ChatExecutionService {
         llmProperties.getOutputLimit().getMaxTotalTokensPerRun());
     RunExecutionContext execution = new RunExecutionContext(runId, budget,
         new ProgressEvaluator(context.projectRoot(),
-            context.mode()==AgentRunContext.Mode.EXCLUSIVE && !beginnerReview ? actionPlan : null), eventFactory, eventPublisher);
+            context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand ? actionPlan : null), eventFactory, eventPublisher);
     execution.setRunContext(context);
     if(context.mode()!=AgentRunContext.Mode.EXCLUSIVE)execution.setConversationSnapshot(completedHistorySnapshot(context));
     execution.setToolPermissionGuard(permissions);
     if(checkpoints!=null)execution.setToolResultsCheckpoint(messages->checkpoints.preserveResults(context,messages));
     execution.setUserRequest(promptText);
     execution.setInterventions(interventions, text -> {
-      if (chatMemory != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !beginnerReview) chatMemory.add(context.conversationId(), java.util.List.of(new UserMessage(text)));
+      if (chatMemory != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand) chatMemory.add(context.conversationId(), java.util.List.of(new UserMessage(text)));
       appendConversationLog(context.conversationId(), "user", text);
     });
     Disposable cancellationHook = cancellationService.onCancel(runId, execution::cancel);
@@ -246,11 +251,11 @@ public class ChatExecutionService {
     try {
       turns.startOrdered(context, promptText, clock.instant());
       if (checkpoints != null) checkpoints.start(context, promptText);
-      if (workContext != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !beginnerReview) workContext.afterStart(context);
+      if (workContext != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand) workContext.afterStart(context);
       execution.checkActive();
       activityTracker.ifPresent(tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));
       appendConversationLog(context.conversationId(), "user", promptText);
-      if (!beginnerReview && !budget.tryConsumeLlmCall()) {
+      if (!structuredCommand && !budget.tryConsumeLlmCall()) {
         log.warn("Chat skipped: LLM call budget exhausted before initial prompt");
         return ChatExecutionResult.failed("LLM call budget exhausted before initial prompt","llm_call_budget_exceeded");
       }
@@ -274,7 +279,14 @@ public class ChatExecutionService {
           eventPublisher.publish(eventFactory.toolFailed(callId, "materialReview", new ErrorInformation("MaterialReview", "Material review failed", "material_review_failed")));
           throw error;
         }
-      } else if (context.mode()==AgentRunContext.Mode.EXCLUSIVE && !beginnerReview && paperCommands != null && dev.mikoto2000.rei.paper.PaperCommandExecutor.accepts(promptText)) {
+      } else if (doctorCommand) {
+        String response = doctor.execute(promptText, execution);
+        execution.checkActive();
+        eventPublisher.publish(eventFactory.messageCompleted(UUID.randomUUID().toString(), "assistant", response));
+        if(chatMemory != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE)
+          chatMemory.add(context.conversationId(),java.util.List.of(new UserMessage(promptText),new org.springframework.ai.chat.messages.AssistantMessage(response)));
+        result = ChatRunResult.success(response);
+      } else if (context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand && paperCommands != null && dev.mikoto2000.rei.paper.PaperCommandExecutor.accepts(promptText)) {
         String callId = UUID.randomUUID().toString();
         eventPublisher.publish(eventFactory.toolStarted(callId, "paper", "paper command", "論文リサーチ"));
         try {
@@ -300,9 +312,9 @@ public class ChatExecutionService {
             skillRoutingContext,
             runCompletionTokens, usageAvailable, lastGenerationMetrics);
       }
-      while (!beginnerReview && result.status() == ChatRunStatus.SUCCESS && !interventions.finishIfEmpty()) {
+      while (!structuredCommand && result.status() == ChatRunStatus.SUCCESS && !interventions.finishIfEmpty()) {
         var guidance = execution.applyInterventions();
-        if (!beginnerReview && !budget.tryConsumeLlmCall()) { result = new ChatRunResult(budgetStopStatus(budget), ""); break; }
+        if (!structuredCommand && !budget.tryConsumeLlmCall()) { result = new ChatRunResult(budgetStopStatus(budget), ""); break; }
         result = executePrompt(guidance.stream().map(org.springframework.ai.chat.messages.Message::getText)
             .collect(java.util.stream.Collectors.joining("\n")), false, startedAtNanos, budget, execution, runId,
             skillRoutingContext, runCompletionTokens, usageAvailable, lastGenerationMetrics);
@@ -311,9 +323,9 @@ public class ChatExecutionService {
         execution.checkActive();
         appendConversationLog(context.conversationId(), "assistant", result.text());
         assistantMessage = result.text();
-        boolean consolidationSuggested = context.mode()==AgentRunContext.Mode.EXCLUSIVE && !beginnerReview && shouldSuggestConsolidation();
+        boolean consolidationSuggested = context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand && shouldSuggestConsolidation();
         execution.checkActive();
-        if(context.mode()==AgentRunContext.Mode.EXCLUSIVE && !beginnerReview)maybeRefreshTopicCandidates();
+        if(context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand)maybeRefreshTopicCandidates();
         execution.completeRun();
         turnStatus = ConversationTurnStore.Status.COMPLETED;
         GenerationMetrics metrics = lastGenerationMetrics.get();
@@ -350,8 +362,8 @@ public class ChatExecutionService {
           execution.close();
           try {turns.finish(context, execution.isCancelled() ? ConversationTurnStore.Status.CANCELLED : turnStatus, assistantMessage);}
           finally {if (checkpoints != null) checkpoints.finish(context, execution.isCancelled() ? "CANCELLED" : turnStatus.name());}
-          if (workContext != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !beginnerReview) workContext.afterTerminal(context);
-          if (autoSleep != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !beginnerReview) autoSleep.afterTerminal(context);
+          if (workContext != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand) workContext.afterTerminal(context);
+          if (autoSleep != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand) autoSleep.afterTerminal(context);
         } finally {
           try {
             if(beanFactory!=null && context.mode()!=AgentRunContext.Mode.EXCLUSIVE)

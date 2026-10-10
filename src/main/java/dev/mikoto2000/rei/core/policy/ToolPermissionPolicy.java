@@ -24,6 +24,9 @@ public class ToolPermissionPolicy {
   }
   /** Parallel authority uses known intrinsic behavior, never an administrator relabeling of arbitrary commands. */
   public static Set<ActionCapability> intrinsicCapabilities(String tool) {
+    if(Set.of("doctorConnectivity","doctorInference").contains(tool))return Set.of(ActionCapability.NETWORK_READ);
+    if(Set.of("doctorCodexVersion","doctorClaudeVersion").contains(tool))return Set.of(ActionCapability.EXECUTE);
+    if("doctorMicrophone".equals(tool))return Set.of(ActionCapability.EXECUTE,ActionCapability.EXTERNAL_SIDE_EFFECT);
     if("inspectDocumentRender".equals(tool))return Set.of(ActionCapability.READ);
     if("validateDocumentRender".equals(tool))return Set.of(ActionCapability.READ,ActionCapability.EXECUTE,ActionCapability.LOCAL_WRITE);
     if("inspectTextDocumentChangeSet".equals(tool))return Set.of(ActionCapability.READ);

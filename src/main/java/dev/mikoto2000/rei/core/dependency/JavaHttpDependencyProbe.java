@@ -12,6 +12,41 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe,AutoCloseabl
   @org.springframework.beans.factory.annotation.Autowired
   public void setPredicatesEnabled(@org.springframework.beans.factory.annotation.Value("${rei.predicates.enabled:false}") boolean enabled){predicatesEnabled=enabled;}
   private final HttpClient client=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).followRedirects(HttpClient.Redirect.NEVER).build();
+  public enum ConnectivityReason { RESPONSE, TIMEOUT, CONNECTION_FAILED, UNAVAILABLE }
+  public record Connectivity(ConnectivityReason reason, Integer httpStatus) {}
+  /** Same managed client/security boundary; no body, credentials or diagnostic exception text. */
+  public Connectivity connectivity(String url, Duration timeout, Runnable checkActive) {
+    new DependencySpec(DependencySpec.Kind.HTTP_STATUS, url, "200");
+    if (timeout == null || timeout.compareTo(Duration.ofMillis(100)) < 0 || timeout.compareTo(Duration.ofSeconds(30)) > 0)
+      throw new IllegalArgumentException("Connectivity timeout must be 100ms to 30s");
+    if (URI.create(url).getQuery() != null) throw new IllegalArgumentException("Diagnostic URL must not contain a query");
+    checkActive.run();
+    var request = HttpRequest.newBuilder(URI.create(url)).timeout(timeout).GET().build();
+    var pending = client.sendAsync(request, HttpResponse.BodyHandlers.discarding());
+    long deadline = System.nanoTime() + timeout.toNanos();
+    try {
+      while (true) {
+        checkActive.run();
+        long remaining = deadline - System.nanoTime();
+        if (remaining <= 0) return new Connectivity(ConnectivityReason.TIMEOUT, null);
+        try {
+          var response = pending.get(Math.min(remaining, TimeUnit.MILLISECONDS.toNanos(50)), TimeUnit.NANOSECONDS);
+          checkActive.run();
+          return new Connectivity(ConnectivityReason.RESPONSE, response.statusCode());
+        } catch (TimeoutException slice) { /* Recheck cancellation and the monotonic deadline. */ }
+      }
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt(); throw new CancellationException("Connectivity observation cancelled");
+    } catch (ExecutionException failure) {
+      ConnectivityReason reason = ConnectivityReason.UNAVAILABLE;
+      Throwable cause = failure;
+      for (int depth=0; cause != null && depth<8; depth++, cause=cause.getCause()) {
+        if (cause instanceof HttpTimeoutException) {reason=ConnectivityReason.TIMEOUT; break;}
+        if (cause instanceof java.net.ConnectException) reason=ConnectivityReason.CONNECTION_FAILED;
+      }
+      return new Connectivity(reason, null);
+    } finally { pending.cancel(true); }
+  }
   @Override public DependencyObservation probe(String id,String url,int expectedStatus) {
     new DependencySpec(DependencySpec.Kind.HTTP_STATUS,url,Integer.toString(expectedStatus));
     if(Thread.currentThread().isInterrupted())throw new CancellationException("HTTP observation cancelled");
