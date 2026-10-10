@@ -47,7 +47,7 @@ public final class StorageInventory {
             }
             String category = classify(relative);
             Long count = null;
-            if (file.toString().endsWith(".jsonl") || category.equals("sessions") || category.equals("turns")) {
+            if (!category.equals("migration-backups") && (file.toString().endsWith(".jsonl") || category.equals("sessions") || category.equals("turns"))) {
               if (attrs.size() > budget[0]) unknown.add("Content budget: " + relative);
               else {
                 budget[0] -= attrs.size();
@@ -81,6 +81,7 @@ public final class StorageInventory {
     return new Report(root, now, Map.copyOf(rows), List.copyOf(unknown), delta, rate, complete[0]);
   }
   private static String classify(String path) {
+    if (path.startsWith(".storage/backups/")) return "migration-backups";
     if (path.endsWith("sessions.json")) return "sessions";
     if (path.contains("state/turns/")) return "turns";
     if (path.endsWith("events/events.jsonl")) return "events";
