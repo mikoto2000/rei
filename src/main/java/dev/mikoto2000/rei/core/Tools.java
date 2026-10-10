@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -735,7 +736,7 @@ public class Tools {
         int errorsToReturn=Math.min(32-returnedErrors,scanResult.fileErrors().size());
         int omittedErrors=scanResult.fileErrors().size()-errorsToReturn;returnedErrors+=errorsToReturn;
         results.add(new GrepQueryResult(i, query.pattern(), bounded, null, scanResult.fileErrors().subList(0,errorsToReturn),truncated || omittedErrors>0,nextRead,omittedErrors));
-      } catch (IllegalArgumentException e) {
+      } catch (IllegalArgumentException | IOException e) {
         results.add(new GrepQueryResult(i, query.pattern(), List.of(), e.getMessage(), List.of()));
       }
     }
@@ -815,7 +816,10 @@ public class Tools {
     PathMatcher includeMatcher = globMatcher(query.includeGlob(), workingDirectory);
     PathMatcher excludeMatcher = globMatcher(query.excludeGlob(), workingDirectory);
 
-    List<String> candidates = snapshots.inventory(query.baseDir(),()->listFile(query.baseDir(),workingDirectory));
+    List<String> candidates = snapshots.inventory(
+        List.of(query.baseDir(), Objects.toString(query.includeGlob(), ""), Objects.toString(query.excludeGlob(), "")),
+        () -> listFile(query.baseDir(),workingDirectory).stream()
+            .filter(path -> matchesGlob(path, includeMatcher, excludeMatcher, workingDirectory)).toList());
     List<GrepMatch> matches = new ArrayList<>();
     List<GrepFileError> fileErrors = new ArrayList<>();
     boolean searchTruncated=false;

@@ -20,14 +20,18 @@ final class FileSnapshots {
   private final Map<Path,Snapshot> files = new LinkedHashMap<>();
   private final Reader reader;
   private int bytes;
-  private final Map<String,List<String>> inventories=new HashMap<>();
+  private final Map<List<String>,List<String>> inventories=new HashMap<>();
   @FunctionalInterface interface Inventory {List<String> list() throws IOException,InterruptedException;}
   synchronized List<String> inventory(String base,Inventory loader)throws IOException,InterruptedException {
-    var cached=inventories.get(base);if(cached!=null)return cached;
+    return inventory(List.of(base),loader);
+  }
+  synchronized List<String> inventory(List<String> key,Inventory loader)throws IOException,InterruptedException {
+    key=List.copyOf(key);
+    var cached=inventories.get(key);if(cached!=null)return cached;
     var paths=loader.list().stream().distinct().sorted().toList();
     if(paths.size()>MAX_FILES)throw new IOException("File inventory limit reached (1024); narrow baseDir/globs");
     if(paths.stream().anyMatch(path->path.length()>1024))throw new IOException("Inventory path limit reached (1024 characters)");
-    inventories.put(base,paths);return paths;
+    inventories.put(key,paths);return paths;
   }
   FileSnapshots(){this(path->{try(var in=Files.newInputStream(path,LinkOption.NOFOLLOW_LINKS)){return in.readNBytes(MAX_FILE_BYTES+1);}});}
   FileSnapshots(Reader reader){this.reader=reader;}

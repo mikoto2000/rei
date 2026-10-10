@@ -84,7 +84,24 @@ class FileOperationsOptimizationTest {
     Files.writeString(root.resolve("a.txt"),"");
     assertNotNull(tools().readMultiFile(List.of(new Tools.ReadFileRequest("a.txt",null,null)),root).getFirst().version());
     var tools=new Tools(){@Override List<String> listFile(String base,Path directory){return java.util.stream.IntStream.range(0,1025).mapToObj(i->"file"+i).toList();}};
-    assertThrows(java.io.IOException.class,()->tools.grepMultiQuery(List.of(query("x")),root));
+    assertTrue(tools.grepMultiQuery(List.of(query("x")),root).getFirst().error().contains("narrow baseDir/globs"));
+    var result=tools.searchAndRead(new Tools.SearchAndReadRequest(List.of(query("x")),0,1),root);
+    assertTrue(result.getFirst().error().contains("narrow baseDir/globs"));
+  }
+  @Test void globsNarrowInventoryBeforeLimitAndQueriesKeepSeparateInventories()throws Exception {
+    Files.writeString(root.resolve("a.txt"),"hit");
+    Files.writeString(root.resolve("b.java"),"hit");
+    var paths=new ArrayList<String>();paths.add("a.txt");paths.add("b.java");
+    for(int i=0;i<1024;i++)paths.add("other"+i+".log");
+    var tools=new Tools(){@Override List<String> listFile(String base,Path directory){return paths;}};
+    var txt=new Tools.GrepQuery("hit",".",false,true,false,false,0,0,null,true,"*.txt",null);
+    var java=new Tools.GrepQuery("hit",".",false,true,false,false,0,0,null,true,null,"*.log");
+    var results=tools.grepMultiQuery(List.of(query("hit"),txt,java),root);
+    assertNotNull(results.getFirst().error());
+    assertNull(results.get(1).error());assertEquals(List.of("a.txt"),results.get(1).matches().stream().map(Tools.GrepMatch::path).toList());
+    assertNull(results.get(2).error());assertEquals(2,results.get(2).matches().size());
+    var search=tools.searchAndRead(new Tools.SearchAndReadRequest(List.of(txt,java),0,2),root);
+    assertEquals(2,search.size());assertTrue(search.stream().allMatch(r->r.error()==null));
   }
   @Test void directoryLinksCannotAliasTheReadingBoundary()throws Exception {
     var directory=Files.createDirectory(root.resolve("real"));Files.writeString(directory.resolve("a.txt"),"secret");var link=root.resolve("alias");
