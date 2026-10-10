@@ -58,10 +58,18 @@ public final class SessionLifecycle {
         metadata = newMetadata(project, message, now);
         sessionId = metadata.sessionId();
       } else metadata = validate(sessionId, project.id()).touched(now);
-      var context = new AgentRunContext(UUID.randomUUID().toString(), sessionId, project.root(), project.id(), source, mode, voiceInput);
+      var context = new AgentRunContext(UUID.randomUUID().toString(), sessionId, project.root(), project.id(), source, mode, voiceInput,
+          metadata.voiceOnly() && !voiceInput ? dev.mikoto2000.rei.core.chat.ResponseStyle.NORMAL : metadata.responseStyle());
       repository.accept(metadata, () -> enqueue.accept(context));
       selected.accept(context);
       return context;
+    }
+  }
+  public SessionMetadata responseStyle(ProjectContext project,String sessionId,dev.mikoto2000.rei.core.chat.ResponseStyle style,boolean voiceOnly) {
+    java.util.Objects.requireNonNull(style);
+    synchronized(repository) {
+      var metadata=validate(sessionId,project.id()).withResponseStyle(style,voiceOnly,clock.instant());
+      repository.accept(metadata,()->{});return metadata;
     }
   }
   private SessionMetadata newMetadata(ProjectContext project, String title, java.time.Instant now) {

@@ -198,3 +198,7 @@ SSE bridge の破棄時には送信完了を最大 2 秒待機します。切断
 音声認識の CPU 比較と設定選定・遅延の測定範囲は [Phase 5](docs/voice-input-phase5.md) を参照してください。
 
 高度な音声機能の明示設定、呼びかけ・所有Runの停止・Windows内蔵TTS・再入力防止、およびGPU等の未対応範囲は [Phase 6](docs/voice-input-phase6.md) を参照してください。
+
+Session単位の会話スタイル、音声限定設定、実行能力・承認を維持する仕様は [Phase 7](docs/voice-input-phase7.md) を参照してください。
+
+音声入力・会話モードのPR一覧、利用手順、実測結果と未対応範囲は [実装記録](docs/voice-input-implementation-report.md) を参照してください。

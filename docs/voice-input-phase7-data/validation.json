@@ -1,0 +1,32 @@
+{
+  "fullRegression": {
+    "tests": 4335,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 1,
+    "elapsed": "12:30",
+    "success": true
+  },
+  "packageSuccess": true,
+  "relatedTests": 54,
+  "acceptance": {
+    "packagedApplication": true,
+    "realAgent": true,
+    "microphoneOpened": false,
+    "audioFilesCreated": false,
+    "nativeWorkers": 0,
+    "microphoneState": "OFF",
+    "allTurns": "COMPLETED",
+    "answers": {
+      "NORMAL_TEXT": "こんにちは！今日もよろしくお願いします。何かお手伝いできることがあれば、お気軽にどうぞ。",
+      "CONVERSATION_TEXT": "こんにちは！10時半を過ぎたところですね。今日の調子はいかがですか？",
+      "CONVERSATION_VOICE_ENVELOPE": "こんにちは！音声入力、ちゃんと届いていますよ。10時46分、今日もよろしくお願いします。"
+    },
+    "syntheticVoiceEnvelope": true,
+    "notNewMicrophoneAsrTest": true,
+    "processExited": true,
+    "stderrEmpty": true
+  },
+  "ci": "pending",
+  "mainIntegration": "pending"
+}
