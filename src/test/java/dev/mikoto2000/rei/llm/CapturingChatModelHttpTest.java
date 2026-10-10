@@ -24,6 +24,38 @@ class CapturingChatModelHttpTest {
   static final String RESPONSE=RequestCapturePhaseZeroTest.RESPONSE;
   static String event(String delta,String reason){return "data: {\"id\":\"chat\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"probe\",\"choices\":[{\"index\":0,\"delta\":"+delta+",\"finish_reason\":"+reason+"}]}\n\n";}
   static final String STREAM=event("{\"role\":\"assistant\",\"content\":\"ok\"}","null")+event("{}","\"stop\"")+"data: [DONE]\n\n";
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"false,false", "false,true", "true,false", "true,true"})
+  void legacyAdvisorExecutesToolsExactlyOnceWithCaptureOnOrOff(boolean capture, boolean streaming) throws Exception {
+    String toolResponse="{\"id\":\"chat\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"probe\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":null,\"tool_calls\":[{\"id\":\"tool-id\",\"type\":\"function\",\"function\":{\"name\":\"readFile\",\"arguments\":\"{}\"}}]},\"finish_reason\":\"tool_calls\"}]}";
+    String toolStream=event("{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"tool-id\",\"type\":\"function\",\"function\":{\"name\":\"readFile\",\"arguments\":\"{}\"}}]}","\"tool_calls\"")+"data: [DONE]\n\n";
+    try(var fixture=new Fixture((n,e)->n==1?(streaming?toolStream:toolResponse):(streaming?STREAM:RESPONSE))){
+      if(capture)fixture.activate();
+      var calls=new AtomicInteger();
+      var callback=new org.springframework.ai.tool.ToolCallback(){
+        public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition(){return org.springframework.ai.tool.definition.ToolDefinition.builder().name("readFile").description("read").inputSchema("{\"type\":\"object\",\"properties\":{}}").build();}
+        public String call(String input){calls.incrementAndGet();return "legacy-tool-result";}
+      };
+      var client=org.springframework.ai.chat.client.ChatClient.builder(fixture.model())
+          .defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultOptions(fixture.options("run-a").mutate())
+          .defaultTools(callback).build();
+      if(streaming)assertThat(client.prompt("work").stream().content().collectList().block(Duration.ofSeconds(10))).isNotEmpty();
+      else assertThat(client.prompt("work").call().content()).isNotBlank();
+      assertThat(calls).hasValue(1);assertThat(fixture.received).hasSize(2);
+      assertThat(new String(fixture.received.get(1),java.nio.charset.StandardCharsets.UTF_8)).contains("legacy-tool-result");
+      if(capture)fixture.assertMatches(2);else assertThat(fixture.store.sessions()).isEmpty();
+    }
+  }
+  @Test void captureTransportCreationFailureFallsBackToDelegate() throws Exception {
+    try(var fixture=new Fixture((n,e)->RESPONSE)){
+      fixture.activate();
+      var delegate=OpenAiChatModel.builder().options(fixture.options("run-a")).build();
+      var model=new CapturingChatModel(delegate,fixture.store,List.of(builder->{throw new IllegalStateException("fixture failure");}),
+          io.micrometer.observation.ObservationRegistry.NOOP,null);
+      assertThat(model.call(new Prompt("fallback",fixture.options("run-a"))).getResult().getOutput().getText()).isNotBlank();
+      assertThat(fixture.received).hasSize(1);assertThat(fixture.store.attempts("run-a")).isEmpty();
+    }
+  }
   @Test void successfulCaptureDoesNotLogRawSecret(org.springframework.boot.test.system.CapturedOutput output) throws Exception {
     try(var fixture=new Fixture((n,e)->RESPONSE)){
       fixture.activate();String secret="capture-private-sentinel-95378";
@@ -125,7 +157,7 @@ class CapturingChatModelHttpTest {
       .toolContext(Map.of(AgentRunContext.class.getName(),new AgentRunContext(run,"conversation-a",dir))).build();}
     CapturingChatModel model(){return model(0);}
     CapturingChatModel model(int retries){return new CapturingChatModel(OpenAiChatModel.builder().options(options("run-a").mutate().maxRetries(retries).build()).build(),store,
-      List.of(builder->builder.interceptor(new ChatStreamTimeoutInterceptor()).interceptor(new ShowUiSdkRequestInterceptor())),io.micrometer.observation.ObservationRegistry.NOOP,null,null);}
+      List.of(builder->builder.interceptor(new ChatStreamTimeoutInterceptor()).interceptor(new ShowUiSdkRequestInterceptor())),io.micrometer.observation.ObservationRegistry.NOOP,null);}
     void activate(){store.reserve("client","conversation-a");store.accept("client","conversation-a","submission-a","run-a");}
     void assertMatches(int count) throws Exception {assertThat(received).hasSize(count);var attempts=store.attempts("run-a");assertThat(attempts).hasSize(count);
       for(int i=0;i<count;i++){var a=attempts.get(i);var bytes=store.body(a.attemptId());assertThat(bytes).isEqualTo(received.get(i));assertThat(a.sha256()).isEqualTo(HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(received.get(i))));}}

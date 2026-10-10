@@ -17,11 +17,9 @@ final class CapturingChatModel implements ChatModel {
   private final List<OpenAiHttpClientBuilderCustomizer> customizers;
   private final io.micrometer.observation.ObservationRegistry observations;
   private final io.micrometer.core.instrument.MeterRegistry meters;
-  private final org.springframework.ai.model.tool.ToolCallingManager tools;
   CapturingChatModel(OpenAiChatModel delegate,CaptureStore store,List<OpenAiHttpClientBuilderCustomizer> customizers,
-      io.micrometer.observation.ObservationRegistry observations,io.micrometer.core.instrument.MeterRegistry meters,
-      org.springframework.ai.model.tool.ToolCallingManager tools){
-    this.delegate=delegate;this.store=store;this.customizers=List.copyOf(customizers);this.observations=observations;this.meters=meters;this.tools=tools;
+      io.micrometer.observation.ObservationRegistry observations,io.micrometer.core.instrument.MeterRegistry meters){
+    this.delegate=delegate;this.store=store;this.customizers=List.copyOf(customizers);this.observations=observations;this.meters=meters;
   }
   public ChatOptions getOptions(){return delegate.getOptions();}
   private CaptureStore.LogicalCall logical(Prompt prompt){
@@ -43,7 +41,7 @@ final class CapturingChatModel implements ChatModel {
         o.getMaxRetries(),o.getProxy(),o.getCustomHeaders(),observations,meters,configured);
     try{
       var builder=OpenAiChatModel.builder().options(o).openAiClient(client).openAiClientAsync(client.async()).observationRegistry(observations);
-      if(tools!=null)builder.toolCallingManager(tools);
+      // RunAwareToolCallingAdvisor or Rei's run loop owns tool execution, just as for the delegate.
       return new Owned(builder.build(),client);
     }catch(RuntimeException error){client.close();throw error;}
   }
