@@ -10,13 +10,21 @@ public interface TimingRecorder {
   enum Metric { FIRST_COMMUNICATION, FIRST_FRAMEWORK_CHUNK, FIRST_GENERATED_TOKEN, FIRST_GENERATION_TEXT, FIRST_VISIBLE_OUTPUT }
   record Span(String id,String parentId,String requestId,String attemptId,Category category,Status status,
       Instant startedAt,long startNanos,Long endNanos,Map<Metric,Long> milestones,
-      Long inputTokens,Long outputTokens,Long generatedTokens,Long generationNanos) {
+      Long inputTokens,Long outputTokens,Long generatedTokens,Long generationNanos,LlmObservation llm) {
     public Span {milestones=Map.copyOf(milestones);}
+    public Span(String id,String parentId,String requestId,String attemptId,Category category,Status status,
+        Instant startedAt,long startNanos,Long endNanos,Map<Metric,Long> milestones,
+        Long inputTokens,Long outputTokens,Long generatedTokens,Long generationNanos) {
+      this(id,parentId,requestId,attemptId,category,status,startedAt,startNanos,endNanos,milestones,inputTokens,outputTokens,generatedTokens,generationNanos,null);
+    }
     /** Only an explicit real generated count and matching measured/provider duration qualify. */
     public Double generationTps() {
       return generatedTokens==null||generationNanos==null||generationNanos<=0?null:generatedTokens/(generationNanos/1_000_000_000d);
     }
   }
+  record LlmObservation(String provider,String model,String feature,Long cachedInputTokens,PrefixDiagnostics.Snapshot prefix) {}
+  default void prompt(String runId,String spanId,String feature,org.springframework.ai.chat.prompt.Prompt prompt) {}
+  default void cacheUsage(String runId,String spanId,String provider,String model,Long cachedInputTokens) {}
   record Summary(long workNanos,long occupiedNanos,Map<Category,Long> occupancyNanos,
       long overlapNanos,long crossCategoryOverlapNanos,long unmeasuredNanos) {
     public Summary {occupancyNanos=Map.copyOf(occupancyNanos);}
@@ -38,3 +46,4 @@ public interface TimingRecorder {
   Optional<Run> latest(String projectId,String sessionId);
   Statistics statistics();
 }
+

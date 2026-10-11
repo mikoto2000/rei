@@ -19,16 +19,17 @@ public class TimingStore implements TimingRecorder {
   private static final class Entry {
     final String id,project,session;final Instant wall;final long start;
     Long end;Status status=Status.INCOMPLETE;boolean missing;
+    final PrefixDiagnostics prefix=new PrefixDiagnostics();
     final LinkedHashMap<String,Child> children=new LinkedHashMap<>();
     final EnumMap<Metric,Long> milestones=new EnumMap<>(Metric.class);
     Entry(String id,String project,String session,Instant wall,long start){this.id=id;this.project=project;this.session=session;this.wall=wall;this.start=start;}
   }
   private static final class Child {
     final String id,parent,request,attempt;final Category category;final Instant wall;final long start;
-    Long end;Status status=Status.INCOMPLETE;Long input,output,generated,generation;
+    Long end;Status status=Status.INCOMPLETE;Long input,output,generated,generation;LlmObservation llm;
     final EnumMap<Metric,Long> milestones=new EnumMap<>(Metric.class);
     Child(String id,String parent,String request,String attempt,Category category,Instant wall,long start){this.id=id;this.parent=parent;this.request=request;this.attempt=attempt;this.category=category;this.wall=wall;this.start=start;}
-    Span snapshot(){return new Span(id,parent,request,attempt,category,status,wall,start,end,milestones,input,output,generated,generation);}
+    Span snapshot(){return new Span(id,parent,request,attempt,category,status,wall,start,end,milestones,input,output,generated,generation,llm);}
   }
   @org.springframework.beans.factory.annotation.Autowired
   public TimingStore(Environment environment,Clock wall) {
@@ -102,6 +103,18 @@ public class TimingStore implements TimingRecorder {
     child.generated=valid(generated);child.generation=valid(generation);
     if(child.generated!=null&&child.output!=null&&child.generated>child.output){child.generated=null;entry.missing=true;}
   }
+  @Override public synchronized void prompt(String runId,String spanId,String feature,org.springframework.ai.chat.prompt.Prompt prompt) {
+    if(!enabled)return;purge(nanos.getAsLong());var entry=runs.get(runId);var child=entry==null?null:entry.children.get(spanId);
+    if(child==null||child.end!=null)return;
+    child.llm=new LlmObservation("UNKNOWN","UNKNOWN",safeLabel(feature),null,entry.prefix.observe(PrefixDiagnostics.sources(prompt)));
+  }
+  private static String safeLabel(String label){return label!=null&&label.matches("[A-Za-z0-9._:/-]{1,128}")?label:"UNKNOWN";}
+  @Override public synchronized void cacheUsage(String runId,String spanId,String provider,String model,Long cached) {
+    if(!enabled)return;purge(nanos.getAsLong());var entry=runs.get(runId);var child=entry==null?null:entry.children.get(spanId);
+    if(child==null)return;var old=child.llm;
+    child.llm=new LlmObservation(safeLabel(provider),safeLabel(model),old==null?"UNKNOWN":old.feature(),
+      new PromptCacheMetrics.Usage(child.input,cached).cached(),old==null?null:old.prefix());
+  }
   @Override public synchronized Optional<Run> snapshot(String projectId,String sessionId,String runId) {
     if(!enabled)return Optional.empty();long now=nanos.getAsLong();purge(now);var entry=runs.get(runId);
     return entry!=null&&Objects.equals(entry.project,projectId)&&Objects.equals(entry.session,sessionId)?Optional.of(snapshot(entry,now)):Optional.empty();
@@ -143,3 +156,4 @@ public class TimingStore implements TimingRecorder {
     return new Summary(work,occupied,occupancy,overlap,cross,Math.max(0,elapsed-occupied));
   }
 }
+
