@@ -15,6 +15,7 @@ public final class CredentialRedactor {
     String safe = QUOTED_SECRET.matcher(value).replaceAll("$1\"[REDACTED]\"");
     safe = ASSIGNMENT.matcher(safe).replaceAll("$1[REDACTED]");
     return safe.replaceAll("(?s)-----BEGIN (?:[A-Z ]+)?PRIVATE KEY-----.*?-----END (?:[A-Z ]+)?PRIVATE KEY-----", "[REDACTED]")
-        .replaceAll("\\bsk-[A-Za-z0-9_-]{16,}\\b", "[REDACTED]");
+        .replaceAll("\\bsk-[A-Za-z0-9_-]{16,}\\b", "[REDACTED]")
+        .replaceAll("\\bx(?:ox[baprs]|app)-[A-Za-z0-9-]+", "[REDACTED]");
   }
 }
