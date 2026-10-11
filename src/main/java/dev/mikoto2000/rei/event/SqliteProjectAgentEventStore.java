@@ -9,6 +9,11 @@ import dev.mikoto2000.rei.storage.*;
 
 /** Indexed individual events; project counters survive later logical deletion. */
 public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
+  @Override public Optional<AgentEvent> findEvent(String project,String id) {
+    return database.read(db->{try(var query=db.prepareStatement("SELECT record FROM agent_events WHERE project_id=? AND id=? LIMIT 1")) {
+      query.setString(1,scope(project));query.setString(2,id);try(var rows=query.executeQuery()){return rows.next()?Optional.of(json.readValue(rows.getString(1),AgentEvent.class)):Optional.empty();}
+    }});
+  }
   public static final int MAX_RECORD_BYTES=1024*1024;
   private static final long READ_BUDGET=16L*1024*1024;
   private final StorageDatabase database;

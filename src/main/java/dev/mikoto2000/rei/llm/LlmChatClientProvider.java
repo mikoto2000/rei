@@ -109,6 +109,9 @@ public class LlmChatClientProvider {
   private ObjectProvider<dev.mikoto2000.rei.memory.service.MemoryContextAdvisor> memoryContext;
   private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextAdvisor> workContext;
   private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextTools> workTools;
+  private ObjectProvider<dev.mikoto2000.rei.episode.EpisodeTools> episodeTools;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setEpisodeTools(ObjectProvider<dev.mikoto2000.rei.episode.EpisodeTools> tools){episodeTools=tools;}
   private ObjectProvider<dev.mikoto2000.rei.checkpoint.ResumeContextAdvisor> resumeContext;
   private ObjectProvider<dev.mikoto2000.rei.checkpoint.CheckpointTools> checkpointTools;
   @org.springframework.beans.factory.annotation.Autowired
@@ -251,6 +254,7 @@ public class LlmChatClientProvider {
     List<Object> toolObjects = new ArrayList<>();
     if(LlmFeature.CHAT.equals(feature)&&checkpointTools!=null)addIfAvailable(toolObjects,checkpointTools);
     if (LlmFeature.CHAT.equals(feature) && workTools != null) addIfAvailable(toolObjects, workTools);
+    if (LlmFeature.CHAT.equals(feature) && episodeTools != null) addIfAvailable(toolObjects, episodeTools);
     if (LlmFeature.CHAT.equals(feature) && paperTools != null) addIfAvailable(toolObjects, paperTools);
     if (LlmFeature.CHAT.equals(feature) && summaryTools != null) addIfAvailable(toolObjects, summaryTools);
     if (LlmFeature.CHAT.equals(feature) && activityTools != null) addIfAvailable(toolObjects, activityTools);

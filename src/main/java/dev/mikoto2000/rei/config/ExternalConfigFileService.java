@@ -392,6 +392,9 @@ public class ExternalConfigFileService {
             discovery:
               enabled: ${REI_TOPIC_GENERATOR_DISCOVERY_ENABLED:true}
           memory:
+            episodes:
+              enabled: ${REI_MEMORY_EPISODES_ENABLED:false}
+              dense-enabled: ${REI_MEMORY_EPISODES_DENSE_ENABLED:false}
             auto-sleep:
               enabled: ${REI_MEMORY_AUTO_SLEEP_ENABLED:false}
               minimum-idle: ${REI_MEMORY_AUTO_SLEEP_MINIMUM_IDLE:5m}

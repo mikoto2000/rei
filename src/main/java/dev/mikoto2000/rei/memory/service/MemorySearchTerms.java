@@ -3,9 +3,9 @@ package dev.mikoto2000.rei.memory.service;
 import java.util.*;
 
 /** Bound plain-text terms; Japanese text also contributes trigrams without needing a morphological engine. */
-final class MemorySearchTerms {
+public final class MemorySearchTerms {
   private MemorySearchTerms() { }
-  static List<String> of(String query) {
+  public static List<String> of(String query) {
     if(query==null) return List.of();
     var terms=new LinkedHashSet<String>();
     for(String term:query.toLowerCase(Locale.ROOT).split("[^\\p{L}\\p{N}_]+")) {
