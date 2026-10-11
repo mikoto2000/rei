@@ -4,13 +4,13 @@ Scope: unchanged legacy long-term memory retrieval versus episode lexical retrie
 
 |Question|Legacy candidates|Episode candidates|Legacy microseconds|Episode microseconds|
 |---|---:|---:|---:|---:|
-|以前 CLI を別プロセスにした理由は？|1|1|30851|95960|
-|その設計では何を代替案として検討した？|1|1|13095|5801|
-|以前の方針から何が変更された？|1|1|12118|5573|
-|その情報の原典は？|1|1|12345|4920|
-|昨日決めたことを教えて|1|1|9557|5061|
-|その機能は実装済み？ それとも提案だけ？|1|1|8961|3352|
-|先月どのような設計変更をした？|1|1|10091|5148|
+|以前 CLI を別プロセスにした理由は？|1|1|8076|3045|
+|その設計では何を代替案として検討した？|1|1|2968|1375|
+|以前の方針から何が変更された？|1|1|2432|910|
+|その情報の原典は？|1|1|2156|796|
+|昨日決めたことを教えて|1|1|2041|823|
+|その機能は実装済み？ それとも提案だけ？|1|1|2528|1115|
+|先月どのような設計変更をした？|1|1|2433|971|
 
 Answer accuracy, evidence match rate, stale-answer rate, unslept conversation success, actual model tokens and physical SQLite I/O: 未測定. Timings are single-run local observations, not a statistical benchmark.
 

@@ -108,3 +108,9 @@ Episode の dense 索引、完全な検索品質 fixture、HTTP 固有の操作�
 ## ローカル評価記録
 
 条件と実測値は [episode-memory-evaluation.md](episode-memory-evaluation.md) を参照してください。全体回帰テストの最終結果は PR に記録します。
+
+## 最終ローカル回帰結果
+
+2026-10-11、Java 25 / Windows、最終実装コミット a8a6d1b3 で `-Pfull test` を実行。Maven 終了コード0。Surefire 865 suite / 4,737 test、失敗0、エラー0、スキップ2。新規 Episode 34 test を含みます。live 接続テストは対象外です。Mockito 5.23.0 の javaagent を指定し、既存 atomic move のファイル操作も可能な通常権限環境で検証しました。ログはローカル `target/episode-final-full.log`、XML は `target/surefire-reports` です。
+
+途中の全体テストでは外部設定テンプレートの enabled 項目に1件失敗があり、テンプレートを修正して今回の全体テストを再実行しています。
