@@ -25,9 +25,8 @@ public class WebApiConfiguration {
       @org.springframework.beans.factory.annotation.Value("${rei.conversation.concurrent-enabled:false}") boolean enabled,
       @org.springframework.beans.factory.annotation.Value("${rei.task-manager.enabled:false}") boolean tasksEnabled,
       @org.springframework.beans.factory.annotation.Value("${rei.today.enabled:false}") boolean todayEnabled,
-      @org.springframework.beans.factory.annotation.Value("${rei.slack.enabled:false}") boolean slackEnabled,
-      @org.springframework.beans.factory.annotation.Value("${rei.backend-mode:false}") boolean backendMode) {
-    return new RunRegistry(clock,enabled||tasksEnabled||todayEnabled||slackEnabled&&backendMode?source.getObject():null);
+      @org.springframework.beans.factory.annotation.Value("${rei.slack.enabled:false}") boolean slackEnabled) {
+    return new RunRegistry(clock,enabled||tasksEnabled||todayEnabled||slackEnabled?source.getObject():null);
   }
   @Bean dev.mikoto2000.rei.application.project.ProjectQueryService webProjectQueryService(ProjectRegistry projects) {
     return new dev.mikoto2000.rei.application.project.ProjectQueryService(projects);

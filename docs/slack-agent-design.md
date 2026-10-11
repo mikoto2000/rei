@@ -28,6 +28,14 @@ Before implementation the task process was checked for token availability (boole
 
 ## Review decisions
 
+- Shell-mode follow-up TDD: enabled Slack connection, headless Run beans and external Tool binding
+  failed in Shell mode (2 failures and 1 error: Red). Web-enabled Slack-only Run persistence also
+  failed after registry restart (RunNotFound: Red). Remove backend-mode admission gates from Slack
+  and its external tools, and make Slack-enabled Web Run registries durable in either mode (12
+  focused tests: Green). Refactor removes unused backend constructor/property parameters. Shell
+  wiring is tested without network startup; the existing per-data-directory lock remains unchanged.
+  The backend flag now only controls headless residence versus the interactive Shell.
+
 - Receipt-suppression follow-up TDD: real envelope/runtime/outbox/request-ledger tests reproduced
   a configured Bot User event without bot_id falling into human admission (8 tests, 1 failure: Red).
   Classify Bot IDs, bot_message subtype, configured Bot Users and self before human admission;
