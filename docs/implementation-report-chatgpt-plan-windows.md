@@ -4,7 +4,7 @@
 
 ## 実装と再利用
 
-WindowsPlanAppServerLauncherがWindows向けの起動、固定バージョン検査、限定環境、専用home/空workspace、MXC設定、所有プロセス停止を担当します。PlanAppServerPropertiesにexecution-modeを追加し、Spring設定bindingの既定をwindowsにしました。実exeにはdrive絶対パスを要求し、npm/cmd wrapperや未対応modeを拒否します。既存4引数のprogrammatic constructorは従来のWSL指定として維持し、設定YAMLのWSL利用には明示modeを追加します。
+WindowsPlanAppServerLauncherがWindows向けの起動、固定バージョン検査、限定環境、専用home/空workspace、MXC設定、所有プロセス停止を担当します。RPCと独立した起動時からのnative process期限（最大125秒）も設け、stdinの書込待ちでも所有プロセスを終了させます。正常終了時は期限タスクを取消します。PlanAppServerPropertiesにexecution-modeを追加し、Spring設定bindingの既定をwindowsにしました。実exeにはdrive絶対パスを要求し、npm/cmd wrapperや未対応modeを拒否します。既存4引数のprogrammatic constructorは従来のWSL指定として維持し、設定YAMLのWSL利用には明示modeを追加します。
 
 両launcherのbounded stdio、queue/出力上限、期限、プロセス終了はAppServerProcessSessionへ共通化しました。PlanAppServerRpcはWindows 0.162.1 / Linux 0.154.0の実schemaを固定し、期待するOS/versionを各launcherから受けて照合します。Windows以外や別バージョンではTurn前に拒否します。
 
@@ -16,9 +16,9 @@ Phase 4の共通backend/own OAuth、資料snapshot、Project/Session/Run、exact
 
 MXCの内部ファイル読取helperにはSystemDriveが必要でした。SystemRoot/SystemDrive/ProgramFiles/ProgramDataなど非秘密のplatform環境だけを明示して渡し、HOME/USERPROFILE/APPDATA/LOCALAPPDATA/TEMP/TMP/CODEX_HOMEは専用homeへ向けます。PATH/ComSpecはSystem32の固定値です。own OAuth tokenはapp-server子環境だけに渡し、sandbox環境の固定include_only allowlistから除外します。親のAPIキー・proxy・通常home・保存済みCLI tokenは継承しません。
 
-root deny/minimal read/workspace read/network falseの名前付きprofileと、正確な起動binaryの追加readだけを使用します。MXCの必要OS/platform directoriesは読取可能ですが、実Projectは直接公開せず、guard済みsnapshotだけをdynamic toolが返します。shell、編集、Web検索、MCP、agents等を無効化し、未許可要求には停止確認後に拒否応答を返します。設定digestにはWindows実行方式・実exe・MXC/環境設定を含め、承認を再評価します。
+root deny/minimal read/workspace read/network falseの名前付きprofileと、正確な起動binaryの追加readだけを使用します。MXCの必要OS/platform directoriesは読取可能ですが、実Projectは直接公開せず、guard済みsnapshotだけをdynamic toolが返します。shell、編集、Web検索、MCP、agents、plugin/remote catalog同期・skill依存自動install等を無効化し、未許可要求には停止確認後に拒否応答を返します。設定digestにはWindows実行方式・実exe・MXC/環境設定を含め、承認を再評価します。
 
-MXC終了直後はdirectory handle解放が遅れるため、walkを閉じてから専用homeだけを削除し、最大2秒のbounded retryを行います。終了処理は起動したProcessとその子だけを対象にします。
+MXC終了直後はdirectory handle解放が遅れるため、walkを閉じてから専用homeだけを削除し、最大2秒のbounded retryを行います。終了処理は起動したProcessとその子だけを対象にします。stdin終了前に子のPID/開始時刻を捕捉し、親終了後も同じ開始時刻の所有子だけを停止・待機します。
 
 ## TDD・検証
 
@@ -26,7 +26,8 @@ MXC終了直後はdirectory handle解放が遅れるため、walkを閉じてか
 - 任意の認証不要実プロセステストでnative initialize、限定Thread作成、cwd/provider/profile、暗黙AGENTSなし、プロセス停止と専用home削除を確認しました。
 - 診断fixtureでWeb検索が提示されるREDを発見し、Windowsセクションをglobal設定の後ろへ置いて修正しました。最終提示ツールはrequest_user_inputとrei_read_sourceのみで、request_user_inputは共通adapterが拒否します。
 - [Windows診断](probes/codex_app_server_windows.py)で許可資料read成功、外部read拒否、write拒否、socket拒否（Windows error 10013）を実測しました。診断だけはPython runtimeの追加readを許可します。dummy bearer tokenの受け渡しもローカルHTTP fixtureで照合し、fixtureは推論を拒否します。
-- 関連83件、failure/error/skip 0。追加は設定binding/直接起動環境3件、Windows handshake/reject2件、任意の実プロセス1件です。全回帰・CI・Gitの最終結果はignored .worktrees/chatgpt-plan-reports/windows.jsonへ保存します。
+- 無RPCの実プロセスが期限後も残るREDを確認し、所有プロセスのwatchdog追加後に期限停止・片付けを検証しました。
+- 関連84件、failure/error/skip 0。追加は設定binding/直接起動環境3件、Windows handshake/reject2件、任意の実プロセス/無RPC期限停止2件です。全回帰・CI・Gitの最終結果はignored .worktrees/chatgpt-plan-reports/windows.jsonへ保存します。
 
 通常CIはmock/fixtureを使い、REI_TEST_WINDOWS_CODEXを指定した場合だけ実MXC起動テストを実行します。実OAuth/実モデル推論は行っていません。自然言語の真偽・任意自由文の完了は保証しません。利用方法・WSLからの移行は[ガイド](chatgpt-plan-subagents.md)を参照してください。
 

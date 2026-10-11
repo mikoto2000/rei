@@ -24,5 +24,19 @@ final class AppServerProcessSession implements PlanAppServerRpc.Session {
     public void send(String json){try{writer.write(json);writer.newLine();writer.flush();}catch(IOException e){throw ChatGptException.of(TRANSPORT);}}
     long pid(){return process.pid();}
     public String poll(Duration timeout){try{Object line=lines.poll(timeout.toNanos(),TimeUnit.NANOSECONDS);return line==null?"":line==EOF?null:(String)line;}catch(InterruptedException e){Thread.currentThread().interrupt();throw ChatGptException.of(CANCELLED);}}
-    public void close(){boolean interrupted=Thread.interrupted();try{writer.close();if(!process.waitFor(500,TimeUnit.MILLISECONDS)){terminate.run();if(!process.waitFor(300,TimeUnit.MILLISECONDS)){kill.run();process.descendants().forEach(p->p.destroyForcibly());process.destroyForcibly();process.waitFor(500,TimeUnit.MILLISECONDS);}}}catch(InterruptedException e){interrupted=true;kill.run();process.destroyForcibly();}catch(Exception ignored){kill.run();process.destroyForcibly();}finally{cleanup.run();if(interrupted)Thread.currentThread().interrupt();}}
+    public void close(){
+      boolean interrupted=Thread.interrupted();
+      // Retain ownership before stdin shutdown can orphan a native helper.
+      var owned=new java.util.HashMap<ProcessHandle,java.util.Optional<java.time.Instant>>();
+      process.descendants().forEach(p->owned.put(p,p.info().startInstant()));
+      try{writer.close();if(!process.waitFor(500,TimeUnit.MILLISECONDS)){terminate.run();if(!process.waitFor(300,TimeUnit.MILLISECONDS)){kill.run();process.descendants().forEach(p->p.destroyForcibly());process.destroyForcibly();process.waitFor(500,TimeUnit.MILLISECONDS);}}}
+      catch(InterruptedException e){interrupted=true;kill.run();process.destroyForcibly();}
+      catch(Exception ignored){kill.run();process.destroyForcibly();}
+      finally{
+        owned.forEach((p,started)->{if(p.isAlive()&&started.isPresent()&&started.equals(p.info().startInstant()))p.destroyForcibly();});
+        try{CompletableFuture.allOf(owned.keySet().stream().filter(ProcessHandle::isAlive).map(ProcessHandle::onExit).toArray(CompletableFuture[]::new)).get(500,TimeUnit.MILLISECONDS);}
+        catch(InterruptedException e){interrupted=true;}catch(Exception ignored){}
+        cleanup.run();if(interrupted)Thread.currentThread().interrupt();
+      }
+    }
   }

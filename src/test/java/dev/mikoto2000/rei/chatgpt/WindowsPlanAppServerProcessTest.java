@@ -14,6 +14,18 @@ import org.junit.jupiter.api.io.TempDir;
 class WindowsPlanAppServerProcessTest {
   @TempDir Path root;
   @Test @EnabledIfEnvironmentVariable(named="REI_TEST_WINDOWS_CODEX",matches="(?i)[A-Z]:.+")
+  void nativeProcessHasDeadlineEvenWhenNoRpcIsSent() throws Exception {
+    var launcher=new WindowsPlanAppServerLauncher(new PlanAppServerProperties(true,root,null,System.getenv("REI_TEST_WINDOWS_CODEX"),"windows"));
+    var token=new TokenSet("fixture","fixture","fixture",null,"dummy-no-inference",null,Set.of(),Instant.now().plusSeconds(60).getEpochSecond());
+    var started=launcher.start(token,Duration.ofSeconds(1),()->false);
+    long pid=((AppServerProcessSession)started.session()).pid();
+    try(var session=started.session()) {
+      ProcessHandle.of(pid).orElseThrow().onExit().get(4,java.util.concurrent.TimeUnit.SECONDS);
+      assertFalse(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false));
+    }
+    try(var homes=Files.list(root)){assertEquals(0,homes.count());}
+  }
+  @Test @EnabledIfEnvironmentVariable(named="REI_TEST_WINDOWS_CODEX",matches="(?i)[A-Z]:.+")
   void startsNativeRestrictedThreadThenDeletesOwnHome() throws Exception {
     var launcher=new WindowsPlanAppServerLauncher(new PlanAppServerProperties(true,root,null,System.getenv("REI_TEST_WINDOWS_CODEX"),"windows"));
     var token=new TokenSet("fixture","fixture","fixture",null,"dummy-no-inference",null,Set.of(),Instant.now().plusSeconds(60).getEpochSecond());

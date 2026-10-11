@@ -41,6 +41,7 @@ class WindowsPlanAppServerLauncherTest {
     assertTrue(config.contains("sandbox = \"mxc\""));
     assertTrue(config.indexOf("web_search = \"disabled\"")<config.indexOf("[windows]"));
     assertTrue(config.contains("shell_tool = false"));
+    assertTrue(config.contains("plugins = false"));assertTrue(config.contains("remote_plugin = false"));
     assertTrue(config.contains("include_only"));
     assertFalse(config.contains("selected-token"));
     assertEquals("0.162.1",launcher.version());assertEquals("windows",launcher.platform());

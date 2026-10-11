@@ -24,6 +24,9 @@ version = subprocess.check_output([str(exe),'--version'], env=env, text=True, ti
 assert version.strip() == 'codex-cli 0.162.1'
 source = (root/'src/main/java/dev/mikoto2000/rei/chatgpt/WslPlanAppServerLauncher.java').read_text()
 config = '\n'.join(line.strip() for line in source.split('return """',1)[1].split('""";',1)[0].splitlines())
+windows_source = (root/'src/main/java/dev/mikoto2000/rei/chatgpt/WindowsPlanAppServerLauncher.java').read_text()
+disabled = '\n'.join(line.strip() for line in windows_source.split('DISABLED_PLUGINS = """',1)[1].split('""";',1)[0].splitlines())+'\n'
+config = config.replace('[permissions.rei-read.filesystem]',disabled+'[permissions.rei-read.filesystem]')
 config = config+'\n[windows]\nsandbox = "mxc"\n'
 config = config.replace('[permissions.rei-read.network]',json.dumps(exe.as_posix())+' = "read"\n[permissions.rei-read.network]')
 config = config.replace('inherit = "none"','inherit = "all"\ninclude_only = '+json.dumps(platform_keys+['PATH','ComSpec','TEMP','TMP','USERPROFILE','LOCALAPPDATA','APPDATA']))

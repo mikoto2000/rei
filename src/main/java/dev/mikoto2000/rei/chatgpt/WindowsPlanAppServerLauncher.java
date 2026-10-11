@@ -10,6 +10,17 @@ import java.util.function.BooleanSupplier;
 
 /** Explicit MXC, no WSL/legacy fallback, selected own OAuth only in the server environment. */
 public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.Launcher {
+  private static final String DISABLED_PLUGINS = """
+      plugins = false
+      remote_plugin = false
+      plugin_sharing = false
+      recommended_plugins = false
+      skip_host_skill_discovery = true
+      skill_mcp_dependency_install = false
+      skill_search = false
+      """;
+  private static final java.util.concurrent.ScheduledThreadPoolExecutor DEADLINES=new java.util.concurrent.ScheduledThreadPoolExecutor(1,r->{var thread=new Thread(r,"rei-native-app-server-deadline");thread.setDaemon(true);return thread;});
+  static {DEADLINES.setRemoveOnCancelPolicy(true);}
   private static final List<String> PLATFORM=List.of("SystemRoot","SystemDrive","WINDIR","ProgramFiles","ProgramFiles(x86)","ProgramW6432","ProgramData","ALLUSERSPROFILE");
   private final PlanAppServerProperties settings;
   public WindowsPlanAppServerLauncher(PlanAppServerProperties settings){this.settings=settings;}
@@ -18,6 +29,7 @@ public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.L
   public String authority(){return dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256(("windows|"+settings.executable()+"|"+configuration()).getBytes(StandardCharsets.UTF_8));}
   public PlanAppServerClient.Started start(TokenSet tokens,Duration timeout,BooleanSupplier stop) {
     if(!settings.enabled()||!settings.executionMode().equals("windows")||!System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win"))throw ChatGptException.of(ROUTE_UNAVAILABLE);
+    long deadline=System.nanoTime()+Math.min(timeout.toNanos(),Duration.ofSeconds(125).toNanos());
     Path home=null;
     try {
       if(!Files.isRegularFile(Path.of(settings.executable())))throw ChatGptException.of(ROUTE_UNAVAILABLE);
@@ -34,6 +46,8 @@ public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.L
       } finally {probe.destroyForcibly();}
       if(stop.getAsBoolean())throw ChatGptException.of(CANCELLED);
       var child=process(home,cwd,tokens.accessToken(),List.of("app-server","--listen","stdio://")).start();
+      var expiry=DEADLINES.schedule(()->{if(child.isAlive()){child.descendants().forEach(ProcessHandle::destroyForcibly);child.destroyForcibly();}},Math.max(1,deadline-System.nanoTime()),TimeUnit.NANOSECONDS);
+      child.onExit().thenRun(()->expiry.cancel(false));
       Path ownedHome=home;
       return new PlanAppServerClient.Started(new AppServerProcessSession(child,
           ()->{child.descendants().forEach(ProcessHandle::destroy);child.destroy();},
@@ -55,6 +69,7 @@ public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.L
   String configuration() {
     String publicKeys="\"SystemRoot\",\"SystemDrive\",\"WINDIR\",\"ProgramFiles\",\"ProgramFiles(x86)\",\"ProgramW6432\",\"ProgramData\",\"ALLUSERSPROFILE\",\"PATH\",\"ComSpec\",\"TEMP\",\"TMP\",\"USERPROFILE\",\"LOCALAPPDATA\",\"APPDATA\"";
     return WslPlanAppServerLauncher.configuration()
+        .replace("[permissions.rei-read.filesystem]",DISABLED_PLUGINS+"[permissions.rei-read.filesystem]")
         .replace("[permissions.rei-read.network]",quote(settings.executable().replace('\\','/'))+" = \"read\"\n[permissions.rei-read.network]")
         .replace("inherit = \"none\"","inherit = \"all\"\ninclude_only = ["+publicKeys+"]")+"\n[windows]\nsandbox = \"mxc\"\n";
   }
