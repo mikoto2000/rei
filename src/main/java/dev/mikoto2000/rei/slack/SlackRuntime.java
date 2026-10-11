@@ -72,8 +72,19 @@ public final class SlackRuntime {
     var accepted=sessions.submit(project,binding.session(),text,AgentRunContext.RequestSource.WEB,context->{
       if(!store.prepare(m,context.runId(),binding))throw new IllegalStateException("Slack receipt already dispatched");
       registry.register(context);
-      reply(context.runId()+":accepted",m,"受付しました。Run: "+context.runId());
-      router.submit(context,text,work->runs.execute(context,work));
+      try {
+        reply(context.runId()+":accepted",m,"受付しました。Run: "+context.runId());
+        router.submit(context,text,work->runs.execute(context,work));
+      }catch(ProjectRunQueue.CapacityExceededException rejected) {
+        // Definitive rejection: only the existing Run lifecycle executes, with no chat/tool work.
+        runs.execute(context,()->{throw new IllegalStateException("Run admission capacity reached");});
+      }catch(RuntimeException uncertain) {
+        if(!router.containsRun(context.projectId(),context.runId())) {
+          runs.execute(context,()->runs.finishMissingTerminal(context,RunStatus.UNKNOWN));
+          store.stateRun(context.runId(),"UNKNOWN");
+        }
+        throw uncertain;
+      }
     });
     store.activateRun(accepted.runId());
   }
@@ -84,7 +95,7 @@ public final class SlackRuntime {
     if(latest.isEmpty()){reply(m.key()+":control",m,"このスレッドには Run がありません。");return;}
     var receipt=latest.get();var run=runs.get(receipt.run());
     if(text.equals("/rei-status")) {
-      String status="WAITING_APPROVAL".equals(receipt.state())?"承認待ち":"CANCEL_REQUESTED".equals(receipt.state())?"キャンセル受付（停止確認待ち）":run.status().name();
+      String status=switch(receipt.state()){case "WAITING_APPROVAL" -> "承認待ち";case "CANCEL_REQUESTED" -> "キャンセル受付（停止確認待ち）";case "UNKNOWN" -> "結果不明";default -> run.status().name();};
       reply(m.key()+":control",m,"Run: "+receipt.run()+"\n状態: "+status);return;
     }
     if(run.status().isTerminal()){reply(m.key()+":control",m,"Run は終了済みです。");return;}

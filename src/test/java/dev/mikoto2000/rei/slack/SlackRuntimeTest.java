@@ -110,4 +110,22 @@ class SlackRuntimeTest {
     assertEquals(1,store.replies().stream().filter(r->r.text().contains("final\nanswer")).count());
     runtime().tick();assertEquals(1,store.replies().stream().filter(r->r.text().contains("final\nanswer")).count());
   }
+  @Test void capacityRejectionReportsFailureWithoutExecutingOrLeavingAnActiveReceipt() {
+    doThrow(new ProjectRunQueue.CapacityExceededException()).when(router).submit(any(AgentRunContext.class),anyString(),any());
+    var runtime=runtime();var m=m("1",null,"hello");runtime.accept(m);runtime.tick();
+    var receipt=store.latest(m).orElseThrow();assertEquals(RunStatus.FAILED,registry.get(receipt.run()).status());
+    assertEquals("FAILED",receipt.state());assertTrue(store.active().isEmpty());
+    assertTrue(store.replies().stream().anyMatch(r->r.text().contains("失敗")));runtime.tick();
+    verify(router,times(1)).submit(any(AgentRunContext.class),anyString(),any());
+  }
+  @Test void ambiguousAdmissionWithoutAQueueSlotIsFencedAndDoesNotRemainActiveForever() {
+    doThrow(new IllegalStateException("unsafe diagnostics")).when(router).submit(any(AgentRunContext.class),anyString(),any());
+    var runtime=runtime();var m=m("1",null,"hello");runtime.accept(m);runtime.tick();
+    assertEquals("UNKNOWN",store.latest(m).orElseThrow().state());assertTrue(store.active().isEmpty());
+    assertEquals(RunStatus.UNKNOWN,registry.get(store.latest(m).orElseThrow().run()).status());
+    assertTrue(store.replies().stream().noneMatch(r->r.text().contains("unsafe diagnostics")));runtime.tick();
+    runtime.accept(m("2","1","rei status"));runtime.tick();
+    assertTrue(store.replies().stream().anyMatch(r->r.text().contains("状態: 結果不明")));
+    verify(router,times(1)).submit(any(AgentRunContext.class),anyString(),any());
+  }
 }

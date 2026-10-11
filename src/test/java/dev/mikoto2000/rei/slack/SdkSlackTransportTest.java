@@ -30,8 +30,10 @@ class SdkSlackTransportTest {
   }
   @Test void http429HonorsRetryAfter() throws Exception {
     var methods=mock(MethodsClient.class);
-    var response=new okhttp3.Response.Builder().request(new okhttp3.Request.Builder().url("https://slack.com/api/chat.postMessage").build()).protocol(okhttp3.Protocol.HTTP_1_1).code(429).message("rate limited").header("Retry-After","7").build();
+    for(String delay:java.util.List.of("7","7200")) {
+    var response=new okhttp3.Response.Builder().request(new okhttp3.Request.Builder().url("https://slack.com/api/chat.postMessage").build()).protocol(okhttp3.Protocol.HTTP_1_1).code(429).message("rate limited").header("Retry-After",delay).build();
     when(methods.chatPostMessage(any(ChatPostMessageRequest.class))).thenThrow(new com.slack.api.methods.SlackApiException(response,"{}"));
-    var result=new SdkSlackTransport(methods,"T").send(new SlackStore.Outgoing("id","T","D","1.0","answer"));assertEquals("RETRY",result.state());assertEquals(7,result.retryAfterSeconds());
+    var result=new SdkSlackTransport(methods,"T").send(new SlackStore.Outgoing("id","T","D","1.0","answer"));assertEquals("RETRY",result.state());assertEquals(Integer.parseInt(delay),result.retryAfterSeconds());
+    }
   }
 }

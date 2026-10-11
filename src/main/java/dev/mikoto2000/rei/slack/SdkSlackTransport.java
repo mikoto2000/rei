@@ -24,5 +24,5 @@ final class SdkSlackTransport implements SlackTransport {
       return Delivery.unknown();
     }catch(Exception error){return Delivery.unknown();}
   }
-  private static int seconds(String raw){try{return Math.max(1,Math.min(3600,Integer.parseInt(raw)));}catch(Exception ignored){return 60;}}
+  private static int seconds(String raw){try{return Math.max(1,Integer.parseInt(raw));}catch(Exception ignored){return 60;}}
 }
