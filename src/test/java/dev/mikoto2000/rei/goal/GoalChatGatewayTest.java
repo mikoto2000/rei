@@ -32,6 +32,7 @@ class GoalChatGatewayTest {
   dev.mikoto2000.rei.application.run.RunService tracking;
   dev.mikoto2000.rei.application.run.RunRegistry registry;
   @AfterEach void closeTracking(){if(tracking!=null)tracking.close();}
+  @Test void queuedGoalNeverAttachesExternalParentBeforeActualChatStarts(){trackRuns();var continuation=mock(RunContinuation.class);gateway.setContinuations(continuation);router.submitOperation(new AgentRunContext("block","other",dir,project),()->{},Runnable::run);var running=loop.run(project,goal.id());verify(continuation,never()).attachParent(any(),any(),any());assertTrue(tracking.cancel(running.currentRunId()).accepted());jobs.remove().run();verifyNoInteractions(chat);assertEquals("PAUSED",goals.get(project,goal.id()).status());}
   @Test void waitingRetainsGoalClaimAndOriginalReservationUntilContinuationCompletes() throws Exception {
     trackRuns();var continuation=mock(RunContinuation.class);gateway.setContinuations(continuation);
     var callback=new java.util.concurrent.atomic.AtomicReference<java.util.function.Consumer<ChatExecutionResult>>();

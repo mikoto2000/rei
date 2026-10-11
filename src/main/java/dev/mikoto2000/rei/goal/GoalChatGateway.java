@@ -62,8 +62,6 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
     GoalRepairBudget slice=goal.completion()!=null&&!repairing&&goal.attempts()<goal.maxRuns()
         ?new GoalRepairBudget(parentBudget,repairReserveCalls):null;
     dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation=slice==null?parentBudget:slice;
-    if(continuations!=null)continuations.attachParent(owner,reservation,result->completed.accept(new GoalLoopService.Outcome(result,
-        slice!=null&&slice.boundaryReached()&&result.stopCode().equals("llm_call_budget_exceeded")?"repair_reserve_reached":result.stopCode())));
     boolean registered=false;
     try {if(runRegistry!=null) {
       runRegistry.register(owner);
@@ -97,6 +95,8 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
                   +"Inspect current files and saved effects before mutations. Keep human requirements and exact test command fixed. "
                   +"Do not repeat an effect with an unknown outcome or apply a human-only repair without permission.";
             }
+            if(continuations!=null)continuations.attachParent(owner,reservation,result->completed.accept(new GoalLoopService.Outcome(result,
+                slice!=null&&slice.boundaryReached()&&result.stopCode().equals("llm_call_budget_exceeded")?"repair_reserve_reached":result.stopCode())));
             var result=chat.execute(owner,prompt,new UserInterventionQueue(),reservation);
             String stop=slice!=null&&slice.boundaryReached()&&result.stopCode().equals("llm_call_budget_exceeded")
                 ?"repair_reserve_reached":result.stopCode();

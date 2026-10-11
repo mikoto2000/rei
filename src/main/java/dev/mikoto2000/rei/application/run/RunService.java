@@ -62,6 +62,7 @@ public class RunService implements AutoCloseable {
     synchronized (monitor()) {
       purgeExpired();
       var current = registry.get(runId);
+      if(current.status()==RunStatus.WAITING&&!registry.claimWaiting(current.context()))return new CancellationResult(false,current);
       if (!registry.transition(runId, RunStatus.CANCELLED, null)) return new CancellationResult(false, current);
       if (current.status() == RunStatus.QUEUED && cancelQueued.test(runId)) {
         cancellation.forgetPendingCancellation(runId);
