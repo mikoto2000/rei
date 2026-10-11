@@ -64,4 +64,14 @@ public final class ChatSubmitService {
       }
     });
   }
-}
+  /** Authenticated adapter context; fixed READ_ONLY and no shell selection side effects. */
+  public AgentRunContext submitMcp(String message,String projectId,String sessionId,dev.mikoto2000.rei.mcp.McpAdmission admission) {
+    if(!concurrentEnabled)throw new IllegalArgumentException("Concurrent conversations are disabled");
+    var project=projects.resolveById(projectId).orElseThrow(()->new ResourceNotFoundException("Project"));
+    return lifecycle.submit(project,sessionId,message,AgentRunContext.RequestSource.MCP,AgentRunContext.Mode.READ_ONLY,
+        false,null,null,admission,context->{
+          sessions.remember(context.conversationId(),project.id());
+          try { runs.register(context);dispatch.accept(context,message); }
+          catch(RuntimeException|Error error){runs.forget(context.runId());sessions.forget(context.conversationId());throw error;}
+        });
+  }}

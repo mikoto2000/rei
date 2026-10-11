@@ -33,6 +33,17 @@ spring:
       embedding: openai
       image: openai
     mcp:
+      server:
+        enabled: ${rei.mcp-server.enabled:false}
+        protocol: STREAMABLE
+        type: SYNC
+        tool-callback-converter: false
+        annotation-scanner:
+          enabled: false
+        capabilities:
+          resource: false
+          prompt: false
+          completion: false
       client:
         enabled: ${REI_MCP_ENABLED:false}
         type: SYNC
@@ -58,6 +69,13 @@ management:
       show-details: never
       show-components: never
 rei:
+  mcp-server:
+    enabled: ${REI_MCP_SERVER_ENABLED:false}
+    port: ${REI_MCP_SERVER_PORT:8091}
+    allowed-projects: ${REI_MCP_SERVER_ALLOWED_PROJECTS:}
+    receipt-retention-days: ${REI_MCP_RECEIPT_RETENTION_DAYS:90}
+    result-retention-days: ${REI_MCP_RESULT_RETENTION_DAYS:30}
+    audit-retention-days: ${REI_MCP_AUDIT_RETENTION_DAYS:90}
   today:
     enabled: ${REI_TODAY_ENABLED:false}
     projects: ${REI_TODAY_PROJECTS:}

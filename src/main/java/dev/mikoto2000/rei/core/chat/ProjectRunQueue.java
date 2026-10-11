@@ -16,7 +16,7 @@ public final class ProjectRunQueue {
     final Runnable scheduled;
     final Runnable discarded;
     final java.util.function.Consumer<RuntimeException> rejected;
-    boolean dispatched, running;
+    boolean dispatched, running, mcp;
     Job(String projectId, String runId, Access access, Runnable work, Runnable scheduled, Runnable discarded,
         java.util.function.Consumer<RuntimeException> rejected) {
       this.projectId = projectId; this.runId = runId; this.access = access; this.work = work; this.scheduled = scheduled;
@@ -58,10 +58,20 @@ public final class ProjectRunQueue {
   }
   public boolean enqueue(String projectId, String runId, Access access, Runnable work, Runnable scheduled,
       Runnable discarded, java.util.function.Consumer<RuntimeException> rejected) {
+    return enqueue(projectId,runId,access,work,scheduled,discarded,rejected,false);
+  }
+  public boolean enqueue(String projectId,String runId,Access access,Runnable work,Runnable scheduled,Runnable discarded,
+      java.util.function.Consumer<RuntimeException> rejected,boolean mcp) {
     var job = new Job(projectId, runId, Objects.requireNonNull(access), work, scheduled, discarded, rejected);
+    job.mcp=mcp;
     List<Job> dispatch;
     boolean started;
     synchronized (this) {
+      if(mcp) {
+        long pending=projects.values().stream().flatMap(Collection::stream).filter(j->j.mcp&&!j.dispatched).count();
+        long total=projects.values().stream().flatMap(Collection::stream).filter(j->j.mcp).count();
+        if(pending>=8||total>=10)throw new CapacityExceededException();
+      }
       var existing = projects.get(projectId);
       if ((existing != null && existing.size() >= projectLimit)
           || projects.values().stream().mapToInt(ArrayDeque::size).sum() >= totalLimit)
@@ -114,7 +124,7 @@ public final class ProjectRunQueue {
     var selected = new ArrayList<Job>();
     for (var queue : projects.values()) for (var job : queue) {
       if (remaining == 0) return selected;
-      if (!job.dispatched && eligible(queue, job)) {
+      if (!job.dispatched && eligible(queue, job) && (!job.mcp || projects.values().stream().flatMap(Collection::stream).filter(j->j.mcp&&j.dispatched).count()<2)) {
         job.dispatched = true; selected.add(job); remaining--;
       }
     }

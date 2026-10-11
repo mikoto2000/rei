@@ -16,7 +16,7 @@ public record AgentRunContext(String runId, String conversationId, Path projectR
   public AgentRunContext asVoiceInput() {
     return new AgentRunContext(runId,conversationId,projectRoot,projectId,requestSource,mode,true,responseStyle);
   }
-  public enum RequestSource { SHELL, WEB }
+  public enum RequestSource { SHELL, WEB, MCP }
   public enum Mode { EXCLUSIVE, READ_ONLY, CONVERSATION }
 
   public AgentRunContext(String runId, String conversationId, Path projectRoot, String projectId,

@@ -60,8 +60,23 @@ final class FileSnapshots {
     if(input.toString().length()>1024)throw new IOException("Path exceeds 1024 characters");
     var root=directory.toRealPath();var path=(input.isAbsolute()?input:root.resolve(input)).normalize();
     if(!path.startsWith(root) || RepositoryMapService.sensitive(root.relativize(path)))throw new IOException("Excluded or outside Project path");
+    var owner=dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    if(owner!=null && owner.requestSource()==dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.MCP) {
+      var captured=owner.projectRoot().toRealPath();
+      var data=dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current();if(Files.exists(data))data=data.toRealPath();
+      if(owner.mode()!=dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY || !path.startsWith(captured)
+          ||path.startsWith(data)||mcpPrivate(captured.relativize(path)))throw new IOException("MCP excludes private or outside Project paths");
+    }
     var cursor=root;for(var part:root.relativize(path)){cursor=cursor.resolve(part);if(Files.isSymbolicLink(cursor) || Files.exists(cursor,LinkOption.NOFOLLOW_LINKS) && !cursor.toRealPath().equals(cursor))throw new IOException("Linked or aliased paths are unsupported");}
     if(Files.exists(path,LinkOption.NOFOLLOW_LINKS) && !path.toRealPath().startsWith(root))throw new IOException("Outside Project path");return path;
+  }
+  private static boolean mcpPrivate(Path relative) {
+    for(var part:relative) {
+      String name=part.toString().toLowerCase(Locale.ROOT);
+      if(Set.of(".rei",".ssh",".gnupg",".kube",".docker","auth.json","token.json","tokens.json","api_keys.json","api-keys.json").contains(name)
+          ||name.matches(".*\\.(?:db(?:-wal|-shm)?|sqlite3?)"))return true;
+    }
+    return false;
   }
   static String hash(byte[] content){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));}catch(NoSuchAlgorithmException error){throw new IllegalStateException(error);}}
 }

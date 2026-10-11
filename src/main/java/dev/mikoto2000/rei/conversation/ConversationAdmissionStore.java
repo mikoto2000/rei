@@ -93,12 +93,36 @@ public final class ConversationAdmissionStore implements AutoCloseable {
   }
   private static Instant instant(String value){return value==null?null:Instant.parse(value);}
   public Receipt accept(SessionMetadata metadata,AgentRunContext context,String key,String fingerprint) {
+    return accept(metadata,context,key,fingerprint,null);
+  }
+  public Receipt accept(SessionMetadata metadata,AgentRunContext context,String key,String fingerprint,dev.mikoto2000.rei.mcp.McpAdmission mcp) {
     String hash=key==null?null:keyHash(key);
     if(hash!=null&&(fingerprint==null||!fingerprint.matches("[a-f0-9]{64}")))throw new IllegalArgumentException("Invalid request fingerprint");
     if(!metadata.sessionId().equals(context.conversationId())||!metadata.projectId().equals(context.projectId()))throw new IllegalArgumentException("Admission ownership mismatch");
     synchronized(database.writer) {
       if(closed)throw new IllegalStateException("Admission store closed");
       return database.transaction(db->{
+        if(mcp!=null) {
+          if(context.requestSource()!=AgentRunContext.RequestSource.MCP || context.mode()!=AgentRunContext.Mode.READ_ONLY)
+            throw new IllegalArgumentException("MCP requires READ_ONLY");
+          try(var query=db.prepareStatement("SELECT fingerprint,run_id,expires_at FROM mcp_requests WHERE principal='local-mcp' AND request_hash=?")) {
+            query.setString(1,mcp.requestHash());try(var rows=query.executeQuery()) {
+              if(rows.next()) {
+                if(!clock.instant().isBefore(Instant.parse(rows.getString(3))))throw new IdempotencyExpiredException();
+                if(!mcp.fingerprint().equals(rows.getString(1)))throw new IdempotencyConflictException();
+                return new Receipt(snapshot(db,rows.getString(2)).orElseThrow().context(),true);
+              }
+            }
+          }
+          try(var query=db.prepareStatement("SELECT 1 FROM sessions WHERE session_id=?")) {
+            query.setString(1,metadata.sessionId());try(var rows=query.executeQuery()) {
+              if(rows.next())try(var owner=db.prepareStatement("SELECT 1 FROM mcp_sessions WHERE session_id=? AND principal='local-mcp' AND project_id=?")) {
+                owner.setString(1,metadata.sessionId());owner.setString(2,metadata.projectId());
+                try(var owned=owner.executeQuery()){if(!owned.next())throw new ResourceNotFoundException("Session");}
+              }
+            }
+          }
+        }
         if(hash!=null) {
           var old=receipt(db,hash);
           if(old!=null){unexpired(old);if(!old.fingerprint().equals(fingerprint))throw new IdempotencyConflictException();return new Receipt(snapshot(db,old.runId()).orElseThrow().context(),true);}
@@ -118,6 +142,16 @@ public final class ConversationAdmissionStore implements AutoCloseable {
         SqliteSessionRepository.put(db,next,revision,null);
         if(hash!=null)try(var write=db.prepareStatement("INSERT INTO chat_receipts VALUES(?,?,?,?)")) {
           write.setString(1,hash);write.setString(2,fingerprint);write.setString(3,context.runId());write.setString(4,clock.instant().plus(RECEIPT_RETENTION).toString());write.executeUpdate();
+        }
+        if(mcp!=null) {
+          try(var write=db.prepareStatement("INSERT OR IGNORE INTO mcp_sessions VALUES(?,'local-mcp',?)")) {
+            write.setString(1,metadata.sessionId());write.setString(2,metadata.projectId());write.executeUpdate();
+          }
+          try(var write=db.prepareStatement("INSERT INTO mcp_requests(principal,request_hash,fingerprint,project_id,session_id,run_id,created_at,expires_at,total_criteria,criteria_json) VALUES('local-mcp',?,?,?,?,?,?,?,?,?)")) {
+            write.setString(1,mcp.requestHash());write.setString(2,mcp.fingerprint());write.setString(3,metadata.projectId());
+            write.setString(4,metadata.sessionId());write.setString(5,context.runId());write.setString(6,clock.instant().toString());
+            write.setString(7,clock.instant().plus(mcp.retention()).toString());write.setInt(8,mcp.totalCriteria());write.setString(9,StorageDatabase.JSON.writeValueAsString(mcp.criteria()));write.executeUpdate();
+          }
         }
         return new Receipt(context,false);
       });
@@ -177,14 +211,20 @@ public final class ConversationAdmissionStore implements AutoCloseable {
       }return null;
     });
   }
+  public void mcpAdmissionFailed(String id,RuntimeException failure) {
+    String code=failure instanceof java.util.concurrent.RejectedExecutionException?"CAPACITY_EXCEEDED":failure instanceof SessionBusyException?"SESSION_BUSY":"INTERNAL_ERROR";
+    database.transaction(db->{try(var q=db.prepareStatement("UPDATE mcp_requests SET admission_error=? WHERE run_id=? AND principal='local-mcp'")){q.setString(1,code);q.setString(2,id);q.executeUpdate();return null;}});
+  }
   public void transition(String id,RunStatus next) {
     database.transaction(db->{
       var old=snapshot(db,id);
       if(old.isEmpty()||old.get().status().isTerminal()||next==RunStatus.QUEUED)return null;
       try(var write=db.prepareStatement("UPDATE conversation_admissions SET status=?,started=COALESCE(started,?),completed=? WHERE run_id=? AND owner_instance=?")) {
         write.setString(1,next.name());write.setString(2,next==RunStatus.RUNNING?clock.instant().toString():null);
-        write.setString(3,next.isTerminal()?clock.instant().toString():null);write.setString(4,id);write.setString(5,instance);write.executeUpdate();
-      }return null;
+        write.setString(3,next.isTerminal()?clock.instant().toString():null);write.setString(4,id);write.setString(5,instance);if(write.executeUpdate()!=1)return null;
+      }
+      try(var update=db.prepareStatement("UPDATE mcp_requests SET state_updated_at=? WHERE run_id=?")){update.setString(1,clock.instant().toString());update.setString(2,id);update.executeUpdate();}
+      return null;
     });
   }
   /** Adopt only a durable external wait whose previous admission owner has exited. */
@@ -222,6 +262,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     try(var write=db.prepareStatement("UPDATE conversation_admissions SET completed=CASE WHEN status='WAITING' THEN NULL ELSE COALESCE(completed,?) END,owner_pid=CASE WHEN status='WAITING' THEN 0 ELSE owner_pid END,owner_start=CASE WHEN status='WAITING' THEN NULL ELSE owner_start END,status=CASE WHEN status IN ('QUEUED','RUNNING') THEN 'UNKNOWN' ELSE status END,active=0 WHERE run_id=?")) {
       write.setString(1,clock.instant().toString());write.setString(2,id);write.executeUpdate();
     }
+    try(var update=db.prepareStatement("UPDATE mcp_requests SET state_updated_at=? WHERE run_id=?")){update.setString(1,clock.instant().toString());update.setString(2,id);update.executeUpdate();}
   }
   @Override public void close() {
     synchronized(database.writer) {

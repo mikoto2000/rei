@@ -55,6 +55,11 @@ public final class SessionLifecycle {
   }
   public AgentRunContext submit(ProjectContext project,String sessionId,String message,
       AgentRunContext.RequestSource source,AgentRunContext.Mode mode,boolean voiceInput,String key,String fingerprint,Consumer<AgentRunContext> enqueue) {
+    return submit(project,sessionId,message,source,mode,voiceInput,key,fingerprint,null,enqueue);
+  }
+  public AgentRunContext submit(ProjectContext project,String sessionId,String message,
+      AgentRunContext.RequestSource source,AgentRunContext.Mode mode,boolean voiceInput,String key,String fingerprint,
+      dev.mikoto2000.rei.mcp.McpAdmission mcp,Consumer<AgentRunContext> enqueue) {
     if (message == null || message.isBlank()) throw new IllegalArgumentException("message is required");
     // All entry points sharing this repository serialize validation, metadata update and FIFO admission.
     synchronized (repository) {
@@ -69,16 +74,16 @@ public final class SessionLifecycle {
               ? (voiceInput ? dev.mikoto2000.rei.core.chat.ResponseStyle.CONVERSATION : dev.mikoto2000.rei.core.chat.ResponseStyle.NORMAL)
               : metadata.voiceOnly() && !voiceInput ? dev.mikoto2000.rei.core.chat.ResponseStyle.NORMAL : metadata.responseStyle());
       if(admissions==null) {
-        if(key!=null)throw new IllegalStateException("Durable admission is unavailable");
+        if(key!=null||mcp!=null)throw new IllegalStateException("Durable admission is unavailable");
         repository.accept(metadata, () -> enqueue.accept(context));
       } else {
-        var receipt=admissions.accept(metadata,context,key,fingerprint);
+        var receipt=admissions.accept(metadata,context,key,fingerprint,mcp);
         if(receipt.replay())return receipt.context();
         repository.refreshCompletionSnapshot();
         try {enqueue.accept(context);}
-        catch(RuntimeException|Error error){admissions.transition(context.runId(),RunStatus.FAILED);admissions.release(context.runId());throw error;}
+        catch(RuntimeException|Error error){if(mcp!=null)admissions.mcpAdmissionFailed(context.runId(),error instanceof RuntimeException runtime?runtime:new IllegalStateException());admissions.transition(context.runId(),RunStatus.FAILED);admissions.release(context.runId());throw error;}
       }
-      selected.accept(context);
+      if(source!=AgentRunContext.RequestSource.MCP)selected.accept(context);
       return context;
     }
   }
