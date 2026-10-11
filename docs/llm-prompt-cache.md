@@ -71,3 +71,53 @@ updatedWorkingSetAndNewSystemPolicyAreUsedWithoutStaleSnapshot は最終投影�
 
 子 Agent は既存 SUBAGENT_STARTED / COMPLETED / FAILED イベントで独立 Timing Run を開始・終了する。通常・並列の子 ownership を保持し、taskSummary は保存しない。子と親の集計を混ぜない。子は自身の subagent:RUN_ID Session 所有権で recorder.snapshot を照会できる。親 Session の /timing 表示に子の usage を合算する UI は今回追加しない。未開始、Project 所有権のない standalone 子や外部 CLI/OAuth backend の内部 usage は未計測になり得る。
 
+
+## Phase 4: Run 間・Provider の評価
+
+ContextHistoryAdvisor は過去の会話ログ・summary cursor を既に再利用する。ただし user/assistant 最終メッセージと prior Run observations を再構成するため、前の Run の全 Tool transcript とバイト単位で一致するとは限らない。会話意味・権限・予算を変えずに完全 Prefix を保証するには transcript の複製保存が必要になり得る。今回は本文複製・古い System の持越しを追加しない。Phase 2 の固定 System と定義は Run 間でも同じ入力集合なら決定的。
+
+LlmModelProvider の feature model は ConcurrentHashMap で再利用され、既に同じ設定の endpoint/model を継続使用する。サーバー側の worker 分配、KV Cache の保持単位や TTL はクライアントから未確認。TensorFold/vLLM で cache count が返れば OpenAI 互換 Usage として計測でき、返らなければ UNKNOWN。OpenAI SDK が持つ promptCacheKey を無条件に送ったり、未知 Provider に cache_control を注入したりしない。現行 fallback、モデル能力・利用可能性、ポリシー、Model Budget を優先する。
+
+自動ルーティング、キャッシュキー生成、圧縮閾値調整は実装を見送る。実 Provider の効果が未実測で、feature ごとの異なる能力要件を変える根拠がない。今回の診断と既存設定で endpoint/model/threshold を比較評価できる段階に留める。Provider 固有の control の実装には、管理者が明示する capability とサーバー検証を追加する必要がある。
+
+### 再現可能な性能評価
+
+`./mvnw.cmd -B -Pfull -Dtest=PrefixDiagnosticScenariosTest test`。同じ固定 System (約9Ki文字)、Tool領域 (約3.5Ki文字)、変動履歴を使う合成 fixture。20回 warmup 後101回の `PrefixDiagnostics.observe` を測定。実アプリのファイル読取/書込、Tool実行、Provider通信は発生しない。source 構築コストと Run全体のオーバーヘッドを測った値ではない。
+
+2026-10-11 Windows / OpenJDK 25、ローカル実行結果:
+
+|fixture|診断中央値 µs|最小 µs|最大 µs|
+|---|---:|---:|---:|
+|通常チャット|36.7|23.6|557.6|
+|連続 Session|29.4|22.8|95.8|
+|Tool 継続|40.5|21.7|154.4|
+|ファイル読取型|37.3|21.3|97.2|
+|ファイル更新型|26.4|20.5|81.8|
+|Planning 型|42.4|31.9|94.5|
+|長い圧縮型 (約65Ki文字追加履歴)|120.0|73.9|227.2|
+|Skill Selection 型|37.0|22.8|85.4|
+
+変更前にこの診断処理は存在しなかった。上の数値は追加処理のコストで、LLM latency 削減の値ではない。メモリは件数・領域・文字列フィールド長で保持を制限するが、プロセス RSS/heap の比較測定は未実施。
+
+|比較指標|変更前|変更後|
+|---|---|---|
+|cache_hit_rate|未計測|取得可能な Provider 応答を正規化、実 Provider 比較は未計測|
+|uncached_input_tokens|未計測|取得済み分だけ計算、実 Provider 比較は未計測|
+|TTFT|既存 framework timing|既存観測を再利用、比較は未計測|
+|prefill_duration|未計測|未計測|
+|Run 全体実行時間|既存 timing|既存 timing、比較は未計測|
+|入力総数 / LLM Call 回数|既存 usage / span|cache 集計に取得件数を併記、実 Provider 比較は未計測|
+|Run summary 後の固定 System 位置|summary より後|先頭 System を保持 (回帰検証)|
+|Skill metadata と依頼の順序|依頼 → metadata|metadata → 依頼 (通常・予算付き経路検証)|
+|同一集合の Tool/schema|登録順・object key 順に依存|名前/object key を canonical 化、実行・配列順は保持|
+
+実環境比較は同じモデル・endpoint・temperature・出力予算・入力で各シナリオを複数回実行し、`/timing` から input/cache の取得率と重み付き rate、uncached、最初の生成テキストまでの時間、duration と Run elapsed の中央値・範囲を比較する。cold/warm、保持時間、worker 分配を分け、response quality と Run成功率も確認する。UNKNOWN による選別バイアス、fallback、同時呼び出し、Span省略を記録する。本文保存が必要な場合のみ既存 Request Capture を明示的に使う。
+
+### 既知の制限と今後
+
+- cache/usage 計測の対応は実際の Usage 欠落状況次第。UNKNOWN は cache miss を意味しない。
+- 記録された Run/Span のみを集計し、上限・TTL で欠落した記録は復元しない。親の統計に独立した子の usage を自動合算しない。
+- SDK内部 retry と endpoint fallback の物理試行単位の usage は未分離。prefill、KV Cache worker ID、retention は未取得。
+- 診断は最大64領域の text / tool call / tool response と ToolDefinitions。media バイト列の比較、結合済み Developer/Skill の詳細分割、token 単位の共通 Prefix 数は未実装。
+- Working Set revision/delta/move tombstone、Run間 Tool transcript 再送、自動 cache tuning は今後の検討。今回実装済みと混同しない。
+
