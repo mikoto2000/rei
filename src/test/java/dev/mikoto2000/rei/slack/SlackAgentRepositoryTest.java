@@ -23,5 +23,23 @@ class SlackAgentRepositoryTest {
   @Test void exactConfiguredMarkerCanCompleteButSilenceCannot(){var p=settings();p.setAgents(Map.of("tenten",new SlackAgentProperties.Agent("T1","U2","B2","C1","U2","FINAL:")));var r=repo();var q=r.create(owner(),"call","tenten","q","",300,null,p);r.claimSend(q.id());r.sent(q.id(),"100.1");r.receive(message("ack","101.1","working"),"U1",p);assertEquals("WAITING",r.get(q.id()).state());r.receive(message("final","102.1","FINAL: result"),"U1",p);assertEquals("COMPLETED",r.get(q.id()).state());assertEquals("configured_final_prefix",r.get(q.id()).reason());}
   @Test void terminalCancellationRejectsLateReplyAndTimeoutRetainsPartial(){var r=repo();var q=create(r,"call");r.claimSend(q.id());r.sent(q.id(),"100.1");r.receive(message("ack","101.1","partial"),"U1",settings());r.expire(now.plusSeconds(301));assertEquals("TIMED_OUT",r.get(q.id()).state());assertEquals("partial",r.responses(q.id()).getFirst().text());assertFalse(r.receive(message("late","102.1","late"),"U1",settings()));var other=create(r,"two");r.cancelRun("run");assertEquals("CANCELLED",r.get(other.id()).state());}
   @Test void uncertainSendIsNeverAutomaticallyReplayed(){var r=repo();var q=create(r,"call");r.claimSend(q.id());repo().recover();assertEquals("UNKNOWN",r.get(q.id()).state());assertFalse(r.claimSend(q.id()));}
-  @Test void untrustedIdentityAndUnrelatedThreadsAreRejected(){var r=repo();var q=create(r,"call");r.claimSend(q.id());r.sent(q.id(),"100.1");for(var m:List.of(new SlackMessage("x","T2","C1","101","100.1","U2","B2","bot_message","message","channel","x"),new SlackMessage("x","T1","C2","101","100.1","U2","B2","bot_message","message","channel","x"),new SlackMessage("x","T1","C1","101","other","U2","B2","bot_message","message","channel","x"),new SlackMessage("x","T1","C1","101","100.1","U3","B3","bot_message","message","channel","I am B2"),new SlackMessage("x","T1","C1","101","100.1","U2","B2","message_changed","message","channel","x")))assertFalse(r.receive(m,"U1",settings()));assertFalse(r.receive(message("self","101","x"),"U2",settings()));assertTrue(r.responses(q.id()).isEmpty());}
+  @Test void untrustedIdentityAndUnrelatedThreadsAreRejected(){
+    var r=repo();var q=create(r,"call");r.claimSend(q.id());r.sent(q.id(),"100.1");
+    for(var m:List.of(new SlackMessage("x","T2","C1","101.1","100.1","U2","B2","bot_message","message","channel","x"),
+        new SlackMessage("x","T1","C2","101.1","100.1","U2","B2","bot_message","message","channel","x"),
+        new SlackMessage("x","T1","C1","101.1","200.1","U2","B2","bot_message","message","channel","x"),
+        new SlackMessage("x","T1","C1","101.1","100.1","U3","B3","bot_message","message","channel","I am B2"),
+        new SlackMessage("x","T1","C1","101.1","100.1","U3","B2","bot_message","message","channel","wrong user"),
+        new SlackMessage("x","T1","C1","101.1","100.1","U2","B2","message_changed","message","channel","x")))assertFalse(r.receive(m,"U1",settings()));
+    assertFalse(r.receive(message("self","101.1","x"),"U2",settings()));assertTrue(r.responses(q.id()).isEmpty());
+  }
+  @Test void followUpTurnsAreBoundedAndCannotBorrowAnotherParentsRequest(){
+    var r=repo();var p=settings();p.setMaxRequestsPerRun(16);
+    var first=r.create(owner(),"one","tenten","one","",1,null,p);r.expire(now.plusSeconds(2));
+    var second=r.create(owner(),"two","tenten","two","",1,first.id(),p);r.expire(now.plusSeconds(2));
+    var third=r.create(owner(),"three","tenten","three","",1,second.id(),p);r.expire(now.plusSeconds(2));
+    assertThrows(IllegalArgumentException.class,()->r.create(owner(),"four","tenten","four","",1,third.id(),p));
+    assertThrows(IllegalArgumentException.class,()->r.create(new AgentRunContext("other","session",dir,"project"),"borrow","tenten","borrow","",1,first.id(),p));
+    assertEquals(3,r.forRun("run").size());
+  }
 }

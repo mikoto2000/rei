@@ -369,7 +369,11 @@ public class ChatExecutionService {
       try {
         // Preserve accepted input on ordinary failures, but never apply a cancelled run's mailbox.
         if (execution.isCancelled()) interventions.discardAndFinish();
-        else while (!interventions.finishIfEmpty()) execution.applyInterventions();
+        else {
+          var guidance=new java.util.ArrayList<org.springframework.ai.chat.messages.Message>();
+          while (!interventions.finishIfEmpty())guidance.addAll(execution.applyInterventions());
+          if(suspended&&continuations!=null&&!guidance.isEmpty())continuations.acceptGuidance(context,guidance);
+        }
       } finally {
         try {
           cancellationHook.dispose();

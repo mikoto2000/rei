@@ -25,6 +25,8 @@ public final class SlackAgentRepository {
       db.sql("CREATE INDEX IF NOT EXISTS slack_agent_active ON slack_agent_requests(state,due)").update();
       db.sql("CREATE TABLE IF NOT EXISTS slack_agent_replies(event TEXT PRIMARY KEY,team TEXT NOT NULL,channel TEXT NOT NULL,ts TEXT NOT NULL,request TEXT NOT NULL,text TEXT NOT NULL,classification TEXT NOT NULL,UNIQUE(team,channel,ts))").update();
       db.sql("CREATE TABLE IF NOT EXISTS slack_agent_dependencies(request TEXT PRIMARY KEY,dependency TEXT UNIQUE NOT NULL)").update();
+      db.sql("CREATE TABLE IF NOT EXISTS slack_agent_channel_due(team TEXT NOT NULL,channel TEXT NOT NULL,due INTEGER NOT NULL,PRIMARY KEY(team,channel))").update();
+      db.sql("CREATE TABLE IF NOT EXISTS slack_agent_early(event TEXT PRIMARY KEY,team TEXT NOT NULL,channel TEXT NOT NULL,ts TEXT NOT NULL,thread TEXT NOT NULL,bot TEXT NOT NULL,bot_user TEXT NOT NULL,text TEXT NOT NULL,classification TEXT NOT NULL,expires INTEGER NOT NULL,UNIQUE(team,channel,ts))").update();
     });
   }
   public <T>T transaction(java.util.function.Supplier<T> work){return tx.execute(status->work.get());}
@@ -52,9 +54,23 @@ public final class SlackAgentRepository {
         .params(id,o.runId(),o.conversationId(),o.projectId(),o.projectRoot().toString(),call,name,a.workspaceId(),a.channelId(),a.botUserId(),a.botId(),a.mentionUserId(),safe,output,now,now,now+seconds*1000L,followUp,turn,now).update();return get(id);
     });
   }
-  public boolean claimSend(String id){return db.sql("UPDATE slack_agent_requests SET state='SENDING',reason='send_claimed',updated=? WHERE id=? AND state='CREATED'").params(clock.millis(),id).update()==1;}
-  public void sent(String id,String ts){if(ts==null||!ts.matches("[0-9]+\\.[0-9]+"))throw new IllegalArgumentException("Slack timestamp required");if(db.sql("UPDATE slack_agent_requests SET state='WAITING',thread=?,reason='reply_pending',updated=? WHERE id=? AND state='SENDING'").params(ts,clock.millis(),id).update()!=1)throw new IllegalStateException("External send transition conflict");}
-  public void delivery(String id,SlackTransport.Delivery result){switch(result.state()){case "SENT"->sent(id,result.ts());case "RETRY"->db.sql("UPDATE slack_agent_requests SET state='CREATED',reason='rate_limited',due=?,updated=? WHERE id=? AND state='SENDING'").params(clock.millis()+result.retryAfterSeconds()*1000L,clock.millis(),id).update();default->db.sql("UPDATE slack_agent_requests SET state=?,reason=?,updated=? WHERE id=? AND state='SENDING'").params(result.state().equals("FAILED")?"FAILED":"UNKNOWN",result.state().equals("FAILED")?"send_rejected":"send_outcome_unknown",clock.millis(),id).update();}}
+  public boolean claimSend(String id){return tx.execute(s->{var q=get(id);long now=clock.millis();
+    if(db.sql("SELECT due FROM slack_agent_channel_due WHERE team=? AND channel=?").params(q.team(),q.channel()).query(Long.class).optional().orElse(0L)>now)return false;
+    if(db.sql("UPDATE slack_agent_requests SET state='SENDING',reason='send_claimed',updated=? WHERE id=? AND state='CREATED' AND due<=?").params(now,id,now).update()!=1)return false;
+    channelDue(q,now+1000);return true;
+  });}
+  private void channelDue(Request q,long due){db.sql("INSERT INTO slack_agent_channel_due VALUES(?,?,?) ON CONFLICT(team,channel) DO UPDATE SET due=MAX(due,excluded.due)").params(q.team(),q.channel(),due).update();}
+  public void sent(String id,String ts){
+    if(ts==null||!ts.matches("[0-9]+\\.[0-9]+"))throw new IllegalArgumentException("Slack timestamp required");
+    tx.executeWithoutResult(s->{
+      if(db.sql("UPDATE slack_agent_requests SET state=CASE WHEN state='SENDING' THEN 'WAITING' ELSE state END,thread=?,reason=CASE WHEN state='SENDING' THEN 'reply_pending' ELSE reason END,updated=? WHERE id=? AND state IN ('SENDING','CANCELLED','UNKNOWN') AND thread IS NULL").params(ts,clock.millis(),id).update()!=1)throw new IllegalStateException("External send transition conflict");
+      var q=get(id);if(!q.state().equals("WAITING")||q.deadline()<=clock.millis())return;
+      db.sql("INSERT OR IGNORE INTO slack_agent_replies SELECT event,team,channel,ts,?,text,classification FROM slack_agent_early WHERE team=? AND channel=? AND thread=? AND bot=? AND bot_user=? AND expires>? ORDER BY length(ts),ts LIMIT 32").params(id,q.team(),q.channel(),ts,q.bot(),q.botUser(),clock.millis()).update();
+      if(responses(id).stream().anyMatch(r->r.classification().equals("configured_final_prefix")))db.sql("UPDATE slack_agent_requests SET state='COMPLETED',reason='configured_final_prefix' WHERE id=? AND state='WAITING'").param(id).update();
+      db.sql("DELETE FROM slack_agent_early WHERE team=? AND channel=? AND thread=?").params(q.team(),q.channel(),ts).update();
+    });
+  }
+  public void delivery(String id,SlackTransport.Delivery result){switch(result.state()){case "SENT"->sent(id,result.ts());case "RETRY"->tx.executeWithoutResult(s->{long due=clock.millis()+result.retryAfterSeconds()*1000L;channelDue(get(id),due);db.sql("UPDATE slack_agent_requests SET state='CREATED',reason='rate_limited',due=?,updated=? WHERE id=? AND state='SENDING'").params(due,clock.millis(),id).update();});default->db.sql("UPDATE slack_agent_requests SET state=?,reason=?,updated=? WHERE id=? AND state='SENDING'").params(result.state().equals("FAILED")?"FAILED":"UNKNOWN",result.state().equals("FAILED")?"send_rejected":"send_outcome_unknown",clock.millis(),id).update();}}
   public List<Request> pending(){return db.sql("SELECT * FROM slack_agent_requests WHERE state='CREATED' AND due<=? ORDER BY created,id LIMIT 16").param(clock.millis()).query(ROW).list();}
   public List<Response> responses(String id){get(id);return db.sql("SELECT event,ts,text,classification FROM slack_agent_replies WHERE request=? ORDER BY length(ts),ts LIMIT 32").param(id).query((r,n)->new Response(r.getString(1),r.getString(2),r.getString(3),r.getString(4))).list();}
   public boolean receive(SlackMessage m,String self,SlackAgentProperties p) {
@@ -63,12 +79,20 @@ public final class SlackAgentRepository {
         ||m.subtype()!=null&&!m.subtype().equals("bot_message"))return false;
     return tx.execute(s->{
       var candidate=db.sql("SELECT * FROM slack_agent_requests WHERE team=? AND channel=? AND thread=? AND state='WAITING' AND deadline>? AND bot=?")
-        .params(m.team(),m.channel(),m.threadTs(),clock.millis(),m.botId()).query(ROW).optional();if(candidate.isEmpty())return false;
+        .params(m.team(),m.channel(),m.threadTs(),clock.millis(),m.botId()).query(ROW).optional();
+      boolean early=candidate.isEmpty();
+      if(early)candidate=db.sql("SELECT * FROM slack_agent_requests WHERE team=? AND channel=? AND state='SENDING' AND deadline>? AND bot=? ORDER BY created LIMIT 1").params(m.team(),m.channel(),clock.millis(),m.botId()).query(ROW).optional();
+      if(candidate.isEmpty())return false;
       var q=candidate.get();SlackAgentProperties.Agent a;try{a=p.agent(q.agent());}catch(IllegalArgumentException denied){return false;}
       if(!a.workspaceId().equals(q.team())||!a.channelId().equals(q.channel())||!a.botId().equals(q.bot())||!a.botUserId().equals(q.botUser())||!q.bot().equals(m.botId())||m.user()!=null&&!q.botUser().equals(m.user())||q.botUser().equals(self))return false;
       if(responses(q.id()).size()>=32)return false;
       boolean finalReply=a.finalPrefix()!=null&&!a.finalPrefix().isBlank()&&m.text().startsWith(a.finalPrefix());
       String kind=finalReply?"configured_final_prefix":"unclassified";
+      if(early){
+        db.sql("DELETE FROM slack_agent_early WHERE expires<=?").param(clock.millis()).update();
+        if(db.sql("SELECT COUNT(*) FROM slack_agent_early").query(Integer.class).single()>=256)return false;
+        return db.sql("INSERT OR IGNORE INTO slack_agent_early VALUES(?,?,?,?,?,?,?,?,?,?)").params(m.eventId(),m.team(),m.channel(),m.ts(),m.threadTs(),q.bot(),q.botUser(),SlackReplies.safe(m.text()),kind,q.deadline()).update()==1;
+      }
       if(db.sql("INSERT OR IGNORE INTO slack_agent_replies VALUES(?,?,?,?,?,?,?)").params(m.eventId(),m.team(),m.channel(),m.ts(),q.id(),SlackReplies.safe(m.text()),kind).update()!=1)return false;
       if(finalReply)db.sql("UPDATE slack_agent_requests SET state='COMPLETED',reason='configured_final_prefix',updated=? WHERE id=? AND state='WAITING'").params(clock.millis(),q.id()).update();return true;
     });

@@ -18,7 +18,7 @@ public final class SlackAgentService implements RunContinuation {
   private BiFunction<AgentRunContext,Saved,ChatExecutionResult> resume=(o,s)->{throw new IllegalStateException("Chat continuation unavailable");};
   private Consumer<AgentRunContext> validate=o->{};
   private final Map<String,Managed> managed=new java.util.concurrent.ConcurrentHashMap<>();
-  private final Map<String,Long> channelDue=new HashMap<>();
+  private final java.util.Queue<Runnable> completionNotifications=new java.util.concurrent.ConcurrentLinkedQueue<>();
   private record Managed(OutputLimitRunBudget.LlmCallReservation reservation,Consumer<ChatExecutionResult> completed) {}
   private dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies;
   private dev.mikoto2000.rei.core.dependency.DependencyObservationService observations;
@@ -46,7 +46,7 @@ public final class SlackAgentService implements RunContinuation {
   }
   public void detach(){transport=null;}
   public void recover(){requests.recover();continuations.recover();}
-  public boolean receive(SlackMessage message){return transport!=null&&Objects.equals(team,message.team())&&requests.receive(message,self,settings);}
+  public boolean receive(SlackMessage message){return message!=null&&transport!=null&&Objects.equals(team,message.team())&&requests.receive(message,self,settings);}
   @Override public Saved restore(AgentRunContext owner){if(!"RESUMING".equals(continuations.state(owner.runId())))return null;var s=continuations.get(owner);var byCall=new HashMap<String,SlackAgentRepository.Request>();requests.forRun(owner.runId()).forEach(q->byCall.put(q.call(),q));
     var messages=s.messages().stream().map(m->{if(!(m instanceof ToolResponseMessage tool))return m;
       return (Message)ToolResponseMessage.builder().responses(tool.getResponses().stream().map(r->{var q=byCall.get(r.id());return q!=null&&r.name().equals("askExternalAgent")?new ToolResponseMessage.ToolResponse(r.id(),r.name(),requests.result(q.id())):r;}).toList()).build();
@@ -57,26 +57,29 @@ public final class SlackAgentService implements RunContinuation {
     var owner=e.runContext();validate.accept(owner);var current=registry.get(owner.runId());
     if(!current.context().equals(owner)||current.status()!=RunStatus.RUNNING||!registry.ownsExecution(owner.runId()))throw new IllegalStateException("External wait lost parent ownership");
     if(e.hasParentReservation()&&!managed.containsKey(owner.runId()))throw new IllegalStateException("Managed parent continuation required to retain Goal budget");
-    continuations.save(owner,e.userRequest(),history,e.budgetSnapshot());
+    continuations.save(owner,e.userRequest(),history,e.budgetSnapshot(),managed.containsKey(owner.runId())||e.hasParentReservation());
     if(!registry.transition(owner.runId(),RunStatus.WAITING,null)){continuations.cancel(owner.runId());requests.cancelRun(owner.runId());throw new java.util.concurrent.CancellationException();}
     return true;
   }
   @Override public void terminal(AgentRunContext owner){continuations.complete(owner.runId());}
-  public void cancel(String run){requests.cancelRun(run);continuations.cancel(run);var m=managed.remove(run);if(m!=null)m.completed().accept(ChatExecutionResult.cancelled());}
+  @Override public void acceptGuidance(AgentRunContext owner,List<Message> guidance){continuations.appendGuidance(owner,guidance);}
+  public void cancel(String run){requests.cancelRun(run);continuations.cancel(run);updateDependencies(run);var m=managed.remove(run);if(m!=null)completionNotifications.add(()->m.completed().accept(ChatExecutionResult.cancelled()));}
   public void onEvent(AgentEvent event){if(event.type()==AgentEventType.AGENT_RUN_CANCELLED&&event.runId()!=null){try{var o=registry.get(event.runId()).context();if(Objects.equals(event.projectId(),o.projectId())&&Objects.equals(event.sessionId(),o.conversationId()))cancel(event.runId());}catch(RunNotFoundException ignored){}}}
   public synchronized void pump(){
+    // Cancellation events arrive under the event-bus monitor; never invoke Goal/Scheduler callbacks there.
+    Runnable notification;while((notification=completionNotifications.poll())!=null)notification.run();
     if(dependencies!=null)for(var q:requests.active()){String id=requests.dependency(q.id());if(id!=null&&dependencies.get(q.project(),id).state()==dev.mikoto2000.rei.core.dependency.DependencyState.CANCELLED)requests.cancelRequest(q.id());}
     requests.expire(clock.instant());var sender=transport;if(sender!=null){
       var attempted=new HashSet<String>();
       for(var q:requests.pending()){
-        String channel=q.team()+":"+q.channel();if(!attempted.add(channel)||channelDue.getOrDefault(channel,0L)>clock.millis())continue;
+        String channel=q.team()+":"+q.channel();if(!attempted.add(channel))continue;
         SlackAgentProperties.Agent a;try{a=settings.agent(q.agent());}catch(IllegalArgumentException invalid){requests.cancelRun(q.run());continue;}
         if(!Objects.equals(team,q.team())||!a.workspaceId().equals(q.team())||!a.channelId().equals(q.channel())||!a.botId().equals(q.bot())||!a.botUserId().equals(q.botUser())||a.botUserId().equals(self))continue;
         var parent=registry.get(q.run());if(!parent.context().projectId().equals(q.project())||!parent.context().conversationId().equals(q.session())||!parent.context().projectRoot().toString().equals(q.root())||parent.status().isTerminal()){requests.cancelRun(q.run());continue;}
         if(!requests.claimSend(q.id()))continue;
         String text="<@"+q.mention()+"> "+escape(q.question())+"\nExpected output: "+escape(q.expected())+"\nRequest: "+q.id();
         SlackTransport.Delivery result;try{result=sender.send(new SlackStore.Outgoing(q.id(),q.team(),q.channel(),null,text));}catch(RuntimeException error){result=SlackTransport.Delivery.unknown();}
-        requests.delivery(q.id(),result);channelDue.put(channel,clock.millis()+(result.state().equals("RETRY")?result.retryAfterSeconds()*1000L:1000L));
+        requests.delivery(q.id(),result);
       }
     }
     for(String run:continuations.waiting()){
@@ -85,10 +88,13 @@ public final class SlackAgentService implements RunContinuation {
       if(current.status()!=RunStatus.WAITING||router.containsRun(owner.projectId(),run))continue;
       if(requests.waiting(run))continue;
       updateDependencies(run);
-      validate.accept(owner);if(!registry.claimWaiting(owner)||!continuations.claim(run))continue;
+      if(continuations.document(run).managedParent()&&!managed.containsKey(run)){continuations.unknown(run);runs.finishMissingTerminal(owner,RunStatus.UNKNOWN);continue;}
+      try{validate.accept(owner);}catch(RuntimeException invalid){continuations.unknown(run);runs.finishMissingTerminal(owner,RunStatus.UNKNOWN);continue;}
+      if(!registry.claimWaiting(owner)||!continuations.claim(run))continue;
       var saved=restore(owner);
       try{router.submitOperation(owner,()->{
-        validate.accept(owner);var result=resume.apply(owner,saved);
+        ChatExecutionResult result;
+        try{validate.accept(owner);result=resume.apply(owner,saved);}catch(RuntimeException uncertain){continuations.unknown(run);runs.finishMissingTerminal(owner,RunStatus.UNKNOWN);var parent=managed.remove(run);if(parent!=null)parent.completed().accept(ChatExecutionResult.cancelled());return;}
         if(result.status()!=ChatExecutionResult.Status.WAITING){
           runs.finishMissingTerminal(owner,result.status()==ChatExecutionResult.Status.CANCELLED?RunStatus.CANCELLED:result.success()?RunStatus.COMPLETED:RunStatus.FAILED);
           continuations.complete(run);var parent=managed.remove(run);if(parent!=null)parent.completed().accept(result);

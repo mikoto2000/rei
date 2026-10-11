@@ -31,5 +31,5 @@ public class SlackAgentConfiguration {
     service.dependencies(dependencies,observations);return service;
   }
   @Bean SlackAgentTools slackAgentTools(SlackAgentProperties p,SlackAgentRepository r,ToolPermissionGuard guard,SlackAgentService service){var tools=new SlackAgentTools(p,r,guard);tools.onRegistered(service::registered);return tools;}
-  @Bean(destroyMethod="unsubscribe") AgentEventBus.Subscription slackAgentEvents(SlackAgentService service,AgentEventBus bus){return bus.subscribeBoundary(service::onEvent);}
+  @Bean(destroyMethod="unsubscribe") AgentEventBus.Subscription slackAgentEvents(SlackAgentService service,AgentEventBus bus){return bus.subscribe(service::onEvent);}
 }

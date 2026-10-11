@@ -74,6 +74,12 @@ class AgentScheduleDispatcherTest {
     assertEquals("COMPLETED",schedules.get(project,id).status());
   }
   record Harness(dev.mikoto2000.rei.core.project.ProjectService projects,ChatExecutionService chat,ConversationInputRouter router,ArrayDeque<Runnable> jobs,AgentScheduleDispatcher dispatcher) {}
+  @Test void waitingScheduleKeepsItsClaimUntilSavedContinuationCompletes() {
+    var h=harness();var continuation=mock(RunContinuation.class);h.dispatcher().setContinuations(continuation);
+    var completed=new AtomicReference<Consumer<ChatExecutionResult>>();doAnswer(inv->{completed.set(inv.getArgument(2));return null;}).when(continuation).attachParent(any(),isNull(),any());
+    when(h.chat().execute(any(),anyString(),any())).thenReturn(ChatExecutionResult.waiting());h.dispatcher().tick();h.jobs().remove().run();h.dispatcher().tick();assertEquals("RUNNING",schedules.get("00000000-0000-0000-0000-000000000001",id).status());verify(h.chat(),times(1)).execute(any(),anyString(),any());verify(continuation,never()).detachParent(any());
+    completed.get().accept(ChatExecutionResult.success("integrated reply",false));assertEquals("COMPLETED",schedules.get("00000000-0000-0000-0000-000000000001",id).status());
+  }
   Harness harness() {
     String project="00000000-0000-0000-0000-000000000001";
     var projects=mock(dev.mikoto2000.rei.core.project.ProjectService.class);var context=new dev.mikoto2000.rei.core.project.ProjectContext(project,"test",dir);

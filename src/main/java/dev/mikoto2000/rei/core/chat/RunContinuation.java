@@ -13,4 +13,5 @@ public interface RunContinuation {
   default void attachParent(AgentRunContext owner,OutputLimitRunBudget.LlmCallReservation reservation,java.util.function.Consumer<ChatExecutionResult> completed) {}
   default void detachParent(AgentRunContext owner) {}
   default void terminal(AgentRunContext owner) {}
+  default void acceptGuidance(AgentRunContext owner,List<Message> guidance) {}
 }

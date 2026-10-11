@@ -139,7 +139,7 @@ public final class RunRegistry implements AutoCloseable {
     if(db!=null && !owned.contains(runId))throw new dev.mikoto2000.rei.application.state.OperationConflictException();
     if (current.status() == RunStatus.QUEUED && next != RunStatus.RUNNING && next != RunStatus.CANCELLED) return false;
     var value=new RunSnapshot(current.context(), next,
-        next == RunStatus.RUNNING ? clock.instant() : current.startedAt(),
+        next == RunStatus.RUNNING && current.startedAt()==null ? clock.instant() : current.startedAt(),
         next.isTerminal() ? clock.instant() : null, next == RunStatus.FAILED || next == RunStatus.UNKNOWN ? failure : null,current.childOrigin());
     save(value);runs.put(runId,value);
     return true;
