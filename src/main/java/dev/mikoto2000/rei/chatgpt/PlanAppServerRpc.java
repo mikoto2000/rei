@@ -6,8 +6,14 @@ import java.time.Duration;
 import java.util.*;
 import java.util.function.*;
 
-/** Codex 0.154.0 experimental stdio schema. No raw RPC/diagnostics are persisted. */
+/** Pinned Linux 0.154.0 / Windows 0.162.1 stdio schemas. No raw RPC is persisted. */
 public final class PlanAppServerRpc {
+  private final String version,platform;
+  public PlanAppServerRpc(){this("0.154.0","linux");}
+  public PlanAppServerRpc(String version,String platform){
+    if(!(version.equals("0.154.0")&&platform.equals("linux"))&&!(version.equals("0.162.1")&&platform.equals("windows")))throw new IllegalArgumentException("Unsupported Codex protocol");
+    this.version=version;this.platform=platform;
+  }
   public interface Session extends AutoCloseable {
     void send(String json); String poll(Duration timeout); void close();
   }
@@ -34,7 +40,7 @@ public final class PlanAppServerRpc {
     try {
       check();
       var initialized=call(1,"initialize",Map.of("clientInfo",Map.of("name","rei","version","1.0"),"capabilities",Map.of("experimentalApi",true)));
-      if(!initialized.path("userAgent").asText().startsWith("rei/0.154.0 ") || !initialized.path("platformOs").asText().equals("linux"))throw ChatGptException.of(PROTOCOL);
+      if(!initialized.path("userAgent").asText().startsWith("rei/"+version+" ") || !initialized.path("platformOs").asText().equals(platform))throw ChatGptException.of(PROTOCOL);
       send(Map.of("method","initialized","params",Map.of()));
       var profiles=call(2,"permissionProfile/list",Map.of()); boolean profile=false;
       for(var p:profiles.path("data"))if(p.path("id").asText().equals("rei-read")&&p.path("allowed").asBoolean())profile=true;

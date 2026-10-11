@@ -16,7 +16,8 @@ public class PlanConfiguration {
       dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions,dev.mikoto2000.rei.core.service.CommandCancellationService cancellation,
       dev.mikoto2000.rei.event.AgentEventFactory events,dev.mikoto2000.rei.event.AgentEventPublisher publisher,
       Clock clock,dev.mikoto2000.rei.application.run.RunRegistry runs) {
-    var adapter=new PlanAppServerClient(client,new WslPlanAppServerLauncher(settings),permissions);
+    PlanAppServerClient.Launcher launcher=settings.executionMode().equals("windows")?new WindowsPlanAppServerLauncher(settings):new WslPlanAppServerLauncher(settings);
+    var adapter=new PlanAppServerClient(client,launcher,permissions);
     var backend=new dev.mikoto2000.rei.subagent.ChatGptSubAgentBackend(adapter,plan,registry,permissions,cancellation,events,publisher,clock,runs,"codex-app-server");
     backend.configureAutomatic(automatic);
     return new dev.mikoto2000.rei.subagent.CodexAppServerSubAgentBackend(backend);

@@ -9,12 +9,14 @@ import java.time.Duration;
 import java.util.*;
 import java.util.function.BooleanSupplier;
 
-/** Own OAuth lease + a fresh WSL process; no alternate credentials or billing fallback. */
+/** Own OAuth lease + a fresh native process; no alternate credentials or billing fallback. */
 public final class PlanAppServerClient implements PlanInference {
   public record Started(PlanAppServerRpc.Session session,String cwd) {}
   public interface Launcher {
     Started start(TokenSet ownToken,Duration timeout,BooleanSupplier stop);
     default String authority(){return "codex-0.154.0-read-snapshots";}
+    default String version(){return "0.154.0";}
+    default String platform(){return "linux";}
   }
   private final PlanClient accounts;private final Launcher launcher;private final ToolPermissionGuard permissions;
   private final ThreadLocal<PlanAppServerRpc.Trace> traces=new ThreadLocal<>();
@@ -56,7 +58,7 @@ public final class PlanAppServerClient implements PlanInference {
     var remaining=Duration.ofNanos(Math.max(1,deadline-System.nanoTime()));
     if(System.nanoTime()>=deadline)throw ChatGptException.of(TIMEOUT);
     var started=launcher.start(lease.tokens(),remaining,stop);
-    var result=new PlanAppServerRpc().execute(started.session(),started.cwd(),model,adjusted,nativeInput,
+    var result=new PlanAppServerRpc(launcher.version(),launcher.platform()).execute(started.session(),started.cwd(),model,adjusted,nativeInput,
         Duration.ofNanos(Math.max(1,deadline-System.nanoTime())),receiveLimit,stop,onDispatch,path->{
           if(stop.getAsBoolean()||!snapshots.containsKey(path)||served.contains(path))throw ChatGptException.of(PERMISSION_DENIED);
           permissions.check("readFile",path,owner);

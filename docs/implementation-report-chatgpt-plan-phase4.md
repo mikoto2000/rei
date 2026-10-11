@@ -1,4 +1,6 @@
-# ChatGPT Plan Phase 4 実装報告
+# ChatGPT Plan Phase 4 初版実装報告
+
+後続のWindowsネイティブ切替は[Windows切替報告](implementation-report-chatgpt-plan-windows.md)を参照してください。現在の既定実行方式はWindows/MXCで、ここから下はPR #102で検証したWSL初版の記録です。
 
 2026-10-12。`codex-app-server` を既定無効の読取専用バックエンドとして追加しました。先に確認したWindows 0.154.0のunelevated sandboxの読取制限問題は、既存WSL2 Ubuntu-24.04のLinux sandboxを使うことで解消しました。管理者setup、通常Codexの設定変更、本人認証は行っていません。
 
