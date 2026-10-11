@@ -73,6 +73,9 @@ Slack Connect など別 Workspace の送信者も ID の許可判定を受けま
 環境変数を設定する際も、シェル履歴に実値が残らない秘密情報管理手段を使用してください。
 
 通常の Shell 起動では Slack 接続は増えません。専用 Backend を起動します。
+軽量 CLI と共用する場合は、`REI_API_KEY` と同じ `REI_DATA_DIR` を設定して
+`rei.bat --mode=server`（Linux/macOS は `./rei.sh --mode=server`）で起動します。
+`--mode=server` も Slack の Backend 起動条件を満たし、Slack 接続はこの一つのプロセスが管理します。
 
 ```powershell
 java -jar target/rei-0.0.1-SNAPSHOT.jar --backend

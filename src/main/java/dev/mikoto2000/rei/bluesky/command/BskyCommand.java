@@ -20,11 +20,16 @@ import picocli.CommandLine.Parameters;
       BskyCommand.HistoryCommand.class
     })
 public class BskyCommand {
+  public static String reportReply(BlueskyPostService service,String target,java.util.List<String> parts){var command=new ReplyCommand(service);command.targetPost=target;command.textParts=parts.toArray(String[]::new);return report(command);}
+  public static String reportHistoryUsers(BlueskyReplyConversationRepository repository){return report(new HistoryUsersCommand(repository));}
+  public static String reportHistory(BlueskyReplyConversationRepository repository,String handle,int limit){var command=new HistoryCommand(repository);command.handle=handle;command.limit=limit;return report(command);}
+  private static String report(ReportCommand command){var text=new java.io.StringWriter();command.out=new java.io.PrintWriter(text,true);command.run();return text.toString().replaceAll("[\\r\\n]+$","");}
+  private abstract static class ReportCommand implements Runnable { protected java.io.PrintWriter out=new java.io.PrintWriter(System.out,true); }
 
   @Component
   @RequiredArgsConstructor
   @Command(name = "reply", description = "指定した投稿にリプライします")
-  public static class ReplyCommand implements Runnable {
+  public static class ReplyCommand extends ReportCommand {
 
     private final BlueskyPostService blueskyPostService;
 
@@ -40,13 +45,13 @@ public class BskyCommand {
           ? blueskyPostService.reply(targetPost)
           : blueskyPostService.reply(targetPost, String.join(" ", textParts));
       if (!result.success()) {
-        System.out.println(result.message());
+        out.println(result.message());
         return;
       }
-      System.out.println(result.message());
-      System.out.println("postUri: " + result.postUri());
+      out.println(result.message());
+      out.println("postUri: " + result.postUri());
       if (result.postUrl() != null) {
-        System.out.println("postUrl: " + result.postUrl());
+        out.println("postUrl: " + result.postUrl());
       }
     }
   }
@@ -54,7 +59,7 @@ public class BskyCommand {
   @Component
   @RequiredArgsConstructor
   @Command(name = "history-users", description = "会話履歴があるユーザー一覧を表示します")
-  public static class HistoryUsersCommand implements Runnable {
+  public static class HistoryUsersCommand extends ReportCommand {
 
     private final BlueskyReplyConversationRepository conversationRepository;
 
@@ -62,17 +67,17 @@ public class BskyCommand {
     public void run() {
       var handles = conversationRepository.listHandles();
       if (handles.isEmpty()) {
-        System.out.println("会話履歴のあるユーザーはありません");
+        out.println("会話履歴のあるユーザーはありません");
         return;
       }
-      handles.forEach(System.out::println);
+      handles.forEach(out::println);
     }
   }
 
   @Component
   @RequiredArgsConstructor
   @Command(name = "history", description = "指定ユーザーとの会話履歴を表示します")
-  public static class HistoryCommand implements Runnable {
+  public static class HistoryCommand extends ReportCommand {
 
     private final BlueskyReplyConversationRepository conversationRepository;
 
@@ -86,10 +91,10 @@ public class BskyCommand {
     public void run() {
       var messages = conversationRepository.findRecent(handle, limit);
       if (messages.isEmpty()) {
-        System.out.println("対象ユーザーの会話履歴はありません: " + handle);
+        out.println("対象ユーザーの会話履歴はありません: " + handle);
         return;
       }
-      messages.forEach(message -> System.out.println(
+      messages.forEach(message -> out.println(
           message.createdAt() + " | " + message.role() + " | " + message.content()));
     }
   }

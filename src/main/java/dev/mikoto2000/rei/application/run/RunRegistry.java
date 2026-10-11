@@ -6,6 +6,9 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 
 /** Monitor-protected transitions publish an immutable snapshot of status and metadata together. */
 public final class RunRegistry implements AutoCloseable {
+  private dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setAdmissions(dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions){this.admissions=admissions;}
   public static final Duration RETENTION = Duration.ofMinutes(30);
   private final Clock clock;
   private final Map<String, RunSnapshot> runs = new LinkedHashMap<>();
@@ -115,6 +118,16 @@ public final class RunRegistry implements AutoCloseable {
     var value=new RunSnapshot(child,RunStatus.QUEUED,null,null,null,origin);save(value);runs.put(child.runId(),value);owned.add(child.runId());
   }
   public synchronized RunSnapshot get(String runId) {
+    if(admissions!=null) {
+      var value=admissions.get(runId);
+      if(value.isPresent()) {
+        var mirror=runs.get(runId);
+        if(owned.contains(runId)&&mirror!=null&&!mirror.status().isTerminal()&&value.get().status().isTerminal()) {
+          save(value.get());runs.put(runId,value.get());
+        }
+        return value.get();
+      }
+    }
     if(db!=null&&!owned.contains(runId)) {
       var document=db.sql("SELECT snapshot FROM rei_run_registry WHERE run_id=:id").param("id",runId).query(String.class).optional();
       if(document.isEmpty()){runs.remove(runId);documents.remove(runId);restored.remove(runId);throw new RunNotFoundException();}
@@ -142,6 +155,7 @@ public final class RunRegistry implements AutoCloseable {
         next == RunStatus.RUNNING && current.startedAt()==null ? clock.instant() : current.startedAt(),
         next.isTerminal() ? clock.instant() : null, next == RunStatus.FAILED || next == RunStatus.UNKNOWN ? failure : null,current.childOrigin());
     save(value);runs.put(runId,value);
+    if(admissions!=null)admissions.transition(runId,next);
     return true;
   }
   public synchronized List<String> purgeExpired() {
@@ -154,14 +168,18 @@ public final class RunRegistry implements AutoCloseable {
     return db==null?Set.copyOf(runs.keySet()):Set.copyOf(db.sql("SELECT run_id FROM rei_run_registry").query(String.class).list());
   }
   /** Restored metadata has no event subscription history in this server instance. */
-  public synchronized boolean restored(String runId) { return restored.contains(runId); }
+  public synchronized boolean restored(String runId) { return restored.contains(runId)||(admissions!=null&&admissions.get(runId).isPresent()&&!runs.containsKey(runId)); }
   public synchronized boolean ownsExecution(String runId) { return db==null || owned.contains(runId); }
   /** Only an exact durable waiting owner can be adopted after its previous process exited. */
   public synchronized boolean claimWaiting(AgentRunContext context) {
     var current=get(context.runId());if(current.status()!=RunStatus.WAITING||!current.context().equals(context))return false;
     if(db!=null&&!owned.contains(context.runId())) {
-      try{var stored=json.readValue(documents.get(context.runId()),StoredRun.class);if(stored.ownerAlive())return false;}
+      var document=db.sql("SELECT snapshot FROM rei_run_registry WHERE run_id=:id").param("id",context.runId()).query(String.class).optional();
+      if(document.isEmpty())return false;
+      try{var stored=json.readValue(document.get(),StoredRun.class);if(stored.ownerAlive())return false;}
       catch(java.io.IOException error){throw new IllegalStateException("Cannot inspect waiting Run owner",error);}
+      if(admissions!=null&&!admissions.claimWaiting(context))return false;
+      documents.put(context.runId(),document.get());
       save(current);owned.add(context.runId());restored.remove(context.runId());
     }
     return true;

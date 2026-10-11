@@ -256,7 +256,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     });
     fields.put("files",files);fields.put("git",CheckpointReconciler.git(context.projectRoot()));
   }
-  static String bounded(String text,int length){if(text==null)return "";return text.length()>length?text.substring(0,length):text;}
+  public static String bounded(String text,int length){if(text==null)return "";return text.length()>length?text.substring(0,length):text;}
   public String context(String run) {
     var state=active.get(run);if(state==null||state.resumedFromRunId()==null)return "";
     var check=state.reconciliation();var json=new com.fasterxml.jackson.databind.ObjectMapper();int budget=settings.getContextCharacters();

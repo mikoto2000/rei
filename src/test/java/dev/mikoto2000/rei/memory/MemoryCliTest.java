@@ -35,6 +35,12 @@ class MemoryCliTest {
         assertEquals(0,arg.isEmpty()?sleep.execute():sleep.execute(arg),output.toString());
       assertTrue(output.toString().contains("unslept turns"));
       var memory=repo.insert(LongTermMemoryTest.candidate("Vision first",MemoryScope.GLOBAL),null,"s");
+      var foreign=repo.insert(LongTermMemoryTest.candidate("Other project",MemoryScope.PROJECT),"other","s");
+      var selected=projects.currentContext().id();
+      assertFalse(support.listForProject(selected,20,0).contains("Other project"));
+      assertThrows(IllegalArgumentException.class,()->support.showForProject(selected,foreign.id()));
+      assertThrows(IllegalArgumentException.class,()->support.forgetForProject(selected,foreign.id()));
+      assertEquals(MemoryStatus.ACTIVE,repo.find(foreign.id()).orElseThrow().status());
       var root=new MemoryCommand();
       var cli=new CommandLine(root,new CommandLine.IFactory() {
         public <K>K create(Class<K> cls) throws Exception {

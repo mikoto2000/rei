@@ -15,6 +15,11 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 /** Durable goal identity, claims and pre-call reservations. Resume never replenishes a budget. */
 @Repository
 public class GoalRepository {
+  /** Shared bounded criteria parser for Shell and named human APIs. */
+  public static List<FileCriterion> parseCriteria(String json) {
+    if(json==null||json.length()>32768)throw new IllegalArgumentException("Bounded criteria JSON required");
+    return JsonFileGoalCondition.parseCriteria(json);
+  }
   public record FileCriterion(String relativeFile,String sha256,String jsonPointer,String expectedJson,String predicateJson) {
     public FileCriterion(String relativeFile,String sha256,String jsonPointer,String expectedJson){this(relativeFile,sha256,jsonPointer,expectedJson,null);}
     public FileCriterion(String relativeFile,String sha256){this(relativeFile,sha256,null,null);}

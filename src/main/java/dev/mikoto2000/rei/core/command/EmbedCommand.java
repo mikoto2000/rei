@@ -33,6 +33,14 @@ import picocli.CommandLine.Parameters;
       EmbedCommand.DeleteCommand.class
     })
 public class EmbedCommand implements Runnable {
+  private abstract static class ReportCommand implements Runnable {
+    private java.io.PrintWriter reportOutput;
+    java.io.PrintWriter out(){return reportOutput==null?new java.io.PrintWriter(System.out,true):reportOutput;}
+  }
+  private static String report(ReportCommand command){var text=new java.io.StringWriter();command.reportOutput=new java.io.PrintWriter(text,true);command.run();return text.toString().replaceFirst("[\\r\\n]+$","");}
+  public static String reportSearch(VectorDocumentService service,String query,Integer topK,Double threshold,String source){var command=new SearchCommand(service);command.queryParts=new String[]{query};command.topK=topK;command.threshold=threshold;command.source=source;return report(command);}
+  public static String reportList(VectorDocumentService service){return report(new ListCommand(service));}
+  public static String reportDelete(VectorDocumentService service,String id,String source){var command=new DeleteCommand(service);command.docId=id;command.source=source;return report(command);}
 
   private final VectorDocumentService vectorDocumentService;
   private final AsyncVectorDocumentService asyncVectorDocumentService;
@@ -72,7 +80,7 @@ public class EmbedCommand implements Runnable {
   @Component
   @RequiredArgsConstructor
   @Command(name = "search", description = "ベクトルストア内の文書を検索します")
-  public static class SearchCommand implements Runnable {
+  public static class SearchCommand extends ReportCommand {
 
     private final VectorDocumentService vectorDocumentService;
 
@@ -92,11 +100,11 @@ public class EmbedCommand implements Runnable {
     public void run() {
       List<VectorDocumentSearchResult> results = vectorDocumentService.search(String.join(" ", queryParts), topK, threshold, source);
       if (results.isEmpty()) {
-        System.out.println("一致する文書はありません");
+        out().println("一致する文書はありません");
         return;
       }
       for (VectorDocumentSearchResult result : results) {
-        System.out.println(result.docId() + " | " + result.source() + " | chunk=" + result.chunkIndex()
+        out().println(result.docId() + " | " + result.source() + " | chunk=" + result.chunkIndex()
             + " | score=" + formatScore(result.score()) + " | " + result.snippet());
       }
     }
@@ -105,7 +113,7 @@ public class EmbedCommand implements Runnable {
   @Component
   @RequiredArgsConstructor
   @Command(name = "list", description = "登録済み文書を一覧します")
-  public static class ListCommand implements Runnable {
+  public static class ListCommand extends ReportCommand {
 
     private final VectorDocumentService vectorDocumentService;
 
@@ -113,7 +121,7 @@ public class EmbedCommand implements Runnable {
     public void run() {
       List<VectorDocumentEntry> entries = vectorDocumentService.list();
       if (entries.isEmpty()) {
-        System.out.println("登録済み文書はありません");
+        out().println("登録済み文書はありません");
         return;
       }
 
@@ -126,7 +134,7 @@ public class EmbedCommand implements Runnable {
 
       for (var groupedEntry : grouped.entrySet()) {
         SourceSummary summary = groupedEntry.getValue();
-        System.out.println(groupedEntry.getKey() + " | docs=" + summary.docCount()
+        out().println(groupedEntry.getKey() + " | docs=" + summary.docCount()
             + " | chunks=" + summary.chunkCount() + " | latest=" + summary.latestIngestedAt());
       }
     }
@@ -135,7 +143,7 @@ public class EmbedCommand implements Runnable {
   @Component
   @RequiredArgsConstructor
   @Command(name = "delete", description = "登録済み文書を削除します")
-  public static class DeleteCommand implements Runnable {
+  public static class DeleteCommand extends ReportCommand {
 
     private final VectorDocumentService vectorDocumentService;
 
@@ -149,12 +157,12 @@ public class EmbedCommand implements Runnable {
     public void run() {
       if (docId != null && !docId.isBlank() && (source == null || source.isBlank())) {
         boolean deleted = vectorDocumentService.deleteByDocId(docId);
-        System.out.println(deleted ? "削除: " + docId : "削除対象が見つかりません: " + docId);
+        out().println(deleted ? "削除: " + docId : "削除対象が見つかりません: " + docId);
         return;
       }
       if ((docId == null || docId.isBlank()) && source != null && !source.isBlank()) {
         int deleted = vectorDocumentService.deleteBySource(source);
-        System.out.println("削除: " + deleted + " documents | " + source);
+        out().println("削除: " + deleted + " documents | " + source);
         return;
       }
       throw new IllegalArgumentException("--doc-id か --source のどちらか一方を指定してください");
@@ -172,48 +180,8 @@ public class EmbedCommand implements Runnable {
   }
 
   static List<String> resolveDocuments(List<String> documents) {
-    Path baseDirectory = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
-    return documents.stream()
-        .flatMap(document -> expandDocument(document, baseDirectory).stream())
-        .distinct()
-        .toList();
+    return dev.mikoto2000.rei.core.completion.DocumentPathResolver.resolve(documents,Path.of(System.getProperty("user.dir")));
   }
-
-  private static List<String> expandDocument(String document, Path baseDirectory) {
-    if (!containsWildcard(document)) {
-      return List.of(document);
-    }
-    PathMatcher matcher = baseDirectory.getFileSystem().getPathMatcher("glob:" + normalizeGlobPattern(document));
-    try (Stream<Path> stream = Files.walk(baseDirectory)) {
-      List<String> matches = stream
-          .filter(Files::isRegularFile)
-          .map(baseDirectory::relativize)
-          .filter(matcher::matches)
-          .map(baseDirectory::resolve)
-          .map(Path::normalize)
-          .map(Path::toString)
-          .sorted()
-          .toList();
-      if (matches.isEmpty()) {
-        throw new IllegalArgumentException("ワイルドカードに一致するファイルがありません: " + document);
-      }
-      return matches;
-    } catch (IOException e) {
-      throw new IllegalStateException("ワイルドカードの展開に失敗しました: " + document, e);
-    }
-  }
-
-  private static boolean containsWildcard(String document) {
-    return document.indexOf('*') >= 0 || document.indexOf('?') >= 0 || document.indexOf('[') >= 0;
-  }
-
-  private static String normalizeGlobPattern(String document) {
-    if (document.startsWith("./")) {
-      return document.substring(2);
-    }
-    return document;
-  }
-
   private static String formatScore(Double score) {
     return score == null ? "n/a" : String.format(Locale.ROOT, "%.3f", score);
   }

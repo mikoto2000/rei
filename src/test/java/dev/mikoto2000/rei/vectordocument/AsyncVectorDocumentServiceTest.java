@@ -18,6 +18,12 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 class AsyncVectorDocumentServiceTest {
+  @Test void ingestionReportsCompletionAndFailureToItsOwnWriterWithoutGlobalOutput()throws Exception {
+    var vectors=Mockito.mock(VectorDocumentService.class);var service=new AsyncVectorDocumentService(vectors);var lines=new java.util.ArrayList<String>();
+    when(vectors.add(List.of("paper.md"))).thenReturn(List.of(new VectorDocumentEntry("doc","paper.md",2,"2026-10-11T00:00:00Z")));
+    service.addAndReport(List.of("paper.md"),lines::add);assertTrue(lines.getFirst().contains("追加完了: doc"));assertFalse(service.hasActiveEmbeddings());
+    doThrow(new IOException("failure")).when(vectors).add(List.of("missing.md"));service.addAndReport(List.of("missing.md"),lines::add);assertTrue(lines.getLast().contains("追加失敗: missing.md"));assertFalse(service.hasActiveEmbeddings());
+  }
 
   @Test
   void addAsyncPrintsCompletionMessage() throws Exception {

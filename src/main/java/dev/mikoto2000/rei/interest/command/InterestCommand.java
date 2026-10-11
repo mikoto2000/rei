@@ -20,11 +20,15 @@ import picocli.CommandLine.Option;
       InterestCommand.DiscoverCommand.class
     })
 public class InterestCommand {
+  public static String reportList(InterestUpdateService service,int hours){var command=new ListCommand(service);command.hours=hours;return report(command);}
+  public static String reportDiscovery(InterestDiscoveryJob job){return report(new DiscoverCommand(job));}
+  private static String report(ReportCommand command){var text=new java.io.StringWriter();command.out=new java.io.PrintWriter(text,true);command.run();return text.toString().replaceAll("[\\r\\n]+$","");}
+  private abstract static class ReportCommand implements Runnable { protected java.io.PrintWriter out=new java.io.PrintWriter(System.out,true); }
 
   @Component
   @RequiredArgsConstructor
   @Command(name = "list", description = "最近の興味更新を一覧します")
-  public static class ListCommand implements Runnable {
+  public static class ListCommand extends ReportCommand {
 
     private final InterestUpdateService interestUpdateService;
 
@@ -35,13 +39,13 @@ public class InterestCommand {
     public void run() {
       List<InterestUpdate> updates = interestUpdateService.listRecent(hours);
       if (updates.isEmpty()) {
-        System.out.println("興味更新はありません");
+        out.println("興味更新はありません");
         return;
       }
 
       for (InterestUpdate update : updates) {
         String urls = update.sourceUrls().isEmpty() ? "" : String.join(", ", update.sourceUrls());
-        System.out.println(update.id() + " | " + update.createdAt() + " | " + update.topic() + " | "
+        out.println(update.id() + " | " + update.createdAt() + " | " + update.topic() + " | "
             + update.summary() + " | " + urls);
       }
     }
@@ -50,16 +54,16 @@ public class InterestCommand {
   @Component
   @RequiredArgsConstructor
   @Command(name = "discover", description = "興味更新の抽出と検索を手動実行します")
-  public static class DiscoverCommand implements Runnable {
+  public static class DiscoverCommand extends ReportCommand {
 
     private final InterestDiscoveryJob interestDiscoveryJob;
 
     @Override
     public void run() {
-      List<InterestUpdate> savedUpdates = interestDiscoveryJob.discoverNow(System.out::println);
-      System.out.println("興味更新を " + savedUpdates.size() + " 件追加しました");
+      List<InterestUpdate> savedUpdates = interestDiscoveryJob.discoverNow(out::println);
+      out.println("興味更新を " + savedUpdates.size() + " 件追加しました");
       for (InterestUpdate update : savedUpdates) {
-        System.out.println("- " + update.topic() + " | " + update.summary());
+        out.println("- " + update.topic() + " | " + update.summary());
       }
     }
   }

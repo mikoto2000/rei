@@ -28,6 +28,17 @@ public final class LlmCaptureCommand implements Runnable {
   public LlmCaptureCommand(CaptureStore store,Supplier<Object> client,Supplier<String> conversation,Runnable ensureConversation){this.store=store;this.client=client;this.conversation=conversation;this.ensureConversation=ensureConversation;}
   public void setShellOutput(PrintWriter output){shellOutput=output;}
   public void setConfirmation(Predicate<String> confirmation){this.confirmation=Objects.requireNonNull(confirmation);}
+  public String reportNext(){return report("next");}
+  public String reportStatus(){return report("status");}
+  public String reportOff(){return report("off");}
+  public String reportSessions(){return report("list");}
+  public String reportAttempts(String run){return report("list",run);}
+  public String reportShow(String attempt){return report("show",attempt);}
+  public String reportRaw(String attempt){return report("raw",attempt);}
+  public String reportExport(String attempt,String path){return report("export",attempt,path);}
+  public String reportDelete(String run){return report("delete",run);}
+  public String reportClear(){return report("clear");}
+  private String report(String... arguments){var text=new StringWriter();setShellOutput(new PrintWriter(text,true));execute(arguments);return text.toString().replaceAll("[\\r\\n]+$","");}
   private PrintWriter out(){return shellOutput==null?spec.commandLine().getOut():shellOutput;}
   public void run(){spec.commandLine().usage(out());}
   @Command(name="capture",description="次のCLI依頼のHTTP本文をJVMメモリへ記録",mixinStandardHelpOptions=true)

@@ -23,7 +23,10 @@ class SlackLifecycleTest {
   }
   @Test void backendStartupFlagIsExplicit() {
     assertTrue(dev.mikoto2000.rei.StartupOptions.parse(new String[]{"--backend"},java.nio.file.Path.of(".")).backend());
+    assertTrue(dev.mikoto2000.rei.StartupOptions.parse(new String[]{"--mode=server"},java.nio.file.Path.of(".")).backend());
+    assertTrue(dev.mikoto2000.rei.StartupOptions.parse(new String[]{"--mode","server"},java.nio.file.Path.of(".")).backend());
     assertFalse(dev.mikoto2000.rei.StartupOptions.parse(new String[]{},java.nio.file.Path.of(".")).backend());
+    assertFalse(dev.mikoto2000.rei.StartupOptions.parse(new String[]{"--mode=legacy-shell"},java.nio.file.Path.of(".")).backend());
   }
   @Test void stopDoesNotWaitForSlowInitializationAndClosesLateConnection() throws Exception {
     var p=new SlackProperties();p.setEnabled(true);var entered=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);var closed=new java.util.concurrent.atomic.AtomicInteger();

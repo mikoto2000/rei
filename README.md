@@ -1,5 +1,7 @@
 # Rei
 
+軽量 CLI は `rei.bat` / `rei.sh` から起動できます。単一 Backend、Session 排他・永続 receipt、HTTP/SSE、detached 起動を実装し、音声を除く既存 Shell コマンドを接続しました。実 Windows Terminal の複数ペイン・GUI close と対話型 ConPTY を検証しています。[起動方法・制約](docs/lightweight-cli-client.md) と [全47コマンドの対応表](docs/lightweight-cli-command-matrix.md) を参照してください。既存 Shell と `start.bat` / `start.sh` は維持しています。
+
 Web API 向けの Tauri 2 クライアント（Phase 1 / 2）は [client/README.md](client/README.md) を参照してください。Windows での開発・ビルド、Conversation / Run UI、SSE 再接続、モバイルの検証状況を記載しています。
 
 Codex による read-only 外部レビューは `/agent codex review [target]` または明示的な自然言語依頼で利用できます。Claude Code CLI のサブスクリプション認証レビューも、明示opt-inで `/agent claude review [target]` に対応します（[利用準備・範囲](docs/claude-code-reviews.md)）。
@@ -36,6 +38,20 @@ Rei は、ターミナルで使う AI 秘書シェルです。OpenAI 互換 API 
 - 利用する OpenAI 互換 API の接続先、モデル名、必要に応じた API キー
 
 以下はソースから起動する手順です。リポジトリのルートで実行してください。Maven は同梱の Maven Wrapper を使用できます。初回は依存ファイルのダウンロードにネットワーク接続が必要です。
+
+従来 Shell の Backend JAR と軽量 CLI をまとめてビルドする場合は、Windows で `build.bat`、Linux/macOS で `sh ./build.sh` を実行します。既定では両方のテストを実行し、`-DskipTests` を付けると省略できます。Maven の追加引数は両方のビルドに渡します。更新先の JAR を使う Rei と軽量 CLI は、ビルド前に通常終了してください。
+
+```powershell
+.\build.bat
+# テストを省略する場合
+.\build.bat -DskipTests
+```
+
+```sh
+sh ./build.sh
+# テストを省略する場合
+sh ./build.sh -DskipTests
+```
 
 ### 2. AI の接続先を設定する
 
@@ -196,7 +212,7 @@ Web では認証付き `GET /api/v1/sessions`、`GET /api/v1/sessions/{sessionId
 詳しくは[設定ガイド](docs/configuration.md)を参照してください。
 
 Slack で会話する場合は [Slack Bot ガイド](docs/slack-bot.md)を参照してください。
-明示的に有効化した専用 `--backend` プロセスが Socket Mode 接続を管理します。
+明示的に有効化した専用 `--backend` または `--mode=server` プロセスが Socket Mode 接続を管理します。
 
 ## 困ったときは
 

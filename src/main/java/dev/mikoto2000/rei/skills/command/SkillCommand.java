@@ -20,6 +20,15 @@ import picocli.CommandLine.Spec;
 public class SkillCommand implements Runnable {
 
   private final AgentSkillRepository repository;
+  private java.io.PrintWriter reportOutput;
+
+  private String report(java.util.function.Consumer<SkillCommand> action) {
+    var text=new java.io.StringWriter();var command=new SkillCommand(repository);
+    command.reportOutput=new java.io.PrintWriter(text);action.accept(command);command.reportOutput.flush();return text.toString();
+  }
+  public String renderList(){return report(SkillCommand::list);}
+  public String renderShow(String name){return report(command->command.show(name));}
+  public String renderReload(){return report(SkillCommand::reload);}
 
   @Spec
   CommandSpec spec;
@@ -71,7 +80,7 @@ public class SkillCommand implements Runnable {
   }
 
   private java.io.PrintWriter out() {
-    return spec.commandLine().getOut();
+    return reportOutput==null?spec.commandLine().getOut():reportOutput;
   }
 
   @Command(name = "list", description = "Agent Skills の一覧を表示します")

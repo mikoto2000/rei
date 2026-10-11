@@ -20,6 +20,28 @@ public final class StorageCommand {
   public StorageCommand(dev.mikoto2000.rei.storage.RetentionPlanner planner,dev.mikoto2000.rei.storage.RetentionExecutor executor,dev.mikoto2000.rei.storage.StorageMaintenance maintenance,dev.mikoto2000.rei.storage.AutomaticRetention automatic){this(planner);setExecutionServices(executor,maintenance,automatic);}
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   public void setExecutionServices(dev.mikoto2000.rei.storage.RetentionExecutor executor,dev.mikoto2000.rei.storage.StorageMaintenance maintenance,dev.mikoto2000.rei.storage.AutomaticRetention automatic){this.executor=executor;this.maintenance=maintenance;this.automatic=automatic;}
+  public String reportPlan(String category,String project,int objects,long bytes){var action=new Plan();action.category=category;action.project=project;action.objects=objects;action.bytes=bytes;return reportRetention(action);}
+  public String reportApprove(String id){var action=new Approve();action.id=id;return reportRetention(action);}
+  public String reportRetentionHistory(){return reportRetention(new History());}
+  public String reportApply(String id){var action=new Apply();action.id=id;return reportRetention(action);}
+  public String reportRestore(String id){var action=new Restore();action.id=id;return reportRetention(action);}
+  public String reportApprovePurge(String id){var action=new ApprovePurge();action.id=id;return reportRetention(action);}
+  public String reportPurge(String id){var action=new Purge();action.id=id;return reportRetention(action);}
+  public String reportPolicy(String category,String days,Long count,Long bytes,boolean clearCount,boolean clearBytes){var action=new Policy();action.category=category;action.days=days;action.count=count;action.bytes=bytes;action.clearCount=clearCount;action.clearBytes=clearBytes;return reportRetention(action);}
+  public String reportAutoPropose(String category,String project,int objects,long bytes,long seconds){var action=new AutoPropose();action.category=category;action.project=project;action.objects=objects;action.bytes=bytes;action.seconds=seconds;return reportAuto(action);}
+  public String reportAutoApprove(String id){var action=new AutoApprove();action.id=id;return reportAuto(action);}
+  public String reportAutoDisable(String id){var action=new AutoDisable();action.id=id;return reportAuto(action);}
+  public String reportAutoHistory(){return reportAuto(new AutoHistory());}
+  public String reportMaintenanceStatus(){return reportMaintenance(new MaintenanceStatus());}
+  public String reportCheckpoint(){return reportMaintenance(new Checkpoint());}
+  public String reportIncrementalVacuum(int pages){var action=new IncrementalVacuum();action.pages=pages;return reportMaintenance(action);}
+  public String reportVacuum(long seconds){var action=new Vacuum();action.seconds=seconds;return reportMaintenance(action);}
+  public String reportStatus(String project){var action=new Status();var text=new java.io.StringWriter();var writer=new java.io.PrintWriter(text,true);new picocli.CommandLine(action).setOut(writer).setErr(writer);action.parent=this;action.project=project;action.call();writer.flush();return reportText(text);}
+  private String reportRetention(RetentionAction action){action.parent=new Retention();action.parent.parent=this;return render(out->{if(planner==null)throw new IllegalStateException("Storage startup gate has not initialized retention");action.execute(planner,out);});}
+  private String reportAuto(AutoAction action){action.parent=new Auto();action.parent.parent=new Retention();action.parent.parent.parent=this;return render(out->{if(automatic==null)throw new IllegalStateException("Automatic retention has not initialized");action.execute(automatic,out);});}
+  private String reportMaintenance(MaintenanceAction action){action.parent=new Maintenance();action.parent.parent=this;return render(out->{if(maintenance==null)throw new IllegalStateException("Storage maintenance has not initialized");action.execute(maintenance,out);});}
+  private static String render(java.util.function.Consumer<java.io.PrintWriter> action){var text=new java.io.StringWriter();var out=new java.io.PrintWriter(text,true);try{action.accept(out);}catch(RuntimeException error){out.println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));}out.flush();return reportText(text);}
+  private static String reportText(java.io.StringWriter text){return text.toString().replaceFirst("[\\r\\n]+$","");}
   @Command(name="retention",subcommands={Plan.class,Approve.class,History.class,Apply.class,Restore.class,ApprovePurge.class,Purge.class,Policy.class,Auto.class},description="dry-run、明示承認、隔離・復元。定期整理は既定で無効です")
   public static final class Retention { @ParentCommand StorageCommand parent; }
   static String selectedScope(String project) {

@@ -22,11 +22,16 @@ import picocli.CommandLine.Parameters;
       ReminderCommand.DeleteCommand.class
     })
 public class ReminderCommand {
+  private abstract static class ReportCommand implements Runnable {protected java.io.PrintWriter out=new java.io.PrintWriter(System.out,true);}
+  private static String report(ReportCommand command){var text=new java.io.StringWriter();command.out=new java.io.PrintWriter(text,true);command.run();return text.toString().replaceAll("[\\r\\n]+$","");}
+  public static String reportList(ReminderService service){return report(new ListCommand(service));}
+  public static String reportAdd(ReminderService service,String message,OffsetDateTime at,OffsetDateTime target,Integer minutes){var command=new AddCommand(service);command.messageParts=new String[]{message};command.at=at;command.target=target;command.minutesBefore=minutes;return report(command);}
+  public static String reportDelete(ReminderService service,long id){var command=new DeleteCommand(service);command.id=id;return report(command);}
 
   @Component
   @RequiredArgsConstructor
   @Command(name = "add", description = "リマインドを追加します")
-  public static class AddCommand implements Runnable {
+  public static class AddCommand extends ReportCommand {
 
     private final ReminderService reminderService;
 
@@ -54,14 +59,14 @@ public class ReminderCommand {
         throw new IllegalArgumentException("--at か --target と --minutes-before の組み合わせを指定してください");
       }
 
-      System.out.println("追加: " + created.id() + " | " + created.remindAt() + " | " + created.message());
+      out.println("追加: " + created.id() + " | " + created.remindAt() + " | " + created.message());
     }
   }
 
   @Component
   @RequiredArgsConstructor
   @Command(name = "list", description = "未通知のリマインドを一覧します")
-  public static class ListCommand implements Runnable {
+  public static class ListCommand extends ReportCommand {
 
     private final ReminderService reminderService;
 
@@ -69,12 +74,12 @@ public class ReminderCommand {
     public void run() {
       List<Reminder> reminders = reminderService.listActive();
       if (reminders.isEmpty()) {
-        System.out.println("未通知のリマインドはありません");
+        out.println("未通知のリマインドはありません");
         return;
       }
 
       for (Reminder reminder : reminders) {
-        System.out.println(reminder.id() + " | " + reminder.type() + " | " + reminder.remindAt() + " | " + reminder.message());
+        out.println(reminder.id() + " | " + reminder.type() + " | " + reminder.remindAt() + " | " + reminder.message());
       }
     }
   }
@@ -82,7 +87,7 @@ public class ReminderCommand {
   @Component
   @RequiredArgsConstructor
   @Command(name = "delete", description = "リマインドを削除します")
-  public static class DeleteCommand implements Runnable {
+  public static class DeleteCommand extends ReportCommand {
 
     private final ReminderService reminderService;
 
@@ -92,7 +97,7 @@ public class ReminderCommand {
     @Override
     public void run() {
       reminderService.delete(id);
-      System.out.println("削除: " + id);
+      out.println("削除: " + id);
     }
   }
 }

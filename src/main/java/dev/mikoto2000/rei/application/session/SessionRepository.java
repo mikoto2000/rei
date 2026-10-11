@@ -4,6 +4,7 @@ import java.util.Optional;
 
 /** Persistent source of truth, independent of runtime session retention. */
 public interface SessionRepository {
+  default void refreshCompletionSnapshot() {}
   /** Already loaded metadata only. Implementations must not perform I/O for completion. */
   default java.util.List<SessionMetadata> completionSnapshot() { return java.util.List.of(); }
   Optional<SessionMetadata> findById(String sessionId);

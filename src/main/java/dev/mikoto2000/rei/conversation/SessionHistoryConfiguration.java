@@ -9,10 +9,19 @@ import org.springframework.beans.factory.annotation.Value;
 @Configuration(proxyBeanMethods = false)
 @Import(dev.mikoto2000.rei.storage.StorageMigrationConfiguration.class)
 public class SessionHistoryConfiguration {
+  @Bean @DependsOn("storageMigrationLease")
+  ConversationAdmissionStore conversationAdmissionStore(@Value("${rei.data-dir}") String directory,java.time.Clock clock,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.event.AgentEventBus> events) {
+    var admissions=new ConversationAdmissionStore(Path.of(directory),clock);
+    events.ifAvailable(admissions::observe);
+    return admissions;
+  }
   @Bean dev.mikoto2000.rei.application.session.SessionLifecycle sessionLifecycle(SessionRepository repository, java.time.Clock clock,
       org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.project.ProjectService> projects,
-      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.memory.service.AutoSleepService> autoSleep) {
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.memory.service.AutoSleepService> autoSleep,
+      ConversationAdmissionStore admissions) {
     var lifecycle=new dev.mikoto2000.rei.application.session.SessionLifecycle(repository,clock);
+    lifecycle.setAdmissions(admissions);
     lifecycle.onSelected(context->projects.ifAvailable(project->project.rememberConversation(context)));
     lifecycle.onEnded(session->autoSleep.ifAvailable(service->service.afterSessionEnd(session)));return lifecycle;
   }

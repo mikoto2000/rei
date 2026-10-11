@@ -13,6 +13,10 @@ public class CheckpointController {
   private final PersistentCheckpointService service;
   public CheckpointController(PersistentCheckpointService service){this.service=service;}
   @GetMapping public List<PersistentCheckpoint> list(@PathVariable String projectId){return service.list(projectId);}
+  public record Text(String text){public Text{text=dev.mikoto2000.rei.event.CredentialRedactor.redact(text);}}
+  @GetMapping("/report") public Text report(@PathVariable String projectId){return new Text(String.valueOf(service.list(projectId)));}
+  @GetMapping("/report/list") public Text reportList(@PathVariable String projectId){return new Text(String.valueOf(service.list(projectId).stream().map(state->state.taskId()+" ["+state.status()+"] "+PersistentCheckpointService.bounded(state.request(),160)).toList()));}
+  @GetMapping("/{taskId}/report") public Text reportShow(@PathVariable String projectId,@PathVariable String taskId){return new Text(service.get(projectId,taskId)+"\n"+service.inspect(projectId,taskId));}
   @GetMapping("/{taskId}") public PersistentCheckpoint show(@PathVariable String projectId,@PathVariable String taskId){return service.get(projectId,taskId);}
   @GetMapping("/{taskId}/reconciliation") public CheckpointReconciler.Result inspect(@PathVariable String projectId,@PathVariable String taskId){return service.inspect(projectId,taskId);}
   public record SaveRequest(String sessionId){}

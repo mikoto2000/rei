@@ -16,6 +16,11 @@ public class WorkContextController {
   @GetMapping("/api/v1/projects/{projectId}/work-context")
   public WorkContext current(@PathVariable String projectId) {return service.current(projectId).orElseThrow(()->new ResourceNotFoundException("Work Context"));}
   public record Summary(boolean autoPresent,boolean hasContext,String text) {}
+  public record Text(String text){}
+  @GetMapping("/api/v1/projects/{projectId}/work-context/report")
+  public Text report(@PathVariable String projectId){var project=service.project(projectId);return new Text(new WorkContextFormatter().details(service.current(projectId).orElse(null),git.capture(project.root(),Instant.now())));}
+  @GetMapping("/api/v1/projects/{projectId}/work-context/history/report")
+  public Text reportHistory(@PathVariable String projectId){var rows=service.history(projectId,100);return new Text(rows.isEmpty()?"Work Context: 履歴はまだありません。":rows.stream().map(context->"revision="+context.revision()+" updated="+context.updatedAt()+" items="+context.items().size()).collect(java.util.stream.Collectors.joining("\n")));}
   @GetMapping("/api/v1/projects/{projectId}/work-context/summary")
   public Summary summary(@PathVariable String projectId) {
     var project=service.project(projectId);var saved=service.current(projectId).orElse(null);

@@ -31,6 +31,15 @@ public class SubAgentCommand implements Callable<Integer> {
   }); }
   /** Keep JLine's encoding even when picocli rebinds the shared command's @Spec. */
   public void setShellOutput(java.io.PrintWriter output) { this.shellOutput = output; }
+  private String report(java.util.function.Consumer<SubAgentCommand> action) {
+    var text=new java.io.StringWriter();var command=new SubAgentCommand(registry,loader,policy);
+    command.setShellOutput(new java.io.PrintWriter(text,true));action.accept(command);return text.toString();
+  }
+  public String renderList(){return report(SubAgentCommand::call);}
+  public String renderShow(String id){return report(parent->{var command=new ShowCommand();command.parent=parent;command.id=id;command.call();});}
+  public String renderReload(){return report(parent->{var command=new ReloadCommand();command.parent=parent;command.call();});}
+  public String renderValidate(Path file){return report(parent->{var command=new ValidateCommand();command.parent=parent;command.file=file;command.call();});}
+  public String renderInitialize(String id){return report(parent->{var command=new InitCommand();command.parent=parent;command.id=id;command.call();});}
   private java.io.PrintWriter output() { return shellOutput == null ? spec.commandLine().getOut() : shellOutput; }
   private void out(String text) { output().println(text); }
   private int execute(Action action) {

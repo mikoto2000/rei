@@ -12,6 +12,8 @@ import dev.mikoto2000.rei.llm.ConversationIds;
 public final class SessionLifecycle {
   private final SessionRepository repository;
   private final Clock clock;
+  private dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions;
+  public void setAdmissions(dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions){this.admissions=admissions;}
   private java.util.function.Consumer<AgentRunContext> selected=context->{};
   private java.util.function.Consumer<SessionMetadata> ended=session->{};
   public void onEnded(java.util.function.Consumer<SessionMetadata> ended){this.ended=ended;}
@@ -49,6 +51,10 @@ public final class SessionLifecycle {
   }
   public AgentRunContext submit(ProjectContext project,String sessionId,String message,
       AgentRunContext.RequestSource source,AgentRunContext.Mode mode,boolean voiceInput,Consumer<AgentRunContext> enqueue) {
+    return submit(project,sessionId,message,source,mode,voiceInput,null,null,enqueue);
+  }
+  public AgentRunContext submit(ProjectContext project,String sessionId,String message,
+      AgentRunContext.RequestSource source,AgentRunContext.Mode mode,boolean voiceInput,String key,String fingerprint,Consumer<AgentRunContext> enqueue) {
     if (message == null || message.isBlank()) throw new IllegalArgumentException("message is required");
     // All entry points sharing this repository serialize validation, metadata update and FIFO admission.
     synchronized (repository) {
@@ -62,7 +68,16 @@ public final class SessionLifecycle {
           metadata.responseStyle()==dev.mikoto2000.rei.core.chat.ResponseStyle.AUTO
               ? (voiceInput ? dev.mikoto2000.rei.core.chat.ResponseStyle.CONVERSATION : dev.mikoto2000.rei.core.chat.ResponseStyle.NORMAL)
               : metadata.voiceOnly() && !voiceInput ? dev.mikoto2000.rei.core.chat.ResponseStyle.NORMAL : metadata.responseStyle());
-      repository.accept(metadata, () -> enqueue.accept(context));
+      if(admissions==null) {
+        if(key!=null)throw new IllegalStateException("Durable admission is unavailable");
+        repository.accept(metadata, () -> enqueue.accept(context));
+      } else {
+        var receipt=admissions.accept(metadata,context,key,fingerprint);
+        if(receipt.replay())return receipt.context();
+        repository.refreshCompletionSnapshot();
+        try {enqueue.accept(context);}
+        catch(RuntimeException|Error error){admissions.transition(context.runId(),RunStatus.FAILED);admissions.release(context.runId());throw error;}
+      }
       selected.accept(context);
       return context;
     }

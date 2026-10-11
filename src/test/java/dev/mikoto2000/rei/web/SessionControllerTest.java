@@ -22,6 +22,24 @@ class SessionControllerTest {
   static class Config {
     @Bean ApiKeyProperties apiKeyProperties() { return new ApiKeyProperties("secret"); }
   }
+  @Test void emptySessionAndResponseStyleUseRegisteredProjectWithoutStartingARun()throws Exception {
+    var repo=new FileSessionRepository(directory.resolve("sessions.json"));var clock=Clock.systemUTC();
+    var lifecycle=new SessionLifecycle(repo,clock);var projects=new dev.mikoto2000.rei.core.project.ProjectRegistry(directory.resolve("projects.json"));var project=projects.resolve(directory);
+    new WebApplicationContextRunner().withPropertyValues("rei.web.enabled=true").withBean(SessionLifecycle.class,()->lifecycle)
+        .withBean(dev.mikoto2000.rei.core.project.ProjectRegistry.class,()->projects)
+        .withBean(SessionQueryService.class,()->new SessionQueryService(repo,new dev.mikoto2000.rei.conversation.ConversationTurnStore(directory)))
+        .withUserConfiguration(Config.class).run(context->{
+          var mvc=MockMvcBuilders.webAppContextSetup(context).addFilters(context.getBean("springSecurityFilterChain",jakarta.servlet.Filter.class)).build();
+          mvc.perform(post("/api/v1/sessions").contentType("application/json").content("{\"projectId\":\""+project.id()+"\"}")).andExpect(status().isUnauthorized());
+          var accepted=mvc.perform(post("/api/v1/sessions").header("Authorization","Bearer secret").contentType("application/json").content("{\"projectId\":\""+project.id()+"\",\"title\":\"empty\"}")).andExpect(status().isCreated()).andReturn();
+          var id=new com.fasterxml.jackson.databind.ObjectMapper().readTree(accepted.getResponse().getContentAsString()).path("sessionId").asText();
+          mvc.perform(patch("/api/v1/sessions/"+id+"/response-style").header("Authorization","Bearer secret").contentType("application/json").content("{\"projectId\":\""+project.id()+"\",\"style\":\"CONVERSATION\",\"voiceOnly\":true}")).andExpect(status().isOk()).andExpect(jsonPath("$.style").value("CONVERSATION")).andExpect(jsonPath("$.voiceOnly").value(true));
+          mvc.perform(get("/api/v1/sessions/"+id+"/response-style?projectId="+project.id()).header("Authorization","Bearer secret")).andExpect(status().isOk());
+          mvc.perform(patch("/api/v1/sessions/"+id+"/response-style").header("Authorization","Bearer secret").contentType("application/json").content("{\"projectId\":\"wrong\",\"style\":\"NORMAL\"}")).andExpect(status().isNotFound());
+          mvc.perform(post("/api/v1/sessions").header("Authorization","Bearer secret").contentType("application/json").content("{\"projectId\":\""+project.id()+"\",\"path\":\"arbitrary\"}")).andExpect(status().isBadRequest());
+          assertEquals("empty",repo.findById(id).orElseThrow().title());
+        });
+  }
   @Test void explicitEndRequiresAuthenticationAndMatchingSavedProjectAndKeepsMetadata() {
     var repo=new FileSessionRepository(directory.resolve("sessions.json"));var now=Instant.parse("2026-10-06T12:00:00Z");
     var session=new SessionMetadata("ended","project","title",now,now);repo.accept(session,()->{});

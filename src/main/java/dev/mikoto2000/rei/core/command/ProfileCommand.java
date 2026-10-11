@@ -26,6 +26,17 @@ import picocli.CommandLine.Option;
 public class ProfileCommand implements Runnable {
 
   private final ProfileEventLogStore logStore;
+  private final java.io.PrintWriter writer;
+  private java.io.PrintWriter out() { return writer == null ? new java.io.PrintWriter(System.out, true) : writer; }
+  private ProfileCommand(ProfileEventLogStore store,java.io.PrintWriter writer) { this.logStore=store;this.writer=writer; }
+  private String render(java.util.function.Consumer<ProfileCommand> report) {
+    var text=new java.io.StringWriter();var output=new java.io.PrintWriter(text,true);report.accept(new ProfileCommand(logStore,output));output.flush();return text.toString();
+  }
+  public String renderSummary() { return render(ProfileCommand::printSummary); }
+  public String renderPath() { return render(ProfileCommand::printPath); }
+  public String renderChart(long seconds,int width) { return render(command->command.printChart(Math.max(1L,seconds),Math.max(1,width))); }
+  public String renderMermaid(int limit) { return render(command->command.printMermaid(Math.max(1,limit))); }
+
 
   public ProfileCommand() {
     this(new ProfileEventLogStore());
@@ -34,6 +45,7 @@ public class ProfileCommand implements Runnable {
   @Autowired
   public ProfileCommand(ProfileEventLogStore logStore) {
     this.logStore = logStore;
+    this.writer = null;
   }
 
   @Override
@@ -42,26 +54,26 @@ public class ProfileCommand implements Runnable {
   }
 
   void printPath() {
-    System.out.println(logStore.file());
+    out().println(logStore.file());
   }
 
   void printSummary() {
     ProfileSummary summary = new dev.mikoto2000.rei.application.read.ProfileQueryService(logStore).summary();
-    System.out.println("profile log: " + summary.file());
-    System.out.println("events: " + summary.total());
+    out().println("profile log: " + summary.file());
+    out().println("events: " + summary.total());
     if (summary.total() == 0) {
       return;
     }
-    System.out.println("from: " + summary.first());
-    System.out.println("to: " + summary.last());
-    System.out.println();
-    System.out.println("counts:");
+    out().println("from: " + summary.first());
+    out().println("to: " + summary.last());
+    out().println();
+    out().println("counts:");
     summary.countsByType().entrySet().stream()
         .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
-        .forEach(entry -> System.out.printf("  %s %d%n", entry.getKey(), entry.getValue()));
+        .forEach(entry -> out().printf("  %s %d%n", entry.getKey(), entry.getValue()));
     if (!summary.durationsByType().isEmpty()) {
-      System.out.println();
-      System.out.println("durations(ms):");
+      out().println();
+      out().println("durations(ms):");
       summary.durationsByType().entrySet().stream()
           .sorted(Comparator.<Map.Entry<String, DurationStats>>comparingLong(entry -> entry.getValue().totalMillis())
               .reversed())
@@ -72,7 +84,7 @@ public class ProfileCommand implements Runnable {
   void printChart(long bucketSeconds, int width) {
     List<ProfileBucket> buckets = logStore.buckets(Duration.ofSeconds(bucketSeconds));
     if (buckets.isEmpty()) {
-      System.out.println("profile log is empty: " + logStore.file());
+      out().println("profile log is empty: " + logStore.file());
       return;
     }
     long max = buckets.stream().mapToLong(ProfileBucket::count).max().orElse(1L);
@@ -80,31 +92,31 @@ public class ProfileCommand implements Runnable {
         .withZone(java.time.ZoneId.systemDefault());
     for (ProfileBucket bucket : buckets) {
       int barLength = (int) Math.max(1L, Math.round((double) bucket.count() / max * width));
-      System.out.printf("%s | %s %d%n", timeFormat.format(bucket.start()), "#".repeat(barLength), bucket.count());
+      out().printf("%s | %s %d%n", timeFormat.format(bucket.start()), "#".repeat(barLength), bucket.count());
     }
   }
 
   void printMermaid(int limit) {
     ProfileSummary summary = new dev.mikoto2000.rei.application.read.ProfileQueryService(logStore).summary();
     if (summary.total() == 0) {
-      System.out.println("profile log is empty: " + summary.file());
+      out().println("profile log is empty: " + summary.file());
       return;
     }
     List<Map.Entry<String, Long>> entries = summary.countsByType().entrySet().stream()
         .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
         .limit(limit)
         .toList();
-    System.out.println("```mermaid");
-    System.out.println("xychart-beta");
-    System.out.println("  title \"Agent Event counts\"");
-    System.out.println("  x-axis [" + String.join(", ", entries.stream().map(entry -> quote(entry.getKey())).toList()) + "]");
-    System.out.println("  y-axis \"events\" 0 --> " + entries.stream().mapToLong(Map.Entry::getValue).max().orElse(1L));
-    System.out.println("  bar [" + String.join(", ", entries.stream().map(entry -> Long.toString(entry.getValue())).toList()) + "]");
-    System.out.println("```");
+    out().println("```mermaid");
+    out().println("xychart-beta");
+    out().println("  title \"Agent Event counts\"");
+    out().println("  x-axis [" + String.join(", ", entries.stream().map(entry -> quote(entry.getKey())).toList()) + "]");
+    out().println("  y-axis \"events\" 0 --> " + entries.stream().mapToLong(Map.Entry::getValue).max().orElse(1L));
+    out().println("  bar [" + String.join(", ", entries.stream().map(entry -> Long.toString(entry.getValue())).toList()) + "]");
+    out().println("```");
   }
 
   private void printDuration(String type, DurationStats stats) {
-    System.out.printf("  %s count=%d avg=%d min=%d max=%d total=%d%n",
+    out().printf("  %s count=%d avg=%d min=%d max=%d total=%d%n",
         type, stats.count(), stats.averageMillis(), stats.minMillis(), stats.maxMillis(), stats.totalMillis());
   }
 

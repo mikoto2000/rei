@@ -76,8 +76,11 @@ public class BackgroundCommands {
     catch(RuntimeException error) { org.slf4j.LoggerFactory.getLogger(getClass()).debug("Execution notification failed: {}",execution.id(),error); }
   }
   public void showLastSummary(Consumer<String> out) {
-    var project=projects.currentContext(); var format=new HistoryFormatter();
-    var active=runs.activeExecutions().stream().filter(e->e.type()==ExecutionType.SUMMARIZE&&project.id().equals(e.projectId())).toList();
+    showLastSummary(projects.currentContext(),out,true,java.util.List.of());
+  }
+  public void showLastSummary(ProjectContext project,Consumer<String> out,boolean narrate,java.util.List<ActiveExecution> additional) {
+    var format=new HistoryFormatter();
+    var active=java.util.stream.Stream.concat(runs.activeExecutions().stream(),additional.stream()).filter(e->e.type()==ExecutionType.SUMMARIZE&&project.id().equals(e.projectId())).toList();
     if(!active.isEmpty()) {
       out.accept("Summarize is currently running:");
       for(var execution:active) {
@@ -94,7 +97,7 @@ public class BackgroundCommands {
       out.accept("  Completed: "+format.timestamp(result.completedAt().toString()));
       String text=CredentialRedactor.redact(result.result()).replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "");
       out.accept(text);
-      if(narrator!=null && !text.isBlank()) {
+      if(narrate && narrator!=null && !text.isBlank()) {
         var execution=new ActiveExecution(result.id(),result.projectId(),result.conversationId(),
             project.root(),result.type(),result.source(),result.startedAt());
         try {

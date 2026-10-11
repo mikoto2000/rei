@@ -23,6 +23,8 @@ class DependencyHttpTest {
       return new PersistentDependencyRepository(new org.springframework.jdbc.datasource.DriverManagerDataSource("jdbc:sqlite:"+Path.of(directory).resolve("dependencies.db")),Clock.systemUTC());
     }
     @Bean DependencyObservationService observations(){return mock(DependencyObservationService.class);}
+    @Bean dev.mikoto2000.rei.core.policy.ToolPermissionGuard guard(){return mock(dev.mikoto2000.rei.core.policy.ToolPermissionGuard.class);}
+    @Bean dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvals(){return mock(dev.mikoto2000.rei.core.policy.ToolApprovalRepository.class);}
   }
   @Test void authenticatedVersionedAnswerPersistsWithoutDispatchAndRejectsReplay() throws Exception {
     var app=new SpringApplication(Config.class);WebApplication.configure(app,"integration-key");
