@@ -363,4 +363,39 @@ class PlanClientTest {
     assertFalse(status.contains("refresh-secret"));
     assertTrue(status.contains("[masked]"));
   }
+
+  @Test
+  void receiveLimitBeforeModelsIdentifiesOAuthRefreshWithoutClearingCredentials() {
+    var store = new ProtectedCredentialStore(root, ProtectedCredentialStoreTest.TEST_PROTECTION);
+    store.locked(
+        s -> {
+          s.save(
+              "default",
+              new TokenSet(
+                  "oaiapp_test",
+                  "subject",
+                  null,
+                  "id-secret",
+                  "expired-secret",
+                  "refresh-secret",
+                  Set.of("chatgpt.tokens.use.direct"),
+                  0));
+          return null;
+        });
+    PlanTransport transport =
+        (u, m, h, b, t, c) -> {
+          assertTrue(u.getPath().endsWith("/oauth/token"));
+          return PlanOAuthTest.reply(200, "x".repeat(65537));
+        };
+    var oauth = new PlanOAuth(store, transport, (i, c, n) -> null, Clock.systemUTC());
+    var error =
+        assertThrows(
+            ChatGptException.class,
+            () -> new PlanClient(oauth, transport, Clock.systemUTC()).models("default", true));
+    assertEquals(ChatGptException.Code.RECEIVE_LIMIT, error.code());
+    assertTrue(error.getMessage().contains("operation=oauth-token"));
+    assertTrue(error.getMessage().contains("receivedBytes=65537, receiveLimitBytes=65536"));
+    assertFalse(error.toString().contains("secret"));
+    assertEquals("refresh-secret", store.locked(s -> s.load("default")).refreshToken());
+  }
 }

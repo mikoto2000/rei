@@ -176,12 +176,13 @@ Phase 2候補: 親Toolへの明示backendId拡張、意味検証の設計、prom
 
 ## モデル一覧 RECEIVE_LIMIT の調査・再検証（2026-10-11）
 
-ユーザーの実アカウントで `/chatgpt models --account personal` が `RECEIVE_LIMIT` になったという報告を受けました。発生時のHTTP status・本文サイズ・Content-Typeは不明です。保存済み資格情報を取得せず、実アカウント通信は行っていません。正常JSONが大きかったのか、巨大なHTTPエラーだったのかは未確定です。後者の誤分類はHTTPモックで再現・修正しました。上限は推測で増やしていません。
+ユーザーの実アカウントで `/chatgpt models --account personal` が `RECEIVE_LIMIT` になったという報告を受けました。発生時のHTTP status・本文サイズ・Content-Typeは不明です。保存済み資格情報を取得せず、実アカウント通信は行っていません。正常JSONが大きかったのか、巨大なHTTPエラーだったのかは未確定です。後者の誤分類はHTTPモックで再現・修正しました。モデルAPIに到達する前に、期限切れtokenの更新の64 KiB上限で停止する経路もあります。同じ例外はlogin/logout時のOAuth discoveryにもありますが、modelsの事前更新はtoken endpointを直接呼びます。上限は推測で増やしていません。
 
 | 用途 | 本文上限 | 判定 |
 |---|---:|---|
 | 正常モデル一覧 JSON | 262,144 bytes (256 KiB) | 一致まで成功、1 byte超過で RECEIVE_LIMIT |
 | models / responses のHTTPエラー本文 | 65,536 bytes (64 KiB) | 超過時もHTTP statusによる分類を保持。切れたJSONのAPIコードは推測しない |
+| OAuth discovery / token更新 | 65,536 bytes (64 KiB) | 従来の制限・分類を維持。超過の診断操作を oauth-discovery / oauth-token と表示 |
 | 正常推論SSE | 1,048,576 bytes (1 MiB) | 既存の累積制限を維持。SSEの改行・data等の本文フレームも含む |
 
 モデル一覧は `ChatGptCommand.models → PlanClient.models → PlanTransport.Http → PlanIO` です。`GET https://api.openai.com/v1/models` に選択アカウントのOAuth Bearerを送信し、`Accept: application/json`、`Accept-Encoding: identity` を指定します。公式の `models` 配列から `visibility=list` の `slug` / `display_name` を順序通り取り出します。別アカウントへの切替と60秒cacheを従来通り扱います。公式資料はカタログ最大バイト数を規定していません。この上限はアプリの保護策です。
@@ -199,6 +200,8 @@ ChatGPT plan: RECEIVE_LIMIT (operation=models, httpStatus=200, contentType=appli
 これは262,145 byteを実際に観測して停止したという意味で、応答全体のサイズではありません。読み取り前のプロトコル拒否では `receivedBytes` は出しません。未知のmedia typeは `unsupported`、欠落は `missing` とし、生ヘッダー、token、Cookie、本文、account/Workspace識別子を診断に含めません。通常の失敗表示に必要な短い診断だけを添え、常時の本文ログを追加しません。
 
 `status` の第2フィールドは発行されたOAuth client_id（ユーザー・Workspaceに紐付く登録）、第3は検証済みID Tokenの `sub` です。tokenやclient secretではありませんが、全面表示をやめてマスクしています。authorizedは保存情報の利用スコープを示すだけで、現在のアクセストークン・モデルAPI・残利用枠の有効性を証明しません。
+
+OAuth応答の上限超過では、操作名・status・観測65,537 byte・64 KiB上限を表示します。認証応答の分類、token refresh/rotation、資格情報の保存・消去条件は変更しません。operationがoauth-tokenの場合はmodels応答サイズとは区別してください。
 
 これらの上限は固定値で、Spring設定バインディング・単位変換・未設定/0の解釈には依存しません。今回変更可能な受信上限設定は追加していません。`rei.chatgpt-plan.enabled`、保存先、allowed-rolesは従来通りで、外部エージェントの `max-output-bytes` 設定はこの経路に作用しません。上限変更が必要なら、まず安全な診断で200/application/jsonのサイズ超過を確定し、別途カタログの上限・メモリ使用を評価してください。SSE上限を緩めてもモデル一覧問題は解決しません。
 
