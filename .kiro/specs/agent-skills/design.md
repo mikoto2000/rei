@@ -124,8 +124,7 @@ LLM 選択に渡す軽量情報。
 ```java
 public record AgentSkillCandidate(
     String name,
-    String description,
-    String excerpt
+    String description
 ) {
 }
 ```
@@ -207,7 +206,6 @@ User request:
 Skills:
 - name: gantt-rescheduler
   description: ガントチャート CSV を今日基準で再スケジュールする
-  excerpt: ...
 
 Return format:
 ["skill-name"]

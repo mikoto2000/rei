@@ -21,7 +21,6 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
 
   private static final Logger log = LoggerFactory.getLogger(AgentSkillImplicitSelector.class);
   private static final Pattern JSON_STRING = Pattern.compile("\"((?:\\\\.|[^\"])*)\"");
-  private static final int EXCERPT_LENGTH = 240;
 
   private final LlmModelProvider modelProvider;
   private final AgentSkillRepository repository;
@@ -95,18 +94,9 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
     for (AgentSkill skill : candidates) {
       builder.append("- name: ").append(skill.name()).append('\n');
       builder.append("  description: ").append(skill.description()).append('\n');
-      builder.append("  excerpt: ").append(excerpt(skill.instructions())).append('\n');
     }
     builder.append("\nReturn format:\n[\"skill-name\"]\n");
     return builder.toString();
-  }
-
-  private String excerpt(String instructions) {
-    String normalized = instructions == null ? "" : instructions.replaceAll("\\s+", " ").strip();
-    if (normalized.length() <= EXCERPT_LENGTH) {
-      return normalized;
-    }
-    return normalized.substring(0, EXCERPT_LENGTH);
   }
 
   private List<String> parseJsonStringArray(String content) {

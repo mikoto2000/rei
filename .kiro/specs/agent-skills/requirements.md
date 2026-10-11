@@ -54,7 +54,7 @@ Rei は既にローカルファイル操作、シェル実行、Web 検索、Goo
 
 #### 受け入れ条件
 1. WHEN Skill 機能が有効で、利用可能な Skill が存在する THEN システムはユーザー入力と Skill 一覧を基に LLM へ選択を依頼する。
-2. THE システム SHALL LLM には Skill 名、説明、必要に応じて本文の短い抜粋を渡す。
+2. THE システム SHALL LLM には Skill 名と説明のみを渡す。ユーザーの依頼文は引き続き渡し、本文は選択後のプロンプトに利用する。
 3. THE システム SHALL LLM の選択結果から `max-selected` 件まで Skill を採用する。
 4. WHEN LLM が該当なしと判断した THEN システムは Skill を注入しない。
 5. WHEN Skill 選択に失敗した THEN システムは通常チャットを継続し、Skill 選択失敗だけでチャットを失敗させない。
