@@ -59,7 +59,8 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
         Schema:
         """+output.resolutionSchema(),json.writeValueAsString(data),budget));
   }
-  private String call(String system,String data,ModelCallBudget budget) {
+  /** Shared tool-free MEMORY call path, including input/output limits and model usage accounting. */
+  public String call(String system,String data,ModelCallBudget budget) {
     var model=models.memoryChatModel();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
     var options=models.chatOptions(LlmFeature.MEMORY,null).mutate()

@@ -74,6 +74,9 @@ public class AiConfiguration {
   }
   private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextAdvisor> workContext;
   private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextTools> workTools;
+  private ObjectProvider<dev.mikoto2000.rei.episode.EpisodeTools> episodeTools;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setEpisodeTools(ObjectProvider<dev.mikoto2000.rei.episode.EpisodeTools> tools){episodeTools=tools;}
   private ObjectProvider<dev.mikoto2000.rei.checkpoint.ResumeContextAdvisor> resumeContext;
   private ObjectProvider<dev.mikoto2000.rei.checkpoint.CheckpointTools> checkpointTools;
   @org.springframework.beans.factory.annotation.Autowired
@@ -194,6 +197,7 @@ public class AiConfiguration {
     if (workTools != null && workTools.getIfAvailable() != null) builder.defaultTools(
         new ToolEventCallbackProvider(org.springframework.ai.tool.method.MethodToolCallbackProvider.builder()
             .toolObjects(workTools.getObject()).build(), eventFactory, eventPublisher));
+    if (episodeTools != null && episodeTools.getIfAvailable() != null) builder.defaultTools(episodeTools.getObject());
     if (paperTools != null && paperTools.getIfAvailable() != null) builder.defaultTools(paperTools.getObject());
     ToolEventCallbackProvider toolCallbackProvider = toolEventCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {

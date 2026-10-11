@@ -10,6 +10,24 @@ import dev.mikoto2000.rei.core.project.ProjectStorage;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 
 public final class SqliteConversationTurnStore extends ConversationTurnStore {
+  @Override public long turnCount(String conversation) {
+    return database.read(connection->{try(var query=connection.prepareStatement("SELECT COUNT(*) FROM turns WHERE project_id=? AND conversation_key=?")) {
+      query.setString(1,scope(conversation));query.setString(2,key(conversation));try(var rows=query.executeQuery()){rows.next();return rows.getLong(1);}
+    }});
+  }
+  @Override public List<Turn> readRange(String conversation,long from,int limit) {
+    if(from<0||limit<1||limit>100)throw new IllegalArgumentException("Invalid turn range");
+    return database.read(connection->{try(var query=connection.prepareStatement("SELECT record FROM turns WHERE project_id=? AND conversation_key=? AND ordinal>=? ORDER BY ordinal LIMIT ?")) {
+      query.setString(1,scope(conversation));query.setString(2,key(conversation));query.setLong(3,from);query.setInt(4,limit);
+      var result=new ArrayList<Turn>();try(var rows=query.executeQuery()){while(rows.next())result.add(StorageDatabase.JSON.readValue(rows.getString(1),Turn.class));}return List.copyOf(result);
+    }});
+  }
+  @Override public Optional<Turn> findRun(String conversation,String run) {
+    return database.read(connection->{try(var query=connection.prepareStatement("SELECT record FROM turns WHERE project_id=? AND conversation_key=? AND run_id=? LIMIT 1")) {
+      query.setString(1,scope(conversation));query.setString(2,key(conversation));query.setString(3,run);
+      try(var rows=query.executeQuery()){return rows.next()?Optional.of(StorageDatabase.JSON.readValue(rows.getString(1),Turn.class)):Optional.empty();}
+    }});
+  }
   private final StorageDatabase database;
   public SqliteConversationTurnStore(Path root){super(null);database=new StorageDatabase(root);}
   public static String scope(String conversation){String project=ProjectStorage.projectId(conversation);return project==null?"":UUID.fromString(project).toString();}

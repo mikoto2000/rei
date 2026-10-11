@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 
 /** Typed JSONL audit log. Project sequences are durable; the bus retains its process sequence API. */
 public class ProjectAgentEventStore implements AgentEventListener {
+  /** Legacy file backend is bounded. The SQLite backend provides indexed lookup across retained events. */
+  public Optional<AgentEvent> findEvent(String project,String id){return recent(project,1000).stream().filter(e->e.id().equals(id)).findFirst();}
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ProjectAgentEventStore.class);
   private final Path base;
   private final ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
