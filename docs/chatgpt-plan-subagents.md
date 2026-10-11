@@ -325,3 +325,9 @@ truthVerifiedは常にfalseです。引用への文字列一致も、因果関�
 comparisonは結論、JSON厳密一致の共通指摘、独自指摘、引用、未確認事項と失敗状態を区別します。多数決は行いません。ローカル結果がsnapshot引用を持たない場合は根拠比較を未解決として明記します。別Run・別モデルでも統計的独立性や正解は保証しません。
 
 復旧時はReceiptの状態とvalidationHistoryを確認してください。INVALID outputは上限内だけ修復されます。FAILED/OUTCOME_UNKNOWN、認証・利用枠・権限エラーでは、状況を確認してから新しい依頼を選び、結果不明の再送を自動化しないでください。通常CIはmockとHTTP fixtureで実認証不要です。
+
+## Phase 4: app-serverの調査状態
+
+**app-serverバックエンドはまだ利用できません。** Codex 0.154.0の認証不要stdio試験で、現在のnative Windows / unelevated sandboxがProject内限定の読取プロファイルを拒否しました。親Runの権限を超える全ディスク読取許可では回避せず、依頼書の停止条件に従ってPhase 4を保持しています。
+
+新しいbackend ID、`/agent codex ... --backend app-server`、app-server用YAML設定は追加していません。既存 `/agent codex` は既存CLI経路です。実行可能な設定例と誤認しないよう、専用homeの診断設定・公式スキーマ差分・復旧条件は [Phase 4調査報告](implementation-report-chatgpt-plan-phase4.md) を参照してください。Phase 0のown OAuthを子環境で使う認証連携、logout/refreshとの同期、ツール権限、Turn取消・usage・Run統合は再開後の実装対象です。
