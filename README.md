@@ -212,7 +212,7 @@ Web では認証付き `GET /api/v1/sessions`、`GET /api/v1/sessions/{sessionId
 詳しくは[設定ガイド](docs/configuration.md)を参照してください。
 
 Slack で会話する場合は [Slack Bot ガイド](docs/slack-bot.md)を参照してください。
-明示的に有効化した専用 `--backend` または `--mode=server` プロセスが Socket Mode 接続を管理します。
+明示的に有効化した Rei プロセスが Socket Mode 接続を管理します。通常 Shell、`--backend`、`--mode=server` の起動に対応します。
 
 ## 困ったときは
 

@@ -15,15 +15,17 @@ import dev.mikoto2000.rei.event.*;
 @Tag("integration")
 class SlackAgentConfigurationTest {
   @TempDir Path dir;
-  @Test void defaultsAndShellModeNeverExposeExternalWriteTools(){
+  @Test void defaultsAndDisabledSlackNeverExposeExternalWriteTools(){
     new ApplicationContextRunner().withUserConfiguration(SlackAgentConfiguration.class).run(c->{assertThat(c).hasNotFailed();assertThat(c).doesNotHaveBean(SlackAgentTools.class);});
-    new ApplicationContextRunner().withUserConfiguration(SlackAgentConfiguration.class).withPropertyValues("rei.slack.enabled=true","rei.slack.agent-collaboration.enabled=true","rei.backend-mode=false").run(c->{assertThat(c).hasNotFailed();assertThat(c).doesNotHaveBean(SlackAgentTools.class);});
+    new ApplicationContextRunner().withUserConfiguration(SlackAgentConfiguration.class).withPropertyValues("rei.slack.enabled=false","rei.slack.agent-collaboration.enabled=true","rei.backend-mode=false").run(c->{assertThat(c).hasNotFailed();assertThat(c).doesNotHaveBean(SlackAgentTools.class);});
   }
-  @Test void enabledConfigurationBindsBotIdentityAndObservesOrdinaryRunCancellation(){
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
+  void enabledConfigurationBindsBotIdentityAndObservesOrdinaryRunCancellation(boolean backend){
     var clock=Clock.systemUTC();var source=new DriverManagerDataSource("jdbc:sqlite:"+dir.resolve("storage.db"));var registry=new RunRegistry(clock);var bus=new InMemoryAgentEventBus();
     var owner=new AgentRunContext("run","session",dir,"project");registry.register(owner);registry.transition("run",RunStatus.RUNNING,null);
     new ApplicationContextRunner().withUserConfiguration(SlackAgentConfiguration.class)
-      .withPropertyValues("rei.slack.enabled=true","rei.backend-mode=true","rei.slack.agent-collaboration.enabled=true","rei.slack.agent-collaboration.allowed-workspace-ids[0]=T1","rei.slack.agent-collaboration.allowed-channel-ids[0]=C1","rei.slack.agent-collaboration.agents.tenten.workspace-id=T1","rei.slack.agent-collaboration.agents.tenten.channel-id=C1","rei.slack.agent-collaboration.agents.tenten.bot-user-id=U2","rei.slack.agent-collaboration.agents.tenten.bot-id=B2","rei.slack.agent-collaboration.agents.tenten.mention-user-id=U2")
+      .withPropertyValues("rei.slack.enabled=true","rei.backend-mode="+backend,"rei.slack.agent-collaboration.enabled=true","rei.slack.agent-collaboration.allowed-workspace-ids[0]=T1","rei.slack.agent-collaboration.allowed-channel-ids[0]=C1","rei.slack.agent-collaboration.agents.tenten.workspace-id=T1","rei.slack.agent-collaboration.agents.tenten.channel-id=C1","rei.slack.agent-collaboration.agents.tenten.bot-user-id=U2","rei.slack.agent-collaboration.agents.tenten.bot-id=B2","rei.slack.agent-collaboration.agents.tenten.mention-user-id=U2")
       .withBean("memoryConsolidationDataSource",javax.sql.DataSource.class,()->source).withBean(Clock.class,()->clock).withBean(RunRegistry.class,()->registry).withBean(RunService.class,()->mock(RunService.class))
       .withBean(ConversationInputRouter.class,()->new ConversationInputRouter(Runnable::run,(o,p,q)->{})).withBean(AgentEventBus.class,()->bus)
       .withBean(dev.mikoto2000.rei.core.project.ProjectRegistry.class,()->mock(dev.mikoto2000.rei.core.project.ProjectRegistry.class))

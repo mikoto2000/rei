@@ -15,7 +15,7 @@ import dev.mikoto2000.rei.core.policy.ToolPermissionGuard;
 import dev.mikoto2000.rei.event.AgentEventBus;
 
 @Configuration(proxyBeanMethods=false)
-@ConditionalOnProperty(name={"rei.slack.enabled","rei.backend-mode","rei.slack.agent-collaboration.enabled"},havingValue="true")
+@ConditionalOnProperty(name={"rei.slack.enabled","rei.slack.agent-collaboration.enabled"},havingValue="true")
 @EnableConfigurationProperties(SlackAgentProperties.class)
 public class SlackAgentConfiguration {
   @Bean SlackAgentRepository slackAgentRepository(@Qualifier("memoryConsolidationDataSource") DataSource source,Clock clock){return new SlackAgentRepository(source,clock);}

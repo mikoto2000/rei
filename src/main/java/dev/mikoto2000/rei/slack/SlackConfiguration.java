@@ -15,17 +15,17 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.beans.factory.annotation.*;
 
 @Configuration(proxyBeanMethods=false)
-@ConditionalOnProperty(name={"rei.slack.enabled","rei.backend-mode"},havingValue="true")
+@ConditionalOnProperty(name="rei.slack.enabled",havingValue="true")
 @EnableConfigurationProperties(SlackProperties.class)
 public class SlackConfiguration {
   @Bean SlackSocketLifecycle slackSocketLifecycle(SlackProperties p,@Value("${rei.data-dir}") String root,Clock clock,
       SessionRepository repository,ProjectRegistry projects,RunRegistry registry,RunService runs,ConversationInputRouter router,AgentEventBus bus,
       dev.mikoto2000.rei.conversation.ConversationTurnStore turns,org.springframework.beans.factory.ObjectProvider<SlackAgentService> collaboration) {
-    return new SlackSocketLifecycle(p,true,System.getenv(),()->SlackSdkConnection.open(p,Path.of(root),clock,repository,projects,registry,runs,router,bus,turns,collaboration.getIfAvailable()));
+    return new SlackSocketLifecycle(p,System.getenv(),()->SlackSdkConnection.open(p,Path.of(root),clock,repository,projects,registry,runs,router,bus,turns,collaboration.getIfAvailable()));
   }
   /** A headless backend can use Socket Mode without enabling the existing HTTP API. */
   @Configuration(proxyBeanMethods=false)
-  @ConditionalOnProperty(name={"rei.slack.enabled","rei.backend-mode"},havingValue="true")
+  @ConditionalOnProperty(name="rei.slack.enabled",havingValue="true")
   @org.springframework.boot.autoconfigure.condition.ConditionalOnExpression("!${rei.web.enabled:false}")
   static class HeadlessRuns {
     @Bean ProjectRegistry slackProjectRegistry(@Value("${rei.data-dir}") String root){return new ProjectRegistry(Path.of(root).resolve("projects.json"));}

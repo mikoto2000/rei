@@ -39,6 +39,157 @@ Scope とイベントの根拠:
 
 ## れいの設定
 
+### 各種 ID の取得方法
+
+表示名ではなく、次の ID を設定します。`U...`（Bot User）、`B...`（Bot）、
+`A...`（App）、`D...`（DM の会話）は別の値です。
+
+| ID | 設定・用途 | 取得方法 |
+| --- | --- | --- |
+| Workspace / Team ID (`T...`) | `allowed-workspace-ids`、外部 agent の `workspace-id` | 下記 `auth.test` の `team_id` |
+| 人間の User ID (`U...` / `W...`) | Phase 1 の `allowed-user-ids` | 人間のプロフィール → More（…）→ Copy member ID。下記 `users.list` でも確認可能 |
+| 外部 Bot User ID (`U...` / `W...`) | `bot-user-id` と `mention-user-id`（同じ値） | 下記 Bot 一覧の `id` |
+| 外部 Bot ID (`B...`) | `bot-id` | 下記 Bot 一覧の `bot_id`、または `users.info` の `user.profile.bot_id` |
+| Channel ID (`C...` / `G...`) | `allowed-channel-ids`、`channel-projects` のキー、外部 agent の `channel-id` | チャンネルのメッセージリンク、またはブラウザーの会話 URL |
+| DM Channel ID (`D...`) | DM を使う場合の `allowed-channel-ids` | れいとの DM をブラウザーで開いた会話 URL |
+| Project UUID | `dm-project-id`、`channel-projects` の値 | 同じデータディレクトリの `projects.json` の `projects[].id` |
+| Thread TS | 返信と外部依頼の照合（YAML 設定は不要） | れいが送った質問の親投稿 TS。Backend が送信結果から保存する |
+
+#### 1. Workspace とれい自身の ID を確認する
+
+れいを起動する PowerShell に、れいの `SLACK_BOT_TOKEN` が設定されていることを
+確認して実行します。App-Level Token (`SLACK_APP_TOKEN`) はこの API には使いません。
+以下の例はトークンを表示せず、環境変数から Authorization ヘッダーへ渡します。
+
+```powershell
+if ([string]::IsNullOrWhiteSpace($env:SLACK_BOT_TOKEN)) {
+    throw "この PowerShell に SLACK_BOT_TOKEN を設定してください"
+}
+
+$slackAuth = Invoke-RestMethod -Method Post `
+    -Uri "https://slack.com/api/auth.test" `
+    -Headers @{ Authorization = "Bearer $env:SLACK_BOT_TOKEN" }
+if (-not $slackAuth.ok) { throw $slackAuth.error }
+$slackAuth | Select-Object team, team_id, user_id, bot_id
+```
+
+`team_id` が設定する Workspace ID です。この呼び出しの `user_id` / `bot_id` は
+トークン所有者である **れい自身**の ID であり、てんてんの値ではありません。
+
+#### 2. てんてんの Bot User ID と Bot ID を取得する
+
+Bot の App プロフィールでは「Copy member ID」が表示されない場合があります。
+「Configuration」「Remove app from your top bar」「Add this app to a channel」だけが
+表示される場合は、そのメニューを探し続けず、次の読み取り API を使ってください。
+
+れいの App に `users:read` が必要です。追加した場合は Workspace に再インストールし、
+有効な Bot Token を使用してください。ページを最後まで取得してから Bot を一覧表示します。
+
+```powershell
+if ([string]::IsNullOrWhiteSpace($env:SLACK_BOT_TOKEN)) {
+    throw "この PowerShell に SLACK_BOT_TOKEN を設定してください"
+}
+$slackUsers = @()
+$slackCursor = ""
+do {
+    $slackUri = "https://slack.com/api/users.list?limit=200"
+    if ($slackCursor) {
+        $slackUri += "&cursor=$([uri]::EscapeDataString($slackCursor))"
+    }
+    $slackResult = Invoke-RestMethod -Uri $slackUri `
+        -Headers @{ Authorization = "Bearer $env:SLACK_BOT_TOKEN" }
+    if (-not $slackResult.ok) { throw $slackResult.error }
+    $slackUsers += $slackResult.members
+    $slackCursor = $slackResult.response_metadata.next_cursor
+} while (-not [string]::IsNullOrWhiteSpace($slackCursor))
+
+$slackUsers |
+    Where-Object { $_.is_bot -and -not $_.deleted } |
+    Select-Object id, name, real_name,
+        @{Name="display_name"; Expression={$_.profile.display_name}},
+        @{Name="bot_id"; Expression={$_.profile.bot_id}} |
+    Format-Table -AutoSize
+```
+
+てんてん（この環境では `mikoto2000-dot`）に対応する行を、名前とプロフィールで確認します。
+その行の `id` を `bot-user-id` / `mention-user-id`、`bot_id` を `bot-id` に設定します。
+表示名だけで複数候補から自動選択しないでください。候補がない場合は `auth.test` の
+Workspace とてんてんがインストールされている Workspace が同じか確認します。
+
+User ID がわかっている場合は、次でも Bot ID を確認できます。ID はダミーです。
+
+```powershell
+$tentenUserId = "U000TENTEN"
+$tentenInfo = Invoke-RestMethod `
+    -Uri "https://slack.com/api/users.info?user=$([uri]::EscapeDataString($tentenUserId))" `
+    -Headers @{ Authorization = "Bearer $env:SLACK_BOT_TOKEN" }
+if (-not $tentenInfo.ok) { throw $tentenInfo.error }
+$tentenInfo.user | Select-Object id, is_bot, deleted,
+    @{Name="bot_id"; Expression={$_.profile.bot_id}}
+```
+
+`is_bot` が true、`deleted` が false、`bot_id` が空でないことを確認します。
+てんてんの User ID を人間専用の `allowed-user-ids` に入れないでください。
+
+#### 3. 人間の User ID、Channel / DM ID を確認する
+
+人間はプロフィールの More（…）→ Copy member ID で取得します。メニューがない場合は、
+上で取得した `$slackUsers` を次のように表示し、自分の行の `id` を確認します。
+
+```powershell
+$slackUsers |
+    Where-Object { -not $_.is_bot -and -not $_.is_app_user -and -not $_.deleted } |
+    Select-Object id, name, real_name,
+        @{Name="display_name"; Expression={$_.profile.display_name}} |
+    Format-Table -AutoSize
+```
+
+チャンネルの投稿のメニューから「Copy link／リンクをコピー」を選びます。
+例えば `https://example.slack.com/archives/C000EXAMPLE/p1234567890000001` なら、
+`archives/` の直後の `C000EXAMPLE` が Channel ID です。
+ブラウザーの URL が `https://app.slack.com/client/T000EXAMPLE/C000EXAMPLE` なら、
+最後の `C000EXAMPLE` が Channel ID です。**れいとの DM** を開いて最後が `D...` なら、
+それが人間向け DM 許可リストに設定する会話 ID です。てんてんとの DM の `D...` を
+てんてんの Bot User ID として使わないでください。外部連携は設定したチャンネルを使います。
+
+App settings の URL に含まれる `A...` は App ID です。今回の `bot-user-id` / `bot-id`
+には使いません。Thread TS も会話 ID ではありません。外部返信は、れいが投稿した質問の
+スレッド内に必要であり、人間の元依頼や別の投稿への返信では相関しません。
+
+#### 4. 登録済み Project UUID を確認する
+
+れいの Shell で `/project add` / `/project cd` を使い、対象の作業先を登録・選択します。
+`/project list` はパスを表示するため、UUID は Backend が使用するデータディレクトリの
+`projects.json` で確認します。以下は、前回成功した `REI_DATA_DIR` が設定済みの場合です。
+
+```powershell
+if ([string]::IsNullOrWhiteSpace($env:REI_DATA_DIR)) {
+    throw "Backend が使用するデータディレクトリを確認し、REI_DATA_DIR に設定してください"
+}
+$reiProjectsFile = Join-Path $env:REI_DATA_DIR "projects.json"
+(Get-Content -LiteralPath $reiProjectsFile -Raw | ConvertFrom-Json).projects |
+    Format-List
+```
+
+対象パスのレコードの `id` が設定する UUID です。Project の名前やパスそのものは使いません。
+別データディレクトリの UUID を転記すると `PROJECT_NOT_REGISTERED` になります。
+
+#### API エラーの確認
+
+`invalid_auth` / `not_authed` は、この PowerShell の Bot Token を確認します。
+`missing_scope` は `users:read` と App の再インストールを確認します。
+HTTP 429 は `Retry-After` に従って待ち、再取得してください。例は診断用で、自動再試行しません。
+トークンや取得した全プロフィールをログ・Git・Slackへ貼らず、必要な ID だけを転記します。
+
+取得方法の根拠：
+[auth.test](https://docs.slack.dev/reference/methods/auth.test/)、
+[users.list](https://docs.slack.dev/reference/methods/users.list/)、
+[users.info](https://docs.slack.dev/reference/methods/users.info/)、
+[User object](https://docs.slack.dev/reference/objects/user-object/)、
+[人間のメンバー ID](https://slack.com/help/articles/360003827751-Create-a-link-to-a-members-profile)。
+
+### 設定ファイルへの反映
+
 `/config path` で外部設定ファイルの場所を確認します。
 以下の ID はダミーです。Project の値には既存 Project API、または
 `<rei-data-dir>/projects.json` の `projects[].id` にある登録済み UUID を指定します。
@@ -66,16 +217,26 @@ Slack Connect など別 Workspace の送信者も ID の許可判定を受けま
 許可ユーザーは接続時に `users.info` で確認し、Bot／App／削除済みユーザーを除外します。
 設定変更時は Backend を再起動してください。
 
-トークンは Backend プロセスの環境変数に設定します。
+トークンはれいを起動するプロセスの環境変数に設定します。
 `SLACK_BOT_TOKEN` はインストールで得た Bot User OAuth Token、
 `SLACK_APP_TOKEN` は `connections:write` を持つ App-Level Token です。
 トークンを YAML、Git、Run のメッセージ、Slack の本文に記載しないでください。
 環境変数を設定する際も、シェル履歴に実値が残らない秘密情報管理手段を使用してください。
 
-通常の Shell 起動では Slack 接続は増えません。専用 Backend を起動します。
 軽量 CLI と共用する場合は、`REI_API_KEY` と同じ `REI_DATA_DIR` を設定して
-`rei.bat --mode=server`（Linux/macOS は `./rei.sh --mode=server`）で起動します。
-`--mode=server` も Slack の Backend 起動条件を満たし、Slack 接続はこの一つのプロセスが管理します。
+`rei.bat --mode=server`（Linux/macOS は `./rei.sh --mode=server`）でも起動できます。
+
+`rei.slack.enabled: true` と両トークンを設定すれば、通常の Shell 起動でも Slack に接続します。
+Phase 2 も `agent-collaboration.enabled: true` なら Shell / Backend のどちらで利用できます。
+`--backend` は Shell を開かず常駐させるためのオプションであり、Slack 接続の必須条件ではありません。
+例えば、前回登録した Project とデータディレクトリを使って通常起動する場合：
+
+```powershell
+$env:REI_DATA_DIR = "F:\rei_temp2"
+.\start.bat --fullauto --project F:\rei
+```
+
+専用 Backend として起動する場合：
 
 ```powershell
 java -jar target/rei-0.0.1-SNAPSHOT.jar --backend
@@ -83,8 +244,9 @@ java -jar target/rei-0.0.1-SNAPSHOT.jar --backend
 
 既存 HTTP API を使う場合は従来どおり `REI_API_KEY` も設定します。
 Socket Mode 自体には HTTP API の有効化は不要です。
-同じデータディレクトリで複数 Backend が起動しても `slack-backend.lock` により
-Slack 接続を所有できるのは1プロセスだけです。
+同じデータディレクトリで複数の Shell / Backend が起動しても `slack-backend.lock` により
+Slack 接続を所有できるのは1プロセスだけです。別プロセスが所有している場合は
+`ANOTHER_BACKEND` を記録して再試行し、Shell 自体は引き続き利用できます。
 終了はプロセスへの通常の終了要求／Ctrl+C を使います。
 
 ## 会話
@@ -135,10 +297,10 @@ Slack の表示状態として管理します。
 認可された UI／Shell で対象 Project を選び、`/approval list`、`/approval show <id>`
 で内容を確認し、`/approval approve <id>` または `/approval deny <id>` を使ってください。
 承認後は既存のチェックポイント確認・再開を実施します。
-Slack を所有する Backend 上で同じ Session のチェックポイントを再開すると、
+Slack を所有するプロセス上で同じ Session のチェックポイントを再開すると、
 再開 Run の回答も元の Slack スレッドへ返ります。この操作には既存の認証された UI／HTTP API を使います。
 承認・再開 UI を利用する運用では `REI_API_KEY` で既存 HTTP API も有効にしてください。
-別プロセスの standalone Shell で再開した Run のイベントは Backend に配信されないため、
+別プロセスの standalone Shell で再開した Run のイベントは Slack 所有プロセスに配信されないため、
 その再開結果の Slack 自動通知は対象外です。Shell による既存承認レコードの操作は利用できます。
 Slack の通常メッセージや Bot の返信による承認・自動再開はありません。
 [権限ガイド](tool-permission.md)と[チェックポイント再開](persistent-checkpoint-resume.md)を参照してください。

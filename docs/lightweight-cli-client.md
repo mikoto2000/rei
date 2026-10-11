@@ -4,7 +4,8 @@
 
 main 統合で追加された `/chatgpt` を含む現在の登録は48項目。全項目の補完とヘルプを取得し、
 `/chatgpt` の認証・利用枠操作と `/voice` の実行は従来 Shell を使用する。
-Slack の専用 Backend 起動条件は `--backend` と `--mode=server` の両方に対応する。
+Slack は明示的に有効化すると通常 Shell と専用 Backend のどちらでも接続する。
+Shell を開かない常駐起動には `--backend` または `--mode=server` を使用する。
 
 ## main 統合の検証（2026-10-11）
 
@@ -21,6 +22,13 @@ server の Slack 起動条件と返信待ちの保護をテストで再現して
 `target/main-merge-native-*.log`、`target/main-merge-windows-*.log`。
 Terminal ペインの stdin/stdout は fixture に接続し、対話キー入力は実 ConPTY で別途検証した。
 検証用 JAR は `target/main-merge-package/rei-backend-main-merge.jar` に分けてビルドした。
+
+プッシュ直前の main 更新（Slack の通常 Shell 対応）も追加統合し、変更範囲の
+Slack／HTTP／起動／会話所有権の361テストを再実行して失敗・エラー0を確認した。
+最新 JAR の Windows 起動・複数ペイン・GUI close も再検証した。
+GUI close は並行実行で一度タイムアウトし、単独再実行で Run 継続・完了・再接続まで通過した。
+追加の証跡は `target/main-merge-latest-slack-regression.log` と
+`target/main-merge-latest-windows-*.log`（GUI の成功結果は `gui-retry.log`）。
 
 ## 構成と境界
 
