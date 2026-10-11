@@ -18,6 +18,18 @@ import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import reactor.core.publisher.Flux;
 
 class StagnationChatModelTest {
+  @Test void completedToolBatchSuspendsBeforeAnotherModelCall() {
+    var context=context(5,new ArrayList<>());var calls=new AtomicInteger();var saved=new AtomicInteger();
+    context.setContinuation(new dev.mikoto2000.rei.core.chat.RunContinuation(){
+      public Saved restore(dev.mikoto2000.rei.core.chat.AgentRunContext owner){return null;}
+      public boolean suspend(RunExecutionContext execution,List<Message> history){
+        assertThat(history.getLast()).isInstanceOf(ToolResponseMessage.class);saved.incrementAndGet();return true;
+      }
+    });
+    assertThatThrownBy(()->model(new ArrayList<>(),calls,false).stream(prompt(context,()->"WAITING")).blockLast())
+      .isInstanceOf(dev.mikoto2000.rei.core.chat.RunWaitingException.class);
+    assertThat(calls.get()).isEqualTo(1);assertThat(saved.get()).isEqualTo(1);
+  }
   @Test void acceptsUnsetCallbacksAndDoesNotMutateRequestContext() {
     var context = context(3, new ArrayList<>());
     var options = org.springframework.ai.openai.OpenAiChatOptions.builder()

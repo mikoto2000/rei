@@ -59,23 +59,24 @@ public class PersistentCheckpointService implements AutoCloseable {
     if(!settings.isEnabled()||context.projectId()==null)return;
     var state=active.get(context.runId());
     if(state==null) {
-      state=PersistentCheckpoint.initial(UUID.randomUUID().toString(),context.projectId(),context.conversationId(),context.runId(),context.projectRoot(),request);
+      var waiting=repository.list(context.projectId()).stream().filter(s->s.runId().equals(context.runId())&&s.status().equals("WAITING")&&s.sessionId().equals(context.conversationId())&&s.projectRoot().equals(context.projectRoot().toString())).findFirst();
+      state=waiting.orElseGet(()->PersistentCheckpoint.initial(UUID.randomUUID().toString(),context.projectId(),context.conversationId(),context.runId(),context.projectRoot(),request));
       var initial=repository.fields(state);initial.put("mode",context.mode());initial.put("voiceInput",context.voiceInput());initial.put("git",CheckpointReconciler.git(context.projectRoot()));state=repository.fields(initial);
-      state=repository.save(state,0,"start:"+context.runId());
+      if(waiting.isEmpty())state=repository.save(state,0,"start:"+context.runId());
       if(!repository.acquire(state.projectId(),state.taskId(),context.runId()))throw new IllegalStateException("Task execution already owned");
       active.put(context.runId(),state);
     }
     executing.add(context.runId());
     if(context.mode()!=AgentRunContext.Mode.EXCLUSIVE)return;
     var plan=plans.getIfAvailable();if(plan!=null) {
-      if(state.resumedFromRunId()==null)plan.restore(List.of());
+      if(state.resumedFromRunId()==null&&!state.status().equals("WAITING"))plan.restore(List.of());
       else plan.restore(state.plan().stream().map(p->new dev.mikoto2000.rei.core.actionplan.PlanStep((String)p.get("id"),(String)p.get("description"),(String)p.get("status"),((Number)p.get("order")).intValue(),((Number)p.get("failureCount")).intValue())).toList());
     }
     var task=tasks.getIfAvailable();if(task!=null){task.reset();task.start(state.request());}
   }
   public void finish(AgentRunContext context,String status) {
     var state=active.get(context.runId());if(state==null)return;
-    try {update(context.runId(),"terminal:"+context.runId(),fields->{
+    try {update(context.runId(),"terminal:"+context.runId()+":"+status+":"+UUID.randomUUID(),fields->{
       // Terminal cleanup uses previously observed filesystem metadata, never waits for Git or large file hashing.
       fields.put("status",status);
       if(!"COMPLETED".equals(status))fields.put("interruptionReason",status);

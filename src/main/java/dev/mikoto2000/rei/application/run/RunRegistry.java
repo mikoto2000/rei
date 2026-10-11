@@ -22,7 +22,7 @@ public final class RunRegistry implements AutoCloseable {
     static StoredRun of(RunSnapshot value,String instance) {
       var c=value.context();return new StoredRun(1,c.runId(),c.conversationId(),c.projectRoot().toString(),c.projectId(),
           c.requestSource(),c.mode(),value.status(),value.startedAt(),value.completedAt(),value.failure(),
-          ProcessHandle.current().pid(),ProcessHandle.current().info().startInstant().map(Instant::toString).orElse(null),instance,value.childOrigin(),c.voiceInput());
+          instance==null?0:ProcessHandle.current().pid(),instance==null?null:ProcessHandle.current().info().startInstant().map(Instant::toString).orElse(null),instance,value.childOrigin(),c.voiceInput());
     }
     boolean ownerAlive() {
       return ownerPid>0 && ownerStart!=null && ProcessHandle.of(ownerPid).filter(ProcessHandle::isAlive)
@@ -43,7 +43,7 @@ public final class RunRegistry implements AutoCloseable {
         if(document.length()>20000)throw new IllegalStateException("Run snapshot capacity exceeded");
         var stored=json.readValue(document,StoredRun.class);var value=stored.snapshot();
         documents.put(value.context().runId(),document);
-        if(!value.status().isTerminal() && !stored.ownerAlive()) {
+        if(!value.status().isTerminal() && value.status()!=RunStatus.WAITING && !stored.ownerAlive()) {
           value=unknown(value);save(value);
         }
         runs.put(value.context().runId(),value);
@@ -53,9 +53,12 @@ public final class RunRegistry implements AutoCloseable {
     purgeExpired();
   }
   private void save(RunSnapshot value) {
+    save(value,instance);
+  }
+  private void save(RunSnapshot value,String ownerInstance) {
     if(db==null)return;
     try {
-      String document=json.writeValueAsString(StoredRun.of(value,instance));
+      String document=json.writeValueAsString(StoredRun.of(value,ownerInstance));
       if(document.length()>20000)throw new IllegalArgumentException("Run snapshot capacity exceeded");
       String id=value.context().runId(),previous=documents.get(id);
       if(previous==null)db.sql("INSERT INTO rei_run_registry(run_id,snapshot) VALUES(:id,:snapshot)").param("id",id).param("snapshot",document).update();
@@ -79,7 +82,8 @@ public final class RunRegistry implements AutoCloseable {
     if(db==null)return;
     for(String run:owned) {
       var value=runs.get(run);
-      if(value!=null && !value.status().isTerminal()){value=unknown(value);save(value);runs.put(run,value);}
+      if(value!=null && !value.status().isTerminal() && value.status()!=RunStatus.WAITING){value=unknown(value);save(value);runs.put(run,value);}
+      else if(value!=null && value.status()==RunStatus.WAITING)save(value,null);
     }
     owned.clear();
   }
@@ -120,7 +124,7 @@ public final class RunRegistry implements AutoCloseable {
           var stored=json.readValue(document.get(),StoredRun.class);var refreshed=stored.snapshot();
           if(!runId.equals(refreshed.context().runId()))throw new IllegalStateException("Run identity mismatch");
           documents.put(runId,document.get());
-          if(!refreshed.status().isTerminal()&&!stored.ownerAlive()){refreshed=unknown(refreshed);save(refreshed);}
+          if(!refreshed.status().isTerminal()&&refreshed.status()!=RunStatus.WAITING&&!stored.ownerAlive()){refreshed=unknown(refreshed);save(refreshed);}
           runs.put(runId,refreshed);restored.add(runId);
         }catch(java.io.IOException error){throw new IllegalStateException("Cannot refresh Run registry",error);}
       }
@@ -135,7 +139,7 @@ public final class RunRegistry implements AutoCloseable {
     if(db!=null && !owned.contains(runId))throw new dev.mikoto2000.rei.application.state.OperationConflictException();
     if (current.status() == RunStatus.QUEUED && next != RunStatus.RUNNING && next != RunStatus.CANCELLED) return false;
     var value=new RunSnapshot(current.context(), next,
-        next == RunStatus.RUNNING ? clock.instant() : current.startedAt(),
+        next == RunStatus.RUNNING && current.startedAt()==null ? clock.instant() : current.startedAt(),
         next.isTerminal() ? clock.instant() : null, next == RunStatus.FAILED || next == RunStatus.UNKNOWN ? failure : null,current.childOrigin());
     save(value);runs.put(runId,value);
     return true;
@@ -152,4 +156,14 @@ public final class RunRegistry implements AutoCloseable {
   /** Restored metadata has no event subscription history in this server instance. */
   public synchronized boolean restored(String runId) { return restored.contains(runId); }
   public synchronized boolean ownsExecution(String runId) { return db==null || owned.contains(runId); }
+  /** Only an exact durable waiting owner can be adopted after its previous process exited. */
+  public synchronized boolean claimWaiting(AgentRunContext context) {
+    var current=get(context.runId());if(current.status()!=RunStatus.WAITING||!current.context().equals(context))return false;
+    if(db!=null&&!owned.contains(context.runId())) {
+      try{var stored=json.readValue(documents.get(context.runId()),StoredRun.class);if(stored.ownerAlive())return false;}
+      catch(java.io.IOException error){throw new IllegalStateException("Cannot inspect waiting Run owner",error);}
+      save(current);owned.add(context.runId());restored.remove(context.runId());
+    }
+    return true;
+  }
 }

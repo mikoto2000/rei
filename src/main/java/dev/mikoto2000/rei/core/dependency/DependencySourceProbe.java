@@ -61,6 +61,7 @@ public class DependencySourceProbe implements DependencyProbe {
       case HTTP_BODY_SHA256 -> http.probeBody(entry.id(),spec.target(),Integer.parseInt(spec.expected().substring(0,3)),spec.expected().substring(4));
       case HTTP_JSON_VALUE -> http.probeJson(entry.id(),spec.target(),spec.expected());
       case USER_ANSWER -> new DependencyObservation(entry.id(),entry.answer()==null?DependencyState.WAITING:DependencyState.COMPLETED,entry.answer()==null?"user_answer_waiting":"user_answer_received");
+      case EXTERNAL_AGENT -> new DependencyObservation(entry.id(),entry.state(),entry.reason());
       case GITHUB_PR_MERGED -> {
         if(github==null)yield new DependencyObservation(entry.id(),DependencyState.BLOCKED,"github_webhook_unavailable");
         int separator=spec.target().lastIndexOf('#');

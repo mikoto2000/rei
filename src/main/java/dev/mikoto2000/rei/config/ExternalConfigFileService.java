@@ -424,6 +424,15 @@ public class ExternalConfigFileService {
             allowed-channel-ids: []
             dm-project-id: ""
             channel-projects: {}
+            agent-collaboration:
+              enabled: false
+              allowed-workspace-ids: []
+              allowed-channel-ids: []
+              agents: {}
+              max-requests-per-run: 3
+              max-follow-up-turns: 2
+              max-delegation-depth: 1
+              timeout-seconds: 300
           bluesky:
             enabled: false
             handle: ${REI_BLUESKY_HANDLE:}

@@ -13,6 +13,9 @@ import dev.mikoto2000.rei.event.*;
 /** Reuses the Project FIFO and Chat boundaries, capturing ownership before queue admission. */
 @Component
 public class GoalChatGateway implements GoalLoopService.Gateway {
+  private RunContinuation continuations;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setContinuations(RunContinuation continuations){this.continuations=continuations;}
   private dev.mikoto2000.rei.timing.TimingExecution timing;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   public void setTiming(dev.mikoto2000.rei.timing.TimingExecution timing){this.timing=timing;}
@@ -92,6 +95,8 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
                   +"Inspect current files and saved effects before mutations. Keep human requirements and exact test command fixed. "
                   +"Do not repeat an effect with an unknown outcome or apply a human-only repair without permission.";
             }
+            if(continuations!=null)continuations.attachParent(owner,reservation,result->completed.accept(new GoalLoopService.Outcome(result,
+                slice!=null&&slice.boundaryReached()&&result.stopCode().equals("llm_call_budget_exceeded")?"repair_reserve_reached":result.stopCode())));
             var result=chat.execute(owner,prompt,new UserInterventionQueue(),reservation);
             String stop=slice!=null&&slice.boundaryReached()&&result.stopCode().equals("llm_call_budget_exceeded")
                 ?"repair_reserve_reached":result.stopCode();
@@ -111,6 +116,8 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
         publisher.publish(events.runFailed(run,new ErrorInformation(error.getClass().getSimpleName(),"Goal Run failed",null)).withOwnership(owner));
         outcome=new GoalLoopService.Outcome(ChatExecutionResult.failed("Goal Run failed"),reason);
       }
+      if(outcome.result().status()==ChatExecutionResult.Status.WAITING)return outcome.result();
+      if(continuations!=null)continuations.detachParent(owner);
       if(runLifecycle!=null) {
         var terminal=outcome.result().status()==ChatExecutionResult.Status.CANCELLED?dev.mikoto2000.rei.application.run.RunStatus.CANCELLED
             :outcome.result().success()?dev.mikoto2000.rei.application.run.RunStatus.COMPLETED:dev.mikoto2000.rei.application.run.RunStatus.FAILED;
@@ -127,7 +134,10 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
     });}catch(RuntimeException|Error error){if(registered){runLifecycle.forgetQueuedCancellation(run);runRegistry.forget(run);}throw error;}
   }
   @Override public boolean isInFlight(GoalRepository.Goal goal) {
-    return goal.currentRunId()!=null&&router.containsRun(goal.projectId(),goal.currentRunId());
+    if(goal.currentRunId()==null)return false;
+    if(router.containsRun(goal.projectId(),goal.currentRunId()))return true;
+    try{return runRegistry!=null&&runRegistry.get(goal.currentRunId()).status()==dev.mikoto2000.rei.application.run.RunStatus.WAITING;}
+    catch(dev.mikoto2000.rei.application.run.RunNotFoundException absent){return false;}
   }
   @Override public void cancel(GoalRepository.Goal goal) {
     if(goal.currentRunId()==null)return;

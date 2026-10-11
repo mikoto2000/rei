@@ -40,6 +40,9 @@ import dev.mikoto2000.rei.websearch.WebSearchTools;
 
 @Component
 public class LlmChatClientProvider {
+  private org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.slack.SlackAgentTools> slackAgentTools;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setSlackAgentTools(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.slack.SlackAgentTools> tools){this.slackAgentTools=tools;}
   private dev.mikoto2000.rei.temporal.SchedulerTools schedulerTools;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   void setSchedulerTools(dev.mikoto2000.rei.temporal.SchedulerTools tools){this.schedulerTools=tools;}
@@ -291,6 +294,7 @@ public class LlmChatClientProvider {
       builder.defaultTools(toolCallbackProvider);
     }
     if (LlmFeature.CHAT.equals(feature) && externalAgentTools != null) builder.defaultTools((Object[]) externalAgentTools.callbacks());
+    if (LlmFeature.CHAT.equals(feature) && slackAgentTools != null && slackAgentTools.getIfAvailable()!=null) builder.defaultTools((Object[]) slackAgentTools.getObject().callbacks());
     if (LlmFeature.CHAT.equals(feature) && subAgentTools != null && subAgentTools.getIfAvailable() != null) {
       builder.defaultTools(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
           subAgentTools.getObject().callback(), eventFactory, eventPublisher));

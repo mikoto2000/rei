@@ -1,4 +1,4 @@
-# Slack Bot（Phase 1）
+# Slack Bot（Phase 1 / Phase 2）
 
 Slack をれいの既存 Session／Run に接続する opt-in の会話チャネルです。
 DM の新規投稿、許可チャンネルのメンション、開始済みスレッドの継続に対応します。
@@ -196,11 +196,132 @@ Markdown 全体の完全な変換や分割したコードブロックの再構�
 SDK のログは既定で無効です。raw payload／HTTP debug／Socket URL のログを有効化しないでください。
 Outbox や Session の本文には会話が含まれるため、データディレクトリを適切に保護してください。
 Slack に依頼するユーザーの許可は、れいのツールを実行する信頼境界でもあります。
-Bot 間自動会話は無効です。次 Phase では Bot の個別認可、ループ・予算制御、
-委譲の provenance、結果と依頼の区別を別途設計する必要があります。
+Bot からの新規依頼は受け付けません。Phase 2 の外部返信も、下記の個別設定と
+送信済み依頼に一致する場合だけ、外部ツールの観測結果として取り込みます。
 
 ## 検証
 
 単体・統合テストは Slack トークンを使わず、SDK の MethodsClient と接続を Fake に置き換えます。
 実 Workspace での Socket 接続・Scope・実際のメッセージ往復は未検証です。
 運用開始時は最小の許可リストで DM／メンション／スレッド継続／再起動／承認／キャンセルを確認してください。
+
+## Phase 2：てんてんへの質問
+
+人間が開始した既存 Run のモデルが `askExternalAgent` を選ぶと、管理者が登録した
+Bot に明示的な質問を投稿します。標準では無効です。Phase 1 の設定に加えて、
+同じ `rei.slack` 以下に次を設定します。ID はすべてダミーです。
+
+```yaml
+rei:
+  slack:
+    agent-collaboration:
+      enabled: true
+      allowed-workspace-ids: [T000EXAMPLE]
+      allowed-channel-ids: [C000EXAMPLE]
+      agents:
+        tenten:
+          workspace-id: T000EXAMPLE
+          bot-user-id: U000TENTEN
+          bot-id: B000TENTEN
+          channel-id: C000EXAMPLE
+          mention-user-id: U000TENTEN
+          final-prefix: ""
+      max-requests-per-run: 3
+      max-follow-up-turns: 2
+      max-delegation-depth: 1
+      timeout-seconds: 300
+```
+
+Bot User ID (`U...`) と Bot ID (`B...`) は別です。てんてんのプロフィールの User ID と、
+管理者が確認した `users.info` の `profile.bot_id` を使ってください。接続時にれい自身の
+Bot と区別し、`users.info` の結果と設定値を照合します。てんてんを Phase 1 の
+`allowed-user-ids` に入れないでください。このリストは引き続き人間専用です。
+両 Bot を指定チャンネルに招待し、れい側の `message.channels`（private なら
+`message.groups`）購読を維持します。Phase 1 の `users:read` と `chat:write` を再利用し、
+新しい Scope や公開 Request URL は不要です。てんてん側が Bot のメンションを無視する
+設定なら返信は来ません。これは実際のてんてんで確認が必要です。
+
+`askExternalAgent(agent, question, expectedOutput?, timeoutSeconds?, followUpRequestId?)`
+は `NETWORK_WRITE` です。既存 Policy / Permission が、解決済みの Bot・Workspace・
+チャンネル・質問本文を判定します。宛先 ID はモデルの引数から変更できません。
+確認が必要な運用では `tool-permission.enabled: true` を維持し、既存承認 UI を使います。
+トークン、秘密、Session 履歴を質問に含めず、必要な短い質問だけ送ってください。
+検証済みの Slack 接続が成立していない場合は、依頼の登録を拒否します。
+トークン不足や接続設定の誤りで、期限処理のない WAITING を作ることはありません。
+既知のトークン形式は伏せますが、任意の秘密を自動判定する保証はありません。
+
+許可ユーザーから、例えば `@れい てんてんにこの設計の注意点を質問し、回答をまとめて`
+と依頼します。LLM がツールを使った場合にだけ外部投稿が発生します。
+送信先には `<@てんてんのUserID>`、質問、期待する出力、`slack-req-...` を送ります。
+送信完了は回答完了ではありません。親 Run は `WAITING` となり、実行スレッド・
+Project キュー・モデル呼び出しを解放します。既存 Dependency には `EXTERNAL_AGENT`
+の待機を保存し、終端結果を既存の観測・スケジューラ処理に渡します。
+
+返信は Workspace / Channel / 投稿の親 Thread TS / Bot ID / Bot User ID の対応を
+照合し、編集・削除・別 Bot・人間・別スレッドを除外します。Bot の投稿から新しい
+Session / Run は作りません。イベント ID と投稿 TS で重複を抑え、送信レスポンスより
+先に届く返信も、認証済みの候補を一時保存して正確な親 TS が判明した後に照合します。
+受理した返信は SQLite に保存してから Socket Mode の ACK を返します。
+
+てんてんの最終回答形式はこの実装では未確認です。`final-prefix: ""` のままなら、
+最初の返信・受付・進捗・無応答を完了と推測せず、期限まで最大32件を集めます。
+期限後は `TIMED_OUT` と部分回答・不確実性を元の Run に返します。
+実際のてんてんに明確な最終回答専用プレフィックスがあると運用者が確認した場合のみ、
+`final-prefix` をその値に設定してください。完全一致の先頭文字列を検出して
+`COMPLETED` にします。質問を単に引用する受付と同じ値は設定しないでください。
+
+返信と状態は SystemMessage に昇格させず、`UNTRUSTED DATA` と表示した ToolResponse
+として元の ToolCall に戻します。元の Project / Session / Run / 依頼とモデル呼び出し・
+トークン・再計画予算を維持し、既存 Project キュー経由で一度だけ再開します。
+外部返信は承認や権限の根拠にはなりません。追加質問には同じ Run の完了済み依頼 ID が
+必要で、既定は総数3件・追加2ターン・委譲深度1です。同じ質問の繰り返しを拒否します。
+タイムアウトは1～設定値秒（設定上限3600秒）、質問2048文字、期待出力512文字です。
+
+## Phase 2：状態・復旧・動作確認
+
+`storage.db` の `slack_agent_*` テーブルに依頼、返信、Dependency 対応、再開履歴、
+チャンネル単位の Retry-After を保存します。既存の共有 SQLite / トランザクションを
+使う追加テーブルです。グローバルの保存形式バージョンを変更しません。
+別ブランチで作った新しいスキーマのデータを古い main に渡す問題は解消しません。
+その場合は対応するアプリを使うか、`REI_DATA_DIR` を分け、Project と Session を登録してください。
+
+| 状態 | 意味・復旧 |
+| --- | --- |
+| CREATED | 権限確認・保存済み、未送信。再起動後も処理可能 |
+| SENDING | 送信前に所有を記録。再起動時は UNKNOWN、再投稿しない |
+| WAITING | 投稿 TS 確認済み。期限まで返信収集 |
+| COMPLETED | 管理者設定の最終回答専用 prefix を確認 |
+| FAILED | Slack が明確に送信を拒否 |
+| TIMED_OUT | 期限超過。部分回答は保持、完了扱いしない |
+| CANCELLED | 親 Run / Dependency の取消。遅延返信で再開しない |
+| UNKNOWN | 送信・再開の結果不明。人間が台帳・Slack・チェックポイントを確認 |
+
+429 は保存した Retry-After に従います。同一チャンネルは最大1回/秒を目安とし、
+再起動後も別の依頼による制限回避を防ぎます。タイムアウト・不明応答は再送しません。
+送信中にキャンセルしても、Slack がすでに受理した投稿を撤回できません。判明した
+投稿 TS は取消済み台帳に保存します。Slack 側の exactly-once は保証しません。
+
+通常の人間 Run の保存済み WAITING は、同じ Backend が保存済み予算を使って復旧します。
+再開を投入済みの `RESUMING` の所有を失った場合は UNKNOWN とし、自動再実行しません。
+Goal / Scheduler の親を持つ待機は、同一プロセス内で既存の予約と完了通知を維持します。
+再起動でその親を失った場合は UNKNOWN にして、既存 Goal / Timer / チェックポイントの
+明示的な復旧に委ねます。親予算の再作成や自動再送は行いません。返信台帳は保持します。
+設定から Bot を削除・変更した場合も、古い宛先へ送り直しません。
+
+`externalAgentStatus(requestId)` は同じ Project / Session の保存済み結果を読むだけです。
+`rei status` / `rei cancel` は Phase 1 と同じ人間の元スレッドで使えます。
+待機中は元スレッドへ外部返信待ちを通知します。てんてんの返信スレッドを人間の
+会話スレッドとして登録しないでください。
+
+実環境の最初の試験では `timeout-seconds: 30`、`max-requests-per-run: 1`、
+`max-follow-up-turns: 0` とし、機密を含まない短い挨拶を指定してください。
+元の人間 Run の WAITING、てんてんの返信の実際の Bot ID / User ID / Thread TS、
+元 Run の再開、受付と最終回答の区別を確認してから制限を増やしてください。
+今回の開発プロセスでは Slack トークンが利用できず、実てんてん E2E は未実施です。
+Phase 1 のユーザーによる動作確認は、Phase 2 の Bot 間返信・完了形式の確認を兼ねません。
+
+仕様の根拠：
+[bot_message（Bot ID と classic Bot の User 不在）](https://docs.slack.dev/reference/events/message/bot_message/)、
+[message](https://docs.slack.dev/reference/events/message/)、
+[chat.postMessage](https://docs.slack.dev/reference/methods/chat.postMessage/)、
+[メンション書式](https://docs.slack.dev/messaging/formatting-message-text/)。

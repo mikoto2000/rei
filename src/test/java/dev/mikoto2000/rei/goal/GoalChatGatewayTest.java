@@ -32,6 +32,16 @@ class GoalChatGatewayTest {
   dev.mikoto2000.rei.application.run.RunService tracking;
   dev.mikoto2000.rei.application.run.RunRegistry registry;
   @AfterEach void closeTracking(){if(tracking!=null)tracking.close();}
+  @Test void queuedGoalNeverAttachesExternalParentBeforeActualChatStarts(){trackRuns();var continuation=mock(RunContinuation.class);gateway.setContinuations(continuation);router.submitOperation(new AgentRunContext("block","other",dir,project),()->{},Runnable::run);var running=loop.run(project,goal.id());verify(continuation,never()).attachParent(any(),any(),any());assertTrue(tracking.cancel(running.currentRunId()).accepted());jobs.remove().run();verifyNoInteractions(chat);assertEquals("PAUSED",goals.get(project,goal.id()).status());}
+  @Test void waitingRetainsGoalClaimAndOriginalReservationUntilContinuationCompletes() throws Exception {
+    trackRuns();var continuation=mock(RunContinuation.class);gateway.setContinuations(continuation);
+    var callback=new java.util.concurrent.atomic.AtomicReference<java.util.function.Consumer<ChatExecutionResult>>();
+    var reservation=new java.util.concurrent.atomic.AtomicReference<OutputLimitRunBudget.LlmCallReservation>();
+    doAnswer(inv->{reservation.set(inv.getArgument(1));callback.set(inv.getArgument(2));return null;}).when(continuation).attachParent(any(),any(),any());
+    when(chat.execute(any(),anyString(),any(),any())).thenAnswer(inv->{var owner=inv.getArgument(0,AgentRunContext.class);assertSame(reservation.get(),inv.getArgument(3));assertTrue(reservation.get().tryReserve());registry.transition(owner.runId(),dev.mikoto2000.rei.application.run.RunStatus.WAITING,null);return ChatExecutionResult.waiting();});
+    var running=loop.run(project,goal.id());jobs.remove().run();assertEquals("RUNNING",goals.get(project,goal.id()).status());assertTrue(gateway.isInFlight(goals.get(project,goal.id())));verify(continuation,never()).detachParent(any());assertEquals(1,goals.get(project,goal.id()).llmCallsUsed());
+    Files.writeString(dir.resolve("out.txt"),"correct");callback.get().accept(ChatExecutionResult.success("verified result",false));assertEquals("COMPLETED",goals.get(project,goal.id()).status());assertEquals(running.currentRunId(),goals.attempts(project,goal.id()).getFirst().runId());verify(chat,times(1)).execute(any(),anyString(),any(),any());
+  }
   @Test void jsonCompletionConditionsReachExistingChatPlanningPrompt() throws Exception {
     var structured=loop.create(new AgentRunContext("source","session",dir,project),"ready",
         List.of(new GoalRepository.FileCriterion("result.json",null,"/ready","true")),1,5);

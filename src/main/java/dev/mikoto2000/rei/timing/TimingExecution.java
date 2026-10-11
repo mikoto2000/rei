@@ -24,7 +24,7 @@ public class TimingExecution {
  public Status status(ChatExecutionResult result) {
   if(result==null)return Status.INCOMPLETE;
   if(result.stopCode().equals("run_timeout")||result.stopCode().equals("timeout"))return Status.TIMED_OUT;
-  return switch(result.status()){case SUCCESS->Status.SUCCESS;case FAILED->Status.FAILED;case CANCELLED->Status.CANCELLED;};
+  return switch(result.status()){case SUCCESS->Status.SUCCESS;case FAILED->Status.FAILED;case CANCELLED->Status.CANCELLED;case WAITING->Status.INCOMPLETE;};
  }
  public static Status status(Throwable failure) {
   for(int depth=0;failure!=null&&depth<16;depth++,failure=failure.getCause()) {

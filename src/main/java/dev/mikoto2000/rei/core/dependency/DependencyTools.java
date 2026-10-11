@@ -18,6 +18,7 @@ public class DependencyTools {
     var owner=AgentRunScope.current();if(owner==null||owner.projectId()==null)throw new IllegalArgumentException("Owning Project/Session required");
     if(kind==null||kind.isBlank())throw new IllegalArgumentException("Dependency kind required");
     var type=DependencySpec.Kind.valueOf(kind.toUpperCase(Locale.ROOT));
+    if(type==DependencySpec.Kind.EXTERNAL_AGENT)throw new IllegalArgumentException("External dependencies are created only by askExternalAgent");
     if(type==DependencySpec.Kind.GIT_STATE_CHANGED&&expected==null)expected=source.gitBaseline(owner.projectRoot());
     if(type==DependencySpec.Kind.FILE_CHANGED&&expected==null)expected=source.fileBaseline(owner.projectRoot(),target);
     var entry=repo.create(owner,new DependencySpec(type,target,expected),lifetime==null?Duration.ofHours(1):Duration.parse(lifetime),prerequisites);service.flushFacts();return entry;

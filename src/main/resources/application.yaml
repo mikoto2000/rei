@@ -370,6 +370,15 @@ rei:
     allowed-channel-ids: []
     channel-projects: {}
     dm-project-id: ""
+    agent-collaboration:
+      enabled: false
+      allowed-workspace-ids: []
+      allowed-channel-ids: []
+      agents: {}
+      max-requests-per-run: 3
+      max-follow-up-turns: 2
+      max-delegation-depth: 1
+      timeout-seconds: 300
   bluesky:
     enabled: ${REI_BLUESKY_ENABLED:false}
     handle: ${REI_BLUESKY_HANDLE:}

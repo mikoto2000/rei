@@ -20,8 +20,8 @@ import org.springframework.beans.factory.annotation.*;
 public class SlackConfiguration {
   @Bean SlackSocketLifecycle slackSocketLifecycle(SlackProperties p,@Value("${rei.data-dir}") String root,Clock clock,
       SessionRepository repository,ProjectRegistry projects,RunRegistry registry,RunService runs,ConversationInputRouter router,AgentEventBus bus,
-      dev.mikoto2000.rei.conversation.ConversationTurnStore turns) {
-    return new SlackSocketLifecycle(p,true,System.getenv(),()->SlackSdkConnection.open(p,Path.of(root),clock,repository,projects,registry,runs,router,bus,turns));
+      dev.mikoto2000.rei.conversation.ConversationTurnStore turns,org.springframework.beans.factory.ObjectProvider<SlackAgentService> collaboration) {
+    return new SlackSocketLifecycle(p,true,System.getenv(),()->SlackSdkConnection.open(p,Path.of(root),clock,repository,projects,registry,runs,router,bus,turns,collaboration.getIfAvailable()));
   }
   /** A headless backend can use Socket Mode without enabling the existing HTTP API. */
   @Configuration(proxyBeanMethods=false)

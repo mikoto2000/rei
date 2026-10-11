@@ -64,6 +64,8 @@ import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 
 @Component
 public class ChatExecutionService {
+  private org.springframework.beans.factory.ObjectProvider<RunContinuation> continuationProvider;
+  @Autowired void setContinuations(org.springframework.beans.factory.ObjectProvider<RunContinuation> continuations){this.continuationProvider=continuations;}
   private dev.mikoto2000.rei.timing.TimingExecution timing;
   @Autowired(required=false) void setTiming(dev.mikoto2000.rei.timing.TimingExecution timing){this.timing=timing;}
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
@@ -224,6 +226,7 @@ public class ChatExecutionService {
 
   private ChatExecutionResult executeInScope(AgentRunContext context, String promptText, UserInterventionQueue interventions,
       OutputLimitRunBudget.LlmCallReservation reservation) {
+    RunContinuation continuations=continuationProvider==null?null:continuationProvider.getIfAvailable();
     boolean beginnerReview = beginnerReviews != null && dev.mikoto2000.rei.externalagent.BeginnerReviewRequest.accepts(promptText);
     boolean doctorCommand = doctor != null && dev.mikoto2000.rei.doctor.DoctorRequest.accepts(promptText);
     boolean structuredCommand = beginnerReview || doctorCommand;
@@ -243,6 +246,8 @@ public class ChatExecutionService {
         new ProgressEvaluator(context.projectRoot(),
             context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand ? actionPlan : null), eventFactory, eventPublisher);
     execution.setRunContext(context);
+    var resumed=continuations==null?null:continuations.restore(context);
+    execution.setContinuation(continuations);execution.resume(resumed);
     if(context.mode()!=AgentRunContext.Mode.EXCLUSIVE)execution.setConversationSnapshot(completedHistorySnapshot(context));
     execution.setToolPermissionGuard(permissions);
     if(checkpoints!=null)execution.setToolResultsCheckpoint(messages->checkpoints.preserveResults(context,messages));
@@ -254,14 +259,15 @@ public class ChatExecutionService {
     Disposable cancellationHook = cancellationService.onCancel(runId, execution::cancel);
     ConversationTurnStore.Status turnStatus = ConversationTurnStore.Status.FAILED;
     String assistantMessage = null;
+    boolean suspended=false;
 
     try {
-      turns.startOrdered(context, promptText, clock.instant());
+      if(resumed==null)turns.startOrdered(context, promptText, clock.instant());
       if (checkpoints != null) checkpoints.start(context, promptText);
       if (workContext != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand) workContext.afterStart(context);
       execution.checkActive();
       activityTracker.ifPresent(tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));
-      appendConversationLog(context.conversationId(), "user", promptText);
+      if(resumed==null)appendConversationLog(context.conversationId(), "user", promptText);
       if (!structuredCommand && !budget.tryConsumeLlmCall()) {
         log.warn("Chat skipped: LLM call budget exhausted before initial prompt");
         return ChatExecutionResult.failed("LLM call budget exhausted before initial prompt","llm_call_budget_exceeded");
@@ -352,6 +358,7 @@ public class ChatExecutionService {
         return ChatExecutionResult.failed(terminalError(result.status()).message(),terminalError(result.status()).code());
       }
     } catch (RuntimeException error) {
+      if(error instanceof RunWaitingException){suspended=true;return ChatExecutionResult.waiting();}
       if (!RunCancellation.isCancellation(error) && !execution.isCancelled()) throw error;
       execution.cancel();
       eventPublisher.publish(eventFactory.runFailed(runId, terminalError(ChatRunStatus.CANCELLED)));
@@ -362,15 +369,20 @@ public class ChatExecutionService {
       try {
         // Preserve accepted input on ordinary failures, but never apply a cancelled run's mailbox.
         if (execution.isCancelled()) interventions.discardAndFinish();
-        else while (!interventions.finishIfEmpty()) execution.applyInterventions();
+        else {
+          var guidance=new java.util.ArrayList<org.springframework.ai.chat.messages.Message>();
+          while (!interventions.finishIfEmpty())guidance.addAll(execution.applyInterventions());
+          if(suspended&&continuations!=null&&!guidance.isEmpty())continuations.acceptGuidance(context,guidance);
+        }
       } finally {
         try {
           cancellationHook.dispose();
           execution.close();
-          try {turns.finish(context, execution.isCancelled() ? ConversationTurnStore.Status.CANCELLED : turnStatus, assistantMessage);}
-          finally {if (checkpoints != null) checkpoints.finish(context, execution.isCancelled() ? "CANCELLED" : turnStatus.name());}
-          if (workContext != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand) workContext.afterTerminal(context);
-          if (autoSleep != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand) autoSleep.afterTerminal(context);
+          try {if(!suspended||execution.isCancelled())turns.finish(context, execution.isCancelled() ? ConversationTurnStore.Status.CANCELLED : turnStatus, assistantMessage);}
+          finally {if (checkpoints != null) checkpoints.finish(context, execution.isCancelled() ? "CANCELLED" : suspended?"WAITING":turnStatus.name());}
+          if(!suspended&&continuations!=null)continuations.terminal(context);
+          if (!suspended && workContext != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand) workContext.afterTerminal(context);
+          if (!suspended && autoSleep != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand) autoSleep.afterTerminal(context);
         } finally {
           try {
             if(beanFactory!=null && context.mode()!=AgentRunContext.Mode.EXCLUSIVE)
@@ -605,6 +617,10 @@ public class ChatExecutionService {
       completeThinking(thinkingEventStarted, thinkingEventCompleted, thinkingId, thinkingBuilder);
       Throwable error = errorRef.get();
       if (error != null) {
+        for(Throwable cause=error;cause!=null;cause=cause.getCause()){
+          if(cause instanceof RunWaitingException waiting)throw waiting;
+          if(cause.getCause()==cause)break;
+        }
         ChatRunResult failure = failureResult(error);
         if (failure.status() == ChatRunStatus.FAILED) logChatFailure("Chat response failed", error);
         else log.info("Chat execution stopped: runId={}, reason={}", runId, failure.status());

@@ -21,10 +21,12 @@ public record ChatExecutionResult(Status status, String text, boolean memoryCons
   public static ChatExecutionResult cancelled() {
     return new ChatExecutionResult(Status.CANCELLED, "", false, "chat run cancelled");
   }
+  public static ChatExecutionResult waiting(){return new ChatExecutionResult(Status.WAITING,"",false,null,"external_dependency_waiting");}
 
   public enum Status {
     SUCCESS,
     FAILED,
-    CANCELLED
+    CANCELLED,
+    WAITING
   }
 }
