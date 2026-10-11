@@ -15,8 +15,9 @@ final class ConversationAdmissionMigration {
     try (var sql=db.createStatement()) {
       sql.executeQuery("SELECT run_id,project_id,session_id,context,status,active,owner_instance,owner_pid,owner_start,accepted,started,completed FROM conversation_admissions LIMIT 0").close();
       sql.executeQuery("SELECT key_hash,fingerprint,run_id,expires FROM chat_receipts LIMIT 0").close();
-      try (var rows=sql.executeQuery("SELECT count(*) FROM sqlite_schema WHERE name='conversation_session_owner' AND sql LIKE '%WHERE active=1%'")) {
-        if (!rows.next() || rows.getInt(1)!=1) throw new SQLException("Conversation lease index missing");
+      try (var rows=sql.executeQuery("SELECT sql FROM sqlite_schema WHERE type='index' AND tbl_name='conversation_admissions' AND name='conversation_session_owner'")) {
+        String expected="CREATE UNIQUE INDEX conversation_session_owner ON conversation_admissions(project_id,session_id) WHERE active=1";
+        if (!rows.next() || !expected.equals(rows.getString(1))) throw new SQLException("Conversation lease index invalid or missing");
       }
     }
   }
