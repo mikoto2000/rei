@@ -17,3 +17,16 @@ Before implementation the task process was checked for token availability (boole
 ## TDD log
 
 1. Repository/identity/state tests added before implementation; Maven test compilation failed for absent SlackAgentRepository/SlackAgentProperties (Red).
+2. Added continuation, tools and explicit-model-loop tests before implementation (missing continuation APIs/classes: Red); implemented saved tool history and bounded budget restoration (Green, 30 focused tests).
+3. Added early reply, persisted channel Retry-After and cancel-during-send tests (3 failures: Red); added an authenticated bounded early inbox, durable channel limits and terminal-state-preserving TS recording (Green).
+4. Added orphaned managed parent test (Red); persisted managed-parent provenance and refuse resuming a lost Goal/Scheduler parent (Green, 22 focused tests).
+5. Actual ChatExecutionService + StagnationChatModel + Fake Slack integration passed without polling the model. An accepted-intervention test then failed (Red); save final accepted human guidance with the waiting continuation (Green). Goal/Scheduler callback and partial-timeout tests passed in a 59-test focused run.
+6. Spring ApplicationContextRunner validates default-disabled/Shell-disabled tools, YAML record binding and cancellation subscription; identity tests use valid Slack timestamps and follow-up limits are checked independently of the request count.
+
+## Review decisions
+
+- Ordinary Run cancellation uses the regular event subscription (RunService publishes ordinary events). Goal/Scheduler completion callbacks are deferred to the existing Slack pump; they never run under the event-bus cancellation monitor.
+- Only WAITING human continuations are eligible after a clean process restart. In-flight admission/LLM execution and orphaned managed parents become UNKNOWN. Saved external results remain readable. No invented parent budget or new Run is used to hide uncertainty.
+- Replies never become system messages; restored non-system tool-call/response history is combined with freshly generated host system instructions. Request text, outbound destination and body pass the existing exact-input Permission guard before the shared SQLite transaction.
+- The bounded early inbox admits only the configured Bot identity while a matching agent is SENDING; a reply is attached only after exact workspace/channel/root thread TS correlation. Unrelated threads never complete the request. Expired entries are deleted before further early admission.
+- No full Session/history is included in the outgoing question. Known credential formats are redacted; this is not general secret classification. The user/admin must choose non-secret explicit questions.
