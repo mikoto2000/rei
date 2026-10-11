@@ -46,3 +46,13 @@ Run ごとに SecureRandom の256-bit鍵を生成し HMAC-SHA256 を使用。鍵
 実 Provider の比較実験は未実施。変更前に取得できる cached / uncached / prefill は UNKNOWN。変更前の構造では Run summary が固定 System より前、Skill の User request が候補より前。これを回帰テストで再現する。Provider の実際の cache hit・TTFT 改善率は報告しない。
 
 参考: [OpenAI の cached_tokens の説明](https://developers.openai.com/cookbook/examples/prompt_caching101)、[vLLM の Automatic Prefix Caching](https://docs.vllm.ai/en/v0.15.0/features/automatic_prefix_caching/)。Prefix の構造改善とサーバーによる実際の再利用は区別する。
+
+## Phase 2: 固定 Prefix
+
+ContextAssembler は元の先頭 System メッセージ群を保持し、その後に Run observations を挿入する。元のメッセージ相互の順序、System/User の role、historical data の注意文を維持。Tool definitions は別 API field のまま。
+
+AgentSkillImplicitSelector はルール → 候補 metadata → Return format → User request の順にする。repository 全件の場合は name 順、検索が提供した候補の場合は既存 score 順をそのまま維持する。選択・解析・fallback・予算処理は変更しない。
+
+StableToolDefinitions は既存の StagnationChatModel / BoundedToolLoop の初期準備で supplied ToolCallbacks のみを name 順へ、JSON Schema の object keys を再帰的に昇順へ。array (required、enum、oneOf 等) の順序を維持。name/description の内容、ToolMetadata、ToolContext、call を元 callback に委譲。schema が解析できなければ元定義で継続。Stagnation では実行時権限・イベント判定用ラッパーを構築した後で定義を安定化し、domain callback の型による既存判定も保持する。追加 Tool Profile は導入せず、既存 EXCLUSIVE / READ_ONLY / CONVERSATION と子 Agent の Tool 限定を再利用する。
+
+Red 記録: ContextAssemblerTest 1件と AgentSkillImplicitSelectorTest 2件が意図した順序差で失敗 (計20件中3 failures)。Tool 定義テストは未実装 StableToolDefinitions により compile failure。Green は同じテストを再実行する。元の schema/options/messages を変更しない回帰も追加。

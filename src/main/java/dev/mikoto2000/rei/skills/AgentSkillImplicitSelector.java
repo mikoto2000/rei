@@ -44,6 +44,7 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
   public List<AgentSkill> select(String prompt, Set<String> excludedSkillNames,
       List<AgentSkill> providedCandidates, Runnable beforeModelCall) {
     List<AgentSkill> candidates = (providedCandidates == null ? repository.findEnabled() : providedCandidates).stream()
+        .sorted(providedCandidates == null ? java.util.Comparator.comparing(AgentSkill::name) : (a, b) -> 0)
         .filter(skill -> excludedSkillNames == null || !excludedSkillNames.contains(skill.name()))
         .toList();
     if (candidates.isEmpty()) {
@@ -88,14 +89,14 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
         該当なしの場合は空配列を返してください。
         必ず JSON 配列のみを返してください。
 
-        User request:
+        Skills:
         """);
-    builder.append(userPrompt == null ? "" : userPrompt).append("\n\nSkills:\n");
     for (AgentSkill skill : candidates) {
       builder.append("- name: ").append(skill.name()).append('\n');
       builder.append("  description: ").append(skill.description()).append('\n');
     }
     builder.append("\nReturn format:\n[\"skill-name\"]\n");
+    builder.append("\nUser request:\n").append(userPrompt == null ? "" : userPrompt).append("\n");
     return builder.toString();
   }
 

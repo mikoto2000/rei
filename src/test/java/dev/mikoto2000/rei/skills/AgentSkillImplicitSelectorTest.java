@@ -26,6 +26,7 @@ class AgentSkillImplicitSelectorTest {
     var prompt = org.mockito.ArgumentCaptor.forClass(String.class);
     Mockito.verify(model).call(prompt.capture());
     assertSelectionPrompt(prompt.getValue(), skill);
+    assertThat(prompt.getValue().indexOf("Skills:")).isLessThan(prompt.getValue().indexOf("User request:"));
     assertThat(new AgentSkillPromptRenderer().render("please use it", List.of(skill)))
         .contains(skill.instructions());
   }
@@ -49,12 +50,13 @@ class AgentSkillImplicitSelectorTest {
     assertSelectionPrompt(prompt.getValue().getContents(), skill);
     Mockito.verify(budget).run();
     Mockito.verify(budget).recordTotalTokens(response.getMetadata().getUsage().getTotalTokens());
+    assertThat(prompt.getValue().getContents().indexOf("Skills:")).isLessThan(prompt.getValue().getContents().indexOf("User request:"));
     assertThat(new AgentSkillPromptRenderer().render("please use it", List.of(skill)))
         .contains(skill.instructions());
   }
 
   private void assertSelectionPrompt(String prompt, AgentSkill skill) {
-    assertThat(prompt).contains("User request:\nplease use it\n\nSkills:\n")
+    assertThat(prompt).endsWith("User request:\nplease use it\n")
         .contains("Skills:\n- name: " + skill.name() + "\n  description: " + skill.description()
             + "\n\nReturn format:\n")
         .doesNotContain("excerpt:", skill.instructions());
