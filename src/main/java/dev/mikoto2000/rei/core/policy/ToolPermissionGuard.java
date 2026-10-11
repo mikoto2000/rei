@@ -8,6 +8,9 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 /** Reports a refusal through existing durable Tool events before invoking the callback. */
 @Component
 public class ToolPermissionGuard {
+  // MCP has project-scoped snapshot reads only, not personal memory, raw process logs or arbitrary PDF paths.
+  private static final java.util.Set<String> MCP_READ_TOOLS=java.util.Set.of("readMultiFile","grepMultiQuery","searchAndRead",
+      "findFile","listFile","repositoryMap","changeTestImpact","now","webSearch","webSearchAndRead");
   private ToolApprovalRepository approvals;
   @org.springframework.beans.factory.annotation.Autowired
   public void setApprovals(ToolApprovalRepository approvals) {this.approvals=approvals;}
@@ -37,6 +40,8 @@ public class ToolPermissionGuard {
   private void check(String tool,String input,AgentRunContext owner,AgentRunContext approvalOwner) {
     boolean restricted = owner != null && (owner.mode() == AgentRunContext.Mode.CONVERSATION
         || owner.mode() == AgentRunContext.Mode.READ_ONLY && !ToolPermissionPolicy.intrinsicallyReadOnly(tool));
+    restricted |= owner!=null && owner.requestSource()==AgentRunContext.RequestSource.MCP
+        && (owner.mode()!=AgentRunContext.Mode.READ_ONLY || !MCP_READ_TOOLS.contains(tool));
     var decision=restricted ? PermissionDecision.DENY : policy.evaluate(tool);
     // Recognized text is not a calibrated confidence/intent guarantee. Retain the existing
     // deny decision, and require the existing exact-input one-use approval for side effects.

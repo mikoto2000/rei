@@ -39,6 +39,7 @@
 		<test.dataDirectory>${project.build.directory}/test-performance/data</test.dataDirectory>
 	</properties>
 	<dependencies>
+<dependency><groupId>org.springframework.ai</groupId><artifactId>spring-ai-starter-mcp-server-webmvc</artifactId></dependency>
 		<dependency>
 			<groupId>net.java.dev.jna</groupId><artifactId>jna-platform</artifactId><version>5.17.0</version>
 		</dependency>

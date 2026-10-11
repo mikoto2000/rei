@@ -351,6 +351,17 @@ class SubAgentRunnerTest {
       }
     }
   }
+  @Test void childCannotExpandMcpReadOnlyAuthority() throws Exception {
+    var runner=runner(p->{
+      var options=(ToolCallingChatOptions)p.getOptions();
+      var child=(AgentRunContext)options.getToolContext().get(AgentRunContext.class.getName());
+      assertThat(child.mode()).isEqualTo(AgentRunContext.Mode.READ_ONLY);
+      assertThat(child.requestSource()).isEqualTo(AgentRunContext.RequestSource.MCP);
+      return Flux.just(answer(SubAgentResultParserTest.VALID));
+    },"2s");
+    var parent=new AgentRunContext("mcp","session",directory,"project",AgentRunContext.RequestSource.MCP,AgentRunContext.Mode.READ_ONLY);
+    try(var scope=AgentRunScope.open(parent)){assertThat(runner.run("reviewer","task",null).status()).isEqualTo(SubAgentResult.Status.COMPLETED);}
+  }
   @Test void childPreservesWebRequestSource() throws Exception {
     var runner = runner(p -> {
       var options = (ToolCallingChatOptions) p.getOptions();

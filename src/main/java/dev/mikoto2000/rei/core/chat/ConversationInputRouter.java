@@ -20,6 +20,8 @@ public final class ConversationInputRouter {
   public void setAdmissions(dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions){this.admissions=admissions;}
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   public void setRequestCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore captures){requestCaptures=captures;}
+  private final java.util.List<Consumer<AgentRunContext>> cleanupObservers=new java.util.concurrent.CopyOnWriteArrayList<>();
+  public void onCleanup(Consumer<AgentRunContext> observer){cleanupObservers.add(Objects.requireNonNull(observer));}
   private final Executor executor;
   private final Runner runner;
   private final ProjectRunQueue projectQueue;
@@ -135,7 +137,7 @@ public final class ConversationInputRouter {
         error->{
           if(admissions!=null)admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.FAILED);
           try{lifecycle.accept(()->{throw error;});}finally{forget(slot);}
-        });
+        },context.requestSource()==AgentRunContext.RequestSource.MCP);
     } catch(RuntimeException error){if(admissions!=null)admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.FAILED);forget(slot);throw error;}
   }
   private AgentRunContext cliContext(Path root, String conversation) {
@@ -166,7 +168,7 @@ public final class ConversationInputRouter {
             if(requestCaptures!=null)requestCaptures.startFailed(context.runId());
             try { lifecycle.accept(() -> { throw error; }); }
             finally { agentSlots.remove(context.runId()); forget(slot); }
-          });
+          },context.requestSource()==AgentRunContext.RequestSource.MCP);
       return first ? Disposition.STARTED : Disposition.QUEUED;
     } catch (RuntimeException error) { if(admissions!=null)admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.FAILED);agentSlots.remove(context.runId()); forget(slot); throw error; }
   }
@@ -174,6 +176,7 @@ public final class ConversationInputRouter {
     if(admissions!=null)admissions.release(slot.context().runId());
     active.remove(slot.context().runId());
     synchronized (mailboxes) { mailboxes.remove(slot.context().conversationId(), slot); }
+    for(var observer:cleanupObservers)try{observer.accept(slot.context());}catch(RuntimeException failure){org.slf4j.LoggerFactory.getLogger(ConversationInputRouter.class).warn("Run cleanup observer unavailable: {}",failure.getClass().getSimpleName());}
     changed();
   }
   private void changed() {
