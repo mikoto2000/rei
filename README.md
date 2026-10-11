@@ -239,3 +239,5 @@ LLM送信本文の明示記録は [LLM Request Capture](docs/llm-request-capture
 文脈と辞書を参照する音声LLM補正（既定OFF、自動採用、VOICE承認維持）は [音声LLM補正](docs/voice-llm-correction.md) を参照してください。
 
 対話Shell起動時の音声入力は、[自動開始設定](docs/configuration.md#音声入力の自動開始)で明示的に有効化できます。既定はOFFです。
+
+Sign in with ChatGPT の手動 SubAgent は [利用・設計ドキュメント](docs/chatgpt-plan-subagents.md) を参照してください。

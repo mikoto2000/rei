@@ -76,6 +76,15 @@ public class AgentEventFactory {
             status, duration, bounded(failureReason, 120)));
   }
 
+  public AgentEvent subAgentLifecycle(AgentEventType type,String parentRunId,String subAgentRunId,String agentId,
+      String task,String status,long duration,String failureReason,String backendId,String modelId,Integer totalTokens) {
+    var base=subAgentLifecycle(type,parentRunId,subAgentRunId,agentId,task,status,duration,failureReason);
+    var original=(SubAgentLifecyclePayload)base.payload();
+    var payload=new SubAgentLifecyclePayload(original.parentRunId(),original.subAgentRunId(),original.agentId(),
+        original.taskSummary(),original.status(),original.duration(),original.failureReason(),backendId,modelId,totalTokens);
+    return new AgentEvent(base.id(),base.sequence(),base.timestamp(),base.type(),base.version(),base.sessionId(),base.turnId(),base.runId(),base.correlationId(),base.parentEventId(),payload,base.projectId());
+  }
+
   public AgentEvent historySearchCompleted(HistorySearchCompletedPayload payload) {
     var event = newEvent(AgentEventType.HISTORY_SEARCH_COMPLETED, null, null, payload);
     return new AgentEvent(event.id(), event.sequence(), event.timestamp(), event.type(), event.version(),

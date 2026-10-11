@@ -313,6 +313,10 @@ public class ReiApplication {
     PrintWriter writer = new PrintWriter(terminal.writer(), true);
     cmd.setOut(writer);
     cmd.setErr(writer);
+    var chatgpt = cmd.getSubcommands().get("chatgpt");
+    if (chatgpt != null && chatgpt.getCommand() instanceof dev.mikoto2000.rei.chatgpt.ChatGptCommand command) {
+      command.setShellOutput(writer);
+    }
     var subagent = cmd.getSubcommands().get("subagent");
     if (subagent != null && subagent.getCommand() instanceof dev.mikoto2000.rei.subagent.SubAgentCommand command) {
       command.setShellOutput(writer);

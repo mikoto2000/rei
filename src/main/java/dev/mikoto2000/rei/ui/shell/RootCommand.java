@@ -33,6 +33,7 @@ version = "v1.0.0",
 name = "",
 description = "AI shell",
 subcommands = {
+  dev.mikoto2000.rei.chatgpt.ChatGptCommand.class,
   dev.mikoto2000.rei.timing.TimingCommand.class,
   dev.mikoto2000.rei.doctor.DoctorCommand.class,
   dev.mikoto2000.rei.core.command.StorageCommand.class,
