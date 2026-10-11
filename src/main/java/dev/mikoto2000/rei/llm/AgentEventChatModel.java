@@ -96,7 +96,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
       if(values.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY) instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext run)return run.runContext();
       if(values.get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName()) instanceof dev.mikoto2000.rei.core.chat.AgentRunContext run)return run;
     }
-    return null;
+    return dev.mikoto2000.rei.core.chat.AgentRunScope.current();
   }
   private boolean cancelled(Prompt prompt) {
     return Thread.currentThread().isInterrupted() || prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options && options.getToolContext()!=null
@@ -111,7 +111,9 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     if(timing==null||!timing.enabled())return null;
     var owner=owner(prompt);if(owner==null)return null;
     if(trace!=null)trace.physicalSpan().set(request);
-    return timing.startSpanWithId(owner.runId(),request,owner.runId(),trace==null?request:trace.requestId(),trace==null?request:Integer.toString(trace.number()),dev.mikoto2000.rei.timing.TimingRecorder.Category.LLM);
+    var span=timing.startSpanWithId(owner.runId(),request,owner.runId(),trace==null?request:trace.requestId(),trace==null?request:Integer.toString(trace.number()),dev.mikoto2000.rei.timing.TimingRecorder.Category.LLM);
+    span.prompt(feature,prompt);
+    return span;
   }
   private void observeChunk(Prompt prompt,dev.mikoto2000.rei.timing.TimingExecution.SpanLease measured,ChatResponse response) {
     if(measured==null)return;
@@ -132,6 +134,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
           && !(response.getMetadata().getUsage() instanceof org.springframework.ai.chat.metadata.EmptyUsage)) {
         var usage=response.getMetadata().getUsage();
         measured.usage(usage.getPromptTokens()==null?null:usage.getPromptTokens().longValue(),usage.getCompletionTokens()==null?null:usage.getCompletionTokens().longValue(),null,null);
+        measured.cacheUsage(usage.getNativeUsage() instanceof com.openai.models.completions.CompletionUsage ? "openai-compatible" : "UNKNOWN",response.getMetadata().getModel(),usage.getCacheReadInputTokens());
       }
     });
   }

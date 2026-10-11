@@ -40,6 +40,32 @@ class ContextAssemblerTest {
         .collect(java.util.stream.Collectors.joining("\n"))).contains("system","会話スタイル","承認事項は省略しない");
     assertThat(projected.getUserMessage().getText()).isEqualTo("current request and Working Set");
   }
+  @Test void runObservationsFollowOriginalSystemPrefixAndSummaryStaysFrozen() {
+    var repository=new ConversationSummaryRepository(dir);
+    repository.save(ConversationSummaryRepository.runKey("conversation","run"),new ConversationSummary("saved decision",1,java.time.Instant.now()));
+    var a=assembler((previous,messages,budget,request)->{calls.incrementAndGet();return "unexpected";});
+    var original=new Prompt(List.of(new SystemMessage("system"),new UserMessage("request"),new AssistantMessage("covered"),new AssistantMessage("new fact")));
+    var projected=a.assemble(original,"conversation","run",()->{});
+    assertThat(projected.getInstructions().getFirst().getText()).isEqualTo("system");
+    assertThat(projected.getContents()).contains("saved decision","new fact").doesNotContain("covered");
+    var again=a.assemble(original,"conversation","run",()->{});
+    assertThat(again.getInstructions()).isEqualTo(projected.getInstructions());assertThat(calls).hasValue(0);
+  }
+  @Test void updatedWorkingSetAndNewSystemPolicyAreUsedWithoutStaleSnapshot() {
+    var current=new java.util.concurrent.atomic.AtomicReference<>("Working Set: latest revision");
+    var a=assembler((previous,messages,budget,request)->"summary");a.setWorkingSet(current::get);
+    var marker=SystemMessage.builder().text("Working Set: old").metadata(Map.of("rei.workingSet",true)).build();
+    var raw=new Prompt(List.of(new SystemMessage("policy-v1"),new UserMessage("request"),marker));
+    assertThat(a.assemble(raw,"conversation","run",()->{}).getContents()).contains("latest revision").doesNotContain("Working Set: old");
+    current.set("Working Set: deleted old path, moved new path");
+    var revised=new Prompt(List.of(new SystemMessage("policy-v2"),new UserMessage("request"),marker));
+    var next=a.assemble(revised,"conversation","run",()->{});
+    assertThat(next.getInstructions().getFirst().getText()).isEqualTo("policy-v2");
+    assertThat(next.getInstructions().getLast().getMetadata().get("rei.workingSet")).isEqualTo(true);
+    assertThat(dev.mikoto2000.rei.timing.PrefixDiagnostics.sources(next)).extracting(dev.mikoto2000.rei.timing.PrefixDiagnostics.Source::id).contains("WORKING_SET");
+    assertThat(next.getContents()).contains("deleted old path, moved new path").doesNotContain("latest revision","policy-v1");
+    assertThat(raw.getContents()).contains("Working Set: old");
+  }
   @Test void belowThresholdKeepsOriginalMessages() {
     var p = prompt("short");
     var result = assembler((previous, messages, budget, request) -> { calls.incrementAndGet(); return "summary"; })

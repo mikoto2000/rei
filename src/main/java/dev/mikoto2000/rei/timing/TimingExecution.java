@@ -48,6 +48,8 @@ public class TimingExecution {
   private boolean finished;
   SpanLease(String run,String id,boolean recorded){this.run=run;this.id=id;this.recorded=recorded;}
   public String id(){return id;}
+  public void prompt(String feature,org.springframework.ai.chat.prompt.Prompt prompt){if(recorded)safely(()->recorder.prompt(run,id,feature,prompt));}
+  public void cacheUsage(String provider,String model,Long cached){if(recorded)safely(()->recorder.cacheUsage(run,id,provider,model,cached));}
   public synchronized void finish(Status status){if(recorded&&!finished){finished=true;safely(()->recorder.endSpan(run,id,status));}}
   public void mark(Metric metric){if(recorded)safely(()->recorder.markSpan(run,id,metric));}
   public void usage(Long input,Long output,Long generated,Long duration){if(recorded)safely(()->recorder.usage(run,id,input,output,generated,duration));}

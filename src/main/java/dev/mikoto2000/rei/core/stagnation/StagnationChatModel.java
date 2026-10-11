@@ -146,7 +146,7 @@ public class StagnationChatModel implements ChatModel {
     if(resumed.isEmpty())instructions.addAll(prompt.getInstructions());
     else {prompt.getInstructions().stream().filter(m->m instanceof SystemMessage).forEach(instructions::add);instructions.addAll(resumed);}
     return new Prompt(instructions, options.mutate()
-        .toolContext(toolContext).toolCallbacks(callbacks).build());
+        .toolContext(toolContext).toolCallbacks(dev.mikoto2000.rei.llm.StableToolDefinitions.callbacks(callbacks)).build());
   }
 
   private ToolCallback observe(ToolCallback delegateTool, RunExecutionContext context) {
