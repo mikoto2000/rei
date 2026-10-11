@@ -206,3 +206,16 @@ config/skill/subagent、reflection lesson の専用 API と既存整形を追加
 
 追加メモリ関連25件が成功。最新 CLI は57件、launcher は実 ConPTY を含む5件が成功。配布依存は10 jars、合計7,742,025 bytes（CLI の純粋引数パーサーに picocli を含む）。Spring、SQLite、provider SDK は CLI に含まれない。最新 Backend `rei-backend-memory-parity.jar` の GUI 強制 close E2E は PASS：専用両ペイン終了後の同一 Backend、RUNNING → COMPLETED、別 CLI 再接続、認証 stop を確認。
 通常の2ペイン E2E も同じ最新版 jar で PASS：第一ペイン終了後も第二 CLI と RUNNING の Run が生存し、第二 CLI が SSE 完了を受信して追加 Session を作成した。
+# 固定ドメイン操作の互換性検証（2026-10-11）
+
+Google Calendar / Tasks、Storage retention・maintenance、Activity の全宣言操作、Bluesky reply/history、interest discover、Feed の OPML・更新・要約・記事操作を固定 API へ接続した。表示は新しい command instance の専用 writer で既存 Shell 実装を共有する。Web の既存 JSON 契約は維持し、CLI 用 representation は明示 header で切り替える。OAuth と LLM を伴う操作は既存 Run キュー・権限・Session 所有権を使い、受理後に副作用を自動再送しない。
+
+LLM capture は CLI ごとのランダム UUID と Session に予約を紐付け、Chat の dispatch 前に消費する。原本は既存の上限付き JVM メモリにのみ保持する。raw/export は既存の明示確認を維持し、export は既存 CREATE_NEW・親 traversal・symlink 検証を共有する。別 CLI の予約消費、表示の masking、原本非上書きをテストした。
+
+VACUUM は turns だけでなく active conversation_admissions も検査する。会話 Turn を作らない操作と、terminal event 後の cleanup 中にも Session lease が残っていれば拒否する実 SQLite テストを追加した。
+
+対象テストは Activity 43 件、Google/Vector 53 件、Storage 26 件、Social 28 件、Capture/Chat 28 件、Feed/Capture 30 件が成功（対象間の重複あり）。CLI reactor は成功し、実 ConPTY の対話 Shell・JLine 復帰も含む。
+
+GUI close E2E: `target/windows-terminal-e2e-76b53f8c-7fff-44f8-aa1f-2bf9991fd97c/result.json`、Backend instance `64172cf2-0607-4d40-84c6-01eb46800b25`。専用 UUID の HWND に WindowPattern.Close を実行し、両 pane host 終了、Run RUNNING 継続→COMPLETED、CLI 再接続・history 取得・新 Session・認証 stop・endpoint 除去を確認した。Windows Terminal が複数ウィンドウを同じ PID でホストするため、MainWindowHandle ではなく UI Automation の top-level HWND を照合する。
+
+全46コマンドの完全互換確認は継続中。voice はユーザー指定で対象外。search の回答 streaming、image 全 options、summarize の直近表示、動的候補・パス補完・help・エラーの突き合わせを完了するまで全互換とはしない。

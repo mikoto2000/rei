@@ -16,9 +16,10 @@ public class ChatController {
   public void setAdmissions(dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions){this.admissions=admissions;}
   public ChatController(ChatSubmitService chat) { this.chat = chat; }
   public ResponseEntity<ChatResponse> submit(ChatRequest request) {return submit(request,null);}
+  public ResponseEntity<ChatResponse> submit(ChatRequest request,String key){return submit(request,key,null);}
   @PostMapping("/api/v1/chat")
-  public ResponseEntity<ChatResponse> submit(@RequestBody ChatRequest request,@RequestHeader(value="Idempotency-Key",required=false) String key) {
-    var run = chat.submit(request.message(), request.projectId(), request.sessionId(), request.mode(),key);
+  public ResponseEntity<ChatResponse> submit(@RequestBody ChatRequest request,@RequestHeader(value="Idempotency-Key",required=false) String key,@RequestHeader(value="X-Rei-Client-Id",required=false) String clientId) {
+    var run = clientId==null?chat.submit(request.message(),request.projectId(),request.sessionId(),request.mode(),key):chat.submit(request.message(), request.projectId(), request.sessionId(), request.mode(),key,clientId);
     return ResponseEntity.accepted().location(URI.create("/api/v1/runs/" + run.runId()))
         .body(new ChatResponse(run.runId(), run.conversationId(), run.runId()));
   }

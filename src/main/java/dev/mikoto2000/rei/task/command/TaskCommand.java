@@ -25,11 +25,21 @@ import picocli.CommandLine.Parameters;
       TaskCommand.DeleteCommand.class
     })
 public class TaskCommand {
+  private abstract static class ReportCommand implements Runnable {
+    private java.io.PrintWriter reportOutput;
+    java.io.PrintWriter out(){return reportOutput==null?new java.io.PrintWriter(System.out,true):reportOutput;}
+  }
+  private static String report(ReportCommand command){var text=new java.io.StringWriter();command.reportOutput=new java.io.PrintWriter(text,true);command.run();return text.toString().replaceFirst("[\\r\\n]+$","");}
+  public static String reportAdd(TaskService service,String title,LocalDate due,int priority,List<String> tags){var command=new AddCommand(service);command.titleParts=new String[]{title};command.dueDate=due;command.priority=priority;command.tags=List.copyOf(tags);return report(command);}
+  public static String reportList(TaskService service,Integer priority,String tag,LocalDate dueBefore){var command=new ListCommand(service);command.priority=priority;command.tag=tag;command.dueBefore=dueBefore;return report(command);}
+  public static String reportDone(TaskService service,long id){var command=new DoneCommand(service);command.id=id;return report(command);}
+  public static String reportDelete(TaskService service,long id){var command=new DeleteCommand(service);command.id=id;return report(command);}
+  public static String reportAuthorization(TaskService service){return report(new AuthCommand(service));}
 
   @Component
   @RequiredArgsConstructor
   @Command(name = "auth", description = "Google Tasks への OAuth 認可を実行します")
-  public static class AuthCommand implements Runnable {
+  public static class AuthCommand extends ReportCommand {
 
     private final TaskService taskService;
 
@@ -37,7 +47,7 @@ public class TaskCommand {
     public void run() {
       try {
         taskService.authorize();
-        System.out.println("Google Tasks の認可が完了しました");
+        out().println("Google Tasks の認可が完了しました");
       } catch (Exception e) {
         throw new RuntimeException("Google Tasks の認可に失敗しました", e);
       }
@@ -47,7 +57,7 @@ public class TaskCommand {
   @Component
   @RequiredArgsConstructor
   @Command(name = "add", description = "タスクを追加します")
-  public static class AddCommand implements Runnable {
+  public static class AddCommand extends ReportCommand {
 
     private final TaskService taskService;
 
@@ -67,9 +77,9 @@ public class TaskCommand {
     public void run() {
       try {
         Task created = taskService.add(String.join(" ", titleParts), dueDate, priority, tags);
-        System.out.println("追加: " + created.id() + " | " + created.title());
+        out().println("追加: " + created.id() + " | " + created.title());
       } catch (RuntimeException e) {
-        System.out.println("[error] " + userFacingMessage(e, "Google Tasks へのタスク追加に失敗しました"));
+        out().println("[error] " + userFacingMessage(e, "Google Tasks へのタスク追加に失敗しました"));
       }
     }
   }
@@ -77,7 +87,7 @@ public class TaskCommand {
   @Component
   @RequiredArgsConstructor
   @Command(name = "list", description = "未完了タスクを一覧します")
-  public static class ListCommand implements Runnable {
+  public static class ListCommand extends ReportCommand {
 
     private final TaskService taskService;
 
@@ -94,14 +104,14 @@ public class TaskCommand {
     public void run() {
       List<Task> tasks = taskService.listOpen(new TaskQuery(priority, tag, dueBefore));
       if (tasks.isEmpty()) {
-        System.out.println("未完了タスクはありません");
+        out().println("未完了タスクはありません");
         return;
       }
 
       for (Task task : tasks) {
         String dueDate = task.dueDate() == null ? "" : task.dueDate().toString();
         String tags = task.tags().isEmpty() ? "" : String.join(",", task.tags());
-        System.out.println(task.id() + " | " + task.priority() + " | " + dueDate + " | " + task.title() + " | " + tags);
+        out().println(task.id() + " | " + task.priority() + " | " + dueDate + " | " + task.title() + " | " + tags);
       }
     }
   }
@@ -109,7 +119,7 @@ public class TaskCommand {
   @Component
   @RequiredArgsConstructor
   @Command(name = "done", description = "タスクを完了にします")
-  public static class DoneCommand implements Runnable {
+  public static class DoneCommand extends ReportCommand {
 
     private final TaskService taskService;
 
@@ -119,14 +129,14 @@ public class TaskCommand {
     @Override
     public void run() {
       Task completed = taskService.complete(id);
-      System.out.println("完了: " + completed.id() + " | " + completed.title());
+      out().println("完了: " + completed.id() + " | " + completed.title());
     }
   }
 
   @Component
   @RequiredArgsConstructor
   @Command(name = "delete", description = "タスクを削除します")
-  public static class DeleteCommand implements Runnable {
+  public static class DeleteCommand extends ReportCommand {
 
     private final TaskService taskService;
 
@@ -136,7 +146,7 @@ public class TaskCommand {
     @Override
     public void run() {
       taskService.delete(id);
-      System.out.println("削除: " + id);
+      out().println("削除: " + id);
     }
   }
 

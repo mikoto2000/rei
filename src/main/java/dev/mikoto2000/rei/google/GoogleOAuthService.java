@@ -34,6 +34,10 @@ public class GoogleOAuthService {
   private static final String USER_ID = "user";
   private final GoogleCalendarProperties properties;
   private Credential credential;
+  private dev.mikoto2000.rei.event.AgentEventFactory events;
+  private dev.mikoto2000.rei.event.AgentEventBus bus;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setRunEvents(dev.mikoto2000.rei.event.AgentEventFactory events,dev.mikoto2000.rei.event.AgentEventBus bus){this.events=events;this.bus=bus;}
 
   public synchronized Credential authorize(NetHttpTransport transport, boolean force) throws Exception {
     if (credential != null && !force) {
@@ -115,6 +119,9 @@ public class GoogleOAuthService {
   private void browse(String url) throws IOException {
     IO.println("Google OAuth を開始します。ブラウザが開かない場合は次の URL を開いてください:");
     IO.println(url);
+    var context=dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    if(context!=null&&events!=null&&bus!=null)bus.publish(events.messageDelta(context.runId(),
+        "Google OAuth を開始します。ブラウザが開かない場合は次の URL を開いてください:\n"+url).withOwnership(context));
     if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
       Desktop.getDesktop().browse(URI.create(url));
     }

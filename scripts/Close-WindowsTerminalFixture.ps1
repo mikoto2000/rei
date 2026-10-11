@@ -5,10 +5,12 @@ Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 $caseName=Split-Path -Leaf $CaseRoot
 if ($caseName -notmatch '^windows-terminal-e2e-[a-f0-9-]{36}$') { throw 'Not a dedicated E2E case' }
-$windows=@(Get-Process WindowsTerminal -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like ('*'+$caseName) })
+$terminalPids=@(Get-Process WindowsTerminal -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
+# A Windows Terminal process can host several windows. MainWindowHandle identifies only one.
+$windows=@([System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children,[System.Windows.Automation.Condition]::TrueCondition) | Where-Object { $_.Current.ProcessId -in $terminalPids -and $_.Current.Name -like ('*'+$caseName) })
 if ($windows.Count -ne 1) { throw 'Dedicated fixture window could not be uniquely identified' }
-$window=$windows[0]
-$element=[System.Windows.Automation.AutomationElement]::FromHandle($window.MainWindowHandle)
+$element=$windows[0]
+$window=Get-Process -Id $element.Current.ProcessId
 if ($element.Current.ProcessId -ne $window.Id -or $element.Current.Name -notlike ('*'+$caseName)) { throw 'Fixture window identity changed' }
 $buttons=$element.FindAll([System.Windows.Automation.TreeScope]::Descendants,[System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty,[System.Windows.Automation.ControlType]::Button))
 $before=@($buttons | ForEach-Object { @{name=$_.Current.Name;automationId=$_.Current.AutomationId} })

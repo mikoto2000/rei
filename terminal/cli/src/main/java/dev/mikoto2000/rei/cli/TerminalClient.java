@@ -134,8 +134,21 @@ public final class TerminalClient implements AutoCloseable {
       // Validate before creating an empty Session. Run access is unchanged.
       RemoteCommands.route(words,project,"validation");createSession(null);
     }
+    if(name.equals("/llm")&&words.size()==2&&words.get(1).equals("capture")){out("/llm capture next|status|off|list [run-id]|show <attempt-id>|raw <attempt-id>|export <attempt-id> <path>|delete <run-id>|clear");return;}
+    if(name.equals("/llm")&&words.size()==3&&words.get(1).equals("capture")&&words.get(2).equals("next")&&session==null){requireProject();createSession(null);}
     if(RemoteCommands.NAMES.contains(name)&&!(name.equals("/history")&&Set.of("off","on").contains(action))) {
       var request=RemoteCommands.route(words,project,session);
+      if(Set.of("/api/v1/activity/commands/coaching/settings","/api/v1/activity/commands/coaching/enabled").contains(request.path())) {
+        var state=backend.get("/api/v1/activity/coaching");if(!state.path("revision").canConvertToLong())throw new java.io.IOException("Coaching revision unavailable");
+        var body=new LinkedHashMap<String,Object>();((Map<?,?>)request.body()).forEach((key,value)->body.put((String)key,value));body.put("expectedRevision",state.path("revision").asLong());request=new RemoteCommands.Request(request.method(),request.path(),body);
+      }
+      if(Set.of("/api/v1/google-calendar/authorize","/api/v1/google-calendar/refresh-token","/api/v1/google-tasks/authorize").contains(request.path())) {
+        String key=UUID.randomUUID().toString();out("Receipt: "+key);var accepted=switch(request.path()) {
+          case "/api/v1/google-calendar/authorize"->backend.authorizeGoogleCalendar(request.body(),key);
+          case "/api/v1/google-calendar/refresh-token"->backend.refreshGoogleCalendar(request.body(),key);
+          default->backend.authorizeGoogleTasks(request.body(),key);
+        };session=accepted.path("sessionId").asText();run=accepted.path("runId").asText();out("Run: "+run);watch(run);refresh();return;
+      }
       if(name.equals("/memory")&&Set.of("summarize","consolidate").contains(action)) {
         String key=UUID.randomUUID().toString();out("Receipt: "+key);
         var accepted=action.equals("summarize")?backend.submitMemorySummary(project,request.body(),key):backend.submitMemoryConsolidation(project,request.body(),key);
@@ -156,7 +169,17 @@ public final class TerminalClient implements AutoCloseable {
         };
         session=accepted.path("sessionId").asText();run=accepted.path("runId").asText();out("Run: "+run);watch(run);refresh();return;
       }
+      if(name.equals("/llm")&&(request.path().endsWith("/raw")||request.path().endsWith("/export"))) {
+        var attempt=backend.get(request.path().substring(0,request.path().lastIndexOf('/')));
+        if(!attempt.path("captureState").asText().equals("COMPLETE"))throw new IllegalArgumentException("Complete original unavailable");
+        String confirmation=reader.readLine("秘密情報を含む未加工本文を表示・保存します。端末履歴・保存後のコピーは削除対象外です。続行しますか? [y/N] ");
+        if(!confirmation.equalsIgnoreCase("y")&&!confirmation.equalsIgnoreCase("yes"))return;
+        var body=new LinkedHashMap<String,Object>((Map<String,Object>)request.body());body.put("approved",true);var response=backend.post(request.path(),body);
+        // Raw is already control-escaped by CaptureDisplay and was explicitly approved. Do not mask its contents again.
+        if(request.path().endsWith("/raw"))reader.printAbove(response.path("text").asText());else out(response.path("text").asText());return;
+      }
       var response=request.method().equals("GET")?backend.get(request.path()):backend.mutation(request.method(),request.path(),request.body());
+      if(name.equals("/activity")&&request.path().endsWith("/suggest-rules")||name.equals("/bsky")&&request.path().endsWith("/replies")||name.equals("/interest")&&request.path().endsWith("/discover")||name.equals("/feed")&&Set.of("update","summary","item").contains(action)&&response.has("runId")){run=response.path("runId").asText();out("Run: "+run);watch(run);return;}
       if(name.equals("/mode")) {
         String style=response.path("style").asText("AUTO").toLowerCase(Locale.ROOT);
         out("Response mode: "+style+(style.equals("auto")?" (text: normal, voice: conversation)":response.path("voiceOnly").asBoolean()?" (voice only)":" (text and voice)"));return;

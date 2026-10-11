@@ -25,11 +25,20 @@ import picocli.CommandLine.Parameters;
       ScheduleCommand.AddCommand.class
     })
 public class ScheduleCommand {
+  private abstract static class ReportCommand implements Runnable {
+    private java.io.PrintWriter reportOutput;
+    java.io.PrintWriter out(){return reportOutput==null?new java.io.PrintWriter(System.out,true):reportOutput;}
+  }
+  private static String report(ReportCommand command){var text=new java.io.StringWriter();command.reportOutput=new java.io.PrintWriter(text,true);command.run();return text.toString().replaceFirst("[\\r\\n]+$","");}
+  public static String reportList(GoogleCalendarService service,LocalDate date,String from,String to){var command=new ListCommand(service);command.date=date;command.from=from;command.to=to;return report(command);}
+  public static String reportAdd(GoogleCalendarService service,String title,String start,String end,String location,String description){var command=new AddCommand(service);command.titleParts=new String[]{title};command.start=start;command.end=end;command.location=location;command.description=description;return report(command);}
+  public static String reportAuthorization(GoogleCalendarService service){return report(new AuthCommand(service));}
+  public static String reportRefresh(GoogleCalendarService service){return report(new RefreshTokenCommand(service));}
 
   @Component
   @RequiredArgsConstructor
   @Command(name = "auth", description = "Google Calendar への OAuth 認可を実行します")
-  static class AuthCommand implements Runnable {
+  static class AuthCommand extends ReportCommand {
 
     private final GoogleCalendarService googleCalendarService;
 
@@ -37,7 +46,7 @@ public class ScheduleCommand {
     public void run() {
       try {
         googleCalendarService.authorize();
-        IO.println("Google Calendar の認可が完了しました");
+        out().println("Google Calendar の認可が完了しました");
       } catch (Exception e) {
         throw new RuntimeException("Google Calendar の認可に失敗しました", e);
       }
@@ -47,7 +56,7 @@ public class ScheduleCommand {
   @Component
   @RequiredArgsConstructor
   @Command(name = "refresh-token", description = "Google Calendar の OAuth トークンをリフレッシュします")
-  static class RefreshTokenCommand implements Runnable {
+  static class RefreshTokenCommand extends ReportCommand {
 
     private final GoogleCalendarService googleCalendarService;
 
@@ -55,7 +64,7 @@ public class ScheduleCommand {
     public void run() {
       try {
         googleCalendarService.refreshToken();
-        IO.println("Google Calendar のトークンを更新しました");
+        out().println("Google Calendar のトークンを更新しました");
       } catch (Exception e) {
         throw new RuntimeException("Google Calendar のトークン更新に失敗しました", e);
       }
@@ -65,7 +74,7 @@ public class ScheduleCommand {
   @Component
   @RequiredArgsConstructor
   @Command(name = "list", description = "Google Calendar の予定を一覧します")
-  static class ListCommand implements Runnable {
+  static class ListCommand extends ReportCommand {
 
     private final GoogleCalendarService googleCalendarService;
 
@@ -95,7 +104,7 @@ public class ScheduleCommand {
         }
 
         if (events.isEmpty()) {
-          IO.println("予定はありません");
+          out().println("予定はありません");
           return;
         }
 
@@ -106,7 +115,7 @@ public class ScheduleCommand {
     }
 
     private void printEvent(GoogleCalendarEventSummary event) {
-      IO.println(String.format(
+      out().println(String.format(
           "%s | %s | %s | %s | %s",
           event.id(),
           event.start(),
@@ -120,7 +129,7 @@ public class ScheduleCommand {
   @Component
   @RequiredArgsConstructor
   @Command(name = "add", description = "Google Calendar に予定を追加します")
-  static class AddCommand implements Runnable {
+  static class AddCommand extends ReportCommand {
 
     private final GoogleCalendarService googleCalendarService;
 
@@ -151,14 +160,14 @@ public class ScheduleCommand {
             location,
             description
         );
-        IO.println(String.format(
+        out().println(String.format(
             "作成しました: %s | %s | %s",
             created.id(),
             created.summary(),
             DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(resolvedStart)
         ));
       } catch (Exception e) {
-        IO.println("[error] " + userFacingMessage(e, "Google Calendar への予定追加に失敗しました"));
+        out().println("[error] " + userFacingMessage(e, "Google Calendar への予定追加に失敗しました"));
       }
     }
   }

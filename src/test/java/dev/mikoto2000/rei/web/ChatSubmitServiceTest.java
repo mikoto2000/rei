@@ -12,6 +12,15 @@ import static org.assertj.core.api.Assertions.*;
 @org.junit.jupiter.api.Tag("integration")
 class ChatSubmitServiceTest {
   @TempDir Path directory;
+  @Test void captureIsConsumedBeforeDispatchOnlyByItsClientAndSession()throws Exception {
+    var projects=new ProjectRegistry(directory.resolve("projects.json"));var project=projects.resolve(Files.createDirectory(directory.resolve("project")));var clock=new RunRegistryTest.MutableClock();
+    var lifecycle=new dev.mikoto2000.rei.application.session.SessionLifecycle(new dev.mikoto2000.rei.conversation.FileSessionRepository(directory.resolve("sessions.json")),clock);var session=lifecycle.create(project,"capture");
+    var captures=new dev.mikoto2000.rei.llm.capture.CaptureStore();String client=UUID.randomUUID().toString();captures.reserve("cli:"+client,session.sessionId());
+    var service=new ChatSubmitService(projects,new SessionRegistry(clock),new RunRegistry(clock),lifecycle,(context,message)->assertThat(captures.logicalCall(context.runId(),null)).isNotNull());service.setCaptures(captures);
+    var context=service.submit("hello",project.id(),session.sessionId(),AgentRunContext.Mode.EXCLUSIVE,null,client);
+    assertThat(captures.sessions()).hasSize(1);assertThat(captures.sessions().getFirst().runId()).isEqualTo(context.runId());
+    assertThatThrownBy(()->service.submit("hello",project.id(),session.sessionId(),AgentRunContext.Mode.EXCLUSIVE,null,"bad")).isInstanceOf(IllegalArgumentException.class);
+  }
 
   @Test void newAndContinuedSessionsKeepProjectAndIdsWithoutWaitingForRunner() throws Exception {
     var projects = new ProjectRegistry(directory.resolve("projects.json"));

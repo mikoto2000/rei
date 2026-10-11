@@ -3,6 +3,63 @@ import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 import java.util.*;
 class RemoteCommandsTest {
+  @Test void feedOperationsPreserveItemRangeAndOptionalUpdateId() {
+    assertEquals("/api/v1/feed/commands/items?limit=10",RemoteCommands.route(List.of("/feed","item","list"),"project","session").path());
+    assertEquals(42L,((Map<?,?>)RemoteCommands.route(List.of("/feed","item","summarize","42"),"project","session").body()).get("itemId"));
+    assertNull(((Map<?,?>)RemoteCommands.route(List.of("/feed","update"),"project",null).body()).get("feedId"));
+    assertEquals(7L,((Map<?,?>)RemoteCommands.route(List.of("/feed","update","7"),"project","session").body()).get("feedId"));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/feed","item","execute"),"project","session"));
+  }
+  @Test void captureUsesFixedRoutesAndDoesNotApproveRawOutputImplicitly() {
+    assertEquals(Map.of("projectId","project","sessionId","session"),RemoteCommands.route(List.of("/llm","capture","next"),"project","session").body());
+    assertEquals("/api/v1/llm/capture/attempts/attempt/show",RemoteCommands.route(List.of("/llm","capture","show","attempt"),"project","session").path());
+    assertEquals(Map.of("approved",false),RemoteCommands.route(List.of("/llm","capture","raw","attempt"),"project","session").body());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/llm","capture","execute"),"project","session"));
+  }
+  @Test void socialCommandsHaveNamedRoutesAndKeepOptionalReplyText() {
+    assertEquals("/api/v1/bluesky/history-users",RemoteCommands.route(List.of("/bsky","history-users"),"project","session").path());
+    assertEquals("/api/v1/bluesky/history/alice?limit=8",RemoteCommands.route(List.of("/bsky","history","alice","--limit","8"),"project","session").path());
+    assertEquals("hello world",((Map<?,?>)RemoteCommands.route(List.of("/bsky","reply","at://target","hello","world"),"project","session").body()).get("text"));
+    assertNull(((Map<?,?>)RemoteCommands.route(List.of("/bsky","reply","at://target"),"project",null).body()).get("text"));
+    assertEquals("/api/v1/interest/commands/discover",RemoteCommands.route(List.of("/interest","discover"),"project","session").path());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/bsky","execute"),"project","session"));
+  }
+  @Test void activityRoutesItsFullDeclaredOperationsWithoutGenericExecution() {
+    assertEquals("/api/v1/activity/commands/summary?date=yesterday",RemoteCommands.route(List.of("/activity","--verbose","summary","yesterday"),"project","session").path());
+    assertEquals("/api/v1/activity/commands/pause",RemoteCommands.route(List.of("/activity","pause"),"project","session").path());
+    var enable=RemoteCommands.route(List.of("/activity","coaching","on"),"project","session");assertEquals("/api/v1/activity/commands/coaching/enabled",enable.path());assertEquals(Map.of("enabled",true),enable.body());
+    assertEquals("/api/v1/activity/commands/classification/unknowns?top=8",RemoteCommands.route(List.of("/activity","classification","unknowns","--top","8"),"project","session").path());
+    assertEquals(Map.of("projectId","project","sessionId","session"),RemoteCommands.route(List.of("/activity","behavior","suggest-rules"),"project","session").body());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/activity","classification","execute"),"project","session"));
+  }
+  @Test void storageHasOnlyNamedOperationsAndPreservesExplicitScopeAndBudgets() {
+    assertEquals("/api/v1/storage/status?projectId=project&current=true",RemoteCommands.route(List.of("/storage","status","--project","current"),"project","session").path());
+    var plan=RemoteCommands.route(List.of("/storage","retention","plan","--project","current"),"project","session");
+    assertEquals("/api/v1/storage/retention/plans",plan.path());assertEquals(Map.of("projectId","project","current",true,"category","raw-results","maxObjects",100,"maxBytes",16777216L),plan.body());
+    assertEquals("/api/v1/storage/retention/executions/execution/approve-purge",RemoteCommands.route(List.of("/storage","retention","approve-purge","execution"),"project","session").path());
+    assertEquals(Map.of("pages",8),RemoteCommands.route(List.of("/storage","maintenance","incremental-vacuum","--pages","8"),"project","session").body());
+    assertEquals(Map.of("windowSeconds",30L),RemoteCommands.route(List.of("/storage","maintenance","vacuum","--window-seconds","30"),"project","session").body());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/storage","status","--project","other"),"project","session"));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/storage","maintenance","vacuum"),"project","session"));
+  }
+  @Test void embedPreservesTheSearchDeleteAndPositionalFileGrammar() {
+    var search=RemoteCommands.route(List.of("/embed","search","A","query","--top-k","3","--threshold","0.6","--source","paper"),"project","session");
+    assertEquals("/api/v1/vector-documents/search?query=A%20query&topK=3&threshold=0.6&source=paper",search.path());
+    assertEquals(Map.of("docId","doc","source",""),RemoteCommands.route(List.of("/embed","delete","--doc-id","doc"),"project","session").body());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/embed","delete","--doc-id","doc","--source","paper"),"project","session"));
+    assertEquals(Map.of("documents",List.of(java.nio.file.Path.of("paper.txt").toAbsolutePath().normalize().toString())),RemoteCommands.route(List.of("/embed","paper.txt"),"project","session").body());
+  }
+  @Test void googleCalendarAndGoogleTasksKeepTheirDistinctShellGrammar() {
+    var event=RemoteCommands.route(List.of("/schedule","add","A","meeting","--start","2026-10-11T09:00:00","--end","2026-10-11T10:00:00"),"project","session");
+    assertEquals("/api/v1/google-calendar/events",event.path());assertEquals("A meeting",((Map<?,?>)event.body()).get("title"));
+    assertTrue(RemoteCommands.route(List.of("/schedule","list","--date","2026-10-11"),"project","session").path().contains("date=2026-10-11"));
+    assertEquals(Map.of("projectId","project","sessionId","session"),RemoteCommands.route(List.of("/task","auth"),"project","session").body());
+    var task=RemoteCommands.route(List.of("/task","add","Review","paper","--tag","science,reading","--tag","weekly"),"project","session");
+    var body=(Map<?,?>)task.body();assertEquals("Review paper",body.get("title"));assertEquals(3,body.get("priority"));assertEquals(List.of("science","reading","weekly"),body.get("tags"));
+    assertEquals("/api/v1/google-tasks/12/complete",RemoteCommands.route(List.of("/task","done","12"),"project","session").path());
+    assertEquals("DELETE",RemoteCommands.route(List.of("/task","delete","12"),"project","session").method());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/schedule","add","Meeting","--start","2026-10-11T09:00:00"),"project","session"));
+  }
   @Test void responseModeAcceptsShellOptionalBooleanSyntax() {
     assertEquals(Map.of("projectId","project","style","CONVERSATION","voiceOnly",false),RemoteCommands.route(List.of("/mode","conversation","--voice-only=false"),"project","session").body());
     assertEquals(Map.of("projectId","project","style","CONVERSATION","voiceOnly",false),RemoteCommands.route(List.of("/mode","conversation","--voice-only","false"),"project","session").body());
@@ -144,7 +201,7 @@ class RemoteCommandsTest {
     assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/reminder","add","fixture","--at","2026-10-11T09:00:00Z","--target","2026-10-11T09:00:00Z","--minutes-before","30"),null,null));
   }
   @Test void interestListUsesShellHourOptionWithoutModelSubmission() {
-    assertEquals("/api/v1/interests?hours=48",RemoteCommands.route(List.of("/interest","list","--hours","48"),null,null).path());
+    assertEquals("/api/v1/interest/commands/list?hours=48",RemoteCommands.route(List.of("/interest","list","--hours","48"),null,null).path());
   }
   @Test void attentionDeliveryRetainsExplicitDuplicateRiskAcknowledgment() {
     assertEquals("GET",RemoteCommands.route(List.of("/attention","delivery","item"),"project",null).method());

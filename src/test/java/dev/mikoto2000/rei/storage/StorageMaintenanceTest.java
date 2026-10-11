@@ -11,6 +11,17 @@ import static org.assertj.core.api.Assertions.*;
 class StorageMaintenanceTest {
   @TempDir Path root;StorageObjectRegistry registry;StorageMaintenance maintenance;
   @BeforeEach void prepare()throws Exception {try(var gate=new StorageMigrationCoordinator(root)){gate.prepare();}registry=new StorageObjectRegistry(root);maintenance=new StorageMaintenance(registry);}
+  @Test void vacuumRejectsSessionOperationsWithoutTurnsUntilTheirExecutionLeaseIsReleased() {
+    try(var admissions=new dev.mikoto2000.rei.conversation.ConversationAdmissionStore(root,Clock.systemUTC())) {
+      String project=java.util.UUID.randomUUID().toString(),session="operation-session";Instant now=Instant.now();
+      var context=new dev.mikoto2000.rei.core.chat.AgentRunContext("operation-run",session,root,project,dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.WEB);
+      admissions.accept(new dev.mikoto2000.rei.application.session.SessionMetadata(session,project,"memory maintenance",now,now),context,null,null);admissions.startExecution(context);
+      assertThatThrownBy(()->maintenance.vacuum(Duration.ofSeconds(30))).isInstanceOf(IllegalStateException.class).hasMessageContaining("Active Run");
+      admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.COMPLETED);
+      assertThatThrownBy(()->maintenance.vacuum(Duration.ofSeconds(30))).isInstanceOf(IllegalStateException.class).hasMessageContaining("Active Run");
+      admissions.release(context.runId());maintenance.vacuum(Duration.ofSeconds(30));
+    }
+  }
   @Test void observationIsReadOnlyAndIncrementalVacuumDoesNotChangeLegacyMode()throws Exception {
     var before=maintenance.status();assertThat(before.databaseBytes()).isPositive();assertThat(before.pageSize()).isPositive();assertThat(before.usableDiskBytes()).isPositive();
     assertThat(maintenance.incrementalVacuum(100)).isFalse();assertThat(maintenance.status().autoVacuum()).isEqualTo(before.autoVacuum());assertThatThrownBy(()->maintenance.incrementalVacuum(0)).isInstanceOf(IllegalArgumentException.class);

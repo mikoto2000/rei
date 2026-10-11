@@ -15,6 +15,7 @@ public final class BackendClient implements AutoCloseable {
   private final HttpClient http;
   private final URI endpoint;
   private final String key;
+  private final String clientId=UUID.randomUUID().toString();
   private final Set<InputStream> streams=new HashSet<>();
   private long subscriptionGeneration;
   public static final class ApiException extends IOException {
@@ -36,7 +37,7 @@ public final class BackendClient implements AutoCloseable {
   }
   private HttpRequest.Builder request(String path) {
     if(!path.startsWith("/api/v1/")||path.contains("#"))throw new IllegalArgumentException("Invalid API path");
-    return HttpRequest.newBuilder(endpoint.resolve(path)).header("Authorization","Bearer "+key).header("Accept","application/json");
+    return HttpRequest.newBuilder(endpoint.resolve(path)).header("Authorization","Bearer "+key).header("Accept","application/json").header("X-Rei-Shell-Output","true").header("X-Rei-Client-Id",clientId);
   }
   private JsonNode response(HttpRequest request)throws IOException,InterruptedException {
     var response=http.send(request,HttpResponse.BodyHandlers.ofInputStream());
@@ -51,7 +52,8 @@ public final class BackendClient implements AutoCloseable {
         throw new ApiException(409);
       }
       if(response.statusCode()<200||response.statusCode()>=300)throw new ApiException(response.statusCode());
-      byte[] bytes=body.readNBytes(1048577);if(bytes.length>1048576)throw new IOException("Backend response capacity exceeded");
+      int limit=request.uri().getPath().startsWith("/api/v1/llm/capture/attempts/")?8*1048576:1048576;
+      byte[] bytes=body.readNBytes(limit+1);if(bytes.length>limit)throw new IOException("Backend response capacity exceeded");
       return bytes.length==0?JSON.nullNode():JSON.readTree(bytes);
     }
   }
@@ -103,6 +105,9 @@ public final class BackendClient implements AutoCloseable {
     if(project==null||project.isBlank()||project.length()>128)throw new IllegalArgumentException("Project identity required");
     return submitAdmitted("/api/v1/projects/"+segment(project)+"/memory/consolidate",body,receiptKey);
   }
+  public JsonNode authorizeGoogleCalendar(Object body,String receiptKey)throws IOException,InterruptedException {return submitAdmitted("/api/v1/google-calendar/authorize",body,receiptKey);}
+  public JsonNode refreshGoogleCalendar(Object body,String receiptKey)throws IOException,InterruptedException {return submitAdmitted("/api/v1/google-calendar/refresh-token",body,receiptKey);}
+  public JsonNode authorizeGoogleTasks(Object body,String receiptKey)throws IOException,InterruptedException {return submitAdmitted("/api/v1/google-tasks/authorize",body,receiptKey);}
   private JsonNode submitAdmitted(String path,Object body,String receiptKey)throws IOException,InterruptedException {
     if(receiptKey==null||!receiptKey.matches("[A-Za-z0-9._:-]{1,128}"))throw new IllegalArgumentException("Invalid receipt key");
     try {
