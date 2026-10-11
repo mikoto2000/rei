@@ -1,6 +1,6 @@
 # 軽量 CLI と単一 Backend
 
-移行はまだ完了していない。Session 排他・永続 receipt、独立 HTTP/SSE クライアント、detached launcher を実装したが、Shell 全コマンド互換と Windows Terminal 複数ペインでの全受け入れ検証は残っている。既存 Shell と `start.bat` / `start.sh` は維持している。[全47コマンドの対応表](lightweight-cli-command-matrix.md) を確認して利用する。
+移行はまだ完了していない。Session 排他・永続 receipt、独立 HTTP/SSE クライアント、detached launcher を実装し、Windows Terminal の実2ペインで同時起動・先行ペイン終了後の Backend/Run 継続と SSE 完了受信を確認した。Shell 全47コマンドの全機能互換は残っている。既存 Shell と `start.bat` / `start.sh` は維持している。[全47コマンドの対応表](lightweight-cli-command-matrix.md) を確認して利用する。
 
 ## 構成と境界
 
@@ -84,15 +84,16 @@ JLine の入力編集、履歴、prompt、completion、末尾 `\` の複数行�
 | `/cancel`, `/runs`, `/watch`, `/receipt` | 対象 Run ID / receipt key を明示。`/runs` 引数なしは local に選択した Run ID の表示のみ |
 | `/history` | `list`, `show [SESSION_ID]`（会話の保存履歴）。`off/on` は入力履歴制御の互換拡張 |
 | `/input-history` | `off`, `on`（端末入力履歴） |
-| `/feed` | `list/show ID`, `add URL DISPLAY_NAME`, `enable/disable ID`, `delete ID --yes` |
+| `/feed` | `list/show ID`, `add URL [--name NAME]`, `edit ID [--name NAME] [--enabled/--disabled]`, `enable/disable ID`, `delete ID`（--yes alias を維持） |
 | `/skill` | `list`, `show NAME`, `reload` |
 | `/profile`, `/briefing`, `/search` | profile summary、今日の briefing、検索 query |
-| `/reminder` | `list/show ID`, `add "MESSAGE" AT`, `delete ID --yes` |
-| `/interest`, `/memory` | list/show。memory は `add "CONTENT" TYPE SCOPE`, `delete ID --yes` |
-| `/timer` | `list/show ID`, `activate/cancel ID`, `history ID` |
+| `/reminder` | `list/show ID`, `add MESSAGE --at AT` または `--target TARGET --minutes-before MINUTES`, `delete ID`。従来 CLI の MESSAGE/AT 位置引数も維持 |
+| `/interest`, `/memory` | interest list は `--hours`（既定24）対応。memory は `add "CONTENT" TYPE SCOPE`, `delete ID`。discover と memory の全機能は未対応 |
+| `/model`, `/models` | 現在のモデル確認・選択、モデル一覧。既存 Shell と同じ ModelHolder と unload service を使用 |
+| `/timer` | `list/show ID`, `activate/cancel ID`, `history ID`, `reconcile ID --run-id RUN --acknowledge-uncertain-side-effects` |
 | `/tasks` | Task Manager の `list/show ID`, `cancel/resume/suspend ID EXPECTED_RUN_ID REVISION` |
-| `/goal` | `list/show ID`, `run/cancel/verify ID`, `progress/history ID` |
-| `/attention`, `/approval` | list/show、`ack ID`、`approve/reject ID` |
+| `/goal` | `list/show ID`, `run/cancel/verify ID`, `progress/history ID`, create/completion/reconcile/wait/wait-activate/wait-resume/wait-cancel の Shell option 名 |
+| `/attention`, `/approval` | list/show、`ack ID`、delivery/deliver/retry-delivery（--acknowledge-duplicate-risk）、`approve/deny ID`（reject alias も維持） |
 | `/checkpoint`, `/resume` | list/show/inspect/save/abandon、checkpoint ID の resume |
 | `/dependency`, `/work` | list/show/history/`answer ID VERSION "ANSWER"`、work show/summary/history/update |
 | `/summarize`, `/image` | URL 要約 / prompt の既存 background API。HTTP 自動再送なし |
@@ -101,6 +102,8 @@ JLine の入力編集、履歴、prompt、completion、末尾 `\` の複数行�
 未知の slash と未対応 subcommand / option は明示エラー。先頭空白があっても slash を通常会話として送信しない。`/task`（Google Tasks）と `/schedule`（Google Calendar）は未対応であり、似た名前の Task Manager / Agent Scheduler に振り替えない。fixed named API のみ使い、任意 URL・service・shell・reflection 実行機能は用意しない。表示は JSON の簡易表示を含み、Shell と同じ表示・全 options ではない。
 
 SSE は sequence を処理し `Last-Event-ID` を付けて最大3回再接続、重複は捨てる。接続待ち中の detach も古い購読を復活させない。409 gap は output incomplete と表示し、Run status を最大60秒 polling、terminal 後に保存 turns を照会する。ストリーム・JSON 応答は1MiBに制限。resume / POST / cancellation を SSE reconnect と連動させない。
+
+Goal create は現在選択した registered Project/Session を Backend で検証し、WEB の RequestSource で既存 GoalLoopService に渡す。`--file` と `--sha256`、または `--criteria-json` の一方を指定し、任意の `--completion-json`、`--max-runs`（既定3、1..10）、`--max-llm-calls`（既定20、1..100）を使用する。completion は `--completion-json` / `--proof-json` のどちらか一方。wait は `--dependency-id` と任意の `--wait-reason`、wait-activate/resume/cancel は観測した `--wait-version` が必要。重複 option、JSON の重複キー・末尾・過大入力は拒否する。
 
 ## 入力履歴と秘密
 
@@ -137,7 +140,7 @@ Windows E2E は毎回 repository の target 以下に UUID の隔離 root を作
 | 1 | Storage gate/discovery、canonical admission、Session 排他、transactional receipt、再起動照会、専用 stop API 実装。起動中異常終了・全 frontend 横断の受け入れケースは追加確認が必要 |
 | 2 | 独立 CLI modules、JLine、local selection、入力・補完・履歴、HTTP/SSE、receipt 照会、明示 cancel 実装。全 Shell 入力/補完互換ではない |
 | 3 | 固定 API adapter と全 Root コマンドの対応表を追加。一部操作のみ対応。未対応コマンド・全 options・表示・追加限定 API が残るため未完了 |
-| 4 | Windows worker の親強制終了後の独立寿命、実 Backend で CLI 終了後の再接続・Project 登録・安全停止を確認。Session/style・同時 receipt・再起動 receipt 照会も実 Backend jar で確認済み。Terminal 複数ペイン全 E2E は未実施 |
+| 4 | Windows worker の親強制終了後の独立寿命に加え、実 Windows Terminal の2ペインで同時 auto 起動、先行 CLI/ペイン host 終了後の同じ Backend と別 CLI の継続、Run RUNNING→COMPLETED、SSE 受信、Session 操作、明示停止を確認。CLI 標準入出力は pane host 内で redirect し、対話型 PTY と全47機能 E2E は未検証 |
 
 Native API の詳細は [Native/Web API](native-web-api.md)、全機能 Shell の利用は [README](../README.md) を参照する。最終テスト件数・commit は作業報告に記録する。必須条件をすべて満たしていないため Phase 1〜4 の実装完了とは報告しない。
 
@@ -146,12 +149,12 @@ Native API の詳細は [Native/Web API](native-web-api.md)、全機能 Shell �
 | 検証 | 結果 |
 | --- | --- |
 | Backend `-Pfull test`（隔離 build directory） | 4,726件、失敗0・エラー0・skip 2。skip は既存の任意 benchmark 等であり、変更による無効化なし |
-| 最終 Session API / admission / Run / Shell 対象回帰 | 29件成功。上の全回帰後に追加した Session API のテストを含む。件数は全回帰と重複 |
-| CLI / launcher reactor | 27件成功。Windows worker の親 process 強制終了後の独立寿命を含む |
+| 今回の Backend 対象回帰（-Pfull） | 62件成功。Migration・別 JVM lease・admission・Goal HTTP・モデル API。全 Backend 4,726件の結果は今回の追加前の前回検証 |
+| CLI / launcher reactor | 37件成功。Windows worker の親 process 強制終了後の独立寿命、SSE Accept、PUT、モデル・Goal・Attention・Feed/Reminder/Interest文法を含む |
 | Native UI | 25ファイル・99件成功、TypeScript typecheck 成功 |
 | Native Rust | 120件成功（offline cargo test） |
 | Windows 実 Backend / CLI jar | 成功。最初の CLI 終了後の readiness、同じ instance の別 CLI 接続、Project/Session/style、同時同 key の同 Run、再起動 receipt、2回の安全停止 |
-| Windows Terminal 複数ペインの操作 | 未実施 |
+| Windows Terminal 複数ペイン | 実 pane host で同時 auto 起動と Run/SSE 継続・完了・明示停止に成功。標準入出力 redirect を使用。対話型 PTY は未検証 |
 | 外部 LLM・Google OAuth・音声・PTY 等の全機能 E2E | 未実施 |
 
 TDD の Red/Green は admission の原子性・冪等性・期限・競合・Shell queue、CLI の受付不明・5xx後照会、秘密の入力履歴除外、Windows path 解釈、接続待ち中 SSE detach、応答スタイル分離、chat options、busy 対象表示で実施。全回帰の初回は4件失敗/エラーを検出し、旧 schema fixture の新テーブル取り残し、同一 Session 新契約の旧期待値、HTTP fixture の publisher 重複を修正して再実行した。
@@ -164,5 +167,17 @@ TDD の Red/Green は admission の原子性・冪等性・期限・競合・She
 - `POST /api/v1/sessions`: registered Project に空 Session を作成（201）。Run を起動しない。
 - `GET/PATCH /api/v1/sessions/{id}/response-style`: Project 所有権を検証する応答スタイル専用操作。既存 SessionResponse の5 fields は変更しない。
 - `POST /api/v1/instance/stop`: 認証済み instance/storage identity に限定した graceful stop（202）。
+- `GET /api/v1/models`, `GET/PUT /api/v1/models/current`: 既存モデル一覧・選択サービスの専用 API。
+- `POST /api/v1/projects/{projectId}/goals`: 所有 Session を検証した Goal 作成（201）。既存 completion/wait API も CLI から利用する。wait の任意 sessionId は選択所有権を検証し、従来の2項目 request は維持する。
+
+実ペイン検証は Python 3 の標準ライブラリによる loopback 応答 fixture と PowerShell 7、Windows Terminal、JDK 25 を使う。ユーザーの既存 Terminal と Backend を操作せず、新しい2ペインと UUID の専用データ領域を作成する。fixture は外部 LLM にアクセスしない。
+
+```powershell
+.\mvnw.cmd '-Drei.build.directory=target/backend-package' '-Drei.build.final-name=rei-backend-panes' -DskipTests package
+.\mvnw.cmd -f terminal/pom.xml package
+pwsh -NoProfile -File scripts/Test-WindowsTerminalPanes.ps1
+```
+
+Backend JAR のビルド完了後に E2E を実行する。動作中の JAR を上書きしない。各 pane の WT_SESSION は異なるため同一値を要求しない。正常な host exit による pane の自動終了は Terminal profile の closeOnExit 設定に従う。GUI の強制 close と対話キー入力は検証対象に含めない。
 
 主なクラスは `ConversationAdmissionStore` / `ConversationAdmissionMigration`、共有 `SessionLifecycle` / `ConversationInputRouter` / `RunRegistry`、`BackendClient` / `TerminalClient` / `ClientHistory` / `SseDecoder` / `RemoteCommands`、`Launcher` / `DetachedBackend`。既存 Shell の全コマンドは保持し、HTTP の同一 Session 独立 Run は依頼された排他契約に合わせて409となる。
