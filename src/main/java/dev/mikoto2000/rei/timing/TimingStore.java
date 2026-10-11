@@ -156,4 +156,3 @@ public class TimingStore implements TimingRecorder {
     return new Summary(work,occupied,occupancy,overlap,cross,Math.max(0,elapsed-occupied));
   }
 }
-

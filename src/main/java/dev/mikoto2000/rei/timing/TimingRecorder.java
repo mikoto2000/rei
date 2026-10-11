@@ -46,4 +46,3 @@ public interface TimingRecorder {
   Optional<Run> latest(String projectId,String sessionId);
   Statistics statistics();
 }
-

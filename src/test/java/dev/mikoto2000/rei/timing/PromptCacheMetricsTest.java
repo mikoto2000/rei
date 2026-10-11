@@ -49,4 +49,3 @@ class PromptCacheMetricsTest {
   assertTrue(first.observe(java.util.stream.IntStream.range(0,100).mapToObj(i->new PrefixDiagnostics.Source("HISTORY","secret")).toList()).regions().size()<=64);
  }
 }
-
