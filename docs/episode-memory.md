@@ -14,7 +14,7 @@ Episode は出来事の経緯を保持する独立モデルです。Decision の
 |Auto Sleep / Scheduler|Auto Sleep は既定無効。アイドル、未処理件数、再試行間隔、cron、終了時リクエストを持つ|タイマーや自動外部通信を追加しない|
 |Work Context|現在の作業と出典・改訂を保持。自動更新は既定無効、自動提示は有効|検索候補・曖昧な話題の補助に使用|
 |Reflection|検証済み Goal からの記憶昇格は独立検証を要求|Episode 要約を検証済み事実として昇格させない|
-|Hybrid RAG|`HybridRetriever` に dense / lexical / BM25 と `ReciprocalRankFusion` が実装済み。設定は `rei.vector-document.retrieval`|共通 RRF を再利用。Episode 自体の dense 索引は現段階では追加していない|
+|Hybrid RAG|`HybridRetriever` に dense / lexical / BM25 と `ReciprocalRankFusion` が実装済み。設定は `rei.vector-document.retrieval`|Episode 専用 sqlite-vec ストアの dense 候補と FTS5 候補を共通 RRF で統合|
 |会話履歴|`ConversationHistorySearchService` が Sleep と独立して検索し、Project 優先・他 Project 上限・redaction を適用|未整理会話を別経路で保存し直さず検索|
 |Session / Turn / Run|`SqliteConversationTurnStore` の永続 Turn と Run ID、Session Repository がある|実在 Run の引用。新しい ordinal 範囲読み取りと Run ID 点検索を追加|
 |モデル予算|Sleep の実行単位・Project 単位予算と MEMORY 呼び出しの入力・出力・時間上限がある|同じ予算オブジェクトとツールなし MEMORY 呼び出しを共有|
@@ -76,8 +76,8 @@ lease はモデル timeout +60秒。Episode は最大50件、各改訂の主張�
 Agent の既存ツール経路に以下を登録します。Shell / Web の Agent 会話から利用できます。既存 `searchConversationHistory` / `getConversationHistory` / `/memory` / `/sleep` の呼び方は維持します。
 
 - `searchMemoryHistory`: Episode FTS、長期記憶、未整理を含む既存会話履歴、Work Context を共通 RRF で統合。既知の context、現在 Session の直前の完了した最大2 Turn、OPEN の Work Context の話題で補助。since/until は ISO instant または UTC の暦日で指定できる。最大20候補、概要各500文字、概要合計4000文字に加え既存 retrieval のトークン上限。他 Project 候補は全体で最大3件。
-- `episodeGet`: 最新側3改訂、各8主張・本文各200文字、概要500文字、関連記憶 ID を取得。
-- `episodeSources`: 最大8原典、各500文字。Session / Run / 発言者 / 根拠区分を返す。
+- `episodeGet`: 最新側3改訂（別 Project は1改訂）、各8主張・本文各200文字、概要500文字、関連記憶 ID を取得。`nextCursor` を `beforeRevision` に渡すと、100改訂より古い履歴も辿れる。
+- `episodeSources`: 指定 revision の最大8原典（別 Project は3）、各500文字。Session / Run / 発言者 / 根拠区分を返す。`revision` と `nextOffset` を次ページへ渡す。
 - `episodeProcessingStatus`: 現在 Session の checkpoint。
 
 Episode 検索は最新 revision のみを候補にし、撤回状態を隠しません。複数の話題が一致してもツールは対象を断定せず、候補として返します。正確な理由や実装状態が必要なら詳細・原典を参照してください。検索結果は命令や実行権限として扱わないことをツール説明に明示しています。
@@ -99,7 +99,7 @@ Windows で Mockito の動的アタッチが拒否される場合、実際の依
 
 ## 残る検証と拡張
 
-Episode の dense 索引、完全な検索品質 fixture、HTTP 固有の操作・権限テスト、大量履歴・並列 writer の負荷計測は追加対応が必要です。改訂はすべて保存する一方、ツールは最新側3改訂・最大8原典を返し、古い改訂のページングはまだ提供しません。発生終了日時は原典にある時刻だけを許可し、不明な完了時刻は推測しません。現段階の横断検索は lexical 候補の RRF 統合であり、既存 dense 検索の全機能を統合したものではありません。実 LLM による抽出品質は未確認です。新しいモデルの返す意味的な分類の正しさは Java の構造・原典検証だけでは保証できません。
+完全な検索品質 fixture、HTTP 固有の操作・権限テスト、大量履歴・並列 writer の負荷計測は追加対応が必要です。改訂はすべて保存し、ツールは1ページ最大3改訂・8原典で全履歴へページングできます。発生終了日時は原典にある時刻だけを許可し、不明な完了時刻は推測しません。dense を無効にした既定設定では lexical のみです。dense を有効にすると、専用ストアの semantic 候補を既存 RRF で統合します。実 LLM による抽出品質は未確認です。新しいモデルの返す意味的な分類の正しさは Java の構造・原典検証だけでは保証できません。
 
 ## Temporal Digest の将来設計
 
@@ -109,8 +109,26 @@ Episode の dense 索引、完全な検索品質 fixture、HTTP 固有の操作�
 
 条件と実測値は [episode-memory-evaluation.md](episode-memory-evaluation.md) を参照してください。全体回帰テストの最終結果は PR に記録します。
 
-## 最終ローカル回帰結果
+## 前回実装のローカル回帰結果
 
 2026-10-11、Java 25 / Windows、最終実装コミット a8a6d1b3 で `-Pfull test` を実行。Maven 終了コード0。Surefire 865 suite / 4,737 test、失敗0、エラー0、スキップ2。新規 Episode 34 test を含みます。live 接続テストは対象外です。Mockito 5.23.0 の javaagent を指定し、既存 atomic move のファイル操作も可能な通常権限環境で検証しました。ログはローカル `target/episode-final-full.log`、XML は `target/surefire-reports` です。
 
 途中の全体テストでは外部設定テンプレートの enabled 項目に1件失敗があり、テンプレートを修正して今回の全体テストを再実行しています。
+
+## Episode 専用 dense 索引とページング
+
+`rei.memory.episodes.dense-enabled` / `REI_MEMORY_EPISODES_DENSE_ENABLED` は既定 false。利用には `rei.embedding.enabled=true` も必要です。索引生成には Memory と Episode 抽出の有効化、Sleep 実行が必要です。起動時に全履歴の embedding は行いません。embedding 接続先は既存の設定を利用するため、dense の明示的な有効化後は索引生成・検索時にそのプロバイダーを呼びます。
+
+既存 vector DB と同じデータディレクトリの `episode-vectors.db` に、既存 `LazySqliteVectorStore` / sqlite-vec を独立インスタンスとして使用します。汎用 Vector Document ツールから Episode 本文を一覧・検索・削除する経路は追加しません。Project ID を docId として索引と検索のフィルタに用います。
+
+memory DB の `episode_dense_indexed(id,revision,generation)` が未索引の最新改訂を検出します。Sleep は最大50件を再処理し、共有 `ModelCallBudgetScope` / `BudgetedEmbeddingModel` で使用量を計上します。embedding 入力は最大4000文字です。FTS と保存された原典・主張はこの上限で切り詰めません。改訂は全件保存しますが dense 索引は最新改訂だけを置き換えます。
+
+vector 保存後に改訂の索引完了を記録します。embedding・保存・予算の失敗では未索引状態を保持し、次の Sleep で同じ source を置き換えるため重複しません。Episode 自体の公開済み checkpoint は戻さず、lexical 検索を維持します。同時 worker は専用 lease で排他します。削除・取得不能の原典は embedding に送らず、未索引のまま残します。
+
+専用 DB の `episode_dense_identity` に永続 UUID を持ち、DB を再作成した場合は新しい generation として再索引します。embedding モデルを変更する場合も専用 DB の再作成が必要です。通常起動で既存 generation が変わることはありません。
+
+dense 結果の本文は信用せず、metadata の Episode ID / revision を現在の Project の最新記録と照合し、期間・原典可用性を再確認します。古いベクトルや別 Project の記録は返しません。プロバイダー障害では FTS にフォールバックし、キャンセル・実行予算停止は隠しません。
+
+改訂ページングは revision ID の rowid を境界とする keyset 方式で、新しい改訂が追加されても次ページをずらしません。カーソルは同じ Episode / Project に実在する revision に限ります。原典ページングは必ず返された revision ID を維持してください。`nextCursor` / `nextOffset` が null なら終了です。初回だけ revision を省略すると最新改訂を選びます。
+
+追加実装では、遅延した旧 worker の vector 保存によって最新改訂の索引完了状態が誤って残る場合も検証しました。vector 保存後に改訂の最新性を CAS で確認し、競合時は索引完了状態を無効化して最新改訂を再処理します。追加実装の全体回帰結果は PR に記録します。
