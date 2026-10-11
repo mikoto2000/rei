@@ -10,7 +10,7 @@
 |Planning Loop|ChatExecutionService / StagnationChatModel|各反復の計画・完了判定指示は変動。既存予算・承認・独立検証を継続|
 |Tool 継続|StagnationChatModel / ToolLoopSupport|元の Prompt と options を保持し Assistant tool_calls / Tool responses を追加。ContextAssembler が最終投影を作る|
 |SubAgent / 並列|SubAgentService / BoundedToolLoop|役割・子依頼・限定 Tool を持つ独立 Prompt。親の Prompt は共有しない。子 ownership と共有 Model Budget は既存管理|
-|Reflection|reflection 配下 / LlmModelProvider|反省対象・評価情報は呼び出しごとに変動する補助 Prompt|
+|Reflection|RunReflectionService / GoalReflectionService|イベント事実による振り返りで、追加 LLM 呼び出しはない。Prompt/cache 計測対象は発生しない|
 |Skill Selection|AgentSkillImplicitSelector / SkillCandidateSelector|ルール、候補 metadata、出力形式、依頼。検索順位は score と name の決定的順序、semantic search は既存ランキング|
 |Context Compaction|ContextAssembler / ConversationCompressor|履歴・Run 別に summary と throughSequence を管理。summary 生成も予算に算入|
 |Working Set|WorkingSetAdvisor / ContextAssembler|初期注入に metadata rei.workingSet を付与、最終投影時は最新 renderForPrompt を再取得。アクセス日時・並び順も変動する|
@@ -56,3 +56,18 @@ AgentSkillImplicitSelector はルール → 候補 metadata → Return format �
 StableToolDefinitions は既存の StagnationChatModel / BoundedToolLoop の初期準備で supplied ToolCallbacks のみを name 順へ、JSON Schema の object keys を再帰的に昇順へ。array (required、enum、oneOf 等) の順序を維持。name/description の内容、ToolMetadata、ToolContext、call を元 callback に委譲。schema が解析できなければ元定義で継続。Stagnation では実行時権限・イベント判定用ラッパーを構築した後で定義を安定化し、domain callback の型による既存判定も保持する。追加 Tool Profile は導入せず、既存 EXCLUSIVE / READ_ONLY / CONVERSATION と子 Agent の Tool 限定を再利用する。
 
 Red 記録: ContextAssemblerTest 1件と AgentSkillImplicitSelectorTest 2件が意図した順序差で失敗 (計20件中3 failures)。Tool 定義テストは未実装 StableToolDefinitions により compile failure。Green は同じテストを再実行する。元の schema/options/messages を変更しない回帰も追加。
+
+## Phase 3: Run 内の保持と実装判断
+
+Prompt Context Snapshot は新しい永続オブジェクトを導入しない。既存 StagnationChatModel / BoundedToolLoop が最初の Prompt と options/callbacks を保持し、Tool結果・介入を末尾に追記する仕組みを再利用する。Phase 2 の定義 canonicalization も初期準備時の1回だけ。親・子の文脈や権限を共有しない。Planning Loop が新しい指示で構築した Prompt は引き続き最新状態を使う。policy の判断は Tool 実行のたびに既存 guard に委譲する。
+
+ContextAssembler / ConversationSummaryRepository は既に Frozen Summary (`summary`, `throughSequence`)、Incremental Context (cursor より新しい entries)、Checkpoint Compaction (threshold を超えたときのみ summary 再構築)、hard limit と summary 予算を持つ。rollingSummarySeesOnlyPreviousSummaryAndNewPrefix、runObservationsFollowOriginalSystemPrefixAndSummaryStaysFrozen および既存圧縮回帰で確認。圧縮閾値を hit rate に合わせて変更しない。
+
+Working Set の差分追記は今回は実装しない。FileReference は path / lastAccessedAt / lastModifiedAt / accessType のみで、revision・move tombstone・権限 revision を持たない。renderForPrompt の更新は現在の Tool loop の状態鮮度に必要。根拠なく初期状態を固定すると削除・移動・権限変更が古いまま残る可能性がある。実 Provider の uncached/TTFT の改善量も未計測。新しいイベント履歴・永続化・要約統合を足すコストと安全性を正当化できないため、現行の最新状態再投影を維持し、WORKING_SET 領域変化を診断する。
+
+updatedWorkingSetAndNewSystemPolicyAreUsedWithoutStaleSnapshot は最終投影が元の raw Prompt を変更せず、最新 supplier と新しい System を使用することを検証する。これはファイル移動や revision 機構の実装テストではない。新しい Snapshot キャッシュ自体を設けないため、古い Tool Profile・Security Policy・model をそこから復元する経路は存在しない。Checkpoint Resume の System 再生成と予算復元は変更せず、既存回帰で検証する。
+
+
+
+子 Agent は既存 SUBAGENT_STARTED / COMPLETED / FAILED イベントで独立 Timing Run を開始・終了する。通常・並列の子 ownership を保持し、taskSummary は保存しない。子と親の集計を混ぜない。子は自身の subagent:RUN_ID Session 所有権で recorder.snapshot を照会できる。親 Session の /timing 表示に子の usage を合算する UI は今回追加しない。未開始、Project 所有権のない standalone 子や外部 CLI/OAuth backend の内部 usage は未計測になり得る。
+
