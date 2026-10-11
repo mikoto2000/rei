@@ -250,6 +250,11 @@ public final class PlanOAuth {
         });
   }
 
+  private static String maskIdentifier(String value) {
+    if (value == null || value.length() < 12) return "[masked]";
+    return value.substring(0, 6) + "…" + value.substring(value.length() - 4);
+  }
+
   public List<String> status() {
     return store.locked(
         s ->
@@ -259,9 +264,9 @@ public final class PlanOAuth {
                       var token = s.load(a);
                       return a
                           + " | "
-                          + token.clientId()
+                          + maskIdentifier(token.clientId())
                           + " | "
-                          + token.subject()
+                          + maskIdentifier(token.subject())
                           + " | "
                           + (token.accessToken() == null
                               ? "signed out"
@@ -275,7 +280,7 @@ public final class PlanOAuth {
   private JsonNode getDiscovery() {
     try (var response =
         transport.send(DISCOVERY, "GET", Map.of(), null, Duration.ofSeconds(15), () -> false)) {
-      return decode(response);
+      return decode(response, "oauth-discovery");
     }
   }
 
@@ -288,11 +293,11 @@ public final class PlanOAuth {
             form(fields).getBytes(StandardCharsets.UTF_8),
             Duration.ofSeconds(20),
             () -> false)) {
-      return decode(response);
+      return decode(response, "oauth-token");
     }
   }
 
-  private JsonNode decode(PlanTransport.Response response) {
+  private JsonNode decode(PlanTransport.Response response, String operation) {
     try {
       byte[] bytes =
           PlanIO.read(
@@ -319,6 +324,15 @@ public final class PlanOAuth {
       }
       return value;
     } catch (ChatGptException e) {
+      if (e.code() == RECEIVE_LIMIT) {
+        String type =
+            response.contentType() == null
+                ? ""
+                : response.contentType().split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+        // PlanIO.bytes reads at most limit+1; this count is observed, not Content-Length.
+        throw ChatGptException.response(
+            RECEIVE_LIMIT, operation, response.status(), type, 65537, 65536, "");
+      }
       throw e;
     } catch (Exception e) {
       throw ChatGptException.of(PROTOCOL);
