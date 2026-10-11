@@ -195,6 +195,9 @@ Web では認証付き `GET /api/v1/sessions`、`GET /api/v1/sessions/{sessionId
 
 詳しくは[設定ガイド](docs/configuration.md)を参照してください。
 
+Slack で会話する場合は [Slack Bot ガイド](docs/slack-bot.md)を参照してください。
+明示的に有効化した専用 `--backend` プロセスが Socket Mode 接続を管理します。
+
 ## 困ったときは
 
 | 症状 | 確認すること |

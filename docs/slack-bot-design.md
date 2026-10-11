@@ -47,3 +47,20 @@ Project の Shell 選択を変更する API は呼ばない。
 回帰リスクは Session の通知選択 callback、Run のキャンセル要求と停止の時間差、
 非同期イベントと Run 対応の保存順序、起動条件、SQLite の transaction 境界にある。
 Bluesky / Session / Run / Policy / Shell の既存テストを最終確認対象にする。
+
+## SDK と依存関係
+
+Socket Mode は `slack-api-client:1.51.0` の JavaWebSocket backend と
+`Java-WebSocket:1.6.0` を使用する。Bolt の別実行基盤は導入しない。
+既存依存解決後の OkHttp 4.12.0、Gson 2.13.2、SLF4J 2.0.18 と合わせて
+コンパイル・Fake MethodsClient による送信契約を検証する。
+SDK の生メッセージ listener が呼ばれる順序を確認し、永続化完了後にのみ
+アダプターが ACK を送信する。SDK の envelope listener による別 ACK 経路は登録しない。
+
+## TDD の履歴
+
+受信許可、SQLite の重複排除／Outbox、Session／Run 接続、起動・終了、SDK 境界の順に
+小さなテストを追加し、Red／Green の単位でコミットした。
+追加レビューで、通常起動の nested configuration、完了 Turn による最終返信、
+外部設定テンプレートの網羅性、既存スレッドへの明示メンションをテスト対象にした。
+実 Slack の認証情報は使用せず、実環境 E2E は未実施である。
