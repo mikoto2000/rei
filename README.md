@@ -39,6 +39,20 @@ Rei は、ターミナルで使う AI 秘書シェルです。OpenAI 互換 API 
 
 以下はソースから起動する手順です。リポジトリのルートで実行してください。Maven は同梱の Maven Wrapper を使用できます。初回は依存ファイルのダウンロードにネットワーク接続が必要です。
 
+従来 Shell の Backend JAR と軽量 CLI をまとめてビルドする場合は、Windows で `build.bat`、Linux/macOS で `sh ./build.sh` を実行します。既定では両方のテストを実行し、`-DskipTests` を付けると省略できます。Maven の追加引数は両方のビルドに渡します。更新先の JAR を使う Rei と軽量 CLI は、ビルド前に通常終了してください。
+
+```powershell
+.\build.bat
+# テストを省略する場合
+.\build.bat -DskipTests
+```
+
+```sh
+sh ./build.sh
+# テストを省略する場合
+sh ./build.sh -DskipTests
+```
+
 ### 2. AI の接続先を設定する
 
 次の例は、同じ PC の `http://localhost:11434` で公開されている `qwen3.5:9b` に接続します。URL・モデル名・キーを実際の接続先に置き換えてください。キーが不要なローカルサーバーでは `dummy-key` を指定できます。
