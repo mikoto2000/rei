@@ -309,6 +309,13 @@ Goal / Scheduler の親を持つ待機は、同一プロセス内で既存の予
 設定から Bot を削除・変更した場合も、古い宛先へ送り直しません。
 
 `externalAgentStatus(requestId)` は同じ Project / Session の保存済み結果を読むだけです。
+Socket の受信時に、Bot ID・`bot_message` subtype・登録済み Bot User ID・自 Bot User IDで
+送信元を分類してから、人間向け受付処理へ振り分けます。Bot の返信は外部依頼の
+Workspace / Channel / Bot ID / Bot User ID / Thread TS / 待機状態を照合して保存します。
+Bot ID が欠ける登録済み Bot のイベント、未許可 Bot、終了後や別スレッドの返信は
+人間向け受付へ戻さず無視します。Bot 返信から新規 Run や受付通知を生成しません。
+本文の「受付しました」という文字列は判定に使いません。人間の通常依頼には従来どおり
+`受付しました。Run: {runId}` を通知します。
 `rei status` / `rei cancel` は Phase 1 と同じ人間の元スレッドで使えます。
 待機中は元スレッドへ外部返信待ちを通知します。てんてんの返信スレッドを人間の
 会話スレッドとして登録しないでください。
