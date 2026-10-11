@@ -7,12 +7,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 /** Small, atomic JSON registry. Failed writes leave both the file and published state unchanged. */
 public final class ProjectRegistry {
+  // Shell and HTTP use separate registry instances in the same Backend. A bounded
+  // lock stripe prevents overlapping read/modify/replace transactions for a file.
+  private static final Object[] FILE_LOCKS = java.util.stream.IntStream.range(0,64)
+      .mapToObj(ignored -> new Object()).toArray();
   private final Path file;
+  private final Object fileLock;
   private final ObjectMapper mapper = new ObjectMapper();
   private volatile List<ProjectContext> completionSnapshot = List.of();
   public ProjectRegistry(Path file) {
-    this.file = file;
-    try { read(); } catch (RuntimeException ignored) { /* Optional startup completion snapshot. */ }
+    this.file = file.toAbsolutePath().normalize();
+    this.fileLock = FILE_LOCKS[Math.floorMod(this.file.hashCode(),FILE_LOCKS.length)];
+    synchronized(fileLock) {
+      try { read(); } catch (RuntimeException ignored) { /* Optional startup completion snapshot. */ }
+    }
   }
   public List<ProjectContext> completionSnapshot() { return completionSnapshot; }
   public record Entry(String id, String name, String path) {
@@ -21,6 +29,7 @@ public final class ProjectRegistry {
   public record Document(List<Entry> projects) {}
 
   public synchronized ProjectContext resolve(Path path) {
+    synchronized(fileLock) {
     Path canonical = canonical(path);
     var entries = read();
     for (var entry : entries) if (Path.of(entry.path()).equals(canonical)) return entry.context();
@@ -29,13 +38,17 @@ public final class ProjectRegistry {
     entries.add(entry);
     save(entries);
     return entry.context();
+    }
   }
-  public synchronized List<ProjectContext> list() { return read().stream().map(Entry::context).toList(); }
+  public synchronized List<ProjectContext> list() { synchronized(fileLock) { return read().stream().map(Entry::context).toList(); } }
   /** Web callers may resolve registered identities only; never interpret input as a path. */
   public synchronized Optional<ProjectContext> resolveById(String id) {
+    synchronized(fileLock) {
     return read().stream().filter(entry -> entry.id().equals(id)).findFirst().map(Entry::context);
+    }
   }
   public synchronized void relocate(String id, Path path) {
+    synchronized(fileLock) {
     Path canonical = canonical(path);
     var entries = read();
     if (entries.stream().anyMatch(e -> !e.id().equals(id) && e.path().equals(canonical.toString())))
@@ -46,11 +59,14 @@ public final class ProjectRegistry {
     }
     if (!found) throw new IllegalArgumentException("Unknown project: " + id);
     save(entries);
+    }
   }
   public synchronized void remove(Path path) {
+    synchronized(fileLock) {
     var entries = read();
     entries.removeIf(e -> Path.of(e.path()).equals(path.toAbsolutePath().normalize()));
     save(entries);
+    }
   }
   private List<Entry> read() {
     if (!Files.exists(file)) { completionSnapshot = List.of(); return new ArrayList<>(); }

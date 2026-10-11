@@ -96,8 +96,13 @@ public class CommandCancellationService {
   public boolean cancelCurrentProject() {
     var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
     if (project == null) return cancel();
+    return cancelProject(project.id());
+  }
+  /** Explicit human Project control; never infer another client's mutable selection. */
+  public boolean cancelProject(String projectId) {
+    if(projectId==null||projectId.isBlank()||projectId.length()>128)throw new IllegalArgumentException("Project ID required");
     boolean changed = false;
-    for (var state : runs.values()) if (project.id().equals(state.projectId)) changed |= cancel(state);
+    for (var state : runs.values()) if (projectId.equals(state.projectId)) changed |= cancel(state);
     return changed;
   }
 

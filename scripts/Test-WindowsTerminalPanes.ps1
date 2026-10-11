@@ -5,6 +5,52 @@ $repoRoot=Split-Path -Parent $PSScriptRoot
 if (-not $BackendJar) { $BackendJar=Join-Path $repoRoot 'target/backend-package/rei-backend-panes.jar' }
 if (-not (Test-Path -LiteralPath $BackendJar)) { throw 'Build the Backend JAR first or supply -BackendJar' }
 $BackendJar=(Resolve-Path -LiteralPath $BackendJar).Path
+function Complete-GuiFixture {
+  $fixture=Get-Content -LiteralPath (Join-Path $CaseRoot 'gui-fixture.json') -Raw | ConvertFrom-Json
+  $endpointPath=Join-Path $CaseRoot 'data/.storage/backend-endpoint.json'
+  $owned=Get-Content -LiteralPath $endpointPath -Raw | ConvertFrom-Json
+  $headers=@{Authorization='Bearer fixture-secret'}
+  & powershell.exe -NoProfile -File (Join-Path $PSScriptRoot 'Close-WindowsTerminalFixture.ps1') -CaseRoot $CaseRoot
+  if ($LASTEXITCODE -ne 0) { throw 'Dedicated GUI fixture close failed' }
+  $identity=Invoke-RestMethod -Uri ($owned.baseUrl+'/api/v1/instance') -Headers $headers
+  if ($identity.instanceId -ne $owned.instanceId) { throw 'Backend identity changed after GUI close' }
+  foreach ($hostPid in @($fixture.firstPanePid,$fixture.secondPanePid)) {
+    if (Get-Process -Id $hostPid -ErrorAction SilentlyContinue) { throw 'Pane host survived GUI window close' }
+  }
+  $running=Invoke-RestMethod -Uri ($owned.baseUrl+'/api/v1/runs/'+$fixture.runId) -Headers $headers
+  if ($running.status -ne 'RUNNING') { throw ('Run was not running after GUI close: '+$running.status) }
+  Set-Content -LiteralPath (Join-Path $CaseRoot 'release-provider') -Value 'GUI close verified'
+  $deadline=[DateTime]::UtcNow.AddSeconds(30)
+  do {
+    $completed=Invoke-RestMethod -Uri ($owned.baseUrl+'/api/v1/runs/'+$fixture.runId) -Headers $headers
+    if ($completed.status -eq 'COMPLETED') { break }
+    if ($completed.status -in @('FAILED','CANCELLED','UNKNOWN')) { throw ('Run failed after GUI close: '+$completed.status) }
+    Start-Sleep -Milliseconds 100
+  } while ([DateTime]::UtcNow -lt $deadline)
+  if ($completed.status -ne 'COMPLETED') { throw 'Run did not complete after GUI close' }
+  $info=[System.Diagnostics.ProcessStartInfo]::new()
+  $info.FileName=if ($env:JAVA_HOME) { Join-Path $env:JAVA_HOME 'bin/java.exe' } else { (Get-Command java.exe).Source }
+  $info.WorkingDirectory=$repoRoot;$info.UseShellExecute=$false;$info.CreateNoWindow=$true
+  $info.RedirectStandardInput=$true;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
+  foreach ($argument in @('--enable-native-access=ALL-UNNAMED',('-Duser.home='+ (Join-Path $CaseRoot 'Reconnect')),'-jar',(Join-Path $repoRoot 'terminal/launcher/target/rei-launcher-0.0.1-SNAPSHOT.jar'),'--mode=client','--no-history','--project',$CaseRoot)) { $info.ArgumentList.Add($argument) }
+  $info.Environment['REI_DATA_DIR']=Join-Path $CaseRoot 'data';$info.Environment['REI_API_KEY']='fixture-secret'
+  $reconnected=[System.Diagnostics.Process]::Start($info)
+  try {
+    $stdout=$reconnected.StandardOutput.ReadToEndAsync();$stderr=$reconnected.StandardError.ReadToEndAsync()
+    foreach ($command in @(('/session select '+$fixture.sessionId),'/history show',('/runs '+$fixture.runId),'/models','/session new after-gui-close','/exit')) { $reconnected.StandardInput.WriteLine($command) }
+    $reconnected.StandardInput.Close()
+    if (-not $reconnected.WaitForExit(20000) -or $reconnected.ExitCode -ne 0) { throw 'CLI reconnect after GUI close failed' }
+    $output=$stdout.GetAwaiter().GetResult()+$stderr.GetAwaiter().GetResult();Set-Content -LiteralPath (Join-Path $CaseRoot 'gui-reconnect.log') -Value $output
+    if ($output -notmatch 'Pane run completed' -or $output -notmatch 'COMPLETED' -or $output -match 'Backend rejected request|Unsupported CLI command|Backend connection failed') { throw 'Reconnected CLI did not retrieve the completed Run and saved history' }
+  } finally { if (-not $reconnected.HasExited) { $reconnected.Kill();$reconnected.WaitForExit() } }
+  $sessions=Invoke-RestMethod -Uri ($owned.baseUrl+'/api/v1/sessions?projectId='+$fixture.projectId) -Headers $headers
+  if ($sessions.items.Count -lt 2) { throw 'Reconnected CLI did not create a Session' }
+  Invoke-RestMethod -Method Post -Uri ($owned.baseUrl+'/api/v1/instance/stop') -Headers $headers -ContentType 'application/json' -Body (@{instanceId=$owned.instanceId;storageId=$owned.storageId}|ConvertTo-Json) | Out-Null
+  $deadline=[DateTime]::UtcNow.AddSeconds(30)
+  while ((Test-Path -LiteralPath $endpointPath) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
+  if (Test-Path -LiteralPath $endpointPath) { throw 'Endpoint survived explicit stop after GUI close' }
+  @{result='PASS';caseRoot=$CaseRoot;guiClose=$true;guiAction='UI Automation WindowPattern.Close';closeAllConfirmation=(Test-Path -LiteralPath (Join-Path $CaseRoot 'gui-close-confirmation.json'));firstPanePid=$fixture.firstPanePid;secondPanePid=$fixture.secondPanePid;instanceId=$owned.instanceId;backendPid=$owned.pid;runId=$fixture.runId;runAfterGuiClose=$running.status;runFinalStatus=$completed.status;reconnectedCli='Retrieved Run/history and created a Session';explicitStop='Endpoint removed'} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $CaseRoot 'result.json')
+}
 if ($Role -eq 'Coordinator') {
   $CaseRoot=Join-Path $repoRoot ('target/windows-terminal-e2e-'+[guid]::NewGuid())
   New-Item -ItemType Directory -Path $CaseRoot | Out-Null
@@ -24,10 +70,12 @@ if ($Role -eq 'Coordinator') {
     Start-Sleep -Milliseconds 100
   }
   # Use a fresh window, leaving the user's existing tabs and panes untouched.
-  & $wt -w new new-tab --title 'Rei E2E first' $pwsh -NoProfile -File $PSCommandPath -Role First -CaseRoot $CaseRoot -BackendJar $BackendJar ';' split-pane -V --title 'Rei E2E second' $pwsh -NoProfile -File $PSCommandPath -Role Second -CaseRoot $CaseRoot -BackendJar $BackendJar
+  $suffix=if ($GuiClose) { ' '+(Split-Path -Leaf $CaseRoot) } else { '' }
+  & $wt -w new new-tab --title ('Rei E2E first'+$suffix) $pwsh -NoProfile -File $PSCommandPath -Role First -CaseRoot $CaseRoot -BackendJar $BackendJar ';' split-pane -V --title ('Rei E2E second'+$suffix) $pwsh -NoProfile -File $PSCommandPath -Role Second -CaseRoot $CaseRoot -BackendJar $BackendJar
   Write-Output ("E2E case: "+$CaseRoot)
   $deadline=[DateTime]::UtcNow.AddSeconds(240)
   while ([DateTime]::UtcNow -lt $deadline) {
+    if ($GuiClose -and (Test-Path -LiteralPath (Join-Path $CaseRoot 'gui-close-ready')) -and (Test-Path -LiteralPath (Join-Path $CaseRoot 'gui-fixture.json')) -and -not (Test-Path -LiteralPath (Join-Path $CaseRoot 'result.json'))) { Complete-GuiFixture }
     foreach ($name in @('First.error','Second.error')) {
       $errorPath=Join-Path $CaseRoot $name
       if (Test-Path -LiteralPath $errorPath) { throw (Get-Content -LiteralPath $errorPath -Raw) }
@@ -130,6 +178,11 @@ try {
   Wait-File 'provider-blocked' | Out-Null
   $client.StandardInput.WriteLine('/watch '+$run.runId);$client.StandardInput.Flush()
   Set-Content -LiteralPath (Join-Path $CaseRoot 'second-ready') -Value $client.Id
+  if ($GuiClose) {
+    @{firstPanePid=$first.panePid;secondPanePid=$PID;projectId=$projects[0].id;sessionId=$run.sessionId;runId=$run.runId} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $CaseRoot 'gui-fixture.json')
+    Wait-File 'gui-close-timeout' | Out-Null
+    throw 'GUI close was not performed'
+  }
   $deadline=[DateTime]::UtcNow.AddSeconds($(if ($GuiClose) { 90 } else { 20 }))
   while (Get-Process -Id $first.panePid -ErrorAction SilentlyContinue) {
     if ([DateTime]::UtcNow -gt $deadline) { throw 'First pane host did not exit' }
@@ -181,7 +234,7 @@ try {
   exit 1
 } finally {
   if ($client -and -not $client.HasExited) { $client.Kill() }
-  if ($Role -eq 'Second' -and (Test-Path -LiteralPath $endpointPath)) {
+  if ($Role -eq 'Second' -and -not $GuiClose -and (Test-Path -LiteralPath $endpointPath)) {
     $owned=Get-Content -LiteralPath $endpointPath -Raw | ConvertFrom-Json
     try { Invoke-RestMethod -Method Post -Uri ($owned.baseUrl+'/api/v1/instance/stop') -Headers $headers -ContentType 'application/json' -Body (@{instanceId=$owned.instanceId;storageId=$owned.storageId}|ConvertTo-Json) | Out-Null } catch { Write-Warning 'Fixture Backend cleanup failed' }
   }

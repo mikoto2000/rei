@@ -11,6 +11,39 @@ import com.sun.net.httpserver.HttpServer;
 
 class TerminalClientTest {
   @TempDir Path directory;
+  @Test void sessionListReadsEveryPageAndUsesTheShellDisplay()throws Exception {
+    var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+    var pages=new java.util.concurrent.atomic.AtomicInteger();var output=new ByteArrayOutputStream();
+    server.createContext("/api/v1/projects",exchange->{var bytes="[{\"id\":\"one\",\"name\":\"One\"}]".getBytes();exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();});
+    server.createContext("/api/v1/sessions",exchange->{
+      String query=exchange.getRequestURI().getQuery();String response="{\"items\":[]}";
+      if(query!=null&&query.contains("limit=100")){pages.incrementAndGet();response=query.contains("cursor=next")?"{\"items\":[{\"sessionId\":\"second\",\"title\":\"Second\"}]}":"{\"items\":[{\"sessionId\":\"first\",\"title\":\"First\"}],\"nextCursor\":\"next\"}";}
+      var bytes=response.getBytes();exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();
+    });server.start();
+    try(var backend=new BackendClient(URI.create("http://127.0.0.1:"+server.getAddress().getPort()),"fixture");
+        var client=new TerminalClient(backend,directory,true,TerminalBuilder.builder().system(false).dumb(true).streams(new ByteArrayInputStream(new byte[0]),output).build())) {
+      client.command("/project select one");client.command("/session list");
+      assertEquals(2,pages.get());assertTrue(output.toString().contains("Sessions:"));assertTrue(output.toString().contains("first  First"));assertTrue(output.toString().contains("second  Second"));
+      assertThrows(IllegalArgumentException.class,()->client.command("/session list extra"));
+    }finally{server.stop(0);}
+  }
+  @Test void changingToTheSameProjectPreservesTheClientSession()throws Exception {
+    var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+    String path=BackendClient.JSON.writeValueAsString(directory.toString());
+    server.createContext("/api/v1/projects",exchange->{
+      var response=exchange.getRequestMethod().equals("POST")?"{\"id\":\"one\",\"name\":\"One\",\"path\":"+path+"}":"[{\"id\":\"one\",\"name\":\"One\",\"path\":"+path+"}]";
+      var bytes=response.getBytes();exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();
+    });
+    server.createContext("/api/v1/sessions",exchange->{
+      var response=exchange.getRequestURI().getPath().endsWith("/chosen")?"{\"sessionId\":\"chosen\",\"projectId\":\"one\"}":"{\"items\":[{\"sessionId\":\"latest\"}]}";
+      var bytes=response.getBytes();exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();
+    });server.start();
+    try(var backend=new BackendClient(URI.create("http://127.0.0.1:"+server.getAddress().getPort()),"fixture");
+        var client=new TerminalClient(backend,directory,true,TerminalBuilder.builder().system(false).dumb(true).streams(new ByteArrayInputStream(new byte[0]),new ByteArrayOutputStream()).build())) {
+      client.command("/project select one");client.command("/session select chosen");client.command("/project cd .");
+      assertEquals("chosen",client.sessionId());
+    }finally{server.stop(0);}
+  }
   @Test void projectAddDoesNotChangeSelectionAndCdUsesSelectedDirectory()throws Exception {
     var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
     var registrations=new java.util.ArrayList<String>();

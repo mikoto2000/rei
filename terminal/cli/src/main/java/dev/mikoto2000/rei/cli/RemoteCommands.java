@@ -9,10 +9,54 @@ public final class RemoteCommands {
           .streamReadConstraints(com.fasterxml.jackson.core.StreamReadConstraints.builder().maxNestingDepth(32).maxStringLength(32768).maxNumberLength(64).build()).build())
       .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
   public record Request(String method,String path,Object body) {}
-  public static final Set<String> NAMES=Set.of("/mode","/history","/feed","/skill","/profile","/briefing","/reminder","/interest","/memory","/search","/timer","/tasks","/goal","/attention","/checkpoint","/resume","/approval","/dependency","/work","/summarize","/image","/model","/models");
+  public static final Set<String> NAMES=Set.of("/paper","/material-review","/agent","/document","/repair","/timing","/doctor","/mode","/history","/feed","/skill","/profile","/briefing","/reminder","/interest","/memory","/search","/timer","/tasks","/goal","/attention","/checkpoint","/resume","/approval","/dependency","/work","/summarize","/image","/model","/models");
   public static Request route(List<String> words,String project,String session) {
     String name=words.getFirst(),action=words.size()>1?words.get(1):"list";
     if(!NAMES.contains(name))throw new IllegalArgumentException("Unsupported CLI command: "+name+". Use legacy-shell; this input was not sent to the model.");
+    if(name.equals("/paper")||name.equals("/material-review")||name.equals("/agent")) {
+      if(project==null)throw new IllegalArgumentException("Select a Project first");
+      if(words.size()>2049||words.stream().mapToLong(String::length).sum()>16384||words.stream().anyMatch(word->word.codePoints().anyMatch(Character::isISOControl)))throw invalid();
+      var body=new LinkedHashMap<String,Object>();body.put("projectId",project);body.put("sessionId",session);
+      if(name.equals("/agent")) {
+        var parsed=dev.mikoto2000.rei.externalagent.ExternalAgentCommandRequest.parse(String.join(" ",words));
+        body.put("agent",parsed.agent());body.put("action",parsed.action());body.put("target",parsed.target());
+        return post("/api/v1/external-agent/operations",body);
+      }
+      var args=words.subList(1,words.size());
+      if(name.equals("/paper")) {
+        try{dev.mikoto2000.rei.paper.PaperCommandRequest.parse(args.toArray(String[]::new));}catch(dev.mikoto2000.rei.paper.PaperException invalid){throw new IllegalArgumentException(invalid.getMessage());}
+      } else dev.mikoto2000.rei.externalagent.BeginnerReviewRequest.parse(args.toArray(String[]::new));
+      body.put("arguments",List.copyOf(args));return post(name.equals("/paper")?"/api/v1/paper/operations":"/api/v1/material-reviews",body);
+    }
+    if(name.equals("/document")||name.equals("/repair")) {
+      if(project==null)throw new IllegalArgumentException("Select a Project first");
+      if(words.size()<3||words.size()>4)throw invalid();
+      String identity=words.get(2),hash=words.size()==4?words.get(3):null;
+      String pattern=name.equals("/document")?"[a-f0-9-]{36}":"[0-9a-fA-F-]{36}";
+      var mutations=name.equals("/document")?Set.of("rollback","clean","reconcile-single"):Set.of("apply");
+      if(!identity.matches(pattern)||!(action.equals("show")&&hash==null||mutations.contains(action)&&hash!=null&&hash.matches("[a-f0-9]{64}")))throw invalid();
+      var body=new LinkedHashMap<String,Object>();body.put("projectId",project);body.put("sessionId",session);body.put("action",action);body.put("id",identity);body.put("hash",hash);
+      return post("/api/v1/"+name.substring(1)+"/recovery",body);
+    }
+    if(name.equals("/timing")) {
+      if(words.size()>4)throw invalid();String target="last";boolean details=false,selected=false;
+      for(String argument:words.subList(1,words.size())){if(argument.equals("--details")){if(details)throw invalid();details=true;}else{if(selected||!argument.matches("[A-Za-z0-9._:-]{1,128}"))throw invalid();target=argument;selected=true;}}
+      return get("/api/v1/timing?runId="+id(target)+"&details="+details+(project==null?"":"&projectId="+id(project))+(session==null?"":"&sessionId="+id(session)));
+    }
+    if(name.equals("/doctor")) {
+      if(words.size()>33||words.stream().mapToInt(String::length).sum()>4096)throw invalid();
+      var checks=new LinkedHashSet<String>();boolean details=false;
+      for(int index=1;index<words.size();index++) {
+        String option=words.get(index);
+        if(option.equals("--details")||option.equals("--details=true")){details=true;continue;}
+        if(option.equals("--details=false")){details=false;continue;}
+        String check;if(option.equals("--check")){if(++index>=words.size())throw invalid();check=words.get(index);}else if(option.startsWith("--check="))check=option.substring(8);else throw invalid();
+        check=check.toLowerCase(Locale.ROOT);if(!Set.of("connectivity","inference","codex","claude","microphone").contains(check))throw invalid();checks.add(check);
+      }
+      if(checks.isEmpty())return get("/api/v1/doctor?details="+details);
+      if(project==null)throw new IllegalArgumentException("Select a Project first");
+      var body=new LinkedHashMap<String,Object>();body.put("projectId",project);body.put("sessionId",session);body.put("checks",List.copyOf(checks));body.put("details",details);return post("/api/v1/diagnostics",body);
+    }
     if(name.equals("/models")){exact(words,1);return get("/api/v1/models");}
     if(name.equals("/model")) {
       if(words.size()==1)return get("/api/v1/models/current");
@@ -20,7 +64,14 @@ public final class RemoteCommands {
       if(model.isBlank()||model.length()>1024||model.codePoints().anyMatch(Character::isISOControl))throw invalid();
       return new Request("PUT","/api/v1/models/current",Map.of("model",model));
     }
-    if(name.equals("/profile")||name.equals("/briefing")){exact(words,1);return get("/api/v1/"+name.substring(1));}
+    if(name.equals("/profile")) {
+      if(words.size()==1||action.equals("summary")){exact(words,words.size()==1?1:2);return get("/api/v1/profile/report");}
+      if(action.equals("path")){exact(words,2);return get("/api/v1/profile/path");}
+      if(action.equals("chart")){var selected=options(words,2,Set.of("--bucket-seconds","--width"),Set.of());long seconds;try{seconds=Long.parseLong(selected.getOrDefault("--bucket-seconds","60"));}catch(NumberFormatException malformed){throw invalid();}return get("/api/v1/profile/chart?bucketSeconds="+Math.max(1L,seconds)+"&width="+Math.max(1,integer(selected.getOrDefault("--width","40"))));}
+      if(action.equals("mermaid")){var selected=options(words,2,Set.of("--limit"),Set.of());return get("/api/v1/profile/mermaid?limit="+Math.max(1,integer(selected.getOrDefault("--limit","12"))));}
+      throw unsupported();
+    }
+    if(name.equals("/briefing")){if(words.size()!=1&&!(words.size()==2&&action.equals("today")))throw invalid();return get("/api/v1/briefing");}
     if(name.equals("/search")){return post("/api/v1/search",Map.of("query",text(words,1)));}
     if(name.equals("/memory")&&project!=null&&Set.of("list","search","show","forget").contains(action)) {
       String base="/api/v1/projects/"+id(project)+"/memory";
@@ -28,11 +79,7 @@ public final class RemoteCommands {
       if(action.equals("search")){var selected=parse(words,2,Set.of("--limit"),Set.of());if(selected.arguments().isEmpty())throw invalid();return get(base+"/search?query="+BackendClient.segment(String.join(" ",selected.arguments()))+"&limit="+integer(selected.options().getOrDefault("--limit","10")));}
       exact(words,3);return action.equals("show")?get(base+"/"+id(words.get(2))):post(base+"/"+id(words.get(2))+"/forget",Map.of());
     }
-    if(name.equals("/history")) {
-      if(action.equals("list")){exact(words,words.size()==1?1:2);return get("/api/v1/sessions"+(project==null?"":"?projectId="+id(project)));}
-      if(action.equals("show")){if(words.size()>3)throw invalid();String selected=words.size()==3?words.get(2):session;if(selected==null)throw new IllegalArgumentException("Select a Session or provide /history show SESSION_ID");return get("/api/v1/sessions/"+id(selected)+"/turns");}
-      throw unsupported();
-    }
+    if(name.equals("/history"))return history(words,project,session);
     if(Set.of("/feed","/skill","/reminder","/interest","/memory").contains(name)) {
       String resource=switch(name){case "/skill"->"skills";case "/reminder"->"reminders";case "/interest"->"interests";case "/memory"->"memories";default->"feed";};String base="/api/v1/"+resource;
       if(name.equals("/interest")&&action.equals("list")) {
@@ -87,7 +134,13 @@ public final class RemoteCommands {
       }
       throw unsupported();
     }
-    if(name.equals("/resume")){exact(words,2);return post(scoped+"/checkpoints/"+id(action)+"/resume",Map.of());}
+    if(name.equals("/checkpoint")&&words.size()==1){if(session==null)throw new IllegalArgumentException("Select a Session first");return post(scoped+"/checkpoints",Map.of("sessionId",session));}
+    if(name.equals("/resume")) {
+      String base=scoped+"/checkpoints";
+      if(words.size()==1||action.equals("list")){exact(words,words.size()==1?1:2);return get(base);}
+      if(Set.of("show","abandon").contains(action)){exact(words,3);String path=base+"/"+id(words.get(2));return action.equals("show")?get(path):post(path+"/abandon",Map.of());}
+      exact(words,2);return post(base+"/"+id(action)+"/resume",Map.of());
+    }
     if(name.equals("/summarize")){exact(words,2);return post("/api/v1/summaries",Map.of("projectId",project,"url",action));}
     if(name.equals("/image")){return post("/api/v1/images",Map.of("projectId",project,"prompt",text(words,1)));}
     if(name.equals("/work")) {
@@ -166,6 +219,46 @@ public final class RemoteCommands {
     if(name.equals("/goal")&&action.equals("progress")){exact(words,3);return get(base+"/"+id(words.get(2))+"/completion-progress");}
     if(name.equals("/dependency")&&action.equals("answer")){exact(words,5);return post(base+"/"+id(words.get(2))+"/answer",Map.of("expectedVersion",revision(words.get(3)),"answer",words.get(4)));}
     throw unsupported();
+  }
+  private static Request history(List<String> words,String project,String session) {
+    String action=words.size()>1?words.get(1):"";var query=new LinkedHashMap<String,Object>();
+    if(action.isEmpty()||action.startsWith("--")) {
+      var selected=options(words,1,Set.of("--limit","--project-id","--cursor"),Set.of());
+      if(selected.containsKey("--limit"))query.put("limit",integer(selected.get("--limit")));
+      if(selected.containsKey("--project-id"))query.put("projectId",selected.get("--project-id"));
+      if(selected.containsKey("--cursor"))query.put("cursor",selected.get("--cursor"));
+      return query("/api/v1/history/report",query);
+    }
+    if(project==null)throw new IllegalArgumentException("Select a Project first");query.put("selectedProjectId",project);
+    if(action.equals("list")) {
+      var selected=options(words,2,Set.of("--project","--limit","--offset"),Set.of());
+      if(selected.containsKey("--project"))query.put("project",selected.get("--project"));
+      query.put("limit",integer(selected.getOrDefault("--limit","50")));query.put("offset",integer(selected.getOrDefault("--offset","0")));
+      return query("/api/v1/history/conversations",query);
+    }
+    if(action.equals("show")) {
+      var parsed=parse(words,2,Set.of("--project","--last","--limit","--cursor"),Set.of("--all"));var selected=parsed.options();
+      if(parsed.arguments().size()>1||selected.containsKey("--last")&&selected.containsKey("--all"))throw invalid();
+      boolean legacy=selected.containsKey("--project")||selected.containsKey("--last")||selected.containsKey("--all");
+      if(legacy&&(selected.containsKey("--limit")||selected.containsKey("--cursor")))throw invalid();
+      if(!legacy&&parsed.arguments().isEmpty()&&selected.containsKey("--cursor"))throw invalid();
+      if(legacy&&session!=null)query.put("sessionId",session);
+      if(selected.containsKey("--project"))query.put("project",selected.get("--project"));
+      if(!parsed.arguments().isEmpty())query.put("conversation",parsed.arguments().getFirst());
+      if(legacy){query.put("last",integer(selected.getOrDefault("--last","50")));query.put("all",Boolean.parseBoolean(selected.get("--all")));}
+      else{if(selected.containsKey("--limit"))query.put("limit",integer(selected.get("--limit")));if(selected.containsKey("--cursor"))query.put("cursor",selected.get("--cursor"));}
+      return query("/api/v1/history/"+(legacy?"conversation":"show"),query);
+    }
+    if(action.equals("search")) {
+      var parsed=parse(words,2,Set.of("--limit"),Set.of("--current","--all"));var selected=parsed.options();
+      if(parsed.arguments().isEmpty()||selected.containsKey("--current")&&selected.containsKey("--all"))throw invalid();
+      query.put("query",String.join(" ",parsed.arguments()));query.put("scope",selected.containsKey("--all")||selected.containsKey("--current")&&!Boolean.parseBoolean(selected.get("--current"))?"ALL_PROJECTS":selected.containsKey("--current")?"CURRENT_PROJECT_ONLY":"CURRENT_PROJECT_PREFERRED");query.put("limit",integer(selected.getOrDefault("--limit","10")));
+      return query("/api/v1/history/search",query);
+    }
+    throw unsupported();
+  }
+  private static Request query(String path,Map<String,?> parameters) {
+    return get(path+(parameters.isEmpty()?"":"?"+parameters.entrySet().stream().map(entry->BackendClient.segment(entry.getKey())+"="+BackendClient.segment(entry.getValue().toString())).collect(java.util.stream.Collectors.joining("&"))));
   }
   private static String text(List<String> words,int start){if(words.size()<=start)throw invalid();return String.join(" ",words.subList(start,words.size()));}
   private static Map<String,String> options(List<String> words,int start,Set<String> values,Set<String> flags) {

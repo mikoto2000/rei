@@ -30,6 +30,14 @@ public class HistoryCommand implements Callable<Integer> {
     this.service=service; this.sessions=sessions; this.projects=projects;
   }
   public void setShellOutput(PrintWriter output) { shellOutput=output; }
+  private String report(java.util.function.Consumer<HistoryCommand> action) {
+    var text=new java.io.StringWriter();var command=new HistoryCommand(service,sessions,projects);command.setShellOutput(new PrintWriter(text,true));action.accept(command);return text.toString();
+  }
+  public String reportSessions(String project,Integer limit,String cursor) {return report(command->{command.projectId=project;command.limit=limit;command.cursor=cursor;command.call();});}
+  public String reportSession(String id,Integer limit,String cursor) {return report(command->command.showSession(id,limit,cursor));}
+  public String reportConversations(String reference,int limit,int offset) {return report(command->command.execute(out->service.list(reference,limit,offset,out)));}
+  public String reportConversation(String reference,String conversation,int last,boolean all) {return report(command->command.show(reference,conversation,last,all));}
+  public String reportSearch(String query,HistorySearchScope scope,int limit) {return report(command->command.execute(out->service.search(query,scope,limit,out)));}
   private PrintWriter output() { return shellOutput==null?spec.commandLine().getOut():shellOutput; }
   private int execute(Consumer<Consumer<String>> action) {
     var out=output();

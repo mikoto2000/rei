@@ -71,8 +71,30 @@ public final class BackendClient implements AutoCloseable {
     if(!receiptKey.matches("[A-Za-z0-9._:-]{1,128}"))throw new IllegalArgumentException("Invalid receipt key");
     if(!Set.of("EXCLUSIVE","READ_ONLY","CONVERSATION").contains(mode))throw new IllegalArgumentException("Invalid conversation mode");
     var body=new LinkedHashMap<String,Object>();body.put("projectId",project);body.put("sessionId",session);body.put("message",message);body.put("mode",mode);
+    return submitAdmitted("/api/v1/chat",body,receiptKey);
+  }
+  public JsonNode submitDiagnostic(Object body,String receiptKey)throws IOException,InterruptedException {
+    return submitAdmitted("/api/v1/diagnostics",body,receiptKey);
+  }
+  public JsonNode submitDocumentRecovery(Object body,String receiptKey)throws IOException,InterruptedException {
+    return submitAdmitted("/api/v1/document/recovery",body,receiptKey);
+  }
+  public JsonNode submitRepairRecovery(Object body,String receiptKey)throws IOException,InterruptedException {
+    return submitAdmitted("/api/v1/repair/recovery",body,receiptKey);
+  }
+  public JsonNode submitPaper(Object body,String receiptKey)throws IOException,InterruptedException {
+    return submitAdmitted("/api/v1/paper/operations",body,receiptKey);
+  }
+  public JsonNode submitMaterialReview(Object body,String receiptKey)throws IOException,InterruptedException {
+    return submitAdmitted("/api/v1/material-reviews",body,receiptKey);
+  }
+  public JsonNode submitExternalAgent(Object body,String receiptKey)throws IOException,InterruptedException {
+    return submitAdmitted("/api/v1/external-agent/operations",body,receiptKey);
+  }
+  private JsonNode submitAdmitted(String path,Object body,String receiptKey)throws IOException,InterruptedException {
+    if(receiptKey==null||!receiptKey.matches("[A-Za-z0-9._:-]{1,128}"))throw new IllegalArgumentException("Invalid receipt key");
     try {
-      return response(request("/api/v1/chat").timeout(Duration.ofSeconds(30)).header("Idempotency-Key",receiptKey).header("Content-Type","application/json")
+      return response(request(path).timeout(Duration.ofSeconds(30)).header("Idempotency-Key",receiptKey).header("Content-Type","application/json")
           .POST(HttpRequest.BodyPublishers.ofByteArray(JSON.writeValueAsBytes(body))).build());
     } catch(ApiException rejected){
       if(rejected.status()<500 && rejected.status()!=408)throw rejected;

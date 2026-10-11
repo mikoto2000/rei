@@ -35,6 +35,9 @@ public class TimingCommand implements java.util.concurrent.Callable<Integer> {
   finally{out.flush();}
  }
  static String ms(long value){return String.format(Locale.ROOT,"%.6f ms",value/1_000_000d);}
+ public static String report(Run run,boolean details,Statistics statistics) {
+  var text=new java.io.StringWriter();var writer=new PrintWriter(text);render(writer,run,details,statistics);writer.flush();return text.toString();
+ }
  private static void render(PrintWriter out,Run run,boolean details,Statistics statistics) {
   out.println("Run "+run.id()+" "+run.status()+" 開始 "+run.startedAt()+" 記録"+(run.incomplete()?"不完全":"完全"));
   out.println("全体経過: "+ms(run.elapsedNanos())+" / 延べ処理: "+ms(run.summary().workNanos()));

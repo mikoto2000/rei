@@ -3,6 +3,75 @@ import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 import java.util.*;
 class RemoteCommandsTest {
+  @Test void researchRequestsUseOnlyTheirNamedDomainRoutes() {
+    assertEquals("/api/v1/paper/operations",RemoteCommands.route(List.of("/paper","search","graph theory","--limit","2"),"project","session").path());
+    assertEquals("/api/v1/material-reviews",RemoteCommands.route(List.of("/material-review","beginner","--entry","index.html"),"project","session").path());
+    var agent=RemoteCommands.route(List.of("/agent","codex","review","src/main"),"project","session");
+    assertEquals("/api/v1/external-agent/operations",agent.path());
+    assertEquals(Map.of("projectId","project","sessionId","session","agent","codex","action","review","target","src/main"),agent.body());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/paper","execute","anything"),"project","session"));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/agent","arbitrary","execute","anything"),"project","session"));
+  }
+  @Test void recoveryHasSeparateNamedRoutesAndRequiresTheApprovedHash() {
+    String id="12345678-1234-1234-1234-123456789abc",hash="a".repeat(64);
+    var document=RemoteCommands.route(List.of("/document","rollback",id,hash),"project","session");
+    assertEquals("/api/v1/document/recovery",document.path());
+    assertEquals(Map.of("projectId","project","sessionId","session","action","rollback","id",id,"hash",hash),document.body());
+    assertEquals("/api/v1/repair/recovery",RemoteCommands.route(List.of("/repair","show",id),"project","session").path());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/document","execute",id,hash),"project","session"));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/repair","apply",id),"project","session"));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/document","show",id,hash),"project","session"));
+  }
+  @Test void historyPreservesSessionPaginationLegacyRangesAndSearchScopes() {
+    assertEquals("/api/v1/history/report",RemoteCommands.route(List.of("/history"),"project","session").path());
+    assertEquals("/api/v1/history/report?limit=5&projectId=other&cursor=next",RemoteCommands.route(List.of("/history","--limit","5","--project-id","other","--cursor","next"),"project","session").path());
+    assertEquals("/api/v1/history/conversations?selectedProjectId=project&limit=50&offset=0",RemoteCommands.route(List.of("/history","list"),"project","session").path());
+    assertEquals("/api/v1/history/show?selectedProjectId=project",RemoteCommands.route(List.of("/history","show"),"project","session").path());
+    assertEquals("/api/v1/history/show?selectedProjectId=project&conversation=chosen&limit=10&cursor=next",RemoteCommands.route(List.of("/history","show","chosen","--limit","10","--cursor","next"),"project","session").path());
+    assertEquals("/api/v1/history/conversation?selectedProjectId=project&sessionId=session&last=20&all=false",RemoteCommands.route(List.of("/history","show","--last","20"),"project","session").path());
+    assertEquals("/api/v1/history/search?selectedProjectId=project&query=two%20words&scope=ALL_PROJECTS&limit=10",RemoteCommands.route(List.of("/history","search","two","words","--all"),"project","session").path());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/history","show","--last","10","--all"),"project","session"));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/history","show","--cursor","next"),"project","session"));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/history","show","id","--limit","5","--all"),"project","session"));
+  }
+  @Test void timingDefaultsAndArgumentOrderMatchShell() {
+    assertEquals("/api/v1/timing?runId=last&details=false&projectId=project&sessionId=session",RemoteCommands.route(List.of("/timing"),"project","session").path());
+    assertEquals("/api/v1/timing?runId=run&details=true&projectId=project&sessionId=session",RemoteCommands.route(List.of("/timing","--details","run"),"project","session").path());
+    assertEquals("/api/v1/timing?runId=last&details=false",RemoteCommands.route(List.of("/timing"),null,null).path());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/timing","--details","--details"),"project","session"));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/timing","one","two"),"project","session"));
+  }
+  @Test void profileAndBriefingHaveAllLegacyReadForms() {
+    assertEquals("/api/v1/profile/report",RemoteCommands.route(List.of("/profile"),null,null).path());
+    assertEquals("/api/v1/profile/report",RemoteCommands.route(List.of("/profile","summary"),null,null).path());
+    assertEquals("/api/v1/profile/path",RemoteCommands.route(List.of("/profile","path"),null,null).path());
+    assertEquals("/api/v1/profile/chart?bucketSeconds=60&width=40",RemoteCommands.route(List.of("/profile","chart"),null,null).path());
+    assertEquals("/api/v1/profile/chart?bucketSeconds=5&width=10",RemoteCommands.route(List.of("/profile","chart","--width","10","--bucket-seconds","5"),null,null).path());
+    assertEquals("/api/v1/profile/mermaid?limit=12",RemoteCommands.route(List.of("/profile","mermaid"),null,null).path());
+    assertEquals("/api/v1/briefing",RemoteCommands.route(List.of("/briefing","today"),null,null).path());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/profile","path","unexpected"),null,null));
+  }
+  @Test void doctorChecksRemainExplicitBoundedAndDeduplicated() {
+    assertEquals("/api/v1/doctor?details=false",RemoteCommands.route(List.of("/doctor"),null,null).path());
+    assertEquals("/api/v1/doctor?details=true",RemoteCommands.route(List.of("/doctor","--details"),null,null).path());
+    var active=RemoteCommands.route(List.of("/doctor","--check","connectivity","--details","--check=CODEX","--check","connectivity"),"project","session");
+    assertEquals("/api/v1/diagnostics",active.path());
+    assertEquals(List.of("connectivity","codex"),((Map<?,?>)active.body()).get("checks"));
+    assertEquals("session",((Map<?,?>)active.body()).get("sessionId"));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/doctor","--check","arbitrary"),"project","session"));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/doctor","--check","inference"),null,null));
+  }
+  @Test void checkpointAndResumeAcceptTheLegacyShellGrammar() {
+    var saved=RemoteCommands.route(List.of("/checkpoint"),"project","session");
+    assertEquals("POST",saved.method());assertEquals("/api/v1/projects/project/checkpoints",saved.path());assertEquals(Map.of("sessionId","session"),saved.body());
+    assertEquals("/api/v1/projects/project/checkpoints",RemoteCommands.route(List.of("/resume"),"project",null).path());
+    assertEquals("/api/v1/projects/project/checkpoints",RemoteCommands.route(List.of("/resume","list"),"project",null).path());
+    assertEquals("/api/v1/projects/project/checkpoints/task",RemoteCommands.route(List.of("/resume","show","task"),"project",null).path());
+    assertEquals("/api/v1/projects/project/checkpoints/task/abandon",RemoteCommands.route(List.of("/resume","abandon","task"),"project",null).path());
+    assertEquals("/api/v1/projects/project/checkpoints/task/resume",RemoteCommands.route(List.of("/resume","task"),"project",null).path());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/checkpoint"),"project",null));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/resume","show","task","extra"),"project",null));
+  }
   @Test void memoryReadsAndForgetUseSelectedProjectAndShellPagination() {
     assertEquals("/api/v1/projects/project/memory?limit=20&offset=0",RemoteCommands.route(List.of("/memory","list"),"project",null).path());
     assertEquals("/api/v1/projects/project/memory?limit=5&offset=10",RemoteCommands.route(List.of("/memory","list","--offset","10","--limit","5"),"project",null).path());
@@ -86,7 +155,7 @@ class RemoteCommandsTest {
     assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/sh","rm","something"),"project","session"));
   }
   @Test void historyAndTasksUseTheirActualPublicApiRoutes() {
-    assertEquals("/api/v1/sessions/session/turns",RemoteCommands.route(List.of("/history","show"),"project","session").path());
+    assertEquals("/api/v1/history/show?selectedProjectId=project",RemoteCommands.route(List.of("/history","show"),"project","session").path());
     assertEquals("/api/v1/tasks?projectId=project",RemoteCommands.route(List.of("/tasks","list"),"project","session").path());
     assertEquals("/api/v1/projects/project/attention/item/ack",RemoteCommands.route(List.of("/attention","ack","item"),"project","session").path());
     assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/checkpoint","list"),null,null));

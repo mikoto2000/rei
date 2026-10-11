@@ -7,6 +7,15 @@ import java.net.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 class BackendClientTest {
+  @Test void namedDiagnosticRunRecoversTheSameReceiptWithoutPostingAgain()throws Exception {
+    var posts=new AtomicInteger();var receipts=new AtomicInteger();var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+    server.createContext("/api/v1/diagnostics",exchange->{assertEquals("diagnostic-key",exchange.getRequestHeaders().getFirst("Idempotency-Key"));exchange.getRequestBody().readAllBytes();posts.incrementAndGet();exchange.close();});
+    server.createContext("/api/v1/chat/receipts/diagnostic-key",exchange->{receipts.incrementAndGet();var bytes="{\"runId\":\"run\",\"sessionId\":\"session\"}".getBytes();exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();});server.start();
+    try(var client=new BackendClient(URI.create("http://127.0.0.1:"+server.getAddress().getPort()),"test-key")) {
+      assertEquals("run",client.submitDiagnostic(java.util.Map.of("projectId","project","checks",java.util.List.of("codex")),"diagnostic-key").path("runId").asText());
+      assertEquals(1,posts.get());assertEquals(1,receipts.get());
+    }finally{server.stop(0);}
+  }
   @Test void eventSubscriptionNegotiatesSseAndKeepsAuthorization() throws Exception {
     var events=new AtomicInteger();var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
     server.createContext("/api/v1/runs/run/events",exchange->{

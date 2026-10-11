@@ -140,7 +140,7 @@ Windows E2E は毎回 repository の target 以下に UUID の隔離 root を作
 | 1 | Storage gate/discovery、canonical admission、Session 排他、transactional receipt、再起動照会、専用 stop API 実装。起動中異常終了・全 frontend 横断の受け入れケースは追加確認が必要 |
 | 2 | 独立 CLI modules、JLine、local selection、入力・補完・履歴、HTTP/SSE、receipt 照会、明示 cancel 実装。全 Shell 入力/補完互換ではない |
 | 3 | 固定 API adapter と全 Root コマンドの対応表を追加。一部操作のみ対応。未対応コマンド・全 options・表示・追加限定 API が残るため未完了 |
-| 4 | Windows worker の親強制終了後の独立寿命に加え、実 Windows Terminal の2ペインで同時 auto 起動、先行 CLI/ペイン host 終了後の同じ Backend と別 CLI の継続、Run RUNNING→COMPLETED、SSE 受信、Session 操作、明示停止を確認。CLI 標準入出力は pane host 内で redirect し、対話型 ConPTY で `/sh` 入力・cwd・CLI 復帰・Ctrl+C 後継続を追加検証。GUI 強制 close と全コマンド E2E は継続中（voice はユーザー指定で対象外） |
+| 4 | Windows worker の親強制終了後の独立寿命に加え、実 Windows Terminal の2ペインで同時 auto 起動、先行 CLI/ペイン host 終了後の同じ Backend と別 CLI の継続、Run RUNNING→COMPLETED、SSE 受信、Session 操作、明示停止を確認。CLI 標準入出力は pane host 内で redirect し、対話型 ConPTY で `/sh` 入力・cwd・CLI 復帰・Ctrl+C 後継続を追加検証。専用 Terminal ウィンドウの GUI 強制 close、両ペイン終了後の Run 完了・新 CLI 再接続・明示停止も確認。全コマンド E2E は継続中（voice はユーザー指定で対象外） |
 
 Native API の詳細は [Native/Web API](native-web-api.md)、全機能 Shell の利用は [README](../README.md) を参照する。最終テスト件数・commit は作業報告に記録する。必須条件をすべて満たしていないため Phase 1〜4 の実装完了とは報告しない。
 
@@ -178,7 +178,7 @@ TDD の Red/Green は admission の原子性・冪等性・期限・競合・She
 pwsh -NoProfile -File scripts/Test-WindowsTerminalPanes.ps1
 ```
 
-Backend JAR のビルド完了後に E2E を実行する。動作中の JAR を上書きしない。各 pane の WT_SESSION は異なるため同一値を要求しない。正常な host exit による pane の自動終了は Terminal profile の closeOnExit 設定に従う。GUI の強制 close と対話キー入力は検証対象に含めない。
+Backend JAR のビルド完了後に E2E を実行する。動作中の JAR を上書きしない。各 pane の WT_SESSION は異なるため同一値を要求しない。正常な host exit による pane の自動終了は Terminal profile の closeOnExit 設定に従う。`-GuiClose` では専用 UUID ウィンドウを UI Automation の WindowPattern.Close で閉じ、両ペイン終了後も Backend と Run が継続することを確認する。対話キー入力は別の実 ConPTY E2E で検証する。
 
 主なクラスは `ConversationAdmissionStore` / `ConversationAdmissionMigration`、共有 `SessionLifecycle` / `ConversationInputRouter` / `RunRegistry`、`BackendClient` / `TerminalClient` / `ClientHistory` / `SseDecoder` / `RemoteCommands`、`Launcher` / `DetachedBackend`。既存 Shell の全コマンドは保持し、HTTP の同一 Session 独立 Run は依頼された排他契約に合わせて409となる。
 
@@ -190,4 +190,10 @@ Backend JAR のビルド完了後に E2E を実行する。動作中の JAR を�
 
 追加 Backend 回帰は Project 登録解除、Project 所有権付き記憶 API、既存 Memory Shell、verified reflection の14件成功。他 Project の記憶は list に出ず、show/forget を拒否して内容を保全する。GET `/api/v1/projects/{projectId}/memory`、GET `/search`、GET `/{id}`、POST `/{id}/forget` は Shell と同じ記憶サービスを使用する。
 
-`Test-WindowsTerminalPanes.ps1 -GuiClose` は CLI が動いている状態で GUI close を待つ fixture を用意する。現環境の GUI ツール一覧に Terminal ウィンドウが現れなかったため、GUI 操作の実行には未到達であり、成功とは記録しない。
+`Test-WindowsTerminalPanes.ps1 -GuiClose` と `Close-WindowsTerminalFixture.ps1` は実 Windows Terminal の専用ウィンドウを GUI から閉じる。共有 Terminal プロセスの PID で終了を判定せず、生成した UUID タイトルと元のウィンドウハンドルを検証する。両ペイン終了、同じ Backend identity、Run の RUNNING → COMPLETED、新 CLI から履歴・Run の照会と Session 作成、認証済み明示停止まで成功。Close all の確認ダイアログが現れた場合だけ、その専用ウィンドウ内のボタンを操作し結果に記録する。
+
+### Shell 互換の追加検証
+
+履歴の Session ページング・旧 conversation 表示・検索 scope、profile の summary/path/chart/mermaid、timing、doctor、全 active Run 表示と Project 限定 cancel を専用 API に追加。履歴表示はリクエストごとの Project scope を使い、既存 Shell の選択を復元する。document/repair の復旧操作は明示ハッシュを検証し、paper/material-review/agent は既存の引数文法を共有して永続受付と Run キューへ接続する。
+
+最新版 Backend の対象回帰49件、独立 CLI の全回帰51件が成功。通常の2ペイン終了と GUI 強制 close の両 E2E も最新版 Backend jar で再確認した。この件数は全 Backend 回帰とは別の対象検証。Shell/Web が別 ProjectRegistry インスタンスで同じファイルを同時更新する競合を再現し、ファイル単位の Backend 内ロックを追加。48 Project の並行登録を保存し、同一 Project への CLI cd は選択 Session を保持する。全47コマンドの互換性は引き続き対応表で個別に管理する。

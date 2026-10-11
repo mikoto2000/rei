@@ -99,6 +99,7 @@ public final class TerminalClient implements AutoCloseable {
     var accepted=backend.submit(project,session,message,key,access);session=accepted.path("sessionId").asText();run=accepted.path("runId").asText();out("Run: "+run);watch(run);refresh();
   }
   String projectId(){return project;}
+  String sessionId(){return session;}
   private static DefaultParser commandParser(){return new DefaultParser().escapeChars(null);}
   static List<String> commandWords(String line){return commandParser().parse(line,line.length(),Parser.ParseContext.ACCEPT_LINE).words();}
   void command(String line)throws IOException,InterruptedException {
@@ -112,8 +113,20 @@ public final class TerminalClient implements AutoCloseable {
     }
     if(RemoteCommands.NAMES.contains(name)&&!(name.equals("/history")&&Set.of("off","on").contains(action))) {
       var request=RemoteCommands.route(words,project,session);
+      if(Set.of("/api/v1/diagnostics","/api/v1/document/recovery","/api/v1/repair/recovery","/api/v1/paper/operations","/api/v1/material-reviews","/api/v1/external-agent/operations").contains(request.path())) {
+        String key=UUID.randomUUID().toString();out("Receipt: "+key);var accepted=switch(request.path()) {
+          case "/api/v1/document/recovery"->backend.submitDocumentRecovery(request.body(),key);
+          case "/api/v1/repair/recovery"->backend.submitRepairRecovery(request.body(),key);
+          case "/api/v1/paper/operations"->backend.submitPaper(request.body(),key);
+          case "/api/v1/material-reviews"->backend.submitMaterialReview(request.body(),key);
+          case "/api/v1/external-agent/operations"->backend.submitExternalAgent(request.body(),key);
+          default->backend.submitDiagnostic(request.body(),key);
+        };
+        session=accepted.path("sessionId").asText();run=accepted.path("runId").asText();out("Run: "+run);watch(run);refresh();return;
+      }
       var response=request.method().equals("GET")?backend.get(request.path()):backend.mutation(request.method(),request.path(),request.body());
-      if(response.isObject()&&response.size()==1&&response.path("text").isTextual())out(response.path("text").asText());else show(response);return;
+      if(response.isObject()&&response.size()==1&&response.path("text").isTextual())out(response.path("text").asText());else show(response);
+      if(name.equals("/resume")&&action.equals("show"))show(backend.get(request.path()+"/reconciliation"));return;
     }
     switch(name) {
       case "/sh"->{if(words.size()!=1)throw new IllegalArgumentException("Usage: /sh");requireProject();if(projectDirectory==null)throw new IllegalArgumentException("Project directory is unavailable");backend.detach();attached=false;int exit=InteractiveShell.run(terminal,projectDirectory);if(exit!=0)out("shell exited with code "+exit);}
@@ -122,15 +135,47 @@ public final class TerminalClient implements AutoCloseable {
         case "list"->{if(words.size()!=2&&words.size()!=1)throw new IllegalArgumentException("Usage: /project list");for(var value:backend.get("/api/v1/projects"))out((value.path("id").asText().equals(project)?"* ":"  ")+value.path("path").asText());refresh();}
         case "select"->{if(words.size()!=3)throw new IllegalArgumentException("Usage: /project select ID");selectProject(argument(words,2));}
         case "remove"->{if(words.size()!=3)throw new IllegalArgumentException("Usage: /project remove DIR");var target=localProjectPath(words.get(2)).toRealPath();for(var value:backend.get("/api/v1/projects")){if(target.toString().equals(value.path("path").asText())){String removed=value.path("id").asText();backend.mutation("DELETE","/api/v1/projects/"+BackendClient.segment(removed),null);if(removed.equals(project)){var fallback=backend.post("/api/v1/projects/register",Map.of("path",Path.of("").toAbsolutePath().normalize().toString()));selectProject(fallback.path("id").asText());}break;}}out("project removed: "+target);out("current project: "+(projectDirectory==null?Path.of("").toAbsolutePath():projectDirectory));refresh();}
-        case "register","add","cd"->{if(words.size()!=3)throw new IllegalArgumentException("Usage: /project "+action+" DIR");var value=backend.post("/api/v1/projects/register",Map.of("path",localProjectPath(argument(words,2)).toString()));if(!action.equals("add")){selectProject(value.path("id").asText());if(action.equals("cd")){var latest=backend.get("/api/v1/sessions?projectId="+BackendClient.segment(project)+"&limit=1").path("items");if(!latest.isEmpty())session=latest.get(0).path("sessionId").asText();}}out((action.equals("add")?"project added: ":"current project: ")+value.path("path").asText());refresh();}
+        case "register","add","cd"->{if(words.size()!=3)throw new IllegalArgumentException("Usage: /project "+action+" DIR");var value=backend.post("/api/v1/projects/register",Map.of("path",localProjectPath(argument(words,2)).toString()));if(!action.equals("add")){boolean changed=!value.path("id").asText().equals(project);if(changed||!action.equals("cd"))selectProject(value.path("id").asText());if(action.equals("cd")&&changed){var latest=backend.get("/api/v1/sessions?projectId="+BackendClient.segment(project)+"&limit=1").path("items");if(!latest.isEmpty())session=latest.get(0).path("sessionId").asText();}}out((action.equals("add")?"project added: ":"current project: ")+value.path("path").asText());refresh();}
         default->throw new IllegalArgumentException("Usage: /project list|add DIR|cd DIR|select ID|register LOCAL_PATH");}}
 
-      case "/session"->{requireProject();switch(words.size()==1?"show":action){case "list"->show(backend.get("/api/v1/sessions?projectId="+BackendClient.segment(project)));case "show"->{if(session==null)out("No Session selected");else show(backend.get("/api/v1/sessions/"+BackendClient.segment(session)));}case "select","switch","resume"->{String id=argument(words,2);var value=backend.get("/api/v1/sessions/"+BackendClient.segment(id));if(!project.equals(value.path("projectId").asText()))throw new IllegalArgumentException("Session belongs to another Project");session=id;}case "new"->{if(words.size()>3)throw new IllegalArgumentException("Usage: /session new [TITLE]");createSession(words.size()==3?words.get(2):null);}case "end"->{requireSession();show(backend.post("/api/v1/sessions/"+BackendClient.segment(session)+"/end",Map.of("projectId",project)));session=null;}default->throw new IllegalArgumentException("Usage: /session list|show|switch ID|new [TITLE]|end");}refresh();}
+      case "/session"->{
+        requireProject();String selectedAction=words.size()==1?"show":action;
+        switch(selectedAction) {
+          case "list"->{
+            if(words.size()!=2)throw new IllegalArgumentException("Usage: /session list");
+            var format=new dev.mikoto2000.rei.conversation.HistoryFormatter();String cursor=null;boolean any=false;
+            do {
+              var page=backend.get("/api/v1/sessions?projectId="+BackendClient.segment(project)+"&limit=100"+(cursor==null?"":"&cursor="+BackendClient.segment(cursor)));
+              for(var row:page.path("items")){if(!any){out("Sessions:");any=true;}out((row.path("sessionId").asText().equals(session)?"* ":"  ")+format.label(row.path("sessionId").asText())+"  "+format.label(row.path("title").asText()));}
+              String next=page.path("nextCursor").isTextual()?page.path("nextCursor").asText():null;
+              if(next!=null&&next.equals(cursor))throw new IOException("Session cursor did not advance");cursor=next;
+            } while(cursor!=null);
+            if(!any)out("No sessions.");
+          }
+          case "show"->{
+            if(words.size()>2)throw new IllegalArgumentException("Usage: /session show");
+            if(session==null)out("No active session.");else {
+              var row=backend.get("/api/v1/sessions/"+BackendClient.segment(session));var format=new dev.mikoto2000.rei.conversation.HistoryFormatter();
+              out("Session:");out("  id: "+format.label(row.path("sessionId").asText()));out("  title: "+format.label(row.path("title").asText()));out("  projectId: "+format.label(row.path("projectId").asText()));out("  createdAt: "+row.path("createdAt").asText());out("  updatedAt: "+row.path("updatedAt").asText());
+            }
+          }
+          case "select","switch","resume"->{
+            if(words.size()!=3)throw new IllegalArgumentException("Usage: /session switch SESSION_ID");
+            String id=argument(words,2);var value=backend.get("/api/v1/sessions/"+BackendClient.segment(id));if(!project.equals(value.path("projectId").asText()))throw new IllegalArgumentException("Session belongs to another project. Select that project first.");session=id;out("Current session: "+new dev.mikoto2000.rei.conversation.HistoryFormatter().label(id));
+          }
+          case "new"->{if(words.size()>3)throw new IllegalArgumentException("Usage: /session new [TITLE]");createSession(words.size()==3?words.get(2):null);}
+          case "end"->{
+            if(words.size()!=2)throw new IllegalArgumentException("Usage: /session end");
+            if(session==null)out("No active session.");else {backend.post("/api/v1/sessions/"+BackendClient.segment(session)+"/end",Map.of("projectId",project));out("Session ended: "+new dev.mikoto2000.rei.conversation.HistoryFormatter().label(session));session=null;}
+          }
+          default->throw new IllegalArgumentException("Usage: /session list|show|switch ID|new [TITLE]|end");
+        }refresh();
+      }
       case "/chat"->{var input=ChatInput.parse(words,mode);if(input.runId()==null)send(input.message(),input.mode());else{requireProject();requireSession();show(backend.post("/api/v1/runs/"+BackendClient.segment(input.runId())+"/input",Map.of("projectId",project,"sessionId",session,"message",input.message())));}}
       case "/run-mode"->{String selected=argument(words,1).toUpperCase(Locale.ROOT).replace('-','_');if(!Set.of("EXCLUSIVE","READ_ONLY","CONVERSATION").contains(selected))throw new IllegalArgumentException("Usage: /run-mode exclusive|read-only|conversation");mode=selected;out("Run access: "+mode);}
-      case "/cancel"->show(backend.post("/api/v1/runs/"+BackendClient.segment(argument(words,1))+"/cancel",Map.of()));
+      case "/cancel"->{if(words.size()>2)throw new IllegalArgumentException("Usage: /cancel [RUN_ID]");if(words.size()==1){requireProject();show(backend.post("/api/v1/projects/"+BackendClient.segment(project)+"/runs/cancel",Map.of()));}else show(backend.post("/api/v1/runs/"+BackendClient.segment(argument(words,1))+"/cancel",Map.of()));}
       case "/watch"->{run=argument(words,1);watch(run);}
-      case "/runs"->{if(words.size()>1)show(backend.get("/api/v1/runs/"+BackendClient.segment(words.get(1))));else out(run==null?"No Run selected":run);}
+      case "/runs"->{if(words.size()>2)throw new IllegalArgumentException("Usage: /runs [RUN_ID]");if(words.size()==2)show(backend.get("/api/v1/runs/"+BackendClient.segment(words.get(1))));else out(backend.get("/api/v1/runs/active").path("text").asText());}
       case "/receipt"->{String key=argument(words,1);if(!key.matches("[A-Za-z0-9._:-]{1,128}"))throw new IllegalArgumentException("Invalid receipt key");show(backend.get("/api/v1/chat/receipts/"+key));}
       case "/history","/input-history"->{if(!Set.of("off","on").contains(action))throw new IllegalArgumentException("Usage: /input-history off|on");recordHistory=action.equals("on");history.enabled(recordHistory);out("Input history "+action);}
       default->throw new IllegalArgumentException("Unsupported CLI command: "+name+". Use legacy-shell; this input was not sent to the model.");
@@ -138,7 +183,7 @@ public final class TerminalClient implements AutoCloseable {
   }
   private void createSession(String title)throws IOException,InterruptedException {
     var body=new LinkedHashMap<String,Object>();body.put("projectId",project);body.put("title",title);
-    var value=backend.post("/api/v1/sessions",body);session=value.path("sessionId").asText();show(value);
+    var value=backend.post("/api/v1/sessions",body);session=value.path("sessionId").asText();out("Current session: "+session);
   }
   private void watch(String id) {
     long generation=subscriptionGeneration.incrementAndGet();backend.detach();if(watching!=null)watching.cancel(true);attached=true;
