@@ -22,6 +22,7 @@ Before implementation the task process was checked for token availability (boole
 4. Added orphaned managed parent test (Red); persisted managed-parent provenance and refuse resuming a lost Goal/Scheduler parent (Green, 22 focused tests).
 5. Actual ChatExecutionService + StagnationChatModel + Fake Slack integration passed without polling the model. An accepted-intervention test then failed (Red); save final accepted human guidance with the waiting continuation (Green). Goal/Scheduler callback and partial-timeout tests passed in a 59-test focused run.
 6. Spring ApplicationContextRunner validates default-disabled/Shell-disabled tools, YAML record binding and cancellation subscription; identity tests use valid Slack timestamps and follow-up limits are checked independently of the request count.
+7. Review found that marking a restored orphaned parent UNKNOWN also requires Run ownership adoption (reproduced as OperationConflict: Red). Adopt only the exact dead waiting owner before stopping, refuse unsent orphan/relocated-Project requests, and mirror terminal external facts even without a resumable parent (Green, 34 tests on origin/main `69bdf49e`). Restart and shared request/Dependency rollback tests also pass.
 
 ## Review decisions
 

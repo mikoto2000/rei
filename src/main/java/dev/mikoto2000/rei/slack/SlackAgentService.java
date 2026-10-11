@@ -76,20 +76,25 @@ public final class SlackAgentService implements RunContinuation {
         SlackAgentProperties.Agent a;try{a=settings.agent(q.agent());}catch(IllegalArgumentException invalid){requests.cancelRun(q.run());continue;}
         if(!Objects.equals(team,q.team())||!a.workspaceId().equals(q.team())||!a.channelId().equals(q.channel())||!a.botId().equals(q.bot())||!a.botUserId().equals(q.botUser())||a.botUserId().equals(self))continue;
         var parent=registry.get(q.run());if(!parent.context().projectId().equals(q.project())||!parent.context().conversationId().equals(q.session())||!parent.context().projectRoot().toString().equals(q.root())||parent.status().isTerminal()){requests.cancelRun(q.run());continue;}
+        if(parent.status()==RunStatus.WAITING&&!registry.claimWaiting(parent.context()))continue;
+        if(!registry.ownsExecution(q.run()))continue;
+        if("WAITING".equals(continuations.state(q.run()))&&continuations.document(q.run()).managedParent()&&!managed.containsKey(q.run())){requests.abandonCreated(q.run());stopUnknown(parent.context());continue;}
+        try{validate.accept(parent.context());}catch(RuntimeException invalid){requests.abandonCreated(q.run());continue;}
         if(!requests.claimSend(q.id()))continue;
         String text="<@"+q.mention()+"> "+escape(q.question())+"\nExpected output: "+escape(q.expected())+"\nRequest: "+q.id();
         SlackTransport.Delivery result;try{result=sender.send(new SlackStore.Outgoing(q.id(),q.team(),q.channel(),null,text));}catch(RuntimeException error){result=SlackTransport.Delivery.unknown();}
         requests.delivery(q.id(),result);
       }
     }
+    if(dependencies!=null)for(String run:requests.terminalDependencyRuns())updateDependencies(run);
     for(String run:continuations.waiting()){
       var current=registry.get(run);var owner=current.context();
       if(current.status()==RunStatus.CANCELLED){cancel(run);continue;}
       if(current.status()!=RunStatus.WAITING||router.containsRun(owner.projectId(),run))continue;
+      if(continuations.document(run).managedParent()&&!managed.containsKey(run)){stopUnknown(owner);continue;}
+      try{validate.accept(owner);}catch(RuntimeException invalid){stopUnknown(owner);continue;}
       if(requests.waiting(run))continue;
       updateDependencies(run);
-      if(continuations.document(run).managedParent()&&!managed.containsKey(run)){continuations.unknown(run);runs.finishMissingTerminal(owner,RunStatus.UNKNOWN);continue;}
-      try{validate.accept(owner);}catch(RuntimeException invalid){continuations.unknown(run);runs.finishMissingTerminal(owner,RunStatus.UNKNOWN);continue;}
       if(!registry.claimWaiting(owner)||!continuations.claim(run))continue;
       var saved=restore(owner);
       try{router.submitOperation(owner,()->{
@@ -103,6 +108,11 @@ public final class SlackAgentService implements RunContinuation {
       catch(RuntimeException uncertain){continuations.unknown(run);runs.finishMissingTerminal(owner,RunStatus.UNKNOWN);}
     }
     if(observations!=null)observations.flushFacts();
+  }
+  private void stopUnknown(AgentRunContext owner){
+    if(!registry.claimWaiting(owner))return;
+    continuations.unknown(owner.runId());runs.finishMissingTerminal(owner,RunStatus.UNKNOWN);
+    var parent=managed.remove(owner.runId());if(parent!=null)completionNotifications.add(()->parent.completed().accept(ChatExecutionResult.failed("External continuation owner unavailable","external_owner_unknown")));
   }
   private void updateDependencies(String run){if(dependencies==null)return;for(var q:requests.forRun(run)){
     String id=requests.dependency(q.id());if(id==null)continue;var dependency=dependencies.get(q.project(),id);
