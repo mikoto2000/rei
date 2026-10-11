@@ -11,7 +11,7 @@ import java.util.function.BooleanSupplier;
 
 /** Dedicated OAuth inference adapter: explicit request whitelist, no Tools, repair or retries. */
 public final class PlanClient {
-  static final int MODEL_CATALOG_LIMIT_BYTES = 262144;
+  static final int MODEL_CATALOG_LIMIT_BYTES = 2 * 1024 * 1024;
   static final int HTTP_ERROR_LIMIT_BYTES = 65536;
 
   public record Model(String id, String name) {}

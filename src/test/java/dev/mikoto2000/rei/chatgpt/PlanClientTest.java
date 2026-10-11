@@ -238,8 +238,13 @@ class PlanClientTest {
   @Test
   void catalogBoundariesCountUtf8BytesAndExposeOnlyObservedMetadata() {
     String base = MODELS.replace("Allowed", "日本語");
+    base =
+        base.substring(0, base.length() - 1)
+            + ",\"ignored_metadata\":\""
+            + "x".repeat(300000)
+            + "\"}";
     int baseBytes = base.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
-    for (int size : new int[] {baseBytes, 262143, 262144, 262145}) {
+    for (int size : new int[] {baseBytes, 1048576, 2097151, 2097152, 2097153}) {
       String body = base + " ".repeat(size - baseBytes);
       PlanTransport transport =
           (u, m, h, b, t, c) -> {
@@ -249,12 +254,12 @@ class PlanClientTest {
             return PlanOAuthTest.reply(200, body);
           };
       var client = new PlanClient(oauth(transport), transport, Clock.systemUTC());
-      if (size <= 262144) assertEquals("日本語", client.models("default", true).getFirst().name());
+      if (size <= 2097152) assertEquals("日本語", client.models("default", true).getFirst().name());
       else {
         var error = assertThrows(ChatGptException.class, () -> client.models("default", true));
         assertEquals(ChatGptException.Code.RECEIVE_LIMIT, error.code());
         assertTrue(error.getMessage().contains("operation=models, httpStatus=200"));
-        assertTrue(error.getMessage().contains("receivedBytes=262145, receiveLimitBytes=262144"));
+        assertTrue(error.getMessage().contains("receivedBytes=2097153, receiveLimitBytes=2097152"));
         assertTrue(error.getMessage().contains("bodyTruncated=true"));
         assertFalse(error.getMessage().contains("日本語"));
       }
@@ -397,5 +402,67 @@ class PlanClientTest {
     assertTrue(error.getMessage().contains("receivedBytes=65537, receiveLimitBytes=65536"));
     assertFalse(error.toString().contains("secret"));
     assertEquals("refresh-secret", store.locked(s -> s.load("default")).refreshToken());
+  }
+
+  @Test
+  void twoMiBCatalogLimitDoesNotRelaxHttpErrorOrSseLimits() {
+    String apiError = "{\"error\":{\"code\":\"subscription_sharing_usage_unavailable\"}}";
+    for (int size : new int[] {65536, 65537}) {
+      PlanTransport transport =
+          (u, m, h, b, t, c) ->
+              PlanOAuthTest.reply(503, apiError + " ".repeat(size - apiError.length()));
+      var client = new PlanClient(oauth(transport), transport, Clock.systemUTC());
+      var error = assertThrows(ChatGptException.class, () -> client.models("default", true));
+      assertEquals(
+          size == 65536
+              ? ChatGptException.Code.USAGE_UNAVAILABLE
+              : ChatGptException.Code.ROUTE_UNAVAILABLE,
+          error.code());
+      assertTrue(
+          error.getMessage().contains("receivedBytes=" + size + ", receiveLimitBytes=65536"));
+    }
+    String terminal =
+        PlanSseAssemblerTest.event("response.completed", PlanSseAssemblerTest.COMPLETED);
+    for (int size : new int[] {1048576, 1048577}) {
+      int padding = size - terminal.length();
+      String sse = ":\n".repeat(padding / 2) + (padding % 2 == 0 ? "" : "\n") + terminal;
+      PlanTransport transport =
+          (u, m, h, b, t, c) ->
+              m.equals("GET")
+                  ? PlanOAuthTest.reply(200, MODELS)
+                  : new PlanTransport.Response(
+                      200, PlanSseAssemblerTest.stream(sse), "mock-request", "text/event-stream");
+      var client = new PlanClient(oauth(transport), transport, Clock.systemUTC());
+      if (size == 1048576)
+        assertEquals(
+            "hello",
+            client
+                .infer(
+                    "default",
+                    "allowed",
+                    "instructions",
+                    "task",
+                    Duration.ofSeconds(10),
+                    262144,
+                    1048576,
+                    () -> false)
+                .text());
+      else
+        assertEquals(
+            ChatGptException.Code.RECEIVE_LIMIT,
+            assertThrows(
+                    ChatGptException.class,
+                    () ->
+                        client.infer(
+                            "default",
+                            "allowed",
+                            "instructions",
+                            "task",
+                            Duration.ofSeconds(10),
+                            262144,
+                            1048576,
+                            () -> false))
+                .code());
+    }
   }
 }

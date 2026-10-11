@@ -165,14 +165,15 @@ class PlanHttpIntegrationTest {
   }
 
   @Test
-  void chunkedCatalogWithoutContentLengthHonorsByteBoundary() throws Exception {
+  void catalogHttpStreamingHonorsTwoMiBBoundaryWithAndWithoutContentLength() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    var size = new AtomicInteger(262144);
+    var size = new AtomicInteger(2097152);
+    var chunked = new AtomicBoolean(true);
     server.createContext(
         "/v1/models",
         x -> {
           x.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
-          x.sendResponseHeaders(200, 0); // chunked, no Content-Length
+          x.sendResponseHeaders(200, chunked.get() ? 0 : size.get());
           byte[] base = PlanClientTest.MODELS.getBytes(StandardCharsets.UTF_8);
           byte[] body = new byte[size.get()];
           java.util.Arrays.fill(body, (byte) ' ');
@@ -209,11 +210,15 @@ class PlanHttpIntegrationTest {
               new PlanOAuth(store, local, (i, c, n) -> null, Clock.systemUTC()),
               local,
               Clock.systemUTC());
-      assertEquals(1, client.models("default", true).size());
-      size.set(262145);
-      assertEquals(
-          ChatGptException.Code.RECEIVE_LIMIT,
-          assertThrows(ChatGptException.class, () -> client.models("default", true)).code());
+      for (boolean streaming : new boolean[] {true, false}) {
+        chunked.set(streaming);
+        size.set(2097152);
+        assertEquals(1, client.models("default", true).size());
+        size.set(2097153);
+        var error = assertThrows(ChatGptException.class, () -> client.models("default", true));
+        assertEquals(ChatGptException.Code.RECEIVE_LIMIT, error.code());
+        assertTrue(error.getMessage().contains("receivedBytes=2097153, receiveLimitBytes=2097152"));
+      }
     } finally {
       server.stop(0);
     }
