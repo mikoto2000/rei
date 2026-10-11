@@ -325,3 +325,41 @@ truthVerifiedは常にfalseです。引用への文字列一致も、因果関�
 comparisonは結論、JSON厳密一致の共通指摘、独自指摘、引用、未確認事項と失敗状態を区別します。多数決は行いません。ローカル結果がsnapshot引用を持たない場合は根拠比較を未解決として明記します。別Run・別モデルでも統計的独立性や正解は保証しません。
 
 復旧時はReceiptの状態とvalidationHistoryを確認してください。INVALID outputは上限内だけ修復されます。FAILED/OUTCOME_UNKNOWN、認証・利用枠・権限エラーでは、状況を確認してから新しい依頼を選び、結果不明の再送を自動化しないでください。通常CIはmockとHTTP fixtureで実認証不要です。
+
+## Phase 4: Codex app-server
+
+既定無効の `codex-app-server` を明示選択できます。Windowsから既存WSL2を使用し、Linux Codex 0.154.0と動作するLinux sandboxが必要です。通常Codexのログイン・設定は使わず、Phase 0自身のaccount/tokenを使用します。対応外のバージョンは拒否します。
+
+```yaml
+rei:
+  chatgpt-plan:
+    enabled: true
+    allowed-roles: [reviewer]
+    app-server:
+      enabled: true
+      distribution: Ubuntu-24.04
+      executable: /absolute/path/to/codex-0.154.0
+      # runtime-directory: F:/project/rei/.rei/app-server
+```
+
+上記executableは利用者が用意する固定バージョンの実binaryです。自動ダウンロードや通常Codex更新は行いません。runtime-directoryはWindows上の専用作業用ディレクトリで、既定はれいのdata directory配下です。WSLから参照可能なdrive pathが必要です。
+
+```text
+/subagent run reviewer --backend codex-app-server --account personal --model <許可slug> --source docs/design.md --expected-result {"unverified":[]} --task "この設計をレビュー"
+```
+
+既存コマンドと同じtask/オプション形式を使います。自動委譲はPhase 2のauto-delegation有効化・account/model allowlistも必要です。
+
+```json
+{"agent":"reviewer","backendId":"codex-app-server","accountRef":"personal","modelId":"<許可slug>","task":"資料をレビュー","sourceRefs":["docs/design.md"],"expectedOutput":"{\"unverified\":[]}"}
+```
+
+delegateTasksも同じbackend指定でlocal/HTTP/app-serverを比較でき、部分失敗を保持します。親の実Project/Session/Run、共有予算、資料承認と検証を再利用します。app-server送信には専用requestCodexAppServerSubAgentのEXECUTE/NETWORK_WRITE/EXTERNAL_SIDE_EFFECT権限が必要です。backend・runtime・資料・modelなどの変更で承認digestも変わります。
+
+roleがreadFile/readMultiFileを許可した場合だけ資料snapshotを取得できます。最初にmetadataを送り、native dynamic tool rei_read_sourceが各pathを一度だけ読みます。毎回親guardを検査し、続く推論回数を親の共有予算へ予約します。role.maxStepsから初回分を除いた回数と最大16読取を上限とし、usageは増分で計上します。shell、編集、任意ネットワーク、再委譲は許可しません。必要tool evidence/semantic契約を黙って省略せず、非対応なら拒否します。
+
+Receipt.externalExecutionからopaque Thread/Turn、読取数、拒否数、イベント数、interrupt要求を確認できます。正常終端後も既存schema/引用/範囲/厳密完了条件で検証します。自由文の真偽や完了を保証せず、採否は親が判断します。
+
+新規専用home/空workspaceを各依頼に作り、root denyの読取制限とnetwork falseを強制します。実Projectを直接mountしません。logout/期限/取消は停止要求へ反映し、停止確認できなければOUTCOME_UNKNOWNです。拒否応答は停止確認後に返し、追加推論を防ぎます。新規依頼時に既存storeでrefreshします。永続Thread resume、結果不明の自動再送、他アカウント/有料API fallbackはありません。Phase 3のHTTP修復ループはこの経路には適用しません。
+
+既存 `/agent codex` はCLI経路で、既存の明示隔離実装・変更レビューを利用できます。app-serverは今回読取レビュー用です。認証不要の実測手順、Windows方式での以前の拒否、検証範囲は[Phase 4報告](implementation-report-chatgpt-plan-phase4.md)を参照してください。実OAuth/実モデル推論は今回代行していません。

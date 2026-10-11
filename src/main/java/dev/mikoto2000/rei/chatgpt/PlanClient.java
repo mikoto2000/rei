@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 
 /** Dedicated OAuth inference adapter: explicit request whitelist, no Tools, repair or retries. */
-public final class PlanClient {
+public final class PlanClient implements PlanInference {
   static final int MODEL_CATALOG_LIMIT_BYTES = 2 * 1024 * 1024;
   static final int HTTP_ERROR_LIMIT_BYTES = 65536;
 
@@ -112,6 +112,20 @@ public final class PlanClient {
     generations
         .computeIfAbsent(account, a -> new java.util.concurrent.atomic.AtomicInteger())
         .incrementAndGet();
+  }
+
+  /** Own SIWC credentials only; a logout/stop invalidates an in-flight external process. */
+  public record Lease(TokenSet tokens, BooleanSupplier valid) {
+    @Override public String toString(){return "Lease[protected]";}
+  }
+  public Lease lease(String account,String model) {
+    var generation=generations.computeIfAbsent(account,a->new java.util.concurrent.atomic.AtomicInteger());
+    int initial=generation.get();
+    if(models(account,false).stream().noneMatch(m->m.id().equals(model)))throw ChatGptException.of(MODEL_UNAVAILABLE);
+    var tokens=oauth.access(account);
+    BooleanSupplier valid=()->generation.get()==initial&&clock.instant().getEpochSecond()<tokens.expiresAt();
+    if(!valid.getAsBoolean())throw ChatGptException.of(AUTH_REQUIRED);
+    return new Lease(tokens,valid);
   }
 
   public PlanSseAssembler.Result infer(

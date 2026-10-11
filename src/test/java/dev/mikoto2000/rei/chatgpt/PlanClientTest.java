@@ -10,6 +10,13 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
 class PlanClientTest {
+  @Test void ownAccountLeaseIsInvalidatedByLogoutGenerationAndRejectsUnavailableModels() {
+    PlanTransport transport=(u,m,h,b,t,c)->PlanOAuthTest.reply(200,MODELS);
+    var client=new PlanClient(oauth(transport),transport,Clock.systemUTC());
+    var lease=client.lease("default","allowed");assertTrue(lease.valid().getAsBoolean());assertEquals("access-secret",lease.tokens().accessToken());assertFalse(lease.toString().contains("access-secret"));
+    client.stop("default");assertFalse(lease.valid().getAsBoolean());
+    assertEquals(ChatGptException.Code.MODEL_UNAVAILABLE,assertThrows(ChatGptException.class,()->client.lease("default","unknown")).code());
+  }
   @Test void explicitHistoryUsesOnlySupportedInputAndNoServerContinuation() {
     PlanTransport transport=(u,m,h,b,t,c)->{
       if(m.equals("GET"))return PlanOAuthTest.reply(200,MODELS);
