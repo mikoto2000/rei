@@ -11,6 +11,7 @@ public record PlanExecutionProperties(boolean enabled, Integer maxIterations, In
       Integer maxInputBytes,Integer maxOutputBytes,Duration timeout,boolean semanticValidation) {
     this(enabled,maxIterations,maxRepairs,maxConcurrent,maxInputBytes,maxOutputBytes,timeout,semanticValidation,0);
   }
+  @org.springframework.boot.context.properties.bind.ConstructorBinding
   public PlanExecutionProperties {
     maxIterations=bounded(maxIterations,3,1,8);
     maxRepairs=bounded(maxRepairs,2,0,3);
