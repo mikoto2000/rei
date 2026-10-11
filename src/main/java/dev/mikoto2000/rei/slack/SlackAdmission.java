@@ -10,8 +10,9 @@ public final class SlackAdmission {
     if(p.getAllowedWorkspaceIds()==null||!p.getAllowedWorkspaceIds().contains(m.team())
         ||p.getAllowedUserIds()==null||!p.getAllowedUserIds().contains(m.user())
         ||p.getAllowedChannelIds()==null||!p.getAllowedChannelIds().contains(m.channel()))return false;
+    if("message".equals(m.type())&&!java.util.Set.of("im","channel","group").contains(m.channelType()==null?"":m.channelType()))return false;
     if(knownThread)return true;
-    if(m.threadTs()!=null&&!m.threadTs().isBlank())return false;
-    return m.dm()||m.text().contains("<@"+self+">");
+    if(m.dm())return m.threadTs()==null||m.threadTs().isBlank()||m.threadTs().equals(m.ts());
+    return m.text().contains("<@"+self+">");
   }
 }

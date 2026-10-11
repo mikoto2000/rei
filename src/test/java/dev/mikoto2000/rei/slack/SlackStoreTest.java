@@ -40,4 +40,10 @@ class SlackStoreTest {
     s.reply("one",m,"one");s.reply("two",m,"two");s.claimSend("one");s.retry("one",1000);
     assertEquals(0,s.outbox(999).size());assertEquals("one",s.outbox(1000).getFirst().id());
   }
+  @Test void invitedExistingThreadKeepsSessionReplyOwnershipAcrossRestart() {
+    var s=new SlackStore(root);var m=message("invite","app_mention","T","C","2","1");
+    s.accept(m);var binding=s.bind(m,"P","S");s.prepare(m,"R",binding);
+    assertEquals(m,new SlackStore(root).forSession("P","S").orElseThrow());
+    assertTrue(s.forSession("other","S").isEmpty());
+  }
 }

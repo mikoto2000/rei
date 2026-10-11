@@ -45,6 +45,12 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
       try(var rows=query.executeQuery()){while(rows.next())result.add(StorageDatabase.JSON.readValue(rows.getString(1),Turn.class));}return List.copyOf(result);
     }});
   }
+  @Override public Optional<Turn> findRun(String conversation,String run) {
+    return database.read(connection->{try(var query=connection.prepareStatement("SELECT record FROM turns WHERE project_id=? AND conversation_key=? AND run_id=? ORDER BY ordinal LIMIT 1")) {
+      query.setString(1,scope(conversation));query.setString(2,key(conversation));query.setString(3,run);
+      try(var rows=query.executeQuery()){return rows.next()?Optional.of(StorageDatabase.JSON.readValue(rows.getString(1),Turn.class)):Optional.empty();}
+    }});
+  }
   @Override public void finish(AgentRunContext context,Status status){finish(context,status,null);}
   @Override public void finish(AgentRunContext context,Status status,String message) {
     if(status==Status.RUNNING)throw new IllegalArgumentException("Expected a terminal turn status");

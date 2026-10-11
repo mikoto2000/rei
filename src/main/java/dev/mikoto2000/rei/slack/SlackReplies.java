@@ -6,7 +6,7 @@ import dev.mikoto2000.rei.event.CredentialRedactor;
 public final class SlackReplies {
   private SlackReplies() {}
   public static String safe(String text) {
-    String result=CredentialRedactor.redact(text).replaceAll("\\bx(?:ox[baprs]|app)-[A-Za-z0-9-]+","[REDACTED]");
+    String result=CredentialRedactor.redact(text);
     for(String name:List.of("SLACK_BOT_TOKEN","SLACK_APP_TOKEN")) {
       String secret=System.getenv(name);if(secret!=null&&!secret.isBlank())result=result.replace(secret,"[REDACTED]");
     }

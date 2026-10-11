@@ -434,6 +434,6 @@ logging:
     name: ${REI_LOG_FILE:${rei.data-dir}/logs/rei.log}
   level:
     # SDK debug/error messages may contain Socket URLs or raw payloads. Adapter diagnostics are fixed codes.
-    com.slack.api: OFF
-    org.java_websocket: OFF
+    com.slack.api: "OFF"
+    org.java_websocket: "OFF"
     dev.mikoto2000.rei.bluesky: DEBUG

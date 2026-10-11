@@ -108,7 +108,7 @@ public final class StorageBackup {
   }
   private static Snapshot scan(Path root,Visitor visitor,boolean includeTarget)throws IOException {
     requireSafePath(root); var total=new Accumulator();
-    for(String name:List.of("sessions.json","projects.json","storage.db","memory.db","memory-consolidation.db","state","events","artifacts","logs/activity.jsonl","logs/activity-archives",".storage/quarantine"))
+    for(String name:List.of("sessions.json","projects.json","storage.db","memory.db","memory-consolidation.db","slack.db","state","events","artifacts","logs/activity.jsonl","logs/activity-archives",".storage/quarantine"))
       if(includeTarget||!name.equals("storage.db"))scanPath(root,root.resolve(name),visitor,total);
     Path projects=root.resolve("projects"); requireSafePath(projects);
     if(Files.exists(projects,LinkOption.NOFOLLOW_LINKS))try(var directories=Files.newDirectoryStream(projects)) {

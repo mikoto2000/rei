@@ -52,8 +52,8 @@ public final class SlackStore {
   }
   public boolean knownThread(SlackMessage m) {
     if(thread(m).isPresent())return true;
-    return tx(c->{try(var s=c.prepareStatement("SELECT 1 FROM slack_events WHERE message_key=? AND state IN ('ACCEPTED','DISPATCHING','ACTIVE','WAITING_APPROVAL','CANCEL_REQUESTED')")) {
-      s.setString(1,m.team()+":"+m.channel()+":"+m.thread());try(var r=s.executeQuery()){return r.next();}
+    return tx(c->{try(var s=c.prepareStatement("SELECT 1 FROM slack_events WHERE state='ACCEPTED' AND json_extract(payload,'$.team')=? AND json_extract(payload,'$.channel')=? AND COALESCE(NULLIF(json_extract(payload,'$.threadTs'),''),json_extract(payload,'$.ts'))=? LIMIT 1")) {
+      s.setString(1,m.team());s.setString(2,m.channel());s.setString(3,m.thread());try(var r=s.executeQuery()){return r.next();}
     }});
   }
   public ThreadBinding bind(SlackMessage m,String project,String session) {
@@ -72,7 +72,7 @@ public final class SlackStore {
     return tx(c->{try(var s=c.prepareStatement(RUN_ROWS+" WHERE r.run=?")){s.setString(1,run);try(var r=s.executeQuery()){return r.next()?Optional.of(receipt(r)):Optional.empty();}}});
   }
   public Optional<SlackMessage> forSession(String project,String session) {
-    return tx(c->{try(var s=c.prepareStatement("SELECT e.payload FROM slack_threads t JOIN slack_events e ON e.message_key=t.team||':'||t.channel||':'||t.thread WHERE t.project=? AND t.session=?")) {
+    return tx(c->{try(var s=c.prepareStatement("SELECT payload FROM slack_events WHERE project=? AND session=? AND run IS NOT NULL ORDER BY rowid LIMIT 1")) {
       s.setString(1,project);s.setString(2,session);try(var r=s.executeQuery()){return r.next()?Optional.of(json.readValue(r.getString(1),SlackMessage.class)):Optional.empty();}
     }});
   }

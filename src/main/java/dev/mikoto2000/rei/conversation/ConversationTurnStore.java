@@ -69,6 +69,10 @@ public class ConversationTurnStore implements ConversationHistory {
       catch (java.io.IOException error) { throw new IllegalStateException("Cannot read conversation turns", error); }
     });
   }
+  /** Scoped lookup for external-channel completion recovery; never reads another Session. */
+  public synchronized Optional<Turn> findRun(String conversationId,String runId) {
+    return read(conversationId).stream().filter(turn->Objects.equals(turn.runId(),runId)).findFirst();
+  }
   /** Optional observed work-time metadata, captured by the owner without changing turn identity. */
   public synchronized void recordMetadata(AgentRunContext context,Map<String,String> metadata) {
     var rows=read(context.conversationId()).stream().map(t->{

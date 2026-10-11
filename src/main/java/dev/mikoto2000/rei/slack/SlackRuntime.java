@@ -13,6 +13,8 @@ public final class SlackRuntime {
   private final SlackProperties p;private final SlackStore store;private final String self;
   private final ProjectRegistry projects;private final SessionLifecycle sessions;private final RunRegistry registry;
   private final RunService runs;private final ConversationInputRouter router;private final Clock clock;
+  private java.util.function.BiFunction<String,String,String> completedAnswer=(session,run)->null;
+  public void onCompletedAnswer(java.util.function.BiFunction<String,String,String> answer){completedAnswer=Objects.requireNonNull(answer);}
   public SlackRuntime(SlackProperties p,SlackStore store,String self,ProjectRegistry projects,SessionLifecycle sessions,
       RunRegistry registry,RunService runs,ConversationInputRouter router,Clock clock) {
     this.p=p;this.store=store;this.self=self;this.projects=projects;this.sessions=sessions;this.registry=registry;
@@ -44,7 +46,10 @@ public final class SlackRuntime {
         }
         if("WAITING_APPROVAL".equals(receipt.state()))continue;
         String text=switch(run.status()) {
-          case COMPLETED -> "完了しました。";
+          case COMPLETED -> {
+            String answer=completedAnswer.apply(receipt.session(),receipt.run());
+            yield answer==null||answer.isBlank()?"完了しました。":"完了しました。\n\n"+answer;
+          }
           case CANCELLED -> "キャンセル完了：Run の実行が停止しました。";
           case FAILED -> "Run が失敗しました。認可された UI で診断を確認してください。";
           default -> "Run の結果が不明です。チェックポイントを確認してください。";
@@ -55,7 +60,8 @@ public final class SlackRuntime {
   }
   private void dispatch(SlackMessage m) {
     String text=m.text().replace("<@"+self+">","").strip();
-    if(text.equals("/rei-status")||text.equals("/rei-cancel")){control(m,text);return;}
+    String command=switch(text){case "rei status" -> "/rei-status";case "rei cancel" -> "/rei-cancel";default -> text;};
+    if(command.equals("/rei-status")||command.equals("/rei-cancel")){control(m,command);return;}
     if(text.isBlank()){store.state(m,"REJECTED");return;}
     var binding=store.thread(m).orElseGet(()-> {
       String id=m.dm()?p.getDmProjectId():p.getChannelProjects().get(m.channel());
@@ -98,9 +104,8 @@ public final class SlackRuntime {
         if(receipt.isEmpty())store.adoptRun(m,event.runId(),event.projectId(),event.sessionId());
         reply(event.runId()+":running",m,"処理中です。Run: "+event.runId());
       }
-      case MESSAGE_COMPLETED -> {
-        if(event.payload() instanceof MessageCompletedPayload payload&&"assistant".equals(payload.role()))reply(event.runId()+":answer:"+payload.messageId(),m,payload.text());
-      }
+      // Final text is read from the persisted completed Turn after runner cleanup.
+      // Intermediate assistant messages and token deltas never become Slack posts.
       case TOOL_FAILED -> {
         if(event.payload() instanceof ToolFailedPayload payload&&payload.error()!=null&&"PermissionRequired".equals(payload.error().errorType())) {
           store.notifyRun(event.runId(),"WAITING_APPROVAL",event.runId()+":approval",m,SlackReplies.parts("承認待ちです。既存 UI／Shell の /approval で確認・承認または拒否し、既存のチェックポイント再開操作を使ってください。Slack の発言は承認として扱いません。"));

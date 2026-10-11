@@ -49,9 +49,9 @@ class SlackRuntimeTest {
   }
   @Test void statusAndCancelDoNotStartAnAgentRun() {
     var runtime=runtime();runtime.accept(m("1",null,"hello"));runtime.tick();var receipt=store.latest(m("1",null,"hello")).orElseThrow();
-    runtime.accept(m("2","1","/rei-status"));runtime.tick();verify(router,times(1)).submit(any(AgentRunContext.class),anyString(),any());
+    runtime.accept(m("2","1","rei status"));runtime.tick();verify(router,times(1)).submit(any(AgentRunContext.class),anyString(),any());
     when(router.containsRun(anyString(),anyString())).thenReturn(true);
-    runtime.accept(m("3","1","/rei-cancel"));runtime.tick();
+    runtime.accept(m("3","1","rei cancel"));runtime.tick();
     assertEquals(1,registry.runIds().size());
     assertEquals("CANCEL_REQUESTED",store.byRun(receipt.run()).orElseThrow().state());
     assertTrue(store.replies().stream().anyMatch(r->r.text().contains("キャンセルを受け付け")));
@@ -77,6 +77,12 @@ class SlackRuntimeTest {
     verify(router,times(2)).submit(any(AgentRunContext.class),anyString(),any());
     assertEquals(store.latest(m("1",null,"hello")).orElseThrow().session(),store.latest(m("2","1","next")).orElseThrow().session());
   }
+  @Test void immediateFollowupToExplicitInvitationInExistingThreadIsAccepted() {
+    var runtime=runtime();var invite=new SlackMessage("invite","T","C","2","1","U",null,null,"app_mention",null,"<@B> hello");
+    assertTrue(runtime.accept(invite));
+    assertTrue(runtime.accept(new SlackMessage("next","T","C","3","1","U",null,null,"message","channel","next")));
+    runtime.tick();verify(router,times(2)).submit(any(AgentRunContext.class),anyString(),any());
+  }
   @Test void unknownDispatchAfterRestartIsNeverSubmittedAgain() {
     var m=m("1",null,"hello");store.accept(m);var session=sessions.create(projects.resolveById(p.getDmProjectId()).orElseThrow(),"thread");
     var binding=store.bind(m,p.getDmProjectId(),session.sessionId());store.prepare(m,"interrupted",binding);
@@ -93,5 +99,15 @@ class SlackRuntimeTest {
   @Test void changedChannelAllowlistSuppressesPendingReplies() {
     var runtime=runtime();runtime.accept(m("1",null,"hello"));runtime.tick();p.setAllowedChannelIds(Set.of());
     var transport=mock(SlackTransport.class);runtime.send(transport);verifyNoInteractions(transport);
+  }
+  @Test void finalReplyUsesCompletedTurnAfterCleanupAndRecoversWithoutMessageEvents() {
+    var runtime=runtime();var m=m("1",null,"hello");runtime.accept(m);runtime.tick();var receipt=store.latest(m).orElseThrow();
+    assertTrue(registry.transition(receipt.run(),RunStatus.RUNNING,null));assertTrue(registry.transition(receipt.run(),RunStatus.COMPLETED,null));
+    when(router.containsRun(anyString(),anyString())).thenReturn(true);
+    runtime.onCompletedAnswer((session,run)->{assertEquals(receipt.session(),session);assertEquals(receipt.run(),run);return "final\nanswer";});
+    runtime.tick();assertTrue(store.replies().stream().noneMatch(r->r.text().contains("final")));
+    when(router.containsRun(anyString(),anyString())).thenReturn(false);runtime.tick();
+    assertEquals(1,store.replies().stream().filter(r->r.text().contains("final\nanswer")).count());
+    runtime().tick();assertEquals(1,store.replies().stream().filter(r->r.text().contains("final\nanswer")).count());
   }
 }

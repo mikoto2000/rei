@@ -413,6 +413,14 @@ public class ExternalConfigFileService {
           feed:
             briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:3}
             cron: ${REI_FEED_CRON:0 0 4 * * *}
+          # Socket Mode is owned only by an explicit --backend process. Tokens are environment-only.
+          slack:
+            enabled: false
+            allowed-workspace-ids: []
+            allowed-user-ids: []
+            allowed-channel-ids: []
+            dm-project-id: ""
+            channel-projects: {}
           bluesky:
             enabled: false
             handle: ${REI_BLUESKY_HANDLE:}

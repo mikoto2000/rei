@@ -18,7 +18,8 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
   private FileChannel lockFile;private FileLock lock;private Slack slack;private SocketModeClient socket;
   private AgentEventBus.Subscription subscription;private SlackRuntime runtime;private SdkSlackTransport transport;
   static SlackSdkConnection open(SlackProperties p,Path root,Clock clock,SessionRepository repository,
-      ProjectRegistry projects,RunRegistry registry,RunService runs,ConversationInputRouter router,AgentEventBus bus) {
+      ProjectRegistry projects,RunRegistry registry,RunService runs,ConversationInputRouter router,AgentEventBus bus,
+      dev.mikoto2000.rei.conversation.ConversationTurnStore turns) {
     var connection=new SlackSdkConnection();
     try {
       Files.createDirectories(root);
@@ -48,6 +49,9 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
       store.recoverSending();
       // Separate lifecycle object shares the repository, without changing Shell notification selection.
       connection.runtime=new SlackRuntime(verified,store,auth.getUserId(),projects,new SessionLifecycle(repository,clock),registry,runs,router,clock);
+      connection.runtime.onCompletedAnswer((session,run)->turns.findRun(session,run)
+          .filter(turn->turn.status()==dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.COMPLETED)
+          .map(dev.mikoto2000.rei.conversation.ConversationTurnStore.Turn::assistantMessage).orElse(null));
       connection.transport=new SdkSlackTransport(methods,auth.getTeamId());
       var receiver=new SlackEnvelopeReceiver(connection.runtime,auth.getTeamId());
       connection.subscription=bus.subscribeBoundary(event->{try{connection.runtime.onEvent(event);}catch(RuntimeException error){org.slf4j.LoggerFactory.getLogger(SlackSdkConnection.class).warn("Slack reply persistence unavailable (details omitted)");}});

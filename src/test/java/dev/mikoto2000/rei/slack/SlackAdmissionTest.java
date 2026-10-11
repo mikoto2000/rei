@@ -25,4 +25,12 @@ class SlackAdmissionTest {
   @Test void messageIdentityIsSharedAcrossEventTypes() {
     assertEquals(message("message","C",null,"U",null,null,"hi").key(),message("app_mention","C",null,"U",null,null,"hi").key());
   }
+  @Test void explicitMentionCanInviteBotToAnExistingThreadButUnmentionedMessagesCannot() {
+    assertTrue(SlackAdmission.accept(settings(),"B",message("app_mention","C","parent","U",null,null,"<@B> help"),false));
+    assertFalse(SlackAdmission.accept(settings(),"B",message("message","C","parent","U",null,null,"help"),false));
+  }
+  @Test void rootThreadTimestampAndUnsupportedGroupDmAreDistinguished() {
+    assertTrue(SlackAdmission.accept(settings(),"B",message("message","D","1","U",null,null,"help"),false));
+    assertFalse(SlackAdmission.accept(settings(),"B",new SlackMessage("E","T","D","1",null,"U",null,null,"message","mpim","<@B> help"),false));
+  }
 }
