@@ -250,6 +250,11 @@ public final class PlanOAuth {
         });
   }
 
+  private static String maskIdentifier(String value) {
+    if (value == null || value.length() < 12) return "[masked]";
+    return value.substring(0, 6) + "…" + value.substring(value.length() - 4);
+  }
+
   public List<String> status() {
     return store.locked(
         s ->
@@ -259,9 +264,9 @@ public final class PlanOAuth {
                       var token = s.load(a);
                       return a
                           + " | "
-                          + token.clientId()
+                          + maskIdentifier(token.clientId())
                           + " | "
-                          + token.subject()
+                          + maskIdentifier(token.subject())
                           + " | "
                           + (token.accessToken() == null
                               ? "signed out"
