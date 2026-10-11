@@ -17,6 +17,7 @@ public enum AgentEventType {
   DEPENDENCY_CANCELLED("dependency.cancelled"),
   GOAL_UPDATED("goal.updated"),
   ATTENTION_REQUIRED("attention.required"),
+  AUTO_SLEEP_STOPPED("memory.auto-sleep.stopped"),
   MEMORY_SLEEP_STARTED("memory.sleep.started"),
   MEMORY_SLEEP_COMPLETED("memory.sleep.completed"),
   MEMORY_SLEEP_FAILED("memory.sleep.failed"),

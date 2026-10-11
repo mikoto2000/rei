@@ -16,14 +16,14 @@ class AutoSleepCronTest {
   AutoSleepService service;
   @AfterEach void close(){if(service!=null)service.close();}
   void setup(String cron,String zone){
-    service=new AutoSleepService(sleep,new MemoryProperties(true,20,80,10,3,2000,60,null),new AutoSleepProperties(true,Duration.ofMinutes(5),2,Duration.ofMinutes(10),cron,zone),activity,clock);
+    service=new AutoSleepService(stubState(sleep),new MemoryProperties(true,20,80,10,3,2000,60,null),new AutoSleepProperties(true,Duration.ofMinutes(5),2,Duration.ofMinutes(10),cron,zone),activity,clock);
     service.afterTerminal(new AgentRunContext("r","s",java.nio.file.Path.of("."),"p"));when(sleep.unsleptTurns("s")).thenReturn(2L);
   }
   @Test void cronWaitsUntilDueAndRunsOnlyOneBatchPerOccurrence() throws Exception {
     setup("0 1 * * * *","UTC");service.tick();verifyNoInteractions(sleep);
-    var done=new CountDownLatch(1);doAnswer(a->{done.countDown();return null;}).when(sleep).sleep(eq("s"),eq("p"),eq(false),any());
+    var done=new CountDownLatch(1);doAnswer(a->{done.countDown();return emptyReport();}).when(sleep).sleep(eq("s"),eq("p"),eq(false),any(),any());
     clock.time=start.plusSeconds(60);service.tick();assertTrue(done.await(2,TimeUnit.SECONDS));clock.time=start.plusSeconds(1200);
-    service.tick();verify(sleep,times(1)).sleep(anyString(),anyString(),anyBoolean(),any());
+    service.tick();verify(sleep,times(1)).sleep(anyString(),anyString(),anyBoolean(),any(),any());
   }
   @Test void dailyCronUsesExplicitTimeZone(){
     setup("0 0 10 * * *","Asia/Tokyo");clock.time=start.plusSeconds(3599);service.tick();verifyNoInteractions(sleep);
@@ -36,7 +36,7 @@ class AutoSleepCronTest {
   @Test void busyAndRecentActivityDeferDueOccurrenceWithoutCatchupStorm() throws Exception {
     setup("0 1 * * * *","UTC");clock.time=start.plusSeconds(60);activity.recordAgentStarted(clock.time);service.tick();verifyNoInteractions(sleep);
     clock.time=start.plusSeconds(7200);activity.recordAgentCompleted(clock.time);service.tick();verifyNoInteractions(sleep);
-    var done=new CountDownLatch(1);doAnswer(a->{done.countDown();return null;}).when(sleep).sleep(eq("s"),eq("p"),eq(false),any());
+    var done=new CountDownLatch(1);doAnswer(a->{done.countDown();return emptyReport();}).when(sleep).sleep(eq("s"),eq("p"),eq(false),any(),any());
     clock.time=start.plusSeconds(7500);service.tick();assertTrue(done.await(2,TimeUnit.SECONDS));
     clock.time=start.plusSeconds(8400);service.tick();verify(sleep,times(1)).unsleptTurns("s");
   }
@@ -50,4 +50,13 @@ class AutoSleepCronTest {
     Instant time;MutableClock(Instant time){this.time=time;}
     public ZoneId getZone(){return ZoneOffset.UTC;}public Clock withZone(ZoneId zone){return this;}public Instant instant(){return time;}
   }
+  static SleepService stubState(SleepService sleep) {
+    when(sleep.autoState(anyString(),anyString())).thenAnswer(a->new dev.mikoto2000.rei.memory.service.MemoryRepository.AutoState(a.getArgument(0),a.getArgument(1),0,0,null,null,null,null,0));
+    return sleep;
+  }
+
+  static SleepService.Report emptyReport(){
+    var report=mock(SleepService.Report.class);when(report.run()).thenReturn(mock(dev.mikoto2000.rei.memory.service.SleepRun.class));return report;
+  }
+
 }

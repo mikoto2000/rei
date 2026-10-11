@@ -30,6 +30,7 @@ public class EpisodeDenseIndex {
             .metadata(Map.of("docId",e.projectId(),"source",e.id(),"chunkIndex",0,"ingestedAt",e.occurredAt(),"episodeId",e.id(),"revision",e.revision())).build();
         vectors.replaceBySource(e.projectId(),e.id(),e.occurredAt(),List.of(document));
         if(!repository.markDense(e,generation))repository.invalidateDense(e.id());
+        else if(budget instanceof dev.mikoto2000.rei.memory.service.AutoSleepExecution auto)auto.progressSaved();
       }
     } finally {repository.release("__episode_dense_index",worker);}
   }

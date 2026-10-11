@@ -13,7 +13,7 @@ public final class WebApiEventMapper {
       case SUBAGENT_STARTED, SUBAGENT_COMPLETED, SUBAGENT_FAILED -> "agentId status duration backendId modelId totalTokens";
       case GOAL_UPDATED -> "goalId status attempts maxRuns llmCallsUsed maxLlmCalls";
       case ATTENTION_REQUIRED -> "attentionId kind message";
-      case MEMORY_SLEEP_STARTED, MEMORY_SLEEP_COMPLETED, MEMORY_SLEEP_FAILED, MEMORY_RETRIEVAL_COMPLETED ->
+      case AUTO_SLEEP_STOPPED, MEMORY_SLEEP_STARTED, MEMORY_SLEEP_COMPLETED, MEMORY_SLEEP_FAILED, MEMORY_RETRIEVAL_COMPLETED ->
           "sleepRunId preview processedTurns candidateCount memoryCount status";
       case APPLICATION_SHUTDOWN_STARTED -> "reason";
       case CONTEXT_COMPRESSION_STARTED, CONTEXT_COMPRESSION_COMPLETED, CONTEXT_COMPRESSION_FAILED ->

@@ -45,6 +45,7 @@ public class MemoryRepository {
             conflicts INTEGER NOT NULL, failed INTEGER NOT NULL)
           """).update();
       db.sql("CREATE TABLE IF NOT EXISTS sleep_model_usage (project_id TEXT PRIMARY KEY, calls INTEGER NOT NULL DEFAULT 0, tokens INTEGER NOT NULL DEFAULT 0, pending INTEGER NOT NULL DEFAULT 0, unknown INTEGER NOT NULL DEFAULT 0)").update();
+      db.sql("CREATE TABLE IF NOT EXISTS auto_sleep_state(session_id TEXT PRIMARY KEY,project_id TEXT NOT NULL,failures INTEGER NOT NULL DEFAULT 0,stage INTEGER NOT NULL DEFAULT 0,stopped_at TEXT,last_failure_at TEXT,code TEXT,description TEXT,revision INTEGER NOT NULL DEFAULT 0)").update();
       db.sql("CREATE TABLE IF NOT EXISTS auto_sleep_requests(session_id TEXT PRIMARY KEY,project_id TEXT NOT NULL,revision INTEGER NOT NULL,cause TEXT NOT NULL)").update();
       db.sql("CREATE TABLE IF NOT EXISTS verified_reflection_memories(project_id TEXT NOT NULL,reflection_id TEXT NOT NULL,goal_id TEXT NOT NULL,session_id TEXT NOT NULL,memory_id TEXT NOT NULL UNIQUE,criteria_sha256 TEXT NOT NULL,verified_at TEXT NOT NULL,PRIMARY KEY(project_id,reflection_id))").update();
       return null;
@@ -55,6 +56,32 @@ public class MemoryRepository {
       db.sql("ALTER TABLE " + table + " ADD COLUMN " + name + " " + definition).update();
   }
   public <T> T transaction(Supplier<T> action) { return transactions.execute(status -> action.get()); }
+  public record AutoState(String session,String project,int failures,int stage,String stoppedAt,String lastFailureAt,String code,String description,long revision) {
+    public AutoState {if(failures<0||stage<0||stage>30||revision<0)throw new IllegalStateException("Invalid Auto Sleep state");}
+  }
+  public AutoState autoState(String session,String project) {
+    if(session==null||session.isBlank()||session.length()>512||project==null||project.isBlank()||project.length()>128)throw new IllegalArgumentException("Select Session and Project");
+    String encoded=dev.mikoto2000.rei.core.project.ProjectStorage.projectId(session);
+    if(encoded!=null&&!encoded.equals(project))throw new IllegalArgumentException("Session belongs to another Project");
+    return transaction(()->{
+      db.sql("INSERT OR IGNORE INTO auto_sleep_state(session_id,project_id) VALUES(?,?)").params(session,project).update();
+      var state=db.sql("SELECT * FROM auto_sleep_state WHERE session_id=?").param(session).query((r,n)->new AutoState(r.getString("session_id"),r.getString("project_id"),r.getInt("failures"),r.getInt("stage"),r.getString("stopped_at"),r.getString("last_failure_at"),r.getString("code"),r.getString("description"),r.getLong("revision"))).single();
+      if(!state.project().equals(project))throw new IllegalArgumentException("Session belongs to another Project");
+      return state;
+    });
+  }
+  public AutoState updateAutoState(AutoState expected,String code,String description,String timestamp,int limit) {
+    return transaction(()->{
+      autoState(expected.session(),expected.project());
+      boolean reset=code==null;
+      int failures=reset?0:Math.addExact(expected.failures(),1);
+      int stage=reset?0:Math.min(30,expected.stage()+("MODEL_TIMEOUT".equals(code)?1:0));
+      int changed=db.sql("UPDATE auto_sleep_state SET failures=?,stage=?,stopped_at=?,last_failure_at=?,code=?,description=?,revision=revision+1 WHERE session_id=? AND project_id=? AND revision=? AND revision<9223372036854775807")
+          .params(failures,stage,reset?null:failures>=limit?timestamp:expected.stoppedAt(),reset?null:timestamp,code,description,expected.session(),expected.project(),expected.revision()).update();
+      if(changed!=1)throw new IllegalStateException("Stale Auto Sleep revision");
+      return autoState(expected.session(),expected.project());
+    });
+  }
   public record AutoSleepRequest(String sessionId,String projectId,long revision,String cause) {}
   /** Ending records intent only; a later idle worker performs consolidation. */
   public void requestAutoSleep(String session,String project,String cause) {

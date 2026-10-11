@@ -50,6 +50,8 @@ public class EpisodeProcessor {
     if(store!=null)for(var turn:turns)if(!store.findRun(session,turn.runId()).filter(turn::equals).isPresent())
       throw new IllegalStateException("Episode source changed during extraction; retry");
     if(Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException();
+    if(budget instanceof dev.mikoto2000.rei.memory.service.AutoSleepExecution auto)auto.remaining();
     repository.saveBatch(session,from,to,verified);
+    if(to>from&&budget instanceof dev.mikoto2000.rei.memory.service.AutoSleepExecution auto)auto.progressSaved();
   }
 }

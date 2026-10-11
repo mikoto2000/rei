@@ -10,12 +10,14 @@ import dev.mikoto2000.rei.core.service.CommandCancellationService;
 
 @Component
 @Command(name="sleep",description="現在 Session の未処理 Turn から長期記憶を整理します",
-    subcommands={SleepCommand.Preview.class,SleepCommand.Status.class,SleepCommand.History.class,SleepCommand.Requests.class,SleepCommand.CancelRequest.class})
+    subcommands={SleepCommand.Preview.class,SleepCommand.Status.class,SleepCommand.History.class,SleepCommand.Requests.class,SleepCommand.CancelRequest.class,SleepCommand.Auto.class})
 public class SleepCommand implements Callable<Integer> {
   private final SleepService service;
   private final MemoryCommandSupport support;
   private final ProjectService projects;
   private final CommandCancellationService cancellation;
+  private dev.mikoto2000.rei.memory.service.AutoSleepService auto;
+  @org.springframework.beans.factory.annotation.Autowired public void setAuto(dev.mikoto2000.rei.memory.service.AutoSleepService auto){this.auto=auto;}
   @Spec CommandSpec spec;
   private java.io.PrintWriter shellOutput;
   /** Picocli completion can inspect the command tree without a Spring context. */
@@ -72,4 +74,16 @@ public class SleepCommand implements Callable<Integer> {
     @Option(names="--revision",required=true) long revision;
     public Integer call(){return parent.execute(()->parent.support.cancelAutoSleepRequest(session,revision));}
   }
+  @Command(name="auto",subcommands={AutoStatus.class,AutoResume.class}) public static class Auto {
+    @ParentCommand SleepCommand parent;
+  }
+  @Command(name="status") public static class AutoStatus implements Callable<Integer> {
+    @ParentCommand Auto auto;
+    public Integer call(){var p=auto.parent;return p.execute(()->p.auto.status(p.projects.currentSessionId(),p.projects.currentContext().id()));}
+  }
+  @Command(name="resume") public static class AutoResume implements Callable<Integer> {
+    @ParentCommand Auto auto;
+    public Integer call(){var p=auto.parent;return p.execute(()->p.auto.resume(p.projects.currentSessionId(),p.projects.currentContext().id()));}
+  }
+
 }

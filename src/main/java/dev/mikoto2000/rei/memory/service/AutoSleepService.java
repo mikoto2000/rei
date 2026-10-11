@@ -25,6 +25,11 @@ public class AutoSleepService implements AutoCloseable {
     var thread=new Thread(r,"rei-auto-sleep"); thread.setDaemon(true); return thread;
   });
   private volatile Thread runningThread;
+  private volatile String runningSession;
+  private record Pending(MemoryRepository.AutoState state,String code,String description,String timestamp) {}
+  private final Map<String,Pending> pendingUpdates=new ConcurrentHashMap<>();
+  private MemoryEvents events;
+  @org.springframework.beans.factory.annotation.Autowired public void setEvents(MemoryEvents events){this.events=events;}
   private final java.util.concurrent.atomic.AtomicBoolean executing=new java.util.concurrent.atomic.AtomicBoolean();
   private dev.mikoto2000.rei.application.session.SessionRepository savedSessions;
   private dev.mikoto2000.rei.core.project.ProjectService projects;
@@ -89,10 +94,11 @@ public class AutoSleepService implements AutoCloseable {
   private final org.springframework.scheduling.support.CronExpression cron;
   private Instant nextCron;
   private long runningVersion;
-  private boolean closed;
+  private volatile boolean closed;
   public AutoSleepService(SleepService sleep, MemoryProperties memory, AutoSleepProperties properties,
       AgentActivityTracker activity, Clock clock) {
     this.sleep=sleep; this.memory=memory; this.properties=properties; this.activity=activity; this.clock=clock;
+    if(Duration.ofSeconds(memory.sleep().timeoutSeconds()).compareTo(properties.maxTimeout())>0)throw new IllegalArgumentException("Auto Sleep max-timeout must cover the base Sleep timeout");
     cron=properties.cron()==null?null:org.springframework.scheduling.support.CronExpression.parse(properties.cron());
     if(cron!=null)advanceCron(clock.instant());
   }
@@ -120,6 +126,7 @@ public class AutoSleepService implements AutoCloseable {
     for(var request:sleep.pendingAutoSleepRequests()) {
       if(!(request.cause().equals("session_end")&&properties.onSessionEnd())&&!(request.cause().equals("shutdown")&&properties.onShutdown()))continue;
       if(registered.stream().noneMatch(p->p.id().equals(request.projectId())))continue;
+      if(sleep.autoState(request.sessionId(),request.projectId()).stoppedAt()!=null)continue;
       try {
         String encoded=dev.mikoto2000.rei.core.project.ProjectStorage.projectId(request.sessionId());
         if(encoded!=null&&!encoded.equals(request.projectId()))continue;
@@ -159,6 +166,20 @@ public class AutoSleepService implements AutoCloseable {
       Instant previous=attempts.get(session.getKey());
       if(previous!=null && now.isBefore(previous.plus(properties.retryInterval()))) continue;
       try {
+        var pending=pendingUpdates.get(session.getKey());
+        if(pending!=null) {
+          var current=sleep.autoState(session.getKey(),session.getValue());
+          if(current.revision()==pending.state().revision()) {
+            var updated=sleep.updateAutoState(pending.state(),pending.code(),pending.description(),pending.timestamp(),properties.failureLimit());
+            notifyStopped(pending.state(),updated);
+          } else {
+            org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep stale result discarded session={} revision={}",session.getKey(),pending.state().revision());
+          }
+          pendingUpdates.remove(session.getKey());
+        }
+        var state=sleep.autoState(session.getKey(),session.getValue());
+        if(state.stoppedAt()!=null){candidates.remove();continue;}
+        if(SleepService.isRunning(session.getKey()))continue;
         var request=requested.get(session.getKey());
         if(sleep.unsleptTurns(session.getKey())<(request==null?properties.minimumTurns():1)) {
           if(request!=null)sleep.completeAutoSleepRequest(request);
@@ -168,24 +189,96 @@ public class AutoSleepService implements AutoCloseable {
         runningVersion=version;
         attempts.put(id,now);
         executing.set(true);
+        runningSession=id;
         worker.submit(() -> {
           runningThread=Thread.currentThread();
           try {
-            sleep.sleep(id,project,false,()->activity.isAgentBusy() || activity.activityVersion()!=version);
-            if(request!=null&&sleep.unsleptTurns(id)==0)sleep.completeAutoSleepRequest(request);
+            var timeout=timeout(state.stage());
+            org.slf4j.LoggerFactory.getLogger(getClass()).info("Auto Sleep session={} wait={} total={}",id,timeout,properties.totalTimeout());
+            var execution=new AutoSleepExecution(timeout,properties.totalTimeout());
+            var report=sleep.sleep(id,project,false,()->closed || activity.isAgentBusy() || activity.activityVersion()!=version,
+                execution);
+            if(report.run().processedTurns()>0||execution.hasSavedProgress()) {
+              try{sleep.updateAutoState(state,null,null,clock.instant().toString(),properties.failureLimit());}
+              catch(RuntimeException update){pendingUpdates.put(id,new Pending(state,null,null,clock.instant().toString()));warnState(id,update);}
+            }
+            if(request!=null)try{if(sleep.unsleptTurns(id)==0)sleep.completeAutoSleepRequest(request);}
+            catch(RuntimeException update){warnState(id,update);}
           }
           catch(RuntimeException error) {
-            org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep deferred ({})",error.getClass().getSimpleName());
+            if(!dev.mikoto2000.rei.core.chat.RunCancellation.isCancellation(error)&&!Thread.currentThread().isInterrupted()
+                &&!closed&&!activity.isAgentBusy()&&activity.activityVersion()==version&&!(error instanceof SleepService.SleepBusyException)
+                &&!(error instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException)) {
+              String code=classify(error), description=description(code,state.stage()), failedAt=clock.instant().toString();
+              // Log types and frames, never provider messages or response/request bodies.
+              var logger=org.slf4j.LoggerFactory.getLogger(getClass());
+              for(Throwable cause=error;cause!=null;cause=cause.getCause())
+                logger.warn("Auto Sleep session={} code={} exception={} frames={}",id,code,cause.getClass().getName(),Arrays.toString(Arrays.copyOf(cause.getStackTrace(),Math.min(12,cause.getStackTrace().length))));
+              try {
+                var updated=sleep.updateAutoState(state,code,description,failedAt,properties.failureLimit());
+                notifyStopped(state,updated);
+              }catch(RuntimeException update){pendingUpdates.put(id,new Pending(state,code,description,failedAt));warnState(id,update);}
+            }
           }
-          finally {runningThread=null; executing.set(false);}
+          finally {runningThread=null; runningSession=null; executing.set(false);}
         });
         return;
       } catch(RuntimeException error) {
         executing.set(false);
         attempts.put(session.getKey(),now);
-        org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep check unavailable ({})",error.getClass().getSimpleName());
+        warnState(session.getKey(),error);
       }
     }
+  }
+  private void notifyStopped(MemoryRepository.AutoState before,MemoryRepository.AutoState after) {
+    if(before.stoppedAt()==null&&after.stoppedAt()!=null&&events!=null)
+      events.publish(dev.mikoto2000.rei.event.AgentEventType.AUTO_SLEEP_STOPPED,after.project(),after.session(),null,false,0,0,0,
+        "[memory] Auto Sleepを停止しました\nSession: "+after.session()+"\n連続失敗: "+after.failures()+"回\n理由: "+after.description()+"\n未整理の会話は保持しています。\n再開: /sleep auto resume");
+  }
+  private void warnState(String session,RuntimeException error) {
+    org.slf4j.LoggerFactory.getLogger(getClass()).warn("Auto Sleep state unavailable session={} ({})",session,error.getClass().getName());
+  }
+  public Duration timeout(int stage) {
+    long multiplier=Math.min(properties.maxTimeoutMultiplier(),1L<<Math.min(30,Math.max(0,stage)));
+    long seconds=Math.multiplyExact((long)memory.sleep().timeoutSeconds(),multiplier);
+    var value=Duration.ofSeconds(seconds);
+    return value.compareTo(properties.maxTimeout())>0?properties.maxTimeout():value;
+  }
+  static String classify(Throwable error) {
+    for(Throwable cause=error;cause!=null;cause=cause.getCause()) {
+      if(cause instanceof AutoSleepExecution.Failure failure)return failure.code;
+      if(cause instanceof dev.mikoto2000.rei.subagent.SubAgentValidationException)return "OUTPUT_INVALID";
+      if(cause instanceof org.springframework.dao.DataAccessException || cause instanceof org.springframework.transaction.TransactionException)return "PERSISTENCE_FAILED";
+    }
+    return error instanceof IllegalArgumentException?"OUTPUT_INVALID":"UNKNOWN";
+  }
+  private String description(String code,int stage) {
+    return switch(code) {
+      case "MODEL_TIMEOUT" -> "モデル応答の完了待ちが"+timeout(stage).toSeconds()+"秒でタイムアウト";
+      case "AUTO_SLEEP_DEADLINE_EXCEEDED" -> "自動Sleep全体の時間上限を超過";
+      case "MODEL_REQUEST_FAILED" -> "モデル要求に失敗";
+      case "OUTPUT_INVALID" -> "出力検証に失敗";
+      case "PERSISTENCE_FAILED" -> "結果の保存に失敗";
+      default -> "原因未分類の失敗";
+    };
+  }
+  public boolean isExecuting(String session){return session!=null&&session.equals(runningSession);}
+  public synchronized String status(String session,String project) {
+    var state=sleep.autoState(session,project);
+    return "Auto Sleep: "+(!properties.enabled()||!memory.enabled()?"無効":state.stoppedAt()!=null?"停止":"有効")
+        +"\n実行中: "+isExecuting(session)+"\nSession: "+session+"\n連続失敗: "+state.failures()+"回\n停止日時: "+state.stoppedAt()
+        +"\n直近理由: "+state.code()+" / "+state.description()+"\n直近失敗日時: "+state.lastFailureAt()
+        +"\nタイムアウト段階: "+state.stage()+" / 適用時間: "+timeout(state.stage()).toSeconds()+"秒"
+        +"\n全体時間上限: "+properties.totalTimeout().toSeconds()+"秒";
+  }
+  public synchronized String resume(String session,String project) {
+    if(session.equals(runningSession)||SleepService.isRunning(session))throw new IllegalStateException("当該SessionのSleep実行中は再開できません");
+    var state=sleep.autoState(session,project);
+    sleep.updateAutoState(state,null,null,clock.instant().toString(),properties.failureLimit());
+    pendingUpdates.remove(session);
+    sessions.put(session,project);
+    return "Auto Sleepの停止状態・失敗回数・段階をリセットしました。"
+        +(!properties.enabled()||!memory.enabled()?"自動機能は無効です。":"次回は既存のアイドル・量・予算・試行間隔に従います。");
   }
   private void advanceCron(Instant after) {
     var next=cron.next(after.atZone(ZoneId.of(properties.zone())));

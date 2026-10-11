@@ -22,7 +22,7 @@ public class EpisodeSleepService {
   public void process(String session,String project,ModelCallBudget budget,java.util.function.BooleanSupplier cancelled) {
     if(!properties.enabled()||!memory.enabled())return;
     String worker=UUID.randomUUID().toString();
-    if(!repository.acquire(session,worker,(long)memory.sleep().timeoutSeconds()+60))throw new IllegalStateException("Episode processing already running");
+    if(!repository.acquire(session,worker,budget instanceof dev.mikoto2000.rei.memory.service.AutoSleepExecution auto?auto.remaining().toSeconds()+60:(long)memory.sleep().timeoutSeconds()+60))throw new dev.mikoto2000.rei.memory.service.SleepService.SleepBusyException();
     try {
     long from=repository.checkpoint(session),to=from;int tokens=0;
     var batch=new ArrayList<ConversationTurnStore.Turn>();

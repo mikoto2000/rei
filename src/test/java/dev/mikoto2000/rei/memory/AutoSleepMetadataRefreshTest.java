@@ -31,7 +31,7 @@ class AutoSleepMetadataRefreshTest {
   AutoSleepService service;
   @AfterEach void close(){if(service!=null)service.close();}
   void setup(SessionRepository saved,boolean enabled) {
-    service=new AutoSleepService(sleep,new MemoryProperties(true,20,80,10,3,2000,60,null),
+    service=new AutoSleepService(stubState(sleep),new MemoryProperties(true,20,80,10,3,2000,60,null),
         new AutoSleepProperties(enabled,Duration.ofSeconds(5),2,Duration.ofMinutes(1)),activity,clock);
     var projects=mock(ProjectService.class);
     when(projects.completionProjects()).thenReturn(List.of(new ProjectContext(project,"p",dir)));
@@ -45,7 +45,7 @@ class AutoSleepMetadataRefreshTest {
     assertTrue(saved.completionSnapshot().isEmpty());
     when(sleep.unsleptTurns("new")).thenReturn(2L);
     var done=new CountDownLatch(1);
-    doAnswer(a->{done.countDown();return null;}).when(sleep).sleep(eq("new"),eq(project),eq(false),any());
+    doAnswer(a->{done.countDown();return emptyReport();}).when(sleep).sleep(eq("new"),eq(project),eq(false),any(),any());
     time.set(initial.plusSeconds(61));service.tick();assertTrue(done.await(2,TimeUnit.SECONDS));
   }
   @Test void pagesContinueAcrossTicksWithoutRecapturingStartupSnapshot() throws Exception {
@@ -55,8 +55,8 @@ class AutoSleepMetadataRefreshTest {
     when(saved.findPage(null,null,100)).thenReturn(first);
     when(saved.findPage(null,cursor,100)).thenReturn(List.of(metadata("old100")));
     when(sleep.unsleptTurns("old100")).thenReturn(2L);
-    var done=new CountDownLatch(1);doAnswer(a->{done.countDown();return null;})
-        .when(sleep).sleep(eq("old100"),eq(project),eq(false),any());
+    var done=new CountDownLatch(1);doAnswer(a->{done.countDown();return emptyReport();})
+        .when(sleep).sleep(eq("old100"),eq(project),eq(false),any(),any());
     time.set(initial.plusSeconds(61));service.tick();
     verify(sleep,never()).unsleptTurns("old100");
     service.tick();assertTrue(done.await(2,TimeUnit.SECONDS));
@@ -70,8 +70,8 @@ class AutoSleepMetadataRefreshTest {
     time.set(initial.plusSeconds(61));assertDoesNotThrow(service::tick);service.tick();
     verify(saved,times(1)).findPage(null,null,100);verifyNoInteractions(sleep);
     when(sleep.unsleptTurns("recovered")).thenReturn(2L);
-    var done=new CountDownLatch(1);doAnswer(a->{done.countDown();return null;})
-        .when(sleep).sleep(eq("recovered"),eq(project),eq(false),any());
+    var done=new CountDownLatch(1);doAnswer(a->{done.countDown();return emptyReport();})
+        .when(sleep).sleep(eq("recovered"),eq(project),eq(false),any(),any());
     time.set(initial.plusSeconds(122));service.tick();assertTrue(done.await(2,TimeUnit.SECONDS));
     verify(saved,times(2)).findPage(null,null,100);
   }
@@ -90,7 +90,7 @@ class AutoSleepMetadataRefreshTest {
     when(saved.findPage(null,null,100)).thenReturn(List.of(invalid,mismatch,metadata("valid")));
     time.set(initial.plusSeconds(61));service.tick();
     verify(sleep,times(1)).unsleptTurns("valid");verify(sleep,never()).unsleptTurns("foreign");
-    verify(sleep,never()).unsleptTurns(mismatch.sessionId());verify(sleep,never()).sleep(anyString(),anyString(),anyBoolean(),any());
+    verify(sleep,never()).unsleptTurns(mismatch.sessionId());verify(sleep,never()).sleep(anyString(),anyString(),anyBoolean(),any(),any());
   }
   @Test void oversizedProviderPageIsRejectedBeforeHistoryReads() {
     var saved=mock(SessionRepository.class);setup(saved,true);service.tick();
@@ -99,4 +99,13 @@ class AutoSleepMetadataRefreshTest {
     time.set(initial.plusSeconds(61));assertDoesNotThrow(service::tick);service.tick();
     verify(saved,times(1)).findPage(null,null,100);verifyNoInteractions(sleep);
   }
+  static SleepService stubState(SleepService sleep) {
+    when(sleep.autoState(anyString(),anyString())).thenAnswer(a->new dev.mikoto2000.rei.memory.service.MemoryRepository.AutoState(a.getArgument(0),a.getArgument(1),0,0,null,null,null,null,0));
+    return sleep;
+  }
+
+  static SleepService.Report emptyReport(){
+    var report=mock(SleepService.Report.class);when(report.run()).thenReturn(mock(dev.mikoto2000.rei.memory.service.SleepRun.class));return report;
+  }
+
 }

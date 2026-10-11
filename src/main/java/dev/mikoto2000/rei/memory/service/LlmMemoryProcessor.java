@@ -84,22 +84,31 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
         if(response.getResult()!=null && response.getResult().getOutput().getText()!=null)
           result.append(response.getResult().getOutput().getText());
         if(result.length()>dev.mikoto2000.rei.subagent.SubAgentResultParser.MAX_OUTPUT_CHARS)
-          throw new IllegalArgumentException("Memory output too large");
+          throw new AutoSleepExecution.Failure("OUTPUT_INVALID",null);
       });
+      var execution=budget instanceof AutoSleepExecution auto?auto:null;
+      var limit=execution==null?new AutoSleepExecution.Wait(Duration.ofSeconds(properties.sleep().timeoutSeconds()),false):execution.waitLimit();
+      Duration wait=limit.duration();
+      boolean deadline=limit.deadline();
+      // Own timeout signal: provider errors and arbitrary IllegalStateException never imply timeout.
       new org.springframework.ai.chat.model.MessageAggregator().aggregate(responses,aggregate::set)
-          .blockLast(Duration.ofSeconds(properties.sleep().timeoutSeconds()));
+          .then().timeout(wait,reactor.core.publisher.Mono.error(new AutoSleepExecution.Failure(
+              deadline?"AUTO_SLEEP_DEADLINE_EXCEEDED":"MODEL_TIMEOUT",null)))
+          .block();
       if(Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
       if(budget!=null) {
         reported=true;
         var response=aggregate.get();var usage=response==null?null:response.getMetadata().getUsage();
         budget.recordTotalTokens(usage==null?null:usage.getTotalTokens());
       }
-      if(outputLimited.get())throw new IllegalStateException("Memory output truncated");
+      if(outputLimited.get())throw new AutoSleepExecution.Failure("OUTPUT_INVALID",null);
       return result.toString();
     } catch(RuntimeException error) {
       RunCancellation.propagate(error);
-      if(budget!=null&&invoked.get()&&!reported)budget.recordTotalTokens(null);
-      throw error;
+      if(budget!=null&&invoked.get()&&!reported)try{budget.recordTotalTokens(null);}
+      catch(RuntimeException accounting){RunCancellation.propagate(accounting);if(!(budget instanceof AutoSleepExecution))throw accounting;error.addSuppressed(accounting);}
+      if(error instanceof AutoSleepExecution.Failure || error instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException)throw error;
+      throw new AutoSleepExecution.Failure(error instanceof org.springframework.dao.DataAccessException?"PERSISTENCE_FAILED":"MODEL_REQUEST_FAILED",error);
     }
   }
 }

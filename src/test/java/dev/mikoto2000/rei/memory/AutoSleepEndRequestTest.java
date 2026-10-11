@@ -24,12 +24,12 @@ class AutoSleepEndRequestTest {
   final String project="00000000-0000-0000-0000-000000000001";
   final Instant now=Instant.parse("2026-10-06T12:00:00Z");
   final MemoryProperties memory=new MemoryProperties(true,20,80,10,3,2000,60,null);
-  final MemoryCandidateExtractor extractor=mock(MemoryCandidateExtractor.class);
+  final MemoryCandidateExtractor extractor=mock(MemoryCandidateExtractor.class,CALLS_REAL_METHODS);
   MemoryRepository repository() {
     var source=new DriverManagerDataSource("jdbc:sqlite:"+dir.resolve("memory.db"));return new MemoryRepository(source,new MemoryService(source,memory));
   }
   SleepService sleep() {
-    var resolution=mock(MemoryResolutionModel.class);when(resolution.resolve(any(),anyList())).thenReturn(new MemoryResolution(MemoryAction.NEW,List.of()));
+    var resolution=mock(MemoryResolutionModel.class,CALLS_REAL_METHODS);when(resolution.resolve(any(),anyList())).thenReturn(new MemoryResolution(MemoryAction.NEW,List.of()));
     doAnswer(invocation->{
       List<ConversationTurnStore.Turn> batch=invocation.getArgument(0);
       return List.of(new MemoryCandidate(MemoryType.DECISION,MemoryScope.PROJECT,"agreed decision","agreed decision",.95,.9,

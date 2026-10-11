@@ -19,7 +19,7 @@ class AutoSleepServiceTest {
   AutoSleepService service;
   @AfterEach void close() { if (service != null) service.close(); }
   void setup(boolean enabled) {
-    service = new AutoSleepService(sleep, new MemoryProperties(true,20,80,10,3,2000,60,null),
+    service = new AutoSleepService(stubState(sleep), new MemoryProperties(true,20,80,10,3,2000,60,null),
         new AutoSleepProperties(enabled, Duration.ofMinutes(5), 2, Duration.ofMinutes(10)), activity, clock);
     when(sleep.unsleptTurns("s")).thenReturn(2L);
     service.afterTerminal(owner);
@@ -35,26 +35,26 @@ class AutoSleepServiceTest {
   @Test void idleSessionRunsOneBatchAndDoesNotImmediatelyRepeat() throws Exception {
     setup(true);
     CountDownLatch done = new CountDownLatch(1);
-    doAnswer(a -> { done.countDown(); return null; }).when(sleep).sleep(eq("s"),eq("p"),eq(false),any());
+    doAnswer(a -> { done.countDown(); return emptyReport(); }).when(sleep).sleep(eq("s"),eq("p"),eq(false),any(),any());
     service.tick(); assertTrue(done.await(2,TimeUnit.SECONDS));
-    service.tick(); verify(sleep,times(1)).sleep(eq("s"),eq("p"),eq(false),any());
+    service.tick(); verify(sleep,times(1)).sleep(eq("s"),eq("p"),eq(false),any(),any());
   }
   @Test void busyOrRecentInputNeverStarts() {
     setup(true); activity.recordAgentStarted(now); service.tick();
     activity.recordAgentCompleted(now); service.tick();
-    verify(sleep,never()).sleep(anyString(),anyString(),anyBoolean(),any());
+    verify(sleep,never()).sleep(anyString(),anyString(),anyBoolean(),any(),any());
   }
   @Test void insufficientTurnsNeverStarts() {
     setup(true); when(sleep.unsleptTurns("s")).thenReturn(1L); service.tick();
-    verify(sleep,never()).sleep(anyString(),anyString(),anyBoolean(),any());
+    verify(sleep,never()).sleep(anyString(),anyString(),anyBoolean(),any(),any());
   }
   @Test void newActivityInvalidatesCancellationGuard() throws Exception {
     setup(true); CountDownLatch entered=new CountDownLatch(1), release=new CountDownLatch(1);
     var cancelled=new java.util.concurrent.atomic.AtomicBoolean();
     doAnswer(a -> {
       java.util.function.BooleanSupplier guard=a.getArgument(3);
-      entered.countDown(); release.await(2,TimeUnit.SECONDS); cancelled.set(guard.getAsBoolean()); return null;
-    }).when(sleep).sleep(eq("s"),eq("p"),eq(false),any());
+      entered.countDown(); release.await(2,TimeUnit.SECONDS); cancelled.set(guard.getAsBoolean()); return emptyReport();
+    }).when(sleep).sleep(eq("s"),eq("p"),eq(false),any(),any());
     service.tick(); assertTrue(entered.await(2,TimeUnit.SECONDS));
     activity.recordUserActivity(now); release.countDown();
     service.close(); assertTrue(cancelled.get());
@@ -62,9 +62,9 @@ class AutoSleepServiceTest {
   @Test void failureIsContainedAndRateLimited() throws Exception {
     setup(true); CountDownLatch entered=new CountDownLatch(1);
     doAnswer(a -> {entered.countDown(); throw new IllegalStateException("model unavailable");})
-        .when(sleep).sleep(eq("s"),eq("p"),eq(false),any());
+        .when(sleep).sleep(eq("s"),eq("p"),eq(false),any(),any());
     assertDoesNotThrow(service::tick); assertTrue(entered.await(2,TimeUnit.SECONDS));
-    service.tick(); verify(sleep,times(1)).sleep(eq("s"),eq("p"),eq(false),any());
+    service.tick(); verify(sleep,times(1)).sleep(eq("s"),eq("p"),eq(false),any(),any());
   }
   @Test void cancellationAlsoProtectsManualSleepPersistence() {
     var turns=dev.mikoto2000.rei.conversation.ConversationTurnStore.inMemory();
@@ -82,7 +82,7 @@ class AutoSleepServiceTest {
     when(saved.completionSnapshot()).thenReturn(java.util.List.of(new dev.mikoto2000.rei.application.session.SessionMetadata("old","00000000-0000-0000-0000-000000000001","old",now,now)));
     when(projects.completionProjects()).thenReturn(java.util.List.of(new dev.mikoto2000.rei.core.project.ProjectContext("00000000-0000-0000-0000-000000000001","p",java.nio.file.Path.of("."))));
     service.setStartupSources(saved,projects);when(sleep.unsleptTurns("s")).thenReturn(0L);when(sleep.unsleptTurns("old")).thenReturn(2L);
-    var done=new CountDownLatch(1);doAnswer(a->{done.countDown();return null;}).when(sleep).sleep(eq("old"),eq("00000000-0000-0000-0000-000000000001"),eq(false),any());
+    var done=new CountDownLatch(1);doAnswer(a->{done.countDown();return emptyReport();}).when(sleep).sleep(eq("old"),eq("00000000-0000-0000-0000-000000000001"),eq(false),any(),any());
     service.tick();assertTrue(done.await(2,TimeUnit.SECONDS));verify(saved,times(1)).completionSnapshot();
   }
   final String project="00000000-0000-0000-0000-000000000001";
@@ -103,7 +103,7 @@ class AutoSleepServiceTest {
     when(saved.completionSnapshot()).thenReturn(java.util.List.copyOf(rows));
     when(projects.completionProjects()).thenReturn(java.util.List.of(new dev.mikoto2000.rei.core.project.ProjectContext(project,"p",java.nio.file.Path.of("."))));
     service.setStartupSources(saved,projects);when(sleep.unsleptTurns("old299")).thenReturn(2L);
-    var done=new CountDownLatch(1);doAnswer(a->{done.countDown();return null;}).when(sleep).sleep(eq("old299"),eq(project),eq(false),any());
+    var done=new CountDownLatch(1);doAnswer(a->{done.countDown();return emptyReport();}).when(sleep).sleep(eq("old299"),eq(project),eq(false),any(),any());
     service.tick();verify(sleep,never()).unsleptTurns("old299");service.tick();assertTrue(done.await(2,TimeUnit.SECONDS));
     verify(saved,times(1)).completionSnapshot();
   }
@@ -127,7 +127,16 @@ class AutoSleepServiceTest {
     when(projects.completionProjects()).thenReturn(java.util.List.of(new dev.mikoto2000.rei.core.project.ProjectContext(project,"p",dir)));
     setup(true);when(sleep.unsleptTurns("s")).thenReturn(0L);when(sleep.unsleptTurns("saved")).thenReturn(2L);
     service.setStartupSources(restarted,projects);
-    var done=new CountDownLatch(1);doAnswer(a->{done.countDown();return null;}).when(sleep).sleep(eq("saved"),eq(project),eq(false),any());
+    var done=new CountDownLatch(1);doAnswer(a->{done.countDown();return emptyReport();}).when(sleep).sleep(eq("saved"),eq(project),eq(false),any(),any());
     service.tick();assertTrue(done.await(2,TimeUnit.SECONDS));
   }
+  static SleepService stubState(SleepService sleep) {
+    when(sleep.autoState(anyString(),anyString())).thenAnswer(a->new dev.mikoto2000.rei.memory.service.MemoryRepository.AutoState(a.getArgument(0),a.getArgument(1),0,0,null,null,null,null,0));
+    return sleep;
+  }
+
+  static SleepService.Report emptyReport(){
+    var report=mock(SleepService.Report.class);when(report.run()).thenReturn(mock(dev.mikoto2000.rei.memory.service.SleepRun.class));return report;
+  }
+
 }

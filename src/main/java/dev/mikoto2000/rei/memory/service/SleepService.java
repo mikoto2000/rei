@@ -38,16 +38,19 @@ public class SleepService {
     return sleep(session,project,preview,()->false);
   }
   public Report sleep(String session, String project, boolean preview, java.util.function.BooleanSupplier cancellation) {
-    Runnable check=()-> {check(); if(cancellation.getAsBoolean()) throw new CancellationException("Sleep cancelled by activity");};
+    return sleep(session,project,preview,cancellation,null);
+  }
+  public Report sleep(String session,String project,boolean preview,java.util.function.BooleanSupplier cancellation,AutoSleepExecution execution) {
+    Runnable check=()-> {check(); if(cancellation.getAsBoolean()) throw new CancellationException("Sleep cancelled by activity"); if(execution!=null)execution.remaining();};
     if (!properties.enabled()) throw new IllegalStateException("Memory is disabled (rei.memory.enabled=false)");
     if (session==null || session.isBlank() || project==null || project.isBlank()) throw new IllegalArgumentException("Select a session and project first");
     String sessionProject=dev.mikoto2000.rei.core.project.ProjectStorage.projectId(session);
     if (sessionProject!=null && !sessionProject.equals(project)) throw new IllegalArgumentException("Session belongs to another project");
-    if (!RUNNING.add(session)) throw new IllegalStateException("Sleep already running for this session");
+    if (!RUNNING.add(session)) throw new SleepBusyException();
     String id="sleep_"+UUID.randomUUID(), started=java.time.Instant.now().toString();
     long from=0, to=0;
     int processed=0;
-    try {
+    try (var deadline=execution==null?null:execution.watchdog()) {
       check.run();
       if(events!=null) events.publish(dev.mikoto2000.rei.event.AgentEventType.MEMORY_SLEEP_STARTED,project,session,id,preview,0,0,0,"STARTED");
       from=repository.lastProcessed(session); to=from;
@@ -72,6 +75,7 @@ public class SleepService {
           ?new PersistentSleepModelBudget(repository,properties.sleep(),project,check)
           :properties.sleep().maxLlmCalls()>0||properties.sleep().maxTotalTokens()>0
               ?new SleepModelBudget(properties.sleep(),check):null;
+      if(execution!=null)budget=execution.accounting(budget);
       if(!preview&&episodes!=null)episodes.process(session,project,budget,cancellation);
       var candidates=batch.isEmpty()?List.<MemoryCandidate>of():budget==null?extractor.extract(List.copyOf(batch)):extractor.extract(List.copyOf(batch),budget);
       check.run();
@@ -121,6 +125,11 @@ public class SleepService {
       if(events!=null) events.publish(dev.mikoto2000.rei.event.AgentEventType.MEMORY_SLEEP_COMPLETED,project,session,id,preview,processed,plans.size(),run.added(),run.status());
       return new Report(run,plans,preview);
     } catch (RuntimeException error) {
+      if(execution!=null&&execution.deadlineExpired()&&!cancellation.getAsBoolean()) {
+        Thread.interrupted();
+        var exceeded=new AutoSleepExecution.Failure("AUTO_SLEEP_DEADLINE_EXCEEDED",null);
+        exceeded.addSuppressed(error);error=exceeded;
+      }
       if(events!=null) events.publish(dev.mikoto2000.rei.event.AgentEventType.MEMORY_SLEEP_FAILED,project,session,id,preview,processed,0,0,
           RunCancellation.isCancellation(error)||Thread.currentThread().isInterrupted()?"CANCELLED":"FAILED");
       if (!preview) {
@@ -171,5 +180,11 @@ public class SleepService {
   }
   public List<MemoryRepository.AutoSleepRequest> pendingAutoSleepRequests(){return repository.pendingAutoSleepRequests();}
   public boolean completeAutoSleepRequest(MemoryRepository.AutoSleepRequest request){return repository.completeAutoSleepRequest(request);}
+  public static boolean isRunning(String session){return RUNNING.contains(session);}
+  public static class SleepBusyException extends IllegalStateException {
+    public SleepBusyException(){super("Sleep already running for this session");}
+  }
+  public MemoryRepository.AutoState autoState(String session,String project){return repository.autoState(session,project);}
+  public MemoryRepository.AutoState updateAutoState(MemoryRepository.AutoState state,String code,String description,String timestamp,int limit){return repository.updateAutoState(state,code,description,timestamp,limit);}
   private static void check() { if(Thread.currentThread().isInterrupted()) throw new CancellationException("Sleep cancelled"); }
 }
