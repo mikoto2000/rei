@@ -19,6 +19,10 @@ public class EpisodeRepository {
     transactions.execute(s->{
       db.sql("CREATE TABLE IF NOT EXISTS episodes(id TEXT NOT NULL,revision TEXT NOT NULL,project_id TEXT NOT NULL,session_id TEXT NOT NULL,occurred_at TEXT NOT NULL,created_at TEXT NOT NULL,record TEXT NOT NULL,PRIMARY KEY(id,revision))").update();
       db.sql("CREATE INDEX IF NOT EXISTS episode_project_time ON episodes(project_id,occurred_at)").update();
+      db.sql("CREATE INDEX IF NOT EXISTS episode_revision_owner ON episodes(id,project_id)").update();
+      db.sql("CREATE INDEX IF NOT EXISTS episode_session ON episodes(session_id)").update();
+      db.sql("CREATE TABLE IF NOT EXISTS episode_dense_indexed(id TEXT PRIMARY KEY,revision TEXT NOT NULL)").update();
+      if(!db.sql("PRAGMA table_info(episode_dense_indexed)").query((r,n)->r.getString("name")).list().contains("generation"))db.sql("ALTER TABLE episode_dense_indexed ADD COLUMN generation TEXT NOT NULL DEFAULT 'default'").update();
       db.sql("CREATE TABLE IF NOT EXISTS episode_processing_checkpoints(session_id TEXT PRIMARY KEY,position INTEGER NOT NULL)").update();
       db.sql("CREATE TABLE IF NOT EXISTS episode_processing_leases(session_id TEXT PRIMARY KEY,owner TEXT NOT NULL,expires_at INTEGER NOT NULL)").update();
       db.sql("CREATE TABLE IF NOT EXISTS episode_sources(episode_id TEXT NOT NULL,revision TEXT NOT NULL,session_id TEXT NOT NULL,run_id TEXT NOT NULL,speaker TEXT NOT NULL,source_id TEXT NOT NULL DEFAULT '',PRIMARY KEY(episode_id,revision,session_id,run_id,speaker,source_id))").update();
@@ -69,6 +73,41 @@ public class EpisodeRepository {
   public List<Episode> revisions(String id,String project) {
     var rows=new ArrayList<>(db.sql("SELECT record FROM episodes WHERE id=? AND project_id=? ORDER BY rowid DESC LIMIT 100").params(id,project).query((r,n)->decode(r.getString(1))).list());
     Collections.reverse(rows);return List.copyOf(rows);
+  }
+  public record RevisionPage(List<Episode> items,String nextCursor) {}
+  public RevisionPage revisionPage(String id,String project,String beforeRevision,int limit) {
+    if(limit<1||limit>10)throw new IllegalArgumentException("Revision page limit must be 1..10");
+    long before=beforeRevision==null?Long.MAX_VALUE:db.sql("SELECT rowid FROM episodes WHERE id=? AND project_id=? AND revision=?")
+        .params(id,project,beforeRevision).query(Long.class).optional().orElseThrow(()->new IllegalArgumentException("Unknown revision cursor"));
+    var rows=db.sql("SELECT record FROM episodes WHERE id=? AND project_id=? AND rowid<? ORDER BY rowid DESC LIMIT ?")
+        .params(id,project,before,limit+1).query((r,n)->decode(r.getString(1))).list();
+    var items=List.copyOf(rows.subList(0,Math.min(limit,rows.size())));
+    return new RevisionPage(items,rows.size()>limit?items.getLast().revision():null);
+  }
+  public Optional<Episode> revision(String id,String project,String revision) {
+    return db.sql("SELECT record FROM episodes WHERE id=? AND project_id=? AND revision=?").params(id,project,revision).query((r,n)->decode(r.getString(1))).optional();
+  }
+  public List<Episode> pendingDense(String session,int limit) {
+    return pendingDense(session,limit,"default");
+  }
+  public List<Episode> pendingDense(String session,int limit,String generation) {
+    if(limit<1||limit>50)throw new IllegalArgumentException("Dense batch limit must be 1..50");
+    return db.sql("SELECT e.record FROM episodes e LEFT JOIN episode_dense_indexed d ON d.id=e.id AND d.revision=e.revision AND d.generation=? WHERE e.session_id=? AND d.id IS NULL AND e.rowid=(SELECT MAX(x.rowid) FROM episodes x WHERE x.id=e.id) ORDER BY e.rowid LIMIT ?")
+        .params(generation,session,limit).query((r,n)->decode(r.getString(1))).list();
+  }
+  public void markDense(Episode episode) {
+    markDense(episode,"default");
+  }
+  public boolean markDense(Episode episode,String generation) {
+    return db.sql("INSERT INTO episode_dense_indexed(id,revision,generation) SELECT id,revision,? FROM episodes WHERE id=? AND revision=? AND rowid=(SELECT MAX(rowid) FROM episodes WHERE id=?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,generation=excluded.generation")
+        .params(generation,episode.id(),episode.revision(),episode.id()).update()==1;
+  }
+  public void invalidateDense(String id) {
+    db.sql("DELETE FROM episode_dense_indexed WHERE id=?").param(id).update();
+  }
+  public boolean hasDense(String project,String generation) {
+    return db.sql("SELECT EXISTS(SELECT 1 FROM episodes e JOIN episode_dense_indexed d ON d.id=e.id AND d.revision=e.revision AND d.generation=? WHERE e.project_id=? AND e.rowid=(SELECT MAX(x.rowid) FROM episodes x WHERE x.id=e.id))")
+        .params(generation,project).query(Integer.class).single()==1;
   }
   public void linkMemory(String project,String session,List<String> runs,String memory) {
     String type=db.sql("SELECT type FROM memories WHERE id=? AND (project_id=? OR scope='GLOBAL')").params(memory,project).query(String.class).optional()

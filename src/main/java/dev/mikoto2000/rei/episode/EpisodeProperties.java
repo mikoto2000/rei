@@ -1,3 +1,5 @@
 package dev.mikoto2000.rei.episode;
 @org.springframework.boot.context.properties.ConfigurationProperties("rei.memory.episodes")
-public record EpisodeProperties(boolean enabled) {}
+public record EpisodeProperties(boolean enabled,boolean denseEnabled) {
+ public EpisodeProperties(boolean enabled){this(enabled,false);}
+}

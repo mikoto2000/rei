@@ -10,6 +10,9 @@ import dev.mikoto2000.rei.llm.ModelCallBudget;
 public class EpisodeSleepService {
   private final EpisodeRepository repository;private final ConversationTurnStore turns;
   private final EpisodeProcessor processor;private final EpisodeProperties properties;private final MemoryProperties memory;
+  private EpisodeDenseIndex dense;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setDense(EpisodeDenseIndex dense){this.dense=dense;}
   private org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextService> work;
   @org.springframework.beans.factory.annotation.Autowired
   public void setWorkContext(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextService> work){this.work=work;}
@@ -31,11 +34,12 @@ public class EpisodeSleepService {
       to++;tokens+=size;batch.add(turn);
     }
     if(to>from)processor.process(session,project,from,to,List.copyOf(batch),budget);
+    if(dense!=null)dense.indexPending(session,budget);
     if(work!=null&&work.getIfAvailable()!=null)work.getObject().current(project).ifPresent(context->repository.linkWorkContext(context,session));
     } finally {repository.release(session,worker);}
   }
   public void linkMemory(String project,String session,java.util.List<String> runs,String memoryId) {
     if(properties.enabled())repository.linkMemory(project,session,runs,memoryId);
   }
-  public long pending(String session){return properties.enabled()?Math.max(0,turns.turnCount(session)-repository.checkpoint(session)):0;}
+  public long pending(String session){return properties.enabled()?Math.max(Math.max(0,turns.turnCount(session)-repository.checkpoint(session)),dense==null?0:dense.pending(session)):0;}
 }
