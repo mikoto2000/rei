@@ -9,18 +9,18 @@ import org.slf4j.LoggerFactory;
 /** Connection failures are contained to this opt-in channel; initialization never blocks startup. */
 public final class SlackSocketLifecycle implements SmartLifecycle,AutoCloseable {
   public interface Connection extends AutoCloseable {void pump();}
-  private final SlackProperties settings;private final boolean backend;
+  private final SlackProperties settings;
   private final Map<String,String> environment;private final Supplier<Connection> factory;
   private volatile Connection connection;private ScheduledExecutorService worker;private volatile boolean running;
   private boolean connecting,closed;
   private long retryAt;
-  public SlackSocketLifecycle(SlackProperties settings,boolean backend,Map<String,String> environment,Supplier<Connection> factory) {
-    this.settings=settings;this.backend=backend;this.environment=environment;this.factory=factory;
+  public SlackSocketLifecycle(SlackProperties settings,Map<String,String> environment,Supplier<Connection> factory) {
+    this.settings=settings;this.environment=environment;this.factory=factory;
   }
   boolean connectOnce() {
     synchronized(this) {
       if(connection!=null)return true;
-      if(closed||connecting||!settings.isEnabled()||!backend)return false;
+      if(closed||connecting||!settings.isEnabled())return false;
       if(environment.getOrDefault("SLACK_BOT_TOKEN","").isBlank()||environment.getOrDefault("SLACK_APP_TOKEN","").isBlank()) {
         LoggerFactory.getLogger(getClass()).warn("Slack disabled: SLACK_BOT_TOKEN and SLACK_APP_TOKEN are required");return false;
       }
@@ -37,7 +37,7 @@ public final class SlackSocketLifecycle implements SmartLifecycle,AutoCloseable 
     finally{synchronized(this){connecting=false;}}
   }
   @Override public synchronized void start() {
-    if(running||!settings.isEnabled()||!backend)return;
+    if(running||!settings.isEnabled())return;
     closed=false;running=true;worker=Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().daemon(true).name("rei-slack").factory());
     worker.scheduleWithFixedDelay(()-> {
       try {

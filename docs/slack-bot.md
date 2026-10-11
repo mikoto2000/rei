@@ -57,7 +57,7 @@ Scope とイベントの根拠:
 
 #### 1. Workspace とれい自身の ID を確認する
 
-Backend を起動する PowerShell に、れいの `SLACK_BOT_TOKEN` が設定されていることを
+れいを起動する PowerShell に、れいの `SLACK_BOT_TOKEN` が設定されていることを
 確認して実行します。App-Level Token (`SLACK_APP_TOKEN`) はこの API には使いません。
 以下の例はトークンを表示せず、環境変数から Authorization ヘッダーへ渡します。
 
@@ -217,13 +217,23 @@ Slack Connect など別 Workspace の送信者も ID の許可判定を受けま
 許可ユーザーは接続時に `users.info` で確認し、Bot／App／削除済みユーザーを除外します。
 設定変更時は Backend を再起動してください。
 
-トークンは Backend プロセスの環境変数に設定します。
+トークンはれいを起動するプロセスの環境変数に設定します。
 `SLACK_BOT_TOKEN` はインストールで得た Bot User OAuth Token、
 `SLACK_APP_TOKEN` は `connections:write` を持つ App-Level Token です。
 トークンを YAML、Git、Run のメッセージ、Slack の本文に記載しないでください。
 環境変数を設定する際も、シェル履歴に実値が残らない秘密情報管理手段を使用してください。
 
-通常の Shell 起動では Slack 接続は増えません。専用 Backend を起動します。
+`rei.slack.enabled: true` と両トークンを設定すれば、通常の Shell 起動でも Slack に接続します。
+Phase 2 も `agent-collaboration.enabled: true` なら Shell / Backend のどちらで利用できます。
+`--backend` は Shell を開かず常駐させるためのオプションであり、Slack 接続の必須条件ではありません。
+例えば、前回登録した Project とデータディレクトリを使って通常起動する場合：
+
+```powershell
+$env:REI_DATA_DIR = "F:\rei_temp2"
+.\start.bat --fullauto --project F:\rei
+```
+
+専用 Backend として起動する場合：
 
 ```powershell
 java -jar target/rei-0.0.1-SNAPSHOT.jar --backend
@@ -231,8 +241,9 @@ java -jar target/rei-0.0.1-SNAPSHOT.jar --backend
 
 既存 HTTP API を使う場合は従来どおり `REI_API_KEY` も設定します。
 Socket Mode 自体には HTTP API の有効化は不要です。
-同じデータディレクトリで複数 Backend が起動しても `slack-backend.lock` により
-Slack 接続を所有できるのは1プロセスだけです。
+同じデータディレクトリで複数の Shell / Backend が起動しても `slack-backend.lock` により
+Slack 接続を所有できるのは1プロセスだけです。別プロセスが所有している場合は
+`ANOTHER_BACKEND` を記録して再試行し、Shell 自体は引き続き利用できます。
 終了はプロセスへの通常の終了要求／Ctrl+C を使います。
 
 ## 会話
@@ -283,10 +294,10 @@ Slack の表示状態として管理します。
 認可された UI／Shell で対象 Project を選び、`/approval list`、`/approval show <id>`
 で内容を確認し、`/approval approve <id>` または `/approval deny <id>` を使ってください。
 承認後は既存のチェックポイント確認・再開を実施します。
-Slack を所有する Backend 上で同じ Session のチェックポイントを再開すると、
+Slack を所有するプロセス上で同じ Session のチェックポイントを再開すると、
 再開 Run の回答も元の Slack スレッドへ返ります。この操作には既存の認証された UI／HTTP API を使います。
 承認・再開 UI を利用する運用では `REI_API_KEY` で既存 HTTP API も有効にしてください。
-別プロセスの standalone Shell で再開した Run のイベントは Backend に配信されないため、
+別プロセスの standalone Shell で再開した Run のイベントは Slack 所有プロセスに配信されないため、
 その再開結果の Slack 自動通知は対象外です。Shell による既存承認レコードの操作は利用できます。
 Slack の通常メッセージや Bot の返信による承認・自動再開はありません。
 [権限ガイド](tool-permission.md)と[チェックポイント再開](persistent-checkpoint-resume.md)を参照してください。
