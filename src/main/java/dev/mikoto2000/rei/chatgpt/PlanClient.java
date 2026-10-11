@@ -11,6 +11,9 @@ import java.util.function.BooleanSupplier;
 
 /** Dedicated OAuth inference adapter: explicit request whitelist, no Tools, repair or retries. */
 public final class PlanClient {
+  static final int MODEL_CATALOG_LIMIT_BYTES = 2 * 1024 * 1024;
+  static final int HTTP_ERROR_LIMIT_BYTES = 65536;
+
   public record Model(String id, String name) {}
 
   private record Catalog(String clientId, String subject, Instant expires, List<Model> models) {}
@@ -20,7 +23,8 @@ public final class PlanClient {
   private final Clock clock;
   private final Map<String, java.util.concurrent.atomic.AtomicInteger> generations =
       new ConcurrentHashMap<>();
-  private final ObjectMapper json = new ObjectMapper();
+  private final ObjectMapper json =
+      new ObjectMapper().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
   private final Map<String, Catalog> catalog = new ConcurrentHashMap<>();
 
   public PlanClient(PlanOAuth oauth, PlanTransport transport, Clock clock) {
@@ -41,19 +45,36 @@ public final class PlanClient {
         transport.send(
             URI.create(PlanOAuth.RESOURCE + "/models"),
             "GET",
-            Map.of("Authorization", "Bearer " + tokens.accessToken()),
+            Map.of(
+                "Authorization",
+                "Bearer " + tokens.accessToken(),
+                "Accept",
+                "application/json",
+                "Accept-Encoding",
+                "identity"),
             null,
             Duration.ofSeconds(20),
             () -> false)) {
+      var duration = Duration.ofSeconds(20);
+      if (response.status() != 200) throw httpError(response, "models", duration, () -> false);
+      String mediaType = mediaType(response);
+      if (!mediaType.equals("application/json") || !identityEncoding(response))
+        throw failure(PROTOCOL, response, "models", -1, MODEL_CATALOG_LIMIT_BYTES);
       byte[] bytes =
           PlanIO.read(
               response.body(),
-              Duration.ofSeconds(20),
+              duration,
               () -> false,
-              () -> PlanIO.bytes(response.body(), 262144));
-      check(response.status(), bytes);
-      var node = json.readTree(bytes);
-      if (!node.path("models").isArray()) throw ChatGptException.of(PROTOCOL);
+              () -> PlanIO.prefix(response.body(), MODEL_CATALOG_LIMIT_BYTES));
+      if (bytes.length > MODEL_CATALOG_LIMIT_BYTES)
+        throw failure(RECEIVE_LIMIT, response, "models", bytes.length, MODEL_CATALOG_LIMIT_BYTES);
+      JsonNode node;
+      try {
+        node = json.readTree(bytes);
+        if (node == null || !node.path("models").isArray()) throw new IllegalArgumentException();
+      } catch (Exception invalid) {
+        throw failure(PROTOCOL, response, "models", bytes.length, MODEL_CATALOG_LIMIT_BYTES);
+      }
       var values = new ArrayList<Model>();
       var ids = new HashSet<String>();
       for (var model : node.path("models")) {
@@ -150,19 +171,18 @@ public final class PlanClient {
                 "Content-Type",
                 "application/json",
                 "Accept",
-                "text/event-stream"),
+                "text/event-stream",
+                "Accept-Encoding",
+                "identity"),
             body,
             Duration.ofNanos(deadline - System.nanoTime()),
             stop)) {
       var remaining = Duration.ofNanos(Math.max(1, deadline - System.nanoTime()));
       if (response.status() != 200) {
-        byte[] error =
-            PlanIO.read(
-                response.body(), remaining, stop, () -> PlanIO.bytes(response.body(), 65536));
-        check(response.status(), error);
+        throw httpError(response, "responses", remaining, stop);
       }
-      if (!response.contentType().toLowerCase(Locale.ROOT).startsWith("text/event-stream"))
-        throw ChatGptException.of(PROTOCOL);
+      if (!mediaType(response).equals("text/event-stream") || !identityEncoding(response))
+        throw failure(PROTOCOL, response, "responses", -1, receiveLimit);
       return PlanIO.read(
           response.body(),
           remaining,
@@ -171,13 +191,57 @@ public final class PlanClient {
     }
   }
 
-  private void check(int status, byte[] bytes) {
-    if (status == 200) return;
+  private static String mediaType(PlanTransport.Response response) {
+    return response.contentType() == null
+        ? ""
+        : response.contentType().split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+  }
+
+  private static boolean identityEncoding(PlanTransport.Response response) {
+    return response.contentEncoding() == null
+        || response.contentEncoding().isBlank()
+        || response.contentEncoding().equalsIgnoreCase("identity");
+  }
+
+  private static ChatGptException failure(
+      ChatGptException.Code code,
+      PlanTransport.Response response,
+      String operation,
+      int received,
+      int limit) {
+    return ChatGptException.response(
+        code, operation, response.status(), mediaType(response), received, limit, "");
+  }
+
+  private ChatGptException httpError(
+      PlanTransport.Response response, String operation, Duration timeout, BooleanSupplier stop) {
+    byte[] bytes =
+        PlanIO.read(
+            response.body(),
+            timeout,
+            stop,
+            () -> PlanIO.prefix(response.body(), HTTP_ERROR_LIMIT_BYTES));
     String code = "";
-    try {
-      code = json.readTree(bytes).path("error").path("code").asText();
-    } catch (Exception ignored) {
+    // A truncated or encoded body cannot establish an API code. Preserve the observed status.
+    if (bytes.length <= HTTP_ERROR_LIMIT_BYTES
+        && identityEncoding(response)
+        && mediaType(response).equals("application/json")) {
+      try {
+        var node = json.readTree(bytes);
+        if (node != null) code = node.path("error").path("code").asText();
+      } catch (Exception ignored) {
+      }
     }
-    throw ChatGptException.of(PlanSseAssembler.classify(code, status));
+    var classified = PlanSseAssembler.classify(code, response.status());
+    if (classified == PROTOCOL && response.status() >= 500 && response.status() != 503)
+      classified = TRANSPORT;
+    return ChatGptException.response(
+        classified,
+        operation,
+        response.status(),
+        mediaType(response),
+        bytes.length,
+        HTTP_ERROR_LIMIT_BYTES,
+        code);
   }
 }

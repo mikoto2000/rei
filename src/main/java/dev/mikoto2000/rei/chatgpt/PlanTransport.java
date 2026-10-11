@@ -12,8 +12,13 @@ import java.util.function.BooleanSupplier;
 
 /** A bounded, redirect-free transport, isolated from Spring AI request capture. */
 public interface PlanTransport {
-  record Response(int status, InputStream body, String requestId, String contentType)
+  record Response(
+      int status, InputStream body, String requestId, String contentType, String contentEncoding)
       implements AutoCloseable {
+    public Response(int status, InputStream body, String requestId, String contentType) {
+      this(status, body, requestId, contentType, "identity");
+    }
+
     public void close() {
       try {
         body.close();
@@ -68,7 +73,8 @@ public interface PlanTransport {
                 response.statusCode(),
                 response.body(),
                 response.headers().firstValue("x-request-id").orElse(null),
-                response.headers().firstValue("content-type").orElse(""));
+                response.headers().firstValue("content-type").orElse(""),
+                response.headers().firstValue("content-encoding").orElse("identity"));
           } catch (TimeoutException pending) {
           }
         }

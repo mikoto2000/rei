@@ -24,6 +24,7 @@ class PlanHttpIntegrationTest {
         x -> {
           byte[] body = PlanClientTest.MODELS.getBytes(StandardCharsets.UTF_8);
           x.getResponseHeaders().set("Content-Type", "application/json");
+          x.getResponseHeaders().set("Content-Type", "application/json");
           x.sendResponseHeaders(200, body.length);
           x.getResponseBody().write(body);
           x.close();
@@ -92,6 +93,7 @@ class PlanHttpIntegrationTest {
         "/v1/models",
         x -> {
           var body = PlanClientTest.MODELS.getBytes(StandardCharsets.UTF_8);
+          x.getResponseHeaders().set("Content-Type", "application/json");
           x.sendResponseHeaders(200, body.length);
           x.getResponseBody().write(body);
           x.close();
@@ -158,6 +160,66 @@ class PlanHttpIntegrationTest {
       release.countDown();
     } finally {
       release.countDown();
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void catalogHttpStreamingHonorsTwoMiBBoundaryWithAndWithoutContentLength() throws Exception {
+    var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    var size = new AtomicInteger(2097152);
+    var chunked = new AtomicBoolean(true);
+    server.createContext(
+        "/v1/models",
+        x -> {
+          x.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
+          x.sendResponseHeaders(200, chunked.get() ? 0 : size.get());
+          byte[] base = PlanClientTest.MODELS.getBytes(StandardCharsets.UTF_8);
+          byte[] body = new byte[size.get()];
+          java.util.Arrays.fill(body, (byte) ' ');
+          System.arraycopy(base, 0, body, 0, base.length);
+          try {
+            for (int offset = 0; offset < body.length; offset += 997) {
+              x.getResponseBody().write(body, offset, Math.min(997, body.length - offset));
+              x.getResponseBody().flush();
+            }
+          } finally {
+            x.close();
+          }
+        });
+    server.start();
+    try {
+      var http = new PlanTransport.Http();
+      PlanTransport local =
+          (u, m, h, b, t, c) ->
+              http.send(
+                  URI.create("http://127.0.0.1:" + server.getAddress().getPort() + u.getPath()),
+                  m,
+                  h,
+                  b,
+                  t,
+                  c);
+      var store = new ProtectedCredentialStore(root, ProtectedCredentialStoreTest.TEST_PROTECTION);
+      store.locked(
+          s -> {
+            s.save("default", ProtectedCredentialStoreTest.tokens("mock-access", "mock-refresh"));
+            return null;
+          });
+      var client =
+          new PlanClient(
+              new PlanOAuth(store, local, (i, c, n) -> null, Clock.systemUTC()),
+              local,
+              Clock.systemUTC());
+      for (boolean streaming : new boolean[] {true, false}) {
+        chunked.set(streaming);
+        size.set(2097152);
+        assertEquals(1, client.models("default", true).size());
+        size.set(2097153);
+        var error = assertThrows(ChatGptException.class, () -> client.models("default", true));
+        assertEquals(ChatGptException.Code.RECEIVE_LIMIT, error.code());
+        assertTrue(error.getMessage().contains("receivedBytes=2097153, receiveLimitBytes=2097152"));
+      }
+    } finally {
       server.stop(0);
     }
   }

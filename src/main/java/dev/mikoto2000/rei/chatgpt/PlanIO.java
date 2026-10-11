@@ -40,9 +40,17 @@ final class PlanIO {
     }
   }
 
+  static byte[] prefix(InputStream input, int limit) {
+    try {
+      return input.readNBytes(limit + 1);
+    } catch (IOException e) {
+      throw ChatGptException.of(TRANSPORT);
+    }
+  }
+
   static byte[] bytes(InputStream input, int limit) {
     try {
-      var bytes = input.readNBytes(limit + 1);
+      var bytes = prefix(input, limit);
       if (bytes.length > limit) throw ChatGptException.of(RECEIVE_LIMIT);
       return bytes;
     } catch (ChatGptException e) {

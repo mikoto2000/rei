@@ -136,11 +136,12 @@ prompt・SSE本文・最終結果は実行中メモリとコマンド返却の�
 | USAGE_UNAVAILABLE | 利用枠確認不能。資格情報を維持して後で本人が再確認 |
 | PERMISSION_DENIED | Project・role allowlist・資料・既存approvalを確認 |
 | ROUTE_UNAVAILABLE / TRANSPORT | endpointまたは通信の問題。課金先を切り替えない |
-| SEND_LIMIT / RECEIVE_LIMIT | 対象資料を縮小。送信後の結果はunknownとなり得る |
+| SEND_LIMIT | 対象資料を縮小。送信後の結果はunknownとなり得る |
+| RECEIVE_LIMIT | operationと本文上限を確認。modelsは2 MiB、OAuthは64 KiB、推論SSEは1 MiB。送信後の結果はunknownとなり得る |
 | PROTOCOL / VALIDATION_FAILED | terminal・JSON・参照・完了条件を確認。自動修復なし |
 | STORE_UNAVAILABLE | Windows user / DPAPI / 保存先権限・ロック・ファイル破損を確認 |
 
-remote本文は秘密情報漏洩を避けて破棄します。そのため詳細なprovider request ID / raw error.param の保存・問い合わせ支援はまだありません。実アカウントの障害調査で必要なら、秘密情報を含めない専用診断型を追加してください。
+remote本文は秘密情報漏洩を避けて破棄します。HTTP失敗では操作・status・正規化したmedia type・観測した本文バイト数・上限・既知のAPIエラーコードだけを表示します。request ID / raw error.param / 未知のエラーコードは表示・保存しません。
 
 ## 既存実装調査と接続点
 
@@ -172,3 +173,44 @@ remote本文は秘密情報漏洩を避けて破棄します。そのため詳�
 ローカル検証: 最新main取り込み後の全体回帰は **4,853件、失敗0、エラー0、スキップ2**（`.github/ci/full-test.ps1`）。最後の承認digest修正は、ロール変更でもdigestが変わらない失敗を再現してから修正し、新機能59件と関連回帰で確認しています。最終headの全体検証はPRのGitHub CIでも実施します。
 
 Phase 2候補: 親Toolへの明示backendId拡張、意味検証の設計、promptに依存しない完了条件DSL、同意付き画像/PDF入力、専用HTTP管理画面、provider診断型、未知結果を保持するcheckpoint。自律的backend選択、app-server、別processの推論workerは未実装です。
+
+
+## モデル一覧 RECEIVE_LIMIT の調査・再検証（2026-10-11）
+
+PR #92後の本人の診断で `operation=models, httpStatus=200, contentType=application/json, receivedBytes=262145, receiveLimitBytes=262144` が確認されました。モデルAPIのJSON応答本文が従来の256 KiB上限を超えていたことは確定しました。応答全体のサイズやJSON解析の成否は未確認です。この証拠に基づき、正常モデル一覧専用の上限を **2 MiB** に変更しました。OAuth・HTTPエラー・推論SSEの上限は変更していません。保存済み資格情報を取得せず、実アカウント通信も行っていません。
+
+| 用途 | 本文上限 | 判定 |
+|---|---:|---|
+| 正常モデル一覧 JSON | 2,097,152 bytes (2 MiB) | 一致まで成功、1 byte超過で RECEIVE_LIMIT |
+| models / responses のHTTPエラー本文 | 65,536 bytes (64 KiB) | 超過時もHTTP statusによる分類を保持。切れたJSONのAPIコードは推測しない |
+| OAuth discovery / token更新 | 65,536 bytes (64 KiB) | 従来の制限・分類を維持。超過の診断操作を oauth-discovery / oauth-token と表示 |
+| 正常推論SSE | 1,048,576 bytes (1 MiB) | 既存の累積制限を維持。SSEの改行・data等の本文フレームも含む |
+
+モデル一覧は `ChatGptCommand.models → PlanClient.models → PlanTransport.Http → PlanIO` です。`GET https://api.openai.com/v1/models` に選択アカウントのOAuth Bearerを送信し、`Accept: application/json`、`Accept-Encoding: identity` を指定します。公式の `models` 配列から `visibility=list` の `slug` / `display_name` を順序通り取り出します。別アカウントへの切替と60秒cacheを従来通り扱います。公式資料はカタログ最大バイト数を規定していません。この上限はアプリの保護策です。
+
+PR #92より前は256 KiB本文読み取りの後でHTTP statusを確認していたため、巨大な401/403/429/5xx本文も RECEIVE_LIMIT になっていました。修正後は非200を別経路へ分け、401=AUTH_INVALID、403=PERMISSION_DENIED、429=USAGE_LIMIT、503=ROUTE_UNAVAILABLE、その他5xx=TRANSPORTとします。完全な上限内JSONに既知の `error.code` がある場合はその分類を優先し、許可した既知コードだけ `apiErrorCode` に残します。不正・切断・非JSON本文からコードを推測しません。200はContent-TypeとContent-Encodingを確認した後で制限付き読み取り・JSON解析を行います。
+
+受信数は `InputStream.readNBytes(limit + 1)` の実際の配列長です。UTF-8文字数、バッファ容量、HTTPヘッダーを数えていません。Content-Lengthは判定に使用せず、不明・chunkedでも実本文を数えます。圧縮は要求せず自動展開もしません。identity以外の正常応答はPROTOCOLとして停止するため、圧縮後の小さいサイズで展開後上限を回避できません。HTTPクライアントは `BodyHandlers.ofInputStream` で読み取り、本文全体を事前にbyte[]へバッファしません。上限検出用の1 byteだけ余分に読み、timeout/cancelを含めてstreamを閉じます。リダイレクトは追跡しません。
+
+失敗コマンドには、例えば次の安全な診断が表示されます。
+
+```text
+ChatGPT plan: RECEIVE_LIMIT (operation=models, httpStatus=200, contentType=application/json, receivedBytes=2097153, receiveLimitBytes=2097152, bodyTruncated=true)
+```
+
+これは2,097,153 byteを実際に観測して停止したという意味で、応答全体のサイズではありません。読み取り前のプロトコル拒否では `receivedBytes` は出しません。未知のmedia typeは `unsupported`、欠落は `missing` とし、生ヘッダー、token、Cookie、本文、account/Workspace識別子を診断に含めません。通常の失敗表示に必要な短い診断だけを添え、常時の本文ログを追加しません。
+
+`status` の第2フィールドは発行されたOAuth client_id（ユーザー・Workspaceに紐付く登録）、第3は検証済みID Tokenの `sub` です。tokenやclient secretではありませんが、全面表示をやめてマスクしています。authorizedは保存情報の利用スコープを示すだけで、現在のアクセストークン・モデルAPI・残利用枠の有効性を証明しません。
+
+OAuth応答の上限超過では、操作名・status・観測65,537 byte・64 KiB上限を表示します。認証応答の分類、token refresh/rotation、資格情報の保存・消去条件は変更しません。operationがoauth-tokenの場合はmodels応答サイズとは区別してください。
+
+これらの上限は固定値で、Spring設定バインディング・単位変換・未設定/0の解釈には依存しません。今回変更可能な受信上限設定は追加していません。`rei.chatgpt-plan.enabled`、保存先、allowed-rolesは従来通りで、外部エージェントの `max-output-bytes` 設定はこの経路に作用しません。2 MiBでも不足する場合は安全な診断で200/application/jsonのサイズ超過を確認し、別途カタログの上限・メモリ使用を評価してください。SSE上限を緩めてもモデル一覧問題は解決しません。
+
+再検証は更新後に本人が同じmodelsコマンドを実行し、成功なら表示されたslugを確認してください。失敗なら分類、operation、httpStatus、contentType、receivedBytes、receiveLimitBytes、bodyTruncated、既知apiErrorCodeだけを共有してください。資格情報やstatusの完全識別子、本文は共有しないでください。RECEIVE_LIMITだけでは利用枠不足を証明できません。429/既知利用枠コードならChatGPT Usageを確認します。inferもモデル一覧の事前取得を行うため同じカタログ超過が起こり得ます。models成功後、本人の承認・利用枠消費を確認した上で最小のinferを実行してください。送信後の切断等は完了を保証しません。
+
+小・256 KiB超〜2 MiB以内・2 MiB一致・+1 byteのUTF-8カタログ、Content-Lengthあり/なし・chunked、HTTP 401/403/429/500/503、巨大エラー、既知APIコード、HTML/不正JSON/Content-Type欠落/圧縮拒否、秘密情報の非表示、statusのマスクをモックで検証しています。既存SSE正常終了・サイズ超過テストも維持します。指定された概要・sign-in・モデル/推論・preview limitations・errors/recoveryの公式資料を再確認し、URL、Bearer、catalog shape、store=false/stream=trueを維持しています。実アカウントでのモデル取得・推論は引き続き未検証です。
+
+公式 Errors and recovery はstatus・body shape・error.code / error.param・request IDの保持を推奨します。今回の安全な診断はstatusと既知コードを保持しますが、body shape / error.param / request ID / 未知コードはまだ保持しません。この診断上の差分は残ります。未知のremote文字列に個人情報・秘密情報が混入することを避けるためで、API失敗から成功への変換や課金先fallbackは行いません。
+
+
+2 MiB境界の検証には、256 KiBを超える不要metadataを持つ合成JSONを使用しています。解析後のモデルcacheには `visibility=list` の `slug` と `display_name` だけを保持し、raw本文や不要metadata、解析treeを保持しません。HTTPクライアントは固定の256 KiB本文バッファを設けず、InputStreamのbackpressureを使います。ローカルHTTPサーバーからContent-Lengthありとchunked（Content-Lengthなし）の両方で2 MiBを受信・解析できること、2 MiB + 1 byteで診断付きRECEIVE_LIMITになることを検証しました。64 KiB HTTPエラー境界、1 MiB SSE完了/超過、OAuth上限と資格情報保持も回帰対象です。
