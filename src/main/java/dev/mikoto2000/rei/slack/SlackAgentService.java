@@ -52,6 +52,13 @@ public final class SlackAgentService implements RunContinuation {
   public void enableRequests(){if(transport==null)throw new IllegalStateException("Slack transport unavailable");acceptingRequests=true;}
   public void detach(){acceptingRequests=false;transport=null;}
   public void recover(){requests.recover();continuations.recover();}
+  /** Classification only: acceptance still requires exact Bot/Workspace/Channel/Thread/state checks. */
+  public boolean isBotSender(String user){
+    if(user==null)return false;
+    if(user.equals(self))return true;
+    return settings.getAgents()!=null&&settings.getAgents().values().stream()
+        .filter(Objects::nonNull).anyMatch(agent->user.equals(agent.botUserId()));
+  }
   public boolean receive(SlackMessage message){return message!=null&&transport!=null&&Objects.equals(team,message.team())&&requests.receive(message,self,settings);}
   @Override public Saved restore(AgentRunContext owner){if(!"RESUMING".equals(continuations.state(owner.runId())))return null;var s=continuations.get(owner);var byCall=new HashMap<String,SlackAgentRepository.Request>();requests.forRun(owner.runId()).forEach(q->byCall.put(q.call(),q));
     var messages=s.messages().stream().map(m->{if(!(m instanceof ToolResponseMessage tool))return m;

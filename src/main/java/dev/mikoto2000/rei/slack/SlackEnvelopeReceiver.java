@@ -20,10 +20,16 @@ public final class SlackEnvelopeReceiver {
       String type=value(event,"type");if(!"message".equals(type)&&!"app_mention".equals(type))return id;
       var message=new SlackMessage(value(payload,"event_id"),team,value(event,"channel"),value(event,"ts"),value(event,"thread_ts"),
           value(event,"user"),value(event,"bot_id"),value(event,"subtype"),type,value(event,"channel_type"),value(event,"text"));
-      if(message.botId()!=null){if(collaboration!=null)collaboration.receive(message);}
+      // Sender classification precedes human admission. A rejected external reply never falls back
+      // to a new Run, including bot_user-only events and bot messages without a bot_id.
+      if(isBotMessage(message)){if(collaboration!=null)collaboration.receive(message);}
       else runtime.accept(message);
       return id;
     }catch(Exception failed){org.slf4j.LoggerFactory.getLogger(getClass()).warn("Slack envelope not acknowledged: validation or persistence unavailable (details omitted)");return null;}
+  }
+  private boolean isBotMessage(SlackMessage message){
+    return message.botId()!=null||"bot_message".equals(message.subtype())
+        ||collaboration!=null&&collaboration.isBotSender(message.user());
   }
   private static String value(JsonNode node,String key){var v=node.get(key);return v!=null&&v.isTextual()?v.asText():null;}
 }
