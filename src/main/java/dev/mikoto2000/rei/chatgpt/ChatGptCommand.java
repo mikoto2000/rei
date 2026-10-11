@@ -133,9 +133,11 @@ public final class ChatGptCommand {
                   + result.totalTokens()
                   + "; error="
                   + result.error());
-          if (result.state() == PlanSseAssembler.State.COMPLETED)
-            out(dev.mikoto2000.rei.event.CredentialRedactor.redact(result.text()));
-          else
+          out("ChatGPT plan output: " + result.diagnostic());
+          if (result.state() == PlanSseAssembler.State.COMPLETED) {
+            if (result.text().isEmpty()) out("ChatGPT plan: completed without output text");
+            else out(dev.mikoto2000.rei.event.CredentialRedactor.redact(result.text()));
+          } else
             throw ChatGptException.of(
                 result.error() == null ? ChatGptException.Code.PROTOCOL : result.error());
         });

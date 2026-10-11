@@ -511,7 +511,10 @@ class PlanClientTest {
                   ? PlanOAuthTest.reply(200, MODELS)
                   : new PlanTransport.Response(
                       200,
-                      PlanSseAssemblerTest.stream(PlanSseAssemblerTest.event(type, response)),
+                      PlanSseAssemblerTest.stream(
+                          type.equals("response.output_text.delta")
+                              ? PlanSseAssemblerTest.delta("partial")
+                              : PlanSseAssemblerTest.event(type, response)),
                       null,
                       "");
       var result =
