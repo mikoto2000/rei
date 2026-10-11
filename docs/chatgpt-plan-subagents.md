@@ -222,7 +222,7 @@ OAuth応答の上限超過では、操作名・status・観測65,537 byte・64 K
 
 続く推論ではHTTP 200でContent-Typeが欠落していました。従来は本文を読む前にPROTOCOLで停止したため、実際の本文がSSEだったかは未確認です。公式のモデル・推論資料は `store=false` / `stream=true` と `response.completed` の確認を要求します。Content-Type欠落が常に起こるという公式保証はありません。
 
-HTTP 200・identity encodingでContent-Typeが欠落/空の場合だけ、1 MiB上限・既存timeout/cancelを維持して本文のSSE形式を検証します。行はdata/event/id/retry/comment/空行を検証し、dataなしの空・コメントのみ本文、JSON、HTML、不正UTF-8・JSONを成功扱いしません。成功には従来通り有効なresponse.completedとterminal出力が必要で、失敗・incomplete・途中切断は完了へ変換しません。明示された異なるContent-Typeやgzip等のencodingは本文読み取り前に拒否します。モデル一覧のJSON Content-Type検証も維持します。HTTP 200だけでは推論の成功を証明しません。
+HTTP 200・identity encodingでContent-Typeが欠落/空の場合だけ、1 MiB上限・既存timeout/cancelを維持して本文のSSE形式を検証します。行はdata/event/id/retry/comment/空行を検証し、dataなしの空・コメントのみ本文、JSON、HTML、不正UTF-8・JSONを成功扱いしません。成功には有効なresponse.completedが必要で、失敗・incomplete・途中切断は完了へ変換しません。明示された異なるContent-Typeやgzip等のencodingは本文読み取り前に拒否します。モデル一覧のJSON Content-Type検証も維持します。HTTP 200だけでは推論の成功を証明しません。
 
 SSE解析がPROTOCOL/RECEIVE_LIMITで停止した場合、operation=responses・観測HTTP status・正規化Content-Type・解析器が観測したreceivedBytes・従来のreceiveLimitBytesだけを表示します。raw本文、token、request ID、個人情報は記録しません。ストリームの再送・自動retry・別課金へのfallbackは追加しません。
 
@@ -233,3 +233,21 @@ SSE解析がPROTOCOL/RECEIVE_LIMITで停止した場合、operation=responses・
 ```
 
 欠落ヘッダー付きSSEの完了・失敗・incomplete・deltaのみ、空/JSON/HTML、不正データ、明示的な異なるmedia type、圧縮拒否、1 MiB一致/超過を合成応答で確認しました。ローカルHTTPのヘッダー欠落・chunked・細分化SSEも確認しました。実アカウントの推論成功は未確認で、資格情報・実本文は使用していません。
+
+
+### 完了するが本文が表示されない場合（2026-10-11）
+
+実アカウントで `COMPLETED; usage=34; error=null` まで到達した一方、期待した本文が表示されない事例を確認しました。この表示だけでは、届いたイベントの構造は確定できません。従来のassemblerは `response.completed.response.output` のみを読み、先行するテキストイベントを破棄していました。テキストdeltaと空のterminal出力を組み合わせた人工fixtureで、同じ空表示を再現できます。
+
+[公式SIWC推論例](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference)に従い `response.output_text.delta` をメモリ内で組み立て、`response.completed` を確認してからコマンドへ返します。出力・内容インデックス順で連結し、`response.output_text.done` と `response.output_item.done` の確定テキストは同じ部分のdeltaを置き換えるため、重複しません。非空のterminalテキストがある場合はそれを優先します。failed、incomplete、切断、timeout、cancel、受信上限超過では部分本文を公開せず、tool/未知の出力要素や不正なインデックス・テキスト型は拒否します。受信上限・OAuth・認可・再送方針は変更しません。
+
+`/chatgpt infer` は状態表示に続いて `ChatGPT plan output:` の安全な診断を表示します。以下はすべてアプリ定義の項目と数値です。
+
+- `terminalItems`、`message`、`reasoning`、`output_text`: 完了イベントの出力要素・内容要素の種類別件数。
+- `deltaEvents`、`doneEvents`、`itemDoneEvents`、`streamParts`: テキストdelta・テキスト確定・要素確定イベントの件数と、組み立てた内容部分数。
+- `streamTextLength`、`textLength`: メモリ内で組み立てた本文と返却本文のJava文字列長（UTF-16 code units）。
+- `textSource`: `terminal`、`stream`、`none`。`receivedBytes`: 終了イベントまでに読み取ったバイト数。
+
+本文は通常のコマンド結果として表示します。診断行・ResultのtoString・例外へ本文、prompt、OAuth情報、レスポンスID、remote由来の未知の種類文字列を含めず、本文を記録するloggerやファイル・イベント・履歴ストアは追加しません。本文を抽出できない場合は空行だけを返さず `completed without output text` と診断を表示します。調査時は診断行だけを共有し、本文や認証情報を貼り付ける必要はありません。
+
+回帰テストは人工fixture、loopbackのfragmented HTTP/SSE、コマンドのShell writerで確認します。実アカウントのOAuth情報・SSE本文はテスト・ログ・Git・PRに使用しません。実環境で届いた構造と表示結果は、更新後のコマンド実行と安全な診断で確認してください。

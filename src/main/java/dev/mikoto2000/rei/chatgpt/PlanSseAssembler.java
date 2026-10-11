@@ -7,7 +7,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-/** Frames are parsed independently; only terminal response output can become a result. */
+/** Text stays in memory until a validated response.completed event allows publication. */
 public final class PlanSseAssembler {
   public enum State {
     COMPLETED,
@@ -21,7 +21,36 @@ public final class PlanSseAssembler {
       String text,
       Integer totalTokens,
       String responseId,
-      ChatGptException.Code error) {}
+      ChatGptException.Code error,
+      String diagnostic) {
+    public Result(
+        State state,
+        String text,
+        Integer totalTokens,
+        String responseId,
+        ChatGptException.Code error) {
+      this(
+          state,
+          text,
+          totalTokens,
+          responseId,
+          error,
+          "textLength=" + (text == null ? 0 : text.length()) + ", textSource=unavailable");
+    }
+
+    @Override
+    public String toString() {
+      return "Result[state="
+          + state
+          + ", totalTokens="
+          + totalTokens
+          + ", error="
+          + error
+          + ", "
+          + diagnostic
+          + "]";
+    }
+  }
 
   private final ObjectMapper json =
       new ObjectMapper()
@@ -29,6 +58,105 @@ public final class PlanSseAssembler {
           .enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
 
   private int received;
+  private final SortedMap<PartKey, Part> parts = new TreeMap<>();
+  private int deltaEvents,
+      doneEvents,
+      itemDoneEvents,
+      terminalItems,
+      messages,
+      reasoning,
+      contentParts;
+
+  private record PartKey(int output, int content) implements Comparable<PartKey> {
+    public int compareTo(PartKey other) {
+      int order = Integer.compare(output, other.output);
+      return order != 0 ? order : Integer.compare(content, other.content);
+    }
+  }
+
+  private static final class Part {
+    final StringBuilder text = new StringBuilder();
+    boolean done;
+  }
+
+  private String diagnostic(String text, String source) {
+    return "terminalItems="
+        + terminalItems
+        + ", message="
+        + messages
+        + ", reasoning="
+        + reasoning
+        + ", output_text="
+        + contentParts
+        + ", deltaEvents="
+        + deltaEvents
+        + ", doneEvents="
+        + doneEvents
+        + ", itemDoneEvents="
+        + itemDoneEvents
+        + ", streamParts="
+        + parts.size()
+        + ", streamTextLength="
+        + parts.values().stream().mapToInt(p -> p.text.length()).sum()
+        + ", textLength="
+        + text.length()
+        + ", textSource="
+        + source
+        + ", receivedBytes="
+        + received;
+  }
+
+  private Result result(
+      State state,
+      String text,
+      Integer usage,
+      String id,
+      ChatGptException.Code error,
+      String source) {
+    return new Result(state, text, usage, id, error, diagnostic(text, source));
+  }
+
+  private static int index(JsonNode node, String field) {
+    var value = node.path(field);
+    if (!value.isIntegralNumber() || !value.canConvertToInt() || value.intValue() < 0)
+      throw ChatGptException.of(PROTOCOL);
+    return value.intValue();
+  }
+
+  private void textPart(PartKey key, JsonNode text, boolean done) {
+    if (!text.isTextual()) throw ChatGptException.of(PROTOCOL);
+    var part = parts.computeIfAbsent(key, unused -> new Part());
+    if (part.done && (!done || !part.text.toString().equals(text.textValue())))
+      throw ChatGptException.of(PROTOCOL);
+    if (done) {
+      part.text.setLength(0);
+      part.done = true;
+    } else if (part.done) throw ChatGptException.of(PROTOCOL);
+    part.text.append(text.textValue());
+  }
+
+  private void item(JsonNode item, Integer outputIndex) {
+    String kind = item.path("type").asText();
+    if (kind.equals("reasoning")) {
+      if (outputIndex == null) reasoning++;
+      return;
+    }
+    if (!kind.equals("message") || !item.path("content").isArray())
+      throw ChatGptException.of(PROTOCOL);
+    if (item.has("role") && !item.path("role").asText().equals("assistant"))
+      throw ChatGptException.of(PROTOCOL);
+    if (item.has("status") && !item.path("status").asText().equals("completed"))
+      throw ChatGptException.of(PROTOCOL);
+    if (outputIndex == null) messages++;
+    int contentIndex = 0;
+    for (var content : item.path("content")) {
+      if (!content.path("type").asText().equals("output_text") || !content.path("text").isTextual())
+        throw ChatGptException.of(PROTOCOL);
+      if (outputIndex == null) contentParts++;
+      else textPart(new PartKey(outputIndex, contentIndex), content.path("text"), true);
+      contentIndex++;
+    }
+  }
 
   int receivedBytes() {
     return received;
@@ -43,6 +171,9 @@ public final class PlanSseAssembler {
     var data = new StringBuilder();
     String event = "";
     received = 0;
+    parts.clear();
+    deltaEvents =
+        doneEvents = itemDoneEvents = terminalItems = messages = reasoning = contentParts = 0;
     boolean seenData = false;
     boolean cr = false;
     try {
@@ -74,11 +205,13 @@ public final class PlanSseAssembler {
       }
       if (requireSseFraming && (!seenData || !isSseLine(decode(line.toByteArray()))))
         throw ChatGptException.of(PROTOCOL);
-      return new Result(State.OUTCOME_UNKNOWN, "", null, null, null);
+      return result(State.OUTCOME_UNKNOWN, "", null, null, null, "none");
     } catch (ChatGptException e) {
       throw e;
     } catch (IOException e) {
-      return new Result(State.OUTCOME_UNKNOWN, "", null, null, TRANSPORT);
+      return result(State.OUTCOME_UNKNOWN, "", null, null, TRANSPORT, "none");
+    } finally {
+      parts.clear();
     }
   }
 
@@ -108,37 +241,60 @@ public final class PlanSseAssembler {
       var node = json.readTree(data);
       String type = node.path("type").asText();
       if (!event.isEmpty() && !event.equals(type)) throw ChatGptException.of(PROTOCOL);
+      if (type.equals("response.output_text.delta") || type.equals("response.output_text.done")) {
+        boolean done = type.equals("response.output_text.done");
+        textPart(
+            new PartKey(index(node, "output_index"), index(node, "content_index")),
+            node.path(done ? "text" : "delta"),
+            done);
+        if (done) doneEvents++;
+        else deltaEvents++;
+        return null;
+      }
+      if (type.equals("response.output_item.done")) {
+        item(node.path("item"), index(node, "output_index"));
+        itemDoneEvents++;
+        return null;
+      }
+      if (type.equals("response.output_item.added")) {
+        String kind = node.path("item").path("type").asText();
+        if (!kind.equals("message") && !kind.equals("reasoning"))
+          throw ChatGptException.of(PROTOCOL);
+        return null;
+      }
       var response = node.path("response");
       if (type.equals("response.failed") || type.equals("error")) {
         String code =
             type.equals("error")
                 ? node.path("code").asText()
                 : response.path("error").path("code").asText();
-        return new Result(State.FAILED, "", usage(response), null, classify(code, 0));
+        return result(State.FAILED, "", usage(response), null, classify(code, 0), "none");
       }
       if (type.equals("response.incomplete"))
-        return new Result(State.INCOMPLETE, "", usage(response), null, null);
+        return result(State.INCOMPLETE, "", usage(response), null, null, "none");
       if (!type.equals("response.completed")) return null;
       if (!response.path("status").asText().equals("completed")
           || !response.path("output").isArray()) throw ChatGptException.of(PROTOCOL);
+      terminalItems = response.path("output").size();
       var text = new StringBuilder();
-      for (var item : response.path("output")) {
-        String kind = item.path("type").asText();
-        if (kind.equals("reasoning")) continue;
-        if (!kind.equals("message") || !item.path("content").isArray())
-          throw ChatGptException.of(PROTOCOL);
-        for (var content : item.path("content")) {
-          if (!content.path("type").asText().equals("output_text")
-              || !content.path("text").isTextual()) throw ChatGptException.of(PROTOCOL);
-          text.append(content.path("text").asText());
-        }
+      for (var outputItem : response.path("output")) {
+        item(outputItem, null);
+        if (outputItem.path("type").asText().equals("message"))
+          for (var content : outputItem.path("content"))
+            text.append(content.path("text").textValue());
       }
-      return new Result(
+      String source = "terminal";
+      if (text.isEmpty()) {
+        for (var part : parts.values()) text.append(part.text);
+        source = text.isEmpty() ? "none" : "stream";
+      }
+      return result(
           State.COMPLETED,
           text.toString(),
           usage(response),
           response.path("id").asText(null),
-          null);
+          null,
+          source);
     } catch (ChatGptException e) {
       throw e;
     } catch (Exception e) {

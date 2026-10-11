@@ -32,4 +32,78 @@ class ChatGptCommandOutputTest {
     assertEquals(0, command.execute("chatgpt", "status"));
     assertTrue(output.toString().contains("日本語の登録状態"));
   }
+
+  @Test
+  void inferDisplaysCompletedStreamTextAndSafeStructureOnShellWriter() {
+    String body =
+        "data:"
+            + " {\"type\":\"response.output_text.delta\",\"output_index\":0,\"content_index\":0,\"delta\":\"Hello,"
+            + " world!\"}\n\n"
+            + "data:"
+            + " {\"type\":\"response.completed\",\"response\":{\"id\":\"private-response-id\",\"status\":\"completed\",\"output\":[],\"usage\":{\"total_tokens\":34}}}\n\n";
+    var result =
+        new PlanSseAssembler()
+            .read(
+                new ByteArrayInputStream(body.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                10000);
+    var output = inferOutput(result);
+    assertTrue(output.contains("COMPLETED; usage=34; error=null"));
+    assertTrue(output.contains("Hello, world!"));
+    assertTrue(output.contains("terminalItems=0"));
+    assertTrue(output.contains("textLength=13"));
+    assertTrue(output.contains("textSource=stream"));
+    assertFalse(output.contains("private-response-id"));
+    String diagnostic =
+        output
+            .lines()
+            .filter(line -> line.startsWith("ChatGPT plan output:"))
+            .findFirst()
+            .orElseThrow();
+    assertFalse(diagnostic.contains("Hello, world!"));
+  }
+
+  @Test
+  void emptyCompletedOutputIsExplainedInsteadOfPrintingABlankLine() {
+    assertTrue(
+        inferOutput(
+                new PlanSseAssembler.Result(
+                    PlanSseAssembler.State.COMPLETED, "", 34, "private-id", null))
+            .contains("completed without output text"));
+  }
+
+  private String inferOutput(PlanSseAssembler.Result result) {
+    @SuppressWarnings("unchecked")
+    var provider = (ObjectProvider<PlanClient>) mock(ObjectProvider.class);
+    var client = mock(PlanClient.class);
+    when(provider.getIfAvailable()).thenReturn(client);
+    when(client.infer(
+            eq("personal"),
+            eq("gpt-6.1-sol"),
+            anyString(),
+            eq("Say hello"),
+            any(),
+            anyInt(),
+            anyInt(),
+            any()))
+        .thenReturn(result);
+    var projects = mock(dev.mikoto2000.rei.core.project.ProjectService.class);
+    when(projects.currentClient())
+        .thenReturn(mock(dev.mikoto2000.rei.core.project.ProjectClient.class));
+    when(projects.currentContext())
+        .thenReturn(
+            new dev.mikoto2000.rei.core.project.ProjectContext(
+                java.util.UUID.randomUUID().toString(), "test", java.nio.file.Path.of(".")));
+    when(projects.currentSessionId()).thenReturn("test-session");
+    var bean = new ChatGptCommand(null, provider, null);
+    bean.configureProbe(projects, mock(dev.mikoto2000.rei.core.policy.ToolPermissionGuard.class));
+    var command = new CommandLine(new Root()).addSubcommand("chatgpt", bean);
+    var output = new StringWriter();
+    bean.setShellOutput(new PrintWriter(output));
+    new CommandLine(bean).setOut(new PrintWriter(new StringWriter()));
+    assertEquals(
+        0,
+        command.execute(
+            "chatgpt", "infer", "--account", "personal", "--model", "gpt-6.1-sol", "Say hello"));
+    return output.toString();
+  }
 }

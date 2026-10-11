@@ -38,7 +38,10 @@ class PlanHttpIntegrationTest {
           // Simulate the observed HTTP 200 response with no Content-Type.
           x.sendResponseHeaders(200, 0);
           for (byte b :
-              PlanSseAssemblerTest.event("response.completed", PlanSseAssemblerTest.COMPLETED)
+              (PlanSseAssemblerTest.delta("Hello, ")
+                      + PlanSseAssemblerTest.delta("world!")
+                      + PlanSseAssemblerTest.event(
+                          "response.completed", PlanSseAssemblerTest.EMPTY_COMPLETED))
                   .getBytes(StandardCharsets.UTF_8)) {
             x.getResponseBody().write(b);
             x.getResponseBody().flush();
@@ -76,8 +79,9 @@ class PlanHttpIntegrationTest {
               1048576,
               () -> false);
       assertEquals(PlanSseAssembler.State.COMPLETED, result.state());
-      assertEquals("hello", result.text());
-      assertEquals(17, result.totalTokens());
+      assertEquals("Hello, world!", result.text());
+      assertEquals(34, result.totalTokens());
+      assertTrue(result.diagnostic().contains("textSource=stream"));
       assertEquals(1, requests.get());
     } finally {
       server.stop(0);
@@ -107,7 +111,7 @@ class PlanHttpIntegrationTest {
             x.sendResponseHeaders(200, 0);
             x.getResponseBody()
                 .write(
-                    "data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\n"
+                    "data: {\"type\":\"response.output_text.delta\",\"output_index\":0,\"content_index\":0,\"delta\":\"partial\"}\n\n"
                         .getBytes(StandardCharsets.UTF_8));
             x.getResponseBody().flush();
             opened.countDown();
