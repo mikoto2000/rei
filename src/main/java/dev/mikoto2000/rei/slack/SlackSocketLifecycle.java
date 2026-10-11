@@ -23,7 +23,7 @@ public final class SlackSocketLifecycle implements SmartLifecycle,AutoCloseable 
       LoggerFactory.getLogger(getClass()).warn("Slack disabled: SLACK_BOT_TOKEN and SLACK_APP_TOKEN are required");return false;
     }
     try{connection=factory.get();return connection!=null;}
-    catch(RuntimeException error){LoggerFactory.getLogger(getClass()).warn("Slack connection unavailable; retry pending (credentials and error details omitted)");return false;}
+    catch(RuntimeException error){LoggerFactory.getLogger(getClass()).warn("Slack connection unavailable: {}; retry pending (credentials and error details omitted)",error instanceof SlackSetupException setup?setup.code.name():"CONNECTION_FAILED");return false;}
   }
   @Override public synchronized void start() {
     if(running||!settings.isEnabled()||!backend)return;
