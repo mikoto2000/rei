@@ -7,6 +7,25 @@ import java.net.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 class BackendClientTest {
+  @Test void eventSubscriptionNegotiatesSseAndKeepsAuthorization() throws Exception {
+    var events=new AtomicInteger();var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+    server.createContext("/api/v1/runs/run/events",exchange->{
+      if(!"text/event-stream".equals(exchange.getRequestHeaders().getFirst("Accept"))) {exchange.sendResponseHeaders(406,-1);exchange.close();return;}
+      assertEquals("Bearer test-key",exchange.getRequestHeaders().getFirst("Authorization"));
+      assertEquals("3",exchange.getRequestHeaders().getFirst("Last-Event-ID"));
+      var body="id: 4\nevent: message.delta\ndata: {}\n\n".getBytes();exchange.getResponseHeaders().set("Content-Type","text/event-stream");exchange.sendResponseHeaders(200,body.length);exchange.getResponseBody().write(body);exchange.close();
+    });server.start();
+    try(var client=new BackendClient(URI.create("http://127.0.0.1:"+server.getAddress().getPort()),"test-key")) {
+      assertEquals(4,client.events("run",3,event->events.incrementAndGet()));assertEquals(1,events.get());
+    }finally{server.stop(0);}
+  }
+  @Test void namedModelSelectionCanUsePutWithoutRetrying() throws Exception {
+    var requests=new AtomicInteger();var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+    server.createContext("/api/v1/models/current",exchange->{requests.incrementAndGet();assertEquals("PUT",exchange.getRequestMethod());exchange.getRequestBody().readAllBytes();var body="{\"model\":\"fixture\"}".getBytes();exchange.sendResponseHeaders(200,body.length);exchange.getResponseBody().write(body);exchange.close();});server.start();
+    try(var client=new BackendClient(URI.create("http://127.0.0.1:"+server.getAddress().getPort()),"test-key")) {
+      assertEquals("fixture",client.mutation("PUT","/api/v1/models/current",java.util.Map.of("model","fixture")).path("model").asText());assertEquals(1,requests.get());
+    }finally{server.stop(0);}
+  }
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings={"","not-json","{\"message\":\"Bearer test-key\"}"})
   void unstructuredConflictBodiesAreNotExposed(String body)throws Exception {

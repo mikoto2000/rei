@@ -61,7 +61,7 @@ public final class BackendClient implements AutoCloseable {
     return mutation("POST",path,body);
   }
   public JsonNode mutation(String method,String path,Object body)throws IOException,InterruptedException {
-    if(!Set.of("POST","PATCH","DELETE").contains(method))throw new IllegalArgumentException("Invalid API mutation");
+    if(!Set.of("POST","PUT","PATCH","DELETE").contains(method))throw new IllegalArgumentException("Invalid API mutation");
     return response(request(path).timeout(Duration.ofSeconds(30)).header("Content-Type","application/json").method(method,body==null?HttpRequest.BodyPublishers.noBody():HttpRequest.BodyPublishers.ofByteArray(JSON.writeValueAsBytes(body))).build());
   }
   public JsonNode submit(String project,String session,String message,String receiptKey)throws IOException,InterruptedException {
@@ -88,7 +88,7 @@ public final class BackendClient implements AutoCloseable {
   }
   public long events(String run,long after,Consumer<SseDecoder.Event> consumer)throws IOException,InterruptedException {
     long generation;synchronized(streams){generation=subscriptionGeneration;}
-    var request=request("/api/v1/runs/"+segment(run)+"/events").header("Last-Event-ID",Long.toString(after)).GET().build();
+    var request=request("/api/v1/runs/"+segment(run)+"/events").setHeader("Accept","text/event-stream").header("Last-Event-ID",Long.toString(after)).GET().build();
     var response=http.send(request,HttpResponse.BodyHandlers.ofInputStream());
     try(var body=response.body()) {
       synchronized(streams){if(generation!=subscriptionGeneration)return after;streams.add(body);}
