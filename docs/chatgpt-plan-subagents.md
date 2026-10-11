@@ -1,6 +1,6 @@
 # Sign in with ChatGPT を利用する SubAgent
 
-れいの既存ロールを `chatgpt-plan` バックエンドで手動実行する、Windows ローカル OSS 向けの機能です。通常会話、Planning Loop、`delegateTask`、並列 SubAgent、Codex / Claude Code の既存経路は従来のモデルを使います。このバックエンドを親 LLM が自動選択する Tool は追加していません。
+れいの既存ロールを `chatgpt-plan` バックエンドで手動実行する、Windows ローカル OSS 向けの機能です。通常会話、Planning Loop、バックエンドを省略した `delegateTask`、並列 SubAgent、Codex / Claude Code の既存経路は従来のモデルを使います。Phase 2では、明示設定と既存の外部送信承認の範囲内で親 LLM が `delegateTask` の接続先を指定できます。
 
 ## 利用条件と設定
 
@@ -251,3 +251,33 @@ SSE解析がPROTOCOL/RECEIVE_LIMITで停止した場合、operation=responses・
 本文は通常のコマンド結果として表示します。診断行・ResultのtoString・例外へ本文、prompt、OAuth情報、レスポンスID、remote由来の未知の種類文字列を含めず、本文を記録するloggerやファイル・イベント・履歴ストアは追加しません。本文を抽出できない場合は空行だけを返さず `completed without output text` と診断を表示します。調査時は診断行だけを共有し、本文や認証情報を貼り付ける必要はありません。
 
 回帰テストは人工fixture、loopbackのfragmented HTTP/SSE、コマンドのShell writerで確認します。実アカウントのOAuth情報・SSE本文はテスト・ログ・Git・PRに使用しません。実環境で届いた構造と表示結果は、更新後のコマンド実行と安全な診断で確認してください。
+
+
+## Phase 2: 親LLMの自動委譲
+
+Phase 1の送信・資料snapshot・承認digest・結果検証・Run関連付けを共有します。以下は追加の管理者設定です。未設定では自動委譲は拒否し、手動経路には影響しません。
+
+```yaml
+rei:
+  chatgpt-plan:
+    enabled: true
+    allowed-roles: [reviewer]
+    auto-delegation:
+      enabled: true
+      allowed-accounts: [personal]
+      allowed-models: [<modelsコマンドで確認したslug>]
+```
+
+親は既存 `delegateTask` の `agent` にロールを指定します。後方互換性のため `roleId` への改名はしません。
+
+```json
+{"agent":"reviewer","backendId":"chatgpt-plan","accountRef":"personal","modelId":"<slug>","task":"設計を独立レビュー","sourceRefs":["docs/design.md"],"constraints":["読み取り専用"],"completionCriteria":["未確認事項を報告"],"expectedOutput":"{\"unverified\":[]}"}
+```
+
+`expectedOutput` はPhase 1と同じ厳密一致の結果フィールド条件です。自由記述 `completionCriteria` はタスクの説明であり、機械的な完了判定の代替にはなりません。採否は親が独立して判断します。外部見解・根拠・提案・未確認事項は検証済みwrapperを含むReceipt.result.outputに返り、状態・使用量・エラー・構造/完了条件の検証エラーもReceiptに含まれます。Tool説明は親に採用・部分採用・不採用を検討し、最終回答で外部見解と自身の判断を区別するよう指示します。
+
+バックエンド省略または `local` は従来動作です。外部専用引数をバックエンド省略で指定すること、未許可バックエンド、外部へ暗黙contextを渡すことを拒否します。親の実際のRunExecutionContextと共有予算が必須です。子から再委譲できず、同時実行は1です。モデル一覧・OAuthは実際に選んだaccountに対して既存PlanClientが確認します。
+
+承認待ちは既存 `/approval show <id>` / 承認 / 再実行を使います。ロール指示・schema・タスク・制約・完了条件・資料snapshot・account/model変更時はdigestが変わり再評価されます。親LLMの指定は許可リストやPermissionを変更しません。失敗・取消・利用枠超過・結果不明では他モデル、別アカウント、API課金先へのfallbackはありません。
+
+公式仕様確認日: 2026-10-11。明示履歴input、store=false、stream=true、HTTP previous_response_id禁止およびパラメーター制限は現行Phase 0/1と一致しました。公式app-serverのトークン受け渡しは子環境env_key方式と、更新後プロセス再起動・thread/resumeです。Phase 2はその別経路を追加しません。

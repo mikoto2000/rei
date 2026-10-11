@@ -88,6 +88,30 @@ class ChatGptSubAgentBackendTest {
         "design-review", "chatgpt-plan", "model", "default", "Review", sources, expected);
   }
 
+  @Test void automaticDelegationIsOptInAndDestinationsAreAdministratorOwned() {
+    var request=request(List.of(), "{\"decision\":\"accept\"}");
+    var budget=mock(LlmCallReservation.class);
+    assertThrows(ChatGptException.class,()->backend.runAutomatic(request,owner,budget));
+    backend.configureAutomatic(new PlanDelegationProperties(true,Set.of("other"),Set.of("model")));
+    assertThrows(ChatGptException.class,()->backend.runAutomatic(request,owner,budget));
+    backend.configureAutomatic(new PlanDelegationProperties(true,Set.of("default"),Set.of("other")));
+    assertThrows(ChatGptException.class,()->backend.runAutomatic(request,owner,budget));
+    verifyNoInteractions(client,permissions);
+  }
+
+  @Test void automaticDelegationReusesParentBudgetPermissionsAndValidation() {
+    runs.register(owner);runs.transition(owner.runId(),RunStatus.RUNNING,null);
+    backend.configureAutomatic(new PlanDelegationProperties(true,Set.of("default"),Set.of("model")));
+    var budget=mock(LlmCallReservation.class);when(budget.tryReserve()).thenReturn(true);
+    var receipt=backend.runAutomatic(request(List.of(),"{\"decision\":\"accept\"}"),owner,budget);
+    assertEquals(ChatGptSubAgentBackend.State.COMPLETED,receipt.state());
+    assertEquals(owner.runId(),receipt.parentRunId());
+    verify(permissions).check(eq("requestChatGptPlanSubAgent"),anyString(),eq(owner));
+    verify(budget).recordTotalTokens(17);
+    var failed=backend.runAutomatic(request(List.of(),"{\"decision\":\"reject\"}"),owner,budget);
+    assertEquals(ChatGptException.Code.VALIDATION_FAILED,failed.error());
+  }
+
   @Test
   void validManualDelegationUsesExistingEnvelopeAndRun() {
     var receipt = backend.run(request(List.of(), "{\"decision\":\"accept\"}"), owner, true, null);

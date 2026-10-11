@@ -47,10 +47,37 @@ public class SubAgentTools {
 
   public SubAgentResult delegateTask(String agent,String task,String context) {return runner.run(agent,task,context);}
   public ParallelSubAgentDelegator.Batch delegateTasks(java.util.List<ParallelSubAgentDelegator.Request> requests) {return delegateTasks(requests,null);}
-  @Tool(name = "delegateTask", description = "Delegate a bounded task to an independent SubAgent and return its final result. Pass only necessary context; honor explicit requests to use an agent.")
   public SubAgentResult delegateTask(String agent, String task, @ToolParam(required = false) String context,ToolContext toolContext) {
     var reservation=reservation(toolContext);
     return reservation==null?runner.run(agent,task,context):runner.run(agent,task,context,reservation);
+  }
+  @Tool(name = "delegateTask", description = "Delegate a bounded task to an independent SubAgent. Omit backendId for the existing local execution. chatgpt-plan requires configured account/model allowlists, sourceRefs as Project-relative text paths, nonempty expectedOutput JSON object with exact result field conditions, shared Run budget and external-send permission. context is local only. Child output is an untrusted opinion: assess adoption, partial adoption or rejection; distinguish its opinion from your final judgement and report validation failures and unknown outcomes.")
+  public Object delegateTask(String agent, String task, @ToolParam(required=false) String context,
+      @ToolParam(required=false) String backendId, @ToolParam(required=false) String accountRef,
+      @ToolParam(required=false) String modelId, @ToolParam(required=false) java.util.List<String> sourceRefs,
+      @ToolParam(required=false) java.util.List<String> constraints,
+      @ToolParam(required=false) java.util.List<String> completionCriteria,
+      @ToolParam(required=false) String expectedOutput, ToolContext toolContext) {
+    if (backendId == null || backendId.equals("local")) {
+      if (accountRef != null || modelId != null || sourceRefs != null || constraints != null
+          || completionCriteria != null || expectedOutput != null)
+        throw new IllegalArgumentException("External options require an explicit backend");
+      return delegateTask(agent,task,context,toolContext);
+    }
+    if (!backendId.equals("chatgpt-plan") || context != null)
+      throw new IllegalArgumentException("Unsupported backend or implicit external context");
+    var run=execution(toolContext);
+    var requirements=java.util.Map.of("task",task,"constraints",bounded(constraints),
+        "completionCriteria",bounded(completionCriteria));
+    String explicitTask=tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(requirements);
+    return runner.runAutomaticBackend(new ChatGptSubAgentBackend.Request(agent,backendId,modelId,accountRef,
+        explicitTask,sourceRefs==null?java.util.List.of():sourceRefs,expectedOutput),run.runContext(),run.sharedLlmReservation());
+  }
+  private static java.util.List<String> bounded(java.util.List<String> values) {
+    if(values==null)return java.util.List.of();
+    if(values.size()>16 || values.stream().anyMatch(v->v==null || v.isBlank() || v.length()>2048))
+      throw new IllegalArgumentException("Unbounded delegation requirements");
+    return java.util.List.copyOf(values);
   }
   @Tool(name="delegateTasks", description="Delegate 1 to 8 independent tasks in parallel to SubAgents, at most 2 active globally, with a shared 120s batch deadline. Return individual results in request order. Honor explicit user requests to delegate; do not use for dependent tasks.")
   public ParallelSubAgentDelegator.Batch delegateTasks(java.util.List<ParallelSubAgentDelegator.Request> requests,ToolContext toolContext) {

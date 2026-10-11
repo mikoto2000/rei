@@ -10,6 +10,11 @@ import org.junit.jupiter.api.io.TempDir;
 
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentToolsTest {
+  @Test void automaticDelegationSchemaPreservesLegacyAndAddsExplicitDestination() {
+    var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(new SubAgentToolPolicy(Set.of()),m->true));
+    var schema=new SubAgentTools(mock(SubAgentRunner.class),registry).callback().getToolDefinition().inputSchema();
+    assertThat(schema).contains("agent","task","context","backendId","accountRef","modelId","sourceRefs","constraints","completionCriteria","expectedOutput");
+  }
   @Test void consensusCallbacksExposeHashReferencesAndDefaultDisabled() {
     var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(new SubAgentToolPolicy(Set.of()),m->true));
     var tools=new SubAgentTools(mock(SubAgentRunner.class),registry);
@@ -41,6 +46,22 @@ class SubAgentToolsTest {
     verify(runner).durableChildren(owner,0,10);
   }
   @TempDir Path directory;
+  @Test void externalCallbackUsesActualRunAndExplicitMaterialsOnly() {
+    var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(new SubAgentToolPolicy(Set.of()),m->true));
+    var runner=mock(SubAgentRunner.class);var callback=new SubAgentTools(runner,registry).callback();
+    var owner=new dev.mikoto2000.rei.core.chat.AgentRunContext("parent","session",directory,"project");
+    var run=new dev.mikoto2000.rei.core.stagnation.RunExecutionContext("parent",new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0,3),null,new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),event->{});
+    run.setRunContext(owner);
+    var context=new org.springframework.ai.chat.model.ToolContext(java.util.Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY,run));
+    callback.call("{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"chatgpt-plan\",\"accountRef\":\"personal\",\"modelId\":\"model\",\"sourceRefs\":[\"docs/design.md\"],\"expectedOutput\":\"{\\\"unverified\\\":[]}\"}",context);
+    var request=org.mockito.ArgumentCaptor.forClass(ChatGptSubAgentBackend.Request.class);
+    verify(runner).runAutomaticBackend(request.capture(),eq(owner),any());
+    assertThat(request.getValue().sources()).containsExactly("docs/design.md");
+    assertThat(request.getValue().account()).isEqualTo("personal");
+    verify(runner,never()).run(anyString(),anyString(),any());
+    assertThatThrownBy(()->callback.call("{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"paid\"}",context)).isInstanceOf(RuntimeException.class);
+    assertThatThrownBy(()->callback.call("{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"chatgpt-plan\"}")).isInstanceOf(RuntimeException.class);
+  }
   @Test void parallelCallbackMapsRequestsAndSerializesOrderedIndividualResults() {
     var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(new SubAgentToolPolicy(Set.of()),m->true));
     var parallel=mock(ParallelSubAgentDelegator.class);

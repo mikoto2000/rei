@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.*;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(PlanProperties.class)
+@EnableConfigurationProperties({PlanProperties.class, PlanDelegationProperties.class})
 @ConditionalOnProperty(name = "rei.chatgpt-plan.enabled", havingValue = "true")
 public class PlanConfiguration {
   @Bean

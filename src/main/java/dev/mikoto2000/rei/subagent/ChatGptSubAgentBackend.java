@@ -19,11 +19,20 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /**
- * One-shot, read-only inference backend for existing roles; never a Tool exposed to the parent LLM.
+ * Read-only inference backend for existing roles with the same approval and validation for all callers.
  */
 @Service
 @ConditionalOnProperty(name = "rei.chatgpt-plan.enabled", havingValue = "true")
 public final class ChatGptSubAgentBackend {
+  private PlanDelegationProperties automatic = new PlanDelegationProperties(false, null, null);
+  @org.springframework.beans.factory.annotation.Autowired
+  public void configureAutomatic(PlanDelegationProperties settings) { automatic = settings; }
+
+  public Receipt runAutomatic(Request request, AgentRunContext owner, LlmCallReservation budget) {
+    automatic.check(request.account(), request.modelId());
+    if (!settings.enabled()) throw ChatGptException.of(PERMISSION_DENIED);
+    return run(request, owner, false, budget);
+  }
   public enum State {
     CREATED,
     AUTHORIZED,
