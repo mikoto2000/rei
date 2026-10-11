@@ -214,3 +214,22 @@ OAuth応答の上限超過では、操作名・status・観測65,537 byte・64 K
 
 
 2 MiB境界の検証には、256 KiBを超える不要metadataを持つ合成JSONを使用しています。解析後のモデルcacheには `visibility=list` の `slug` と `display_name` だけを保持し、raw本文や不要metadata、解析treeを保持しません。HTTPクライアントは固定の256 KiB本文バッファを設けず、InputStreamのbackpressureを使います。ローカルHTTPサーバーからContent-Lengthありとchunked（Content-Lengthなし）の両方で2 MiBを受信・解析できること、2 MiB + 1 byteで診断付きRECEIVE_LIMITになることを検証しました。64 KiB HTTPエラー境界、1 MiB SSE完了/超過、OAuth上限と資格情報保持も回帰対象です。
+
+
+## 推論時のContent-Type欠落（2026-10-11）
+
+本人の再検証ではmodels取得に成功しました。`models` の左側は `slug`（例 `gpt-6.1-sol`）、右側は表示名です。`infer --model` には大小文字を含め左側をそのまま指定してください。`GPT-6.1-Sol` は表示名なのでMODEL_UNAVAILABLEになります。
+
+続く推論ではHTTP 200でContent-Typeが欠落していました。従来は本文を読む前にPROTOCOLで停止したため、実際の本文がSSEだったかは未確認です。公式のモデル・推論資料は `store=false` / `stream=true` と `response.completed` の確認を要求します。Content-Type欠落が常に起こるという公式保証はありません。
+
+HTTP 200・identity encodingでContent-Typeが欠落/空の場合だけ、1 MiB上限・既存timeout/cancelを維持して本文のSSE形式を検証します。行はdata/event/id/retry/comment/空行を検証し、dataなしの空・コメントのみ本文、JSON、HTML、不正UTF-8・JSONを成功扱いしません。成功には従来通り有効なresponse.completedとterminal出力が必要で、失敗・incomplete・途中切断は完了へ変換しません。明示された異なるContent-Typeやgzip等のencodingは本文読み取り前に拒否します。モデル一覧のJSON Content-Type検証も維持します。HTTP 200だけでは推論の成功を証明しません。
+
+SSE解析がPROTOCOL/RECEIVE_LIMITで停止した場合、operation=responses・観測HTTP status・正規化Content-Type・解析器が観測したreceivedBytes・従来のreceiveLimitBytesだけを表示します。raw本文、token、request ID、個人情報は記録しません。ストリームの再送・自動retry・別課金へのfallbackは追加しません。
+
+本人の再検証コマンド:
+
+```text
+/chatgpt infer --account personal --model gpt-6.1-sol "Say exactly: Hello, world!"
+```
+
+欠落ヘッダー付きSSEの完了・失敗・incomplete・deltaのみ、空/JSON/HTML、不正データ、明示的な異なるmedia type、圧縮拒否、1 MiB一致/超過を合成応答で確認しました。ローカルHTTPのヘッダー欠落・chunked・細分化SSEも確認しました。実アカウントの推論成功は未確認で、資格情報・実本文は使用していません。
