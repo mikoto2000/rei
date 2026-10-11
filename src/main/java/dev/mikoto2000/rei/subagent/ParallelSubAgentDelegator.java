@@ -14,10 +14,19 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
   private SubAgentProperties standaloneBudgetProperties=new SubAgentProperties();
   @org.springframework.beans.factory.annotation.Autowired
   public void setStandaloneBudgetProperties(SubAgentProperties properties){standaloneBudgetProperties=properties;}
-  public record Request(String id, String agent, String task, String context) { }
+  public record Request(String id, String agent, String task, String context, String backendId,
+      String accountRef,String modelId,List<String> sourceRefs,String expectedOutput) {
+    public Request(String id,String agent,String task,String context){this(id,agent,task,context,null,null,null,null,null);}
+    public Request {sourceRefs=sourceRefs==null?null:List.copyOf(sourceRefs);}
+  }
   public enum Status { COMPLETED, PARTIAL, FAILED, CANCELLED, TIMEOUT, REJECTED }
-  public record Item(String id, String agent, Status status, SubAgentResult result) { }
-  public record Batch(Status status, List<Item> items) { public Batch { items=List.copyOf(items); } }
+  public record Item(String id, String agent, Status status, SubAgentResult result,ChatGptSubAgentBackend.Receipt receipt) {
+    public Item(String id,String agent,Status status,SubAgentResult result){this(id,agent,status,result,null);}
+  }
+  public record Batch(Status status, List<Item> items,PlanReviewComparison.Comparison comparison) {
+    public Batch(Status status,List<Item> items){this(status,items,null);}
+    public Batch { items=List.copyOf(items); }
+  }
   private final SubAgentRunner runner;
   private final SubAgentRegistry registry;
   private final CommandCancellationService cancellation;
@@ -48,11 +57,18 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
     if(parent!=null && parent.conversationId().startsWith("subagent:"))throw new IllegalArgumentException("Recursive delegation is prohibited");
     if(input==null || input.isEmpty() || input.size()>8)throw new IllegalArgumentException("Expected 1 to 8 delegation requests");
     var requests=new ArrayList<>(input);var ids=new HashSet<String>();
+    boolean external=requests.stream().anyMatch(r->r!=null&&"chatgpt-plan".equals(r.backendId()));
     for(var request:requests) {
       if(request==null || request.id()==null || !request.id().matches("[A-Za-z0-9_-]{1,64}") || !ids.add(request.id())
           || request.agent()==null || registry.findById(request.agent()).isEmpty() || request.task()==null || request.task().isBlank()
           || request.task().length()>16384 || (request.context()!=null && request.context().length()>32768))
         throw new IllegalArgumentException("Invalid delegation request or unavailable agent");
+      if(request.backendId()!=null && !Set.of("local","chatgpt-plan").contains(request.backendId()))
+        throw new IllegalArgumentException("Unsupported delegation backend");
+      if("chatgpt-plan".equals(request.backendId()) && (parent==null||reservation==null||request.context()!=null))
+        throw new IllegalArgumentException("Explicit human Run, shared budget and sources required");
+      if(!"chatgpt-plan".equals(request.backendId()) && (request.accountRef()!=null||request.modelId()!=null||request.sourceRefs()!=null||request.expectedOutput()!=null))
+        throw new IllegalArgumentException("External options require explicit backend");
     }
     if(!admission.tryAcquire())return new Batch(Status.REJECTED,requests.stream().map(r->item(r,Status.REJECTED,null)).toList());
     var effectiveReservation=reservation==null&&parent==null?StandaloneSubAgentBudget.create(standaloneBudgetProperties):reservation;
@@ -68,11 +84,17 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
           if(stopped.get() || Thread.currentThread().isInterrupted())return item(request,Status.CANCELLED,null);
           if(System.nanoTime()-deadline>=0){deadlineReached.set(true);return item(request,Status.TIMEOUT,null);}
           try(var scope=AgentRunScope.open(parent)) {
-            var result=child!=null?child.apply(request,effectiveReservation):effectiveReservation==null?runner.run(request.agent(),request.task(),request.context()):runner.run(request.agent(),request.task(),request.context(),effectiveReservation);
+            ChatGptSubAgentBackend.Receipt receipt=null;
+            SubAgentResult result;
+            if(child==null && "chatgpt-plan".equals(request.backendId())) {
+              receipt=runner.runAutomaticBackend(new ChatGptSubAgentBackend.Request(request.agent(),request.backendId(),request.modelId(),request.accountRef(),request.task(),request.sourceRefs()==null?List.of():request.sourceRefs(),request.expectedOutput()),parent,effectiveReservation);
+              result=receipt.result();
+            } else result=child!=null?child.apply(request,effectiveReservation):effectiveReservation==null?runner.run(request.agent(),request.task(),request.context()):runner.run(request.agent(),request.task(),request.context(),effectiveReservation);
             var state=switch(result.status()) {
               case COMPLETED -> Status.COMPLETED;case CANCELLED -> Status.CANCELLED;case TIMEOUT -> Status.TIMEOUT;default -> Status.FAILED;
             };
-            return item(request,state,result);
+            if(external && result.structuredOutput()!=null && result.structuredOutput().status()==SubAgentOutput.Status.PARTIAL)state=Status.PARTIAL;
+            return new Item(request.id(),request.agent(),state,result,receipt);
           }
         });
         futures.add(future);
@@ -113,7 +135,8 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
         long completed=results.stream().filter(r->r.status()==Status.COMPLETED).count();
         terminal=completed==results.size()?Status.COMPLETED:completed>0?Status.PARTIAL:Status.FAILED;
       }
-      return new Batch(terminal,results);
+      var comparison=external && requests.stream().map(Request::task).distinct().count()==1?PlanReviewComparison.compare(results):null;
+      return new Batch(terminal,results,comparison);
     }finally{cancel.run();registration.dispose();admission.release();}
   }
   private static Item item(Request request,Status status,SubAgentResult result){return new Item(request.id(),request.agent(),status,result);}

@@ -98,6 +98,67 @@ class ChatGptSubAgentBackendTest {
     assertThrows(ChatGptException.class,()->backend.runAutomatic(request,owner,budget));
     verifyNoInteractions(client,permissions);
   }
+  @Test void advancedRepairSharesBudgetAndRetainsExplicitHistory() throws Exception {
+    Files.writeString(root.resolve("review.yaml"),Files.readString(root.resolve("review.yaml")).replace("maxSteps: 1","maxSteps: 3\nmaxRepairs: 2"));
+    registry.reload();
+    backend.configureExecution(new PlanExecutionProperties(true,null,null,null,null,null,null,true));
+    var captured=new java.util.ArrayList<java.util.List<PlanClient.Input>>();
+    when(client.inferHistory(anyString(),anyString(),anyString(),anyList(),any(),anyInt(),anyInt(),any(),any())).thenAnswer(call->{
+      ((Runnable)call.getArgument(8)).run();captured.add(call.getArgument(3));
+      return new PlanSseAssembler.Result(PlanSseAssembler.State.COMPLETED,captured.size()==1?"not JSON":VALID,17,"response",null);
+    });
+    var budget=mock(LlmCallReservation.class);when(budget.tryReserve()).thenReturn(true);
+    var receipt=backend.run(request(List.of(),"{\"decision\":\"accept\"}"),owner,true,budget);
+    assertEquals(ChatGptSubAgentBackend.State.COMPLETED,receipt.state());
+    assertEquals(1,receipt.result().repairAttempts());assertEquals(2,receipt.iterations().size());
+    assertEquals(34,receipt.totalTokens());verify(budget,times(2)).tryReserve();verify(budget,times(2)).recordTotalTokens(17);
+    assertEquals(List.of("user","assistant","user"),captured.get(1).stream().map(PlanClient.Input::role).toList());
+    assertFalse(receipt.semantic().truthVerified());
+  }
+  void advanced() throws Exception {
+    Files.writeString(root.resolve("review.yaml"),Files.readString(root.resolve("review.yaml")).replace("maxSteps: 1","maxSteps: 3\nmaxRepairs: 2"));
+    registry.reload();backend.configureExecution(new PlanExecutionProperties(true,null,null,null,null,null,null,false));
+  }
+  @Test void validAnswerCanBeExplicitlyRefinedWithinSameRunAndDeadline() throws Exception {
+    advanced();backend.configureExecution(new PlanExecutionProperties(true,null,null,null,null,null,null,false,1));
+    when(client.inferHistory(anyString(),anyString(),anyString(),anyList(),any(),anyInt(),anyInt(),any(),any())).thenAnswer(call->{((Runnable)call.getArgument(8)).run();return new PlanSseAssembler.Result(PlanSseAssembler.State.COMPLETED,VALID,17,"resp",null);});
+    var budget=mock(LlmCallReservation.class);when(budget.tryReserve()).thenReturn(true);
+    var receipt=backend.run(request(List.of(),"{\"decision\":\"accept\"}"),owner,true,budget);
+    assertEquals(ChatGptSubAgentBackend.State.COMPLETED,receipt.state());assertEquals(2,receipt.iterations().size());
+    assertEquals(0,receipt.result().repairAttempts());assertEquals(34,receipt.totalTokens());
+  }
+  @Test void advancedNeverRetriesAuthQuotaPermissionOrUnknownDispatch() throws Exception {
+    advanced();
+    for(var code:List.of(ChatGptException.Code.AUTH_INVALID,ChatGptException.Code.USAGE_LIMIT,ChatGptException.Code.PERMISSION_DENIED,ChatGptException.Code.TRANSPORT,ChatGptException.Code.CANCELLED)) {
+      clearInvocations(client);
+      doAnswer(call->{((Runnable)call.getArgument(8)).run();throw ChatGptException.of(code);}).when(client).inferHistory(anyString(),anyString(),anyString(),anyList(),any(),anyInt(),anyInt(),any(),any());
+      var budget=mock(LlmCallReservation.class);when(budget.tryReserve()).thenReturn(true);
+      var receipt=backend.run(request(List.of(),"{\"decision\":\"accept\"}"),owner,true,budget);
+      assertNotEquals(ChatGptSubAgentBackend.State.COMPLETED,receipt.state());
+      verify(client,times(1)).inferHistory(anyString(),anyString(),anyString(),anyList(),any(),anyInt(),anyInt(),any(),any());
+      if(code==ChatGptException.Code.TRANSPORT||code==ChatGptException.Code.CANCELLED)assertEquals(ChatGptSubAgentBackend.State.OUTCOME_UNKNOWN,receipt.state());
+    }
+  }
+  @Test void repairLimitAndSharedBudgetNeverReset() throws Exception {
+    advanced();
+    when(client.inferHistory(anyString(),anyString(),anyString(),anyList(),any(),anyInt(),anyInt(),any(),any())).thenAnswer(call->{((Runnable)call.getArgument(8)).run();return new PlanSseAssembler.Result(PlanSseAssembler.State.COMPLETED,"invalid",17,"resp",null);});
+    var budget=mock(LlmCallReservation.class);when(budget.tryReserve()).thenReturn(true);
+    var failed=backend.run(request(List.of(),"{\"decision\":\"accept\"}"),owner,true,budget);
+    assertEquals(2,failed.result().repairAttempts());assertEquals(3,failed.iterations().size());assertEquals(51,failed.totalTokens());
+    assertEquals(ChatGptException.Code.VALIDATION_FAILED,failed.error());verify(budget,times(3)).tryReserve();
+    clearInvocations(client);var exhausted=mock(LlmCallReservation.class);when(exhausted.tryReserve()).thenReturn(true,false);
+    var stopped=backend.run(request(List.of(),"{\"decision\":\"accept\"}"),owner,true,exhausted);
+    assertEquals(ChatGptException.Code.PERMISSION_DENIED,stopped.error());
+    verify(client,times(1)).inferHistory(anyString(),anyString(),anyString(),anyList(),any(),anyInt(),anyInt(),any(),any());
+  }
+  @Test void repairDoesNotExtendTotalDeadlineOrReplayKnownCompletedRequest() throws Exception {
+    advanced();backend.configureExecution(new PlanExecutionProperties(true,3,2,2,262144,1048576,Duration.ofMillis(500),false));
+    doAnswer(call->{((Runnable)call.getArgument(8)).run();Thread.sleep(600);return new PlanSseAssembler.Result(PlanSseAssembler.State.COMPLETED,"invalid",17,"resp",null);}).when(client).inferHistory(anyString(),anyString(),anyString(),anyList(),any(),anyInt(),anyInt(),any(),any());
+    var budget=mock(LlmCallReservation.class);when(budget.tryReserve()).thenReturn(true);
+    var receipt=backend.run(request(List.of(),"{\"decision\":\"accept\"}"),owner,true,budget);
+    assertEquals(ChatGptException.Code.TIMEOUT,receipt.error());assertEquals(ChatGptSubAgentBackend.State.FAILED,receipt.state());
+    verify(client,times(1)).inferHistory(anyString(),anyString(),anyString(),anyList(),any(),anyInt(),anyInt(),any(),any());
+  }
 
   @Test void automaticDelegationReusesParentBudgetPermissionsAndValidation() {
     runs.register(owner);runs.transition(owner.runId(),RunStatus.RUNNING,null);

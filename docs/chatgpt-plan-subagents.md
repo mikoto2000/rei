@@ -281,3 +281,47 @@ rei:
 承認待ちは既存 `/approval show <id>` / 承認 / 再実行を使います。ロール指示・schema・タスク・制約・完了条件・資料snapshot・account/model変更時はdigestが変わり再評価されます。親LLMの指定は許可リストやPermissionを変更しません。失敗・取消・利用枠超過・結果不明では他モデル、別アカウント、API課金先へのfallbackはありません。
 
 公式仕様確認日: 2026-10-11。明示履歴input、store=false、stream=true、HTTP previous_response_id禁止およびパラメーター制限は現行Phase 0/1と一致しました。公式app-serverのトークン受け渡しは子環境env_key方式と、更新後プロセス再起動・thread/resumeです。Phase 2はその別経路を追加しません。
+
+## Phase 3: 上限付き実行・修復・比較
+
+以下は追加の管理者設定です。execution.enabled=false（既定）ならPhase 1/2の1回推論・修復なし・同時実行1を維持します。
+
+```yaml
+rei:
+  chatgpt-plan:
+    execution:
+      enabled: true
+      max-iterations: 3
+      max-repairs: 2
+      refinement-rounds: 1 # 成功結果の再検討。既定0
+      max-concurrent: 2
+      max-input-bytes: 262144
+      max-output-bytes: 1048576
+      timeout: 120s
+      semantic-validation: true
+```
+
+ロールYAMLの既存 `maxSteps` と `maxRepairs` も上限です。例えばmaxSteps=3、maxRepairs=2なら初回・修復・再検討を合計3回まで実行します。既存maxRepairs=0のロールは、この設定だけでは修復を許可しません。再検討回数を実行できないロールは拒否します。毎回、同じ親Runのモデル回数・token予約を消費し、総期限は延長しません。修復はJSON、schema、資料ID/引用、scope、厳密完了条件、機械的意味検証の失敗に限定します。検証条件を緩めず、修復上限・実行回数・予算のどれかで停止します。
+
+HTTPではサーバー履歴を使いません。初回のuser JSON、前回assistant出力（最大16,384文字）、値を含まない検証診断を明示input配列へ送信します。system role、previous_response_id、conversation、max_output_tokens等は追加しません。再検討は同じモデルの自己点検であり、独立検証の代替ではありません。認証失効、取消、権限拒否、利用枠超過、通信結果不明では自動再試行しません。別アカウント・モデル・課金先にもfallbackしません。
+
+ReceiptにはaccountRef、iterations（各推論の状態・usage・検証エラー）、既存resultのrepairAttempts/validationHistory、semanticが追加されます。semanticは独立した機械検証器で、schema/資料snapshot照合後に指摘と引用資料pathの対応、重複指摘、同一指摘の重大度の矛盾を確認します。
+
+- SUPPORTED: 指摘の文面が照合済み引用に直接含まれる機械的裏付け。
+- PARTIALLY_SUPPORTED: 引用資料と場所は対応するが、推論の妥当性は未確定。
+- UNSUPPORTED: 重複・矛盾・引用資料に対応しない場所。修復対象。
+- UNVERIFIED: 対応する引用資料なし。
+
+truthVerifiedは常にfalseです。引用への文字列一致も、因果関係・一般化・「問題なし」の正しさを証明しません。自然言語の矛盾全般や自由文の完了条件を機械判定する機能ではありません。親は資料と結果を独立に評価し、追加の既存ローカルレビューを選べます。別LLMの自動検証や有料送信を新しく追加していません。既存ロールのevidenceTools/requiredToolCalls/semanticValidation契約を無効化することもありません。
+
+既存delegateTasksへ接続先を指定できます。同じtaskの混在レビュー・複数Planモデルではcomparisonを返します。
+
+```json
+{"requests":[{"id":"local","agent":"reviewer","task":"この設計をレビュー","context":"必要な公開資料のみ"},{"id":"plan-a","agent":"reviewer","task":"この設計をレビュー","backendId":"chatgpt-plan","accountRef":"personal","modelId":"<許可slug-A>","sourceRefs":["docs/design.md"],"expectedOutput":"{\"unverified\":[]}"},{"id":"plan-b","agent":"reviewer","task":"この設計をレビュー","backendId":"chatgpt-plan","accountRef":"personal","modelId":"<許可slug-B>","sourceRefs":["docs/design.md"],"expectedOutput":"{\"unverified\":[]}"}]}
+```
+
+既存ワーカーは全体2、batch期限120秒、キュー最大8です。Plan側は設定の1〜2をさらに適用します。各Plan子はPhase 2の自動許可リスト・資料承認を通り、同じProject/Session/親Run予算へ所属します。失敗した子があっても成功した結果は保持し、全体はPARTIALまたはFAILEDです。各Plan receiptはOUTCOME_UNKNOWNや利用枠の分類も維持します。異なるtaskのbatchには比較を付けません。
+
+comparisonは結論、JSON厳密一致の共通指摘、独自指摘、引用、未確認事項と失敗状態を区別します。多数決は行いません。ローカル結果がsnapshot引用を持たない場合は根拠比較を未解決として明記します。別Run・別モデルでも統計的独立性や正解は保証しません。
+
+復旧時はReceiptの状態とvalidationHistoryを確認してください。INVALID outputは上限内だけ修復されます。FAILED/OUTCOME_UNKNOWN、認証・利用枠・権限エラーでは、状況を確認してから新しい依頼を選び、結果不明の再送を自動化しないでください。通常CIはmockとHTTP fixtureで実認証不要です。
