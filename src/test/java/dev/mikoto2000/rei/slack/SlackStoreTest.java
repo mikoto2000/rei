@@ -35,4 +35,9 @@ class SlackStoreTest {
     s.reply("R2",m,"retry");row=s.outbox(0).getFirst();s.claimSend(row.id());s.retry(row.id(),1000);
     assertEquals(0,s.outbox(999).size());assertEquals(1,s.outbox(1000).size());
   }
+  @Test void rateLimitedChannelCannotBeBypassedByLaterReplies() {
+    var s=new SlackStore(root);var m=message("E","message","T","D","1",null);
+    s.reply("one",m,"one");s.reply("two",m,"two");s.claimSend("one");s.retry("one",1000);
+    assertEquals(0,s.outbox(999).size());assertEquals("one",s.outbox(1000).getFirst().id());
+  }
 }

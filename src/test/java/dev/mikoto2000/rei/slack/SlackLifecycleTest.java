@@ -25,4 +25,15 @@ class SlackLifecycleTest {
     assertTrue(dev.mikoto2000.rei.StartupOptions.parse(new String[]{"--backend"},java.nio.file.Path.of(".")).backend());
     assertFalse(dev.mikoto2000.rei.StartupOptions.parse(new String[]{},java.nio.file.Path.of(".")).backend());
   }
+  @Test void stopDoesNotWaitForSlowInitializationAndClosesLateConnection() throws Exception {
+    var p=new SlackProperties();p.setEnabled(true);var entered=new java.util.concurrent.CountDownLatch(1);var release=new java.util.concurrent.CountDownLatch(1);var closed=new java.util.concurrent.atomic.AtomicInteger();
+    var lifecycle=new SlackSocketLifecycle(p,true,Map.of("SLACK_BOT_TOKEN","dummy","SLACK_APP_TOKEN","dummy"),()->{
+      entered.countDown();try{release.await();}catch(InterruptedException e){Thread.currentThread().interrupt();}
+      return new SlackSocketLifecycle.Connection(){public void pump(){}public void close(){closed.incrementAndGet();}};
+    });
+    var connecting=java.util.concurrent.CompletableFuture.supplyAsync(lifecycle::connectOnce);
+    assertTrue(entered.await(2,java.util.concurrent.TimeUnit.SECONDS));
+    try{assertTimeoutPreemptively(java.time.Duration.ofMillis(300),lifecycle::close);}finally{release.countDown();}
+    connecting.get(2,java.util.concurrent.TimeUnit.SECONDS);assertEquals(1,closed.get());
+  }
 }

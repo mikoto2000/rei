@@ -20,7 +20,7 @@ public final class SlackRuntime {
   }
   /** Called before ACK. No LLM, send or queue execution runs on this thread. */
   public boolean accept(SlackMessage m) {
-    if(!SlackAdmission.accept(p,self,m,store.thread(m).isPresent()))return false;
+    if(!SlackAdmission.accept(p,self,m,store.knownThread(m)))return false;
     var safe=new SlackMessage(m.eventId(),m.team(),m.channel(),m.ts(),m.threadTs(),m.user(),m.botId(),m.subtype(),m.type(),m.channelType(),SlackReplies.safe(m.text()));
     return store.accept(safe);
   }
@@ -39,19 +39,18 @@ public final class SlackRuntime {
         boolean occupied=router.containsRun(receipt.project(),receipt.run());
         if(occupied)continue;
         if(!run.status().isTerminal()) {
-          if(runs.restored(receipt.run())){store.state(receipt.message(),"UNKNOWN");reply(receipt.run()+":unknown",receipt.message(),"再起動前の Run の結果は不明です。チェックポイントを確認して明示的に再開してください。");}
+          if(runs.restored(receipt.run()))store.notifyRun(receipt.run(),"UNKNOWN",receipt.run()+":unknown",receipt.message(),SlackReplies.parts("再起動前の Run の結果は不明です。チェックポイントを確認して明示的に再開してください。"));
           continue;
         }
         if("WAITING_APPROVAL".equals(receipt.state()))continue;
-        store.state(receipt.message(),run.status().name());
         String text=switch(run.status()) {
           case COMPLETED -> "完了しました。";
           case CANCELLED -> "キャンセル完了：Run の実行が停止しました。";
           case FAILED -> "Run が失敗しました。認可された UI で診断を確認してください。";
           default -> "Run の結果が不明です。チェックポイントを確認してください。";
         };
-        reply(receipt.run()+":terminal",receipt.message(),text);
-      }catch(RunNotFoundException missing){store.state(receipt.message(),"UNKNOWN");reply(receipt.run()+":unknown",receipt.message(),"Run の保存期間が終了、または実行結果が不明です。履歴とチェックポイントを確認してください。");}
+        store.notifyRun(receipt.run(),run.status().name(),receipt.run()+":terminal",receipt.message(),SlackReplies.parts(text));
+      }catch(RunNotFoundException missing){store.notifyRun(receipt.run(),"UNKNOWN",receipt.run()+":unknown",receipt.message(),SlackReplies.parts("Run の保存期間が終了、または実行結果が不明です。履歴とチェックポイントを確認してください。"));}
     }
   }
   private void dispatch(SlackMessage m) {
@@ -64,13 +63,13 @@ public final class SlackRuntime {
       return store.bind(m,id,sessions.create(project,"Slack conversation").sessionId());
     });
     var project=projects.resolveById(binding.project()).orElseThrow();
-    sessions.submit(project,binding.session(),text,AgentRunContext.RequestSource.WEB,context->{
+    var accepted=sessions.submit(project,binding.session(),text,AgentRunContext.RequestSource.WEB,context->{
       if(!store.prepare(m,context.runId(),binding))throw new IllegalStateException("Slack receipt already dispatched");
       registry.register(context);
       reply(context.runId()+":accepted",m,"受付しました。Run: "+context.runId());
       router.submit(context,text,work->runs.execute(context,work));
     });
-    store.transition(m,"DISPATCHING","ACTIVE");
+    store.activateRun(accepted.runId());
   }
   private void control(SlackMessage m,String text) {
     // Claim the command before a cancellation side effect, including across restarts.
@@ -83,7 +82,7 @@ public final class SlackRuntime {
       reply(m.key()+":control",m,"Run: "+receipt.run()+"\n状態: "+status);return;
     }
     if(run.status().isTerminal()){reply(m.key()+":control",m,"Run は終了済みです。");return;}
-    store.state(receipt.message(),"CANCEL_REQUESTED");
+    store.stateRun(receipt.run(),"CANCEL_REQUESTED");
     var result=runs.cancel(receipt.run());
     reply(m.key()+":control",m,result.accepted()?"キャンセルを受け付けました。停止を確認しています。":"キャンセル対象は終了済みです。");
   }
@@ -95,14 +94,16 @@ public final class SlackRuntime {
     if(receipt.isPresent()&&(!event.projectId().equals(receipt.get().project())||!event.sessionId().equals(receipt.get().session())))return;
     var m=target.get();
     switch(event.type()) {
-      case AGENT_RUN_STARTED -> reply(event.runId()+":running",m,"処理中です。Run: "+event.runId());
+      case AGENT_RUN_STARTED -> {
+        if(receipt.isEmpty())store.adoptRun(m,event.runId(),event.projectId(),event.sessionId());
+        reply(event.runId()+":running",m,"処理中です。Run: "+event.runId());
+      }
       case MESSAGE_COMPLETED -> {
         if(event.payload() instanceof MessageCompletedPayload payload&&"assistant".equals(payload.role()))reply(event.runId()+":answer:"+payload.messageId(),m,payload.text());
       }
       case TOOL_FAILED -> {
         if(event.payload() instanceof ToolFailedPayload payload&&payload.error()!=null&&"PermissionRequired".equals(payload.error().errorType())) {
-          receipt.ifPresent(r->store.state(r.message(),"WAITING_APPROVAL"));
-          reply(event.runId()+":approval",m,"承認待ちです。既存 UI／Shell の /approval で確認・承認または拒否し、既存のチェックポイント再開操作を使ってください。Slack の発言は承認として扱いません。");
+          store.notifyRun(event.runId(),"WAITING_APPROVAL",event.runId()+":approval",m,SlackReplies.parts("承認待ちです。既存 UI／Shell の /approval で確認・承認または拒否し、既存のチェックポイント再開操作を使ってください。Slack の発言は承認として扱いません。"));
         }
       }
       case AGENT_RUN_COMPLETED,AGENT_RUN_FAILED -> {
@@ -112,12 +113,13 @@ public final class SlackRuntime {
     }
   }
   private void reply(String id,SlackMessage m,String text) {
-    var parts=SlackReplies.parts(text);for(int i=0;i<parts.size();i++)store.reply(id+":"+i,m,parts.get(i));
+    store.replyParts(id,m,SlackReplies.parts(text));
   }
   /** One attempt per channel per tick; rate-limited attempts wait in the durable outbox. */
   public void send(SlackTransport transport) {
     var attempted=new HashSet<String>();
     for(var row:store.outbox(clock.millis())) {
+      if(!p.getAllowedWorkspaceIds().contains(row.team())||!p.getAllowedChannelIds().contains(row.channel())||!p.getAllowedUserIds().contains(row.requester())){store.suppress(row.id());continue;}
       if(!attempted.add(row.team()+":"+row.channel())||!store.claimSend(row.id()))continue;
       SlackTransport.Delivery result;
       try{result=transport.send(row);}catch(RuntimeException error){result=SlackTransport.Delivery.unknown();}

@@ -34,6 +34,7 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
       if(p.getAllowedUserIds()==null||p.getAllowedUserIds().size()>128)throw new SlackSetupException(SlackSetupException.Code.USER_VALIDATION_FAILED);
       var humans=new HashSet<String>();
       for(String user:p.getAllowedUserIds()) {
+        if(Thread.currentThread().isInterrupted())throw new SlackSetupException(SlackSetupException.Code.CONNECTION_FAILED);
         var result=methods.usersInfo(r->r.user(user));
         if(!result.isOk()||result.getUser()==null)throw new SlackSetupException(SlackSetupException.Code.USER_VALIDATION_FAILED);
         var identity=result.getUser();if(!identity.isBot()&&!identity.isAppUser()&&!identity.isDeleted()&&!identity.isWorkflowBot()&&!identity.isConnectorBot())humans.add(user);
@@ -44,6 +45,7 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
       var verified=new SlackProperties();verified.setEnabled(true);verified.setAllowedWorkspaceIds(Set.of(auth.getTeamId()));verified.setAllowedUserIds(Set.copyOf(humans));
       verified.setAllowedChannelIds(p.getAllowedChannelIds()==null?Set.of():Set.copyOf(p.getAllowedChannelIds()));verified.setChannelProjects(Map.copyOf(p.getChannelProjects()));verified.setDmProjectId(p.getDmProjectId());
       var store=new SlackStore(root);
+      store.recoverSending();
       // Separate lifecycle object shares the repository, without changing Shell notification selection.
       connection.runtime=new SlackRuntime(verified,store,auth.getUserId(),projects,new SessionLifecycle(repository,clock),registry,runs,router,clock);
       connection.transport=new SdkSlackTransport(methods,auth.getTeamId());

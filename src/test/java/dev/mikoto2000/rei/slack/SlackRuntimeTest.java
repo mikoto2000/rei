@@ -54,21 +54,44 @@ class SlackRuntimeTest {
     runtime.accept(m("3","1","/rei-cancel"));runtime.tick();
     assertEquals(1,registry.runIds().size());
     assertEquals("CANCEL_REQUESTED",store.byRun(receipt.run()).orElseThrow().state());
-    assertTrue(store.outbox(Long.MAX_VALUE).stream().anyMatch(r->r.text().contains("キャンセルを受け付け")));
-    assertTrue(store.outbox(Long.MAX_VALUE).stream().noneMatch(r->r.text().contains("キャンセル完了")));
+    assertTrue(store.replies().stream().anyMatch(r->r.text().contains("キャンセルを受け付け")));
+    assertTrue(store.replies().stream().noneMatch(r->r.text().contains("キャンセル完了")));
     when(router.containsRun(anyString(),anyString())).thenReturn(false);runtime.tick();
-    assertTrue(store.outbox(Long.MAX_VALUE).stream().anyMatch(r->r.text().contains("キャンセル完了")));
+    assertTrue(store.replies().stream().anyMatch(r->r.text().contains("キャンセル完了")));
   }
   @Test void permissionRequiredUsesExistingApprovalAndRepliesToOwningThread() {
     var runtime=runtime();runtime.accept(m("1",null,"hello"));runtime.tick();var r=store.latest(m("1",null,"hello")).orElseThrow();
     runtime.onEvent(new AgentEvent("event",1,Clock.systemUTC().instant(),AgentEventType.TOOL_FAILED,1,r.session(),null,r.run(),null,null,new ToolFailedPayload("M","write",new ErrorInformation("PermissionRequired","unsafe raw data",null)),r.project()));
     assertEquals("WAITING_APPROVAL",store.byRun(r.run()).orElseThrow().state());
-    assertTrue(store.outbox(Long.MAX_VALUE).stream().anyMatch(row->row.thread().equals("1")&&row.text().contains("承認待ち")));
-    assertTrue(store.outbox(Long.MAX_VALUE).stream().noneMatch(row->row.text().contains("unsafe raw data")));
+    assertTrue(store.replies().stream().anyMatch(row->row.thread().equals("1")&&row.text().contains("承認待ち")));
+    assertTrue(store.replies().stream().noneMatch(row->row.text().contains("unsafe raw data")));
   }
   @Test void unrelatedEventNeverLeaksToSlack() {
     var runtime=runtime();runtime.accept(m("1",null,"hello"));runtime.tick();
     runtime.onEvent(new AgentEvent("event",1,Clock.systemUTC().instant(),AgentEventType.MESSAGE_COMPLETED,1,"other",null,"other",null,null,new MessageCompletedPayload("M","assistant","private"),"other"));
-    assertTrue(store.outbox(Long.MAX_VALUE).stream().noneMatch(r->r.text().contains("private")));
+    assertTrue(store.replies().stream().noneMatch(r->r.text().contains("private")));
+  }
+  @Test void immediateFollowupToAcceptedParentIsNotLostBeforeWorkerRuns() {
+    var runtime=runtime();assertTrue(runtime.accept(m("1",null,"hello")));
+    assertTrue(runtime.accept(m("2","1","next")));runtime.tick();
+    verify(router,times(2)).submit(any(AgentRunContext.class),anyString(),any());
+    assertEquals(store.latest(m("1",null,"hello")).orElseThrow().session(),store.latest(m("2","1","next")).orElseThrow().session());
+  }
+  @Test void unknownDispatchAfterRestartIsNeverSubmittedAgain() {
+    var m=m("1",null,"hello");store.accept(m);var session=sessions.create(projects.resolveById(p.getDmProjectId()).orElseThrow(),"thread");
+    var binding=store.bind(m,p.getDmProjectId(),session.sessionId());store.prepare(m,"interrupted",binding);
+    runtime().tick();verifyNoInteractions(router);assertEquals("UNKNOWN",store.byRun("interrupted").orElseThrow().state());
+  }
+  @Test void resumedRunBecomesCurrentWithoutLosingOriginalEventMapping() {
+    var runtime=runtime();var m=m("1",null,"hello");runtime.accept(m);runtime.tick();var original=store.latest(m).orElseThrow();
+    store.stateRun(original.run(),"WAITING_APPROVAL");
+    var context=new AgentRunContext("resumed",original.session(),root,original.project(),AgentRunContext.RequestSource.WEB);registry.register(context);
+    runtime.onEvent(new AgentEvent("resumed-event",1,Clock.systemUTC().instant(),AgentEventType.AGENT_RUN_STARTED,1,original.session(),null,"resumed",null,null,null,original.project()));
+    assertEquals("resumed",store.latest(m).orElseThrow().run());
+    assertEquals(original.run(),store.byRun(original.run()).orElseThrow().run());
+  }
+  @Test void changedChannelAllowlistSuppressesPendingReplies() {
+    var runtime=runtime();runtime.accept(m("1",null,"hello"));runtime.tick();p.setAllowedChannelIds(Set.of());
+    var transport=mock(SlackTransport.class);runtime.send(transport);verifyNoInteractions(transport);
   }
 }
