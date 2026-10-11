@@ -28,6 +28,18 @@ Before implementation the task process was checked for token availability (boole
 
 ## Review decisions
 
+- Receipt-suppression follow-up TDD: real envelope/runtime/outbox/request-ledger tests reproduced
+  a configured Bot User event without bot_id falling into human admission (8 tests, 1 failure: Red).
+  Classify Bot IDs, bot_message subtype, configured Bot Users and self before human admission;
+  rejected external replies never fall back. Exact reply authorization stays in the existing ledger.
+  Coverage includes human receipt delivery regardless of body text, repeated/duplicate Bot replies,
+  unknown/self Bots, missing Bot metadata, disconnected/unrequested senders, mismatched identity,
+  workspace/channel/thread and cancelled requests. The existing human and Bluesky paths are retained.
+  Green: the initial 8 boundary tests and 191 Slack/Bluesky tests passed. Refactor: extract sender
+  classification into a named receiver helper, keeping external authorization separate from routing.
+  After the additional disconnected/unrequested sender case, all 9 boundary tests and 192
+  Slack/Bluesky tests passed on the final source.
+
 - Ordinary Run cancellation uses the regular event subscription (RunService publishes ordinary events). Goal/Scheduler completion callbacks are deferred to the existing Slack pump; they never run under the event-bus cancellation monitor.
 - Only WAITING human continuations are eligible after a clean process restart. In-flight admission/LLM execution and orphaned managed parents become UNKNOWN. Saved external results remain readable. No invented parent budget or new Run is used to hide uncertainty.
 - Replies never become system messages; restored non-system tool-call/response history is combined with freshly generated host system instructions. Request text, outbound destination and body pass the existing exact-input Permission guard before the shared SQLite transaction.
