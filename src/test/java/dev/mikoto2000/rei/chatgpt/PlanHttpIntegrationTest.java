@@ -35,7 +35,7 @@ class PlanHttpIntegrationTest {
           assertEquals("Bearer mock-access", x.getRequestHeaders().getFirst("Authorization"));
           requests.incrementAndGet();
           x.getRequestBody().readAllBytes();
-          x.getResponseHeaders().set("Content-Type", "text/event-stream");
+          // Simulate the observed HTTP 200 response with no Content-Type.
           x.sendResponseHeaders(200, 0);
           for (byte b :
               PlanSseAssemblerTest.event("response.completed", PlanSseAssemblerTest.COMPLETED)

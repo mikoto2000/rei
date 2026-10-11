@@ -423,46 +423,208 @@ class PlanClientTest {
     }
     String terminal =
         PlanSseAssemblerTest.event("response.completed", PlanSseAssemblerTest.COMPLETED);
-    for (int size : new int[] {1048576, 1048577}) {
-      int padding = size - terminal.length();
-      String sse = ":\n".repeat(padding / 2) + (padding % 2 == 0 ? "" : "\n") + terminal;
+    for (String contentType : new String[] {"text/event-stream", ""}) {
+      for (int size : new int[] {1048576, 1048577}) {
+        int padding = size - terminal.length();
+        String sse = ":\n".repeat(padding / 2) + (padding % 2 == 0 ? "" : "\n") + terminal;
+        PlanTransport transport =
+            (u, m, h, b, t, c) ->
+                m.equals("GET")
+                    ? PlanOAuthTest.reply(200, MODELS)
+                    : new PlanTransport.Response(
+                        200, PlanSseAssemblerTest.stream(sse), "mock-request", contentType);
+        var client = new PlanClient(oauth(transport), transport, Clock.systemUTC());
+        if (size == 1048576)
+          assertEquals(
+              "hello",
+              client
+                  .infer(
+                      "default",
+                      "allowed",
+                      "instructions",
+                      "task",
+                      Duration.ofSeconds(10),
+                      262144,
+                      1048576,
+                      () -> false)
+                  .text());
+        else
+          assertEquals(
+              ChatGptException.Code.RECEIVE_LIMIT,
+              assertThrows(
+                      ChatGptException.class,
+                      () ->
+                          client.infer(
+                              "default",
+                              "allowed",
+                              "instructions",
+                              "task",
+                              Duration.ofSeconds(10),
+                              262144,
+                              1048576,
+                              () -> false))
+                  .code());
+      }
+    }
+  }
+
+  @Test
+  void missingResponsesMediaTypeStillRequiresValidatedTerminalSse() {
+    for (String header : new String[] {"", "   "}) {
       PlanTransport transport =
           (u, m, h, b, t, c) ->
               m.equals("GET")
                   ? PlanOAuthTest.reply(200, MODELS)
                   : new PlanTransport.Response(
-                      200, PlanSseAssemblerTest.stream(sse), "mock-request", "text/event-stream");
-      var client = new PlanClient(oauth(transport), transport, Clock.systemUTC());
-      if (size == 1048576)
-        assertEquals(
-            "hello",
-            client
-                .infer(
-                    "default",
-                    "allowed",
-                    "instructions",
-                    "task",
-                    Duration.ofSeconds(10),
-                    262144,
-                    1048576,
-                    () -> false)
-                .text());
-      else
-        assertEquals(
-            ChatGptException.Code.RECEIVE_LIMIT,
-            assertThrows(
-                    ChatGptException.class,
-                    () ->
-                        client.infer(
+                      200,
+                      PlanSseAssemblerTest.stream(
+                          ":heartbeat\n\n"
+                              + PlanSseAssemblerTest.event(
+                                  "response.completed", PlanSseAssemblerTest.COMPLETED)),
+                      null,
+                      header);
+      var result =
+          new PlanClient(oauth(transport), transport, Clock.systemUTC())
+              .infer(
+                  "default",
+                  "allowed",
+                  "instructions",
+                  "task",
+                  Duration.ofSeconds(5),
+                  262144,
+                  1048576,
+                  () -> false);
+      assertEquals(PlanSseAssembler.State.COMPLETED, result.state());
+      assertEquals("hello", result.text());
+      assertEquals(17, result.totalTokens());
+    }
+  }
+
+  @Test
+  void missingMediaTypeDoesNotConvertFailedOrPartialStreamToSuccess() {
+    for (String type :
+        new String[] {"response.failed", "response.incomplete", "response.output_text.delta"}) {
+      String response = "{\"error\":{\"code\":\"subscription_sharing_usage_limit_exceeded\"}}";
+      PlanTransport transport =
+          (u, m, h, b, t, c) ->
+              m.equals("GET")
+                  ? PlanOAuthTest.reply(200, MODELS)
+                  : new PlanTransport.Response(
+                      200,
+                      PlanSseAssemblerTest.stream(PlanSseAssemblerTest.event(type, response)),
+                      null,
+                      "");
+      var result =
+          new PlanClient(oauth(transport), transport, Clock.systemUTC())
+              .infer(
+                  "default",
+                  "allowed",
+                  "instructions",
+                  "task",
+                  Duration.ofSeconds(5),
+                  262144,
+                  1048576,
+                  () -> false);
+      assertNotEquals(PlanSseAssembler.State.COMPLETED, result.state());
+      assertEquals("", result.text());
+      if (type.equals("response.failed"))
+        assertEquals(ChatGptException.Code.USAGE_LIMIT, result.error());
+    }
+  }
+
+  @Test
+  void missingMediaTypeRejectsNonSseWithoutLeakingBodyAndReportsObservedBytes() {
+    for (String body :
+        new String[] {
+          "",
+          "{\"secret\":\"access-secret\"}\n",
+          "<html>access-secret</html>\n",
+          "data: not-json-access-secret\n\n",
+          ":heartbeat\n\n"
+        }) {
+      PlanTransport transport =
+          (u, m, h, b, t, c) ->
+              m.equals("GET")
+                  ? PlanOAuthTest.reply(200, MODELS)
+                  : new PlanTransport.Response(
+                      200, PlanSseAssemblerTest.stream(body), "request-secret", "");
+      var error =
+          assertThrows(
+              ChatGptException.class,
+              () ->
+                  new PlanClient(oauth(transport), transport, Clock.systemUTC())
+                      .infer(
+                          "default",
+                          "allowed",
+                          "instructions",
+                          "task",
+                          Duration.ofSeconds(5),
+                          262144,
+                          1048576,
+                          () -> false));
+      assertEquals(ChatGptException.Code.PROTOCOL, error.code());
+      assertTrue(
+          error
+              .getMessage()
+              .contains(
+                  "operation=responses, httpStatus=200, contentType=missing, receivedBytes="));
+      assertFalse(error.toString().contains("secret"));
+    }
+  }
+
+  @Test
+  void explicitWrongMediaTypeAndEncodedMissingTypeStayRejectedBeforeBodyRead() {
+    for (String type :
+        new String[] {"text/html", "application/json", "text/event-stream-untrusted"}) {
+      PlanTransport transport =
+          (u, m, h, b, t, c) ->
+              m.equals("GET")
+                  ? PlanOAuthTest.reply(200, MODELS)
+                  : new PlanTransport.Response(
+                      200,
+                      PlanSseAssemblerTest.stream(
+                          PlanSseAssemblerTest.event(
+                              "response.completed", PlanSseAssemblerTest.COMPLETED)),
+                      null,
+                      type);
+      var error =
+          assertThrows(
+              ChatGptException.class,
+              () ->
+                  new PlanClient(oauth(transport), transport, Clock.systemUTC())
+                      .infer(
+                          "default",
+                          "allowed",
+                          "instructions",
+                          "task",
+                          Duration.ofSeconds(5),
+                          262144,
+                          1048576,
+                          () -> false));
+      assertEquals(ChatGptException.Code.PROTOCOL, error.code());
+      assertFalse(error.getMessage().contains("receivedBytes="));
+    }
+    PlanTransport encoded =
+        (u, m, h, b, t, c) ->
+            m.equals("GET")
+                ? PlanOAuthTest.reply(200, MODELS)
+                : new PlanTransport.Response(
+                    200, PlanSseAssemblerTest.stream(""), null, "", "gzip");
+    assertEquals(
+        ChatGptException.Code.PROTOCOL,
+        assertThrows(
+                ChatGptException.class,
+                () ->
+                    new PlanClient(oauth(encoded), encoded, Clock.systemUTC())
+                        .infer(
                             "default",
                             "allowed",
                             "instructions",
                             "task",
-                            Duration.ofSeconds(10),
+                            Duration.ofSeconds(5),
                             262144,
                             1048576,
                             () -> false))
-                .code());
-    }
+            .code());
   }
 }

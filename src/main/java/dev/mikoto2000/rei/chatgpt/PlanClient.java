@@ -181,13 +181,22 @@ public final class PlanClient {
       if (response.status() != 200) {
         throw httpError(response, "responses", remaining, stop);
       }
-      if (!mediaType(response).equals("text/event-stream") || !identityEncoding(response))
+      String type = mediaType(response);
+      if ((!type.isEmpty() && !type.equals("text/event-stream")) || !identityEncoding(response))
         throw failure(PROTOCOL, response, "responses", -1, receiveLimit);
+      var assembler = new PlanSseAssembler();
       return PlanIO.read(
           response.body(),
           remaining,
           stop,
-          () -> new PlanSseAssembler().read(response.body(), receiveLimit));
+          () -> {
+            try {
+              return assembler.read(response.body(), receiveLimit, type.isEmpty());
+            } catch (ChatGptException e) {
+              throw failure(
+                  e.code(), response, "responses", assembler.receivedBytes(), receiveLimit);
+            }
+          });
     }
   }
 

@@ -28,11 +28,22 @@ public final class PlanSseAssembler {
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
           .enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
 
+  private int received;
+
+  int receivedBytes() {
+    return received;
+  }
+
   public Result read(InputStream input, int maxBytes) {
+    return read(input, maxBytes, false);
+  }
+
+  Result read(InputStream input, int maxBytes, boolean requireSseFraming) {
     var line = new ByteArrayOutputStream();
     var data = new StringBuilder();
     String event = "";
-    int received = 0;
+    received = 0;
+    boolean seenData = false;
     boolean cr = false;
     try {
       for (int b; (b = input.read()) != -1; ) {
@@ -46,6 +57,7 @@ public final class PlanSseAssembler {
           cr = b == '\r';
           String text = decode(line.toByteArray());
           line.reset();
+          if (requireSseFraming && !isSseLine(text)) throw ChatGptException.of(PROTOCOL);
           if (text.isEmpty()) {
             if (!data.isEmpty()) {
               var result = parse(event, data.toString());
@@ -54,17 +66,29 @@ public final class PlanSseAssembler {
             data.setLength(0);
             event = "";
           } else if (text.startsWith("data:")) {
+            seenData = true;
             if (!data.isEmpty()) data.append('\n');
             data.append(text.substring(5).replaceFirst("^ ", ""));
           } else if (text.startsWith("event:")) event = text.substring(6).strip();
         } else line.write(b);
       }
+      if (requireSseFraming && (!seenData || !isSseLine(decode(line.toByteArray()))))
+        throw ChatGptException.of(PROTOCOL);
       return new Result(State.OUTCOME_UNKNOWN, "", null, null, null);
     } catch (ChatGptException e) {
       throw e;
     } catch (IOException e) {
       return new Result(State.OUTCOME_UNKNOWN, "", null, null, TRANSPORT);
     }
+  }
+
+  private static boolean isSseLine(String line) {
+    return line.isEmpty()
+        || line.startsWith(":")
+        || line.startsWith("data:")
+        || line.startsWith("event:")
+        || line.startsWith("id:")
+        || line.startsWith("retry:");
   }
 
   private String decode(byte[] bytes) {
