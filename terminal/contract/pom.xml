@@ -1,0 +1,7 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
+  <parent><groupId>dev.mikoto2000</groupId><artifactId>rei-terminal</artifactId><version>0.0.1-SNAPSHOT</version></parent><artifactId>rei-contract</artifactId>
+  <dependencies><dependency><groupId>com.fasterxml.jackson.core</groupId><artifactId>jackson-databind</artifactId></dependency></dependencies>
+  <build><sourceDirectory>../../src/main/java</sourceDirectory><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><configuration><includes>
+    <include>dev/mikoto2000/rei/launcher/BackendEndpoint.java</include><include>dev/mikoto2000/rei/launcher/BackendEndpointStore.java</include><include>dev/mikoto2000/rei/launcher/BackendConnectionProbe.java</include><include>dev/mikoto2000/rei/launcher/BackendOwnership.java</include><include>dev/mikoto2000/rei/core/datasource/ReiDataDirectory.java</include>
+  </includes></configuration></plugin></plugins></build>
+</project>
