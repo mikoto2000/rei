@@ -10,4 +10,6 @@ public interface AgentScheduler {
   ScheduledAgentTask scheduleAt(Instant executeAt, String action, String conversationId);
 
   List<ScheduledAgentTask> list();
+
+  void cancel(String id);
 }

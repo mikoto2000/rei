@@ -47,6 +47,17 @@ public class SchedulerTools {
     return scheduler.list();
   }
 
+  @Tool(name = "cancelScheduledAction", description = """
+      タイマー ID を指定し、現在の Project/Session の未実行タイマーを取り消します。
+      listScheduledActions で取得した ID を指定してください。PENDING、SCHEDULED、WAITING_EVENT が対象です。
+      定期実行も以降の実行を停止します。実行中や終了済みのタイマーは取り消せません。
+      履歴は保持されます。
+      """)
+  public String cancelScheduledAction(String timerId) {
+    scheduler.cancel(timerId);
+    return "Schedule cancelled";
+  }
+
   @Tool(name="scheduleInterval",description="Register a bounded interval continuation as PENDING. Interval 1m..366d, occurrences 2..100. Review /timer show ID and explicitly activate. Missed times coalesce; failure stops repetitions.")
   public ScheduledAgentTask scheduleInterval(String interval,int occurrences,String action,String conversationId) {
     if(!(scheduler instanceof PersistentAgentScheduler persistent))throw new IllegalStateException("Persistent scheduler required");

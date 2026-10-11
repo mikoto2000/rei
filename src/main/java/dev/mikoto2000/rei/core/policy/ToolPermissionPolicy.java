@@ -11,7 +11,7 @@ public class ToolPermissionPolicy {
   private static final Set<String> READ=Set.of("readFile","readMultiFile","grepMultiQuery","readPdfFile",
       "searchAndRead","today","now","findFile","listFile","repositoryMap","changeTestImpact","diagnoseTestReport","diagnoseTestReports","readTextChangeSetBase","inspectTextChangeSet","getShellProcessStatus","waitForShellProcess","waitForFile","dependencyStatus","dependencyHistory","checkDependency","waitForDependency","listScheduledActions","listCodexReviews","getCodexReview");
   private static final Set<String> NETWORK_READ=Set.of("webSearch","webSearchAndRead","fetchUrlContent","checkHttpDependency","waitForHttpDependency");
-  private static final Set<String> LOCAL_WRITE=Set.of("applyTextDiff","writeMultiFile","proposeTextChangeSet","applyTextChangeSet","discardTextChangeSet","reconcileTextChangeSet","createDirectory","copyFile","scheduleAfter","scheduleAt","scheduleInterval","scheduleCron","scheduleOnEvent","registerDependency","cancelDependency");
+  private static final Set<String> LOCAL_WRITE=Set.of("applyTextDiff","writeMultiFile","proposeTextChangeSet","applyTextChangeSet","discardTextChangeSet","reconcileTextChangeSet","createDirectory","copyFile","scheduleAfter","scheduleAt","scheduleInterval","scheduleCron","scheduleOnEvent","cancelScheduledAction","registerDependency","cancelDependency");
   private final ToolPermissionProperties properties;
   public ToolPermissionPolicy(ToolPermissionProperties properties) {this.properties=properties;}
   /** Stable administrator policy identity for durable authorization audit. */

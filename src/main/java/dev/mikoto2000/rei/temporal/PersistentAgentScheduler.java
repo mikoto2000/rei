@@ -233,6 +233,18 @@ public class PersistentAgentScheduler implements AgentScheduler {
           .param(project).update();
     });
   }
+  @Override public void cancel(String id) {
+    if(id==null||id.isBlank())throw new IllegalArgumentException("timerId is required");
+    var owner=AgentRunScope.current();
+    if(owner==null||owner.projectId()==null)throw new IllegalArgumentException("Owning project is required");
+    transaction.executeWithoutResult(status->{
+      var entry=get(owner.projectId(),id);
+      if(!Objects.equals(entry.task().conversationId(),owner.conversationId())
+          ||!Objects.equals(entry.projectRoot(),owner.projectRoot().toString()))
+        throw new IllegalArgumentException("Schedule not found in this Project/Session");
+      cancel(owner.projectId(),id);
+    });
+  }
   public void cancel(String project,String id) {
     cancel(project,id,(Long)null);
   }

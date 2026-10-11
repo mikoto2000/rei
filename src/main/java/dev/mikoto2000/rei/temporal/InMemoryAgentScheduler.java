@@ -33,6 +33,12 @@ public class InMemoryAgentScheduler implements AgentScheduler {
     return List.copyOf(tasks);
   }
 
+  @Override
+  public void cancel(String id) {
+    if (id == null || id.isBlank()) throw new IllegalArgumentException("timerId is required");
+    if (!tasks.removeIf(task -> task.id().equals(id))) throw new IllegalArgumentException("Schedule not found");
+  }
+
   private ScheduledAgentTask save(ScheduledAgentTask task) {
     tasks.add(task);
     return task;
