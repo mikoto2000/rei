@@ -96,7 +96,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
       if(values.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY) instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext run)return run.runContext();
       if(values.get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName()) instanceof dev.mikoto2000.rei.core.chat.AgentRunContext run)return run;
     }
-    return null;
+    return dev.mikoto2000.rei.core.chat.AgentRunScope.current();
   }
   private boolean cancelled(Prompt prompt) {
     return Thread.currentThread().isInterrupted() || prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options && options.getToolContext()!=null
@@ -157,5 +157,3 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     return (System.nanoTime() - startedAtNanos) / 1_000_000L;
   }
 }
-
-

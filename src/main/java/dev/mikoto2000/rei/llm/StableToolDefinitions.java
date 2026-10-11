@@ -8,7 +8,10 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 /** Canonicalizes only supplied definitions. Callback authority and context are delegated unchanged. */
 public final class StableToolDefinitions {
- private static final ObjectMapper MAPPER=new ObjectMapper();
+ private static final ObjectMapper MAPPER=new ObjectMapper()
+     .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+     .enable(DeserializationFeature.USE_BIG_INTEGER_FOR_INTS)
+     .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
  private StableToolDefinitions() {}
  public static Prompt prompt(Prompt prompt) {
   if(!(prompt.getOptions() instanceof ToolCallingChatOptions options)||options.getToolCallbacks()==null||options.getToolCallbacks().isEmpty())return prompt;

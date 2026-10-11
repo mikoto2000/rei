@@ -18,5 +18,9 @@ class StableToolDefinitionsTest {
   callbacks.getLast().call("input");verify(z).call("input");assertEquals(List.of(z,a),options.getToolCallbacks());
   assertEquals(stable.getInstructions(),original.getInstructions());assertEquals("auto",((OpenAiChatOptions)stable.getOptions()).getToolChoice());
  }
+ @Test void preservesExactDecimalSchemaConstraints() {
+  var schema="{\"type\":\"number\",\"minimum\":0.12345678901234567890123456789}";
+  assertTrue(StableToolDefinitions.callbacks(List.of(tool("a",schema))).getFirst().getToolDefinition().inputSchema().contains("0.12345678901234567890123456789"));
+ }
  @Test void malformedSchemaSafelyKeepsOriginalAndDoesNotIntroduceTools(){var tool=tool("a","invalid");assertEquals("invalid",StableToolDefinitions.callbacks(List.of(tool)).getFirst().getToolDefinition().inputSchema());assertEquals(List.of(),StableToolDefinitions.callbacks(List.of()));}
 }

@@ -121,3 +121,7 @@ LlmModelProvider の feature model は ConcurrentHashMap で再利用され、�
 - 診断は最大64領域の text / tool call / tool response と ToolDefinitions。media バイト列の比較、結合済み Developer/Skill の詳細分割、token 単位の共通 Prefix 数は未実装。
 - Working Set revision/delta/move tombstone、Run間 Tool transcript 再送、自動 cache tuning は今後の検討。今回実装済みと混同しない。
 
+
+最終レビューでは小数 schema constraint の精度と ToolContext のない同期補助呼び出しを追加テストで再現した。独立 JUnit 実行で2件 Red → BigDecimal/BigInteger 読取と既存 AgentRunScope fallback により2件 Green。ToolContext の明示的 ownership を最優先にし、同期 lexical scope は補助呼び出しだけの fallback とする。全回帰とは別出力先で実行し、既存テスト JVM の classes は書き換えない。詳細表示に call ごとの uncached_input_tokens / cache_hit_rate / usage_supported / cache_metrics_supported / prefill_duration=UNKNOWN も併記する。
+
+静的解析: 確定した作業基点から変更した本番 Java 全クラスを `javac -Xlint:all -proc:none` で別出力先へコンパイルし成功。既存 BoundedToolLoop / StagnationChatModel の serialVersionUID と lexical scope に関する5警告は残る。今回の新規クラスに警告はない。`git diff --check` も成功。

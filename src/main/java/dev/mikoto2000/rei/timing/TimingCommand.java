@@ -34,6 +34,7 @@ public class TimingCommand implements java.util.concurrent.Callable<Integer> {
   }catch(RuntimeException unavailable){spec.commandLine().getErr().println("Usage: /timing [last|RUN_ID] [--details]. 計測照会に失敗しました。詳細は非表示です。");return 2;}
   finally{out.flush();}
  }
+ static Object unknown(Object value){return value==null?"UNKNOWN":value;}
  static String ms(long value){return String.format(Locale.ROOT,"%.6f ms",value/1_000_000d);}
  public static String report(Run run,boolean details,Statistics statistics) {
   var text=new java.io.StringWriter();var writer=new PrintWriter(text);render(writer,run,details,statistics);writer.flush();return text.toString();
@@ -57,9 +58,13 @@ public class TimingCommand implements java.util.concurrent.Callable<Integer> {
   out.println("保持Run/Span: "+statistics.runs()+"/"+statistics.spans()+" / 破棄Run: "+statistics.evictedRuns()+" / 省略Span: "+statistics.droppedSpans());
   if(details)for(var span:run.spans()) {
    out.println("  "+span.id()+" parent="+span.parentId()+" request="+span.requestId()+" attempt="+span.attemptId()+" "+span.category()+" "+span.status()+" start="+ms(span.startNanos())+" end="+(span.endNanos()==null?"未完了":ms(span.endNanos())));
-   if(span.llm()!=null)out.println("    cache/prefix (構造診断は実測hit数ではありません): "+span.llm());
+   if(span.llm()!=null) {
+    var cache=new PromptCacheMetrics.Usage(span.inputTokens(),span.llm().cachedInputTokens());
+    out.println("    cache/prefix (構造診断は実測hit数ではありません): "+span.llm());
+    out.println("    uncached_input_tokens="+unknown(cache.uncached())+" cache_hit_rate="+unknown(cache.hitRate())
+        +" usage_supported="+cache.usageSupported()+" cache_metrics_supported="+cache.cacheMetricsSupported()+" prefill_duration=UNKNOWN");
+   }
    out.println("    観測 "+span.startedAt()+" 指標(Span開始からns) "+span.milestones()+" input="+(span.inputTokens()==null?"未取得":span.inputTokens())+" output="+(span.outputTokens()==null?"未取得":span.outputTokens())+" generationTPS="+(span.generationTps()==null?"未取得":span.generationTps())+" (Run範囲外の時間は占有に加算しません)");
   }
  }
 }
-
