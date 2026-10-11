@@ -3,10 +3,10 @@ setlocal
 pushd "%~dp0"
 if errorlevel 1 exit /b %errorlevel%
 
-call mvnw.cmd package %*
+call mvnw.cmd package -DskipTests %*
 if errorlevel 1 goto failed
 
-call mvnw.cmd -f terminal\pom.xml package %*
+call mvnw.cmd -f terminal\pom.xml package -DskipTests %*
 if errorlevel 1 goto failed
 
 popd
