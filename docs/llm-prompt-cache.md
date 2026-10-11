@@ -125,3 +125,15 @@ LlmModelProvider の feature model は ConcurrentHashMap で再利用され、�
 最終レビューでは小数 schema constraint の精度と ToolContext のない同期補助呼び出しを追加テストで再現した。独立 JUnit 実行で2件 Red → BigDecimal/BigInteger 読取と既存 AgentRunScope fallback により2件 Green。ToolContext の明示的 ownership を最優先にし、同期 lexical scope は補助呼び出しだけの fallback とする。全回帰とは別出力先で実行し、既存テスト JVM の classes は書き換えない。詳細表示に call ごとの uncached_input_tokens / cache_hit_rate / usage_supported / cache_metrics_supported / prefill_duration=UNKNOWN も併記する。
 
 静的解析: 確定した作業基点から変更した本番 Java 全クラスを `javac -Xlint:all -proc:none` で別出力先へコンパイルし成功。既存 BoundedToolLoop / StagnationChatModel の serialVersionUID と lexical scope に関する5警告は残る。今回の新規クラスに警告はない。`git diff --check` も成功。
+
+実 Provider の到達確認: 構成された chat endpoint の `/v1/models` を5秒 deadline で照会したが TaskCanceledException (timeout) で取得できなかった。秘密値・catalog本文は出力せず、生成 API は呼んでいない。この環境から実 Provider の cold/warm 比較ができたとは報告しない。
+
+## 検証記録 (2026-10-11)
+
+- CI と同じ `.github/ci/full-test.ps1 -TimeoutSeconds 1200` の全回帰: 5033件、failures 0、errors 0、skipped 2、15分48秒。最終レビュー修正前の構築済み classes に対する検証。
+- 作業中に main の PR #99 が入ったため rebase (競合なし)。最終修正と最新 main を含む targeted regression: 340件、failures/errors/skipped 0、1分21秒。LLM、Timing、Skill Selection、Model Budget、ToolPermission、Capture、Checkpoint、SubAgent (追加された自動 Plan 委譲テストも含む)。
+- 最終状態の全回帰は GitHub PR CI で確認する。ローカルで最終状態の全 suite を再実行したとは扱わない。
+- 既存 TimingOverheadProbeTest (小さい固定 Prompt、7 batch ×1000 call の中央値): timing disabled 4.809µs/call、enabled 13.711µs/call、差 8.902µs/call。元出力・イベント3000件・Span1000件の保持を検証。今回の診断を含む timing 全体と無効状態の比較であり、変更前の timing 実装との差ではない。
+- TimingMemoryProbeTest: 10000基本 Span の post-GC process heap delta 約3.32MB。この probe は Prefix 領域を投入しないため、新しい Prefix metadata を満杯まで保持したメモリ量の測定ではない。
+- 合成 Prefix 診断の最終再測定中央値: chat 13.6µs、session 13.9µs、tool 18.8µs、read 13.3µs、write 13.4µs、planning 13.3µs、compaction 66.4µs、skill 16.3µs。前の測定との差は JVM warmup / 並行負荷等の変動を含み、コード改善率とは解釈しない。
+- System/User の role と元指示、schema の array 順・正確な小数、callback 実行・ToolContext、実行時権限、Shared Model Budget、summary cursor / hard limit / Resume を既存回帰で確認。診断本文・鍵・taskSummary を保存しない assertion、所有 Project/Session の照会境界、容量・eviction のテストを追加。
