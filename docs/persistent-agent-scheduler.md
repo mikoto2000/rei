@@ -21,9 +21,14 @@ Project あたり未終了予約は最大256件です。
 /timer cancel timer-ID
 ```
 
-全操作は現在選択した Project に限定します。cancel は未取得の PENDING / SCHEDULED だけです。
+全操作は現在選択した Project に限定します。cancel は未取得の PENDING / SCHEDULED / WAITING_EVENT が対象です。
 表示と保存する outcome は資格情報を redaction します。action 自体は再実行に必要なため DB に保存します。
 登録後の action・Project・Session・日時の変更は提供しません。変更する場合は cancel して新規登録します。
+
+LLM は listScheduledActions でタイマー ID を取得し、cancelScheduledAction(timerId) で
+現在の Project・パス・Session に所属するタイマーを取り消せます。Tool permission は LOCAL_WRITE です。
+取り消すと CANCELLED になり、定期実行も以降の実行を停止します。履歴は保持します。
+実行中・終了済み・別の Project/Session のタイマーは取り消せません。
 
 ## Dispatch
 

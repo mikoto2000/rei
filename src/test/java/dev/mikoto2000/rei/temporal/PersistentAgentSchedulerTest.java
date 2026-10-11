@@ -20,6 +20,54 @@ class PersistentAgentSchedulerTest {
   String create(PersistentAgentScheduler scheduler) {
     try(var scope=AgentRunScope.open(owner())) {return scheduler.scheduleAfter(Duration.ofSeconds(1),"Check build status","session").id();}
   }
+  @Test void toolCancellationPersistsAndPreventsDispatch() {
+    var scheduler=scheduler(now);var tools=new SchedulerTools(scheduler);
+    for(boolean active:new boolean[]{false,true}) {
+      String id=create(scheduler);
+      if(active)scheduler.activate("project",id);
+      try(var scope=AgentRunScope.open(owner())) {
+        assertEquals("Schedule cancelled",tools.cancelScheduledAction(id));
+        assertTrue(tools.listScheduledActions().isEmpty());
+      }
+      var restarted=scheduler(now.plusSeconds(2));
+      assertEquals("CANCELLED",restarted.get("project",id).status());
+      assertEquals("CANCELLED",restarted.history("project",id).getLast().status());
+      assertTrue(restarted.claimDue().isEmpty());
+    }
+  }
+  @Test void toolCancellationRejectsForeignOwnersAndRunningSchedules() {
+    var scheduler=scheduler(now);var tools=new SchedulerTools(scheduler);String id=create(scheduler);
+    assertThrows(IllegalArgumentException.class,()->tools.cancelScheduledAction(id));
+    for(var foreign:new AgentRunContext[]{
+        new AgentRunContext("run","session",dir,"other"),
+        new AgentRunContext("run","other",dir,"project"),
+        new AgentRunContext("run","session",dir.resolve("other"),"project")}) {
+      try(var scope=AgentRunScope.open(foreign)) {
+        assertThrows(IllegalArgumentException.class,()->tools.cancelScheduledAction(id));
+      }
+    }
+    assertEquals("PENDING",scheduler.get("project",id).status());
+    scheduler.activate("project",id);
+    var due=scheduler(now.plusSeconds(2));due.claimDue().orElseThrow();
+    try(var scope=AgentRunScope.open(owner())) {
+      assertThrows(IllegalStateException.class,()->new SchedulerTools(due).cancelScheduledAction(id));
+    }
+    assertEquals("RUNNING",due.get("project",id).status());
+  }
+  @Test void toolCancellationStopsRecurringAndEventSchedules() {
+    var scheduler=scheduler(now);var tools=new SchedulerTools(scheduler);
+    try(var scope=AgentRunScope.open(owner())) {
+      var interval=tools.scheduleInterval("1m",3,"Repeat","session");
+      scheduler.activate("project",interval.id());
+      tools.cancelScheduledAction(interval.id());
+      var event=tools.scheduleOnEvent("source-run","AGENT_RUN_COMPLETED","1h","Continue","session");
+      scheduler.activate("project",event.id());
+      tools.cancelScheduledAction(event.id());
+      assertEquals("CANCELLED",scheduler.get("project",event.id()).status());
+      assertTrue(tools.listScheduledActions().isEmpty());
+      assertTrue(scheduler(now.plusSeconds(120)).claimDue().isEmpty());
+    }
+  }
   @Test void pendingRequiresHumanActivationAndSurvivesRestart() {
     var first=scheduler(now);String id=create(first);var restarted=scheduler(now.plusSeconds(2));
     assertEquals("PENDING",restarted.get("project",id).status());assertTrue(restarted.claimDue().isEmpty());
