@@ -137,3 +137,5 @@ LlmModelProvider の feature model は ConcurrentHashMap で再利用され、�
 - TimingMemoryProbeTest: 10000基本 Span の post-GC process heap delta 約3.32MB。この probe は Prefix 領域を投入しないため、新しい Prefix metadata を満杯まで保持したメモリ量の測定ではない。
 - 合成 Prefix 診断の最終再測定中央値: chat 13.6µs、session 13.9µs、tool 18.8µs、read 13.3µs、write 13.4µs、planning 13.3µs、compaction 66.4µs、skill 16.3µs。前の測定との差は JVM warmup / 並行負荷等の変動を含み、コード改善率とは解釈しない。
 - System/User の role と元指示、schema の array 順・正確な小数、callback 実行・ToolContext、実行時権限、Shared Model Budget、summary cursor / hard limit / Resume を既存回帰で確認。診断本文・鍵・taskSummary を保存しない assertion、所有 Project/Session の照会境界、容量・eviction のテストを追加。
+
+最終投影の Working Set metadata 保持も追加検証: `rei.workingSet` が null になる Red (13件中1 failure) を再現し、本文再描画時に元 metadata を保持して WORKING_SET の分類が成立することを確認した。修正後の同じ対象回帰340件は failures/errors/skipped 0 (1分34秒)。本文・role・Token Budget は変えず、診断識別子を維持する修正。

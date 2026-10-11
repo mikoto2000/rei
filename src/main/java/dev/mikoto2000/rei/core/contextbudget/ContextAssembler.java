@@ -173,7 +173,7 @@ public class ContextAssembler {
         if (historyBySequence.containsKey(historical)) messages.add(historyBySequence.get(historical));
       } else if (message instanceof SystemMessage || message instanceof UserMessage) {
         if (Boolean.TRUE.equals(message.getMetadata().get("rei.workingSet")) && workingSet != null)
-          messages.add(new SystemMessage(workingSet.get()));
+          messages.add(SystemMessage.builder().text(workingSet.get()).metadata(message.getMetadata()).build());
         else messages.add(message);
       } else {
         Message retained = activeBySequence.get(++sequence);

@@ -61,6 +61,8 @@ class ContextAssemblerTest {
     var revised=new Prompt(List.of(new SystemMessage("policy-v2"),new UserMessage("request"),marker));
     var next=a.assemble(revised,"conversation","run",()->{});
     assertThat(next.getInstructions().getFirst().getText()).isEqualTo("policy-v2");
+    assertThat(next.getInstructions().getLast().getMetadata().get("rei.workingSet")).isEqualTo(true);
+    assertThat(dev.mikoto2000.rei.timing.PrefixDiagnostics.sources(next)).extracting(dev.mikoto2000.rei.timing.PrefixDiagnostics.Source::id).contains("WORKING_SET");
     assertThat(next.getContents()).contains("deleted old path, moved new path").doesNotContain("latest revision","policy-v1");
     assertThat(raw.getContents()).contains("Working Set: old");
   }
