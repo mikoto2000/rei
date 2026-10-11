@@ -6,6 +6,8 @@
 
 Rei の開発者向けドキュメントです。利用手順は [README.md](./README.md) を参照してください。
 
+Episode の経緯・根拠・差分整理・横断検索は [Episode Memory](docs/episode-memory.md) を参照してください。
+
 回答生成中の SQLite 接続再利用・耐久性・I/O 計測は [ディスク I/O の改善記録](docs/answer-generation-disk-io.md)を参照してください。
 
 初めてコードを読む場合は、[図解付きプログラム構造ガイド](docs/program-structure.md)から始めてください。全体構成、会話の実行経路、状態と保存先、機能別の変更箇所を説明しています。

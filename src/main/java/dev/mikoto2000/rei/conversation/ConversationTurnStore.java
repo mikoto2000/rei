@@ -9,6 +9,15 @@ import dev.mikoto2000.rei.application.session.*;
 
 /** Conversation lifecycle metadata, independent of the bounded chat memory window. */
 public class ConversationTurnStore implements ConversationHistory {
+  public synchronized long turnCount(String conversation){return read(conversation).size();}
+  /** Ordinal range for bounded background processing; SQLite overrides without reading earlier turns. */
+  public synchronized List<Turn> readRange(String conversation,long from,int limit) {
+    if(from<0||limit<1||limit>100)throw new IllegalArgumentException("Invalid turn range");
+    return read(conversation).stream().skip(from).limit(limit).toList();
+  }
+  public synchronized Optional<Turn> findRun(String conversation,String run) {
+    return read(conversation).stream().filter(t->t.runId().equals(run)).findFirst();
+  }
   public enum Status { RUNNING, COMPLETED, FAILED, CANCELLED }
   public record Turn(String runId,String request,Status status,String assistantMessage,java.time.Instant createdAt,
       String source,String sourceId,Map<String,String> metadata) {

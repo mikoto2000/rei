@@ -386,6 +386,9 @@ rei:
     timeout-seconds: ${REI_WORK_CONTEXT_TIMEOUT_SECONDS:120}
     max-turns: ${REI_WORK_CONTEXT_MAX_TURNS:20}
   memory:
+    episodes:
+      enabled: ${REI_MEMORY_EPISODES_ENABLED:false}
+      dense-enabled: ${REI_MEMORY_EPISODES_DENSE_ENABLED:false}
     auto-sleep:
       enabled: ${REI_MEMORY_AUTO_SLEEP_ENABLED:false}
       minimum-idle: ${REI_MEMORY_AUTO_SLEEP_MINIMUM_IDLE:5m}
