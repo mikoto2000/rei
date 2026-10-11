@@ -5,7 +5,7 @@ import java.util.regex.Pattern;
 /** Shared redaction for event summaries and history display; always apply before clipping. */
 public final class CredentialRedactor {
   private CredentialRedactor() {}
-  private static final String KEYS = "api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|secret|credential|authorization|accessJwt|refreshJwt";
+  private static final String KEYS = "api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token(?:[_-]?hint)?|code[_-]?verifier|token|password|secret|credential|authorization|accessJwt|refreshJwt";
   private static final Pattern QUOTED_SECRET = Pattern.compile(
       "(?i)([\"'](?:" + KEYS + ")[\"']\\s*:\\s*)(\"(?:\\\\.|[^\"\\\\])*\"|'[^']*')");
   private static final Pattern ASSIGNMENT = Pattern.compile(

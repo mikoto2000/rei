@@ -37,6 +37,12 @@
 		<test.dataDirectory>${project.build.directory}/test-performance/data</test.dataDirectory>
 	</properties>
 	<dependencies>
+		<dependency>
+			<groupId>net.java.dev.jna</groupId><artifactId>jna-platform</artifactId><version>5.17.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.security</groupId><artifactId>spring-security-oauth2-jose</artifactId>
+		</dependency>
 		<!-- SDK Socket Mode uses Java-WebSocket to avoid a second servlet/websocket API stack. -->
 		<dependency>
 			<groupId>com.slack.api</groupId><artifactId>slack-api-client</artifactId><version>1.51.0</version>

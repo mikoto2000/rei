@@ -9,11 +9,15 @@ import picocli.CommandLine.Model.CommandSpec;
 @Component
 @Command(name = "subagent", description = "サブエージェントの定義を管理します", subcommands = {
     SubAgentCommand.ListCommand.class, SubAgentCommand.ShowCommand.class, SubAgentCommand.ReloadCommand.class,
-    SubAgentCommand.ValidateCommand.class, SubAgentCommand.InitCommand.class })
+    SubAgentCommand.RunCommand.class, SubAgentCommand.ValidateCommand.class, SubAgentCommand.InitCommand.class })
 public class SubAgentCommand implements Callable<Integer> {
   private final SubAgentRegistry registry;
   private final SubAgentDefinitionLoader loader;
   private final SubAgentToolPolicy policy;
+  private SubAgentRunner runner;
+  private dev.mikoto2000.rei.core.project.ProjectService projects;
+  @org.springframework.beans.factory.annotation.Autowired
+  public void configureExecution(SubAgentRunner runner,dev.mikoto2000.rei.core.project.ProjectService projects){this.runner=runner;this.projects=projects;}
   private java.io.PrintWriter shellOutput;
   @Spec CommandSpec spec;
   public SubAgentCommand() { this(null, null, null); }
@@ -38,6 +42,31 @@ public class SubAgentCommand implements Callable<Integer> {
     } finally { output().flush(); }
   }
   @FunctionalInterface private interface Action { void run() throws Exception; }
+  @Command(name="run",description="Run a role manually; chatgpt-plan consumes ChatGPT plan usage")
+  public static class RunCommand implements Callable<Integer> {
+    @ParentCommand SubAgentCommand parent;
+    @Parameters(index="0") String role;
+    @Option(names="--backend",defaultValue="local") String backend;
+    @Option(names="--model") String model;
+    @Option(names="--account",defaultValue="default") String account;
+    @Option(names="--task",required=true) String task;
+    @Option(names="--source") java.util.List<String> sources=new java.util.ArrayList<>();
+    @Option(names="--expected-result") String expected;
+    @Option(names="--context") String context;
+    public Integer call(){return parent.execute(()->{
+      if(parent.runner==null)throw new IllegalArgumentException("SubAgent runtime unavailable");
+      if(backend.equals("local")){if(model!=null)throw new IllegalArgumentException("Local model is selected by the existing role definition");var result=parent.runner.run(role,task,context);parent.out(result.status()+" | "+dev.mikoto2000.rei.event.CredentialRedactor.redact(result.output()));if(result.status()!=SubAgentResult.Status.COMPLETED)throw new IllegalArgumentException("SubAgent did not complete");return;}
+      if(!backend.equals("chatgpt-plan")||model==null||expected==null||context!=null)throw new IllegalArgumentException("chatgpt-plan requires --model and --expected-result; material is supplied by --source");
+      var project=parent.projects.currentContext();String session; synchronized(parent.projects.currentClient()){project=parent.projects.currentContext();session=parent.projects.currentSessionId();}
+      if(session==null)throw new IllegalArgumentException("Select a Session before external delegation");
+      var owner=new dev.mikoto2000.rei.core.chat.AgentRunContext(java.util.UUID.randomUUID().toString(),session,project.root(),project.id());
+      var request=new ChatGptSubAgentBackend.Request(role,backend,model,account,task,sources,expected);
+      var receipt=parent.runner.runManualBackend(request,owner,true,null);
+      parent.out("ChatGPT plan usage | "+receipt.backendId()+" | "+receipt.requestId()+" | "+receipt.state()+" | tokens="+receipt.totalTokens()+" | error="+receipt.error());
+      if(receipt.result().structuredOutput()!=null)parent.out(dev.mikoto2000.rei.event.CredentialRedactor.redact(receipt.result().output()));
+      if(receipt.state()!=ChatGptSubAgentBackend.State.COMPLETED)throw new IllegalArgumentException("SubAgent did not complete; inspect Run status before retrying");
+    });}
+  }
   @Command(name = "list") public static class ListCommand implements Callable<Integer> {
     @ParentCommand SubAgentCommand parent;
     public Integer call() { return parent.call(); }

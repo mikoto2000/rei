@@ -22,6 +22,16 @@ import reactor.core.publisher.Mono;
 
 /** Per-invocation state only. Inherited values are explicit task/context, model, project location and an optional shared call reservation. */
 public final class SubAgentRunner {
+  private org.springframework.beans.factory.ObjectProvider<ChatGptSubAgentBackend> planBackend;
+  @org.springframework.beans.factory.annotation.Autowired
+  public void configurePlanBackend(org.springframework.beans.factory.ObjectProvider<ChatGptSubAgentBackend> backend){this.planBackend=backend;}
+  /** Manual dispatch only. Existing delegateTask stays on the existing backend. */
+  public ChatGptSubAgentBackend.Receipt runManualBackend(ChatGptSubAgentBackend.Request request,AgentRunContext owner,
+      boolean standalone,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
+    var backend=planBackend==null?null:planBackend.getIfAvailable();
+    if(backend==null)throw new IllegalArgumentException("ChatGPT plan backend is disabled");
+    return backend.run(request,owner,standalone,reservation==null&&standalone?StandaloneSubAgentBudget.create(standaloneBudgetProperties):reservation);
+  }
   private DurableSubAgentRepository durable;
   private final ConcurrentMap<String,String> durableChildren=new ConcurrentHashMap<>();
   public void configureDurable(SubAgentProperties settings,DurableSubAgentRepository repository){durable=settings.isDurableEnabled()?repository:null;standaloneBudgetProperties=settings;}

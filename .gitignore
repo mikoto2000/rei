@@ -35,3 +35,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Protected Sign in with ChatGPT credentials must never enter source control.
+credentials.bin
+credentials.lock
+credentials-*.tmp
