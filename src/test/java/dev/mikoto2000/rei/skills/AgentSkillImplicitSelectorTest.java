@@ -15,6 +15,52 @@ import org.springframework.ai.chat.model.ChatModel;
 class AgentSkillImplicitSelectorTest {
 
   @Test
+  void sendsOnlySkillMetadataAndUserRequestOnNormalPath() {
+    AgentSkill skill = skill("skill-a");
+    ChatModel model = Mockito.mock(ChatModel.class);
+    when(model.call(anyString())).thenReturn("[\"skill-a\"]");
+    var selector = new AgentSkillImplicitSelector(model, new InMemoryAgentSkillRepository(List.of(skill)));
+
+    assertThat(selector.select("please use it", Set.of(), null)).containsExactly(skill);
+
+    var prompt = org.mockito.ArgumentCaptor.forClass(String.class);
+    Mockito.verify(model).call(prompt.capture());
+    assertSelectionPrompt(prompt.getValue(), skill);
+    assertThat(new AgentSkillPromptRenderer().render("please use it", List.of(skill)))
+        .contains(skill.instructions());
+  }
+
+  @Test
+  void sendsOnlySkillMetadataAndUserRequestWithTokenBudget() {
+    AgentSkill skill = skill("skill-a");
+    ChatModel model = Mockito.mock(ChatModel.class);
+    var response = new org.springframework.ai.chat.model.ChatResponse(List.of(
+        new org.springframework.ai.chat.model.Generation(
+            new org.springframework.ai.chat.messages.AssistantMessage("[\"skill-a\"]"))));
+    when(model.call(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class))).thenReturn(response);
+    var budget = Mockito.mock(dev.mikoto2000.rei.llm.ModelCallBudget.class);
+    when(budget.tokenLimitEnabled()).thenReturn(true);
+    var selector = new AgentSkillImplicitSelector(model, new InMemoryAgentSkillRepository(List.of(skill)));
+
+    assertThat(selector.select("please use it", Set.of(), List.of(skill), budget)).containsExactly(skill);
+
+    var prompt = org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
+    Mockito.verify(model).call(prompt.capture());
+    assertSelectionPrompt(prompt.getValue().getContents(), skill);
+    Mockito.verify(budget).run();
+    Mockito.verify(budget).recordTotalTokens(response.getMetadata().getUsage().getTotalTokens());
+    assertThat(new AgentSkillPromptRenderer().render("please use it", List.of(skill)))
+        .contains(skill.instructions());
+  }
+
+  private void assertSelectionPrompt(String prompt, AgentSkill skill) {
+    assertThat(prompt).contains("User request:\nplease use it\n\nSkills:\n")
+        .contains("Skills:\n- name: " + skill.name() + "\n  description: " + skill.description()
+            + "\n\nReturn format:\n")
+        .doesNotContain("excerpt:", skill.instructions());
+  }
+
+  @Test
   void wrappedInterruptionTerminatesSelectionAndRestoresInterrupt() {
     var model = Mockito.mock(ChatModel.class);
     when(model.call(anyString())).thenThrow(new RuntimeException(new InterruptedException("cancelled")));

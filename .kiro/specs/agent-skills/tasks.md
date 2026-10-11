@@ -92,7 +92,7 @@ Agent Skills は、`.rei/skills/<skill-name>/SKILL.md` に配置された Markdo
   - [x] 5.2 **Green**: LLM 選択の最小実装を行う
     - `AgentSkillImplicitSelector` を作成する
     - `ChatModel` を直接使い、Agent Skills Advisor の再帰実行を避ける
-    - Skill 名、説明、短い excerpt を含む選択プロンプトを作る
+    - Skill 名と説明のみを含む選択プロンプトを作る
     - JSON 配列を parse して Skill 一覧へ変換する
   - [x] 5.3 **Red**: 該当なし、未知 Skill、JSON parse 失敗のテストを追加する
     - `[]` は空選択になることを検証する
