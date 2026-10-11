@@ -22,6 +22,15 @@ class PlanAppServerRpcTest {
     public String poll(Duration timeout){return incoming.poll();}
     public void close(){closed=true;}
   }
+  @Test void pinnedWindowsHandshakeUsesSameTerminalAndBudgetProtocol() {
+    var s=new Fake(USAGE,done("completed"));var frames=new ArrayList<>(s.incoming);frames.set(0,INIT.replace("0.154.0","0.162.1").replace("linux","windows"));s.incoming.clear();s.incoming.addAll(frames);
+    var result=new PlanAppServerRpc("0.162.1","windows").execute(s,"/isolated/workspace","model","instructions",List.of(new PlanClient.Input("user","task")),Duration.ofSeconds(1),4096,()->false,()->{},path->"snapshot");
+    assertEquals(PlanSseAssembler.State.COMPLETED,result.result().state());assertEquals(17,result.result().totalTokens());assertTrue(s.closed);
+  }
+  @Test void windowsAdapterRejectsLinuxOrWrongVersionBeforeTurn() {
+    var s=new Fake();assertEquals(ChatGptException.Code.PROTOCOL,assertThrows(ChatGptException.class,()->new PlanAppServerRpc("0.162.1","windows").execute(s,"cwd","model","instructions",List.of(),Duration.ofSeconds(1),4096,()->false,()->{},path->"")).code());
+    assertTrue(s.closed);assertEquals(1,s.sent.size());
+  }
   PlanAppServerRpc.Outcome run(Fake s,BooleanSupplier stop,java.util.function.Function<String,String> read){
     return new PlanAppServerRpc().execute(s,"/isolated/workspace","model","instructions",List.of(new PlanClient.Input("user","task")),Duration.ofSeconds(1),4096,stop,()->{},read);
   }

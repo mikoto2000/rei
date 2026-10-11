@@ -1,6 +1,6 @@
 # ChatGPT Plan Phase 2〜4 作業結果
 
-Phase 2/3は実装・回帰・CI・PRマージ・専用worktree削除まで完了しました。Phase 4はWindows sandboxの制限をWSL2で解消し、読取専用app-serverバックエンドを実装しました。最終Git/検証metadataはignored .worktrees/chatgpt-plan-reports/phase4.jsonに保存します。
+Phase 2/3は実装・回帰・CI・PRマージ・専用worktree削除まで完了しました。Phase 4はWindows sandboxの制限をWSL2で解消し、読取専用app-serverバックエンドを実装しました。PR #102初版のGit/検証metadataはignored .worktrees/chatgpt-plan-reports/phase4.jsonに保存しています。後続のWindowsネイティブ切替は[Windows切替報告](implementation-report-chatgpt-plan-windows.md)とchatgpt-plan-reports/windows.jsonを参照してください。
 
 ## Git・検証結果
 
@@ -74,7 +74,7 @@ Phase 2/3のcommitはorigin/mainに含まれることを確認しました。Pha
 | chatgpt-plan Phase 2 | 親が明示backend/account/modelを指定 | opt-in delegateTask(s) | 自動allowlistと既存送信承認/親Run予算 |
 | chatgpt-plan Phase 3 | 複数回推論/修復/再検討/混在・複数モデル比較 | 同じ手動/自動入口、execution opt-in | 機械的意味補助検証、部分失敗、truthVerified=false |
 | Codex CLI | 従来の外部レビュー・明示隔離実装 | 既存 `/agent codex ...` | CLI自身の認証と既存隔離/能力検査/変更レビュー |
-| Codex app-server Phase 4 | own SIWC、WSL2/Linux 0.154.0、資料レビュー | 明示codex-app-server、同じ手動/自動入口 | 許可snapshot読取、イベント/終端、共有予算、読取sandbox |
+| Codex app-server Phase 4 | own SIWC、既定Windows/MXC 0.162.1、明示WSL/Linux 0.154.0、資料レビュー | 明示codex-app-server、同じ手動/自動入口 | 許可snapshot読取、イベント/終端、共有予算、読取sandbox |
 | Claude Code | 従来の外部委譲 | 既存 `/agent claude ...` | 既存明示認可・隔離・結果検証 |
 
 手動のstandalone委譲は既存入口の独立予算を使います。親の自動委譲は実ToolContextのProject/Session/Runと共有予約を引き継ぎます。親は子の意見の採用/部分採用/不採用を独立判断し、外部見解を自身の判断と区別します。自動化設定だけで外部送信承認を省略できません。

@@ -31,7 +31,8 @@ public final class WslPlanAppServerLauncher implements PlanAppServerClient.Launc
       } finally {version.destroyForcibly();}
       if(stop.getAsBoolean())throw ChatGptException.of(CANCELLED);
       var child=process(home,linuxCwd,tokens.accessToken(),List.of("app-server","--listen","stdio://")).start();
-      return new PlanAppServerClient.Started(new ProcessSession(child,home),linuxCwd);
+      Path ownedHome=home;
+      return new PlanAppServerClient.Started(new AppServerProcessSession(child,()->stopLinux(ownedHome,"TERM"),()->stopLinux(ownedHome,"KILL"),()->remove(ownedHome)),linuxCwd);
     } catch(ChatGptException e){remove(home);throw e;}catch(Exception e){remove(home);throw ChatGptException.of(ROUTE_UNAVAILABLE);}
   }
   ProcessBuilder process(Path home,String linuxCwd,String token,List<String> arguments) {
@@ -102,23 +103,5 @@ public final class WslPlanAppServerLauncher implements PlanAppServerClient.Launc
     if(root==null)return;
     // Only the newly created dedicated home; never follow links or recurse into external roots.
     try(var paths=Files.walk(root)){for(Path p:paths.sorted(Comparator.reverseOrder()).toList())if(p.toAbsolutePath().normalize().startsWith(root.toAbsolutePath().normalize()))Files.deleteIfExists(p);}catch(IOException ignored){}
-  }
-  private final class ProcessSession implements PlanAppServerRpc.Session {
-    private static final Object EOF=new Object();private final BlockingQueue<Object> lines=new ArrayBlockingQueue<>(64);
-    private final Process process;private final Path home;private final BufferedWriter writer;
-    ProcessSession(Process process,Path home) {
-      this.process=process;this.home=home;writer=new BufferedWriter(new OutputStreamWriter(process.getOutputStream(),StandardCharsets.UTF_8));
-      Thread.ofVirtual().start(()->{
-        try(var in=new BufferedInputStream(process.getInputStream())) {
-          var line=new ByteArrayOutputStream();int total=0,value;
-          while((value=in.read())!=-1){if(++total>2*1024*1024||line.size()>=65536)throw new IOException();if(value=='\n'){if(!lines.offer(line.toString(StandardCharsets.UTF_8),1,TimeUnit.SECONDS))throw new IOException();line.reset();}else line.write(value);}
-          if(line.size()>0)lines.offer(line.toString(StandardCharsets.UTF_8));
-        } catch(Exception ignored){process.destroyForcibly();}finally{while(!lines.offer(EOF)){lines.poll();}}
-      });
-      Thread.ofVirtual().start(()->{try(var in=process.getErrorStream()){byte[] bytes=new byte[4096];int total=0,n;while((n=in.read(bytes))!=-1){total+=n;if(total>1048576){process.destroyForcibly();break;}}}catch(IOException ignored){}});
-    }
-    public void send(String json){try{writer.write(json);writer.newLine();writer.flush();}catch(IOException e){throw ChatGptException.of(TRANSPORT);}}
-    public String poll(Duration timeout){try{Object line=lines.poll(timeout.toNanos(),TimeUnit.NANOSECONDS);return line==null?"":line==EOF?null:(String)line;}catch(InterruptedException e){Thread.currentThread().interrupt();throw ChatGptException.of(CANCELLED);}}
-    public void close(){boolean interrupted=Thread.interrupted();try{writer.close();if(!process.waitFor(500,TimeUnit.MILLISECONDS)){stopLinux(home,"TERM");if(!process.waitFor(300,TimeUnit.MILLISECONDS)){stopLinux(home,"KILL");process.descendants().forEach(p->p.destroyForcibly());process.destroyForcibly();process.waitFor(500,TimeUnit.MILLISECONDS);}}}catch(InterruptedException e){interrupted=true;stopLinux(home,"KILL");process.destroyForcibly();}catch(Exception ignored){stopLinux(home,"KILL");process.destroyForcibly();}finally{remove(home);if(interrupted)Thread.currentThread().interrupt();}}
   }
 }

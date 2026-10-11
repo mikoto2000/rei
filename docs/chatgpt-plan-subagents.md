@@ -328,7 +328,7 @@ comparisonは結論、JSON厳密一致の共通指摘、独自指摘、引用、
 
 ## Phase 4: Codex app-server
 
-既定無効の `codex-app-server` を明示選択できます。Windowsから既存WSL2を使用し、Linux Codex 0.154.0と動作するLinux sandboxが必要です。通常Codexのログイン・設定は使わず、Phase 0自身のaccount/tokenを使用します。対応外のバージョンは拒否します。
+既定無効の `codex-app-server` を明示選択できます。実行方式の既定はWindowsネイティブです。Windows Codex 0.162.1の実exeとnative MXCが必要です。通常Codexのログイン・設定は使わず、Phase 0自身のaccount/tokenを使用します。対応外のバージョン、MXC非対応や管理ポリシーによる拒否では停止し、WSL/legacy sandboxへ自動切替しません。
 
 ```yaml
 rei:
@@ -337,12 +337,26 @@ rei:
     allowed-roles: [reviewer]
     app-server:
       enabled: true
-      distribution: Ubuntu-24.04
-      executable: /absolute/path/to/codex-0.154.0
+      execution-mode: windows # 省略時もwindows
+      executable: C:/tools/codex-0.162.1/codex.exe
       # runtime-directory: F:/project/rei/.rei/app-server
 ```
 
-上記executableは利用者が用意する固定バージョンの実binaryです。自動ダウンロードや通常Codex更新は行いません。runtime-directoryはWindows上の専用作業用ディレクトリで、既定はれいのdata directory配下です。WSLから参照可能なdrive pathが必要です。
+上記executableは利用者が用意する固定バージョンの実exeです。npm/cmd wrapperは指定できません。自動ダウンロードや通常Codex更新は行いません。runtime-directoryはWindows上の専用作業用ディレクトリで、既定はれいのdata directory配下です。Windows対応ビルドだけではMXC利用を保証しないため、下記診断で確認してください。OSアカウント・ACL・firewallのsetupは自動実施しません。
+
+Windows起動ではSystemDrive/SystemRootなど非秘密のplatform環境と専用home/TEMPだけを渡します。sandboxの環境は同じ固定allowlistで、OAuth tokenを含めません。MXCは必要なOS/platform directoriesを読めますが、実Projectは直接公開せず、資料はguard済みsnapshotのみです。
+
+WSLを使う場合は明示設定してください。以前のWSL設定にはexecution-modeを追加します。
+
+```yaml
+rei:
+  chatgpt-plan:
+    app-server:
+      enabled: true
+      execution-mode: wsl
+      distribution: Ubuntu-24.04
+      executable: /absolute/path/to/codex-0.154.0
+```
 
 ```text
 /subagent run reviewer --backend codex-app-server --account personal --model <許可slug> --source docs/design.md --expected-result {"unverified":[]} --task "この設計をレビュー"
@@ -362,4 +376,4 @@ Receipt.externalExecutionからopaque Thread/Turn、読取数、拒否数、イ�
 
 新規専用home/空workspaceを各依頼に作り、root denyの読取制限とnetwork falseを強制します。実Projectを直接mountしません。logout/期限/取消は停止要求へ反映し、停止確認できなければOUTCOME_UNKNOWNです。拒否応答は停止確認後に返し、追加推論を防ぎます。新規依頼時に既存storeでrefreshします。永続Thread resume、結果不明の自動再送、他アカウント/有料API fallbackはありません。Phase 3のHTTP修復ループはこの経路には適用しません。
 
-既存 `/agent codex` はCLI経路で、既存の明示隔離実装・変更レビューを利用できます。app-serverは今回読取レビュー用です。認証不要の実測手順、Windows方式での以前の拒否、検証範囲は[Phase 4報告](implementation-report-chatgpt-plan-phase4.md)を参照してください。実OAuth/実モデル推論は今回代行していません。
+既存 `/agent codex` はCLI経路で、既存の明示隔離実装・変更レビューを利用できます。app-serverは今回読取レビュー用です。認証不要の実測手順、以前のWindows unelevated拒否と現在のMXC対応、検証範囲は[Windows切替報告](implementation-report-chatgpt-plan-windows.md)と[Phase 4初版報告](implementation-report-chatgpt-plan-phase4.md)を参照してください。実OAuth/実モデル推論は今回代行していません。
