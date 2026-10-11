@@ -140,7 +140,7 @@ Windows E2E は毎回 repository の target 以下に UUID の隔離 root を作
 | 1 | Storage gate/discovery、canonical admission、Session 排他、transactional receipt、再起動照会、専用 stop API 実装。起動中異常終了・全 frontend 横断の受け入れケースは追加確認が必要 |
 | 2 | 独立 CLI modules、JLine、local selection、入力・補完・履歴、HTTP/SSE、receipt 照会、明示 cancel 実装。全 Shell 入力/補完互換ではない |
 | 3 | 固定 API adapter と全 Root コマンドの対応表を追加。一部操作のみ対応。未対応コマンド・全 options・表示・追加限定 API が残るため未完了 |
-| 4 | Windows worker の親強制終了後の独立寿命に加え、実 Windows Terminal の2ペインで同時 auto 起動、先行 CLI/ペイン host 終了後の同じ Backend と別 CLI の継続、Run RUNNING→COMPLETED、SSE 受信、Session 操作、明示停止を確認。CLI 標準入出力は pane host 内で redirect し、対話型 PTY と全47機能 E2E は未検証 |
+| 4 | Windows worker の親強制終了後の独立寿命に加え、実 Windows Terminal の2ペインで同時 auto 起動、先行 CLI/ペイン host 終了後の同じ Backend と別 CLI の継続、Run RUNNING→COMPLETED、SSE 受信、Session 操作、明示停止を確認。CLI 標準入出力は pane host 内で redirect し、対話型 ConPTY で `/sh` 入力・cwd・CLI 復帰・Ctrl+C 後継続を追加検証。GUI 強制 close と全コマンド E2E は継続中（voice はユーザー指定で対象外） |
 
 Native API の詳細は [Native/Web API](native-web-api.md)、全機能 Shell の利用は [README](../README.md) を参照する。最終テスト件数・commit は作業報告に記録する。必須条件をすべて満たしていないため Phase 1〜4 の実装完了とは報告しない。
 
@@ -150,11 +150,11 @@ Native API の詳細は [Native/Web API](native-web-api.md)、全機能 Shell �
 | --- | --- |
 | Backend `-Pfull test`（隔離 build directory） | 4,726件、失敗0・エラー0・skip 2。skip は既存の任意 benchmark 等であり、変更による無効化なし |
 | 今回の Backend 対象回帰（-Pfull） | 62件成功。Migration・別 JVM lease・admission・Goal HTTP・モデル API。全 Backend 4,726件の結果は今回の追加前の前回検証 |
-| CLI / launcher reactor | 37件成功。Windows worker の親 process 強制終了後の独立寿命、SSE Accept、PUT、モデル・Goal・Attention・Feed/Reminder/Interest文法を含む |
+| CLI / launcher reactor | 41件成功。対話 ConPTY、ローカル Shell、Project add/cd、Project 記憶文法を追加。Windows worker の親 process 強制終了後の独立寿命、SSE Accept、PUT、モデル・Goal・Attention・Feed/Reminder/Interest文法を含む |
 | Native UI | 25ファイル・99件成功、TypeScript typecheck 成功 |
 | Native Rust | 120件成功（offline cargo test） |
 | Windows 実 Backend / CLI jar | 成功。最初の CLI 終了後の readiness、同じ instance の別 CLI 接続、Project/Session/style、同時同 key の同 Run、再起動 receipt、2回の安全停止 |
-| Windows Terminal 複数ペイン | 実 pane host で同時 auto 起動と Run/SSE 継続・完了・明示停止に成功。標準入出力 redirect を使用。対話型 PTY は未検証 |
+| Windows Terminal 複数ペイン | 実 pane host で同時 auto 起動と Run/SSE 継続・完了・明示停止に成功。標準入出力 redirect を使用。別途、実 ConPTY にネイティブ JLine を接続した対話 Shell E2E が成功 |
 | 外部 LLM・Google OAuth・音声・PTY 等の全機能 E2E | 未実施 |
 
 TDD の Red/Green は admission の原子性・冪等性・期限・競合・Shell queue、CLI の受付不明・5xx後照会、秘密の入力履歴除外、Windows path 解釈、接続待ち中 SSE detach、応答スタイル分離、chat options、busy 対象表示で実施。全回帰の初回は4件失敗/エラーを検出し、旧 schema fixture の新テーブル取り残し、同一 Session 新契約の旧期待値、HTTP fixture の publisher 重複を修正して再実行した。
@@ -181,3 +181,13 @@ pwsh -NoProfile -File scripts/Test-WindowsTerminalPanes.ps1
 Backend JAR のビルド完了後に E2E を実行する。動作中の JAR を上書きしない。各 pane の WT_SESSION は異なるため同一値を要求しない。正常な host exit による pane の自動終了は Terminal profile の closeOnExit 設定に従う。GUI の強制 close と対話キー入力は検証対象に含めない。
 
 主なクラスは `ConversationAdmissionStore` / `ConversationAdmissionMigration`、共有 `SessionLifecycle` / `ConversationInputRouter` / `RunRegistry`、`BackendClient` / `TerminalClient` / `ClientHistory` / `SseDecoder` / `RemoteCommands`、`Launcher` / `DetachedBackend`。既存 Shell の全コマンドは保持し、HTTP の同一 Session 独立 Run は依頼された排他契約に合わせて409となる。
+
+### 対話 Shell と Project 記憶の追加検証
+
+`/sh` は CLI の選択 Project でローカルの対話 Shell を起動し、終了後に端末属性と入力処理を復元する。`SHELL` と OS 既定値・PowerShell の `-NoLogo` は既存 Shell と同じ。Backend へ汎用 Shell 実行 API は追加しない。
+
+`WindowsPtyTest` は [Microsoft の ConPTY 手順](https://learn.microsoft.com/en-us/windows/console/creating-a-pseudoconsole-session) に従って実 OS PTY を作り、ネイティブ JLine の使用を必須として検証する。選択ディレクトリを PowerShell で実際にファイルへ保存し、Shell 終了後と Ctrl+C 後に CLI コマンドが使えることを確認する。テスト用子プロセスだけをコンソールに接続し、終了時に PTY・process・pipe・attribute list を解放する。
+
+追加 Backend 回帰は Project 登録解除、Project 所有権付き記憶 API、既存 Memory Shell、verified reflection の14件成功。他 Project の記憶は list に出ず、show/forget を拒否して内容を保全する。GET `/api/v1/projects/{projectId}/memory`、GET `/search`、GET `/{id}`、POST `/{id}/forget` は Shell と同じ記憶サービスを使用する。
+
+`Test-WindowsTerminalPanes.ps1 -GuiClose` は CLI が動いている状態で GUI close を待つ fixture を用意する。現環境の GUI ツール一覧に Terminal ウィンドウが現れなかったため、GUI 操作の実行には未到達であり、成功とは記録しない。

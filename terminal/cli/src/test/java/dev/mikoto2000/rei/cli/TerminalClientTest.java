@@ -11,6 +11,26 @@ import com.sun.net.httpserver.HttpServer;
 
 class TerminalClientTest {
   @TempDir Path directory;
+  @Test void projectAddDoesNotChangeSelectionAndCdUsesSelectedDirectory()throws Exception {
+    var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
+    var registrations=new java.util.ArrayList<String>();
+    server.createContext("/api/v1/projects",exchange->{
+      String response;
+      if(exchange.getRequestMethod().equals("POST")) {
+        var body=BackendClient.JSON.readTree(exchange.getRequestBody());registrations.add(body.path("path").asText());
+        response="{\"id\":\"two\",\"name\":\"Two\",\"path\":"+BackendClient.JSON.writeValueAsString(directory.resolve("child").toString())+"}";
+      } else response="[{\"id\":\"one\",\"name\":\"One\",\"path\":"+BackendClient.JSON.writeValueAsString(directory.toString())+"},{\"id\":\"two\",\"name\":\"Two\",\"path\":"+BackendClient.JSON.writeValueAsString(directory.resolve("child").toString())+"}]";
+      var bytes=response.getBytes();exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();
+    });
+    server.createContext("/api/v1/sessions",exchange->{var bytes="{\"items\":[]}".getBytes();exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();});server.start();
+    try(var backend=new BackendClient(URI.create("http://127.0.0.1:"+server.getAddress().getPort()),"fixture");
+        var client=new TerminalClient(backend,directory,true,TerminalBuilder.builder().system(false).dumb(true).streams(new ByteArrayInputStream(new byte[0]),new ByteArrayOutputStream()).build())) {
+      client.command("/project select one");client.command("/project add child");assertEquals("one",client.projectId());
+      client.command("/project cd child");assertEquals("two",client.projectId());
+      assertEquals(java.util.List.of(directory.resolve("child").toString(),directory.resolve("child").toString()),registrations);
+      assertThrows(IllegalArgumentException.class,()->client.command("/project add child extra"));
+    }finally{server.stop(0);}
+  }
   @Test void quotedWindowsPathsRetainBackslashes() {
     assertEquals(java.util.List.of("/project","register","C:\\project with spaces\\rei"),TerminalClient.commandWords("/project register \"C:\\project with spaces\\rei\""));
   }

@@ -31,20 +31,24 @@ public class MemoryCommandSupport {
       throw new IllegalStateException("Auto Sleep request changed or is not in this Project");
     return "Pending Auto Sleep request cancelled. An already running Sleep is unaffected.";
   }
-  public String list(int limit,int offset) { enabled(); return render(repository.list(project(),limit,offset)); }
-  public String search(String query,int limit) { enabled(); return render(repository.search(query,project(),limit)); }
-  public String show(String id) {
-    enabled(); var m=visible(id);
+  public String list(int limit,int offset) { return listForProject(project(),limit,offset); }
+  public String listForProject(String project,int limit,int offset) { enabled(); return render(repository.list(project,limit,offset)); }
+  public String search(String query,int limit) { return searchForProject(project(),query,limit); }
+  public String searchForProject(String project,String query,int limit) { enabled(); return render(repository.search(query,project,limit)); }
+  public String show(String id) { return showForProject(project(),id); }
+  public String showForProject(String project,String id) {
+    enabled(); var m=visible(project,id);
     return "id: "+m.id()+"\nscope: "+m.scope()+"\nprojectId: "+m.projectId()+"\ntype: "+m.type()+"\nstatus: "+m.status()
         +"\ncontent: "+m.content()+"\nsummary: "+m.summary()+"\nconfidence: "+m.confidence()+"\nimportance: "+m.importance()
         +"\ncreatedAt: "+m.createdAt()+"\nupdatedAt: "+m.updatedAt()+"\nlastAccessedAt: "+m.lastAccessedAt()
         +"\nvalidFrom: "+m.validFrom()+"\nvalidUntil: "+m.validUntil()+"\nsupersededBy: "+m.supersededBy()
         +"\nsource sessions/turns: "+m.sources()+"\ntags: "+m.tags()+"\nrelations: "+repository.relations(id)
-        +repository.verifiedReflectionProofByMemory(project(),id).map(proof->"\nverified reflection proof: "+proof).orElse("");
+        +repository.verifiedReflectionProofByMemory(project,id).map(proof->"\nverified reflection proof: "+proof).orElse("");
   }
-  public String forget(String id) { enabled(); visible(id); repository.archive(id); return "Archived: "+id; }
-  private LongTermMemory visible(String id) {
-    return repository.find(id).filter(m -> m.scope()==MemoryScope.GLOBAL || Objects.equals(m.projectId(),project()))
+  public String forget(String id) { return forgetForProject(project(),id); }
+  public String forgetForProject(String project,String id) { enabled(); visible(project,id); repository.archive(id); return "Archived: "+id; }
+  private LongTermMemory visible(String project,String id) {
+    return repository.find(id).filter(m -> m.scope()==MemoryScope.GLOBAL || Objects.equals(m.projectId(),project))
         .orElseThrow(() -> new IllegalArgumentException("Memory not found in GLOBAL/current project"));
   }
   private String render(List<LongTermMemory> memories) {

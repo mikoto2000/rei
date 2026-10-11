@@ -3,6 +3,14 @@ import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 import java.util.*;
 class RemoteCommandsTest {
+  @Test void memoryReadsAndForgetUseSelectedProjectAndShellPagination() {
+    assertEquals("/api/v1/projects/project/memory?limit=20&offset=0",RemoteCommands.route(List.of("/memory","list"),"project",null).path());
+    assertEquals("/api/v1/projects/project/memory?limit=5&offset=10",RemoteCommands.route(List.of("/memory","list","--offset","10","--limit","5"),"project",null).path());
+    assertEquals("/api/v1/projects/project/memory/search?query=two%20words&limit=10",RemoteCommands.route(List.of("/memory","search","two","words"),"project",null).path());
+    assertEquals("/api/v1/projects/project/memory/item",RemoteCommands.route(List.of("/memory","show","item"),"project",null).path());
+    assertEquals("/api/v1/projects/project/memory/item/forget",RemoteCommands.route(List.of("/memory","forget","item"),"project",null).path());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/memory","search","query","--unknown"),"project",null));
+  }
   @Test void feedAndReminderAcceptShellOptionNamesAndDeletionGrammar() {
     assertEquals(Map.of("url","https://example.test/feed","displayName","example"),RemoteCommands.route(List.of("/feed","add","https://example.test/feed","--name","example"),null,null).body());
     assertEquals(Map.of("displayName","renamed","enabled",false),RemoteCommands.route(List.of("/feed","edit","1","--name","renamed","--disabled"),null,null).body());

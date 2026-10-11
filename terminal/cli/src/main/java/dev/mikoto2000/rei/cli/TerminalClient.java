@@ -24,9 +24,10 @@ public final class TerminalClient implements AutoCloseable {
   private final AtomicLong subscriptionGeneration=new AtomicLong();
   private String mode="EXCLUSIVE";
   private String project,projectName="none",session,run;
+  private Path projectDirectory;
   private volatile List<String> projectIds=List.of(),sessionIds=List.of();
   private boolean recordHistory;
-  private static final List<String> COMMANDS=java.util.stream.Stream.concat(java.util.stream.Stream.of("/help","/exit","/project","/session","/chat","/run-mode","/cancel","/runs","/watch","/receipt","/input-history","/paste"),RemoteCommands.NAMES.stream()).sorted().toList();
+  private static final List<String> COMMANDS=java.util.stream.Stream.concat(java.util.stream.Stream.of("/help","/exit","/project","/session","/chat","/run-mode","/cancel","/runs","/watch","/receipt","/input-history","/paste","/sh"),RemoteCommands.NAMES.stream()).sorted().toList();
   public TerminalClient(BackendClient backend,Path historyDirectory,boolean noHistory)throws IOException {
     this(backend,historyDirectory,noHistory,TerminalBuilder.builder().system(true).build());
   }
@@ -47,7 +48,7 @@ public final class TerminalClient implements AutoCloseable {
   private void complete(LineReader input,ParsedLine line,List<Candidate> candidates) {
     List<String> values=line.wordIndex()==0?COMMANDS:line.words().getFirst().equals("/project")?projectIds:line.words().getFirst().equals("/session")?sessionIds:List.of();
     for(String value:values)if(value.startsWith(line.word()))candidates.add(new Candidate(value));
-    if(line.words().size()>1&&line.words().getFirst().equals("/project")&&line.words().get(1).equals("register")) {
+    if(line.words().size()>1&&line.words().getFirst().equals("/project")&&Set.of("register","add","cd").contains(line.words().get(1))) {
       var context=new CompletionContext(line.line(),line.cursor(),line.words(),line.wordIndex(),line.wordIndex()-1,line.word(),List.of("project","register"),Set.of("directory"),List.of(),Path.of("").toAbsolutePath());
       for(var value:paths.complete(context))candidates.add(new Candidate(value.value(),value.display(),"CLI local paths",value.description(),null,null,value.appendSpace()));
     }
@@ -87,7 +88,7 @@ public final class TerminalClient implements AutoCloseable {
   private void selectProject(String id)throws IOException,InterruptedException {
     JsonNode match=null;for(var value:backend.get("/api/v1/projects"))if(id.equals(value.path("id").asText()))match=value;
     if(match==null)throw new IllegalArgumentException("Unknown registered Project ID");
-    project=id;projectName=match.path("name").asText();session=null;refresh();
+    project=id;projectName=match.path("name").asText();projectDirectory=match.path("path").asText().isBlank()?null:Path.of(match.path("path").asText());session=null;refresh();
   }
   private void send(String message)throws IOException,InterruptedException {
     send(message,mode);
@@ -111,11 +112,19 @@ public final class TerminalClient implements AutoCloseable {
     }
     if(RemoteCommands.NAMES.contains(name)&&!(name.equals("/history")&&Set.of("off","on").contains(action))) {
       var request=RemoteCommands.route(words,project,session);
-      show(request.method().equals("GET")?backend.get(request.path()):backend.mutation(request.method(),request.path(),request.body()));return;
+      var response=request.method().equals("GET")?backend.get(request.path()):backend.mutation(request.method(),request.path(),request.body());
+      if(response.isObject()&&response.size()==1&&response.path("text").isTextual())out(response.path("text").asText());else show(response);return;
     }
     switch(name) {
+      case "/sh"->{if(words.size()!=1)throw new IllegalArgumentException("Usage: /sh");requireProject();if(projectDirectory==null)throw new IllegalArgumentException("Project directory is unavailable");backend.detach();attached=false;int exit=InteractiveShell.run(terminal,projectDirectory);if(exit!=0)out("shell exited with code "+exit);}
       case "/help"->out(String.join(" ",COMMANDS)+"\n/project list|select ID|register LOCAL_PATH; /session list|select ID|new|end; /watch RUN_ID; /history off|on. Unsupported commands are never sent to the model.");
-      case "/project"->{switch(action){case "list"->{show(backend.get("/api/v1/projects"));refresh();}case "select"->selectProject(argument(words,2));case "register"->{var value=backend.post("/api/v1/projects/register",Map.of("path",Path.of(argument(words,2)).toAbsolutePath().normalize().toString()));selectProject(value.path("id").asText());}default->throw new IllegalArgumentException("Usage: /project list|select ID|register LOCAL_PATH");}}
+      case "/project"->{switch(action){
+        case "list"->{if(words.size()!=2&&words.size()!=1)throw new IllegalArgumentException("Usage: /project list");for(var value:backend.get("/api/v1/projects"))out((value.path("id").asText().equals(project)?"* ":"  ")+value.path("path").asText());refresh();}
+        case "select"->{if(words.size()!=3)throw new IllegalArgumentException("Usage: /project select ID");selectProject(argument(words,2));}
+        case "remove"->{if(words.size()!=3)throw new IllegalArgumentException("Usage: /project remove DIR");var target=localProjectPath(words.get(2)).toRealPath();for(var value:backend.get("/api/v1/projects")){if(target.toString().equals(value.path("path").asText())){String removed=value.path("id").asText();backend.mutation("DELETE","/api/v1/projects/"+BackendClient.segment(removed),null);if(removed.equals(project)){var fallback=backend.post("/api/v1/projects/register",Map.of("path",Path.of("").toAbsolutePath().normalize().toString()));selectProject(fallback.path("id").asText());}break;}}out("project removed: "+target);out("current project: "+(projectDirectory==null?Path.of("").toAbsolutePath():projectDirectory));refresh();}
+        case "register","add","cd"->{if(words.size()!=3)throw new IllegalArgumentException("Usage: /project "+action+" DIR");var value=backend.post("/api/v1/projects/register",Map.of("path",localProjectPath(argument(words,2)).toString()));if(!action.equals("add")){selectProject(value.path("id").asText());if(action.equals("cd")){var latest=backend.get("/api/v1/sessions?projectId="+BackendClient.segment(project)+"&limit=1").path("items");if(!latest.isEmpty())session=latest.get(0).path("sessionId").asText();}}out((action.equals("add")?"project added: ":"current project: ")+value.path("path").asText());refresh();}
+        default->throw new IllegalArgumentException("Usage: /project list|add DIR|cd DIR|select ID|register LOCAL_PATH");}}
+
       case "/session"->{requireProject();switch(words.size()==1?"show":action){case "list"->show(backend.get("/api/v1/sessions?projectId="+BackendClient.segment(project)));case "show"->{if(session==null)out("No Session selected");else show(backend.get("/api/v1/sessions/"+BackendClient.segment(session)));}case "select","switch","resume"->{String id=argument(words,2);var value=backend.get("/api/v1/sessions/"+BackendClient.segment(id));if(!project.equals(value.path("projectId").asText()))throw new IllegalArgumentException("Session belongs to another Project");session=id;}case "new"->{if(words.size()>3)throw new IllegalArgumentException("Usage: /session new [TITLE]");createSession(words.size()==3?words.get(2):null);}case "end"->{requireSession();show(backend.post("/api/v1/sessions/"+BackendClient.segment(session)+"/end",Map.of("projectId",project)));session=null;}default->throw new IllegalArgumentException("Usage: /session list|show|switch ID|new [TITLE]|end");}refresh();}
       case "/chat"->{var input=ChatInput.parse(words,mode);if(input.runId()==null)send(input.message(),input.mode());else{requireProject();requireSession();show(backend.post("/api/v1/runs/"+BackendClient.segment(input.runId())+"/input",Map.of("projectId",project,"sessionId",session,"message",input.message())));}}
       case "/run-mode"->{String selected=argument(words,1).toUpperCase(Locale.ROOT).replace('-','_');if(!Set.of("EXCLUSIVE","READ_ONLY","CONVERSATION").contains(selected))throw new IllegalArgumentException("Usage: /run-mode exclusive|read-only|conversation");mode=selected;out("Run access: "+mode);}
@@ -176,6 +185,9 @@ public final class TerminalClient implements AutoCloseable {
   }
   private void requireProject(){if(project==null)throw new IllegalArgumentException("Select a Project with /project select ID or /project register LOCAL_PATH");}
   private void requireSession(){if(session==null)throw new IllegalArgumentException("No Session selected");}
+  private Path localProjectPath(String value) {
+    var path=Path.of(value);return (path.isAbsolute()?path:(projectDirectory==null?Path.of("").toAbsolutePath():projectDirectory).resolve(path)).toAbsolutePath().normalize();
+  }
   private static String argument(List<String> words,int index){if(index>=words.size())throw new IllegalArgumentException("Missing command argument");return words.get(index);}
   private void show(JsonNode value)throws IOException{out(BackendClient.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(value));}
   private String safeOutput(String value){return backend.redact(value).replaceAll("[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]","");}

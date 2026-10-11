@@ -1,4 +1,4 @@
-param([ValidateSet('Coordinator','First','Second')][string]$Role='Coordinator', [string]$CaseRoot, [string]$BackendJar)
+param([ValidateSet('Coordinator','First','Second')][string]$Role='Coordinator', [string]$CaseRoot, [string]$BackendJar, [switch]$GuiClose)
 $ErrorActionPreference='Stop'
 if (-not $IsWindows) { throw 'Windows Terminal E2E requires PowerShell 7 on Windows' }
 $repoRoot=Split-Path -Parent $PSScriptRoot
@@ -8,6 +8,7 @@ $BackendJar=(Resolve-Path -LiteralPath $BackendJar).Path
 if ($Role -eq 'Coordinator') {
   $CaseRoot=Join-Path $repoRoot ('target/windows-terminal-e2e-'+[guid]::NewGuid())
   New-Item -ItemType Directory -Path $CaseRoot | Out-Null
+  if ($GuiClose) { Set-Content -LiteralPath (Join-Path $CaseRoot 'gui-close-requested') -Value 'true' }
   $pwsh=(Get-Command pwsh.exe).Source
   $wt=(Get-Command wt.exe).Source
   $providerInfo=[System.Diagnostics.ProcessStartInfo]::new()
@@ -24,7 +25,8 @@ if ($Role -eq 'Coordinator') {
   }
   # Use a fresh window, leaving the user's existing tabs and panes untouched.
   & $wt -w new new-tab --title 'Rei E2E first' $pwsh -NoProfile -File $PSCommandPath -Role First -CaseRoot $CaseRoot -BackendJar $BackendJar ';' split-pane -V --title 'Rei E2E second' $pwsh -NoProfile -File $PSCommandPath -Role Second -CaseRoot $CaseRoot -BackendJar $BackendJar
-  $deadline=[DateTime]::UtcNow.AddSeconds(150)
+  Write-Output ("E2E case: "+$CaseRoot)
+  $deadline=[DateTime]::UtcNow.AddSeconds(240)
   while ([DateTime]::UtcNow -lt $deadline) {
     foreach ($name in @('First.error','Second.error')) {
       $errorPath=Join-Path $CaseRoot $name
@@ -46,6 +48,7 @@ if ($Role -eq 'Coordinator') {
     if (-not $provider.HasExited) { $provider.Kill();$provider.WaitForExit() }
   }
 }
+$GuiClose=Test-Path -LiteralPath (Join-Path $CaseRoot 'gui-close-requested')
 function Wait-File([string]$Name) {
   $path=Join-Path $CaseRoot $Name
   $deadline=[DateTime]::UtcNow.AddSeconds(110)
@@ -94,6 +97,12 @@ try {
     if ($identity.instanceId -ne $endpoint.instanceId) { throw 'First pane failed readiness verification' }
     Set-Content -LiteralPath (Join-Path $CaseRoot 'ready') -Value $endpoint.instanceId
     Wait-File 'second-ready' | Out-Null
+    if ($GuiClose) {
+      Set-Content -LiteralPath (Join-Path $CaseRoot 'gui-close-ready') -Value 'Close only the first pane through Windows Terminal UI; do not send /exit'
+      Write-Host 'Rei E2E first: GUI force close this pane now. CLI is still running.'
+      Wait-File 'gui-close-timeout' | Out-Null
+      throw 'GUI close was not performed'
+    }
     $client.StandardInput.WriteLine('/exit');$client.StandardInput.Close()
     if (-not $client.WaitForExit(10000) -or $client.ExitCode -ne 0) { throw 'First CLI did not exit cleanly' }
     Set-Content -LiteralPath (Join-Path $CaseRoot 'first-client.log') -Value ($stdout.GetAwaiter().GetResult()+$stderr.GetAwaiter().GetResult())
@@ -121,7 +130,7 @@ try {
   Wait-File 'provider-blocked' | Out-Null
   $client.StandardInput.WriteLine('/watch '+$run.runId);$client.StandardInput.Flush()
   Set-Content -LiteralPath (Join-Path $CaseRoot 'second-ready') -Value $client.Id
-  $deadline=[DateTime]::UtcNow.AddSeconds(20)
+  $deadline=[DateTime]::UtcNow.AddSeconds($(if ($GuiClose) { 90 } else { 20 }))
   while (Get-Process -Id $first.panePid -ErrorAction SilentlyContinue) {
     if ([DateTime]::UtcNow -gt $deadline) { throw 'First pane host did not exit' }
     Start-Sleep -Milliseconds 100
@@ -166,7 +175,7 @@ try {
   if (-not $stop.WaitForExit(35000) -or $stop.ExitCode -ne 0) { throw 'Explicit stop failed' }
   Set-Content -LiteralPath (Join-Path $CaseRoot 'stop.log') -Value ($stopOut.GetAwaiter().GetResult()+$stopErr.GetAwaiter().GetResult())
   if (Test-Path -LiteralPath $endpointPath) { throw 'Endpoint survived explicit stop' }
-  @{result='PASS';caseRoot=$CaseRoot;wtSession=$env:WT_SESSION;firstPanePid=$first.panePid;secondPanePid=$PID;instanceId=$initial.instanceId;backendPid=$initial.pid;runId=$run.runId;runAfterFirstPaneExit=$running.status;runFinalStatus=$completed.status;runSse='Second CLI received completed response';firstPaneExit='Same Backend and second CLI remained alive';secondClientAfterExit='Created another Session';explicitStop='Endpoint removed';limitations='CLI stdin/stdout are redirected inside real Terminal pane hosts; interactive PTY is not covered'} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $CaseRoot 'result.json')
+  @{result='PASS';caseRoot=$CaseRoot;guiClose=[bool]$GuiClose;wtSession=$env:WT_SESSION;firstPanePid=$first.panePid;secondPanePid=$PID;instanceId=$initial.instanceId;backendPid=$initial.pid;runId=$run.runId;runAfterFirstPaneExit=$running.status;runFinalStatus=$completed.status;runSse='Second CLI received completed response';firstPaneExit='Same Backend and second CLI remained alive';secondClientAfterExit='Created another Session';explicitStop='Endpoint removed';limitations='CLI stdin/stdout are redirected inside real Terminal pane hosts; interactive PTY is not covered'} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $CaseRoot 'result.json')
 } catch {
   $_ | Out-String | Set-Content -LiteralPath (Join-Path $CaseRoot ($Role+'.error'))
   exit 1

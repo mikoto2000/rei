@@ -18,6 +18,15 @@ import static org.assertj.core.api.Assertions.*;
 @org.junit.jupiter.api.Tag("integration")
 class ProjectControllerTest {
   @TempDir Path directory;
+  @Test void removalOnlyUnregistersTheExactProjectAndPreservesFiles()throws Exception {
+    var registry=new ProjectRegistry(directory.resolve("projects.json"));
+    var root=Files.createDirectory(directory.resolve("root"));var content=Files.writeString(root.resolve("keep.txt"),"keep");
+    var registered=registry.resolve(root);
+    var controller=new ProjectController(new ProjectQueryService(registry));controller.setRegistry(registry);
+    org.junit.jupiter.api.Assertions.assertThrows(dev.mikoto2000.rei.application.run.ResourceNotFoundException.class,()->controller.remove("unknown"));
+    controller.remove(registered.id());
+    assertThat(registry.list()).isEmpty();assertThat(Files.readString(content)).isEqualTo("keep");
+  }
   @Configuration(proxyBeanMethods = false) @EnableWebMvc
   @Import({SecurityConfig.class, ProjectController.class})
   static class Config {

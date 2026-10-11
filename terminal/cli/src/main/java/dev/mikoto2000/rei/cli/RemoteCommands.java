@@ -22,6 +22,12 @@ public final class RemoteCommands {
     }
     if(name.equals("/profile")||name.equals("/briefing")){exact(words,1);return get("/api/v1/"+name.substring(1));}
     if(name.equals("/search")){return post("/api/v1/search",Map.of("query",text(words,1)));}
+    if(name.equals("/memory")&&project!=null&&Set.of("list","search","show","forget").contains(action)) {
+      String base="/api/v1/projects/"+id(project)+"/memory";
+      if(action.equals("list")){var selected=options(words,words.size()==1?1:2,Set.of("--limit","--offset"),Set.of());return get(base+"?limit="+integer(selected.getOrDefault("--limit","20"))+"&offset="+integer(selected.getOrDefault("--offset","0")));}
+      if(action.equals("search")){var selected=parse(words,2,Set.of("--limit"),Set.of());if(selected.arguments().isEmpty())throw invalid();return get(base+"/search?query="+BackendClient.segment(String.join(" ",selected.arguments()))+"&limit="+integer(selected.options().getOrDefault("--limit","10")));}
+      exact(words,3);return action.equals("show")?get(base+"/"+id(words.get(2))):post(base+"/"+id(words.get(2))+"/forget",Map.of());
+    }
     if(name.equals("/history")) {
       if(action.equals("list")){exact(words,words.size()==1?1:2);return get("/api/v1/sessions"+(project==null?"":"?projectId="+id(project)));}
       if(action.equals("show")){if(words.size()>3)throw invalid();String selected=words.size()==3?words.get(2):session;if(selected==null)throw new IllegalArgumentException("Select a Session or provide /history show SESSION_ID");return get("/api/v1/sessions/"+id(selected)+"/turns");}
@@ -183,6 +189,7 @@ public final class RemoteCommands {
     return new Parsed(List.copyOf(arguments),Map.copyOf(parsed));
   }
   private static long revision(String value){try{long revision=Long.parseLong(value);if(revision<0)throw invalid();return revision;}catch(NumberFormatException error){throw invalid();}}
+  private static int integer(String value){try{return Integer.parseInt(value);}catch(NumberFormatException error){throw invalid();}}
   private static void exact(List<String> words,int size){if(words.size()!=size)throw invalid();}
   private static String id(String value){if(value==null||value.isBlank()||value.length()>256)throw invalid();return BackendClient.segment(value);}
   private static Request get(String path){return new Request("GET",path,null);}

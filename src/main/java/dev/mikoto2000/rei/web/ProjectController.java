@@ -20,6 +20,14 @@ public class ProjectController {
         .map(project -> new ProjectResponse(project.id(), project.name(), project.path())).toList();
   }
   public record RegisterRequest(String path) implements StrictApiRequest {}
+  @DeleteMapping("/api/v1/projects/{id}")
+  public ProjectResponse remove(@PathVariable String id) {
+    if(id==null||id.isBlank()||id.length()>128)throw new IllegalArgumentException("Project ID required");
+    if(registry==null)throw new IllegalStateException("Project registry unavailable");
+    var project=registry.resolveById(id).orElseThrow(()->new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
+    registry.remove(project.root());
+    return new ProjectResponse(project.id(),project.name(),project.root().toString());
+  }
   @PostMapping("/api/v1/projects/register")
   public ProjectResponse register(@RequestBody RegisterRequest request) {
     if(request==null||request.path()==null||request.path().isBlank()||request.path().length()>4096)throw new IllegalArgumentException("Invalid Project path");
