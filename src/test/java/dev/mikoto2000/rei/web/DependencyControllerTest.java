@@ -14,6 +14,20 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 @Tag("integration")
 class DependencyControllerTest {
   @TempDir Path dir;
+  @Test void namedCheckUsesTheWebPermissionBoundaryBeforeObservingAndCancelIsProjectOwned() {
+    var projects=new dev.mikoto2000.rei.core.project.ProjectRegistry(dir.resolve("projects.json"));var project=projects.resolve(dir);
+    var repo=new PersistentDependencyRepository(new DriverManagerDataSource("jdbc:sqlite:"+dir.resolve("dependencies.db")),Clock.systemUTC());
+    var observations=mock(DependencyObservationService.class);var guard=mock(dev.mikoto2000.rei.core.policy.ToolPermissionGuard.class);
+    var controller=new DependencyController(repo,observations,projects,guard);
+    var entry=repo.create(new AgentRunContext("run","session",dir,project.id()),new DependencySpec(DependencySpec.Kind.HTTP_STATUS,"http://127.0.0.1:9999","200"),Duration.ofHours(1),List.of());
+    when(observations.inspect(project.id(),entry.id(),true)).thenReturn(entry);
+    assertEquals(entry,controller.check(project.id(),entry.id()));
+    var order=inOrder(guard,observations);var owner=org.mockito.ArgumentCaptor.forClass(AgentRunContext.class);
+    order.verify(guard).check(eq("checkHttpDependency"),anyString(),owner.capture());order.verify(observations).inspect(project.id(),entry.id(),true);
+    assertEquals(AgentRunContext.RequestSource.WEB,owner.getValue().requestSource());
+    assertThrows(IllegalArgumentException.class,()->controller.cancel("foreign",entry.id()));
+    assertEquals(DependencyState.CANCELLED,controller.cancel(project.id(),entry.id()).state());
+  }
   @Test void explicitAnswerRequiresCurrentVersionAndDoesNotCompleteOrExecuteDependency() {
     var repo=new PersistentDependencyRepository(new DriverManagerDataSource("jdbc:sqlite:"+dir.resolve("dependencies.db")),Clock.systemUTC());
     var events=mock(DependencyObservationService.class);

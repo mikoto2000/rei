@@ -20,14 +20,20 @@ public class MemoryCommandSupport {
   private String project() { return projects.currentContext().id(); }
   public void enabled() { if(!properties.enabled()) throw new IllegalStateException("Memory is disabled (rei.memory.enabled=false)"); }
   public String autoSleepRequests() {
-    String project=project();var format=new dev.mikoto2000.rei.conversation.HistoryFormatter();
+    return autoSleepRequestsForProject(project());
+  }
+  public String autoSleepRequestsForProject(String project) {
+    var format=new dev.mikoto2000.rei.conversation.HistoryFormatter();
     var rows=sleep.pendingAutoSleepRequests().stream().filter(r->r.projectId().equals(project))
         .map(r->format.label(r.sessionId())+" revision="+r.revision()+" cause="+format.label(r.cause())).toList();
     return rows.isEmpty()?"No pending Auto Sleep requests.":dev.mikoto2000.rei.event.CredentialRedactor.redact(String.join("\n",rows));
   }
   public String cancelAutoSleepRequest(String session,long revision) {
+    return cancelAutoSleepRequestForProject(project(),session,revision);
+  }
+  public String cancelAutoSleepRequestForProject(String project,String session,long revision) {
     if(session==null||session.isBlank()||session.length()>512||revision<1)throw new IllegalArgumentException("Session and positive revision are required");
-    if(!sleep.completeAutoSleepRequest(new MemoryRepository.AutoSleepRequest(session,project(),revision,"")))
+    if(!sleep.completeAutoSleepRequest(new MemoryRepository.AutoSleepRequest(session,project,revision,"")))
       throw new IllegalStateException("Auto Sleep request changed or is not in this Project");
     return "Pending Auto Sleep request cancelled. An already running Sleep is unaffected.";
   }
@@ -56,15 +62,21 @@ public class MemoryCommandSupport {
     return String.join("\n\n",memories.stream().map(m -> m.id()+" ["+m.scope()+"] ["+m.type()+"] "+m.status()+"\n"+m.content()).toList());
   }
   public String status() {
-    enabled(); var runs=repository.history(project(),1);
+    return statusForProject(project(),projects.currentSessionId());
+  }
+  public String statusForProject(String project,String session) {
+    enabled(); var runs=repository.history(project,1);
     StringBuilder text=new StringBuilder("Memory Status\n");
-    repository.counts(project()).forEach((key,count) -> text.append(key).append(": ").append(count).append('\n'));
+    repository.counts(project).forEach((key,count) -> text.append(key).append(": ").append(count).append('\n'));
     text.append("Last sleep: ").append(runs.isEmpty()?"none":runs.getFirst()).append('\n');
-    text.append("unslept turns: ").append(sleep.unsleptTurns(projects.currentSessionId()));
+    text.append("unslept turns: ").append(sleep.unsleptTurns(session));
     return text.toString();
   }
   public String history() {
-    enabled(); var runs=repository.history(project(),100);
+    return historyForProject(project());
+  }
+  public String historyForProject(String project) {
+    enabled(); var runs=repository.history(project,100);
     return "Sleep history\n"+(runs.isEmpty()?"none":String.join("\n",runs.stream().map(Object::toString).toList()));
   }
   public String report(SleepService.Report report) {

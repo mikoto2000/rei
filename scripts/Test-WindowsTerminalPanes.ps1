@@ -112,7 +112,7 @@ function Wait-File([string]$Name) {
 function Start-Client([string[]]$Arguments) {
   $info=[System.Diagnostics.ProcessStartInfo]::new()
   $info.FileName=if ($env:JAVA_HOME) { Join-Path $env:JAVA_HOME 'bin/java.exe' } else { (Get-Command java.exe).Source }
-  $info.WorkingDirectory=$repoRoot
+  $info.WorkingDirectory=$CaseRoot
   $info.UseShellExecute=$false
   $info.RedirectStandardInput=$true
   $info.RedirectStandardOutput=$true

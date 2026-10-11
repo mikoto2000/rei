@@ -4,6 +4,7 @@
   <build><sourceDirectory>../../src/main/java</sourceDirectory><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><configuration><includes>
     <include>dev/mikoto2000/rei/launcher/BackendEndpoint.java</include><include>dev/mikoto2000/rei/launcher/BackendEndpointStore.java</include><include>dev/mikoto2000/rei/launcher/BackendConnectionProbe.java</include><include>dev/mikoto2000/rei/launcher/BackendOwnership.java</include><include>dev/mikoto2000/rei/core/datasource/ReiDataDirectory.java</include>
     <include>dev/mikoto2000/rei/core/command/UserInputParser.java</include>
+    <include>dev/mikoto2000/rei/application/cli/CliCatalog.java</include>
     <include>dev/mikoto2000/rei/paper/PaperCommandRequest.java</include><include>dev/mikoto2000/rei/paper/PaperSearchQuery.java</include><include>dev/mikoto2000/rei/paper/PaperException.java</include>
     <include>dev/mikoto2000/rei/externalagent/BeginnerReviewRequest.java</include><include>dev/mikoto2000/rei/externalagent/ExternalAgentCommandRequest.java</include><include>dev/mikoto2000/rei/externalagent/ExternalAgentRequest.java</include>
     <include>dev/mikoto2000/rei/conversation/HistoryFormatter.java</include><include>dev/mikoto2000/rei/conversation/ConversationLogEntry.java</include><include>dev/mikoto2000/rei/event/CredentialRedactor.java</include>

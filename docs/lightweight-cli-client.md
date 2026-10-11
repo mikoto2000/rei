@@ -197,3 +197,12 @@ Backend JAR のビルド完了後に E2E を実行する。動作中の JAR を�
 履歴の Session ページング・旧 conversation 表示・検索 scope、profile の summary/path/chart/mermaid、timing、doctor、全 active Run 表示と Project 限定 cancel を専用 API に追加。履歴表示はリクエストごとの Project scope を使い、既存 Shell の選択を復元する。document/repair の復旧操作は明示ハッシュを検証し、paper/material-review/agent は既存の引数文法を共有して永続受付と Run キューへ接続する。
 
 最新版 Backend の対象回帰49件、独立 CLI の全回帰51件が成功。通常の2ペイン終了と GUI 強制 close の両 E2E も最新版 Backend jar で再確認した。この件数は全 Backend 回帰とは別の対象検証。Shell/Web が別 ProjectRegistry インスタンスで同じファイルを同時更新する競合を再現し、ファイル単位の Backend 内ロックを追加。48 Project の並行登録を保存し、同一 Project への CLI cd は選択 Session を保持する。全47コマンドの互換性は引き続き対応表で個別に管理する。
+
+### Catalog と追加の Session 操作
+
+GET `/api/v1/cli/catalog` は固定の RootCommand 登録47項目から宣言された options・子コマンド・alias・列挙値を読み出す。コマンド実行、任意クラス選択、Backend の任意ファイル一覧は提供しない。CLI は通常の refresh で取得し、help と Tab は immutable cache を使う。100回の補完でも追加 HTTP がゼロであることを確認した。全動的候補の互換確認は継続中。CLI 起動時はローカル cwd を初期 Project に選ぶ。
+
+config/skill/subagent、reflection lesson の専用 API と既存整形を追加。Dependency の check は WEB の Tool Permission を通してから観測する。memory summarize/consolidate は保存承認を既存 Shell と共有し、Sleep と共に ConversationInputRouter の操作キュー・永続 receipt・Session 排他を通す。terminal event 後も実処理の cleanup が終わるまで排他を保つ。実 HTTP の replay、異なる payload の409、チャットとの競合、余分な会話 Turn がないことを検証した。旧メモリ要約・統合・export の対象範囲は既存 Shell 同様の全体。
+
+追加メモリ関連25件が成功。最新 CLI は57件、launcher は実 ConPTY を含む5件が成功。配布依存は10 jars、合計7,742,025 bytes（CLI の純粋引数パーサーに picocli を含む）。Spring、SQLite、provider SDK は CLI に含まれない。最新 Backend `rei-backend-memory-parity.jar` の GUI 強制 close E2E は PASS：専用両ペイン終了後の同一 Backend、RUNNING → COMPLETED、別 CLI 再接続、認証 stop を確認。
+通常の2ペイン E2E も同じ最新版 jar で PASS：第一ペイン終了後も第二 CLI と RUNNING の Run が生存し、第二 CLI が SSE 完了を受信して追加 Session を作成した。

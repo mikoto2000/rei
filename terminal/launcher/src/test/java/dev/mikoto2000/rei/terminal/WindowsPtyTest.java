@@ -19,7 +19,7 @@ class WindowsPtyTest {
     var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
     var root=directory.toRealPath();var json=BackendClient.JSON;
     server.createContext("/",exchange->{
-      String text=exchange.getRequestURI().getPath().startsWith("/api/v1/sessions")?"{\"items\":[]}":
+      String text=exchange.getRequestURI().getPath().equals("/api/v1/cli/catalog")?"{\"commands\":[]}":exchange.getRequestURI().getPath().startsWith("/api/v1/sessions")?"{\"items\":[]}":
           json.writeValueAsString(exchange.getRequestMethod().equals("POST")?Map.of("id","fixture","name","Fixture","path",root.toString()):List.of(Map.of("id","fixture","name","Fixture","path",root.toString())));
       var bytes=text.getBytes(java.nio.charset.StandardCharsets.UTF_8);exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();
     });server.start();
@@ -29,8 +29,14 @@ class WindowsPtyTest {
       var proof=root.resolve("shell-directory.txt");
       pty.send("Set-Content -LiteralPath '"+proof.toString().replace("'","''")+"' -Value ((Get-Location).Path)\r");
       long deadline=System.nanoTime()+java.time.Duration.ofSeconds(20).toNanos();
-      while(!Files.exists(proof)&&System.nanoTime()<deadline)Thread.sleep(50);
-      assertTrue(Files.exists(proof),pty.output());assertEquals(root.toString(),Files.readString(proof).strip());
+      String observed=null;
+      while(System.nanoTime()<deadline) {
+        try {if(Files.exists(proof))observed=Files.readString(proof).strip();}
+        catch(java.nio.file.FileSystemException stillWriting) { /* PowerShell may still hold the newly created file. */ }
+        if(root.toString().equals(observed))break;
+        Thread.sleep(50);
+      }
+      assertEquals(root.toString(),observed,pty.output());
       int offset=pty.output().length();pty.send("exit\r");pty.awaitAfter("]> ",offset);
       pty.send("\u0003");Thread.sleep(100);offset=pty.output().length();pty.send("/help\r");pty.awaitAfter("/project",offset);
       pty.send("/exit\r");assertEquals(0,pty.exitCode());

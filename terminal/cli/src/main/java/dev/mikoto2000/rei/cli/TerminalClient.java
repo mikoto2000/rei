@@ -26,6 +26,9 @@ public final class TerminalClient implements AutoCloseable {
   private String project,projectName="none",session,run;
   private Path projectDirectory;
   private volatile List<String> projectIds=List.of(),sessionIds=List.of();
+  private volatile List<String> modelIds=List.of();
+  private volatile CachedCatalog catalog=new CachedCatalog(new dev.mikoto2000.rei.application.cli.CliCatalog(List.of()));
+  private boolean catalogLoaded;
   private boolean recordHistory;
   private static final List<String> COMMANDS=java.util.stream.Stream.concat(java.util.stream.Stream.of("/help","/exit","/project","/session","/chat","/run-mode","/cancel","/runs","/watch","/receipt","/input-history","/paste","/sh"),RemoteCommands.NAMES.stream()).sorted().toList();
   public TerminalClient(BackendClient backend,Path historyDirectory,boolean noHistory)throws IOException {
@@ -41,17 +44,33 @@ public final class TerminalClient implements AutoCloseable {
     terminal.handle(Terminal.Signal.INT,signal->{backend.detach();attached=false;});
   }
   public void selectInitialProject(Path path)throws IOException,InterruptedException {
-    if(path==null)return;
-    var value=backend.post("/api/v1/projects/register",Map.of("path",path.toString()));selectProject(value.path("id").asText());
+    Path selected=(path==null?Path.of(""):path).toAbsolutePath().normalize();
+    var value=backend.post("/api/v1/projects/register",Map.of("path",selected.toString()));selectProject(value.path("id").asText());
   }
   private final CompletionEngine paths=new CompletionEngine().register(new FilePathCompletionProvider());
   private void complete(LineReader input,ParsedLine line,List<Candidate> candidates) {
-    List<String> values=line.wordIndex()==0?COMMANDS:line.words().getFirst().equals("/project")?projectIds:line.words().getFirst().equals("/session")?sessionIds:List.of();
+    List<String> values=completionValues(line.words(),line.wordIndex(),line.word());
     for(String value:values)if(value.startsWith(line.word()))candidates.add(new Candidate(value));
     if(line.words().size()>1&&line.words().getFirst().equals("/project")&&Set.of("register","add","cd").contains(line.words().get(1))) {
-      var context=new CompletionContext(line.line(),line.cursor(),line.words(),line.wordIndex(),line.wordIndex()-1,line.word(),List.of("project","register"),Set.of("directory"),List.of(),Path.of("").toAbsolutePath());
+      var context=new CompletionContext(line.line(),line.cursor(),line.words(),line.wordIndex(),line.wordIndex()-1,line.word(),List.of("project","register"),Set.of("directory"),List.of(),projectDirectory==null?Path.of("").toAbsolutePath():projectDirectory);
       for(var value:paths.complete(context))candidates.add(new Candidate(value.value(),value.display(),"CLI local paths",value.description(),null,null,value.appendSpace()));
     }
+  }
+  List<String> completionValues(List<String> words,int wordIndex,String prefix) {
+    var values=new LinkedHashSet<>(catalog.complete(words,wordIndex,prefix));
+    if(wordIndex==0)values.addAll(COMMANDS);
+    if(wordIndex==1&&!words.isEmpty()&&words.getFirst().equals("/model"))values.addAll(modelIds);
+    if(wordIndex==2&&words.size()>1) {
+      if(words.getFirst().equals("/project")&&words.get(1).equals("select"))values.addAll(projectIds);
+      if(words.getFirst().equals("/session")&&Set.of("select","switch","resume").contains(words.get(1)))values.addAll(sessionIds);
+    }
+    return values.stream().filter(value->value.startsWith(prefix)).toList();
+  }
+  void refreshCatalog()throws IOException,InterruptedException {
+    if(catalogLoaded)return;
+    try{catalog=new CachedCatalog(BackendClient.JSON.treeToValue(backend.get("/api/v1/cli/catalog"),dev.mikoto2000.rei.application.cli.CliCatalog.class));}
+    catch(BackendClient.ApiException missing){if(missing.status()!=404)throw missing;}
+    catalogLoaded=true;
   }
   public void run()throws IOException {
     try{refresh();}catch(Exception error){out("Completion metadata unavailable; /project list can retry.");}
@@ -82,6 +101,7 @@ public final class TerminalClient implements AutoCloseable {
     }
   }
   private void refresh()throws IOException,InterruptedException {
+    refreshCatalog();
     var projects=backend.get("/api/v1/projects");var ids=new ArrayList<String>();for(var value:projects)ids.add(value.path("id").asText());projectIds=List.copyOf(ids);
     if(project!=null){var sessions=backend.get("/api/v1/sessions?projectId="+BackendClient.segment(project));ids=new ArrayList<>();for(var value:sessions.path("items"))ids.add(value.path("sessionId").asText());sessionIds=List.copyOf(ids);}
   }
@@ -105,14 +125,26 @@ public final class TerminalClient implements AutoCloseable {
   void command(String line)throws IOException,InterruptedException {
     var words=commandWords(line);
     String name=words.getFirst();String action=words.size()>1?words.get(1):"list";
+    if(words.size()>1&&Set.of("--help","-h").contains(words.getLast())) {
+      String help=catalog.help(words.subList(0,words.size()-1));if(!help.isEmpty()){out(help);return;}
+    }
     if(name.equals("/mode")&&session==null) {
       requireProject();
-      if(action.equals("list")||action.equals("status")){out("Response mode: auto (no active Session)");return;}
+      if(action.equals("list")||action.equals("status")){if(words.size()>2)throw new IllegalArgumentException("Unexpected mode argument");out("Response mode: auto (text: normal, voice: conversation); no active Session");return;}
       // Validate before creating an empty Session. Run access is unchanged.
       RemoteCommands.route(words,project,"validation");createSession(null);
     }
     if(RemoteCommands.NAMES.contains(name)&&!(name.equals("/history")&&Set.of("off","on").contains(action))) {
       var request=RemoteCommands.route(words,project,session);
+      if(name.equals("/memory")&&Set.of("summarize","consolidate").contains(action)) {
+        String key=UUID.randomUUID().toString();out("Receipt: "+key);
+        var accepted=action.equals("summarize")?backend.submitMemorySummary(project,request.body(),key):backend.submitMemoryConsolidation(project,request.body(),key);
+        session=accepted.path("sessionId").asText();run=accepted.path("runId").asText();out("Run: "+run);watch(run);refresh();return;
+      }
+      if(name.equals("/sleep")&&request.method().equals("POST")&&request.path().endsWith("/memory/sleep")) {
+        String key=UUID.randomUUID().toString();out("Receipt: "+key);var accepted=backend.submitMemorySleep(project,request.body(),key);
+        session=accepted.path("sessionId").asText();run=accepted.path("runId").asText();out("Run: "+run);watch(run);refresh();return;
+      }
       if(Set.of("/api/v1/diagnostics","/api/v1/document/recovery","/api/v1/repair/recovery","/api/v1/paper/operations","/api/v1/material-reviews","/api/v1/external-agent/operations").contains(request.path())) {
         String key=UUID.randomUUID().toString();out("Receipt: "+key);var accepted=switch(request.path()) {
           case "/api/v1/document/recovery"->backend.submitDocumentRecovery(request.body(),key);
@@ -125,12 +157,21 @@ public final class TerminalClient implements AutoCloseable {
         session=accepted.path("sessionId").asText();run=accepted.path("runId").asText();out("Run: "+run);watch(run);refresh();return;
       }
       var response=request.method().equals("GET")?backend.get(request.path()):backend.mutation(request.method(),request.path(),request.body());
+      if(name.equals("/mode")) {
+        String style=response.path("style").asText("AUTO").toLowerCase(Locale.ROOT);
+        out("Response mode: "+style+(style.equals("auto")?" (text: normal, voice: conversation)":response.path("voiceOnly").asBoolean()?" (voice only)":" (text and voice)"));return;
+      }
+      if(name.equals("/models")) {
+        var names=new ArrayList<String>();String current=response.path("currentModel").asText();
+        for(var model:response.path("models")){String value=model.asText();names.add(value);out((value.equals(current)?"* ":"")+value);}modelIds=List.copyOf(names);return;
+      }
+      if(name.equals("/model")){out((request.method().equals("GET")?"":"current model: ")+response.path("model").asText());return;}
       if(response.isObject()&&response.size()==1&&response.path("text").isTextual())out(response.path("text").asText());else show(response);
       if(name.equals("/resume")&&action.equals("show"))show(backend.get(request.path()+"/reconciliation"));return;
     }
     switch(name) {
       case "/sh"->{if(words.size()!=1)throw new IllegalArgumentException("Usage: /sh");requireProject();if(projectDirectory==null)throw new IllegalArgumentException("Project directory is unavailable");backend.detach();attached=false;int exit=InteractiveShell.run(terminal,projectDirectory);if(exit!=0)out("shell exited with code "+exit);}
-      case "/help"->out(String.join(" ",COMMANDS)+"\n/project list|select ID|register LOCAL_PATH; /session list|select ID|new|end; /watch RUN_ID; /history off|on. Unsupported commands are never sent to the model.");
+      case "/help"->{String help=catalog.help(words.subList(1,words.size()));out(help.isEmpty()?String.join(" ",COMMANDS)+"\n/project list|select ID|register LOCAL_PATH; /session list|select ID|new|end; /watch RUN_ID; /history off|on. Unsupported commands are never sent to the model.":help);}
       case "/project"->{switch(action){
         case "list"->{if(words.size()!=2&&words.size()!=1)throw new IllegalArgumentException("Usage: /project list");for(var value:backend.get("/api/v1/projects"))out((value.path("id").asText().equals(project)?"* ":"  ")+value.path("path").asText());refresh();}
         case "select"->{if(words.size()!=3)throw new IllegalArgumentException("Usage: /project select ID");selectProject(argument(words,2));}

@@ -160,17 +160,23 @@ public class MemoryCommand {
 
     @Option(names = "--dir")
     String exportDir;
+    private java.io.PrintWriter reportOutput;
+    private java.io.PrintWriter out() { return reportOutput==null?new java.io.PrintWriter(System.out,true):reportOutput; }
+    public String render(String directory) {
+      var command=new ExportCommand(memoryExporter);command.exportDir=directory;
+      var text=new java.io.StringWriter();command.reportOutput=new java.io.PrintWriter(text,true);command.run();return text.toString().stripTrailing();
+    }
 
     @Override
     public void run() {
       MemoryExporter.ExportResult result = memoryExporter.export(exportDir == null
           ? dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve("memory-export") : Path.of(exportDir));
       if (result.count() == 0) {
-        System.out.println("エクスポート対象の記憶がありません");
+        out().println("エクスポート対象の記憶がありません");
         return;
       }
-      System.out.println("エクスポート完了: " + result.latestMd());
-      System.out.println("件数: " + result.count());
+      out().println("エクスポート完了: " + result.latestMd());
+      out().println("件数: " + result.count());
     }
   }
 
@@ -183,29 +189,35 @@ public class MemoryCommand {
 
     @Option(names = {"--approve", "--save"}, defaultValue = "false", description = "要約の保存を承認します")
     boolean approve;
+    private java.io.PrintWriter reportOutput;
+    private java.io.PrintWriter out() { return reportOutput==null?new java.io.PrintWriter(System.out,true):reportOutput; }
+    public String render(boolean approval) {
+      var command=new SummarizeCommand(consolidatorService,memoryService);command.approve=approval;
+      var text=new java.io.StringWriter();command.reportOutput=new java.io.PrintWriter(text,true);command.run();return text.toString().stripTrailing();
+    }
 
     @Override
     public void run() {
       try {
         var result = consolidatorService.summarizeCandidates();
         if (!result.hasCandidates()) {
-          System.out.println("要約対象の会話履歴がありません");
+          out().println("要約対象の会話履歴がありません");
           return;
         }
         String summary = result.summary();
-        System.out.println(summary);
+        out().println(summary);
         if (!approve) {
-          System.out.println("要約は未保存です。保存するには --approve を指定してください");
+          out().println("要約は未保存です。保存するには --approve を指定してください");
           return;
         }
         Memory memory = new Memory(null, summary, MemoryType.EPISODE_SUMMARY, MemoryScope.SHORT_TERM,
             MemoryStatus.CANDIDATE, 0.8d, null, OffsetDateTime.now(), OffsetDateTime.now());
         memoryService.save(memory);
-        System.out.println("要約を記憶として保存しました");
+        out().println("要約を記憶として保存しました");
       } catch (dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException e) {
-        System.out.println("[stopped] " + e.reason().name());
+        out().println("[stopped] " + e.reason().name());
       } catch (IllegalStateException e) {
-        System.out.println("[error] " + e.getMessage());
+        out().println("[error] " + e.getMessage());
       }
     }
   }
@@ -221,13 +233,19 @@ public class MemoryCommand {
 
     @Option(names = {"--approve", "--save"}, defaultValue = "false", description = "抽出候補の保存を承認します")
     boolean approve;
+    private java.io.PrintWriter reportOutput;
+    private java.io.PrintWriter out() { return reportOutput==null?new java.io.PrintWriter(System.out,true):reportOutput; }
+    public String render(boolean approval) {
+      var command=new ConsolidateCommand(consolidatorService,memoryService,sensitiveInfoDetector,conflictResolver);command.approve=approval;
+      var text=new java.io.StringWriter();command.reportOutput=new java.io.PrintWriter(text,true);command.run();return text.toString().stripTrailing();
+    }
 
     @Override
     public void run() {
       try {
         List<Memory> candidates = consolidatorService.extractCandidates();
         if (candidates.isEmpty()) {
-          System.out.println("保存対象の会話履歴がありません");
+          out().println("保存対象の会話履歴がありません");
           return;
         }
 
@@ -235,11 +253,11 @@ public class MemoryCommand {
         int saved = 0;
         int skipped = 0;
         if (!approve) {
-          System.out.println("候補は未保存です。保存するには --approve を指定してください");
+          out().println("候補は未保存です。保存するには --approve を指定してください");
         }
         for (Memory candidate : candidates) {
           if (sensitiveInfoDetector.containsSensitiveInfo(candidate.content())) {
-            System.out.println("[warn] 機微情報を含むためスキップ: " + candidate.content());
+            out().println("[warn] 機微情報を含むためスキップ: " + candidate.content());
             skipped++;
             continue;
           }
@@ -253,19 +271,19 @@ public class MemoryCommand {
             continue;
           }
           if (!approve) {
-            System.out.println("[candidate] " + candidate.type() + " | " + candidate.content());
+            out().println("[candidate] " + candidate.type() + " | " + candidate.content());
             continue;
           }
           memoryService.save(candidate);
           saved++;
         }
         ConsolidationReport report = ConsolidationReport.of(candidates.size(), saved, skipped);
-        System.out.println(
+        out().println(
             "統合結果 保存=" + report.savedCount() + " / スキップ=" + report.skippedCount() + " / 候補=" + report.totalCandidates());
       } catch (dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException e) {
-        System.out.println("[stopped] " + e.reason().name());
+        out().println("[stopped] " + e.reason().name());
       } catch (IllegalStateException e) {
-        System.out.println("[error] " + e.getMessage());
+        out().println("[error] " + e.getMessage());
       }
     }
 
@@ -279,7 +297,7 @@ public class MemoryCommand {
       } catch (CompletionException e) {
         Throwable cause = e.getCause();
         if (cause instanceof TimeoutException) {
-          System.out.println("[warn] 競合判定がタイムアウトしたためスキップしました");
+          out().println("[warn] 競合判定がタイムアウトしたためスキップしました");
           return null;
         }
         throw new IllegalStateException("競合判定に失敗しました", cause == null ? e : cause);

@@ -9,10 +9,71 @@ public final class RemoteCommands {
           .streamReadConstraints(com.fasterxml.jackson.core.StreamReadConstraints.builder().maxNestingDepth(32).maxStringLength(32768).maxNumberLength(64).build()).build())
       .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
   public record Request(String method,String path,Object body) {}
-  public static final Set<String> NAMES=Set.of("/paper","/material-review","/agent","/document","/repair","/timing","/doctor","/mode","/history","/feed","/skill","/profile","/briefing","/reminder","/interest","/memory","/search","/timer","/tasks","/goal","/attention","/checkpoint","/resume","/approval","/dependency","/work","/summarize","/image","/model","/models");
+  public static final Set<String> NAMES=Set.of("/sleep","/reflection","/subagent","/config","/paper","/material-review","/agent","/document","/repair","/timing","/doctor","/mode","/history","/feed","/skill","/profile","/briefing","/reminder","/interest","/memory","/search","/timer","/tasks","/goal","/attention","/checkpoint","/resume","/approval","/dependency","/work","/summarize","/image","/model","/models");
   public static Request route(List<String> words,String project,String session) {
     String name=words.getFirst(),action=words.size()>1?words.get(1):"list";
     if(!NAMES.contains(name))throw new IllegalArgumentException("Unsupported CLI command: "+name+". Use legacy-shell; this input was not sent to the model.");
+    if(name.equals("/memory")&&Set.of("summarize","consolidate","export").contains(action)) {
+      if(project==null)throw new IllegalArgumentException("Select a Project first");String base="/api/v1/projects/"+id(project)+"/memory/"+action;
+      if(action.equals("export")) {
+        var parsed=parse(words,2,Set.of("--dir"),Set.of());if(!parsed.arguments().isEmpty())throw invalid();
+        var body=new LinkedHashMap<String,Object>();String directory=parsed.options().get("--dir");body.put("directory",directory==null?null:java.nio.file.Path.of(directory).toAbsolutePath().normalize().toString());return post(base,body);
+      }
+      if(session==null)throw new IllegalArgumentException("Select a Session first");boolean approval=false,approvalSpecified=false;
+      for(int index=2;index<words.size();index++) {
+        String option=words.get(index),value="true";int equals=option.indexOf('=');if(equals>=0){value=option.substring(equals+1);option=option.substring(0,equals);}
+        if(approvalSpecified||!Set.of("--approve","--save").contains(option)||!Set.of("true","false").contains(value))throw invalid();approval=Boolean.parseBoolean(value);approvalSpecified=true;
+      }
+      return post(base,Map.of("sessionId",session,"approve",approval));
+    }
+    if(name.equals("/sleep")) {
+      if(project==null)throw new IllegalArgumentException("Select a Project first");String base="/api/v1/projects/"+id(project)+"/memory/sleep";
+      if(words.size()==1||action.equals("preview")){exact(words,words.size()==1?1:2);if(session==null)throw new IllegalArgumentException("Select a Session first");return post(base,Map.of("sessionId",session,"preview",words.size()==2));}
+      if(Set.of("status","history","requests").contains(action)){exact(words,2);return get(base+"/"+action+(action.equals("status")&&session!=null?"?sessionId="+id(session):""));}
+      if(action.equals("cancel-request")){var parsed=parse(words,2,Set.of("--revision"),Set.of());if(parsed.arguments().size()!=1||!parsed.options().containsKey("--revision"))throw invalid();long version=revision(parsed.options().get("--revision"));if(version<1)throw invalid();return post(base+"/requests/"+id(parsed.arguments().getFirst())+"/cancel",Map.of("revision",version));}
+      throw invalid();
+    }
+    if(name.equals("/reflection")) {
+      if(project==null)throw new IllegalArgumentException("Select a Project first");
+      var parsed=parse(words,1,Set.of("--revision","--evidence-hash","--note","--source-kind","--kind","--evidence","--observation"),Set.of());var arguments=parsed.arguments();var selected=parsed.options();
+      if(arguments.size()>2)throw invalid();String operation=arguments.isEmpty()?"list":arguments.getFirst();String identity=arguments.size()==2?arguments.get(1):null;
+      String base="/api/v1/projects/"+id(project)+"/reflections";
+      if(Set.of("list","runs").contains(operation)){if(identity!=null)throw invalid();return get(base+(operation.equals("runs")?"/runs":""));}
+      if(Set.of("show","run","collect","promote","collect-run").contains(operation)) {
+        if(identity==null)throw invalid();String encoded=id(identity);
+        return switch(operation){case "show"->get(base+"/"+encoded);case "run"->get(base+"/runs/"+encoded);case "collect"->post(base+"/collect",Map.of("id",identity));case "promote"->post(base+"/"+encoded+"/promote",Map.of());default->{if(session==null)throw new IllegalArgumentException("Select a Session first");yield post(base+"/runs/"+encoded+"/collect",Map.of("sessionId",session));}};
+      }
+      if(session==null)throw new IllegalArgumentException("Select a Session first");
+      if(operation.equals("lessons")){if(identity!=null)throw invalid();return get(base+"/lessons?sessionId="+id(session));}
+      if(operation.equals("lesson")){if(identity==null)throw invalid();return get(base+"/lessons/"+id(identity)+"?sessionId="+id(session));}
+      var body=new LinkedHashMap<String,Object>();body.put("sessionId",session);body.put("id",identity);body.put("sourceKind",selected.getOrDefault("--source-kind","RUN"));
+      String kind=selected.getOrDefault("--kind","FAILURE_PATTERN");if(!Set.of("FAILURE_PATTERN","SUCCESSFUL_STRATEGY","REPEATED_CORRECTION").contains(kind))throw invalid();body.put("kind",kind);
+      try{body.put("revision",Long.parseLong(selected.getOrDefault("--revision","-1")));}catch(NumberFormatException malformed){throw invalid();}
+      body.put("evidenceHash",selected.get("--evidence-hash"));body.put("note",selected.get("--note"));body.put("evidence",selected.containsKey("--evidence")?List.of(selected.get("--evidence").split(",")):null);body.put("observation",selected.get("--observation"));
+      if(operation.equals("lesson-propose")){if(identity!=null)throw invalid();return post(base+"/lessons/proposals",body);}
+      if(identity==null)throw invalid();String encoded=id(identity);
+      return switch(operation){case "lesson-observe"->post(base+"/lessons/observe",body);case "lesson-observe-correction"->post(base+"/lessons/observe-correction",body);case "lesson-validate"->post(base+"/lessons/"+encoded+"/validate",body);case "lesson-counterexample"->post(base+"/lessons/"+encoded+"/counterexamples",body);case "lesson-correct"->post(base+"/lessons/"+encoded+"/corrections",body);case "lesson-forget"->post(base+"/lessons/"+encoded+"/forget",body);default->throw invalid();};
+    }
+    if(name.equals("/subagent")) {
+      String base="/api/v1/subagents";
+      if(action.equals("list")){exact(words,words.size()==1?1:2);return get(base);}
+      if(action.equals("show")){exact(words,3);return get(base+"/"+id(words.get(2)));}
+      if(action.equals("reload")){exact(words,2);return post(base+"/reload",Map.of());}
+      if(action.equals("init")){exact(words,3);return post(base+"/initialize",Map.of("id",words.get(2)));}
+      if(action.equals("validate")){exact(words,3);return post(base+"/validate",Map.of("file",java.nio.file.Path.of(words.get(2)).toAbsolutePath().normalize().toString()));}
+      throw invalid();
+    }
+    if(name.equals("/config")) {
+      if(action.equals("path")){exact(words,2);return get("/api/v1/config/path");}
+      if(action.equals("init")){var selected=options(words,2,Set.of(),Set.of("--force"));return post("/api/v1/config/initialize",Map.of("force",Boolean.parseBoolean(selected.getOrDefault("--force","false"))));}
+      throw invalid();
+    }
+    if(name.equals("/skill")) {
+      if(action.equals("list")){exact(words,words.size()==1?1:2);return get("/api/v1/skills/report");}
+      if(action.equals("show")){exact(words,3);return get("/api/v1/skills/"+id(words.get(2))+"/report");}
+      if(action.equals("reload")){exact(words,2);return post("/api/v1/skills/reload-report",Map.of());}
+      throw invalid();
+    }
     if(name.equals("/paper")||name.equals("/material-review")||name.equals("/agent")) {
       if(project==null)throw new IllegalArgumentException("Select a Project first");
       if(words.size()>2049||words.stream().mapToLong(String::length).sum()>16384||words.stream().anyMatch(word->word.codePoints().anyMatch(Character::isISOControl)))throw invalid();
@@ -120,8 +181,14 @@ public final class RemoteCommands {
       String base="/api/v1/sessions/"+id(session)+"/response-style";
       if(action.equals("list")||action.equals("status")){exact(words,words.size()==1?1:2);return get(base+"?projectId="+id(project));}
       if(!Set.of("auto","normal","conversation").contains(action))throw unsupported();
-      boolean voiceOnly=words.size()==3&&words.get(2).equals("--voice-only")&&action.equals("conversation");
-      exact(words,voiceOnly?3:2);
+      boolean voiceOnly=false;
+      if(words.size()>2) {
+        if(!action.equals("conversation"))throw invalid();String option=words.get(2),value="true";
+        if(option.startsWith("--voice-only=")){exact(words,3);value=option.substring("--voice-only=".length());}
+        else if(option.equals("--voice-only")){if(words.size()==4)value=words.get(3);else exact(words,3);}
+        else throw invalid();
+        if(!Set.of("true","false").contains(value))throw invalid();voiceOnly=Boolean.parseBoolean(value);
+      }else exact(words,2);
       return new Request("PATCH",base,Map.of("projectId",project,"style",action.toUpperCase(Locale.ROOT),"voiceOnly",voiceOnly));
     }
     String scoped="/api/v1/projects/"+id(project);
@@ -217,7 +284,12 @@ public final class RemoteCommands {
     }
     if(name.equals("/goal")&&Set.of("run","cancel","verify").contains(action)||name.equals("/timer")&&Set.of("activate","cancel").contains(action)){exact(words,3);return post(base+"/"+id(words.get(2))+"/"+action,Map.of());}
     if(name.equals("/goal")&&action.equals("progress")){exact(words,3);return get(base+"/"+id(words.get(2))+"/completion-progress");}
-    if(name.equals("/dependency")&&action.equals("answer")){exact(words,5);return post(base+"/"+id(words.get(2))+"/answer",Map.of("expectedVersion",revision(words.get(3)),"answer",words.get(4)));}
+    if(name.equals("/dependency")&&Set.of("check","cancel").contains(action)){exact(words,3);return post(base+"/"+id(words.get(2))+"/"+action,Map.of());}
+    if(name.equals("/dependency")&&action.equals("answer")) {
+      if(words.size()==5&&!words.get(3).startsWith("--"))return post(base+"/"+id(words.get(2))+"/answer",Map.of("expectedVersion",revision(words.get(3)),"answer",words.get(4)));
+      var selected=parse(words,2,Set.of("--value"),Set.of());if(selected.arguments().size()!=1||!selected.options().containsKey("--value"))throw invalid();
+      return post(base+"/"+id(selected.arguments().getFirst())+"/human-answer",Map.of("value",selected.options().get("--value")));
+    }
     throw unsupported();
   }
   private static Request history(List<String> words,String project,String session) {

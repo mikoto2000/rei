@@ -91,6 +91,18 @@ public final class BackendClient implements AutoCloseable {
   public JsonNode submitExternalAgent(Object body,String receiptKey)throws IOException,InterruptedException {
     return submitAdmitted("/api/v1/external-agent/operations",body,receiptKey);
   }
+  public JsonNode submitMemorySleep(String project,Object body,String receiptKey)throws IOException,InterruptedException {
+    if(project==null||project.isBlank()||project.length()>128)throw new IllegalArgumentException("Project identity required");
+    return submitAdmitted("/api/v1/projects/"+segment(project)+"/memory/sleep",body,receiptKey);
+  }
+  public JsonNode submitMemorySummary(String project,Object body,String receiptKey)throws IOException,InterruptedException {
+    if(project==null||project.isBlank()||project.length()>128)throw new IllegalArgumentException("Project identity required");
+    return submitAdmitted("/api/v1/projects/"+segment(project)+"/memory/summarize",body,receiptKey);
+  }
+  public JsonNode submitMemoryConsolidation(String project,Object body,String receiptKey)throws IOException,InterruptedException {
+    if(project==null||project.isBlank()||project.length()>128)throw new IllegalArgumentException("Project identity required");
+    return submitAdmitted("/api/v1/projects/"+segment(project)+"/memory/consolidate",body,receiptKey);
+  }
   private JsonNode submitAdmitted(String path,Object body,String receiptKey)throws IOException,InterruptedException {
     if(receiptKey==null||!receiptKey.matches("[A-Za-z0-9._:-]{1,128}"))throw new IllegalArgumentException("Invalid receipt key");
     try {

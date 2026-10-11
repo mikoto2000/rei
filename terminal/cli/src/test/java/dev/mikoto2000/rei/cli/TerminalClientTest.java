@@ -11,6 +11,43 @@ import com.sun.net.httpserver.HttpServer;
 
 class TerminalClientTest {
   @TempDir Path directory;
+  @Test void modelControlsUseShellTextAndCacheNamesForCompletion()throws Exception {
+    var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);var output=new ByteArrayOutputStream();
+    server.createContext("/api/v1/models",exchange->{
+      String response=exchange.getRequestURI().getPath().endsWith("/current")?"{\"model\":\"chosen\"}":"{\"models\":[\"chosen\",\"other\"],\"currentModel\":\"chosen\"}";
+      var bytes=response.getBytes();exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();
+    });server.start();
+    try(var backend=new BackendClient(URI.create("http://127.0.0.1:"+server.getAddress().getPort()),"fixture");
+        var client=new TerminalClient(backend,directory,true,TerminalBuilder.builder().system(false).dumb(true).streams(new ByteArrayInputStream(new byte[0]),output).build())) {
+      client.command("/models");assertTrue(output.toString().contains("* chosen"));assertFalse(output.toString().contains("currentModel"));
+      assertEquals(java.util.List.of("other"),client.completionValues(java.util.List.of("/model","o"),1,"o"));
+      output.reset();client.command("/model chosen");assertTrue(output.toString().contains("current model: chosen"));
+    }finally{server.stop(0);}
+  }
+  @Test void startupWithoutProjectOptionSelectsTheClientWorkingDirectory()throws Exception {
+    var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);var registered=new java.util.concurrent.atomic.AtomicReference<String>();
+    String path=BackendClient.JSON.writeValueAsString(Path.of("").toAbsolutePath().normalize().toString());
+    server.createContext("/api/v1/projects",exchange->{
+      String response;if(exchange.getRequestMethod().equals("POST")){registered.set(BackendClient.JSON.readTree(exchange.getRequestBody()).path("path").asText());response="{\"id\":\"cwd\",\"name\":\"Current\",\"path\":"+path+"}";}else response="[{\"id\":\"cwd\",\"name\":\"Current\",\"path\":"+path+"}]";
+      var bytes=response.getBytes();exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();
+    });server.createContext("/api/v1/sessions",exchange->{var bytes="{\"items\":[]}".getBytes();exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();});server.start();
+    try(var backend=new BackendClient(URI.create("http://127.0.0.1:"+server.getAddress().getPort()),"fixture");
+        var client=new TerminalClient(backend,directory,true,TerminalBuilder.builder().system(false).dumb(true).streams(new ByteArrayInputStream(new byte[0]),new ByteArrayOutputStream()).build())) {
+      client.selectInitialProject(null);assertEquals("cwd",client.projectId());assertEquals(Path.of("").toAbsolutePath().normalize().toString(),registered.get());
+    }finally{server.stop(0);}
+  }
+  @Test void tabCompletionUsesTheCatalogCacheWithoutAnyAdditionalHttpRequest()throws Exception {
+    var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);var requests=new java.util.concurrent.atomic.AtomicInteger();
+    var command=new dev.mikoto2000.rei.application.cli.CliCatalog.Command("session",java.util.List.of(),"Sessions",java.util.List.of(),java.util.List.of(),java.util.List.of(new dev.mikoto2000.rei.application.cli.CliCatalog.Command("switch",java.util.List.of("resume"),"Select",java.util.List.of(),java.util.List.of(),java.util.List.of())));
+    var bytes=BackendClient.JSON.writeValueAsBytes(new dev.mikoto2000.rei.application.cli.CliCatalog(java.util.List.of(command)));
+    server.createContext("/api/v1/cli/catalog",exchange->{requests.incrementAndGet();exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();});server.start();
+    try(var backend=new BackendClient(URI.create("http://127.0.0.1:"+server.getAddress().getPort()),"fixture");
+        var client=new TerminalClient(backend,directory,true,TerminalBuilder.builder().system(false).dumb(true).streams(new ByteArrayInputStream(new byte[0]),new ByteArrayOutputStream()).build())) {
+      client.refreshCatalog();assertEquals(1,requests.get());
+      for(int index=0;index<100;index++)assertEquals(java.util.List.of("resume"),client.completionValues(java.util.List.of("/session","r"),1,"r"));
+      client.refreshCatalog();assertEquals(1,requests.get());
+    }finally{server.stop(0);}
+  }
   @Test void sessionListReadsEveryPageAndUsesTheShellDisplay()throws Exception {
     var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);
     var pages=new java.util.concurrent.atomic.AtomicInteger();var output=new ByteArrayOutputStream();

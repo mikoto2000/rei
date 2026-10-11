@@ -122,8 +122,21 @@ public final class ConversationInputRouter {
   }
   /** Explicit application work shares the agent FIFO without entering the chat runner or mailbox. */
   public void submitOperation(AgentRunContext context, Runnable operation, Consumer<Runnable> lifecycle) {
-    projectQueue.enqueue(context.projectId(), context.runId(), () -> lifecycle.accept(operation),
-        () -> {}, () -> {}, error -> lifecycle.accept(() -> { throw error; }));
+    var slot=slot(context,"operation");
+    if(admissions!=null)admissions.reserveKnownSession(context);
+    try {
+      projectQueue.enqueue(context.projectId(),context.runId(),ProjectRunQueue.Access.valueOf(context.mode().name()),()->{
+        try {
+          if(admissions!=null)admissions.startExecution(context);
+          lifecycle.accept(operation);
+        } finally {forget(slot);}
+      },()->{active.put(context.runId(),ActiveRun.of(context,"operation"));changed();},
+        ()->{if(admissions!=null)admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.CANCELLED);forget(slot);},
+        error->{
+          if(admissions!=null)admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.FAILED);
+          try{lifecycle.accept(()->{throw error;});}finally{forget(slot);}
+        });
+    } catch(RuntimeException error){if(admissions!=null)admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.FAILED);forget(slot);throw error;}
   }
   private AgentRunContext cliContext(Path root, String conversation) {
     return new AgentRunContext(UUID.randomUUID().toString(), conversation, root,

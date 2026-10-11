@@ -3,6 +3,59 @@ import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 import java.util.*;
 class RemoteCommandsTest {
+  @Test void responseModeAcceptsShellOptionalBooleanSyntax() {
+    assertEquals(Map.of("projectId","project","style","CONVERSATION","voiceOnly",false),RemoteCommands.route(List.of("/mode","conversation","--voice-only=false"),"project","session").body());
+    assertEquals(Map.of("projectId","project","style","CONVERSATION","voiceOnly",false),RemoteCommands.route(List.of("/mode","conversation","--voice-only","false"),"project","session").body());
+    assertEquals(Map.of("projectId","project","style","CONVERSATION","voiceOnly",true),RemoteCommands.route(List.of("/mode","conversation","--voice-only"),"project","session").body());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/mode","normal","--voice-only"),"project","session"));
+  }
+  @Test void memoryMaintenancePreservesApprovalAliasesAndRequiresSelectedSession() {
+    var summary=RemoteCommands.route(List.of("/memory","summarize","--save=false"),"project","session");
+    assertEquals("/api/v1/projects/project/memory/summarize",summary.path());assertEquals(Map.of("sessionId","session","approve",false),summary.body());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/memory","summarize","--approve=true","--save=false"),"project","session"));
+    assertEquals(Map.of("sessionId","session","approve",true),RemoteCommands.route(List.of("/memory","consolidate","--save"),"project","session").body());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/memory","summarize"),"project",null));
+    assertEquals(Map.of("directory",java.nio.file.Path.of("export").toAbsolutePath().normalize().toString()),RemoteCommands.route(List.of("/memory","export","--dir","export"),"project","session").body());
+  }
+  @Test void sleepUsesTheSelectedSessionAndObservedCancellationRevision() {
+    var preview=RemoteCommands.route(List.of("/sleep","preview"),"project","session");assertEquals("/api/v1/projects/project/memory/sleep",preview.path());assertEquals(Map.of("sessionId","session","preview",true),preview.body());
+    assertEquals(Map.of("sessionId","session","preview",false),RemoteCommands.route(List.of("/sleep"),"project","session").body());
+    assertEquals("/api/v1/projects/project/memory/sleep/status?sessionId=session",RemoteCommands.route(List.of("/sleep","status"),"project","session").path());
+    assertEquals(Map.of("revision",2L),RemoteCommands.route(List.of("/sleep","cancel-request","session","--revision","2"),"project","session").body());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/sleep"),"project",null));
+  }
+  @Test void reflectionReviewPreservesTheOwningSessionAndRevisionEvidenceOptions() {
+    assertEquals("/api/v1/projects/project/reflections",RemoteCommands.route(List.of("/reflection","list"),"project","session").path());
+    assertEquals("/api/v1/projects/project/reflections/runs",RemoteCommands.route(List.of("/reflection","runs"),"project","session").path());
+    assertEquals(Map.of("sessionId","session"),RemoteCommands.route(List.of("/reflection","collect-run","run"),"project","session").body());
+    var review=RemoteCommands.route(List.of("/reflection","lesson-validate","lesson","--revision","2","--evidence-hash","a".repeat(64),"--note","reviewed"),"project","session");
+    assertEquals("/api/v1/projects/project/reflections/lessons/lesson/validate",review.path());
+    var body=(Map<?,?>)review.body();assertEquals("session",body.get("sessionId"));assertEquals(2L,body.get("revision"));assertEquals("reviewed",body.get("note"));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/reflection","lesson-validate","lesson","--revision","2"),"project",null));
+  }
+  @Test void subagentDefinitionManagementHasOnlyFixedRoutesAndLocalValidationPaths() {
+    assertEquals("/api/v1/subagents",RemoteCommands.route(List.of("/subagent","list"),null,null).path());
+    assertEquals("/api/v1/subagents/reviewer",RemoteCommands.route(List.of("/subagent","show","reviewer"),null,null).path());
+    assertEquals("/api/v1/subagents/reload",RemoteCommands.route(List.of("/subagent","reload"),null,null).path());
+    assertEquals(Map.of("id","reviewer"),RemoteCommands.route(List.of("/subagent","init","reviewer"),null,null).body());
+    assertEquals(Map.of("file",java.nio.file.Path.of("reviewer.yaml").toAbsolutePath().normalize().toString()),RemoteCommands.route(List.of("/subagent","validate","reviewer.yaml"),null,null).body());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/subagent","execute","arbitrary"),null,null));
+  }
+  @Test void dependencyShellAnswerUsesValueOptionAndNamedCheckCancelOperations() {
+    var answer=RemoteCommands.route(List.of("/dependency","answer","dep","--value","Choice A"),"project","session");
+    assertEquals("/api/v1/projects/project/dependencies/dep/human-answer",answer.path());assertEquals(Map.of("value","Choice A"),answer.body());
+    assertEquals("/api/v1/projects/project/dependencies/dep/check",RemoteCommands.route(List.of("/dependency","check","dep"),"project","session").path());
+    assertEquals("/api/v1/projects/project/dependencies/dep/cancel",RemoteCommands.route(List.of("/dependency","cancel","dep"),"project","session").path());
+  }
+  @Test void configAndSkillUseNamedOperationsAndShellOptions() {
+    assertEquals("/api/v1/config/path",RemoteCommands.route(List.of("/config","path"),null,null).path());
+    assertEquals(Map.of("force",true),RemoteCommands.route(List.of("/config","init","--force"),null,null).body());
+    assertEquals(Map.of("force",false),RemoteCommands.route(List.of("/config","init"),null,null).body());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/config","init","arbitrary-path"),null,null));
+    assertEquals("/api/v1/skills/report",RemoteCommands.route(List.of("/skill"),null,null).path());
+    assertEquals("/api/v1/skills/sample/report",RemoteCommands.route(List.of("/skill","show","sample"),null,null).path());
+    assertEquals("/api/v1/skills/reload-report",RemoteCommands.route(List.of("/skill","reload"),null,null).path());
+  }
   @Test void researchRequestsUseOnlyTheirNamedDomainRoutes() {
     assertEquals("/api/v1/paper/operations",RemoteCommands.route(List.of("/paper","search","graph theory","--limit","2"),"project","session").path());
     assertEquals("/api/v1/material-reviews",RemoteCommands.route(List.of("/material-review","beginner","--entry","index.html"),"project","session").path());
