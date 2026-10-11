@@ -6,6 +6,7 @@ import java.util.UUID;
 /** Public discovery metadata. Never contains credentials. */
 public record BackendEndpoint(int schemaVersion, String instanceId, String storageId, long pid,
     String baseUrl, int apiProtocolVersion, String status) {
+  public static final int CURRENT_API_PROTOCOL=2;
   public BackendEndpoint {
     if (schemaVersion != 1 || pid <= 0 || apiProtocolVersion <= 0 || !"READY".equals(status))
       throw new IllegalArgumentException("Unsupported backend endpoint");

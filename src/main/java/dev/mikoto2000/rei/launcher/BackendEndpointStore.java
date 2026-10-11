@@ -27,6 +27,15 @@ public final class BackendEndpointStore {
     } catch (IllegalArgumentException invalid) { throw new IOException("Invalid persistent storage identity",invalid); }
     return id;
   }
+  /** Launcher identity check never creates or repairs persistent metadata. */
+  public Optional<String> readStorageId() throws IOException {
+    Path file=directory.resolve("storage-id");
+    if(Files.notExists(file,LinkOption.NOFOLLOW_LINKS))return Optional.empty();
+    String id=new String(bounded(file),java.nio.charset.StandardCharsets.UTF_8);
+    try{if(!UUID.fromString(id).toString().equals(id))throw new IllegalArgumentException();}
+    catch(IllegalArgumentException invalid){throw new IOException("Invalid persistent storage identity");}
+    return Optional.of(id);
+  }
   public void publish(BackendEndpoint value) throws IOException {
     safeDirectory();
     if (!storageId().equals(value.storageId())) throw new IOException("Storage identity mismatch");

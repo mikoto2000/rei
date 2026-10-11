@@ -14,6 +14,7 @@ public final class SqliteSessionRepository implements SessionRepository {
   public SqliteSessionRepository(Path root){database=new StorageDatabase(root);refreshCompletion();}
   @Override public List<SessionMetadata> completionSnapshot(){return completion;}
   private void refreshCompletion(){completion=findPage(null,null,101);}
+  @Override public void refreshCompletionSnapshot(){refreshCompletion();}
   private static Previous previous(Connection connection,String id)throws Exception {
     try(var query=connection.prepareStatement("SELECT record,revision FROM sessions WHERE session_id=?")) {
       query.setString(1,id);try(var rows=query.executeQuery()) {

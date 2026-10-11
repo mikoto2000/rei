@@ -29,7 +29,7 @@ class GitHubWebhookHttpIntegrationTest {
     @Bean("memoryConsolidationDataSource") javax.sql.DataSource data(@org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory){return new DriverManagerDataSource("jdbc:sqlite:"+Path.of(directory).resolve("state.db"));}
     @Bean PersistentAgentScheduler scheduler(javax.sql.DataSource source,Clock clock){return new PersistentAgentScheduler(source,clock);}
     @Bean AttentionRepository inbox(javax.sql.DataSource source,Clock clock){return new AttentionRepository(source,clock);}
-    @Bean dev.mikoto2000.rei.event.AgentEventPublisher githubFixturePublisher(dev.mikoto2000.rei.event.AgentEventBus bus){return (dev.mikoto2000.rei.event.AgentEventPublisher)bus;}
+    @Bean @Primary dev.mikoto2000.rei.event.AgentEventPublisher githubFixturePublisher(dev.mikoto2000.rei.event.AgentEventBus bus){return (dev.mikoto2000.rei.event.AgentEventPublisher)bus;}
   }
   @Test void hmacIsTheOnlyPublicPostAndOwnerScopedReceiptsSurviveRestartWithoutRepeatingNotification() throws Exception {
     var projects=new ProjectRegistry(root.resolve("projects.json"));var project=projects.resolve(root);

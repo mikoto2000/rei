@@ -28,6 +28,7 @@
 	</scm>
 	<properties>
 		<rei.build.final-name>${project.artifactId}-${project.version}</rei.build.final-name>
+		<rei.build.directory>target</rei.build.directory>
 		<java.version>25</java.version>
 		<spring-ai.version>2.0.1</spring-ai.version>
 		<picocli.version>4.7.7</picocli.version>
@@ -198,6 +199,7 @@
 		</dependencies>
 	</dependencyManagement>
 	<build>
+		<directory>${rei.build.directory}</directory>
 		<finalName>${rei.build.final-name}</finalName>
 		<plugins>
 			<plugin>

@@ -23,7 +23,7 @@ class BackendConnectionProbeTest {
     server.start();
     try (var client = HttpClient.newHttpClient()) {
       var identity = new BackendEndpoint(1,UUID.randomUUID().toString(),UUID.randomUUID().toString(),
-          ProcessHandle.current().pid(),"http://127.0.0.1:"+server.getAddress().getPort(),1,"READY");
+          ProcessHandle.current().pid(),"http://127.0.0.1:"+server.getAddress().getPort(),BackendEndpoint.CURRENT_API_PROTOCOL,"READY");
       var json = new com.fasterxml.jackson.databind.ObjectMapper();
       response.set(json.writeValueAsString(identity));
       var probe = new BackendConnectionProbe(client);
@@ -39,9 +39,9 @@ class BackendConnectionProbeTest {
       assertEquals(BackendConnectionProbe.Status.IDENTITY_MISMATCH,probe.check(identity,"test-secret",true).status());
       response.set("x".repeat(16385));
       assertEquals(BackendConnectionProbe.Status.IDENTITY_MISMATCH,probe.check(identity,"test-secret",true).status());
-      response.set(json.writeValueAsString(new BackendEndpoint(1,identity.instanceId(),identity.storageId(),identity.pid(),identity.baseUrl(),2,"READY")));
+      response.set(json.writeValueAsString(new BackendEndpoint(1,identity.instanceId(),identity.storageId(),identity.pid(),identity.baseUrl(),1,"READY")));
       assertEquals(BackendConnectionProbe.Status.INCOMPATIBLE,probe.check(identity,"test-secret",true).status());
-      response.set(json.writeValueAsString(new BackendEndpoint(1,UUID.randomUUID().toString(),identity.storageId(),identity.pid(),identity.baseUrl(),1,"READY")));
+      response.set(json.writeValueAsString(new BackendEndpoint(1,UUID.randomUUID().toString(),identity.storageId(),identity.pid(),identity.baseUrl(),BackendEndpoint.CURRENT_API_PROTOCOL,"READY")));
       assertEquals(BackendConnectionProbe.Status.IDENTITY_MISMATCH,probe.check(identity,"test-secret",true).status());
       server.stop(0);
       assertEquals(BackendConnectionProbe.Status.UNREACHABLE,probe.check(identity,"test-secret",true).status());

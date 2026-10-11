@@ -20,7 +20,7 @@ public final class BackendConnectionProbe {
   public Result check(BackendEndpoint expected,String key,boolean storageOwned) throws InterruptedException {
     if (!storageOwned) return new Result(Status.STALE);
     if (key == null || key.isBlank()) return new Result(Status.KEY_MISSING);
-    if (expected.apiProtocolVersion() != 1) return new Result(Status.INCOMPATIBLE);
+    if (expected.apiProtocolVersion() != BackendEndpoint.CURRENT_API_PROTOCOL) return new Result(Status.INCOMPATIBLE);
     try {
       var request = HttpRequest.newBuilder(expected.uri().resolve("/api/v1/instance"))
           .timeout(Duration.ofSeconds(3)).header("Authorization","Bearer "+key).GET().build();
@@ -31,7 +31,7 @@ public final class BackendConnectionProbe {
       BackendEndpoint actual;
       try { actual = json.readValue(response.body(),BackendEndpoint.class); }
       catch (IOException | IllegalArgumentException invalid) { return new Result(Status.IDENTITY_MISMATCH); }
-      if (actual.apiProtocolVersion() != 1) return new Result(Status.INCOMPATIBLE);
+      if (actual.apiProtocolVersion() != BackendEndpoint.CURRENT_API_PROTOCOL) return new Result(Status.INCOMPATIBLE);
       return new Result(expected.sameInstance(actual) ? Status.READY : Status.IDENTITY_MISMATCH);
     } catch (IOException connection) { return new Result(Status.UNREACHABLE); }
     catch (IllegalArgumentException invalid) { return new Result(Status.AUTHENTICATION_FAILED); }

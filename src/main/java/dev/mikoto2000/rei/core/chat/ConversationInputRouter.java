@@ -15,6 +15,9 @@ public final class ConversationInputRouter {
   }
   @FunctionalInterface public interface Subscription extends AutoCloseable { void close(); }
   private dev.mikoto2000.rei.llm.capture.CaptureStore requestCaptures;
+  private dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setAdmissions(dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions){this.admissions=admissions;}
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   public void setRequestCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore captures){requestCaptures=captures;}
   private final Executor executor;
@@ -131,27 +134,31 @@ public final class ConversationInputRouter {
   }
   private Disposition enqueue(Slot slot, Consumer<Runnable> lifecycle) {
     var context = slot.context();
+    if(admissions!=null)admissions.reserveKnownSession(context);
     var admitted = beforeExecution.getOrDefault(context.runId(), () -> {});
     agentSlots.put(context.runId(), slot);
     String key = context.projectId() == null ? context.projectRoot().toString() : context.projectId();
     try {
       boolean first = projectQueue.enqueue(key, context.runId(), ProjectRunQueue.Access.valueOf(context.mode().name()), () -> {
         try {
+          if(admissions!=null)admissions.startExecution(context);
           admitted.run();
           lifecycle.accept(() -> runner.execute(context, slot.prompt(), slot.queue()));
         }
         finally { agentSlots.remove(context.runId()); forget(slot); }
       }, () -> { active.put(context.runId(), ActiveRun.of(context, slot.prompt())); changed(); },
-          () -> { agentSlots.remove(context.runId()); forget(slot); },
+          () -> { if(admissions!=null)admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.CANCELLED);agentSlots.remove(context.runId()); forget(slot); },
           error -> {
+            if(admissions!=null)admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.FAILED);
             if(requestCaptures!=null)requestCaptures.startFailed(context.runId());
             try { lifecycle.accept(() -> { throw error; }); }
             finally { agentSlots.remove(context.runId()); forget(slot); }
           });
       return first ? Disposition.STARTED : Disposition.QUEUED;
-    } catch (RuntimeException error) { agentSlots.remove(context.runId()); forget(slot); throw error; }
+    } catch (RuntimeException error) { if(admissions!=null)admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.FAILED);agentSlots.remove(context.runId()); forget(slot); throw error; }
   }
   private void forget(Slot slot) {
+    if(admissions!=null)admissions.release(slot.context().runId());
     active.remove(slot.context().runId());
     synchronized (mailboxes) { mailboxes.remove(slot.context().conversationId(), slot); }
     changed();

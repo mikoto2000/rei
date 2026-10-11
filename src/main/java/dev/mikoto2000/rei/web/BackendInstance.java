@@ -13,7 +13,7 @@ public final class BackendInstance implements AutoCloseable {
   public synchronized void ready(int port) throws IOException {
     if (ready != null) throw new IllegalStateException("Backend already ready");
     var value = new BackendEndpoint(1,instanceId,store.storageId(),ProcessHandle.current().pid(),
-        "http://127.0.0.1:"+port,1,"READY");
+        "http://127.0.0.1:"+port,BackendEndpoint.CURRENT_API_PROTOCOL,"READY");
     store.publish(value);
     ready = value;
   }

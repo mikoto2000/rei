@@ -6,6 +6,15 @@ import org.springframework.web.bind.annotation.*;
 
 @RestControllerAdvice(basePackages = "dev.mikoto2000.rei.web")
 public class ApiExceptionHandler {
+  public record Busy(String message,String projectId,String sessionId,String runId) {}
+  @ExceptionHandler(dev.mikoto2000.rei.application.run.SessionBusyException.class)
+  public ResponseEntity<Busy> sessionBusy(dev.mikoto2000.rei.application.run.SessionBusyException error) {
+    return ResponseEntity.status(409).body(new Busy("Session already has an active Run",error.projectId(),error.sessionId(),error.runId()));
+  }
+  @ExceptionHandler(dev.mikoto2000.rei.application.run.IdempotencyConflictException.class)
+  public ResponseEntity<Error> receiptConflict(){return ResponseEntity.status(409).body(new Error("Idempotency-Key belongs to another request"));}
+  @ExceptionHandler(dev.mikoto2000.rei.application.run.IdempotencyExpiredException.class)
+  public ResponseEntity<Error> receiptExpired(){return ResponseEntity.status(410).body(new Error("Receipt expired; automatic re-execution is forbidden"));}
   @ExceptionHandler(dev.mikoto2000.rei.artifact.ArtifactException.class)
   public ResponseEntity<Error> artifact(dev.mikoto2000.rei.artifact.ArtifactException error) {
     int status=switch(error.code()) {
