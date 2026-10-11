@@ -19,6 +19,9 @@ public class SleepService {
   private final MemoryResolver resolver;
   private final MemoryProperties properties;
   private MemoryEvents events;
+  private dev.mikoto2000.rei.episode.EpisodeSleepService episodes;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setEpisodes(dev.mikoto2000.rei.episode.EpisodeSleepService service){episodes=service;}
   @org.springframework.beans.factory.annotation.Autowired
   public void setEvents(MemoryEvents events) { this.events=events; }
   public record Plan(MemoryCandidate candidate, MemoryResolution resolution, List<LongTermMemory> targets) {
@@ -69,6 +72,7 @@ public class SleepService {
           ?new PersistentSleepModelBudget(repository,properties.sleep(),project,check)
           :properties.sleep().maxLlmCalls()>0||properties.sleep().maxTotalTokens()>0
               ?new SleepModelBudget(properties.sleep(),check):null;
+      if(!preview&&episodes!=null)episodes.process(session,project,budget,cancellation);
       var candidates=batch.isEmpty()?List.<MemoryCandidate>of():budget==null?extractor.extract(List.copyOf(batch)):extractor.extract(List.copyOf(batch),budget);
       check.run();
       var sourceIds=batch.stream().map(ConversationTurnStore.Turn::runId).collect(java.util.stream.Collectors.toSet());
@@ -148,6 +152,8 @@ public class SleepService {
         }
       }
     }
+    if(episodes!=null&&r.action()!=MemoryAction.IGNORE)repository.exact(c,project)
+        .ifPresent(m->episodes.linkMemory(project,session,c.sourceTurnIds(),m.id()));
   }
   private static SleepRun run(String id,String session,String project,String started,String status,long from,long to,
       int processed,List<Plan> plans,int failed) {
@@ -158,7 +164,7 @@ public class SleepService {
         counts.getOrDefault(MemoryAction.SUPERSEDE,0),counts.getOrDefault(MemoryAction.IGNORE,0)+counts.getOrDefault(MemoryAction.DUPLICATE,0),
         counts.getOrDefault(MemoryAction.CONFLICT,0),failed);
   }
-  public long unsleptTurns(String session) { return session==null?0:Math.max(0,turns.read(session).size()-repository.lastProcessed(session)); }
+  public long unsleptTurns(String session) { return session==null?0:Math.max(Math.max(0,turns.turnCount(session)-repository.lastProcessed(session)),episodes==null?0:episodes.pending(session)); }
   public void requestAutoSleep(String session,String project,String cause) {
     if(!properties.enabled())throw new IllegalStateException("Memory is disabled");
     repository.requestAutoSleep(session,project,cause);
