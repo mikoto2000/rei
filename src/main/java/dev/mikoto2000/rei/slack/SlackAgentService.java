@@ -15,6 +15,7 @@ public final class SlackAgentService implements RunContinuation {
   private final SlackAgentProperties settings;private final SlackAgentRepository requests;private final SlackAgentContinuationStore continuations;
   private final RunRegistry registry;private final RunService runs;private final ConversationInputRouter router;private final Clock clock;
   private volatile SlackTransport transport;private volatile String self,team;
+  private volatile boolean acceptingRequests;
   private BiFunction<AgentRunContext,Saved,ChatExecutionResult> resume=(o,s)->{throw new IllegalStateException("Chat continuation unavailable");};
   private Consumer<AgentRunContext> validate=o->{};
   private final Map<String,Managed> managed=new java.util.concurrent.ConcurrentHashMap<>();
@@ -24,6 +25,7 @@ public final class SlackAgentService implements RunContinuation {
   private dev.mikoto2000.rei.core.dependency.DependencyObservationService observations;
   public void dependencies(dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies,dev.mikoto2000.rei.core.dependency.DependencyObservationService observations){this.dependencies=dependencies;this.observations=observations;}
   public void registered(SlackAgentRepository.Request q){
+    if(transport==null||!acceptingRequests)throw new IllegalStateException("Verified Slack connection required before external request admission");
     if(dependencies==null||requests.dependency(q.id())!=null)return;
     var owner=registry.get(q.run()).context();validate.accept(owner);
     if(!owner.projectId().equals(q.project())||!owner.conversationId().equals(q.session())||!owner.projectRoot().toString().equals(q.root()))throw new IllegalArgumentException("External dependency ownership mismatch");
@@ -41,10 +43,14 @@ public final class SlackAgentService implements RunContinuation {
   @Override public void attachParent(AgentRunContext owner,OutputLimitRunBudget.LlmCallReservation reservation,Consumer<ChatExecutionResult> completed){managed.put(owner.runId(),new Managed(reservation,completed));}
   @Override public void detachParent(AgentRunContext owner){managed.remove(owner.runId());}
   public void attach(String self,String team,SlackTransport transport){
-    for(String name:settings.getAgents().keySet()){var a=settings.agent(name);if(!a.workspaceId().equals(team)||a.botUserId().equals(self))throw new IllegalArgumentException("External agent identity outside this installation");}
-    this.self=self;this.team=team;this.transport=transport;
+    attach(self,team,transport,true);
   }
-  public void detach(){transport=null;}
+  public void attach(String self,String team,SlackTransport transport,boolean acceptingRequests){
+    for(String name:settings.getAgents().keySet()){var a=settings.agent(name);if(!a.workspaceId().equals(team)||a.botUserId().equals(self))throw new IllegalArgumentException("External agent identity outside this installation");}
+    this.self=self;this.team=team;this.transport=transport;this.acceptingRequests=acceptingRequests;
+  }
+  public void enableRequests(){if(transport==null)throw new IllegalStateException("Slack transport unavailable");acceptingRequests=true;}
+  public void detach(){acceptingRequests=false;transport=null;}
   public void recover(){requests.recover();continuations.recover();}
   public boolean receive(SlackMessage message){return message!=null&&transport!=null&&Objects.equals(team,message.team())&&requests.receive(message,self,settings);}
   @Override public Saved restore(AgentRunContext owner){if(!"RESUMING".equals(continuations.state(owner.runId())))return null;var s=continuations.get(owner);var byCall=new HashMap<String,SlackAgentRepository.Request>();requests.forRun(owner.runId()).forEach(q->byCall.put(q.call(),q));

@@ -62,7 +62,7 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
       if(collaboration!=null){collaboration.verifyIdentities(auth.getUserId(),auth.getTeamId(),user->{
         try{var result=methods.usersInfo(r->r.user(user));var identity=result.getUser();return result.isOk()&&identity!=null&&identity.isBot()&&!identity.isDeleted()&&identity.getProfile()!=null?identity.getProfile().getBotId():null;}
         catch(Exception unavailable){return null;}
-      });collaboration.recover();collaboration.attach(auth.getUserId(),auth.getTeamId(),connection.transport);connection.collaboration=collaboration;}
+      });collaboration.recover();collaboration.attach(auth.getUserId(),auth.getTeamId(),connection.transport,false);connection.collaboration=collaboration;}
       var receiver=new SlackEnvelopeReceiver(connection.runtime,auth.getTeamId(),collaboration);
       connection.subscription=bus.subscribeBoundary(event->{try{connection.runtime.onEvent(event);}catch(RuntimeException error){org.slf4j.LoggerFactory.getLogger(SlackSdkConnection.class).warn("Slack reply persistence unavailable (details omitted)");}});
       connection.socket=connection.slack.socketMode(System.getenv("SLACK_APP_TOKEN"),SocketModeClient.Backend.JavaWebSocket);
@@ -70,7 +70,7 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
         try{connection.socket.sendSocketModeResponse(com.slack.api.socket_mode.response.AckResponse.builder().envelopeId(ack).build());}
         catch(RuntimeException failed){org.slf4j.LoggerFactory.getLogger(SlackSdkConnection.class).warn("Slack ACK delivery unavailable; receipt retained");}
       }});
-      connection.socket.setAutoReconnectEnabled(true);connection.socket.connect();return connection;
+      connection.socket.setAutoReconnectEnabled(true);connection.socket.connect();if(collaboration!=null)collaboration.enableRequests();return connection;
     }catch(Exception error) {
       connection.close();
       if(error instanceof SlackSetupException setup)throw setup;

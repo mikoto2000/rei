@@ -39,6 +39,7 @@ class SlackAgentChatIntegrationTest {
     var service=new SlackAgentService(settings,repository,saved,registry,runs,router,clock);
     var guard=new ToolPermissionGuard(new ToolPermissionPolicy(new ToolPermissionProperties(false,null,null,null)),new AgentEventFactory(clock),bus);
     var tools=new SlackAgentTools(settings,repository,guard);var modelCalls=new AtomicInteger();
+    service.attach("U1","T1",row->SlackTransport.Delivery.sent("100.1"));tools.onRegistered(service::registered);
     var interventions=new UserInterventionQueue();
     ChatModel model=new ChatModel(){
       public ToolCallingChatOptions getOptions(){return ToolCallingChatOptions.builder().build();}
