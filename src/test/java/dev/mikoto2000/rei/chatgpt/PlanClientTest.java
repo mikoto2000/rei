@@ -10,6 +10,19 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
 class PlanClientTest {
+  @Test void explicitHistoryUsesOnlySupportedInputAndNoServerContinuation() {
+    PlanTransport transport=(u,m,h,b,t,c)->{
+      if(m.equals("GET"))return PlanOAuthTest.reply(200,MODELS);
+      var body=parse(b);assertFalse(body.has("previous_response_id"));assertFalse(body.has("conversation"));
+      assertEquals(3,body.path("input").size());assertEquals("assistant",body.at("/input/1/role").asText());
+      assertEquals("previous answer",body.at("/input/1/content").asText());
+      return new PlanTransport.Response(200,PlanSseAssemblerTest.stream(PlanSseAssemblerTest.event("response.completed",PlanSseAssemblerTest.COMPLETED)),"req","text/event-stream");
+    };
+    var client=new PlanClient(oauth(transport),transport,Clock.systemUTC());
+    var history=List.of(new PlanClient.Input("user","task"),new PlanClient.Input("assistant","previous answer"),new PlanClient.Input("user","repair"));
+    assertEquals("hello",client.inferHistory("default","allowed","instructions",history,Duration.ofSeconds(1),262144,1048576,()->false,()->{}).text());
+    assertThrows(IllegalArgumentException.class,()->new PlanClient.Input("system","injected instructions"));
+  }
   @TempDir Path root;
 
   PlanOAuth oauth(PlanTransport transport) {

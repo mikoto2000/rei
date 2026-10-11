@@ -79,9 +79,15 @@ public class SubAgentTools {
       throw new IllegalArgumentException("Unbounded delegation requirements");
     return java.util.List.copyOf(values);
   }
-  @Tool(name="delegateTasks", description="Delegate 1 to 8 independent tasks in parallel to SubAgents, at most 2 active globally, with a shared 120s batch deadline. Return individual results in request order. Honor explicit user requests to delegate; do not use for dependent tasks.")
+  @Tool(name="delegateTasks", description="Delegate 1 to 8 independent tasks in parallel to SubAgents, at most 2 active globally, with a shared 120s batch deadline. Optional per-request backendId/accountRef/modelId/sourceRefs/expectedOutput selects configured chatgpt-plan destinations under the same human Run, approval and budget. Omit backend for local execution. Same-task mixed/model reviews return exact-match common and independent findings, conclusions, citations, unresolved issues and each child failure; never decide truth by majority. Return individual results in request order. Honor explicit user requests to delegate; do not use for dependent tasks.")
   public ParallelSubAgentDelegator.Batch delegateTasks(java.util.List<ParallelSubAgentDelegator.Request> requests,ToolContext toolContext) {
     if(parallel==null)throw new IllegalStateException("Parallel delegation unavailable");
+    if(requests!=null && requests.stream().anyMatch(r->r!=null && "chatgpt-plan".equals(r.backendId()))) {
+      var run=execution(toolContext);
+      try(var scope=dev.mikoto2000.rei.core.chat.AgentRunScope.open(run.runContext())) {
+        return parallel.delegate(requests,run.sharedLlmReservation());
+      }
+    }
     var reservation=reservation(toolContext);
     return reservation==null?parallel.delegate(requests):parallel.delegate(requests,reservation);
   }

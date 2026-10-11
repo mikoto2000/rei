@@ -46,6 +46,16 @@ class SubAgentToolsTest {
     verify(runner).durableChildren(owner,0,10);
   }
   @TempDir Path directory;
+  @Test void mixedParallelToolPropagatesExplicitRunAcrossSchedulerBoundary() {
+    var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(new SubAgentToolPolicy(Set.of()),m->true));
+    var parallel=mock(ParallelSubAgentDelegator.class);
+    var tools=new SubAgentTools(mock(SubAgentRunner.class),registry);tools.parallelDelegator(parallel);
+    var owner=new dev.mikoto2000.rei.core.chat.AgentRunContext("parent","session",directory,"project");
+    var run=new dev.mikoto2000.rei.core.stagnation.RunExecutionContext("parent",new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0,3),null,new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),event->{});run.setRunContext(owner);
+    var context=new org.springframework.ai.chat.model.ToolContext(java.util.Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY,run));
+    when(parallel.delegate(anyList(),any())).thenAnswer(call->{assertThat(dev.mikoto2000.rei.core.chat.AgentRunScope.current()).isEqualTo(owner);return new ParallelSubAgentDelegator.Batch(ParallelSubAgentDelegator.Status.FAILED,java.util.List.of());});
+    tools.delegateTasks(java.util.List.of(new ParallelSubAgentDelegator.Request("plan","reviewer","task",null,"chatgpt-plan","personal","model",java.util.List.of(),"{\"unverified\":[]}")),context);
+  }
   @Test void externalCallbackUsesActualRunAndExplicitMaterialsOnly() {
     var registry=new SubAgentRegistry(directory,new SubAgentDefinitionLoader(new SubAgentToolPolicy(Set.of()),m->true));
     var runner=mock(SubAgentRunner.class);var callback=new SubAgentTools(runner,registry).callback();

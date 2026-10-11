@@ -15,6 +15,13 @@ public final class PlanClient {
   static final int HTTP_ERROR_LIMIT_BYTES = 65536;
 
   public record Model(String id, String name) {}
+  public record Input(String role,String content) {
+    public Input {
+      if(role==null||!Set.of("user","assistant").contains(role)||content==null)
+        throw new IllegalArgumentException("Explicit user/assistant text required");
+    }
+    @Override public String toString(){return "Input["+role+", protected text]";}
+  }
 
   private record Catalog(String clientId, String subject, Instant expires, List<Model> models) {}
 
@@ -130,6 +137,15 @@ public final class PlanClient {
       int receiveLimit,
       BooleanSupplier cancelled,
       Runnable onDispatch) {
+    return inferHistory(account,model,instructions,List.of(new Input("user",task)),timeout,
+        sendLimit,receiveLimit,cancelled,onDispatch);
+  }
+
+  public PlanSseAssembler.Result inferHistory(String account,String model,String instructions,
+      List<Input> input,Duration timeout,int sendLimit,int receiveLimit,BooleanSupplier cancelled,
+      Runnable onDispatch) {
+    input=List.copyOf(input);
+    if(input.isEmpty()||input.size()>16)throw ChatGptException.of(SEND_LIMIT);
     long deadline = System.nanoTime() + timeout.toNanos();
     var generation =
         generations.computeIfAbsent(account, a -> new java.util.concurrent.atomic.AtomicInteger());
@@ -148,7 +164,7 @@ public final class PlanClient {
                   "instructions",
                   instructions,
                   "input",
-                  List.of(Map.of("role", "user", "content", task)),
+                  input,
                   "store",
                   false,
                   "stream",
