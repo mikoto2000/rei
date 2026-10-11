@@ -53,6 +53,17 @@ class TerminalClientTest {
     try(var backend=new BackendClient(URI.create("http://127.0.0.1:"+server.getAddress().getPort()),"fixture");
         var client=new TerminalClient(backend,directory,true,TerminalBuilder.builder().system(false).dumb(true).streams(new ByteArrayInputStream(new byte[0]),new ByteArrayOutputStream()).build())) {
       client.refreshCatalog();assertEquals(1,requests.get());
+      var readerField=TerminalClient.class.getDeclaredField("reader");readerField.setAccessible(true);
+      var input=(org.jline.reader.LineReader)readerField.get(client);
+      var candidates=new java.util.ArrayList<org.jline.reader.Candidate>();
+      ((org.jline.reader.impl.LineReaderImpl)input).getCompleter().complete(input,input.getParser().parse("/",1,org.jline.reader.Parser.ParseContext.COMPLETE),candidates);
+      var sessionCandidate=candidates.stream().filter(value->value.value().equals("/session")).findFirst().orElseThrow();
+      assertEquals("command",sessionCandidate.group());assertEquals("Sessions",sessionCandidate.descr());
+      candidates.clear();((org.jline.reader.impl.LineReaderImpl)input).getCompleter().complete(input,input.getParser().parse("/session r",10,org.jline.reader.Parser.ParseContext.COMPLETE),candidates);
+      var alias=candidates.stream().filter(value->value.value().equals("resume")).findFirst().orElseThrow();
+      assertEquals("command",alias.group());assertEquals("Select",alias.descr());
+      assertTrue(input.isSet(org.jline.reader.LineReader.Option.BRACKETED_PASTE));
+      if(java.io.File.separatorChar=='\\')assertTrue(input.isSet(org.jline.reader.LineReader.Option.CASE_INSENSITIVE));
       for(int index=0;index<100;index++)assertEquals(java.util.List.of("resume"),client.completionValues(java.util.List.of("/session","r"),1,"r"));
       client.refreshCatalog();assertEquals(1,requests.get());
     }finally{server.stop(0);}

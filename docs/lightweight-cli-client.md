@@ -231,3 +231,10 @@ Windows Terminal の通常2ペイン E2E は `windows-terminal-e2e-35133712-e50e
 GUI close E2E は `windows-terminal-e2e-e4deeabf-3b77-479b-8c37-83648c58d6d9` が PASS。専用 UUID の HWND を UI Automation WindowPattern.Close で閉じた後、両 pane host の終了、Backend instance `82e1af28-c13e-4089-b74a-7f185654c483` の継続、Run `9564be1b-7f03-4ae4-8254-76c5841e018b` の RUNNING → COMPLETED、新 CLI の Run/history 取得・新 Session、認証 stop と endpoint 除去を確認した。Terminal のペインでは stdin/stdout を fixture に接続し、対話キー入力は上記の実 ConPTY で別途検証する。provider はローカル Python fixture で、外部 LLM の実行とは区別する。
 
 ユーザー指定で voice は延期した。実 Google OAuth、Bluesky、外部 codex/claude、live LLM の実アカウントでの成功は今回の fixture/regression 結果に含めない。macOS service 起動、receipt tombstone・終了済み CLI history の自動掃除は実装範囲外。既存 Shell と旧起動スクリプトは維持し、同じブランチで作業し、worktree と PR は作成しない。
+
+
+### 補完表示の追加修正（2026-10-11）
+
+軽量 CLI の JLine Candidate に、既存 Shell と同じ `command` group と Root catalog の説明文を渡す。子コマンド・alias にも説明を付け、option/value とローカルパスは既存の kind で表示する。Windows の CASE_INSENSITIVE と BRACKETED_PASTE 設定も既存 Shell とそろえた。CLI 固有の追加コマンドは維持する。
+
+表示テストは旧 Candidate の group が null であることを red で再現し、修正後は説明・alias・reader 設定・Tab 中 HTTP 増加なしを検証した。実 ConPTY でも `/` + Tab の `command` 見出しと説明を確認し、その後の `/sh`・入力・cwd・JLine 復帰・Ctrl+C 後 help/exit が成功。CLI 76 件・launcher 5 件、計81件成功、失敗・エラー・skip 0。ログは `target/completion-display-pty-regression.log`。Backend と既存 Shell の実装は変更していない。

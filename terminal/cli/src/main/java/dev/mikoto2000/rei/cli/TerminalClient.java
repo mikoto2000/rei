@@ -41,6 +41,8 @@ public final class TerminalClient implements AutoCloseable {
     var memory=new DefaultHistory(){@Override public void add(java.time.Instant time,String line){if(recordHistory&&history.accepts(line))super.add(time,line);}};
     reader=LineReaderBuilder.builder().terminal(terminal).parser(commandParser()).history(memory).completer(this::complete).build();
     reader.setVariable(LineReader.HISTORY_SIZE,1000);reader.setVariable(LineReader.HISTORY_FILE_SIZE,1000);
+    reader.setOpt(LineReader.Option.BRACKETED_PASTE);
+    if(java.io.File.separatorChar=='\\')reader.setOpt(LineReader.Option.CASE_INSENSITIVE);
     if(recordHistory)for(String line:history.entries())memory.add(java.time.Instant.now(),line);
     terminal.handle(Terminal.Signal.INT,signal->{backend.detach();attached=false;});
   }
@@ -51,12 +53,15 @@ public final class TerminalClient implements AutoCloseable {
   private final CompletionEngine paths=new CompletionEngine().register(new FilePathCompletionProvider());
   private void complete(LineReader input,ParsedLine line,List<Candidate> candidates) {
     List<String> values=completionValues(line.words(),line.wordIndex(),line.word());
-    for(String value:values)if(value.startsWith(line.word()))candidates.add(new Candidate(value));
+    for(String value:values)if(value.startsWith(line.word())){
+      var candidate=catalog.presentation(line.words(),line.wordIndex(),value);
+      candidates.add(new Candidate(candidate.value(),candidate.display(),candidate.kind(),candidate.description(),null,null,candidate.appendSpace()));
+    }
     Set<String> types=catalog.pathTypes(line.words(),line.wordIndex(),line.word());
     if(line.words().size()>1&&line.words().getFirst().equals("/project")&&Set.of("register","add","cd").contains(line.words().get(1)))types=Set.of("directory");
     if(!types.isEmpty()) {
       var context=new CompletionContext(line.line(),line.cursor(),line.words(),line.wordIndex(),line.wordIndex()-1,line.word(),List.of(),types,List.of(),projectDirectory==null?Path.of("").toAbsolutePath():projectDirectory);
-      for(var value:paths.complete(context))candidates.add(new Candidate(value.value(),value.display(),"CLI local paths",value.description(),null,null,value.appendSpace()));
+      for(var value:paths.complete(context))candidates.add(new Candidate(value.value(),value.display(),value.kind(),value.description(),null,null,value.appendSpace()));
     }
   }
   List<String> completionValues(List<String> words,int wordIndex,String prefix) {

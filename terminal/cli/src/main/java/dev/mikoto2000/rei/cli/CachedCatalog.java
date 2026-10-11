@@ -6,6 +6,13 @@ import java.util.*;
 final class CachedCatalog {
   private final CliCatalog catalog;
   CachedCatalog(CliCatalog catalog){this.catalog=catalog;}
+  dev.mikoto2000.rei.core.completion.CompletionCandidate presentation(List<String> words,int wordIndex,String value){
+    CliCatalog.Command command=null;
+    if(wordIndex==0)command=find(catalog.commands(),value.replaceFirst("^/",""));
+    else {var context=target(words,wordIndex);if(context.command()!=null&&context.argument()==0&&context.pending()==null&&context.options())command=find(context.command().commands(),value);}
+    String kind=wordIndex==0||command!=null?"command":value.startsWith("-")?"option":"value";
+    return new dev.mikoto2000.rei.core.completion.CompletionCandidate(value,value,command==null?null:command.description().replace('\n',' '),kind,true);
+  }
   String requestedHelp(List<String> words){
     if(words.size()<2||words.stream().noneMatch(word->Set.of("-h","--help","-V","--version").contains(word)))return null;
     var root=picocli.CommandLine.Model.CommandSpec.create().name("");
