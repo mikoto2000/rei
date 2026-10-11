@@ -56,6 +56,14 @@ public final class SlackStore {
   public Optional<Receipt> byRun(String run) {
     return tx(c->{try(var s=c.prepareStatement("SELECT * FROM slack_events WHERE run=?")){s.setString(1,run);try(var r=s.executeQuery()){return r.next()?Optional.of(receipt(r)):Optional.empty();}}});
   }
+  public Optional<SlackMessage> forSession(String project,String session) {
+    return tx(c->{try(var s=c.prepareStatement("SELECT team,channel,thread FROM slack_threads WHERE project=? AND session=?")) {
+      s.setString(1,project);s.setString(2,session);try(var r=s.executeQuery()){return r.next()?Optional.of(new SlackMessage("resume",r.getString(1),r.getString(2),r.getString(3),r.getString(3),null,null,null,"message",null,"")):Optional.empty();}
+    }});
+  }
+  public boolean transition(SlackMessage m,String from,String to) {
+    return tx(c->update(c,"UPDATE slack_events SET state=? WHERE message_key=? AND state=?",to,m.key(),from)==1);
+  }
   public Optional<Receipt> latest(SlackMessage m) {
     return tx(c->{try(var s=c.prepareStatement("SELECT * FROM slack_events WHERE run IS NOT NULL AND json_extract(payload,'$.team')=? AND json_extract(payload,'$.channel')=? AND COALESCE(NULLIF(json_extract(payload,'$.threadTs'),''),json_extract(payload,'$.ts'))=? ORDER BY rowid DESC LIMIT 1")) {
       s.setString(1,m.team());s.setString(2,m.channel());s.setString(3,m.thread());try(var r=s.executeQuery()){return r.next()?Optional.of(receipt(r)):Optional.empty();}
