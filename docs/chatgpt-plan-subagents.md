@@ -46,6 +46,8 @@ ID Token の検証と推論許可は別です。token response に `chatgpt.toke
 /subagent run reviewer --backend chatgpt-plan --account personal --model <slug> --task "この設計をレビューし、指摘と未検証事項を報告してください" --source docs/design.md --expected-result '{"unverified":[]}'
 ```
 
+外部送信の承認は、role/backend/model/accountと、ロール指示文・スキーマ・タスク・実際の資料内容をまとめたdigestに結び付けます。承認後にロール定義や資料が変われば、再度承認が必要です。
+
 `--source` は複数回指定できます。UTF-8 テキストのみです。PDF、画像、binary、隠しディレクトリ、別 Project、絶対パス、`..`、代表的な token / private key を含む資料はこの MVP では拒否します。資料をれい側で読み、参照 ID・Project 相対パス・SHA-256 を発行します。モデルへファイル読み取り権限は渡しません。必要な秘密情報を含まない資料を選ぶ責任も利用者にあります。scanner は任意の秘密情報を完全に判別する仕組みではありません。
 
 `--expected-result` は空でない JSON object を必須とし、**既存ロールの result 内の指定フィールドとの厳密一致**を完了条件とします。例の `unverified: []` は未検証事項が残れば成功しない指定です。完了条件に合わない回答を成功にするためだけに値を緩めないでください。`--context` はローカル経路用であり、このバックエンドでは拒否します。
@@ -142,7 +144,7 @@ remote本文は秘密情報漏洩を避けて破棄します。そのため詳�
 
 ## 既存実装調査と接続点
 
-開始点: `origin/main` = `d3f2010e577d61e99576d52c686a00f7d52238ce`。
+開始点: `origin/main` = `d3f2010e577d61e99576d52c686a00f7d52238ce`。作業中の `25bfeb7f`（Slack連携・ヘルプ日本語化）をmergeし、双方の依存・credential redactionを保持しました。
 
 - Java25 / Spring Boot4.1.1 / Spring AI2.0.1。通常のモデルを置き換えず、専用 HTTP/SSE adapter を追加。
 - SubAgentDefinition / Loader / Registry のID、モデル選択、YAMLと既存結果スキーマを維持。Runner に手動 backend dispatch を追加。既存の再試行・repair・semantic validator・parallel / DAG・Semantic Skill Search は local 経路のまま。
@@ -166,5 +168,7 @@ remote本文は秘密情報漏洩を避けて破棄します。そのため詳�
 - [ID Token検証](https://developers.openai.com/siwc/website)
 
 公開OIDC discoveryの issuer、JWKS URI、RS256、revocation endpoint を取得して確認しました。本人のOAuth・実モデル一覧・実Responses・利用枠消費・Workspace別挙動は **未検証** です。CIは実トークンを使わないモック、署名JWT、ローカルstream、Windows DPAPI、別JVM lockのテストです。認証済みAPIとの仕様差分をまだ観測していません。実アカウント接続の成功を報告していません。
+
+ローカル検証: 最新main取り込み後の全体回帰は **4,853件、失敗0、エラー0、スキップ2**（`.github/ci/full-test.ps1`）。最後の承認digest修正は、ロール変更でもdigestが変わらない失敗を再現してから修正し、新機能59件と関連回帰で確認しています。最終headの全体検証はPRのGitHub CIでも実施します。
 
 Phase 2候補: 親Toolへの明示backendId拡張、意味検証の設計、promptに依存しない完了条件DSL、同意付き画像/PDF入力、専用HTTP管理画面、provider診断型、未知結果を保持するcheckpoint。自律的backend選択、app-server、別processの推論workerは未実装です。

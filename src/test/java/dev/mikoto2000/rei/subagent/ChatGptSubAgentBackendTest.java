@@ -122,6 +122,25 @@ class ChatGptSubAgentBackendTest {
   }
 
   @Test
+  void externalApprovalIsBoundToRoleInstructionsAsWellAsMaterials() throws Exception {
+    var request = request(List.of(), "{\"decision\":\"accept\"}");
+    assertEquals(
+        ChatGptSubAgentBackend.State.COMPLETED, backend.run(request, owner, true, null).state());
+    Path definition = root.resolve("review.yaml");
+    Files.writeString(
+        definition,
+        Files.readString(definition)
+            .replace("Review the supplied task", "Changed safe review instructions"));
+    assertTrue(registry.reload().isEmpty());
+    assertEquals(
+        ChatGptSubAgentBackend.State.COMPLETED, backend.run(request, owner, true, null).state());
+    var approvedInput = org.mockito.ArgumentCaptor.forClass(String.class);
+    verify(permissions, times(2))
+        .check(eq("requestChatGptPlanSubAgent"), approvedInput.capture(), eq(owner));
+    assertNotEquals(approvedInput.getAllValues().get(0), approvedInput.getAllValues().get(1));
+  }
+
+  @Test
   void parentRunAndBudgetAreRetained() {
     runs.register(owner);
     runs.transition("parent", RunStatus.RUNNING, null);

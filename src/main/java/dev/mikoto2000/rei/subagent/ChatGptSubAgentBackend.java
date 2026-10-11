@@ -186,26 +186,6 @@ public final class ChatGptSubAgentBackend {
                       "Do not invoke tools, change files, execute commands or delegate")));
       if (task.getBytes(StandardCharsets.UTF_8).length > 262144)
         throw ChatGptException.of(SEND_LIMIT);
-      String approval =
-          role.id()
-              + "|chatgpt-plan|"
-              + request.modelId()
-              + "|"
-              + request.account()
-              + "|"
-              + dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256(
-                  task.getBytes(StandardCharsets.UTF_8));
-      permissions.check("requestChatGptPlanSubAgent", approval, owner);
-      state = State.AUTHORIZED;
-      publish(parent, id, role.id(), state, false, request.modelId(), null, 0);
-      if (sharedBudget != null
-          && (sharedBudget.tokenExhausted()
-              || sharedBudget.usageUnknown()
-              || !sharedBudget.tryReserve())) throw ChatGptException.of(PERMISSION_DENIED);
-      reserved = true;
-      runs.transition(id, RunStatus.RUNNING, null);
-      state = State.RUNNING;
-      publish(parent, id, role.id(), state, false);
       String instructions =
           role.systemPrompt()
               + "\n"
@@ -229,6 +209,26 @@ public final class ChatGptSubAgentBackend {
       if (!CredentialRedactor.redact(instructions).equals(instructions)
           || !CredentialRedactor.redact(task).equals(task))
         throw ChatGptException.of(PERMISSION_DENIED);
+      String approval =
+          role.id()
+              + "|chatgpt-plan|"
+              + request.modelId()
+              + "|"
+              + request.account()
+              + "|"
+              + dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256(
+                  json.writeValueAsBytes(Map.of("instructions", instructions, "task", task)));
+      permissions.check("requestChatGptPlanSubAgent", approval, owner);
+      state = State.AUTHORIZED;
+      publish(parent, id, role.id(), state, false, request.modelId(), null, 0);
+      if (sharedBudget != null
+          && (sharedBudget.tokenExhausted()
+              || sharedBudget.usageUnknown()
+              || !sharedBudget.tryReserve())) throw ChatGptException.of(PERMISSION_DENIED);
+      reserved = true;
+      runs.transition(id, RunStatus.RUNNING, null);
+      state = State.RUNNING;
+      publish(parent, id, role.id(), state, false);
       var response =
           client.infer(
               request.account(),
