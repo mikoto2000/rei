@@ -66,7 +66,12 @@ class VoiceWorkerProcessTest {
     public static void main(String[] args) throws Exception {
       String mode=args[0];
       if(mode.equals("slowexit"))Runtime.getRuntime().addShutdownHook(new Thread(()->{try{Thread.sleep(30000);}catch(InterruptedException ignored){}}));
-      if(mode.equals("waithello")){java.nio.file.Files.writeString(Path.of(args[1]),Long.toString(ProcessHandle.current().pid()));Thread.sleep(30000);}
+      if(mode.equals("waithello")){
+        var marker=Path.of(args[1]);var staged=marker.resolveSibling(marker.getFileName()+".tmp");
+        java.nio.file.Files.writeString(staged,Long.toString(ProcessHandle.current().pid()));
+        java.nio.file.Files.move(staged,marker,java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        Thread.sleep(30000);
+      }
       var output=new DataOutputStream(System.out);var input=new DataInputStream(System.in);
       if(mode.equals("normal")){var noise=new byte[8192];Arrays.fill(noise,(byte)'x');for(int i=0;i<256;i++)System.err.write(noise);System.err.flush();}
       output.writeInt(mode.equals("badhello")?0:0x52454956);output.writeInt(1);output.flush();

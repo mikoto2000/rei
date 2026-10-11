@@ -22,7 +22,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   void workContextLinks(ActivityWorkContextService workLinks,dev.mikoto2000.rei.core.project.ProjectService projects){this.workLinks=workLinks;this.projects=projects;}
   @org.springframework.beans.factory.annotation.Autowired
   void timelinePresentation(ActivityTimelinePresentationService presentation){this.presentation=presentation;}
-  @Option(names="--verbose",description="Show saved evidence, Vision, rule and Behavior diagnostics") private boolean verbose;
+  @Option(names="--verbose",description="保存済みの根拠、画像認識、ルール、行動評価の診断情報を表示します") private boolean verbose;
   @org.springframework.beans.factory.annotation.Autowired
   void operationalToolkit(ClassificationToolkit toolkit,ClassificationRuleSuggestions suggestions){this.toolkit=toolkit;this.suggestions=suggestions;}
   @Parameters(index="0",arity="0..1",defaultValue="today",paramLabel="today|yesterday|YYYY-MM-DD|pause|resume",completionCandidates=ActionCandidates.class) private String action;
@@ -36,7 +36,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   public ActivityCommand(ActivityTimeline timeline,ActivityCapture capture,ActivityProperties properties) {this(timeline,capture,properties,null);}
   @org.springframework.beans.factory.annotation.Autowired
   public ActivityCommand(ActivityTimeline timeline,ActivityCapture capture,ActivityProperties properties,dev.mikoto2000.rei.activity.behavior.BehaviorService behavior) {this.timeline=timeline;this.capture=capture;this.properties=properties;this.behavior=behavior;this.presentation=new ActivityTimelinePresentationService(timeline,null);}
-  @Command(name="summary",description="Activity Summary for a local date (default: today)")
+  @Command(name="summary",description="指定日の活動サマリーを表示します（省略時は今日）")
   public static class SummaryCommand implements java.util.concurrent.Callable<Integer> {
     @ParentCommand private ActivityCommand parent;
     @Spec private picocli.CommandLine.Model.CommandSpec spec;
@@ -68,15 +68,15 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
       catch(Exception e) {spec.commandLine().getErr().println("Activity 分析に失敗しました。ログを確認してください。");return 1;}
     }
   }
-  @Command(name="weekly",description="Read-only calendar week analysis and previous-week comparison")
+  @Command(name="weekly",description="暦週単位の活動分析と前週との比較を表示します")
   public static class WeeklyCommand extends PeriodCommand {
     protected ActivityPeriodAnalysis.Period period(){return ActivityPeriodAnalysis.Period.WEEK;}
   }
-  @Command(name="monthly",description="Read-only calendar month analysis and previous-month comparison")
+  @Command(name="monthly",description="暦月単位の活動分析と前月との比較を表示します")
   public static class MonthlyCommand extends PeriodCommand {
     protected ActivityPeriodAnalysis.Period period(){return ActivityPeriodAnalysis.Period.MONTH;}
   }
-  @Command(name="coaching",description="Period coaching: status, configure, on, off, weekly, monthly")
+  @Command(name="coaching",description="期間別コーチングの状態表示・設定・有効化・無効化・週次／月次実行を行います")
   public static class CoachingCommand implements java.util.concurrent.Callable<Integer> {
     @ParentCommand private ActivityCommand parent;
     @Spec private picocli.CommandLine.Model.CommandSpec spec;
@@ -112,7 +112,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
     }
     private boolean automaticEnabled(){return parent.properties!=null && parent.properties.getCoaching().isAutomaticEnabled();}
   }
-  @Command(name="context",description="Read-only saved Activity/Work Context references in the selected Project")
+  @Command(name="context",description="選択中のプロジェクトに保存された活動・作業コンテキストの参照情報を表示します")
   public static class ContextCommand implements java.util.concurrent.Callable<Integer> {
     @ParentCommand private ActivityCommand parent;
     @Spec private picocli.CommandLine.Model.CommandSpec spec;
@@ -127,7 +127,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
       catch(Exception e){spec.commandLine().getErr().println("Activityの保存参照を取得できませんでした。ログを確認してください。");return 1;}
     }
   }
-  @Command(name="behavior",description="Behavior evaluation: on, off, status, evaluate (manual, no notification)")
+  @Command(name="behavior",description="行動評価の有効化・無効化・状態表示・手動評価を行います（手動評価では通知しません）")
   public static class BehaviorCommand implements java.util.concurrent.Callable<Integer> {
     @ParentCommand private ActivityCommand parent;
     @Spec private picocli.CommandLine.Model.CommandSpec spec;
@@ -155,7 +155,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
       } catch(Exception e) {spec.commandLine().getErr().println("Behavior の操作に失敗しました。");return 1;}
     }
   }
-  @Command(name="classification",description="Classification operations: status, reload, unknowns, rules, suggest-rules")
+  @Command(name="classification",description="活動分類の状態表示・再読み込み・未分類項目表示・ルール表示・ルール提案を行います")
   public static class ClassificationCommand implements java.util.concurrent.Callable<Integer> {
     @ParentCommand private ActivityCommand parent;
     @Spec private picocli.CommandLine.Model.CommandSpec spec;

@@ -363,6 +363,13 @@ rei:
     cache-dir: ${REI_SQLITE_VEC_CACHE_DIR:${rei.data-dir}/extensions/sqlite-vec}
     extension-path: ${REI_SQLITE_VEC_EXTENSION_PATH:}
     release-base-url: ${REI_SQLITE_VEC_RELEASE_BASE_URL:https://github.com/asg017/sqlite-vec/releases/download}
+  slack:
+    enabled: ${REI_SLACK_ENABLED:false}
+    allowed-workspace-ids: []
+    allowed-user-ids: []
+    allowed-channel-ids: []
+    channel-projects: {}
+    dm-project-id: ""
   bluesky:
     enabled: ${REI_BLUESKY_ENABLED:false}
     handle: ${REI_BLUESKY_HANDLE:}
@@ -429,4 +436,7 @@ logging:
   file:
     name: ${REI_LOG_FILE:${rei.data-dir}/logs/rei.log}
   level:
+    # SDK debug/error messages may contain Socket URLs or raw payloads. Adapter diagnostics are fixed codes.
+    com.slack.api: "OFF"
+    org.java_websocket: "OFF"
     dev.mikoto2000.rei.bluesky: DEBUG

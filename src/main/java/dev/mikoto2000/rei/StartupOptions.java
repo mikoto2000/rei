@@ -5,11 +5,13 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import picocli.CommandLine;
 
 /** Parsed before Spring starts; unrelated arguments remain available to Spring. */
-@CommandLine.Command(name = "rei", description = "AI shell", mixinStandardHelpOptions = true, version = "v1.0.0")
+@CommandLine.Command(name = "rei", description = "AI シェル", mixinStandardHelpOptions = true, version = "v1.0.0")
 public final class StartupOptions {
   @CommandLine.Option(names = {"-p", "--project"}, paramLabel = "<directory>",
       description = "起動時のカレントプロジェクトのディレクトリを指定します")
   private String directory;
+  @CommandLine.Option(names="--backend",description="Shell を開かず Backend を常駐起動します")
+  private boolean backend;
   private Path project;
   private boolean helpRequested;
   private boolean versionRequested;
@@ -32,6 +34,7 @@ public final class StartupOptions {
   }
 
   public Path project() { return project; }
+  public boolean backend() {return backend;}
   public boolean helpRequested() { return helpRequested; }
   public boolean printHelpIfRequested() {
     var command = new CommandLine(this);

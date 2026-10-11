@@ -37,7 +37,7 @@ public class ChatCommand implements Runnable {
 
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
   private String[] prompts;
-  @picocli.CommandLine.Option(names="--mode",defaultValue="EXCLUSIVE",description="EXCLUSIVE / CONVERSATION / READ_ONLY")
+  @picocli.CommandLine.Option(names="--mode",defaultValue="EXCLUSIVE",description="実行モード（EXCLUSIVE / CONVERSATION / READ_ONLY）")
   private dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode;
   @picocli.CommandLine.Option(names="--run",description="指定Runへ追加指示を送る（独立Runは作成しない）")
   private String targetRun;

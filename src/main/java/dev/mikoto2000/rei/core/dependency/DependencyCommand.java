@@ -14,7 +14,7 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
   @Spec picocli.CommandLine.Model.CommandSpec spec;
   @Parameters(index="0",arity="0..1",defaultValue="list") String action;
   @Parameters(index="1",arity="0..1") String id;
-  @Option(names="--value",description="Human answer, never supplied through an LLM tool") String value;
+  @Option(names="--value",description="ユーザー本人の回答（LLM ツールからは指定できません）") String value;
   private java.io.PrintWriter output;
   public DependencyCommand(){this(null,null,null,null);}
   @Autowired public DependencyCommand(PersistentDependencyRepository repo,DependencyObservationService service,ProjectService projects,ToolPermissionGuard guard){this.repo=repo;this.service=service;this.projects=projects;this.guard=guard;}

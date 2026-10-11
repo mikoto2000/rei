@@ -13,8 +13,8 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
   @Spec picocli.CommandLine.Model.CommandSpec spec;
   @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|show|activate|cancel|history|reconcile") String action;
   @Parameters(index="1",arity="0..1",paramLabel="timerId") String id;
-  @Option(names="--run-id",description="Observed uncertain Run ID") String expectedRunId;
-  @Option(names="--acknowledge-uncertain-side-effects",description="Acknowledge unknown effects; this does not replay the schedule") boolean acknowledgeUncertain;
+  @Option(names="--run-id",description="結果が不明な実行の ID") String expectedRunId;
+  @Option(names="--acknowledge-uncertain-side-effects",description="実行による影響が不明であることを承認します（スケジュールは再実行しません）") boolean acknowledgeUncertain;
   private java.io.PrintWriter output;
   public TimerCommand(){this(null,null,null);}
   public TimerCommand(PersistentAgentScheduler scheduler,ProjectService projects){this(scheduler,projects,null);}

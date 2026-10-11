@@ -37,8 +37,19 @@
 		<test.dataDirectory>${project.build.directory}/test-performance/data</test.dataDirectory>
 	</properties>
 	<dependencies>
-        <dependency><groupId>net.java.dev.jna</groupId><artifactId>jna-platform</artifactId><version>5.17.0</version></dependency>
-        <dependency><groupId>org.springframework.security</groupId><artifactId>spring-security-oauth2-jose</artifactId></dependency>
+		<dependency>
+			<groupId>net.java.dev.jna</groupId><artifactId>jna-platform</artifactId><version>5.17.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.security</groupId><artifactId>spring-security-oauth2-jose</artifactId>
+		</dependency>
+		<!-- SDK Socket Mode uses Java-WebSocket to avoid a second servlet/websocket API stack. -->
+		<dependency>
+			<groupId>com.slack.api</groupId><artifactId>slack-api-client</artifactId><version>1.51.0</version>
+		</dependency>
+		<dependency>
+			<groupId>org.java-websocket</groupId><artifactId>Java-WebSocket</artifactId><version>1.6.0</version>
+		</dependency>
 		<!-- Native read-only probes; JNA is already present via Tika. -->
 		<dependency>
 			<groupId>net.java.dev.jna</groupId><artifactId>jna</artifactId><version>5.17.0</version>
