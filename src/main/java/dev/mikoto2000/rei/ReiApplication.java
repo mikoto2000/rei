@@ -140,13 +140,20 @@ public class ReiApplication {
     }
     System.setProperty("rei.data-dir", dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().toString());
     SpringApplication application = new SpringApplication(ReiApplication.class);
+    boolean backend=StartupOptions.parse(args,dev.mikoto2000.rei.core.datasource.ReiPaths.startupDirectory()).backend();
+    application.addInitializers(c->c.getEnvironment().getPropertySources().addFirst(
+        new org.springframework.core.env.MapPropertySource("reiBackendMode",java.util.Map.of("rei.backend-mode",backend))));
     application.setDefaultProperties(ExternalConfigSupport.defaultProperties());
     dev.mikoto2000.rei.web.WebApplication.configure(application, System.getenv("REI_API_KEY"));
     ConfigurableApplicationContext context = application.run(args);
     int exitCode;
     try {
       var app = context.getBean(ReiApplication.class);
-      launch(app, args);
+      if(backend) {
+        var stopped=new java.util.concurrent.CountDownLatch(1);
+        context.addApplicationListener((org.springframework.context.ApplicationListener<org.springframework.context.event.ContextClosedEvent>)e->stopped.countDown());
+        try{stopped.await();}catch(InterruptedException interrupted){Thread.currentThread().interrupt();}
+      }else launch(app, args);
     } finally {
       exitCode = SpringApplication.exit(context);
     }

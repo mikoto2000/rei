@@ -10,6 +10,8 @@ public final class StartupOptions {
   @CommandLine.Option(names = {"-p", "--project"}, paramLabel = "<directory>",
       description = "起動時のカレントプロジェクトのディレクトリを指定します")
   private String directory;
+  @CommandLine.Option(names="--backend",description="Shell を開かず Backend を常駐起動します")
+  private boolean backend;
   private Path project;
   private boolean helpRequested;
   private boolean versionRequested;
@@ -32,6 +34,7 @@ public final class StartupOptions {
   }
 
   public Path project() { return project; }
+  public boolean backend() {return backend;}
   public boolean helpRequested() { return helpRequested; }
   public boolean printHelpIfRequested() {
     var command = new CommandLine(this);
