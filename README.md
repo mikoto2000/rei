@@ -1,5 +1,7 @@
 # Rei
 
+軽量 CLI への移行は実装途中です。`--mode=server` / `--mode=legacy-shell` と接続先識別基盤の現状・未実装事項は [移行記録](docs/lightweight-cli-client.md) を参照してください。
+
 Web API 向けの Tauri 2 クライアント（Phase 1 / 2）は [client/README.md](client/README.md) を参照してください。Windows での開発・ビルド、Conversation / Run UI、SSE 再接続、モバイルの検証状況を記載しています。
 
 Codex による read-only 外部レビューは `/agent codex review [target]` または明示的な自然言語依頼で利用できます。Claude Code CLI のサブスクリプション認証レビューも、明示opt-inで `/agent claude review [target]` に対応します（[利用準備・範囲](docs/claude-code-reviews.md)）。
