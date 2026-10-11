@@ -14,7 +14,7 @@ public class AttentionCommand implements java.util.concurrent.Callable<Integer> 
   @Parameters(index="1",arity="0..1",paramLabel="attentionId") String id;
   private java.io.PrintWriter output;
   private AttentionDeliveryService delivery;
-  @Option(names="--acknowledge-duplicate-risk",description="A prior delivery may have succeeded; explicitly accept duplicate notification risk") boolean duplicateRisk;
+  @Option(names="--acknowledge-duplicate-risk",description="前回の配信が成功している可能性があるため、通知が重複するリスクを明示的に承認します") boolean duplicateRisk;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   public void setDelivery(AttentionDeliveryService delivery){this.delivery=delivery;}
   public AttentionCommand(){this(null,null);}
