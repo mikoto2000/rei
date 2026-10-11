@@ -30,6 +30,11 @@ class AgentEventChatModelTimingTest {
   assertEquals(4,span.milestones().get(Metric.FIRST_FRAMEWORK_CHUNK));assertEquals(9,span.milestones().get(Metric.FIRST_GENERATION_TEXT));
   assertFalse(span.milestones().containsKey(Metric.FIRST_GENERATED_TOKEN));assertNull(span.generationTps());assertEquals(Status.SUCCESS,span.status());assertFalse(run.toString().contains("SECRET"));
  }
+ @Test void synchronousAuxiliaryCallInRunScopeIsMeasuredWithoutToolContext() {
+  var delegate=mock(ChatModel.class);var plain=new Prompt("AUXILIARY-SECRET");when(delegate.call(plain)).thenReturn(response("OK"));
+  try(var scope=AgentRunScope.open(owner)){model(delegate).call(plain);}
+  var spans=store.latest("project","session").orElseThrow().spans();assertEquals(1,spans.size());assertFalse(spans.toString().contains("SECRET"));
+ }
  @Test void knownUsageIsRecordedWithoutUsingTextLengthAsTokens() {
   var delegate=mock(ChatModel.class);var value=new ChatResponse(List.of(new Generation(new AssistantMessage("SECRET"))),ChatResponseMetadata.builder().usage(new DefaultUsage(2,3)).build());
   when(delegate.call(prompt)).thenReturn(value);assertSame(value,model(delegate).call(prompt));

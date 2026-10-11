@@ -62,7 +62,7 @@ public final class BoundedToolLoop {
     return runWithHistory(model,prompt,remaining,owner,checkActive,reservation,new ModelRetries(0));
   }
   public Mono<Outcome> runWithHistory(ChatModel model,Prompt prompt,AtomicInteger remaining,AgentRunContext owner,Runnable checkActive,
-      dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,ModelRetries retries){return iteration(model,prompt,remaining,owner,checkActive,reservation,retries);}
+      dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,ModelRetries retries){return iteration(model,dev.mikoto2000.rei.llm.StableToolDefinitions.prompt(prompt),remaining,owner,checkActive,reservation,retries);}
   private Mono<ChatResponse> response(ChatModel model,Prompt prompt,AtomicInteger remaining,Runnable checkActive,
       dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,ModelRetries retries,boolean retrying,dev.mikoto2000.rei.timing.TimingAttempt previous) {
     return Mono.defer(() -> {
