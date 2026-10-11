@@ -5,8 +5,6 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
 if [ -n "${JAVA_HOME:-}" ]; then
     JAVA="$JAVA_HOME/bin/java"
-elif [ -x /c/Java/jdk-25/bin/java.exe ]; then
-    JAVA=/c/Java/jdk-25/bin/java.exe
 else
     JAVA=java
 fi
