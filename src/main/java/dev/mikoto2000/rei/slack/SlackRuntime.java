@@ -41,7 +41,8 @@ public final class SlackRuntime {
         boolean occupied=router.containsRun(receipt.project(),receipt.run());
         if(occupied)continue;
         if(!run.status().isTerminal()) {
-          if(runs.restored(receipt.run()))store.notifyRun(receipt.run(),"UNKNOWN",receipt.run()+":unknown",receipt.message(),SlackReplies.parts("再起動前の Run の結果は不明です。チェックポイントを確認して明示的に再開してください。"));
+          if(run.status()==RunStatus.WAITING)reply(receipt.run()+":external-wait",receipt.message(),"外部エージェントの返信待ちです。rei status／rei cancel で確認・キャンセルできます。");
+          else if(runs.restored(receipt.run()))store.notifyRun(receipt.run(),"UNKNOWN",receipt.run()+":unknown",receipt.message(),SlackReplies.parts("再起動前の Run の結果は不明です。チェックポイントを確認して明示的に再開してください。"));
           continue;
         }
         if("WAITING_APPROVAL".equals(receipt.state()))continue;

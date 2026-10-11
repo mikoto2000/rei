@@ -7,6 +7,14 @@ import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reaso
 
 /** One user run, explicitly passed in ToolContext across reactive scheduler boundaries. */
 public class RunExecutionContext {
+  private dev.mikoto2000.rei.core.chat.RunContinuation continuation;
+  private List<org.springframework.ai.chat.messages.Message> resumeMessages=List.of();
+  public void setContinuation(dev.mikoto2000.rei.core.chat.RunContinuation continuation){this.continuation=continuation;}
+  public void resume(dev.mikoto2000.rei.core.chat.RunContinuation.Saved saved){if(saved!=null){budget.restore(saved.budget());resumeMessages=List.copyOf(saved.messages());}}
+  public List<org.springframework.ai.chat.messages.Message> takeResumeMessages(){var saved=resumeMessages;resumeMessages=List.of();return saved;}
+  public OutputLimitRunBudget.Snapshot budgetSnapshot(){return budget.snapshot();}
+  public boolean hasParentReservation(){return budget.sharedLlmReservation()!=null;}
+  public void suspendIfWaiting(List<org.springframework.ai.chat.messages.Message> history){checkActive();if(continuation!=null&&continuation.suspend(this,history))throw new dev.mikoto2000.rei.core.chat.RunWaitingException();}
   public static final String KEY = RunExecutionContext.class.getName();
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
   public void setToolPermissionGuard(dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {this.permissions=permissions;}

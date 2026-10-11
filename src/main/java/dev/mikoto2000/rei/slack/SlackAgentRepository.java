@@ -24,8 +24,13 @@ public final class SlackAgentRepository {
       db.sql("CREATE UNIQUE INDEX IF NOT EXISTS slack_agent_threads ON slack_agent_requests(team,channel,thread) WHERE thread IS NOT NULL").update();
       db.sql("CREATE INDEX IF NOT EXISTS slack_agent_active ON slack_agent_requests(state,due)").update();
       db.sql("CREATE TABLE IF NOT EXISTS slack_agent_replies(event TEXT PRIMARY KEY,team TEXT NOT NULL,channel TEXT NOT NULL,ts TEXT NOT NULL,request TEXT NOT NULL,text TEXT NOT NULL,classification TEXT NOT NULL,UNIQUE(team,channel,ts))").update();
+      db.sql("CREATE TABLE IF NOT EXISTS slack_agent_dependencies(request TEXT PRIMARY KEY,dependency TEXT UNIQUE NOT NULL)").update();
     });
   }
+  public <T>T transaction(java.util.function.Supplier<T> work){return tx.execute(status->work.get());}
+  public String dependency(String request){return db.sql("SELECT dependency FROM slack_agent_dependencies WHERE request=?").param(request).query(String.class).optional().orElse(null);}
+  public void dependency(String request,String dependency){db.sql("INSERT INTO slack_agent_dependencies VALUES(?,?)").params(request,dependency).update();}
+  public List<Request> active(){return db.sql("SELECT * FROM slack_agent_requests WHERE state IN ('CREATED','SENDING','WAITING') ORDER BY id LIMIT 256").query(ROW).list();}
   public Request get(String id){return db.sql("SELECT * FROM slack_agent_requests WHERE id=?").param(id).query(ROW).optional().orElseThrow(()->new IllegalArgumentException("External request not found"));}
   public List<Request> forRun(String run){return db.sql("SELECT * FROM slack_agent_requests WHERE run=? ORDER BY created,id LIMIT 16").param(run).query(ROW).list();}
   public Request create(AgentRunContext o,String call,String name,String question,String expected,int seconds,String followUp,SlackAgentProperties p) {
@@ -38,6 +43,7 @@ public final class SlackAgentRepository {
       var existing=db.sql("SELECT * FROM slack_agent_requests WHERE run=? AND call=?").params(o.runId(),call).query(ROW).optional();
       if(existing.isPresent()) {var q=existing.get();if(!q.session().equals(o.conversationId())||!q.project().equals(o.projectId())||!q.root().equals(o.projectRoot().toString())||!q.agent().equals(name)||!q.question().equals(safe)||!q.expected().equals(output)||!Objects.equals(q.followUp(),followUp))throw new IllegalArgumentException("Tool call identity conflict");return q;}
       var prior=forRun(o.runId());if(prior.size()>=p.getMaxRequestsPerRun())throw new IllegalArgumentException("External request budget exhausted");
+      if(db.sql("SELECT COUNT(*) FROM slack_agent_requests WHERE state IN ('CREATED','SENDING','WAITING')").query(Integer.class).single()>=256)throw new IllegalArgumentException("External active request capacity exhausted");
       int turn=0;
       if(followUp!=null){var parent=get(followUp);if(!parent.run().equals(o.runId())||!parent.session().equals(o.conversationId())||!parent.project().equals(o.projectId())||!parent.agent().equals(name)||!Set.of("COMPLETED","TIMED_OUT").contains(parent.state()))throw new IllegalArgumentException("Owned finished external request required for follow-up");turn=parent.turn()+1;if(turn>p.getMaxFollowUpTurns())throw new IllegalArgumentException("Follow-up budget exhausted");}
       if(prior.stream().anyMatch(q->q.agent().equals(name)&&q.question().equals(safe)))throw new IllegalArgumentException("Repeated external question rejected");
@@ -68,6 +74,7 @@ public final class SlackAgentRepository {
     });
   }
   public void cancelRun(String run){db.sql("UPDATE slack_agent_requests SET state='CANCELLED',reason='parent_cancelled',updated=? WHERE run=? AND state IN ('CREATED','SENDING','WAITING')").params(clock.millis(),run).update();}
+  public void cancelRequest(String id){db.sql("UPDATE slack_agent_requests SET state='CANCELLED',reason='dependency_cancelled',updated=? WHERE id=? AND state IN ('CREATED','SENDING','WAITING')").params(clock.millis(),id).update();}
   public void expire(Instant now){db.sql("UPDATE slack_agent_requests SET state=CASE WHEN state='SENDING' THEN 'UNKNOWN' ELSE 'TIMED_OUT' END,reason='deadline_expired',updated=? WHERE deadline<=? AND state IN ('CREATED','SENDING','WAITING')").params(now.toEpochMilli(),now.toEpochMilli()).update();}
   public void recover(){db.sql("UPDATE slack_agent_requests SET state='UNKNOWN',reason='send_owner_lost',updated=? WHERE state='SENDING'").param(clock.millis()).update();}
   public boolean waiting(String run){return forRun(run).stream().anyMatch(q->ACTIVE.contains(q.state()));}

@@ -16,6 +16,8 @@ import dev.mikoto2000.rei.application.session.SessionRepository;
 @Component
 @EnableConfigurationProperties(AgentSchedulerProperties.class)
 public class AgentScheduleDispatcher {
+  private RunContinuation continuations;
+  @Autowired(required=false) public void setContinuations(RunContinuation continuations){this.continuations=continuations;}
   @FunctionalInterface interface Gateway {
     void dispatch(PersistentAgentScheduler.Entry entry,Consumer<ChatExecutionResult> completed);
   }
@@ -63,10 +65,13 @@ public class AgentScheduleDispatcher {
           if(!validProject(entry,projects))throw new IllegalStateException("Scheduled project was relocated while queued");
           var current=sessions.findById(owner.conversationId()).orElseThrow(()->new IllegalStateException("Scheduled session no longer exists"));
           if(!current.projectId().equals(owner.projectId()))throw new IllegalStateException("Scheduled session ownership changed");
+          if(continuations!=null)continuations.attachParent(owner,null,completed);
           result=chat.execute(owner,entry.task().action(),new UserInterventionQueue());
           }
         }
         catch(RuntimeException error){result=ChatExecutionResult.failed(error.getClass().getSimpleName());}
+        if(result.status()==ChatExecutionResult.Status.WAITING)return;
+        if(continuations!=null)continuations.detachParent(owner);
         if(runLifecycle!=null) {
           var terminal=result.status()==ChatExecutionResult.Status.CANCELLED?dev.mikoto2000.rei.application.run.RunStatus.CANCELLED
               :result.success()?dev.mikoto2000.rei.application.run.RunStatus.COMPLETED:dev.mikoto2000.rei.application.run.RunStatus.FAILED;
@@ -103,8 +108,9 @@ public class AgentScheduleDispatcher {
       var next=schedules.claimDue();if(next.isEmpty()){busy.set(false);return;}claim=next.get();currentClaim.set(claim);
       var owned=claim;
       Consumer<ChatExecutionResult> completed=result->{
+        if(result.status()==ChatExecutionResult.Status.WAITING)return;
         try {if(schedules.activeClaim(owned))schedules.finish(owned,switch(result.status()) {
-          case SUCCESS -> "COMPLETED";case FAILED -> "FAILED";case CANCELLED -> "CANCELLED";
+          case SUCCESS -> "COMPLETED";case FAILED -> "FAILED";case CANCELLED -> "CANCELLED";case WAITING -> throw new IllegalStateException("Waiting is not a schedule completion");
         },result.success()?result.text():result.errorMessage());}
         finally {release(owned);}
       };

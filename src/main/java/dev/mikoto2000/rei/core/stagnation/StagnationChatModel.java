@@ -88,6 +88,7 @@ public class StagnationChatModel implements ChatModel {
                 assembler.preserveToolResults(toolResult.conversationHistory(), context.runContext().conversationId(),
                     context.runContext().runId());
               context.preserveToolResults(toolResult.conversationHistory());
+              context.suspendIfWaiting(toolResult.conversationHistory());
               return toolResult;
             }
             finally { context.endIteration(); }
@@ -140,7 +141,11 @@ public class StagnationChatModel implements ChatModel {
     List<ToolCallback> callbacks = new ArrayList<>();
     if (options.getToolCallbacks() != null)
       for (ToolCallback callback : options.getToolCallbacks()) callbacks.add(observe(callback, context));
-    return new Prompt(prompt.getInstructions(), options.mutate()
+    var resumed=context.takeResumeMessages();
+    var instructions=new ArrayList<Message>();
+    if(resumed.isEmpty())instructions.addAll(prompt.getInstructions());
+    else {prompt.getInstructions().stream().filter(m->m instanceof SystemMessage).forEach(instructions::add);instructions.addAll(resumed);}
+    return new Prompt(instructions, options.mutate()
         .toolContext(toolContext).toolCallbacks(callbacks).build());
   }
 
@@ -155,7 +160,8 @@ public class StagnationChatModel implements ChatModel {
         String name = getToolDefinition().name();
         // These two domain callbacks authorize the complete persisted specification, not raw tool JSON.
         // Preparation never starts a process; execution checks Policy/approval on the server before claim.
-        if(!(delegateTool instanceof dev.mikoto2000.rei.externalagent.ExternalAgentToolCallback domain && domain.authorizesSpecification()))context.checkToolPermission(name,input);
+        if(!(delegateTool instanceof dev.mikoto2000.rei.externalagent.ExternalAgentToolCallback domain && domain.authorizesSpecification())
+            && !(delegateTool instanceof dev.mikoto2000.rei.slack.SlackAgentToolCallback slack && slack.authorizesSpecification()))context.checkToolPermission(name,input);
         if (context.externalDelegationUsed() && !(delegateTool instanceof dev.mikoto2000.rei.externalagent.ExternalAgentToolCallback domain && domain.availableAfterDelegation()))
           return "External review is complete or already attempted. Evaluate the supplied result independently and answer; no further tool execution or automatic fixes are allowed in this review run.";
         var before = context.evaluator().beforeTool(name, input);

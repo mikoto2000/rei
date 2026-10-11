@@ -6,6 +6,12 @@ package dev.mikoto2000.rei.llm;
  * the controlled model loop reserves every additional LLM/tool cycle before invoking the model.
  */
 public class OutputLimitRunBudget {
+  public record Snapshot(int replans,int llmCalls,long totalTokens,boolean usageUnknown) {}
+  public synchronized Snapshot snapshot(){return new Snapshot(replans,llmCalls,totalTokens,usageUnknown);}
+  public synchronized void restore(Snapshot saved){
+    if(saved==null||saved.replans()<0||saved.llmCalls()<0||saved.totalTokens()<0)throw new IllegalArgumentException("Invalid saved Run budget");
+    replans=Math.max(replans,saved.replans());llmCalls=Math.max(llmCalls,saved.llmCalls());totalTokens=Math.max(totalTokens,saved.totalTokens());usageUnknown|=saved.usageUnknown();
+  }
   /** Optional durable parent budget. Reservations precede every model call. */
   public interface LlmCallReservation {
     boolean tryReserve();

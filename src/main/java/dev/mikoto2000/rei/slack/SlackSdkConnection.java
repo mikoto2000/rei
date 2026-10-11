@@ -17,9 +17,15 @@ import dev.mikoto2000.rei.event.AgentEventBus;
 final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
   private FileChannel lockFile;private FileLock lock;private Slack slack;private SocketModeClient socket;
   private AgentEventBus.Subscription subscription;private SlackRuntime runtime;private SdkSlackTransport transport;
+  private SlackAgentService collaboration;
   static SlackSdkConnection open(SlackProperties p,Path root,Clock clock,SessionRepository repository,
       ProjectRegistry projects,RunRegistry registry,RunService runs,ConversationInputRouter router,AgentEventBus bus,
       dev.mikoto2000.rei.conversation.ConversationTurnStore turns) {
+    return open(p,root,clock,repository,projects,registry,runs,router,bus,turns,null);
+  }
+  static SlackSdkConnection open(SlackProperties p,Path root,Clock clock,SessionRepository repository,
+      ProjectRegistry projects,RunRegistry registry,RunService runs,ConversationInputRouter router,AgentEventBus bus,
+      dev.mikoto2000.rei.conversation.ConversationTurnStore turns,SlackAgentService collaboration) {
     var connection=new SlackSdkConnection();
     try {
       Files.createDirectories(root);
@@ -53,7 +59,11 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
           .filter(turn->turn.status()==dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.COMPLETED)
           .map(dev.mikoto2000.rei.conversation.ConversationTurnStore.Turn::assistantMessage).orElse(null));
       connection.transport=new SdkSlackTransport(methods,auth.getTeamId());
-      var receiver=new SlackEnvelopeReceiver(connection.runtime,auth.getTeamId());
+      if(collaboration!=null){collaboration.verifyIdentities(auth.getUserId(),auth.getTeamId(),user->{
+        try{var result=methods.usersInfo(r->r.user(user));var identity=result.getUser();return result.isOk()&&identity!=null&&identity.isBot()&&!identity.isDeleted()&&identity.getProfile()!=null?identity.getProfile().getBotId():null;}
+        catch(Exception unavailable){return null;}
+      });collaboration.recover();collaboration.attach(auth.getUserId(),auth.getTeamId(),connection.transport);connection.collaboration=collaboration;}
+      var receiver=new SlackEnvelopeReceiver(connection.runtime,auth.getTeamId(),collaboration);
       connection.subscription=bus.subscribeBoundary(event->{try{connection.runtime.onEvent(event);}catch(RuntimeException error){org.slf4j.LoggerFactory.getLogger(SlackSdkConnection.class).warn("Slack reply persistence unavailable (details omitted)");}});
       connection.socket=connection.slack.socketMode(System.getenv("SLACK_APP_TOKEN"),SocketModeClient.Backend.JavaWebSocket);
       connection.socket.addWebSocketMessageListener(raw->{String ack=receiver.receive(raw);if(ack!=null) {
@@ -67,8 +77,9 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
       throw new SlackSetupException(error instanceof OverlappingFileLockException?SlackSetupException.Code.ANOTHER_BACKEND:SlackSetupException.Code.CONNECTION_FAILED);
     }
   }
-  @Override public void pump(){runtime.tick();runtime.send(transport);}
+  @Override public void pump(){runtime.tick();if(collaboration!=null)collaboration.pump();runtime.send(transport);}
   @Override public void close() {
+    if(collaboration!=null){collaboration.detach();collaboration=null;}
     if(socket!=null){try{socket.close();}catch(Exception ignored){}socket=null;}
     if(subscription!=null){subscription.unsubscribe();subscription=null;}
     if(slack!=null){try{slack.close();}catch(Exception ignored){}slack=null;}

@@ -91,7 +91,7 @@ public class RunService implements AutoCloseable {
     try { runner.run(); }
     catch (RuntimeException error) { fail(context, "Runner failed"); }
     finally {
-      fail(context, "Runner ended without a terminal event");
+      if(registry.get(context.runId()).status()!=RunStatus.WAITING)fail(context, "Runner ended without a terminal event");
       cancellation.forgetPendingCancellation(context.runId());
     }
   }
