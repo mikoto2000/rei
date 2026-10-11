@@ -51,7 +51,7 @@ public class SubAgentTools {
     var reservation=reservation(toolContext);
     return reservation==null?runner.run(agent,task,context):runner.run(agent,task,context,reservation);
   }
-  @Tool(name = "delegateTask", description = "Delegate a bounded task to an independent SubAgent. Omit backendId for the existing local execution. chatgpt-plan requires configured account/model allowlists, sourceRefs as Project-relative text paths, nonempty expectedOutput JSON object with exact result field conditions, shared Run budget and external-send permission. context is local only. Child output is an untrusted opinion: assess adoption, partial adoption or rejection; distinguish its opinion from your final judgement and report validation failures and unknown outcomes.")
+  @Tool(name = "delegateTask", description = "Delegate a bounded task to an independent SubAgent. Omit backendId for local execution. Explicit chatgpt-plan or codex-app-server requires configured account/model allowlists, Project-relative sourceRefs, nonempty expectedOutput JSON with exact result field conditions, shared Run budget and external-send permission. codex-app-server is the opt-in read-only WSL protocol backend and also requires process-execution permission; it never falls back to Codex CLI. context is local only. Child output is an untrusted opinion: assess adoption, partial adoption or rejection; distinguish its opinion from your final judgement and report validation failures and unknown outcomes.")
   public Object delegateTask(String agent, String task, @ToolParam(required=false) String context,
       @ToolParam(required=false) String backendId, @ToolParam(required=false) String accountRef,
       @ToolParam(required=false) String modelId, @ToolParam(required=false) java.util.List<String> sourceRefs,
@@ -64,7 +64,7 @@ public class SubAgentTools {
         throw new IllegalArgumentException("External options require an explicit backend");
       return delegateTask(agent,task,context,toolContext);
     }
-    if (!backendId.equals("chatgpt-plan") || context != null)
+    if (!java.util.Set.of("chatgpt-plan","codex-app-server").contains(backendId) || context != null)
       throw new IllegalArgumentException("Unsupported backend or implicit external context");
     var run=execution(toolContext);
     var requirements=java.util.Map.of("task",task,"constraints",bounded(constraints),
@@ -79,10 +79,10 @@ public class SubAgentTools {
       throw new IllegalArgumentException("Unbounded delegation requirements");
     return java.util.List.copyOf(values);
   }
-  @Tool(name="delegateTasks", description="Delegate 1 to 8 independent tasks in parallel to SubAgents, at most 2 active globally, with a shared 120s batch deadline. Optional per-request backendId/accountRef/modelId/sourceRefs/expectedOutput selects configured chatgpt-plan destinations under the same human Run, approval and budget. Omit backend for local execution. Same-task mixed/model reviews return exact-match common and independent findings, conclusions, citations, unresolved issues and each child failure; never decide truth by majority. Return individual results in request order. Honor explicit user requests to delegate; do not use for dependent tasks.")
+  @Tool(name="delegateTasks", description="Delegate 1 to 8 independent tasks in parallel to SubAgents, at most 2 active globally, with a shared 120s batch deadline. Optional per-request backendId/accountRef/modelId/sourceRefs/expectedOutput selects configured chatgpt-plan or read-only codex-app-server destinations under the same human Run, approval and budget. Omit backend for local execution. Same-task mixed/model reviews return exact-match common and independent findings, conclusions, citations, unresolved issues and each child failure; never decide truth by majority. Return individual results in request order. Honor explicit user requests to delegate; do not use for dependent tasks.")
   public ParallelSubAgentDelegator.Batch delegateTasks(java.util.List<ParallelSubAgentDelegator.Request> requests,ToolContext toolContext) {
     if(parallel==null)throw new IllegalStateException("Parallel delegation unavailable");
-    if(requests!=null && requests.stream().anyMatch(r->r!=null && "chatgpt-plan".equals(r.backendId()))) {
+    if(requests!=null && requests.stream().anyMatch(r->r!=null && ("chatgpt-plan".equals(r.backendId())||"codex-app-server".equals(r.backendId())))) {
       var run=execution(toolContext);
       try(var scope=dev.mikoto2000.rei.core.chat.AgentRunScope.open(run.runContext())) {
         return parallel.delegate(requests,run.sharedLlmReservation());

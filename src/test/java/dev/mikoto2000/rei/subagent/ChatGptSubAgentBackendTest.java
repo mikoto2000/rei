@@ -87,6 +87,18 @@ class ChatGptSubAgentBackendTest {
     return new ChatGptSubAgentBackend.Request(
         "design-review", "chatgpt-plan", "model", "default", "Review", sources, expected);
   }
+  @Test void appServerSharesExistingVerifierRunBudgetAndDistinctPermission() {
+    when(client.authority()).thenReturn("test-configuration");
+    runs.register(owner);
+    var external=new ChatGptSubAgentBackend(client,new PlanProperties(true,root,Set.of("design-review")),registry,
+        permissions,cancellation,new AgentEventFactory(Clock.systemUTC()),publisher,Clock.systemUTC(),runs,"codex-app-server");
+    var budget=mock(LlmCallReservation.class);when(budget.tryReserve()).thenReturn(true);
+    var request=new ChatGptSubAgentBackend.Request("design-review","codex-app-server","model","default","Review",List.of(),"{\"decision\":\"accept\"}");
+    var receipt=external.run(request,owner,false,budget);
+    assertEquals(ChatGptSubAgentBackend.State.COMPLETED,receipt.state());assertEquals("codex-app-server",receipt.backendId());assertEquals("parent",receipt.parentRunId());
+    verify(budget).tryReserve();verify(budget).recordTotalTokens(17);verify(permissions).check(eq("requestCodexAppServerSubAgent"),contains("|codex-app-server|"),eq(owner));
+    assertNotNull(receipt.result().structuredOutput());
+  }
 
   @Test void automaticDelegationIsOptInAndDestinationsAreAdministratorOwned() {
     var request=request(List.of(), "{\"decision\":\"accept\"}");

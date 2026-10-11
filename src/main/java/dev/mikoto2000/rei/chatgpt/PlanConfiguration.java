@@ -6,9 +6,21 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.*;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties({PlanProperties.class, PlanDelegationProperties.class, PlanExecutionProperties.class})
+@EnableConfigurationProperties({PlanProperties.class, PlanDelegationProperties.class, PlanExecutionProperties.class, PlanAppServerProperties.class})
 @ConditionalOnProperty(name = "rei.chatgpt-plan.enabled", havingValue = "true")
 public class PlanConfiguration {
+  @Bean
+  @ConditionalOnProperty(name="rei.chatgpt-plan.app-server.enabled",havingValue="true")
+  dev.mikoto2000.rei.subagent.CodexAppServerSubAgentBackend codexAppServerBackend(PlanAppServerProperties settings,
+      PlanClient client,PlanProperties plan,PlanDelegationProperties automatic,dev.mikoto2000.rei.subagent.SubAgentRegistry registry,
+      dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions,dev.mikoto2000.rei.core.service.CommandCancellationService cancellation,
+      dev.mikoto2000.rei.event.AgentEventFactory events,dev.mikoto2000.rei.event.AgentEventPublisher publisher,
+      Clock clock,dev.mikoto2000.rei.application.run.RunRegistry runs) {
+    var adapter=new PlanAppServerClient(client,new WslPlanAppServerLauncher(settings),permissions);
+    var backend=new dev.mikoto2000.rei.subagent.ChatGptSubAgentBackend(adapter,plan,registry,permissions,cancellation,events,publisher,clock,runs,"codex-app-server");
+    backend.configureAutomatic(automatic);
+    return new dev.mikoto2000.rei.subagent.CodexAppServerSubAgentBackend(backend);
+  }
   @Bean
   PlanTransport planTransport() {
     return new PlanTransport.Http();

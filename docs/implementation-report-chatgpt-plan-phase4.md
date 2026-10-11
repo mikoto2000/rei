@@ -1,71 +1,46 @@
-# ChatGPT Plan Phase 4 調査・停止報告
+# ChatGPT Plan Phase 4 実装報告
 
-2026-10-11。**Phase 4の実行バックエンドは未実装です。** Phase 3のマージ `fec9d638608ae267d09e084e787719fdbe6c4024` とworktree削除を確認してから、専用ブランチ `feature/chatgpt-plan-phase4-app-server` / worktree `F:/project/rei/.worktrees/chatgpt-plan-phase4` を作成しました。
+2026-10-12。`codex-app-server` を既定無効の読取専用バックエンドとして追加しました。先に確認したWindows 0.154.0のunelevated sandboxの読取制限問題は、既存WSL2 Ubuntu-24.04のLinux sandboxを使うことで解消しました。管理者setup、通常Codexの設定変更、本人認証は行っていません。
 
-依頼書の停止条件「根本的な仕様上の問題、認証・権限上の危険、解消不能なCIエラーがある場合は、そのPhase以降を停止し、作業内容を保持して報告」に該当する、現環境の読取隔離の問題を実プロセスで確認しました。Phase 4を完了扱いにせず、調査・再現手順だけをdraft PRへ保存し、ブランチとworktreeを保持します。
+## 実装と再利用
 
-## 再現した境界問題
+PlanInferenceにHTTPとapp-serverの差分を閉じ込め、既存ChatGptSubAgentBackendのProject/Session/Run、role、明示資料snapshot、exact-input承認、共有予算、schema・引用・scope・厳密完了条件の検証を再利用しました。`/subagent run`、delegateTask(s)でbackendを明示できます。既存 `/agent codex` とClaudeのCLI委譲は維持します。
 
-インストール済みの `codex-cli 0.154.0` を、資格情報のない専用CODEX_HOME、空の新規workspace、明示的に限定した子環境で起動しました。標準入出力RPCの `initialize` / `initialized` は成功し、`permissionProfile/list` は下記の名前付きプロファイルをallowed=trueとして返しました。
+新規コンポーネントはPlanAppServerProperties/Client/Rpc、WslPlanAppServerLauncher、CodexAppServerSubAgentBackendと共通SPIです。主要変更箇所はPlanConfiguration/Client、SubAgentRunner/Tools/Command、ParallelSubAgentDelegator、ToolPermissionPolicyです。
 
-```toml
-default_permissions = "rei-probe"
-[windows]
-sandbox = "unelevated"
-[permissions.rei-probe.filesystem]
-":root" = "deny"
-":minimal" = "read"
-":workspace_roots" = "read"
-[permissions.rei-probe.network]
-enabled = false
-[shell_environment_policy]
-inherit = "none"
-```
+専用adapterは0.154.0の生成スキーマに固定し、initialize/initialized、permissionProfile/list、thread/start、turn/start、動的資料読取、usage、終端イベント、interruptを扱います。応答ID、Thread/Turn、バージョン、cwd、provider、権限、承認方式を照合します。ACKやプロセス終了だけでは成功にせず、正常なturn/completedと単一final_answerの後に共通検証を行います。Traceにはopaque Thread/Turn、資料読取回数、拒否要求、イベント数、interrupt要求を記録し、生RPCやtokenは返しません。
 
-`thread/start` に permissions=rei-probe / ephemeral=true / approvalPolicy=untrusted / approvalsReviewer=user を渡すと、RPC error -32603で拒否されました。原因はWindowsのunelevated restricted-token sandboxがsplit filesystem read restrictionsを実施できず、unsandboxed実行を拒否したことです。Turnは開始していません。プロセスはstdin終了後にexit 0で終了しました。元の既定選択でも同じ拒否を確認し、再現スクリプトでは方式を明示しました。
+## 権限・認証・予算
 
-[`docs/probes/codex_app_server_permissions.py`](probes/codex_app_server_permissions.py) はバージョンを0.154.0に固定した認証不要の再現手順です。Python 3.12で構文確認と実プロセス再現を行いました。通常CIには実バイナリを要求しません。診断はcheckout配下のignored target/へ専用homeとreport.jsonを残し、native stderrは保存しません。
+- Phase 0自身のOAuth tokenだけを限定した子環境へ渡します。clientInfo.nameは登録時agent_name_hintと同じrei。通常のCLI資格情報や親環境を継承しません。
+- 選んだaccount/modelを既存catalogで検査し、期限・logout世代を実行中も監視します。refreshは既存storeで行い、新しい依頼ごとに新規プロセス/Threadを作ります。
+- 空の専用workspaceとhome、root deny/minimal read/workspace read/network falseの名前付きprofileを使います。起動用の正確なCodex binaryだけ追加読取許可します。実Projectは直接mountせず、既存guardで許可済みsnapshotのみrei_read_sourceが返します。
+- 初期inputには資料metadataを送り、内容は各pathについて一度だけ取得できます。roleがreadFile/readMultiFileを許可しない資料付き依頼は送信前に拒否します。shell、編集、ブラウザ、MCP、再委譲を無効化し、native承認/入力/追加権限要求を拒否します。
+- 初回と資料読取後の各追加推論を親Runの同じモデル回数予約へ計上します。role.maxStepsと共有予算の小さい上限を適用し、usageは累積値の増分として計上して最終値との二重計上を防ぎます。不明usageは不明として保持します。
+- 拒否時は負の応答を返す前にTurn中断を確認し、追加推論を防ぎます。取消・期限でもinterruptを要求し、停止確認できなければOUTCOME_UNKNOWN。通信結果不明、認証、quota、権限エラーの自動再送・別課金先fallbackはありません。
+- stdioフレーム、全出力、queue、イベント数、期限を制限します。終了時に所有home/PIDを照合して専用Linux process groupを停止し、専用homeだけ片付けます。外部結果中の資格情報は拒否します。
 
-```powershell
-python docs/probes/codex_app_server_permissions.py C:/absolute/path/to/native/codex.exe
-```
+## 検証
 
-終了コード2は上記Thread拒否です。modelTurnStarted=false / threadCreated=false / processExit=0を確認してください。npm/shell wrapperではなくnative exeを指定します。異なるバージョンは拒否するので、対応スキーマを再調査してください。
+関連テスト78件でfailure/error 0。RPC状態機械、終端判定、拒否後中断、取消、unknown、malformed/cross-thread、auth/quota、own OAuth lease失効、Run/予算、増分usage、手動/自動routing、無効時のfallback禁止、既存Plan互換を確認しました。通常CIはmock/fixtureを使い、実認証を要求しません。
 
-`readOnly` という旧sandbox指定だけではProject外読取の防止を証明できません。全ディスク読取許可、danger-full-access、親のdenyの無効化では回避しません。Codexのuntrusted承認方式にも承認なしで許可されるコマンドがあり、承認RPCをすべて拒否するだけで親Policyが全操作へ適用されたとは言えません。
+別途REI_TEST_WSL_CODEXに0.154.0 Linux binaryを指定した任意の実プロセステストで、production launcherの起動、限定Thread作成、プロセス停止と専用home削除を確認しました。全回帰・CI・Gitの最終結果は[納品記録](chatgpt-plan-phase2-4-delivery.md)とignored .worktrees/chatgpt-plan-reports/phase4.jsonに保存します。
 
-これは**現在のnative Windows / unelevated方式で確認した制約**です。全OS・全sandbox方式でapp-server統合が不可能という結論ではありません。elevated sandboxは管理者によるsetup・OSアカウント/ファイアウォール設定を要し、専用homeへ自動構築していません。MXC/WSL/別バージョンの利用可能性と強制境界は未検証です。本人認証、CLIの保存済みトークン、通常Codex homeの設定変更は行っていません。
+認証不要の[WSL診断](probes/codex_app_server_wsl.py)はローカルHTTP fixtureだけへ接続し、推論を拒否することで提示ツールを検査します。同じprofileで許可資料読取成功、外部ファイル読取拒否、書込拒否、socket拒否を実測しました。実OAuth/実モデル推論の成功は確認していません。
 
-## 公式仕様と実バージョン
+以前の[Windows診断](probes/codex_app_server_permissions.py)は履歴として残します。Windows unelevatedで限定読取拒否という観測は現在も有効です。全ディスク読取やdanger-full-accessでは回避しません。
 
-- [SIWC app-server](https://developers.openai.com/siwc/token-sharing-open-source/codex-app-server): own OAuth access tokenを子環境のenv_keyへ渡すprovider、stable clientInfo.nameとagent_name_hint、更新後の再起動/thread resume。Phase 0の認証・refresh・logoutと同期させる必要があります。
-- [app-server protocol](https://learn.chatgpt.com/docs/app-server): initialize/initialized、thread/start、turn/start、ストリーム、承認、interrupt、usage、terminal status。
-- [Permission profiles](https://learn.chatgpt.com/docs/permissions): 名前付きfilesystem/networkプロファイルと読取拒否。
-- [Windows sandbox](https://learn.chatgpt.com/docs/windows/windows-sandbox): unelevatedはdeny-read非対応、elevatedは管理者setupが必要。現行資料にはMXCもありますが、0.154.0での利用可否は推測しません。
-- [0.154.0 source](https://github.com/openai/codex/blob/rust-v0.154.0/codex-rs/sandboxing/src/windows.rs): restricted-token方式が読取制限を拒否する実装を確認しました。
+## 制限と比較
 
-`app-server generate-json-schema --out ...` と `--experimental` の両方を実バイナリから生成しました。標準ThreadStartParamsにはpermissionsがなく、実験スキーマには文字列profile IDとして存在します。初期化experimentalApi=trueが必要です。0.154.0の旧SandboxPolicy.readOnlyにはreadableRoots等がないため、現行資料の新しいJSONをそのまま渡す実装はしません。生成物・初回実プロセス記録はworktreeのignored target/に保持しています。
+app-serverはWindowsから明示WSL distro/固定Linux binaryを起動する読取・レビュー用です。任意コマンド、実Project編集、Git操作、独立した子agent、永続Thread resumeは提供しません。CLIによる既存の明示隔離実装と変更レビューは従来経路を使います。Phase 3のHTTP修復/再検討ループはapp-serverへ適用せず、単一Turn内の資料取得を上限内で扱います。roleのrequiredToolCalls/evidenceTools/semantic契約は省略しません。
 
-## 既存Codex委譲との比較と再利用計画
+自然言語の真偽、任意自由文の完了は保証しません。親が外部見解の採用・部分採用・不採用を独立判断します。対応バージョン以外は拒否するため、更新時は生成schemaとsandbox境界を再検証してください。
 
-| 項目 | 既存実装 | app-serverで必要になる差分 |
-|---|---|---|
-| 認証 | Codex CLI自身の認証、PlanOAuth/ProtectedCredentialStoreは別経路 | Phase 0自身のtokenを限定子環境にだけ渡す。CLI資格情報を流用しない |
-| 起動・出力 | ExternalAgentProcessRunner、期限/出力量/取消、CLI JSON/schema | stdio RPC、ID対応、bounded parser、native version/schema検査 |
-| 依頼 | ExternalAgentCommand、DelegationService、明示ユーザー認可 | 明示backend選択。既存 `/agent codex` / Claudeを維持 |
-| Project・Run | AgentRunContext、ToolPermissionGuard、RunRegistry、共有予算 | opaque thread/turnと同一親Run関連付け。ツール側にも強制する |
-| ツール・承認 | Policy、ActionCapability、exact-input one-use approval | native command/file/permission要求を分類し両側拒否を優先。現在の読取隔離はblocker |
-| 実装・変更 | IsolatedImplementationService、承認済み仕様、隔離作業、Self Patch Review | app-serverでも既存経路を使う。変更を無承認で反映しない |
-| 継続・復元 | opt-in opaque native session、checkpoint/明示再レビュー | own isolated home、thread resumeのownership検査、refresh後再起動。結果不明を再送しない |
-| 使用量 | ModelCallBudget、Run/Goal token予約 | turn usageを同じ予約へ計上、usage不明を成功計上しない |
-| 結果 | action schema、SubAgent schema/source/completion検証 | turn/completedのstatus確認後に既存検証。RPC ACK/終了コードだけでは成功にしない |
+## 公式仕様
 
-新たな実行バックエンド、設定bean、コマンドオプション、認証連携、推論adapter、ツールの権限bridgeは追加していません。プロダクションJavaの変更はなく、既存CLI/Claude/通常会話への動作変更もありません。この調査ブランチでの全Java回帰は再実行せず、Phase 3の5,036件・失敗/エラー0・skip2とCI成功を基準として記録します。Phase 4の要求されたmock/実行/認証失効/承認/Run統合テストは未実装です。
+- [SIWC app-server](https://developers.openai.com/siwc/token-sharing-open-source/codex-app-server): own tokenの子環境受け渡しとstable client名。
+- [app-server](https://learn.chatgpt.com/docs/app-server): Thread/Turn、承認、usage、interrupt。
+- [permissions](https://learn.chatgpt.com/docs/permissions): filesystem/network profile。
+- [Windows sandbox](https://learn.chatgpt.com/docs/windows/windows-sandbox): sandbox方式による読取制限の違い。
 
-## 再開条件
-
-1. 専用認証homeを維持したまま、Project外・資格情報ファイルの読取、書込、ネットワークの境界を強制できるsandbox方式を準備・実測する。管理者setup等が必要なら本人/管理者が行う。
-2. 任意コマンドや親Policyの範囲を自動判定できない場合は拒否する方針、または明示した既存guard経由のツールだけを使う構成を確定する。
-3. 対応バージョンと生成スキーマを固定して、Phase 4のTDD、認証連携、Run/予算、取消・結果不明・結果検証、回帰、CIへ進む。
-
-研究draft PRは未マージ、worktreeは保持します。Git metadataとPhase 2/3完了情報は [`chatgpt-plan-phase2-4-delivery.md`](chatgpt-plan-phase2-4-delivery.md) にまとめます。
+現行資料を0.154.0に推測適用せず、実binaryの通常/experimental schemaとプロセス観測を実装根拠にしました。permissionsとdynamicToolsにはexperimentalApi=trueが必要です。

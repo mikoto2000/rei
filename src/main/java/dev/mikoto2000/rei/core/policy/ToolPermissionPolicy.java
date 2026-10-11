@@ -49,6 +49,7 @@ public class ToolPermissionPolicy {
     if(Set.of("listClaudeCodeReviews","getClaudeCodeReview").contains(tool))return Set.of(ActionCapability.READ);
     if(READ.contains(tool)) return Set.of(ActionCapability.READ);
     if(NETWORK_READ.contains(tool)) return Set.of(ActionCapability.NETWORK_READ);
+    if("requestCodexAppServerSubAgent".equals(tool))return Set.of(ActionCapability.EXECUTE,ActionCapability.NETWORK_WRITE,ActionCapability.EXTERNAL_SIDE_EFFECT);
     if(Set.of("requestChatGptPlanSubAgent","requestChatGptPlanInference").contains(tool))return Set.of(ActionCapability.NETWORK_WRITE,ActionCapability.EXTERNAL_SIDE_EFFECT);
     if("deliverAttention".equals(tool))return Set.of(ActionCapability.NETWORK_WRITE,ActionCapability.EXTERNAL_SIDE_EFFECT);
     if("registerDependency".equals(tool))return Set.of(ActionCapability.READ,ActionCapability.LOCAL_WRITE);

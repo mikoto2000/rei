@@ -65,7 +65,7 @@ public class SubAgentCommand implements Callable<Integer> {
     public Integer call(){return parent.execute(()->{
       if(parent.runner==null)throw new IllegalArgumentException("SubAgent runtime unavailable");
       if(backend.equals("local")){if(model!=null)throw new IllegalArgumentException("Local model is selected by the existing role definition");var result=parent.runner.run(role,task,context);parent.out(result.status()+" | "+dev.mikoto2000.rei.event.CredentialRedactor.redact(result.output()));if(result.status()!=SubAgentResult.Status.COMPLETED)throw new IllegalArgumentException("SubAgent did not complete");return;}
-      if(!backend.equals("chatgpt-plan")||model==null||expected==null||context!=null)throw new IllegalArgumentException("chatgpt-plan requires --model and --expected-result; material is supplied by --source");
+      if(!java.util.Set.of("chatgpt-plan","codex-app-server").contains(backend)||model==null||expected==null||context!=null)throw new IllegalArgumentException("External backend requires --model and --expected-result; material is supplied by --source");
       var project=parent.projects.currentContext();String session; synchronized(parent.projects.currentClient()){project=parent.projects.currentContext();session=parent.projects.currentSessionId();}
       if(session==null)throw new IllegalArgumentException("Select a Session before external delegation");
       var owner=new dev.mikoto2000.rei.core.chat.AgentRunContext(java.util.UUID.randomUUID().toString(),session,project.root(),project.id());

@@ -25,8 +25,16 @@ public final class SubAgentRunner {
   private org.springframework.beans.factory.ObjectProvider<ChatGptSubAgentBackend> planBackend;
   @org.springframework.beans.factory.annotation.Autowired
   public void configurePlanBackend(org.springframework.beans.factory.ObjectProvider<ChatGptSubAgentBackend> backend){this.planBackend=backend;}
+  private org.springframework.beans.factory.ObjectProvider<CodexAppServerSubAgentBackend> appServerBackend;
+  @org.springframework.beans.factory.annotation.Autowired
+  public void configureAppServerBackend(org.springframework.beans.factory.ObjectProvider<CodexAppServerSubAgentBackend> backend){this.appServerBackend=backend;}
   public ChatGptSubAgentBackend.Receipt runAutomaticBackend(ChatGptSubAgentBackend.Request request, AgentRunContext owner,
       dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
+    if("codex-app-server".equals(request.backendId())) {
+      var external=appServerBackend==null?null:appServerBackend.getIfAvailable();
+      if(external==null)throw new IllegalArgumentException("Codex app-server backend is disabled");
+      return external.runAutomatic(request,owner,reservation);
+    }
     var backend=planBackend==null?null:planBackend.getIfAvailable();
     if(backend==null)throw new IllegalArgumentException("ChatGPT plan backend is disabled");
     return backend.runAutomatic(request,owner,reservation);
@@ -34,6 +42,11 @@ public final class SubAgentRunner {
   /** Manual dispatch only. Existing delegateTask stays on the existing backend. */
   public ChatGptSubAgentBackend.Receipt runManualBackend(ChatGptSubAgentBackend.Request request,AgentRunContext owner,
       boolean standalone,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
+    if("codex-app-server".equals(request.backendId())) {
+      var external=appServerBackend==null?null:appServerBackend.getIfAvailable();
+      if(external==null)throw new IllegalArgumentException("Codex app-server backend is disabled");
+      return external.run(request,owner,standalone,reservation==null&&standalone?StandaloneSubAgentBudget.create(standaloneBudgetProperties):reservation);
+    }
     var backend=planBackend==null?null:planBackend.getIfAvailable();
     if(backend==null)throw new IllegalArgumentException("ChatGPT plan backend is disabled");
     return backend.run(request,owner,standalone,reservation==null&&standalone?StandaloneSubAgentBudget.create(standaloneBudgetProperties):reservation);
