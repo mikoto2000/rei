@@ -11,12 +11,26 @@ public final class RemoteCommands {
   public record Request(String method,String path,Object body) {}
   public static final Set<String> NAMES=Set.of("/llm","/bsky","/activity","/storage","/embed","/schedule","/task","/sleep","/reflection","/subagent","/config","/paper","/material-review","/agent","/document","/repair","/timing","/doctor","/mode","/history","/feed","/skill","/profile","/briefing","/reminder","/interest","/memory","/search","/timer","/tasks","/goal","/attention","/checkpoint","/resume","/approval","/dependency","/work","/summarize","/image","/model","/models");
   public static Request route(List<String> words,String project,String session) {
+    return route(words,project,session,java.nio.file.Path.of(System.getProperty("user.dir")));
+  }
+  public static Request route(List<String> words,String project,String session,java.nio.file.Path localBase) {
+    var request=routeDirect(words,project,session,localBase);
+    if(!Set.of("/schedule","/task").contains(words.getFirst())||request.path().endsWith("/authorize")||request.path().endsWith("/refresh-token"))return request;
+    if(project==null)throw new IllegalArgumentException("Select a Project first");var body=new LinkedHashMap<String,Object>();body.put("projectId",project);body.put("sessionId",session);
+    if(request.body() instanceof Map<?,?> values)values.forEach((key,value)->body.put((String)key,value));
+    int query=request.path().indexOf('?');if(query>=0)for(String part:request.path().substring(query+1).split("&")){var item=part.split("=",2);String value=java.net.URLDecoder.decode(item[1],java.nio.charset.StandardCharsets.UTF_8);body.put(item[0],item[0].equals("priority")?integer(value):value);}
+    String action=words.size()==1?"list":words.get(1),path;
+    if(words.getFirst().equals("/schedule"))path="/calendar/"+action;
+    else path=Set.of("done","delete").contains(action)?"/tasks/"+longInteger(words.get(2))+"/"+(action.equals("done")?"complete":"delete"):"/tasks/"+action;
+    return post("/api/v1/google-operations"+path,body);
+  }
+  private static Request routeDirect(List<String> words,String project,String session,java.nio.file.Path localBase) {
     String name=words.getFirst(),action=words.size()>1?words.get(1):"list";
     if(!NAMES.contains(name))throw new IllegalArgumentException("Unsupported CLI command: "+name+". Use legacy-shell; this input was not sent to the model.");
     if(name.equals("/feed")) {
       String base="/api/v1/feed/commands";
       if(action.equals("list")){exact(words,words.size()==1?1:2);return get(base);}
-      if(action.equals("import-opml")){exact(words,3);String input=words.get(2);if(input.equals("~"))input=System.getProperty("user.home");else if(input.startsWith("~/")||input.startsWith("~\\"))input=java.nio.file.Path.of(System.getProperty("user.home")).resolve(input.substring(2)).toString();return post(base+"/imports",Map.of("path",java.nio.file.Path.of(input).toAbsolutePath().normalize().toString()));}
+      if(action.equals("import-opml")){exact(words,3);String input=words.get(2);if(input.equals("~"))input=System.getProperty("user.home");else if(input.startsWith("~/")||input.startsWith("~\\"))input=java.nio.file.Path.of(System.getProperty("user.home")).resolve(input.substring(2)).toString();return post(base+"/imports",Map.of("path",localBase.resolve(input).toAbsolutePath().normalize().toString()));}
       if(action.equals("add")){var parsed=parse(words,2,Set.of("--name"),Set.of());if(parsed.arguments().size()!=1)throw invalid();var body=new LinkedHashMap<String,Object>();body.put("url",parsed.arguments().getFirst());body.put("displayName",parsed.options().get("--name"));return post(base,body);}
       if(action.equals("edit")){var parsed=parse(words,2,Set.of("--name"),Set.of("--enabled","--disabled"));if(parsed.arguments().size()!=1)throw invalid();boolean enabled=Boolean.parseBoolean(parsed.options().get("--enabled")),disabled=Boolean.parseBoolean(parsed.options().get("--disabled"));var body=new LinkedHashMap<String,Object>();body.put("displayName",parsed.options().get("--name"));body.put("enabled",enabled==disabled?null:enabled);return new Request("PATCH",base+"/"+longInteger(parsed.arguments().getFirst()),body);}
       if(action.equals("delete")){exact(words,3);return new Request("DELETE",base+"/"+longInteger(words.get(2)),null);}
@@ -31,7 +45,7 @@ public final class RemoteCommands {
       if(operation.equals("list")){if(words.size()==3)return get(base+"/sessions");exact(words,4);return get(base+"/sessions/"+id(words.get(3))+"/attempts");}
       if(operation.equals("show")){exact(words,4);return get(base+"/attempts/"+id(words.get(3))+"/show");}
       if(operation.equals("raw")){exact(words,4);return post(base+"/attempts/"+id(words.get(3))+"/raw",Map.of("approved",false));}
-      if(operation.equals("export")){exact(words,5);return post(base+"/attempts/"+id(words.get(3))+"/export",Map.of("approved",false,"path",java.nio.file.Path.of(words.get(4)).toAbsolutePath().toString()));}
+      if(operation.equals("export")){exact(words,5);return post(base+"/attempts/"+id(words.get(3))+"/export",Map.of("approved",false,"path",localBase.resolve(words.get(4)).toAbsolutePath().toString()));}
       if(operation.equals("delete")){exact(words,4);return new Request("DELETE",base+"/sessions/"+id(words.get(3)),null);}
       if(operation.equals("clear")){exact(words,3);return new Request("DELETE",base+"/sessions",null);}throw invalid();
     }
@@ -97,7 +111,7 @@ public final class RemoteCommands {
       }
       if(action.equals("delete")){var parsed=parse(words,2,Set.of("--doc-id","--source"),Set.of());if(!parsed.arguments().isEmpty()||parsed.options().size()!=1)throw invalid();return post(base+"/delete",Map.of("docId",parsed.options().getOrDefault("--doc-id",""),"source",parsed.options().getOrDefault("--source","")));}
       var parsed=parse(words,action.equals("add")?2:1,Set.of(),Set.of());if(parsed.arguments().isEmpty())throw invalid();
-      var documents=dev.mikoto2000.rei.core.completion.DocumentPathResolver.resolve(parsed.arguments(),java.nio.file.Path.of(System.getProperty("user.dir"))).stream().map(path->java.nio.file.Path.of(path).toAbsolutePath().normalize().toString()).toList();return post(base,Map.of("documents",documents));
+      if(project==null)throw new IllegalArgumentException("Select a Project first");var documents=dev.mikoto2000.rei.core.completion.DocumentPathResolver.resolve(parsed.arguments(),localBase).stream().map(path->localBase.resolve(path).toAbsolutePath().normalize().toString()).toList();var body=new LinkedHashMap<String,Object>();body.put("projectId",project);body.put("sessionId",session);body.put("documents",documents);return post(base+"/ingestions",body);
     }
     if(name.equals("/schedule")||name.equals("/task")) {
       String base=name.equals("/schedule")?"/api/v1/google-calendar":"/api/v1/google-tasks";
@@ -118,7 +132,7 @@ public final class RemoteCommands {
       if(project==null)throw new IllegalArgumentException("Select a Project first");String base="/api/v1/projects/"+id(project)+"/memory/"+action;
       if(action.equals("export")) {
         var parsed=parse(words,2,Set.of("--dir"),Set.of());if(!parsed.arguments().isEmpty())throw invalid();
-        var body=new LinkedHashMap<String,Object>();String directory=parsed.options().get("--dir");body.put("directory",directory==null?null:java.nio.file.Path.of(directory).toAbsolutePath().normalize().toString());return post(base,body);
+        var body=new LinkedHashMap<String,Object>();String directory=parsed.options().get("--dir");body.put("directory",directory==null?null:localBase.resolve(directory).toAbsolutePath().normalize().toString());return post(base,body);
       }
       if(session==null)throw new IllegalArgumentException("Select a Session first");boolean approval=false,approvalSpecified=false;
       for(int index=2;index<words.size();index++) {
@@ -136,7 +150,7 @@ public final class RemoteCommands {
     }
     if(name.equals("/reflection")) {
       if(project==null)throw new IllegalArgumentException("Select a Project first");
-      var parsed=parse(words,1,Set.of("--revision","--evidence-hash","--note","--source-kind","--kind","--evidence","--observation"),Set.of());var arguments=parsed.arguments();var selected=parsed.options();
+      var parsed=parseRepeating(words,1,Set.of("--revision","--evidence-hash","--note","--source-kind","--kind","--evidence","--observation"),Set.of(),"--evidence");var arguments=parsed.arguments();var selected=parsed.options();
       if(arguments.size()>2)throw invalid();String operation=arguments.isEmpty()?"list":arguments.getFirst();String identity=arguments.size()==2?arguments.get(1):null;
       String base="/api/v1/projects/"+id(project)+"/reflections";
       if(Set.of("list","runs").contains(operation)){if(identity!=null)throw invalid();return get(base+(operation.equals("runs")?"/runs":""));}
@@ -161,7 +175,7 @@ public final class RemoteCommands {
       if(action.equals("show")){exact(words,3);return get(base+"/"+id(words.get(2)));}
       if(action.equals("reload")){exact(words,2);return post(base+"/reload",Map.of());}
       if(action.equals("init")){exact(words,3);return post(base+"/initialize",Map.of("id",words.get(2)));}
-      if(action.equals("validate")){exact(words,3);return post(base+"/validate",Map.of("file",java.nio.file.Path.of(words.get(2)).toAbsolutePath().normalize().toString()));}
+      if(action.equals("validate")){exact(words,3);return post(base+"/validate",Map.of("file",localBase.resolve(words.get(2)).toAbsolutePath().normalize().toString()));}
       throw invalid();
     }
     if(name.equals("/config")) {
@@ -233,8 +247,8 @@ public final class RemoteCommands {
       if(action.equals("mermaid")){var selected=options(words,2,Set.of("--limit"),Set.of());return get("/api/v1/profile/mermaid?limit="+Math.max(1,integer(selected.getOrDefault("--limit","12"))));}
       throw unsupported();
     }
-    if(name.equals("/briefing")){if(words.size()!=1&&!(words.size()==2&&action.equals("today")))throw invalid();return get("/api/v1/briefing");}
-    if(name.equals("/search")){return post("/api/v1/search",Map.of("query",text(words,1)));}
+    if(name.equals("/briefing")){if(words.size()!=1&&!(words.size()==2&&action.equals("today"))||project==null)throw invalid();var body=new LinkedHashMap<String,Object>();body.put("projectId",project);body.put("sessionId",session);return post("/api/v1/briefing/commands/today",body);}
+    if(name.equals("/search")){if(project==null)throw invalid();var parsed=parse(words,1,Set.of("--vector-top-k","--web-top-k","--threshold","--source"),Set.of());if(parsed.arguments().isEmpty())throw invalid();var body=new LinkedHashMap<String,Object>();body.put("projectId",project);body.put("sessionId",session);body.put("query",String.join(" ",parsed.arguments()));body.put("vectorTopK",integer(parsed.options().getOrDefault("--vector-top-k","3")));body.put("webTopK",integer(parsed.options().getOrDefault("--web-top-k","5")));Double threshold=parsed.options().containsKey("--threshold")?Double.valueOf(parsed.options().get("--threshold")):null;if(threshold!=null&&!Double.isFinite(threshold))throw invalid();body.put("threshold",threshold);body.put("source",parsed.options().get("--source"));return post("/api/v1/search/answers",body);}
     if(name.equals("/memory")&&project!=null&&Set.of("list","search","show","forget").contains(action)) {
       String base="/api/v1/projects/"+id(project)+"/memory";
       if(action.equals("list")){var selected=options(words,words.size()==1?1:2,Set.of("--limit","--offset"),Set.of());return get(base+"?limit="+integer(selected.getOrDefault("--limit","20"))+"&offset="+integer(selected.getOrDefault("--offset","0")));}
@@ -243,7 +257,7 @@ public final class RemoteCommands {
     }
     if(name.equals("/history"))return history(words,project,session);
     if(Set.of("/feed","/skill","/reminder","/interest","/memory").contains(name)) {
-      String resource=switch(name){case "/skill"->"skills";case "/reminder"->"reminders";case "/interest"->"interests";case "/memory"->"memories";default->"feed";};String base="/api/v1/"+resource;
+      String resource=switch(name){case "/skill"->"skills";case "/reminder"->"reminders/commands";case "/interest"->"interests";case "/memory"->"memories";default->"feed";};String base="/api/v1/"+resource;
       if(name.equals("/interest")&&action.equals("list")) {
         var selected=options(words,2,Set.of("--hours"),Set.of());long hours=revision(selected.getOrDefault("--hours","24"));
         if(hours<1||hours>8760)throw invalid();return get(base+"?hours="+hours);
@@ -305,16 +319,18 @@ public final class RemoteCommands {
     if(name.equals("/checkpoint")&&words.size()==1){if(session==null)throw new IllegalArgumentException("Select a Session first");return post(scoped+"/checkpoints",Map.of("sessionId",session));}
     if(name.equals("/resume")) {
       String base=scoped+"/checkpoints";
-      if(words.size()==1||action.equals("list")){exact(words,words.size()==1?1:2);return get(base);}
-      if(Set.of("show","abandon").contains(action)){exact(words,3);String path=base+"/"+id(words.get(2));return action.equals("show")?get(path):post(path+"/abandon",Map.of());}
+      if(words.size()==1||action.equals("list")){exact(words,words.size()==1?1:2);return get(base+(words.size()==1?"/report":"/report/list"));}
+      if(Set.of("show","abandon").contains(action)){exact(words,3);String path=base+"/"+id(words.get(2));return action.equals("show")?get(path+"/report"):post(path+"/abandon",Map.of());}
       exact(words,2);return post(base+"/"+id(action)+"/resume",Map.of());
     }
-    if(name.equals("/summarize")){exact(words,2);return post("/api/v1/summaries",Map.of("projectId",project,"url",action));}
-    if(name.equals("/image")){return post("/api/v1/images",Map.of("projectId",project,"prompt",text(words,1)));}
+    if(name.equals("/summarize")){if(words.size()==1)return get(scoped+"/summaries/latest");exact(words,2);return post("/api/v1/summaries/cli",Map.of("projectId",project,"url",action));}
+    if(name.equals("/image")){
+      boolean generate=action.equals("generate");var parsed=parse(words,generate?2:1,generate?Set.of("--output","--model","--size"):Set.of(),generate?Set.of("--raw"):Set.of());if(parsed.arguments().isEmpty())throw invalid();var body=new LinkedHashMap<String,Object>();body.put("projectId",project);body.put("prompt",String.join(" ",parsed.arguments()));String size=parsed.options().get("--size");if(size!=null)dev.mikoto2000.rei.image.ImageSize.parse(size);body.put("size",size);body.put("model",parsed.options().get("--model"));body.put("output",parsed.options().containsKey("--output")?localBase.resolve(parsed.options().get("--output")).toAbsolutePath().normalize().toString():null);body.put("raw",Boolean.parseBoolean(parsed.options().get("--raw")));return post("/api/v1/images/cli",body);
+    }
     if(name.equals("/work")) {
-      if(Set.of("show","list").contains(action)){exact(words,words.size()==1?1:2);return get(scoped+"/work-context");}
-      if(Set.of("summary","history").contains(action)){exact(words,2);return get(scoped+"/work-context/"+action);}
-      if(action.equals("update")){exact(words,2);if(session==null)throw new IllegalArgumentException("Select a Session first");return post("/api/v1/sessions/"+id(session)+"/work-context/update",Map.of());}
+      if(Set.of("show","list").contains(action)){exact(words,words.size()==1?1:2);return get(scoped+"/work-context/report");}
+      if(Set.of("summary","history").contains(action)){exact(words,2);return get(scoped+"/work-context/"+action+(action.equals("history")?"/report":""));}
+      if(action.equals("update")){exact(words,2);if(session==null)throw new IllegalArgumentException("Select a Session first");return post(scoped+"/work-context/updates",Map.of("projectId",project,"sessionId",session));}
       throw unsupported();
     }
     String resource=switch(name){case "/checkpoint"->"checkpoints";case "/approval"->"approvals";case "/dependency"->"dependencies";case "/attention"->"attention";case "/timer"->"schedules";case "/goal"->"goals";default->throw unsupported();};String base=scoped+"/"+resource;

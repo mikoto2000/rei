@@ -12,8 +12,17 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/vector-documents")
 public final class VectorDocumentController {
   private final VectorDocumentService vectors;private final AsyncVectorDocumentService background;
+  private dev.mikoto2000.rei.application.run.IntegrationRunSubmitService runs;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setRuns(dev.mikoto2000.rei.application.run.IntegrationRunSubmitService runs){this.runs=runs;}
   public record Text(String text) {}
   public record Documents(List<String> documents) implements StrictApiRequest {}
+  public record Ingestion(String projectId,String sessionId,List<String> documents) implements StrictApiRequest {}
+  @PostMapping("/ingestions") public org.springframework.http.ResponseEntity<BackgroundRunController.AcceptedRunResponse> ingest(@RequestBody Ingestion request){
+    if(request==null||request.documents()==null||request.documents().isEmpty()||request.documents().size()>100)throw new IllegalArgumentException("Explicit documents required");required(request.projectId());optional(request.sessionId());
+    request.documents().forEach(path->{required(path);if(!java.nio.file.Path.of(path).isAbsolute()||path.indexOf('*')>=0||path.indexOf('?')>=0||path.indexOf('[')>=0)throw new IllegalArgumentException("Expand file globs in the client");});
+    var run=java.util.Objects.requireNonNull(runs,"Embedding runtime unavailable").ingestVectors(request.projectId(),request.sessionId(),List.copyOf(request.documents()));return org.springframework.http.ResponseEntity.accepted().location(java.net.URI.create("/api/v1/runs/"+run.runId())).body(new BackgroundRunController.AcceptedRunResponse(run.runId()));
+  }
   public record Deletion(String docId,String source) implements StrictApiRequest {}
   public VectorDocumentController(VectorDocumentService vectors,AsyncVectorDocumentService background){this.vectors=vectors;this.background=background;}
   @GetMapping public Text list(){return text(EmbedCommand.reportList(vectors));}

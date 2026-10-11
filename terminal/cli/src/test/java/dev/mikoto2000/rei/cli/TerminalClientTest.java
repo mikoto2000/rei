@@ -11,6 +11,15 @@ import com.sun.net.httpserver.HttpServer;
 
 class TerminalClientTest {
   @TempDir Path directory;
+  @Test void commandTokenizationOmitsEmptyQuotedArgumentsLikeExistingShell() {
+    assertEquals(java.util.List.of("/models"),TerminalClient.commandWords("/models \"\" "));
+    assertEquals(java.util.List.of("/chat","hello world","C:\\work\\file"),TerminalClient.commandWords("/chat \"hello world\" C:\\work\\file"));
+  }
+  @Test void coachingUsesTheReadRevisionAndDoesNotWriteBeforeReading()throws Exception {
+    var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);var calls=new java.util.ArrayList<String>();var written=new java.util.concurrent.atomic.AtomicReference<com.fasterxml.jackson.databind.JsonNode>();
+    server.createContext("/api/v1/activity",exchange->{String response;if(exchange.getRequestMethod().equals("GET")){calls.add("read");response="{\"revision\":7}";}else{calls.add("write");written.set(BackendClient.JSON.readTree(exchange.getRequestBody()));response="{\"text\":\"enabled\"}";}var bytes=response.getBytes();exchange.sendResponseHeaders(200,bytes.length);exchange.getResponseBody().write(bytes);exchange.close();});server.start();
+    try(var backend=new BackendClient(URI.create("http://127.0.0.1:"+server.getAddress().getPort()),"fixture");var client=new TerminalClient(backend,directory,true,TerminalBuilder.builder().system(false).dumb(true).streams(new ByteArrayInputStream(new byte[0]),new ByteArrayOutputStream()).build())){client.command("/activity coaching on");assertEquals(java.util.List.of("read","write"),calls);assertEquals(7,written.get().path("expectedRevision").asLong());assertTrue(written.get().path("enabled").asBoolean());}finally{server.stop(0);}
+  }
   @Test void modelControlsUseShellTextAndCacheNamesForCompletion()throws Exception {
     var server=HttpServer.create(new InetSocketAddress("127.0.0.1",0),0);var output=new ByteArrayOutputStream();
     server.createContext("/api/v1/models",exchange->{
@@ -59,7 +68,7 @@ class TerminalClientTest {
     });server.start();
     try(var backend=new BackendClient(URI.create("http://127.0.0.1:"+server.getAddress().getPort()),"fixture");
         var client=new TerminalClient(backend,directory,true,TerminalBuilder.builder().system(false).dumb(true).streams(new ByteArrayInputStream(new byte[0]),output).build())) {
-      client.command("/project select one");client.command("/session list");
+      client.command("/project select one");pages.set(0);client.command("/session list");
       assertEquals(2,pages.get());assertTrue(output.toString().contains("Sessions:"));assertTrue(output.toString().contains("first  First"));assertTrue(output.toString().contains("second  Second"));
       assertThrows(IllegalArgumentException.class,()->client.command("/session list extra"));
     }finally{server.stop(0);}

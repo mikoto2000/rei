@@ -16,6 +16,12 @@ import dev.mikoto2000.rei.task.TaskService;
 
 class IntegrationRunSubmitServiceTest {
   @TempDir Path directory;
+  @Test void implicitOAuthOperationsAreQueuedAndRetainClientOwnership()throws Exception {
+    var projects=new ProjectRegistry(directory.resolve("projects.json"));var project=projects.resolve(directory);var lifecycle=mock(SessionLifecycle.class);var registry=new RunRegistry(Clock.systemUTC());var bus=new InMemoryAgentEventBus();var events=new AgentEventFactory(Clock.systemUTC());var cancellation=new CommandCancellationService();var pending=new ArrayDeque<Runnable>();var router=new ConversationInputRouter(pending::add,(context,prompt,queue)->{throw new AssertionError();});var calendar=mock(GoogleCalendarService.class);var tasks=mock(TaskService.class);when(tasks.listOpen(any())).thenAnswer(call->{assertEquals(project.id(),AgentRunScope.current().projectId());assertEquals("session",AgentRunScope.current().conversationId());return java.util.List.of();});
+    try(var runs=new RunService(registry,bus,events,cancellation,router::cancelQueued)){
+      var service=new IntegrationRunSubmitService(projects,lifecycle,registry,runs,router,cancellation,events,bus,calendar,tasks);var operation=service.listGoogleTasks(project.id(),"session",null,null,null);verifyNoInteractions(tasks);verify(lifecycle).validate("session",project.id());pending.remove().run();assertEquals(RunStatus.COMPLETED,runs.get(operation.runId()).status());verify(tasks).listOpen(any());assertNull(AgentRunScope.current());
+    }
+  }
   @Test void authorizationBeginsOnlyInsideTheCapturedWebRun() throws Exception {
     var projects=new ProjectRegistry(directory.resolve("projects.json"));var project=projects.resolve(directory);var lifecycle=mock(SessionLifecycle.class);
     var registry=new RunRegistry(Clock.systemUTC());var bus=new InMemoryAgentEventBus();var events=new AgentEventFactory(Clock.systemUTC());var cancellation=new CommandCancellationService();

@@ -49,6 +49,12 @@ public class SearchCommand implements Runnable {
   private final LlmModelProvider modelProvider;
   private final SearchKnowledgeService searchKnowledgeService;
   private final CommandCancellationService cancellationService;
+  private java.util.function.Consumer<String> output=value->System.out.print(value);
+  private void println(String value){output.accept(value+System.lineSeparator());}
+  public void report(String query,int vectorTopK,int webTopK,Double threshold,String source,java.util.function.Consumer<String> output){
+    var command=new SearchCommand(chatClientProvider,currentModelHolder,modelProvider,searchKnowledgeService,cancellationService);
+    command.queryParts=new String[]{query};command.vectorTopK=vectorTopK;command.webTopK=webTopK;command.threshold=threshold;command.source=source;command.output=java.util.Objects.requireNonNull(output);command.run();
+  }
 
   public SearchCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
       SearchKnowledgeService searchKnowledgeService, CommandCancellationService cancellationService) {
@@ -98,7 +104,7 @@ public class SearchCommand implements Runnable {
           .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool("search")));
 
       if (result.webSearchSkippedMessage() != null) {
-        IO.println("[web search skipped] " + result.webSearchSkippedMessage());
+        println("[web search skipped] " + result.webSearchSkippedMessage());
       }
       CountDownLatch latch = new CountDownLatch(1);
       AtomicReference<Throwable> errorRef = new AtomicReference<>();
@@ -108,9 +114,9 @@ public class SearchCommand implements Runnable {
           .subscribe(
               chunk -> {
                 if (headerPrinted.compareAndSet(false, true)) {
-                  IO.println(answerHeader(startedAtNanos));
+                  println(answerHeader(startedAtNanos));
                 }
-                System.out.print(chunk);
+                output.accept(chunk);
               },
               error -> {
                 errorRef.set(error);
@@ -123,31 +129,31 @@ public class SearchCommand implements Runnable {
       if (!completed) {
         disposable.dispose();
         log.warn("Search response timed out after {} ms", streamTimeoutMillis());
-        System.out.println();
-        IO.println("[error] 回答の取得がタイムアウトしました");
+        println("");
+        println("[error] 回答の取得がタイムアウトしました");
         return;
       }
-      System.out.println();
+      println("");
       Throwable error = errorRef.get();
       if (error != null) {
         log.warn("Search response failed", error);
-        IO.println("[error] " + buildUserFacingMessage(error));
+        println("[error] " + buildUserFacingMessage(error));
         return;
       }
 
       printSources(vectorResults, webContext);
     } catch (IOException e) {
       log.warn("Search knowledge retrieval failed", e);
-      IO.println("[error] 検索結果の取得に失敗しました: " + safeMessage(e, "原因不明"));
+      println("[error] 検索結果の取得に失敗しました: " + safeMessage(e, "原因不明"));
     } catch (InterruptedException e) {
       if (cancellationService.consumeCancellationRequested()) {
-        System.out.println();
-        IO.println("[cancelled]");
+        println("");
+        println("[cancelled]");
         return;
       }
       Thread.currentThread().interrupt();
       log.warn("Search interrupted", e);
-      IO.println("[error] 検索が中断されました");
+      println("[error] 検索が中断されました");
     } finally {
       cancellationService.clear();
     }
@@ -246,9 +252,9 @@ public class SearchCommand implements Runnable {
     if (sources.isEmpty()) {
       return;
     }
-    IO.println("=== sources ===");
+    println("=== sources ===");
     for (String value : sources) {
-      IO.println("- " + value);
+      println("- " + value);
     }
   }
 

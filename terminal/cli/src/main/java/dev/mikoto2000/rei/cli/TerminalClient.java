@@ -7,7 +7,6 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.jline.reader.*;
-import org.jline.reader.impl.DefaultParser;
 import org.jline.reader.impl.history.DefaultHistory;
 import org.jline.terminal.*;
 import dev.mikoto2000.rei.core.completion.*;
@@ -27,6 +26,8 @@ public final class TerminalClient implements AutoCloseable {
   private Path projectDirectory;
   private volatile List<String> projectIds=List.of(),sessionIds=List.of();
   private volatile List<String> modelIds=List.of();
+  private volatile List<String> projectPaths=List.of();
+  private volatile List<String> allSessionIds=List.of();
   private volatile CachedCatalog catalog=new CachedCatalog(new dev.mikoto2000.rei.application.cli.CliCatalog(List.of()));
   private boolean catalogLoaded;
   private boolean recordHistory;
@@ -51,8 +52,10 @@ public final class TerminalClient implements AutoCloseable {
   private void complete(LineReader input,ParsedLine line,List<Candidate> candidates) {
     List<String> values=completionValues(line.words(),line.wordIndex(),line.word());
     for(String value:values)if(value.startsWith(line.word()))candidates.add(new Candidate(value));
-    if(line.words().size()>1&&line.words().getFirst().equals("/project")&&Set.of("register","add","cd").contains(line.words().get(1))) {
-      var context=new CompletionContext(line.line(),line.cursor(),line.words(),line.wordIndex(),line.wordIndex()-1,line.word(),List.of("project","register"),Set.of("directory"),List.of(),projectDirectory==null?Path.of("").toAbsolutePath():projectDirectory);
+    Set<String> types=catalog.pathTypes(line.words(),line.wordIndex(),line.word());
+    if(line.words().size()>1&&line.words().getFirst().equals("/project")&&Set.of("register","add","cd").contains(line.words().get(1)))types=Set.of("directory");
+    if(!types.isEmpty()) {
+      var context=new CompletionContext(line.line(),line.cursor(),line.words(),line.wordIndex(),line.wordIndex()-1,line.word(),List.of(),types,List.of(),projectDirectory==null?Path.of("").toAbsolutePath():projectDirectory);
       for(var value:paths.complete(context))candidates.add(new Candidate(value.value(),value.display(),"CLI local paths",value.description(),null,null,value.appendSpace()));
     }
   }
@@ -60,6 +63,11 @@ public final class TerminalClient implements AutoCloseable {
     var values=new LinkedHashSet<>(catalog.complete(words,wordIndex,prefix));
     if(wordIndex==0)values.addAll(COMMANDS);
     if(wordIndex==1&&!words.isEmpty()&&words.getFirst().equals("/model"))values.addAll(modelIds);
+    String type=catalog.candidateType(words,wordIndex);
+    if(type.endsWith("$RegisteredProjectCandidates")||type.endsWith("$ProjectDirectoryCandidates"))values.addAll(projectPaths);
+    if(type.endsWith("SessionCompletionCandidates$CurrentProject"))values.addAll(sessionIds);
+    else if(type.endsWith("SessionCompletionCandidates"))values.addAll(allSessionIds);
+    if(!words.isEmpty()&&words.getFirst().equals("/agent")){if(wordIndex==1)values.addAll(List.of("codex","claude"));if(wordIndex==2&&words.size()>1&&Set.of("codex","claude").contains(words.get(1))){values.addAll(List.of("review","implement","implementation","merge"));if(words.get(1).equals("codex"))values.add("material-review");}}
     if(wordIndex==2&&words.size()>1) {
       if(words.getFirst().equals("/project")&&words.get(1).equals("select"))values.addAll(projectIds);
       if(words.getFirst().equals("/session")&&Set.of("select","switch","resume").contains(words.get(1)))values.addAll(sessionIds);
@@ -102,8 +110,12 @@ public final class TerminalClient implements AutoCloseable {
   }
   private void refresh()throws IOException,InterruptedException {
     refreshCatalog();
-    var projects=backend.get("/api/v1/projects");var ids=new ArrayList<String>();for(var value:projects)ids.add(value.path("id").asText());projectIds=List.copyOf(ids);
-    if(project!=null){var sessions=backend.get("/api/v1/sessions?projectId="+BackendClient.segment(project));ids=new ArrayList<>();for(var value:sessions.path("items"))ids.add(value.path("sessionId").asText());sessionIds=List.copyOf(ids);}
+    var projects=backend.get("/api/v1/projects");var ids=new ArrayList<String>();var registeredPaths=new ArrayList<String>();for(var value:projects){ids.add(value.path("id").asText());if(value.hasNonNull("path"))registeredPaths.add(value.path("path").asText());}projectIds=List.copyOf(ids);projectPaths=List.copyOf(registeredPaths);
+    try{allSessionIds=sessionCompletion(null);}catch(BackendClient.ApiException unavailable){if(unavailable.status()!=400&&unavailable.status()!=404)throw unavailable;}
+    if(project!=null)sessionIds=sessionCompletion(project);
+  }
+  private List<String> sessionCompletion(String project)throws IOException,InterruptedException{
+    var ids=new ArrayList<String>();var cursors=new HashSet<String>();String cursor=null;do{String path="/api/v1/sessions?limit=100"+(project==null?"":"&projectId="+BackendClient.segment(project))+(cursor==null?"":"&cursor="+BackendClient.segment(cursor));var page=backend.get(path);for(var value:page.path("items"))ids.add(value.path("sessionId").asText());cursor=page.path("nextCursor").isTextual()?page.path("nextCursor").asText():null;if(cursor!=null&&(!cursors.add(cursor)||cursors.size()>128))throw new IOException("Session completion pagination capacity exceeded");}while(cursor!=null);return List.copyOf(ids);
   }
   private void selectProject(String id)throws IOException,InterruptedException {
     JsonNode match=null;for(var value:backend.get("/api/v1/projects"))if(id.equals(value.path("id").asText()))match=value;
@@ -120,12 +132,15 @@ public final class TerminalClient implements AutoCloseable {
   }
   String projectId(){return project;}
   String sessionId(){return session;}
-  private static DefaultParser commandParser(){return new DefaultParser().escapeChars(null);}
-  static List<String> commandWords(String line){return commandParser().parse(line,line.length(),Parser.ParseContext.ACCEPT_LINE).words();}
+  private static Parser commandParser(){return new dev.mikoto2000.rei.ui.shell.ShellCompletionParser(Path.of(System.getProperty("user.home")));}
+  static List<String> commandWords(String line){return java.util.Arrays.asList(new dev.mikoto2000.rei.core.command.UserInputParser().split(line));}
   void command(String line)throws IOException,InterruptedException {
-    var words=commandWords(line);
+    var rawWords=commandWords(line);String requestedHelp=catalog.requestedHelp(rawWords);
+    if(requestedHelp!=null){if(!requestedHelp.isEmpty())out(requestedHelp);return;}
+    var words=catalog.normalize(rawWords);
     String name=words.getFirst();String action=words.size()>1?words.get(1):"list";
-    if(words.size()>1&&Set.of("--help","-h").contains(words.getLast())) {
+    if(catalog.requiresSubcommand(words)){out(catalog.help(words));return;}
+    if(words.size()>1&&!words.contains("--")&&Set.of("--help","-h").contains(words.getLast())) {
       String help=catalog.help(words.subList(0,words.size()-1));if(!help.isEmpty()){out(help);return;}
     }
     if(name.equals("/mode")&&session==null) {
@@ -137,7 +152,7 @@ public final class TerminalClient implements AutoCloseable {
     if(name.equals("/llm")&&words.size()==2&&words.get(1).equals("capture")){out("/llm capture next|status|off|list [run-id]|show <attempt-id>|raw <attempt-id>|export <attempt-id> <path>|delete <run-id>|clear");return;}
     if(name.equals("/llm")&&words.size()==3&&words.get(1).equals("capture")&&words.get(2).equals("next")&&session==null){requireProject();createSession(null);}
     if(RemoteCommands.NAMES.contains(name)&&!(name.equals("/history")&&Set.of("off","on").contains(action))) {
-      var request=RemoteCommands.route(words,project,session);
+      var request=RemoteCommands.route(words,project,session,projectDirectory==null?Path.of("").toAbsolutePath():projectDirectory);
       if(Set.of("/api/v1/activity/commands/coaching/settings","/api/v1/activity/commands/coaching/enabled").contains(request.path())) {
         var state=backend.get("/api/v1/activity/coaching");if(!state.path("revision").canConvertToLong())throw new java.io.IOException("Coaching revision unavailable");
         var body=new LinkedHashMap<String,Object>();((Map<?,?>)request.body()).forEach((key,value)->body.put((String)key,value));body.put("expectedRevision",state.path("revision").asLong());request=new RemoteCommands.Request(request.method(),request.path(),body);
@@ -179,6 +194,7 @@ public final class TerminalClient implements AutoCloseable {
         if(request.path().endsWith("/raw"))reader.printAbove(response.path("text").asText());else out(response.path("text").asText());return;
       }
       var response=request.method().equals("GET")?backend.get(request.path()):backend.mutation(request.method(),request.path(),request.body());
+      if(Set.of("/search","/image","/summarize","/briefing","/work","/resume","/embed","/schedule","/task").contains(name)&&response.has("runId")){if(name.equals("/embed"))out("追加処理を開始: "+String.join(", ",words.subList(action.equals("add")?2:1,words.size())));if(response.path("text").isTextual())out(response.path("text").asText());run=response.path("runId").asText();out("Run: "+run);watch(run);return;}
       if(name.equals("/activity")&&request.path().endsWith("/suggest-rules")||name.equals("/bsky")&&request.path().endsWith("/replies")||name.equals("/interest")&&request.path().endsWith("/discover")||name.equals("/feed")&&Set.of("update","summary","item").contains(action)&&response.has("runId")){run=response.path("runId").asText();out("Run: "+run);watch(run);return;}
       if(name.equals("/mode")) {
         String style=response.path("style").asText("AUTO").toLowerCase(Locale.ROOT);
@@ -189,8 +205,7 @@ public final class TerminalClient implements AutoCloseable {
         for(var model:response.path("models")){String value=model.asText();names.add(value);out((value.equals(current)?"* ":"")+value);}modelIds=List.copyOf(names);return;
       }
       if(name.equals("/model")){out((request.method().equals("GET")?"":"current model: ")+response.path("model").asText());return;}
-      if(response.isObject()&&response.size()==1&&response.path("text").isTextual())out(response.path("text").asText());else show(response);
-      if(name.equals("/resume")&&action.equals("show"))show(backend.get(request.path()+"/reconciliation"));return;
+      if(response.isObject()&&response.path("text").isTextual())out(response.path("text").asText());else show(response);return;
     }
     switch(name) {
       case "/sh"->{if(words.size()!=1)throw new IllegalArgumentException("Usage: /sh");requireProject();if(projectDirectory==null)throw new IllegalArgumentException("Project directory is unavailable");backend.detach();attached=false;int exit=InteractiveShell.run(terminal,projectDirectory);if(exit!=0)out("shell exited with code "+exit);}
@@ -207,14 +222,15 @@ public final class TerminalClient implements AutoCloseable {
         switch(selectedAction) {
           case "list"->{
             if(words.size()!=2)throw new IllegalArgumentException("Usage: /session list");
-            var format=new dev.mikoto2000.rei.conversation.HistoryFormatter();String cursor=null;boolean any=false;
+            var format=new dev.mikoto2000.rei.conversation.HistoryFormatter();String cursor=null;boolean any=false;var listedIds=new ArrayList<String>();
             do {
               var page=backend.get("/api/v1/sessions?projectId="+BackendClient.segment(project)+"&limit=100"+(cursor==null?"":"&cursor="+BackendClient.segment(cursor)));
-              for(var row:page.path("items")){if(!any){out("Sessions:");any=true;}out((row.path("sessionId").asText().equals(session)?"* ":"  ")+format.label(row.path("sessionId").asText())+"  "+format.label(row.path("title").asText()));}
+              for(var row:page.path("items")){listedIds.add(row.path("sessionId").asText());if(!any){out("Sessions:");any=true;}out((row.path("sessionId").asText().equals(session)?"* ":"  ")+format.label(row.path("sessionId").asText())+"  "+format.label(row.path("title").asText()));}
               String next=page.path("nextCursor").isTextual()?page.path("nextCursor").asText():null;
               if(next!=null&&next.equals(cursor))throw new IOException("Session cursor did not advance");cursor=next;
             } while(cursor!=null);
             if(!any)out("No sessions.");
+            sessionIds=List.copyOf(listedIds);
           }
           case "show"->{
             if(words.size()>2)throw new IllegalArgumentException("Usage: /session show");
@@ -233,11 +249,11 @@ public final class TerminalClient implements AutoCloseable {
             if(session==null)out("No active session.");else {backend.post("/api/v1/sessions/"+BackendClient.segment(session)+"/end",Map.of("projectId",project));out("Session ended: "+new dev.mikoto2000.rei.conversation.HistoryFormatter().label(session));session=null;}
           }
           default->throw new IllegalArgumentException("Usage: /session list|show|switch ID|new [TITLE]|end");
-        }refresh();
+        }if(!Set.of("list","show").contains(selectedAction))refresh();
       }
       case "/chat"->{var input=ChatInput.parse(words,mode);if(input.runId()==null)send(input.message(),input.mode());else{requireProject();requireSession();show(backend.post("/api/v1/runs/"+BackendClient.segment(input.runId())+"/input",Map.of("projectId",project,"sessionId",session,"message",input.message())));}}
       case "/run-mode"->{String selected=argument(words,1).toUpperCase(Locale.ROOT).replace('-','_');if(!Set.of("EXCLUSIVE","READ_ONLY","CONVERSATION").contains(selected))throw new IllegalArgumentException("Usage: /run-mode exclusive|read-only|conversation");mode=selected;out("Run access: "+mode);}
-      case "/cancel"->{if(words.size()>2)throw new IllegalArgumentException("Usage: /cancel [RUN_ID]");if(words.size()==1){requireProject();show(backend.post("/api/v1/projects/"+BackendClient.segment(project)+"/runs/cancel",Map.of()));}else show(backend.post("/api/v1/runs/"+BackendClient.segment(argument(words,1))+"/cancel",Map.of()));}
+      case "/cancel"->{if(words.size()>2)throw new IllegalArgumentException("Usage: /cancel [RUN_ID]");if(words.size()==1){requireProject();backend.post("/api/v1/projects/"+BackendClient.segment(project)+"/runs/cancel",Map.of());}else show(backend.post("/api/v1/runs/"+BackendClient.segment(argument(words,1))+"/cancel",Map.of()));}
       case "/watch"->{run=argument(words,1);watch(run);}
       case "/runs"->{if(words.size()>2)throw new IllegalArgumentException("Usage: /runs [RUN_ID]");if(words.size()==2)show(backend.get("/api/v1/runs/"+BackendClient.segment(words.get(1))));else out(backend.get("/api/v1/runs/active").path("text").asText());}
       case "/receipt"->{String key=argument(words,1);if(!key.matches("[A-Za-z0-9._:-]{1,128}"))throw new IllegalArgumentException("Invalid receipt key");show(backend.get("/api/v1/chat/receipts/"+key));}

@@ -29,6 +29,7 @@ class ConversationAdmissionIntegrationTest {
       org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration.class,
       org.springframework.boot.webmvc.autoconfigure.WebMvcAutoConfiguration.class,org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration.class})
   static class Config {
+    @Bean dev.mikoto2000.rei.llm.capture.CaptureStore captures(){return new dev.mikoto2000.rei.llm.capture.CaptureStore();}
     @Bean Clock clock(){return Clock.systemUTC();}
     @Bean dev.mikoto2000.rei.memory.service.MemoryEvents memoryEvents(){return org.mockito.Mockito.mock(dev.mikoto2000.rei.memory.service.MemoryEvents.class);}
     @Bean ProjectRegistry projects(@org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String root){return new ProjectRegistry(Path.of(root,"projects.json"));}
@@ -49,6 +50,13 @@ class ConversationAdmissionIntegrationTest {
     @Bean dev.mikoto2000.rei.memory.command.MemoryCommandSupport memorySupport(){
       var support=org.mockito.Mockito.mock(dev.mikoto2000.rei.memory.command.MemoryCommandSupport.class);
       org.mockito.Mockito.when(support.report(org.mockito.ArgumentMatchers.any())).thenReturn("Sleep Preview");return support;
+    }
+  }
+  @Test void receiptReplayCannotConsumeAnotherClientsCaptureReservation()throws Exception {
+    try(var context=start();var http=HttpClient.newHttpClient()) {
+      var endpoint=context.getBean(BackendInstance.class).get();var project=context.getBean(ProjectRegistry.class).resolve(Files.createDirectory(root.resolve("project")));var lifecycle=context.getBean(dev.mikoto2000.rei.application.session.SessionLifecycle.class);var session=lifecycle.create(project,"capture");var captures=context.getBean(dev.mikoto2000.rei.llm.capture.CaptureStore.class);String firstClient=UUID.randomUUID().toString(),otherClient=UUID.randomUUID().toString();captures.reserve("cli:"+firstClient,session.sessionId());
+      String body=JSON.writeValueAsString(Map.of("projectId",project.id(),"sessionId",session.sessionId(),"message","capture"));var original=post(endpoint,"/api/v1/chat",body,"capture-key");var withIdentity=HttpRequest.newBuilder(original,(header,value)->true).header("X-Rei-Client-Id",firstClient).build();var accepted=http.send(withIdentity,HttpResponse.BodyHandlers.ofString());assertEquals(202,accepted.statusCode());String run=JSON.readTree(accepted.body()).path("runId").asText();assertNotNull(captures.logicalCall(run,null));
+      captures.finish(run,"COMPLETED");captures.reserve("cli:"+otherClient,session.sessionId());var replay=HttpRequest.newBuilder(original,(header,value)->true).header("X-Rei-Client-Id",otherClient).build();assertEquals(accepted.body(),http.send(replay,HttpResponse.BodyHandlers.ofString()).body());assertTrue(captures.status("cli:"+otherClient,session.sessionId()).startsWith("RESERVED"));assertEquals(1,context.getBean("pending",Queue.class).size());
     }
   }
   private org.springframework.context.ConfigurableApplicationContext start() {

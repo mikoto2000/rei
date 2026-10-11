@@ -18,16 +18,21 @@ public class AsyncVectorDocumentService {
 
   @Async("embedTaskExecutor")
   public void addAsync(List<String> documents) {
+    addAndReport(documents,System.out::println);
+  }
+
+  /** Runs on the caller's existing executor and preserves its Run/output ownership. */
+  public void addAndReport(List<String> documents,java.util.function.Consumer<String> output) {
     activeEmbeddings.incrementAndGet();
     try {
       List<VectorDocumentEntry> entries = vectorDocumentService.add(documents);
       for (VectorDocumentEntry entry : entries) {
-        System.out.println("追加完了: " + entry.docId() + " | " + entry.source() + " | chunks=" + entry.chunkCount());
+        output.accept("追加完了: " + entry.docId() + " | " + entry.source() + " | chunks=" + entry.chunkCount());
       }
     } catch (IOException e) {
-      System.out.println("追加失敗: " + String.join(", ", documents) + " | " + e.getMessage());
+      output.accept("追加失敗: " + String.join(", ", documents) + " | " + e.getMessage());
     } catch (RuntimeException e) {
-      System.out.println("追加失敗: " + String.join(", ", documents) + " | " + e.getMessage());
+      output.accept("追加失敗: " + String.join(", ", documents) + " | " + e.getMessage());
     } finally {
       activeEmbeddings.decrementAndGet();
     }

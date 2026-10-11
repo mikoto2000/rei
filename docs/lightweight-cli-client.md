@@ -1,6 +1,6 @@
 # 軽量 CLI と単一 Backend
 
-移行はまだ完了していない。Session 排他・永続 receipt、独立 HTTP/SSE クライアント、detached launcher を実装し、Windows Terminal の実2ペインで同時起動・先行ペイン終了後の Backend/Run 継続と SSE 完了受信を確認した。Shell 全47コマンドの全機能互換は残っている。既存 Shell と `start.bat` / `start.sh` は維持している。[全47コマンドの対応表](lightweight-cli-command-matrix.md) を確認して利用する。
+単一 Backend と独立 CLI を実装し、既存 Shell を維持した。RootCommand の47項目のうち、ユーザー指定で延期した voice を除く46コマンドを固定ドメイン API または CLI ローカル処理へ接続する。Windows Terminal の実2ペイン、専用ウィンドウの GUI close、ネイティブ JLine の対話型 ConPTY を検証した。[全47コマンドの対応表](lightweight-cli-command-matrix.md) と末尾の最新検証記録を参照。
 
 ## 構成と境界
 
@@ -15,7 +15,7 @@ flowchart LR
 
 Backend だけが Storage、Migration、LLM、MCP、Tool Permission、Run、Session、Checkpoint を所有する。CLI は Spring、SQLite、provider SDK を依存に持たず、Backend の会話データを直接読まない。launcher が discovery と OS lock の状態を読む。CLI の Project/Session 選択は process ごとの local state であり、Shell や別 CLI の選択を変えない。
 
-`terminal/pom.xml` は既存ルートビルドとは独立した reactor。`contract` は discovery の純 Java クラス、`completion` は `core.completion`、`cli` は JLine + Java HttpClient、`launcher` は OS 起動を扱う。既存 Backend クラスの大量移動は行っていない。CLI は文字・通常の端末出力を中心とし、全面再描画 TUI は使用しない。
+`terminal/pom.xml` は既存ルートビルドとは独立した reactor。`contract` は discovery・固定 catalog・純粋引数文法の Java クラス、`completion` は `core.completion`、`cli` は JLine + Java HttpClient、`launcher` は OS 起動を扱う。既存 Backend クラスの大量移動は行っていない。CLI は文字・通常の端末出力を中心とし、全面再描画 TUI は使用しない。
 
 ## ビルドと起動
 
@@ -48,7 +48,7 @@ Windows で稼働中の既定 jar を置換できない場合は、既存 proces
 
 launcher の `--project` は Backend の専用 Project 登録 API を使う。全機能 Shell の入力を新 CLI に汎用転送する API は作っていない。Shell は Backend と同じ JVM・同じ寿命であり、API 無効時は `--mode=legacy-shell` を使う。既存 Shell が Storage を所有する間に新 Backend を二重起動しない。既存 Shell を通常終了し、既存 API key を設定してから launcher を利用する。
 
-Windows Terminal では、同じ `REI_DATA_DIR` と `REI_API_KEY` を設定した別ペインでそれぞれ `rei.bat --mode=client` を実行する。各 CLI の `/project select` と `/session switch` は独立する。下記の実 Backend プロセステストは実施済みだが、Terminal の split-pane 操作・ペインを閉じる操作を含む E2E は未実施。
+Windows Terminal では、同じ `REI_DATA_DIR` と `REI_API_KEY` を設定した別ペインでそれぞれ `rei.bat --mode=client` を実行する。各 CLI の `/project select` と `/session switch` は独立する。実 Windows Terminal の split-pane、先行ペイン終了、専用ウィンドウの GUI close を含む E2E を実施済み。
 
 ## discovery・起動・停止
 
@@ -72,36 +72,27 @@ receipt 照会期間は7日。期限後は410で再実行しない。key hash �
 
 ## CLI の入力・コマンド
 
-JLine の入力編集、履歴、prompt、completion、末尾 `\` の複数行入力と `/paste`（単独 `.` で完了）を用意した。Tab は cached Project/Session ID と共通 `core.completion` の client-local path 補完を使う。Tab 中に HTTP / Storage 読み取りを実行しない。全 Shell の補完・文法の互換は未完了。
+JLine の入力編集、履歴、prompt、completion、末尾 `\` の複数行入力と `/paste`（単独 `.` で完了）を用意した。Tab は cached Project/Session ID と共通 `core.completion` の client-local path 補完を使う。Tab 中に HTTP / Storage 読み取りを実行しない。Shell と同じ純粋 tokenizer とパス補完を共有する。Root 宣言の引数・options・排他 group・alias・既定動作は起動時に取得したメタデータに保持し、Tab はキャッシュだけを使用する。
 
-| コマンド | 利用できる操作 |
+全コマンドの詳細は [対応表](lightweight-cli-command-matrix.md)。`/help COMMAND [SUBCOMMAND]` で Picocli 形式のヘルプを表示する。裸の親コマンドは既存 Shell と同じくヘルプを表示し、既定動作を持つコマンドはその動作を実行する。
+
+| 区分 | コマンドと操作 |
 | --- | --- |
-| `/project` | `list`, `select ID`, `register LOCAL_PATH`（登録と local 選択） |
-| `/session` | `list`, `show`, `new [TITLE]`, `select/switch/resume ID`, `end` |
-| `/mode` | `status`, `auto`, `normal`, `conversation [--voice-only]`。Session の応答スタイル |
-| `/run-mode` | `exclusive`, `read-only`, `conversation`。CLI local の Run access、既定 EXCLUSIVE |
-| `/chat` | `[--mode ACCESS] [--run RUN_ID] [--] MESSAGE`。追加指示は選択 Session と対象 Run の所有権を Backend が検証 |
-| `/cancel`, `/runs`, `/watch`, `/receipt` | 対象 Run ID / receipt key を明示。`/runs` 引数なしは local に選択した Run ID の表示のみ |
-| `/history` | `list`, `show [SESSION_ID]`（会話の保存履歴）。`off/on` は入力履歴制御の互換拡張 |
-| `/input-history` | `off`, `on`（端末入力履歴） |
-| `/feed` | `list/show ID`, `add URL [--name NAME]`, `edit ID [--name NAME] [--enabled/--disabled]`, `enable/disable ID`, `delete ID`（--yes alias を維持） |
-| `/skill` | `list`, `show NAME`, `reload` |
-| `/profile`, `/briefing`, `/search` | profile summary、今日の briefing、検索 query |
-| `/reminder` | `list/show ID`, `add MESSAGE --at AT` または `--target TARGET --minutes-before MINUTES`, `delete ID`。従来 CLI の MESSAGE/AT 位置引数も維持 |
-| `/interest`, `/memory` | interest list は `--hours`（既定24）対応。memory は `add "CONTENT" TYPE SCOPE`, `delete ID`。discover と memory の全機能は未対応 |
-| `/model`, `/models` | 現在のモデル確認・選択、モデル一覧。既存 Shell と同じ ModelHolder と unload service を使用 |
-| `/timer` | `list/show ID`, `activate/cancel ID`, `history ID`, `reconcile ID --run-id RUN --acknowledge-uncertain-side-effects` |
-| `/tasks` | Task Manager の `list/show ID`, `cancel/resume/suspend ID EXPECTED_RUN_ID REVISION` |
-| `/goal` | `list/show ID`, `run/cancel/verify ID`, `progress/history ID`, create/completion/reconcile/wait/wait-activate/wait-resume/wait-cancel の Shell option 名 |
-| `/attention`, `/approval` | list/show、`ack ID`、delivery/deliver/retry-delivery（--acknowledge-duplicate-risk）、`approve/deny ID`（reject alias も維持） |
-| `/checkpoint`, `/resume` | list/show/inspect/save/abandon、checkpoint ID の resume |
-| `/dependency`, `/work` | list/show/history/`answer ID VERSION "ANSWER"`、work show/summary/history/update |
-| `/summarize`, `/image` | URL 要約 / prompt の既存 background API。HTTP 自動再送なし |
-| `/paste`, `/help`, `/exit` | 複数行入力 / コマンド一覧 / 自身の CLI 終了 |
+| 選択・会話 | `/project add/remove/list/cd`、`/session new/switch/resume/end/show/list`、`/chat [--mode ACCESS] [--run RUN_ID] PROMPT`、`/mode auto/normal/conversation/status` |
+| 実行・履歴 | `/cancel` は選択 Project の停止、`/runs` は全 active 表示。`/history` の Session 一覧、旧会話の list/show/search と全 options |
+| 診断・設定 | `/timing`、`/doctor`、`/config path/init [--force]`、`/model`、`/models`、`/profile path/summary/chart/mermaid` |
+| 永続制御 | `/storage` の全 retention/maintenance、`/goal`、`/attention`、`/timer`、`/dependency`、`/approval`、`/checkpoint`、`/resume`、`/work` |
+| 調査・生成 | `/search` の全 options、`/paper`、`/material-review`、`/agent`、`/document`、`/repair`、`/image [generate]`、`/summarize [URL]` |
+| ナレッジ | `/embed add/search/list/delete`（glob は CLI で展開）、`/reflection` と lesson 操作、`/skill`、`/subagent`、`/memory`、`/sleep` |
+| 外部連携 | `/schedule` は Google Calendar、`/task` は Google Tasks。OAuth・一覧・追加・完了・削除は専用 Run と SSE を使い、認可待ちも CLI に通知する |
+| 日常情報 | `/activity` の全宣言操作、`/feed` の全宣言操作、`/briefing today`、`/reminder add/list/delete`、`/bsky`、`/interest` |
+| ローカル | `/sh` は CLI の選択ディレクトリで対話 Shell を開き、終了後 JLine に戻る。`/paste`、`/help`、`/exit` |
+| CLI 拡張 | `/watch RUN_ID`、`/receipt KEY`、`/run-mode`、`/input-history off/on`、`/tasks`（Task Manager）、`/project select/register` |
+| 延期 | `/voice` は明示未対応。音声は既存 Shell で利用する |
 
-未知の slash と未対応 subcommand / option は明示エラー。先頭空白があっても slash を通常会話として送信しない。`/task`（Google Tasks）と `/schedule`（Google Calendar）は未対応であり、似た名前の Task Manager / Agent Scheduler に振り替えない。fixed named API のみ使い、任意 URL・service・shell・reflection 実行機能は用意しない。表示は JSON の簡易表示を含み、Shell と同じ表示・全 options ではない。
+未知の slash・subcommand・option は明示エラーとなり、LLM に送信しない。任意 URL・service・shell・reflection の汎用実行 API は用意しない。ドメイン結果には既存 Shell の formatter または CLI 専用の固定表現を使い、既存 Web/Native の JSON 表現を維持する。CLI の Run/receipt 表示は実行識別のための追加表示。
 
-SSE は sequence を処理し `Last-Event-ID` を付けて最大3回再接続、重複は捨てる。接続待ち中の detach も古い購読を復活させない。409 gap は output incomplete と表示し、Run status を最大60秒 polling、terminal 後に保存 turns を照会する。ストリーム・JSON 応答は1MiBに制限。resume / POST / cancellation を SSE reconnect と連動させない。
+SSE は sequence を処理し `Last-Event-ID` を付けて最大3回再接続、重複は捨てる。接続待ち中の detach も古い購読を復活させない。409 gap は output incomplete と表示し、Run status を最大60秒 polling、terminal 後に保存 turns を照会する。通常のストリーム・JSON 応答は1MiBに制限。確認済み capture 原本表示は control escape 後の上限を8MiBにする。resume / POST / cancellation を SSE reconnect と連動させない。
 
 Goal create は現在選択した registered Project/Session を Backend で検証し、WEB の RequestSource で既存 GoalLoopService に渡す。`--file` と `--sha256`、または `--criteria-json` の一方を指定し、任意の `--completion-json`、`--max-runs`（既定3、1..10）、`--max-llm-calls`（既定20、1..100）を使用する。completion は `--completion-json` / `--proof-json` のどちらか一方。wait は `--dependency-id` と任意の `--wait-reason`、wait-activate/resume/cancel は観測した `--wait-version` が必要。重複 option、JSON の重複キー・末尾・過大入力は拒否する。
 
@@ -137,14 +128,14 @@ Windows E2E は毎回 repository の target 以下に UUID の隔離 root を作
 
 | Phase | 現状 |
 | --- | --- |
-| 1 | Storage gate/discovery、canonical admission、Session 排他、transactional receipt、再起動照会、専用 stop API 実装。起動中異常終了・全 frontend 横断の受け入れケースは追加確認が必要 |
-| 2 | 独立 CLI modules、JLine、local selection、入力・補完・履歴、HTTP/SSE、receipt 照会、明示 cancel 実装。全 Shell 入力/補完互換ではない |
-| 3 | 固定 API adapter と全 Root コマンドの対応表を追加。一部操作のみ対応。未対応コマンド・全 options・表示・追加限定 API が残るため未完了 |
-| 4 | Windows worker の親強制終了後の独立寿命に加え、実 Windows Terminal の2ペインで同時 auto 起動、先行 CLI/ペイン host 終了後の同じ Backend と別 CLI の継続、Run RUNNING→COMPLETED、SSE 受信、Session 操作、明示停止を確認。CLI 標準入出力は pane host 内で redirect し、対話型 ConPTY で `/sh` 入力・cwd・CLI 復帰・Ctrl+C 後継続を追加検証。専用 Terminal ウィンドウの GUI 強制 close、両ペイン終了後の Run 完了・新 CLI 再接続・明示停止も確認。全コマンド E2E は継続中（voice はユーザー指定で対象外） |
+| 1 | gate/discovery・永続受付・排他・停止を実装。実複数 JVM の lease 競合と migration 前の異常終了、実 HTTP の同時再送・restart・cleanup 中排他を検証 |
+| 2 | 独立 modules、JLine、local selection、共通 tokenizer/補完、独立履歴、HTTP/SSE、receipt 照会、明示 cancel を実装・検証 |
+| 3 | 全47項目を調査し voice 以外を接続。直接宣言の全サブコマンドのヘルプを Picocli と照合。paper/material-review/doctor は既存の純粋 request parser を共有 |
+| 4 | Windows worker の親強制終了後の独立寿命に加え、実 Windows Terminal の2ペインで同時 auto 起動、先行 CLI/ペイン host 終了後の同じ Backend と別 CLI の継続、Run RUNNING→COMPLETED、SSE 受信、Session 操作、明示停止を確認。CLI 標準入出力は pane host 内で redirect し、対話型 ConPTY で `/sh` 入力・cwd・CLI 復帰・Ctrl+C 後継続を追加検証。専用 Terminal ウィンドウの GUI 強制 close、両ペイン終了後の Run 完了・新 CLI 再接続・明示停止も確認。47 コマンドの help を実 Backend/CLI でも検証（voice 実行は対象外） |
 
-Native API の詳細は [Native/Web API](native-web-api.md)、全機能 Shell の利用は [README](../README.md) を参照する。最終テスト件数・commit は作業報告に記録する。必須条件をすべて満たしていないため Phase 1〜4 の実装完了とは報告しない。
+Native API の詳細は [Native/Web API](native-web-api.md)、全機能 Shell の利用は [README](../README.md) を参照する。最終テスト件数・commit は作業報告に記録する。外部アカウント・実 provider の認可/推論成功は隔離 fixture の検証とは区別する。
 
-### 2026-10-11 の検証記録
+### 2026-10-11 の前回検証記録（最新結果は末尾）
 
 | 検証 | 結果 |
 | --- | --- |
@@ -155,7 +146,7 @@ Native API の詳細は [Native/Web API](native-web-api.md)、全機能 Shell �
 | Native Rust | 120件成功（offline cargo test） |
 | Windows 実 Backend / CLI jar | 成功。最初の CLI 終了後の readiness、同じ instance の別 CLI 接続、Project/Session/style、同時同 key の同 Run、再起動 receipt、2回の安全停止 |
 | Windows Terminal 複数ペイン | 実 pane host で同時 auto 起動と Run/SSE 継続・完了・明示停止に成功。標準入出力 redirect を使用。別途、実 ConPTY にネイティブ JLine を接続した対話 Shell E2E が成功 |
-| 外部 LLM・Google OAuth・音声・PTY 等の全機能 E2E | 未実施 |
+| 外部 LLM・実 Google OAuth・音声 | 実アカウントでの認可/推論は未実施。音声は対象外。対話型 PTY は末尾の最新記録 |
 
 TDD の Red/Green は admission の原子性・冪等性・期限・競合・Shell queue、CLI の受付不明・5xx後照会、秘密の入力履歴除外、Windows path 解釈、接続待ち中 SSE detach、応答スタイル分離、chat options、busy 対象表示で実施。全回帰の初回は4件失敗/エラーを検出し、旧 schema fixture の新テーブル取り残し、同一 Session 新契約の旧期待値、HTTP fixture の publisher 重複を修正して再実行した。
 
@@ -200,7 +191,7 @@ Backend JAR のビルド完了後に E2E を実行する。動作中の JAR を�
 
 ### Catalog と追加の Session 操作
 
-GET `/api/v1/cli/catalog` は固定の RootCommand 登録47項目から宣言された options・子コマンド・alias・列挙値を読み出す。コマンド実行、任意クラス選択、Backend の任意ファイル一覧は提供しない。CLI は通常の refresh で取得し、help と Tab は immutable cache を使う。100回の補完でも追加 HTTP がゼロであることを確認した。全動的候補の互換確認は継続中。CLI 起動時はローカル cwd を初期 Project に選ぶ。
+GET `/api/v1/cli/catalog` は固定の RootCommand 登録47項目から宣言された options・子コマンド・alias・列挙値を読み出す。コマンド実行、任意クラス選択、Backend の任意ファイル一覧は提供しない。CLI は通常の refresh で取得し、help と Tab は immutable cache を使う。100回の補完でも追加 HTTP がゼロであることを確認した。動的候補とローカルパス補完は追加回帰で検証した。CLI 起動時はローカル cwd を初期 Project に選ぶ。
 
 config/skill/subagent、reflection lesson の専用 API と既存整形を追加。Dependency の check は WEB の Tool Permission を通してから観測する。memory summarize/consolidate は保存承認を既存 Shell と共有し、Sleep と共に ConversationInputRouter の操作キュー・永続 receipt・Session 排他を通す。terminal event 後も実処理の cleanup が終わるまで排他を保つ。実 HTTP の replay、異なる payload の409、チャットとの競合、余分な会話 Turn がないことを検証した。旧メモリ要約・統合・export の対象範囲は既存 Shell 同様の全体。
 
@@ -218,4 +209,25 @@ VACUUM は turns だけでなく active conversation_admissions も検査する�
 
 GUI close E2E: `target/windows-terminal-e2e-76b53f8c-7fff-44f8-aa1f-2bf9991fd97c/result.json`、Backend instance `64172cf2-0607-4d40-84c6-01eb46800b25`。専用 UUID の HWND に WindowPattern.Close を実行し、両 pane host 終了、Run RUNNING 継続→COMPLETED、CLI 再接続・history 取得・新 Session・認証 stop・endpoint 除去を確認した。Windows Terminal が複数ウィンドウを同じ PID でホストするため、MainWindowHandle ではなく UI Automation の top-level HWND を照合する。
 
-全46コマンドの完全互換確認は継続中。voice はユーザー指定で対象外。search の回答 streaming、image 全 options、summarize の直近表示、動的候補・パス補完・help・エラーの突き合わせを完了するまで全互換とはしない。
+search の回答 streaming、image の全 options、summarize の直近表示、動的候補・パス補完・help・引数検証を追加した。voice はユーザー指定で対象外。以下に今回の最終検証を記録する。
+
+
+## 最終検証記録（2026-10-11、今回の依頼）
+
+Phase 1 の ownership、migration 前の二重起動拒否、identity/protocol 検証、receipt の同時受付・restart/replay・changed payload・expiry、Session admission と runner cleanup の排他を検証した。実 Windows Backend の起動・再接続・停止では `windows-cli-e2e-1b38ef4d-05e6-4e71-8c20-20c4f4dac37f` が PASS。起動 cwd と選択 Project の二つが登録され、全47コマンドの cached help を実 CLI で表示した。
+
+Shell 登録47項目を保持し、音声を除く46コマンドを対応した。Picocli の option 位置、alias、排他 group、repeat/CSV、空 quoted 引数、裸の container、子コマンド help を回帰検証した。Root 宣言と純粋 catalog の usage を比較し、実行側の tokenizer・研究系 request parser・既存 formatter を共有する。宣言済み `--help` は必須引数省略・途中の option 位置にも対応し、`--` 後の literal は help として扱わない。CLI の Tab は HTTP を呼ばず、Project/Session の cache とローカルのパスを使う。
+
+今回追加した主な固定 API は `/api/v1/search/answers`、`/api/v1/images/cli`、`/api/v1/summaries/cli`、`/api/v1/projects/{id}/summaries/latest`、`/api/v1/vector-documents/ingestions`、`/api/v1/google-operations/calendar/list|add`、`/api/v1/google-operations/tasks/list|add` と ID の complete/delete、`/api/v1/reminders/commands`、`/api/v1/briefing/commands/today`、`/api/v1/projects/{id}/work-context/updates` と report/history/report、checkpoint report。HTTP に任意の command text・reflection target・service selector を渡す API は作らない。Google の暗黙 OAuth も受理した Run の SSE に URL を出し、HTTP request を認可待ちで保持しない。
+
+TDD では image failure/cancel が completed 履歴へ残る問題、option 位置と repeated evidence の正規化、追加 metadata と旧 Shell usage の差を red で再現してから修正した。既存 Web の Dependency read 契約はそのままに、CLI representation だけ facts を flush する。HTTP integration のテスト構成へ新しい権限ガードと承認 repository を補った。
+
+最終 Backend 全回帰は `-Pfull test`（`target/recovery-parity`）で4,792件、成功4,790・失敗0・エラー0・skip 2、BUILD SUCCESS。skip は既存の opt-in I/O benchmark と実 PlantUML jar 未設定のケースであり、今回のテストを無効化していない。ログは `target/final-full-regression-green.log`。
+
+最新 CLI reactor は CLI 76 件・launcher 5 件、計81件成功、skip 0。`WindowsPtyTest` は実 ConPTY と native JLine で `/sh` の選択 cwd、stdin、Shell 終了後の入力復帰、Ctrl+C 後の help/exit を検証した。Native は UI 99 件（25 files）、Rust 120 件成功、typecheck 成功。CLI 配布依存は10 jars、7,783,021 bytes。Spring、SQLite、provider SDK を含まない。
+
+Windows Terminal の通常2ペイン E2E は `windows-terminal-e2e-35133712-e50e-418f-9667-3d4c1659a31f` が PASS。第一 CLI の exit 後も同一 Backend と第二 CLI が生存し、Run は RUNNING を維持、第二 CLI が SSE の COMPLETED を受信して追加 Session を作成した。
+
+GUI close E2E は `windows-terminal-e2e-e4deeabf-3b77-479b-8c37-83648c58d6d9` が PASS。専用 UUID の HWND を UI Automation WindowPattern.Close で閉じた後、両 pane host の終了、Backend instance `82e1af28-c13e-4089-b74a-7f185654c483` の継続、Run `9564be1b-7f03-4ae4-8254-76c5841e018b` の RUNNING → COMPLETED、新 CLI の Run/history 取得・新 Session、認証 stop と endpoint 除去を確認した。Terminal のペインでは stdin/stdout を fixture に接続し、対話キー入力は上記の実 ConPTY で別途検証する。provider はローカル Python fixture で、外部 LLM の実行とは区別する。
+
+ユーザー指定で voice は延期した。実 Google OAuth、Bluesky、外部 codex/claude、live LLM の実アカウントでの成功は今回の fixture/regression 結果に含めない。macOS service 起動、receipt tombstone・終了済み CLI history の自動掃除は実装範囲外。既存 Shell と旧起動スクリプトは維持し、同じブランチで作業し、worktree と PR は作成しない。

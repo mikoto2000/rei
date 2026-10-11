@@ -9,14 +9,22 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
 
 /** A CLI-only representation of fixed domain results; execution and Web JSON contracts stay in their controllers. */
-@ControllerAdvice(assignableTypes={GoalController.class,AttentionController.class,DependencyController.class,ApprovalController.class,ScheduleController.class})
+@ControllerAdvice(assignableTypes={GoalController.class,AttentionController.class,DependencyController.class,ApprovalController.class,ScheduleController.class,CheckpointController.class})
 public final class ShellReportAdvice implements ResponseBodyAdvice<Object> {
+  private dev.mikoto2000.rei.core.dependency.DependencyObservationService dependencyFacts;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setDependencyFacts(dev.mikoto2000.rei.core.dependency.DependencyObservationService facts){dependencyFacts=facts;}
   public record Text(String text) {}
-  public boolean supports(MethodParameter method,Class<? extends HttpMessageConverter<?>> converter){return true;}
+  public record RunText(String text,String runId){}
+  public boolean supports(MethodParameter method,Class<? extends HttpMessageConverter<?>> converter){return java.util.Set.of(GoalController.class,AttentionController.class,DependencyController.class,ApprovalController.class,ScheduleController.class,CheckpointController.class).contains(method.getContainingClass());}
   public Object beforeBodyWrite(Object body,MethodParameter method,MediaType type,Class<? extends HttpMessageConverter<?>> converter,ServerHttpRequest request,ServerHttpResponse response) {
     if(!"true".equals(request.getHeaders().getFirst("X-Rei-Shell-Output")))return body;
+    if(method.getContainingClass()==DependencyController.class&&java.util.Set.of("list","show","history").contains(method.getMethod().getName())&&dependencyFacts!=null)dependencyFacts.flushFacts();
+    if(body instanceof Text||body instanceof CheckpointController.Text)return body;
+    if(body instanceof dev.mikoto2000.rei.checkpoint.PersistentCheckpointService.ResumeResult result)return new RunText(dev.mikoto2000.rei.event.CredentialRedactor.redact(result.toString()),result.runId());
     String name=method.getMethod().getName(),text;
-    if(method.getContainingClass()==AttentionController.class&&name.equals("acknowledge"))text="Acknowledged. This does not approve, resume or execute the task.";
+    if(method.getContainingClass()==CheckpointController.class&&name.equals("save")&&body instanceof dev.mikoto2000.rei.checkpoint.PersistentCheckpoint state)text="Checkpoint saved: task="+state.taskId()+" revision="+state.revision();
+    else if(method.getContainingClass()==AttentionController.class&&name.equals("acknowledge"))text="Acknowledged. This does not approve, resume or execute the task.";
     else if(body instanceof GoalController.History history)text=history.history()+"\nAttempts: "+history.attempts();
     else if(method.getContainingClass()==ScheduleController.class&&name.equals("activate"))text="Schedule activated; dispatch requires rei.agent-scheduler.enabled and rei.tool-permission.enabled";
     else if(method.getContainingClass()==ScheduleController.class&&name.equals("cancel"))text="Schedule cancelled";

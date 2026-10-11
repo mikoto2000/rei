@@ -18,6 +18,7 @@ import picocli.CommandLine.Command;
       BriefingCommand.TodayCommand.class
     })
 public class BriefingCommand {
+  public static String reportToday(BriefingService service){var command=new TodayCommand(service);var text=new java.io.StringWriter();command.out=new java.io.PrintWriter(text,true);command.run();return text.toString().replaceAll("[\\r\\n]+$","");}
 
   @Component
   @RequiredArgsConstructor
@@ -25,6 +26,7 @@ public class BriefingCommand {
   public static class TodayCommand implements Runnable {
 
     private final BriefingService briefingService;
+    private java.io.PrintWriter out=new java.io.PrintWriter(System.out,true);
 
     @Override
     public void run() {
@@ -36,63 +38,63 @@ public class BriefingCommand {
     }
 
     private void print(DailyBriefing briefing) {
-      System.out.println("日次ブリーフィング | " + briefing.date());
-      System.out.println("概要: " + briefing.overview());
+      out.println("日次ブリーフィング | " + briefing.date());
+      out.println("概要: " + briefing.overview());
 
-      System.out.println("予定:");
+      out.println("予定:");
       if (briefing.events().isEmpty()) {
-        System.out.println("- 予定はありません");
+        out.println("- 予定はありません");
       } else {
         for (GoogleCalendarEventSummary event : briefing.events()) {
-          System.out.println("- " + event.start() + " | " + event.summary() + " | " + event.location());
+          out.println("- " + event.start() + " | " + event.summary() + " | " + event.location());
         }
       }
 
-      System.out.println("未完了タスク:");
+      out.println("未完了タスク:");
       if (briefing.openTasks().isEmpty()) {
-        System.out.println("- 未完了タスクはありません");
+        out.println("- 未完了タスクはありません");
       } else {
         for (Task task : briefing.openTasks()) {
           String dueDate = task.dueDate() == null ? "" : task.dueDate().toString();
-          System.out.println("- " + task.id() + " | " + dueDate + " | " + task.title());
+          out.println("- " + task.id() + " | " + dueDate + " | " + task.title());
         }
       }
 
-      System.out.println("関連文書:");
+      out.println("関連文書:");
       if (briefing.relatedDocuments().isEmpty()) {
-        System.out.println("- 関連文書はありません");
+        out.println("- 関連文書はありません");
       } else {
         for (String document : briefing.relatedDocuments()) {
-          System.out.println("- " + document);
+          out.println("- " + document);
         }
       }
 
-      System.out.println("新着記事:");
+      out.println("新着記事:");
       if (briefing.feedItems().isEmpty()) {
-        System.out.println("- 昨日 00:00 以降の新着記事はありませんでした");
+        out.println("- 昨日 00:00 以降の新着記事はありませんでした");
       } else {
         for (FeedBriefingItem item : briefing.feedItems()) {
-          System.out.println("- " + item.publishedAt() + " | " + item.feedName() + " | " + item.title() + " | " + item.url());
+          out.println("- " + item.publishedAt() + " | " + item.feedName() + " | " + item.title() + " | " + item.url());
         }
       }
 
-      System.out.println("気になりそうな話題:");
+      out.println("気になりそうな話題:");
       if (briefing.interestUpdates().isEmpty()) {
-        System.out.println("- 該当なし");
+        out.println("- 該当なし");
       } else {
         for (String update : briefing.interestUpdates()) {
-          System.out.println("- " + update);
+          out.println("- " + update);
         }
       }
 
-      System.out.println("注意点:");
+      out.println("注意点:");
       for (String cautionPoint : briefing.cautionPoints()) {
-        System.out.println("- " + cautionPoint);
+        out.println("- " + cautionPoint);
       }
 
-      System.out.println("次アクション:");
+      out.println("次アクション:");
       for (String nextAction : briefing.nextActions()) {
-        System.out.println("- " + nextAction);
+        out.println("- " + nextAction);
       }
     }
   }

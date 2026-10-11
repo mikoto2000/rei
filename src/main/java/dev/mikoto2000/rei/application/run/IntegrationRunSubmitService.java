@@ -25,6 +25,24 @@ public final class IntegrationRunSubmitService {
   private dev.mikoto2000.rei.interest.InterestDiscoveryJob interests;
   private dev.mikoto2000.rei.feed.FeedUpdateService feedUpdates;
   private dev.mikoto2000.rei.feed.FeedSummaryService feedSummaries;
+  private dev.mikoto2000.rei.core.command.SearchCommand search;
+  private dev.mikoto2000.rei.briefing.BriefingService briefing;
+  private dev.mikoto2000.rei.workcontext.WorkContextService work;
+  private dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService embeddings;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setEmbeddings(dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService embeddings){this.embeddings=embeddings;}
+  public AgentRunContext ingestVectors(String project,String session,java.util.List<String> documents){return submitAuxiliary(project,session,"vectors.ingest",()->{var context=AgentRunScope.current();java.util.Objects.requireNonNull(embeddings,"Embedding unavailable").addAndReport(documents,line->bus.publish(events.messageDelta(context.runId(),CredentialRedactor.redact(line)+System.lineSeparator()).withOwnership(context)));return "";});}
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setBriefing(dev.mikoto2000.rei.briefing.BriefingService briefing){this.briefing=briefing;}
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setWork(dev.mikoto2000.rei.workcontext.WorkContextService work){this.work=work;}
+  public AgentRunContext briefing(String project,String session){return submitAuxiliary(project,session,"briefing.today",()->dev.mikoto2000.rei.briefing.command.BriefingCommand.reportToday(java.util.Objects.requireNonNull(briefing,"Briefing unavailable")));}
+  public AgentRunContext updateWork(String project,String session){if(session==null)throw new IllegalArgumentException("Session を選択して会話を開始してください。");return submitAuxiliary(project,session,"work.update",()->java.util.Objects.requireNonNull(work,"Work context unavailable").update(session,null,true).map(context->"Work Context saved: project="+context.projectId()+" revision="+context.revision()).orElse("保存できる会話はまだありません。"));}
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setSearch(dev.mikoto2000.rei.core.command.SearchCommand search){this.search=search;}
+  public AgentRunContext search(String project,String session,String query,int vectorTopK,int webTopK,Double threshold,String source){return submitAuxiliary(project,session,"knowledge.search",()->{
+    var context=AgentRunScope.current();java.util.Objects.requireNonNull(search,"Search unavailable").report(query,vectorTopK,webTopK,threshold,source,chunk->bus.publish(events.messageDelta(context.runId(),CredentialRedactor.redact(chunk)).withOwnership(context)));return "";
+  });}
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   public void setFeeds(dev.mikoto2000.rei.feed.FeedUpdateService updates,dev.mikoto2000.rei.feed.FeedSummaryService summaries){feedUpdates=updates;feedSummaries=summaries;}
   public AgentRunContext updateFeeds(String project,String session,Long id){return submitAuxiliary(project,session,"feed.update",()->dev.mikoto2000.rei.feed.command.FeedCommand.reportUpdate(java.util.Objects.requireNonNull(feedUpdates,"Feed updates unavailable"),id));}
@@ -46,6 +64,12 @@ public final class IntegrationRunSubmitService {
   public AgentRunContext authorizeCalendar(String project,String session,String key){return submit(project,session,key,"google.calendar.authorize",()->ScheduleCommand.reportAuthorization(calendar));}
   public AgentRunContext refreshCalendar(String project,String session,String key){return submit(project,session,key,"google.calendar.refresh",()->ScheduleCommand.reportRefresh(calendar));}
   public AgentRunContext authorizeTasks(String project,String session,String key){return submit(project,session,key,"google.tasks.authorize",()->TaskCommand.reportAuthorization(tasks));}
+  public AgentRunContext listGoogleTasks(String project,String session,Integer priority,String tag,java.time.LocalDate dueBefore){return submitAuxiliary(project,session,"google.tasks.list",()->TaskCommand.reportList(tasks,priority,tag,dueBefore));}
+  public AgentRunContext addGoogleTask(String project,String session,String title,java.time.LocalDate due,int priority,java.util.List<String> tags){return submitAuxiliary(project,session,"google.tasks.add",()->TaskCommand.reportAdd(tasks,title,due,priority,tags));}
+  public AgentRunContext completeGoogleTask(String project,String session,long id){return submitAuxiliary(project,session,"google.tasks.done",()->TaskCommand.reportDone(tasks,id));}
+  public AgentRunContext deleteGoogleTask(String project,String session,long id){return submitAuxiliary(project,session,"google.tasks.delete",()->TaskCommand.reportDelete(tasks,id));}
+  public AgentRunContext listCalendar(String project,String session,java.time.LocalDate date,String from,String to){return submitAuxiliary(project,session,"google.calendar.list",()->ScheduleCommand.reportList(calendar,date,from,to));}
+  public AgentRunContext addCalendarEvent(String project,String session,String title,String start,String end,String location,String description){return submitAuxiliary(project,session,"google.calendar.add",()->ScheduleCommand.reportAdd(calendar,title,start,end,location,description));}
   public AgentRunContext suggestClassificationRules(String project,String session){return submitAuxiliary(project,session,"activity.classification.suggest-rules",()->{if(activity==null)throw new IllegalStateException("Activity unavailable");return activity.reportClassificationRuleSuggestion();});}
   public AgentRunContext suggestBehaviorRules(String project,String session){return submitAuxiliary(project,session,"activity.behavior.suggest-rules",()->{if(activity==null)throw new IllegalStateException("Activity unavailable");return activity.reportBehaviorRuleSuggestion();});}
   private AgentRunContext submitAuxiliary(String projectId,String sessionId,String operation,java.util.function.Supplier<String> report) {

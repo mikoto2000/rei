@@ -3,6 +3,17 @@ import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 import java.util.*;
 class RemoteCommandsTest {
+  @Test void explicitFilesAreResolvedByTheClientSelectedProject() {
+    var base=java.nio.file.Path.of("selected-project").toAbsolutePath().normalize();
+    var image=(Map<?,?>)RemoteCommands.route(List.of("/image","generate","scene","--output","picture.png"),"project",null,base).body();assertEquals(base.resolve("picture.png").toString(),image.get("output"));
+    var embed=(Map<?,?>)RemoteCommands.route(List.of("/embed","paper.txt"),"project",null,base).body();assertEquals(List.of(base.resolve("paper.txt").toString()),embed.get("documents"));
+    var opml=(Map<?,?>)RemoteCommands.route(List.of("/feed","import-opml","feeds.opml"),"project",null,base).body();assertEquals(base.resolve("feeds.opml").toString(),opml.get("path"));
+  }
+  @Test void searchAndImagesKeepShellOptionsAndSummaryCanShowItsLatestResult() {
+    var search=(Map<?,?>)RemoteCommands.route(List.of("/search","query","--vector-top-k","8","--web-top-k","2","--threshold","0.4","--source","docs"),"project","session").body();assertEquals(8,search.get("vectorTopK"));assertEquals(2,search.get("webTopK"));
+    var image=(Map<?,?>)RemoteCommands.route(List.of("/image","generate","A","scene","--model","image-test","--raw","--size","512x768","--output","picture.png"),"project",null).body();assertEquals("A scene",image.get("prompt"));assertEquals(true,image.get("raw"));assertEquals("image-test",image.get("model"));assertTrue(java.nio.file.Path.of((String)image.get("output")).isAbsolute());
+    assertEquals("/api/v1/projects/project/summaries/latest",RemoteCommands.route(List.of("/summarize"),"project",null).path());
+  }
   @Test void feedOperationsPreserveItemRangeAndOptionalUpdateId() {
     assertEquals("/api/v1/feed/commands/items?limit=10",RemoteCommands.route(List.of("/feed","item","list"),"project","session").path());
     assertEquals(42L,((Map<?,?>)RemoteCommands.route(List.of("/feed","item","summarize","42"),"project","session").body()).get("itemId"));
@@ -47,17 +58,17 @@ class RemoteCommandsTest {
     assertEquals("/api/v1/vector-documents/search?query=A%20query&topK=3&threshold=0.6&source=paper",search.path());
     assertEquals(Map.of("docId","doc","source",""),RemoteCommands.route(List.of("/embed","delete","--doc-id","doc"),"project","session").body());
     assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/embed","delete","--doc-id","doc","--source","paper"),"project","session"));
-    assertEquals(Map.of("documents",List.of(java.nio.file.Path.of("paper.txt").toAbsolutePath().normalize().toString())),RemoteCommands.route(List.of("/embed","paper.txt"),"project","session").body());
+    assertEquals(Map.of("projectId","project","sessionId","session","documents",List.of(java.nio.file.Path.of("paper.txt").toAbsolutePath().normalize().toString())),RemoteCommands.route(List.of("/embed","paper.txt"),"project","session").body());
   }
   @Test void googleCalendarAndGoogleTasksKeepTheirDistinctShellGrammar() {
     var event=RemoteCommands.route(List.of("/schedule","add","A","meeting","--start","2026-10-11T09:00:00","--end","2026-10-11T10:00:00"),"project","session");
-    assertEquals("/api/v1/google-calendar/events",event.path());assertEquals("A meeting",((Map<?,?>)event.body()).get("title"));
-    assertTrue(RemoteCommands.route(List.of("/schedule","list","--date","2026-10-11"),"project","session").path().contains("date=2026-10-11"));
+    assertEquals("/api/v1/google-operations/calendar/add",event.path());assertEquals("A meeting",((Map<?,?>)event.body()).get("title"));
+    assertEquals("2026-10-11",((Map<?,?>)RemoteCommands.route(List.of("/schedule","list","--date","2026-10-11"),"project","session").body()).get("date"));
     assertEquals(Map.of("projectId","project","sessionId","session"),RemoteCommands.route(List.of("/task","auth"),"project","session").body());
     var task=RemoteCommands.route(List.of("/task","add","Review","paper","--tag","science,reading","--tag","weekly"),"project","session");
     var body=(Map<?,?>)task.body();assertEquals("Review paper",body.get("title"));assertEquals(3,body.get("priority"));assertEquals(List.of("science","reading","weekly"),body.get("tags"));
-    assertEquals("/api/v1/google-tasks/12/complete",RemoteCommands.route(List.of("/task","done","12"),"project","session").path());
-    assertEquals("DELETE",RemoteCommands.route(List.of("/task","delete","12"),"project","session").method());
+    assertEquals("/api/v1/google-operations/tasks/12/complete",RemoteCommands.route(List.of("/task","done","12"),"project","session").path());
+    assertEquals("POST",RemoteCommands.route(List.of("/task","delete","12"),"project","session").method());
     assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/schedule","add","Meeting","--start","2026-10-11T09:00:00"),"project","session"));
   }
   @Test void responseModeAcceptsShellOptionalBooleanSyntax() {
@@ -158,7 +169,7 @@ class RemoteCommandsTest {
     assertEquals("/api/v1/profile/chart?bucketSeconds=60&width=40",RemoteCommands.route(List.of("/profile","chart"),null,null).path());
     assertEquals("/api/v1/profile/chart?bucketSeconds=5&width=10",RemoteCommands.route(List.of("/profile","chart","--width","10","--bucket-seconds","5"),null,null).path());
     assertEquals("/api/v1/profile/mermaid?limit=12",RemoteCommands.route(List.of("/profile","mermaid"),null,null).path());
-    assertEquals("/api/v1/briefing",RemoteCommands.route(List.of("/briefing","today"),null,null).path());
+    assertEquals("/api/v1/briefing/commands/today",RemoteCommands.route(List.of("/briefing","today"),"project",null).path());
     assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/profile","path","unexpected"),null,null));
   }
   @Test void doctorChecksRemainExplicitBoundedAndDeduplicated() {
@@ -174,9 +185,9 @@ class RemoteCommandsTest {
   @Test void checkpointAndResumeAcceptTheLegacyShellGrammar() {
     var saved=RemoteCommands.route(List.of("/checkpoint"),"project","session");
     assertEquals("POST",saved.method());assertEquals("/api/v1/projects/project/checkpoints",saved.path());assertEquals(Map.of("sessionId","session"),saved.body());
-    assertEquals("/api/v1/projects/project/checkpoints",RemoteCommands.route(List.of("/resume"),"project",null).path());
-    assertEquals("/api/v1/projects/project/checkpoints",RemoteCommands.route(List.of("/resume","list"),"project",null).path());
-    assertEquals("/api/v1/projects/project/checkpoints/task",RemoteCommands.route(List.of("/resume","show","task"),"project",null).path());
+    assertEquals("/api/v1/projects/project/checkpoints/report",RemoteCommands.route(List.of("/resume"),"project",null).path());
+    assertEquals("/api/v1/projects/project/checkpoints/report/list",RemoteCommands.route(List.of("/resume","list"),"project",null).path());
+    assertEquals("/api/v1/projects/project/checkpoints/task/report",RemoteCommands.route(List.of("/resume","show","task"),"project",null).path());
     assertEquals("/api/v1/projects/project/checkpoints/task/abandon",RemoteCommands.route(List.of("/resume","abandon","task"),"project",null).path());
     assertEquals("/api/v1/projects/project/checkpoints/task/resume",RemoteCommands.route(List.of("/resume","task"),"project",null).path());
     assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/checkpoint"),"project",null));

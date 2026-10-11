@@ -48,7 +48,18 @@ try {
   $after = Get-Content -LiteralPath $endpointPath -Raw | ConvertFrom-Json
   if ($initial.instanceId -ne $after.instanceId) { throw 'Second client replaced Backend' }
   $projects = Invoke-RestMethod -Uri ($initial.baseUrl + '/api/v1/projects') -Headers $headers
-  if ($projects.Count -ne 1) { throw 'Project registration failed' }
+  if ($projects.Count -ne 2 -or -not ($projects | Where-Object { $_.path -eq $repoRoot })) { throw 'Client working directory was not registered independently' }
+  $selected=@($projects | Where-Object { $_.path -eq $caseRoot })
+  if ($selected.Count -ne 1) { throw 'Selected fixture Project registration failed' }
+  $projects=$selected
+  $catalog=Invoke-RestMethod -Uri ($initial.baseUrl+'/api/v1/cli/catalog') -Headers $headers
+  if ($catalog.commands.Count -ne 47) { throw 'Shell catalog did not expose all 47 declarations' }
+  $helpInput=($catalog.commands | ForEach-Object { '/help '+$_.name }) -join "`n"
+  $helpOutput=Invoke-Client @('--mode=client') ($helpInput+"`n/llm capture --help`n/doctor --details -h`n/exit`n") 'all-shell-help'
+  foreach ($command in $catalog.commands) {
+    if ($helpOutput -notmatch ('Usage:\s+'+[regex]::Escape($command.name)+'(?:\s|\[|$)')) { throw ('Missing Shell command help: '+$command.name) }
+  }
+  if ($helpOutput -notmatch 'Usage:\s+llm capture') { throw 'Declared nested help was not handled locally' }
   $saved = Invoke-RestMethod -Uri ($initial.baseUrl + '/api/v1/sessions?projectId=' + $projects[0].id) -Headers $headers
   if ($saved.items.Count -ne 1) { throw 'Empty Session creation failed' }
   $sessionId = $saved.items[0].sessionId
@@ -80,7 +91,7 @@ try {
   $receipt = Invoke-RestMethod -Uri ($restarted.baseUrl + '/api/v1/chat/receipts/windows-e2e-receipt') -Headers $headers
   if ($receipt.runId -ne $firstRun.runId) { throw 'Receipt lost across Backend restart' }
   Invoke-Client @('server','stop','--yes') '' 'restart-stop' | Out-Null
-  [pscustomobject]@{result='PASS'; caseRoot=$caseRoot; instanceId=$initial.instanceId; pid=$initial.pid; firstClientExit='Backend remained ready'; secondClient='Same instance, Project/Session/style operations succeeded'; concurrentReceipt='Same Run ID'; restartReceipt=$receipt.status; explicitStop='Endpoint removed'} | ConvertTo-Json
+  [pscustomobject]@{result='PASS'; caseRoot=$caseRoot; instanceId=$initial.instanceId; pid=$initial.pid; firstClientExit='Backend remained ready'; secondClient='Same instance, Project/Session/style operations succeeded'; independentProjects=2; shellHelpCommands=$catalog.commands.Count; declaredNestedHelp='PASS'; concurrentReceipt='Same Run ID'; restartReceipt=$receipt.status; explicitStop='Endpoint removed'} | ConvertTo-Json
 } finally {
   if (Test-Path -LiteralPath $endpointPath) {
     $owned = Get-Content -LiteralPath $endpointPath -Raw | ConvertFrom-Json
