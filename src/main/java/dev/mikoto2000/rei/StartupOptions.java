@@ -7,6 +7,9 @@ import picocli.CommandLine;
 /** Parsed before Spring starts; unrelated arguments remain available to Spring. */
 @CommandLine.Command(name = "rei", description = "AI shell", mixinStandardHelpOptions = true, version = "v1.0.0")
 public final class StartupOptions {
+  @CommandLine.Option(names = "--mode", paramLabel = "<server|legacy-shell>",
+      description = "起動方式を指定します（軽量 CLI への移行中は既定値 legacy-shell）")
+  private String mode;
   @CommandLine.Option(names = {"-p", "--project"}, paramLabel = "<directory>",
       description = "起動時のカレントプロジェクトのディレクトリを指定します")
   private String directory;

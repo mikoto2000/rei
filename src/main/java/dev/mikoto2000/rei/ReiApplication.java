@@ -130,6 +130,14 @@ public class ReiApplication {
   }
 
   public static void main(String[] args) throws IOException {
+    dev.mikoto2000.rei.launcher.BackendMode mode;
+    try {
+      mode = dev.mikoto2000.rei.launcher.BackendMode.parse(args);
+    } catch (IllegalArgumentException error) {
+      System.err.println("Error: " + error.getMessage());
+      System.exit(2);
+      return;
+    }
     try {
       var options = StartupOptions.parse(args, dev.mikoto2000.rei.core.datasource.ReiPaths.startupDirectory());
       if (options.printHelpIfRequested()) return;
@@ -139,10 +147,17 @@ public class ReiApplication {
       return;
     }
     System.setProperty("rei.data-dir", dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().toString());
+    if (mode == dev.mikoto2000.rei.launcher.BackendMode.SERVER
+        && (System.getenv("REI_API_KEY") == null || System.getenv("REI_API_KEY").isBlank())) {
+      System.err.println("Server mode requires REI_API_KEY. Configure the existing API key and restart; no credentials have been generated.");
+      System.exit(2);
+      return;
+    }
     SpringApplication application = new SpringApplication(ReiApplication.class);
     application.setDefaultProperties(ExternalConfigSupport.defaultProperties());
     dev.mikoto2000.rei.web.WebApplication.configure(application, System.getenv("REI_API_KEY"));
     ConfigurableApplicationContext context = application.run(args);
+    if (mode == dev.mikoto2000.rei.launcher.BackendMode.SERVER) return;
     int exitCode;
     try {
       var app = context.getBean(ReiApplication.class);
