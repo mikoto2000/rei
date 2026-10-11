@@ -10,7 +10,7 @@ import picocli.CommandLine.*;
 import picocli.CommandLine.Model.CommandSpec;
 
 @Component
-@Command(name="llm",description="LLM request capture",subcommands=LlmCaptureCommand.Capture.class,mixinStandardHelpOptions=true)
+@Command(name="llm",description="LLM リクエストの記録を操作します",subcommands=LlmCaptureCommand.Capture.class,mixinStandardHelpOptions=true)
 public final class LlmCaptureCommand implements Runnable {
   private final CaptureStore store;
   private final Supplier<Object> client;

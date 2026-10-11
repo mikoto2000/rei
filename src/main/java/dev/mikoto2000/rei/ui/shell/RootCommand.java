@@ -31,7 +31,7 @@ import picocli.CommandLine.Command;
 @Command(
 version = "v1.0.0",
 name = "",
-description = "AI shell",
+description = "AI シェル",
 subcommands = {
   dev.mikoto2000.rei.timing.TimingCommand.class,
   dev.mikoto2000.rei.doctor.DoctorCommand.class,

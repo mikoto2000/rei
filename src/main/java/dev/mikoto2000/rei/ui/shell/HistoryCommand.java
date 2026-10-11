@@ -19,7 +19,7 @@ public class HistoryCommand implements Callable<Integer> {
   private final SessionQueryService sessions;
   private final ProjectService projects;
   private final HistoryFormatter format = new HistoryFormatter();
-  @Option(names="--limit", description="Session page size (1-100)") Integer limit;
+  @Option(names="--limit", description="セッションの1ページあたりの表示件数（1〜100）") Integer limit;
   @Option(names="--cursor") String cursor;
   @Option(names="--project-id") String projectId;
   private PrintWriter shellOutput;
