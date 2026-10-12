@@ -19,6 +19,15 @@ public final class JLineShellEventOutput implements ShellEventOutput {
     this.reader = reader;
     this.writer = reader.getTerminal().writer();
   }
+  @Override public synchronized void approvalRequired(String message) {
+    if (dev.mikoto2000.rei.core.completion.ApprovalDisplayState.interactive(reader.getTerminal()))
+      printBlock(dev.mikoto2000.rei.core.completion.ApprovalNotice.format(message));
+    else {
+      // Do not ask JLine to redraw a forced terminal type when actual streams are redirected.
+      flushPendingToWriter();
+      writer.println(dev.mikoto2000.rei.core.completion.ApprovalNotice.text(message)); writer.flush();
+    }
+  }
 
   /** Print one styled, newline-delimited block without interleaving stream chunks or damaging the prompt. */
   public synchronized void printBlock(org.jline.utils.AttributedString block) {
