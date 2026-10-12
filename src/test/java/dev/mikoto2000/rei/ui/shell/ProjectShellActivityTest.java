@@ -14,6 +14,23 @@ import static org.mockito.Mockito.*;
 
 @org.junit.jupiter.api.Tag("integration")
 class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
+  @Test void approvalFramesReachStyledOutputOnlyForTheSelectedSession() throws Exception {
+    var projects = connect(new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json"))));
+    var repository = new dev.mikoto2000.rei.conversation.FileSessionRepository(temp.resolve("sessions.json"));
+    var shell = new dev.mikoto2000.rei.application.session.ShellConversationService(projects,
+        new dev.mikoto2000.rei.application.session.SessionLifecycle(repository, Clock.systemUTC()), (c,p)->{});
+    var first = shell.submit("first");
+    var output = mock(ShellEventOutput.class);
+    var activity = new ProjectShellActivity(projects, new ProjectAgentEventStore(temp), new ProjectRunStateStore(temp), new WorkingSet(), mock(ChatMemory.class));
+    activity.attach(output); clearInvocations(output);
+    var event = new AgentEvent("fixture", 0, java.time.Instant.EPOCH, AgentEventType.ATTENTION_REQUIRED, 1,
+        "session", null, "run", null, null, new AttentionRequiredPayload("attention", "APPROVAL_REQUIRED", "fixture operation"), "project").withOwnership(first);
+    activity.onEvent(event);
+    verify(output).approvalRequired("fixture operation");
+    clearInvocations(output); shell.newConversation(); shell.submit("second");
+    activity.onEvent(event);
+    verify(output, never()).approvalRequired(anyString());
+  }
   @Test void switchingSessionsHidesLateEventsFromPreviousRunEvenOnWorkerThread() throws Exception {
     var projects = connect(new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json"))));
     var repository = new dev.mikoto2000.rei.conversation.FileSessionRepository(temp.resolve("sessions.json"));

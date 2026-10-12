@@ -53,6 +53,12 @@ import picocli.CommandLine;
 @EnableScheduling
 @SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
 public class ReiApplication {
+  @Autowired(required = false)
+  private dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvalRequests;
+  @Autowired(required = false)
+  private dev.mikoto2000.rei.core.policy.ApprovalContinuationService approvalContinuations;
+  @Autowired(required = false)
+  private dev.mikoto2000.rei.application.run.RunRegistry approvalRuns;
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   private dev.mikoto2000.rei.core.completion.CompletionEngine completionEngine = ReiLineReaderFactory.completionEngine();
 
@@ -212,6 +218,15 @@ public class ReiApplication {
       }
     });
     eventOutput.setApprovalMenu(approvalMenu);
+    if (approvalRequests != null) approvalMenu.follow(owner -> {
+      if (owner.project() == null || owner.session() == null) return java.util.List.of();
+      return approvalRequests.list(owner.project()).stream()
+          .filter(request -> owner.session().equals(request.sessionId()))
+          .filter(request -> approvalRunActive(request.runId()))
+          .filter(request -> dev.mikoto2000.rei.core.completion.ApprovalDisplayState.pending(request.status(), request.expiresAt(),
+              approvalContinuations == null ? "UNAVAILABLE" : approvalContinuations.state(request.id()).orElse("UNAVAILABLE"), java.time.Instant.now()))
+          .map(dev.mikoto2000.rei.core.policy.ToolApprovalRepository.Request::id).toList();
+    });
     var notificationOptions = ShellAgentEventRenderer.TopicNotificationOptions.from(environment);
     dev.mikoto2000.rei.event.AgentEventListener shellListener;
     if (projectShellActivity != null) {
@@ -298,6 +313,7 @@ public class ReiApplication {
       }
     } finally {
       shutdownNotifier.begin("shell_exit");
+      approvalMenu.close();
       commandExecutor.shutdownNow();
       var voiceCommand = cmd.getSubcommands().get("voice");
       if (voiceCommand != null && voiceCommand.getCommand() instanceof dev.mikoto2000.rei.voice.VoiceCommand voice)
@@ -313,6 +329,11 @@ public class ReiApplication {
     var command = cmd.getSubcommands().get("voice");
     if (command != null && command.getCommand() instanceof dev.mikoto2000.rei.voice.VoiceCommand voice)
       voice.autoStart(isInteractiveTerminal(terminal), output);
+  }
+  private boolean approvalRunActive(String runId) {
+    if (approvalRuns == null) return true;
+    try { return !approvalRuns.get(runId).status().isTerminal(); }
+    catch (dev.mikoto2000.rei.application.run.RunNotFoundException missing) { return false; }
   }
 
   static boolean isInteractiveTerminal(Terminal terminal) {
