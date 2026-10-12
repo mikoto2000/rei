@@ -401,7 +401,7 @@ class SubAgentRunnerTest {
     }
     assertThat(requests.getFirst().getInstructions()).hasSize(2);
     assertThat(requests.getFirst().getInstructions().getFirst().getText()).startsWith("Review independently.\n")
-        .contains("Return exactly one JSON object");
+        .contains("Return exactly one JSON object", "Common tool usage policy", "same response", "documented limits");
     assertThat(requests.getFirst().getInstructions().getLast().getText()).isEqualTo("review this\n\nContext:\nexplicit context");
     assertThat(requests.get(1).getInstructions()).anyMatch(m -> m instanceof ToolResponseMessage);
     var options = (ToolCallingChatOptions) requests.getFirst().getOptions();

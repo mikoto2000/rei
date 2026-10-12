@@ -19,6 +19,9 @@ import reactor.core.scheduler.Schedulers;
 /** Ephemeral explicit loop: no advisors, persistence, planner, or ambient tool resolution. */
 public final class BoundedToolLoop {
   private final ToolLoopSupport tools = new ToolLoopSupport();
+  private final dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler;
+  public BoundedToolLoop(){this(null);}
+  public BoundedToolLoop(dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler){this.assembler=assembler;}
   public static final class SharedBudgetExceeded extends RuntimeException { }
   public static final class MaxStepsExceeded extends RuntimeException { }
   private static boolean isTransientModelFailure(Throwable error) {
@@ -119,8 +122,19 @@ public final class BoundedToolLoop {
   }
   private Mono<Outcome> iteration(ChatModel model,Prompt prompt,AtomicInteger remaining,AgentRunContext owner,Runnable checkActive,
       dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,ModelRetries retries) {
-    return response(model,prompt,remaining,checkActive,reservation,retries,false,null).flatMap(response->Mono.defer(()->{
+    return Mono.fromCallable(()->{
+      if(assembler==null)return prompt;
+      var summaryBudget=new dev.mikoto2000.rei.llm.ModelCallBudget(){
+        public void run(){checkActive.run();if(remaining.getAndDecrement()<=0)throw new MaxStepsExceeded();if(reservation!=null&&!reservation.tryReserve())throw new SharedBudgetExceeded();}
+        public boolean tokenLimitEnabled(){return reservation!=null&&reservation.tokenLimitEnabled();}
+        public void recordTotalTokens(Integer tokens){if(reservation!=null)reservation.recordTotalTokens(tokens);checkActive.run();}
+      };
+      try(var scope=AgentRunScope.open(owner);var budget=dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(summaryBudget)) {
+        return assembler.assemble(prompt,owner.conversationId(),owner.runId(),checkActive);
+      }
+    }).subscribeOn(Schedulers.boundedElastic()).flatMap(projected->response(model,projected,remaining,checkActive,reservation,retries,false,null).flatMap(response->Mono.defer(()->{
         checkActive.run();
+        if(assembler!=null)assembler.confirmedDelivery(projected,owner);
         if (!response.hasToolCalls()) {
           var history = new ArrayList<Message>(prompt.getInstructions());
           history.add(response.getResult().getOutput());
@@ -147,6 +161,6 @@ public final class BoundedToolLoop {
           }
           return iteration(model, new Prompt(result.conversationHistory(), prompt.getOptions()), remaining, owner, checkActive,reservation,retries);
         });
-    }));
+    })));
   }
 }

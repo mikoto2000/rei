@@ -63,6 +63,34 @@ public class ProgressEvaluator {
       }
     }
     JsonNode output = parse(result);
+    if(name.equals("readReviewFile") && output!=null && output.has("range")) {
+      var range=output.path("range");var span=range.path("span");
+      var observed=information.observeRange("review-chars:"+range.path("path").asText(),range.path("version").asText(),span.path("start").asInt()+1,span.path("end").asInt()+1);
+      if(observed.status()==InformationLedger.Status.NEW)evidence.add(new ProgressEvidence(ProgressEvent.NEW_INFORMATION,"New review characters fetched",range.path("path").asText(),range.path("version").asText()));
+      return List.copyOf(evidence);
+    }
+    if(name.equals("submitReviewResult") && output!=null && output.hasNonNull("id")) {
+      for(var entry:output.path("ranges"))if(entry.path("reviewed").asBoolean()&&entry.path("delivered").asBoolean()&&!entry.path("stale").asBoolean()) {
+        var range=entry.path("range");var span=range.path("span");
+        var observed=information.observeRange("reviewed:"+output.path("id").asText()+":"+range.path("path").asText(),range.path("version").asText(),span.path("start").asInt()+1,span.path("end").asInt()+1);
+        if(observed.status()==InformationLedger.Status.NEW)evidence.add(new ProgressEvidence(ProgressEvent.STATE_CHANGED,"New review range verified",range.path("path").asText(),range.path("version").asText()));
+      }
+      for(var finding:output.path("findings"))if(information.observe(digest(canonical(finding))).equals(InformationLedger.Status.NEW))
+        evidence.add(new ProgressEvidence(ProgressEvent.STATE_CHANGED,"Verified review finding added",finding.path("path").asText(),finding.path("version").asText()));
+      return List.copyOf(evidence);
+    }
+    if(name.equals("readRawToolResult")) {
+      try {
+        var header=result.split("\\n",8);
+        if(header.length!=8)throw new IllegalArgumentException();
+        String ref=header[2].substring(14);java.util.UUID.fromString(ref);
+        int start=Integer.parseInt(header[3].substring(8)),end=Integer.parseInt(header[5].substring(12));
+        if(end-start!=header[7].length())throw new IllegalArgumentException();
+        var observed=information.observeRange("raw:"+ref,ref,start+1,end+1);
+        if(observed.status()==InformationLedger.Status.NEW)evidence.add(new ProgressEvidence(ProgressEvent.NEW_INFORMATION,"New raw result characters",ref));
+      }catch(RuntimeException invalid){unknown(name,"RAW_RANGE_UNAVAILABLE",evidence);}
+      return List.copyOf(evidence);
+    }
     if (name.equals("applyTextChangeSet")) observeChangeSet(output, evidence);
     var webInformation = WEB_TOOLS.contains(name) ? webInformation(name, output, result) : List.<Information>of();
     String action = actionKey(name, arguments);

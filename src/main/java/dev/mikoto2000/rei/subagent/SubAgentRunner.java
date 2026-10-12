@@ -97,6 +97,9 @@ public final class SubAgentRunner {
   private SubAgentProperties standaloneBudgetProperties=new SubAgentProperties();
   @org.springframework.beans.factory.annotation.Autowired
   public void setStandaloneBudgetProperties(SubAgentProperties properties){standaloneBudgetProperties=properties;}
+  private dev.mikoto2000.rei.core.contextbudget.ContextAssembler deliveryAssembler;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  void setDeliveryAssembler(dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler){deliveryAssembler=assembler;}
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
   @org.springframework.beans.factory.annotation.Autowired
   public void setToolPermissionGuard(dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {this.permissions=permissions;}
@@ -166,6 +169,9 @@ public final class SubAgentRunner {
     Consumer<SubAgentResult> complete = result -> {
       if (stopped.compareAndSet(false, true)) {
         subscriptions.dispose();
+        if(deliveryAssembler!=null)try{deliveryAssembler.finishReviewRun(owner,result.status()==SubAgentResult.Status.CANCELLED,
+            result.status()!=SubAgentResult.Status.COMPLETED&&result.status()!=SubAgentResult.Status.CANCELLED,parent);}
+        catch(RuntimeException failure){completion.completeExceptionally(failure);return;}
         completion.complete(result.withModelRetries(modelRetries.attempts(),modelRetries.history()).withToolRetries(toolRetries.attempts(),toolRetries.history()));
       }
     };
@@ -210,7 +216,7 @@ public final class SubAgentRunner {
               .toolContext(null).toolContext(Map.of(AgentRunContext.class.getName(), owner)).build();
           ToolLoopSupport.requireNoRawTools(runOptions);
           String input = context == null || context.isBlank() ? task : task + "\n\nContext:\n" + context;
-          var prompt = new Prompt(List.of(new SystemMessage(d.systemPrompt() + SubAgentOutputPrompt.instructions(d)), new UserMessage(input)), runOptions);
+          var prompt = new Prompt(List.of(new SystemMessage(dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.appendTo(d.systemPrompt()) + SubAgentOutputPrompt.instructions(d)), new UserMessage(input)), runOptions);
           ChatModel model = models.apply(d.model());
           ToolLoopSupport.requireNoDefaultTools(model);
           subscriptions.add(validatedRun(model, prompt, d, owner, check, evidence,
@@ -274,8 +280,9 @@ public final class SubAgentRunner {
   private Mono<Validated> validatedRun(ChatModel model, Prompt prompt, SubAgentDefinition definition,
       AgentRunContext owner, Runnable check, SubAgentEvidence evidence, AtomicInteger remaining,
       AtomicInteger repairs, List<List<ValidationError>> history,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,BoundedToolLoop.ModelRetries modelRetries) {
-    return new BoundedToolLoop().runWithHistory(model, prompt, remaining, owner, check,reservation,modelRetries).flatMap(outcome -> Mono.defer(() -> {
+    return new BoundedToolLoop(deliveryAssembler).runWithHistory(model, prompt, remaining, owner, check,reservation,modelRetries).flatMap(outcome -> Mono.defer(() -> {
       check.run();
+        if(deliveryAssembler!=null)deliveryAssembler.requireReviewed(owner);
         var json = parser.parse(outcome.output());
         var validation = validator.validate(definition, json);
         if (!validation.valid()) throw new SubAgentValidationException(validation.errors());
@@ -286,7 +293,7 @@ public final class SubAgentRunner {
         check.run();
         var valid=new Validated(outcome.output(), SubAgentOutput.fromValidated(json));
         if(!definition.semanticValidation())return Mono.just(valid);
-        return new SubAgentSemanticValidator().validate(model,prompt,definition,outcome.output(),evidence,
+        return new SubAgentSemanticValidator(deliveryAssembler).validate(model,prompt,definition,outcome.output(),evidence,
             remaining,owner,check,reservation,modelRetries).thenReturn(valid);
     }).onErrorResume(SubAgentValidationException.class,invalid -> {
         history.add(List.copyOf(invalid.errors()));
@@ -316,7 +323,7 @@ public final class SubAgentRunner {
   private ToolCallback guarded(ToolCallback callback, AgentRunContext owner, Runnable check, SubAgentEvidence evidence,AgentRunContext approvalParent,SubAgentReadToolRetries retries,dev.mikoto2000.rei.llm.ModelCallBudget modelBudget) {
     // Child tool events use the existing API; lifecycle envelopes provide parent correlation.
     ToolCallback observed = new ToolEventCallbackDecorator(callback, events, publisher);
-    return new ToolCallback() {
+    return dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.preservePolicy(callback,new ToolCallback() {
       public ToolDefinition getToolDefinition() { return callback.getToolDefinition(); }
       public ToolMetadata getToolMetadata() { return callback.getToolMetadata(); }
       public String call(String input) { return call(input, new ToolContext(Map.of())); }
@@ -337,6 +344,6 @@ public final class SubAgentRunner {
           return evidence == null ? result : evidence.capture(callback.getToolDefinition().name(), input, result);
         }
       }
-    };
+    });
   }
 }

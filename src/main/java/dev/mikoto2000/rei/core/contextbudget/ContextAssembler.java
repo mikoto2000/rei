@@ -17,6 +17,19 @@ public class ContextAssembler {
   private final ConversationCompressor compressor;
   private final AgentEventFactory events;
   private final AgentEventPublisher publisher;
+  private boolean requireReviewCoverage=true;
+  public void setRequireReviewCoverage(boolean required){requireReviewCoverage=required;}
+  public void requireReviewed(dev.mikoto2000.rei.core.chat.AgentRunContext owner) {
+    if(!requireReviewCoverage||reviewTools==null||owner==null||owner.projectId()==null)return;
+    try(var scope=dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)){reviewTools.requireComplete(owner);}
+  }
+  private dev.mikoto2000.rei.review.ReviewTools reviewTools;
+  public void setReviewTools(dev.mikoto2000.rei.review.ReviewTools tools) { reviewTools = tools; }
+  public void confirmedDelivery(Prompt prompt, dev.mikoto2000.rei.core.chat.AgentRunContext owner) {
+    if (reviewTools != null) reviewTools.confirmedPrompt(prompt, owner);
+  }
+  public void finishReviewRun(dev.mikoto2000.rei.core.chat.AgentRunContext owner,boolean cancelled,boolean failed,
+      dev.mikoto2000.rei.core.chat.AgentRunContext parent){if(reviewTools!=null)reviewTools.finishRun(owner,cancelled,failed,parent);}
   private java.util.function.Supplier<String> workingSet;
   public void setWorkingSet(java.util.function.Supplier<String> workingSet) { this.workingSet = workingSet; }
   public void preserveToolResults(List<Message> messages, String conversation, String run) {
@@ -30,7 +43,18 @@ public class ContextAssembler {
     this.tools = tools; this.compressor = compressor; this.events = events; this.publisher = publisher;
   }
   public Prompt assemble(Prompt raw, String conversation, String run, Runnable checkActive) {
-    if (!properties.isEnabled()) return raw;
+    if (!properties.isEnabled()) {
+      checkActive.run();
+      var messages = raw.getInstructions().stream().map(message -> {
+        if (message instanceof ToolResponseMessage tool && tool.getResponses().stream().anyMatch(response ->
+            ToolResultCompressor.policy(tool,response.id()) == ResultDelivery.Kind.FILE_CONTENT)) return tools.compact(message,conversation,run);
+        return message;
+      }).toList();
+      var projected = tools.fit(new Prompt(messages,raw.getOptions()),conversation,run,hardLimit(raw));
+      if (estimate(projected) > hardLimit(raw)) throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
+          dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.CONTEXT_HARD_LIMIT);
+      return projected;
+    }
     var lock = summaries.lock(conversation);
     try {
       lock.lockInterruptibly();
@@ -65,7 +89,8 @@ public class ContextAssembler {
     long before = estimate(project(raw, h, a));
     log.debug("Context estimated tokens={}, threshold={}, hardLimit={}", before, threshold, hard);
     if (before > threshold) {
-      var budget=execution(raw)==null?StandaloneSummaryBudget.create(properties):null;
+      var inherited=dev.mikoto2000.rei.llm.ModelCallBudgetScope.current();
+      var budget=execution(raw)==null?(inherited==null?StandaloneSummaryBudget.create(properties):inherited):null;
       compress(h, raw, check,budget);
       if (estimate(project(raw, h, a)) > threshold) compress(a, raw, check,budget);
     }
@@ -78,7 +103,7 @@ public class ContextAssembler {
     }
     while (estimate(project(raw, h, a)) > hard && dropOldest(h)) { }
     while (estimate(project(raw, h, a)) > hard && dropOldest(a)) { }
-    Prompt result = project(raw, h, a);
+    Prompt result = tools.fit(project(raw, h, a),conversation,run,hard);
     long after = estimate(result);
     if (after > hard) throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
         dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.CONTEXT_HARD_LIMIT);

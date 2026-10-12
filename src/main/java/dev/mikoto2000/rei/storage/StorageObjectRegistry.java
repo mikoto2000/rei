@@ -55,6 +55,25 @@ public final class StorageObjectRegistry {
     UUID.fromString(normalized.getFileName().toString().replaceFirst("\\.jsonl$",""));
     return database.transaction(db->put(db,root,normalized,kind,physicalScope,null,run,Objects.requireNonNull(created),verified,references));
   }
+  public long rawStoredBytes(){return database.read(db->{try(var sql=db.createStatement();var rows=sql.executeQuery("SELECT COALESCE(SUM(size),0) FROM stored_objects WHERE kind='RAW_RESULT' AND status<>'PURGED'")){rows.next();return rows.getLong(1);}});}
+  private Path rawBodyPath(String conversation,String hash) {
+    if(hash==null||!hash.matches("[a-f0-9]{64}"))throw new IllegalArgumentException("Invalid raw body hash");
+    String project=ProjectStorage.projectId(conversation);
+    return (project==null?root:root.resolve("projects").resolve(project)).resolve("state/context/bodies").resolve(key(conversation)).resolve(hash+".json");
+  }
+  public void verifyRawBodyReadable(String conversation,String hash) {
+    var path=rawBodyPath(conversation,hash);verifyBodyPath(path);
+    database.read(db->{var object=find(db,id(root,path));if(object.isPresent()&&!object.get().status().equals("AVAILABLE"))throw new IllegalStateException("RAW_RESULT_NOT_FOUND");return null;});
+  }
+  public StoredObject registerRawWithBody(String conversation,String run,String ref,String hash,boolean pointerCreated,boolean bodyCreated) {
+    return database.transaction(db->{
+      Path pointer=rawPath(conversation,ref),body=rawBodyPath(conversation,hash);
+      if(pointerCreated)StorageBackup.force(pointer);if(bodyCreated)StorageBackup.force(body);
+      var parent=put(db,root,pointer,"RAW_RESULT",scope(conversation),key(conversation),run,pointerCreated?clock.instant():null,pointerCreated,List.of());
+      put(db,root,body,"RAW_RESULT",scope(conversation),key(conversation),run,bodyCreated?clock.instant():null,bodyCreated,List.of(new Reference("RAW_RESULT_BODY",parent.id())));
+      return parent;
+    });
+  }
   public StoredObject registerRaw(String conversation,String run,String ref,boolean createdByProducer) {
     return database.transaction(db->{StorageBackup.force(rawPath(conversation,ref));return put(db,root,rawPath(conversation,ref),"RAW_RESULT",scope(conversation),key(conversation),run,createdByProducer?clock.instant():null,createdByProducer,List.of());});
   }
