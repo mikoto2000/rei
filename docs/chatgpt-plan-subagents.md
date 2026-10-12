@@ -1,5 +1,9 @@
 # Sign in with ChatGPT を利用する SubAgent
 
+親のChat Runには、現在の有効設定から生成した委譲先の案内をSystem contextとして渡します。案内は登録済みの適合ロール、許可されたアカウント・モデル、保存済みのChatGPT利用認証を区別します。無効化・許可不足・未認証の場合は不足条件を示します。認証トークン・subject・client ID・資格情報パスは渡さず、この確認でネットワーク通信もしません。許可モデルの一覧は管理者設定であり、実際の利用可否や利用枠は `/chatgpt models` と実行時の確認が必要です。
+
+「ChatGPT にレビューして」という依頼でCodex/Claude Code用レビューを選んだ場合は、拒否を維持したままChatGPTの `delegateTask` / `delegateTasks`、`backendId=chatgpt-plan` を案内します。案内は承認や他プロバイダへの実行許可を与えません。外部送信・正確な呼び出しへの既存の承認、EXCLUSIVE Runと共有予算の条件は引き続き適用します。
+
 れいの既存ロールを `chatgpt-plan` バックエンドで手動実行する、Windows ローカル OSS 向けの機能です。通常会話、Planning Loop、バックエンドを省略した `delegateTask`、並列 SubAgent、Codex / Claude Code の既存経路は従来のモデルを使います。Phase 2では、明示設定と既存の外部送信承認の範囲内で親 LLM が `delegateTask` の接続先を指定できます。
 
 ## 利用条件と設定

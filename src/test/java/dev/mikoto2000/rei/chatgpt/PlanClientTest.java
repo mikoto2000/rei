@@ -387,6 +387,7 @@ class PlanClientTest {
     assertFalse(status.contains("access-secret"));
     assertFalse(status.contains("refresh-secret"));
     assertTrue(status.contains("[masked]"));
+    assertEquals(java.util.Set.of("default"),oauth.authorizedAccounts());
   }
 
   @Test

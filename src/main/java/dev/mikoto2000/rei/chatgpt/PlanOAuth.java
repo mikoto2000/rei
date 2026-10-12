@@ -276,6 +276,13 @@ public final class PlanOAuth {
                     })
                 .toList());
   }
+  /** Local authorization labels only; no token, subject, client ID or network request. */
+  public java.util.Set<String> authorizedAccounts() {
+    return store.locked(s -> s.accounts().stream().filter(account -> {
+      var token=s.load(account);
+      return token.accessToken()!=null && token.scopes().contains("chatgpt.tokens.use.direct");
+    }).collect(java.util.stream.Collectors.toUnmodifiableSet()));
+  }
 
   private JsonNode getDiscovery() {
     try (var response =

@@ -47,6 +47,16 @@ class ExternalAgentDelegationServiceTest {
     noProject.setRunContext(new AgentRunContext("run", "conversation", root));
     assertEquals(ExternalAgentResult.Status.REJECTED, service.review(noProject, "review", null, "").status());
   }
+  @Test void chatGptRequestRejectedByCodexPointsToItsOwnRouteWithoutExecutingCodex() {
+    var guidance=org.mockito.Mockito.mock(dev.mikoto2000.rei.chatgpt.ChatGptDelegationGuidance.class);
+    org.mockito.Mockito.when(guidance.rejectionHint("ChatGPT に資料をレビューして")).thenReturn("\nUse delegateTask with backendId=chatgpt-plan; accountRef=default; modelId=gpt-6.1-sol.");
+    var service=new ExternalAgentDelegationService((r,c)->{fail("Codex must not execute");return null;},
+        new CommandCancellationService(),new AgentEventFactory(Clock.systemUTC()),e->{},Optional.empty());
+    service.setDelegationGuidance(guidance);
+    var result=service.review(run("ChatGPT に資料をレビューして"),"review",null,"");
+    assertEquals(ExternalAgentResult.Status.REJECTED,result.status());
+    assertTrue(result.summary().contains("explicit user request"));assertTrue(result.summary().contains("backendId=chatgpt-plan"));
+  }
   @Test void acceptsAbsoluteTargetAfterMissingTargetWithoutConsumingBudget() throws Exception {
     Path file = Files.writeString(root.resolve("design.md"), "design").toRealPath();
     List<ExternalAgentRequest> requests = new ArrayList<>();

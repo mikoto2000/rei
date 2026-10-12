@@ -35,6 +35,9 @@ public class ExternalAgentDelegationService implements AutoCloseable {
   private final AgentEventPublisher publisher;
   private final Optional<WorkingSet> workingSet;
   private ExternalReviewRepository history;
+  private dev.mikoto2000.rei.chatgpt.ChatGptDelegationGuidance delegationGuidance;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setDelegationGuidance(dev.mikoto2000.rei.chatgpt.ChatGptDelegationGuidance guidance){delegationGuidance=guidance;}
   private CodexProperties modelBudgetProperties=new CodexProperties();
   private ClaudeCodeProperties claudeProperties=new ClaudeCodeProperties();
   @org.springframework.beans.factory.annotation.Autowired
@@ -232,7 +235,8 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     if(permit!=null&&(permit.run!=run||permit.cancelled.get()||Thread.currentThread().isInterrupted()))return new ExternalAgentResult(ExternalAgentResult.Status.CANCELLED,"Parallel review cancelled before execution",List.of(),List.of(),0,null,"");
     if (run == null || !(fixProposal?ExternalAgentAuthorization.explicitFixProposalRequest(run.userRequest(),agent):ExternalAgentAuthorization.explicitRequest(run.userRequest(),agent)))
       return ExternalAgentResult.rejected(fixProposal?providerLabel+" fix proposals require an explicit request for a fix proposal from this provider in this Run; tool arguments and an ordinary review request cannot authorize it."
-          :provider+" requires an explicit user request in this Run. Tool arguments cannot authorize another provider.");
+          :provider+" requires an explicit user request in this Run. Tool arguments cannot authorize another provider."
+              +(delegationGuidance==null||run==null?"":delegationGuidance.rejectionHint(run.userRequest())));
     var owner = run.runContext();
     if (owner == null || owner.projectId() == null || !Files.isDirectory(owner.projectRoot()))
       return ExternalAgentResult.rejected("No current project is available");
