@@ -40,6 +40,19 @@ class ReviewCoverageLedgerTest {
     assertThat(ledger.get(id, scope).revision()).isEqualTo(revision);
     assertThatThrownBy(() -> ledger.get(id, new ReviewCoverageLedger.Scope("project", "other", "run"))).hasMessageContaining("ACCESS_DENIED");
   }
+  @Test void explicitlyGrantedChildCanListTheSameJobWithoutCrossProjectAccess() {
+    String id=create();var child=new ReviewCoverageLedger.Scope("project","subagent:child","child");
+    ledger.grant(id,scope,child);
+    assertThat(ledger.jobs(child)).containsExactly(id);
+    assertThatThrownBy(()->ledger.grant(id,scope,new ReviewCoverageLedger.Scope("other","chat","other"))).hasMessageContaining("ACCESS_DENIED");
+  }
+  @Test void checkpointResumeRetainsExactRangesAndFindings() {
+    String id=create();ledger.fetched(id,scope,range(first));ledger.delivered(id,scope,List.of(range(first)));
+    var resumed=new ReviewCoverageLedger.Scope("project","chat","resumed");
+    ledger.resume(id,scope,resumed);
+    assertThat(ledger.get(id,resumed).ranges()).isEqualTo(ledger.get(id,scope).ranges());
+    assertThat(ledger.jobs(resumed)).containsExactly(id);
+  }
   @Test void staleVersionNeverCompletesAndExternalSuccessIsUnverified() {
     String id = create();
     ledger.externalReport(id, scope, "success");

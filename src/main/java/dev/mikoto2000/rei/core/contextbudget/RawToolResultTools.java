@@ -6,8 +6,10 @@ import dev.mikoto2000.rei.core.chat.AgentRunScope;
 public class RawToolResultTools {
   private final RawToolResultStore store;
   private final TokenEstimator estimator;
+  private final int pageTokens;
   public RawToolResultTools(RawToolResultStore store) { this(store, TokenEstimator.conservative()); }
-  public RawToolResultTools(RawToolResultStore store, TokenEstimator estimator) { this.store = store; this.estimator = estimator; }
+  public RawToolResultTools(RawToolResultStore store, TokenEstimator estimator) { this(store,estimator,2048); }
+  public RawToolResultTools(RawToolResultStore store, TokenEstimator estimator, int pageTokens) { this.store = store; this.estimator = estimator; this.pageTokens=pageTokens; }
   @ResultDelivery(ResultDelivery.Kind.RAW_RESULT_PAGE)
   @Tool(description = "Read an exact contiguous page of a saved result. Offset is a UTF-16 character offset; limit 1..16000 is an upper bound. Follow nextOffset while hasMore. A page may shrink to its token budget.")
   public String readRawToolResult(String rawResultRef, int offset, int limit) {
@@ -15,7 +17,7 @@ public class RawToolResultTools {
     if (owner == null) throw new IllegalStateException("A run is required");
     if (offset < 0 || limit < 1 || limit > 16000) throw new IllegalArgumentException("INVALID_CURSOR");
     var result = store.read(owner.conversationId(), rawResultRef);
-    return pageText(rawResultRef, result, offset, limit, 2048);
+    return pageText(rawResultRef, result, offset, limit, pageTokens);
   }
   String pageText(String ref, RawToolResultStore.Result result, int offset, int limit, int budget) {
     String raw = result.rawResult();
@@ -36,8 +38,9 @@ public class RawToolResultTools {
       throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
     return encoded;
   }
+  private static String safeHeader(String value) { return value.replace("\\","\\\\").replace("\r","\\r").replace("\n","\\n").replace("\t","\\t"); }
   private String encode(String ref, RawToolResultStore.Result result, int start, int end) {
-    return "toolName: " + result.toolName() + "\ntoolCallId: " + result.toolCallId()
+    return "toolName: " + safeHeader(result.toolName()) + "\ntoolCallId: " + safeHeader(result.toolCallId())
         + "\nrawResultRef: " + ref + "\noffset: " + start + "\ntotalCharacters: " + result.rawResult().length()
         + "\nnextOffset: " + end + "\nhasMore: " + (end < result.rawResult().length()) + "\n"
         + result.rawResult().substring(start, end);

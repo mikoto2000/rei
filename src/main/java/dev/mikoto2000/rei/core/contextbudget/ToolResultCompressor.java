@@ -29,7 +29,11 @@ public class ToolResultCompressor {
       if (policy == ResultDelivery.Kind.RAW_RESULT_PAGE) { responses.add(response); continue; }
       String ref = store.save(conversation, run, response.name(), response.id(), raw);
       if (policy == ResultDelivery.Kind.FILE_CONTENT) {
-        if (estimator.text(raw) <= delivery.getPageTargetTokens()) { responses.add(response); continue; }
+        if (tool.getMetadata().get("rei.reviewReceipts") instanceof Map<?,?> receipts && receipts.containsKey(response.id())) {
+          if(estimator.text(raw)>delivery.getPageMaxTokens())throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT: reduce readReviewFile tokenBudget");
+          responses.add(response);continue;
+        }
+        if (estimator.text(raw) <= delivery.getPageMaxTokens()) { responses.add(response); continue; }
         changed = true;
         responses.add(new ToolResponseMessage.ToolResponse(response.id(), response.name(),
             new LosslessResultPager(estimator).page(ref, response.id(), response.name(), raw, 0, delivery.getPageTargetTokens())));
@@ -66,6 +70,7 @@ public class ToolResultCompressor {
       for (int r = 0; r < responses.size() && total > hard; r++) {
         var response = responses.get(r); var policy = policy(tool, response.id());
         if (policy != ResultDelivery.Kind.FILE_CONTENT && policy != ResultDelivery.Kind.RAW_RESULT_PAGE) continue;
+        if(tool.getMetadata().get("rei.reviewReceipts") instanceof Map<?,?> receipts&&receipts.containsKey(response.id()))continue;
         long remainder = estimator.text(response.responseData()) - (total - hard) - delivery.getPageSafetyTokens();
         if (remainder < delivery.getPageMinTokens()) continue;
         int budget = (int)Math.min(delivery.getPageMaxTokens(), remainder);
@@ -95,7 +100,7 @@ public class ToolResultCompressor {
     }
     return new org.springframework.ai.chat.prompt.Prompt(messages,prompt.getOptions());
   }
-  static ResultDelivery.Kind policy(ToolResponseMessage message, String call) {
+  public static ResultDelivery.Kind policy(ToolResponseMessage message, String call) {
     Object policies = message.getMetadata().get("rei.deliveryPolicies");
     if (policies instanceof Map<?, ?> registered && registered.get(call) instanceof ResultDelivery.Kind kind) return kind;
     return ResultDelivery.Kind.GENERAL;
@@ -106,7 +111,7 @@ public class ToolResultCompressor {
       var node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(raw);
       if (node != null && node.isObject()) {
         var text = new StringBuilder();
-        for (String key : List.of("command", "status", "exitCode", "exit_code", "error", "diagnosis", "stderr", "stdout", "output")) {
+        for (String key : List.of("status", "exitCode", "exit_code", "error", "diagnosis", "stderr", "command", "stdout", "output")) {
           var value = node.get(key);
           if (value != null) text.append(key).append(": ").append(value.isContainerNode() ? value.toString() : value.asText()).append('\n');
         }
@@ -114,7 +119,7 @@ public class ToolResultCompressor {
       }
     } catch (Exception ignored) { }
     return raw.lines().filter(line -> line.toLowerCase(Locale.ROOT)
-        .matches(".*(exit.?code|status|command|fail|error|expected|exception|tests run|build |process).*"))
+        .matches(".*(exit.?code|status|command|fail|error|stderr|diagnosis|expected|exception|tests run|build |process).*"))
         .limit(80).collect(java.util.stream.Collectors.joining("\n"));
   }
   private String bounded(String text, int budget) {

@@ -198,14 +198,16 @@ public class LlmChatClientProvider {
         addIfAvailable(objects, searchTools);
         addIfAvailable(objects, webSearchTools);
         addIfAvailable(objects, urlContentFetchTools);
+        if(rawResultTools!=null)objects.add(rawResultTools);
+        if(reviewTools!=null)objects.add(reviewTools);
         if (!objects.isEmpty()) {
-          for (var callback : MethodToolCallbackProvider.builder().toolObjects(objects.toArray()).build().getToolCallbacks()) {
+          for (var callback : dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(objects.toArray()).getToolCallbacks()) {
             if (dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.intrinsicallyReadOnly(callback.getToolDefinition().name()))
               callbacks.add(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(callback, eventFactory, eventPublisher));
           }
         }
       }
-      return ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(modelProvider.subAgentChatModel(), null))
+      return ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(modelProvider.subAgentChatModel(), contextAssembler))
           .defaultAdvisors(new RunAwareToolCallingAdvisor())
           .defaultOptions(options.mutate().toolCallbacks(callbacks).toolChoice(callbacks.isEmpty() ? "none" : "auto"))
           .build();

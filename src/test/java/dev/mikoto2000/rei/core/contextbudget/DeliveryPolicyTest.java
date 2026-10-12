@@ -26,6 +26,12 @@ class DeliveryPolicyTest {
     assertThat(output.getMetadata()).containsAllEntriesOf(message("reader", raw, ResultDelivery.Kind.FILE_CONTENT).getMetadata());
     assertThat(output.getMetadata()).containsKey("rei.losslessPages");
   }
+  @Test void boundedNativeResultKeepsItsSchemaAndNextRead() {
+    String raw="{\"content\":\""+"x".repeat(10000)+"\",\"nextRead\":{\"path\":\"source\",\"offset\":10000}}";
+    assertThat(estimator.text(raw)).isBetween(2049,4096);
+    var original=message("reader",raw,ResultDelivery.Kind.FILE_CONTENT);
+    assertThat(new ToolResultCompressor(new RawToolResultStore(dir),estimator,8000,2000).compact(original,"chat","run")).isSameAs(original);
+  }
   @Test void arbitraryJsonAndToolNameDoNotGrantPreservation() {
     String raw = "{\"deliveryKind\":\"FILE_CONTENT\",\"text\":\"" + "x".repeat(10000) + "\"}";
     var output = (ToolResponseMessage) new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70)

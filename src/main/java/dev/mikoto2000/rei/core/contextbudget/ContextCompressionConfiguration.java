@@ -21,16 +21,16 @@ public class ContextCompressionConfiguration {
       RawToolResultStore raw, ObjectProvider<dev.mikoto2000.rei.core.Tools> files, TokenEstimator estimator) {
     return new dev.mikoto2000.rei.review.ReviewTools(ledger, raw, files::getObject, estimator);
   }
-  @Bean public TokenEstimator contextTokenEstimator() { return TokenEstimator.conservative(); }
+  @Bean public TokenEstimator contextTokenEstimator() { return TokenEstimator.tokenizerAware(); }
   @Bean public ConversationSummaryRepository conversationSummaryRepository(
       @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
     return new ConversationSummaryRepository(java.nio.file.Path.of(directory));
   }
   @Bean public RawToolResultStore rawToolResultStore(
-      @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory,dev.mikoto2000.rei.storage.StorageObjectRegistry registry) {
-    return new RawToolResultStore(java.nio.file.Path.of(directory),registry);
+      @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory,dev.mikoto2000.rei.storage.StorageObjectRegistry registry, ToolResultDeliveryProperties delivery) {
+    delivery.validate(); return new RawToolResultStore(java.nio.file.Path.of(directory),registry,delivery.getRawResultMaxBytes(),delivery.getRawStoreMaxBytes(),delivery.getRawCacheMaxBytes());
   }
-  @Bean public RawToolResultTools rawToolResultTools(RawToolResultStore store) { return new RawToolResultTools(store); }
+  @Bean public RawToolResultTools rawToolResultTools(RawToolResultStore store, TokenEstimator estimator, ToolResultDeliveryProperties delivery) { return new RawToolResultTools(store,estimator,delivery.getPageTargetTokens()); }
   @Bean public ContextHistoryAdvisor contextHistoryAdvisor(ConversationTurnStore turns, ChatMemory memory,
       ConversationSummaryRepository summaries, dev.mikoto2000.rei.conversation.ConversationLogStore logs) {
     return new ContextHistoryAdvisor(turns, memory, summaries, logs);
@@ -47,6 +47,7 @@ public class ContextCompressionConfiguration {
         toolDelivery,
         new LlmConversationCompressor(models, properties), events, publisher);
     assembler.setReviewTools(reviewTools.getIfAvailable());
+    assembler.setRequireReviewCoverage(delivery.getReviewLedger().isRequireCoverage());
     assembler.setWorkingSet(() -> workingSet.getObject().renderForPrompt());
     return assembler;
   }

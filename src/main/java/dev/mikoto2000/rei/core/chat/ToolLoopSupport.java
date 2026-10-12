@@ -50,7 +50,8 @@ public final class ToolLoopSupport {
           dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.GENERAL));
       var receipts = new java.util.HashMap<String, dev.mikoto2000.rei.review.ReviewTools.Receipt>();
       for (var response : message.getResponses()) if (registered.get(response.name()) instanceof dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.Registered callback && callback.reviewPage())
-        receipts.put(response.id(), dev.mikoto2000.rei.review.ReviewTools.receipt(response.responseData()));
+        try {receipts.put(response.id(), dev.mikoto2000.rei.review.ReviewTools.receipt(response.responseData()));}
+        catch(IllegalArgumentException malformed){/* A tool error/argument correction is never a delivery receipt. */}
       var metadata = new java.util.HashMap<>(message.getMetadata()); metadata.put("rei.deliveryPolicies", java.util.Map.copyOf(calls));
       if (!receipts.isEmpty()) metadata.put("rei.reviewReceipts", java.util.Map.copyOf(receipts));
       history.set(history.size() - 1, org.springframework.ai.chat.messages.ToolResponseMessage.builder()

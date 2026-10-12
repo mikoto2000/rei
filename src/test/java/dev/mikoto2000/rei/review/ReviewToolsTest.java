@@ -12,6 +12,23 @@ import dev.mikoto2000.rei.core.contextbudget.*;
 
 class ReviewToolsTest {
   @TempDir Path dir;
+  @Test void changedSourceRebuildsCoverageWithoutReusingOldReview() throws Exception {
+    Files.writeString(dir.resolve("lesson.md"),"old text");
+    try(var migration=new StorageMigrationCoordinator(dir.resolve("data"))){migration.prepare();}
+    var ledger=new ReviewCoverageLedger(new StorageDatabase(dir.resolve("data")));
+    var tools=new ReviewTools(ledger,new RawToolResultStore(dir.resolve("data")),new Tools(),TokenEstimator.conservative());
+    var owner=new AgentRunContext("run","chat",dir,"project");
+    try(var scope=AgentRunScope.open(owner)) {
+      var job=tools.beginReview(List.of("lesson.md"),"correctness","v1");
+      var page=tools.readReviewFile(job.id(),"lesson.md",job.targets().getFirst().version(),0,512);
+      tools.confirmed(owner,List.of(page));tools.submitReviewResult(job.id(),page.range(),"checked",List.of());
+      Files.writeString(dir.resolve("lesson.md"),"new text");assertThat(tools.reviewStatus(job.id()).status()).isEqualTo("STALE_VERSION");
+      var rebuilt=tools.restartReview(job.id());
+      assertThat(rebuilt.id()).isEqualTo(job.id());assertThat(rebuilt.status()).isEqualTo("REVIEW_PARTIAL");
+      assertThat(rebuilt.targets().getFirst().version()).isNotEqualTo(page.range().version());
+      assertThat(rebuilt.ranges().getFirst().stale()).isTrue();
+    }
+  }
   @Test void allExactSourcePagesMustBeConfirmedAndReviewedBeforeCompletion() throws Exception {
     String source = "\uFEFF教材🙂\r\n" + "中間の矛盾\\\"\n".repeat(100);
     Files.writeString(dir.resolve("lesson.md"), source);

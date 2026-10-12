@@ -11,7 +11,7 @@ public class ToolPermissionPolicy {
   private static final Set<String> CONSERVATIVE_TOOLS=Set.of("runCommand","executeExternalProgram",
       "selfReviewPatch","selfRepairPatch","reviewPatchRequirements","applyDiagnosedRepair",
       "requestCodexImplementation","requestClaudeCodeImplementation","computerUse","checkpointResume");
-  private static final Set<String> READ=Set.of("beginReview","readReviewFile","submitReviewResult","reviewStatus","countFileLines","readFile","readMultiFile","readSkillResource","readRawToolResult","grepMultiQuery","readPdfFile",
+  private static final Set<String> READ=Set.of("restartReview", "reviewPending","beginReview","readReviewFile","submitReviewResult","reviewStatus","countFileLines","readFile","readMultiFile","readSkillResource","readRawToolResult","grepMultiQuery","readPdfFile",
       "searchAndRead","today","now","findFile","listFile","repositoryMap","changeTestImpact","diagnoseTestReport","diagnoseTestReports","readTextChangeSetBase","inspectTextChangeSet","getShellProcessStatus","waitForShellProcess","waitForFile","dependencyStatus","dependencyHistory","checkDependency","waitForDependency","listScheduledActions","listCodexReviews","getCodexReview");
   private static final Set<String> NETWORK_READ=Set.of("webSearch","webSearchAndRead","fetchUrlContent","checkHttpDependency","waitForHttpDependency");
   private static final Set<String> LOCAL_WRITE=Set.of("applyTextDiff","writeMultiFile","proposeTextChangeSet","applyTextChangeSet","discardTextChangeSet","reconcileTextChangeSet","createDirectory","copyFile","scheduleAfter","scheduleAt","scheduleInterval","scheduleCron","scheduleOnEvent","cancelScheduledAction","registerDependency","cancelDependency");

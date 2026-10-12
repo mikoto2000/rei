@@ -48,7 +48,9 @@ public class StagnationChatModel implements ChatModel {
         if(result.returnDirect())return Flux.just(new ChatResponse(ToolExecutionResult.buildGenerations(result)));
         return iteration(new Prompt(result.conversationHistory(),prepared.getOptions()),context,false,context.progressVersion());
       });
-    });
+    }).doOnError(error->{if(assembler!=null)assembler.finishReviewRun(context.runContext(),
+        error instanceof java.util.concurrent.CancellationException,false,null);})
+        .doOnCancel(()->{if(assembler!=null)assembler.finishReviewRun(context.runContext(),true,false,null);});
   }
 
   private Flux<ChatResponse> iteration(Prompt prompt, RunExecutionContext context, boolean prepaid, long progressAtLimit) {
@@ -121,7 +123,7 @@ public class StagnationChatModel implements ChatModel {
         context.endIteration();
         if (!OutputLimitDetector.isOutputLimitReached(result)) {
           var guidance = context.applyInterventions();
-          if (guidance.isEmpty()) return Flux.empty();
+          if (guidance.isEmpty()) { if(assembler!=null)assembler.requireReviewed(context.runContext()); return Flux.empty(); }
           List<Message> messages = new ArrayList<>(prompt.getInstructions());
           messages.add(result.getResult().getOutput());
           messages.addAll(guidance);

@@ -14,6 +14,10 @@ import dev.mikoto2000.rei.event.*;
 /** Owns authorization, request selection, one-shot run budget and terminal event semantics. */
 @Service
 public class ExternalAgentDelegationService implements AutoCloseable {
+  private dev.mikoto2000.rei.review.ReviewCoverageLedger coverage;
+  @org.springframework.beans.factory.annotation.Autowired
+  void setCoverage(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.review.ReviewCoverageLedger> ledger,
+      @org.springframework.beans.factory.annotation.Value("${rei.tool-result-delivery.review-ledger.enabled:true}") boolean enabled){coverage=enabled?ledger.getIfAvailable():null;}
   public record ParallelRequest(String requestId,String task,String target,String context) {}
   public enum ParallelStatus {COMPLETED,PARTIAL,TIMEOUT,REJECTED,BUSY}
   public record ParallelItem(String requestId,ExternalAgentResult result) {}
@@ -277,6 +281,20 @@ public class ExternalAgentDelegationService implements AutoCloseable {
       catch(RuntimeException error){return ExternalAgentResult.rejected("Review history unavailable; no external process started");}
       var action=fixProposal?ExternalAgentRequest.Action.PROPOSE_FIX
           :previous!=null && previous.result().materialReviewReport()!=null?ExternalAgentRequest.Action.MATERIAL_REVIEW:reviewAction(run, agent);
+      String coverageJob=null;
+      if(coverage!=null&&owner.projectId()!=null&&!fixProposal) {
+        var targets=new ArrayList<dev.mikoto2000.rei.review.ReviewCoverageLedger.Target>();
+        try {
+          var manifest=ExternalAgentSourceSnapshot.snapshot(root,selected,run::isCancelled,System.nanoTime()+java.time.Duration.ofSeconds(10).toNanos());
+          for(var file:manifest) {
+            int length=((Number)file.get("sourceLength")).intValue(),line=((Number)file.get("sourceEndLine")).intValue(),offset=((Number)file.get("sourceEndOffset")).intValue();
+            targets.add(new dev.mikoto2000.rei.review.ReviewCoverageLedger.Target(((String)file.get("path")).replace('\\','/'),(String)file.get("sha256"),line,
+                List.of(new dev.mikoto2000.rei.review.ReviewCoverageLedger.Span(0,length,1,line,0,offset))));
+          }
+        }catch(java.io.IOException unavailable){targets.clear();}
+        var job=coverage.createExternal(dev.mikoto2000.rei.review.ReviewTools.scope(owner),"External "+provider+" review "+id+" target="+Objects.toString(selected,root.toString())+" focus="+bounded(task,2000),"external-review-v1",targets);
+        coverageJob=job.id();
+      }
       var request = new ExternalAgentRequest(agent, action,
           bounded(run.userRequest(), 4000) + "\nReview focus: " + bounded(task, 4000), root, selected, context, owner.runId(), id,
           continuation?previous.result().externalSessionId():null);
@@ -304,6 +322,12 @@ public class ExternalAgentDelegationService implements AutoCloseable {
       } finally { hook.dispose(); }
       boolean wasCancelled = cancelled.get() || run.isCancelled() || result.status() == ExternalAgentResult.Status.CANCELLED;
       if(wasCancelled)result=new ExternalAgentResult(ExternalAgentResult.Status.CANCELLED,providerLabel+" review cancelled",List.of(),List.of(),result.duration(),result.exitCode(),"",null,null,null,result.changeSetId());
+      if(coverageJob!=null) {
+        if(wasCancelled)coverage.stop(coverageJob,dev.mikoto2000.rei.review.ReviewTools.scope(owner),true);
+        else coverage.externalReport(coverageJob,dev.mikoto2000.rei.review.ReviewTools.scope(owner),result.status().name());
+        var warnings=new ArrayList<>(result.warnings());warnings.add("REVIEW_UNVERIFIED: external source delivery/range evidence is opaque; reviewJobId="+coverageJob);
+        result=new ExternalAgentResult(result.status(),result.summary(),result.findings(),warnings,result.duration(),result.exitCode(),result.rawOutput(),result.reviewId(),result.externalSessionId(),result.proposedChange(),result.changeSetId(),result.implementation(),result.materialReviewReport());
+      }
       if(history!=null) {
         result=ExternalReviewRepository.safe(new ExternalAgentResult(result.status(),result.summary(),result.findings(),result.warnings(),result.duration(),result.exitCode(),"",id,result.externalSessionId(),null,result.changeSetId(),null,result.materialReviewReport()));
         try{history.finish(owner.projectId(),id,result);}

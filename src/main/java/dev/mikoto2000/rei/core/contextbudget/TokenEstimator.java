@@ -14,6 +14,31 @@ public interface TokenEstimator {
     if (message instanceof UserMessage user) total += 4096L * user.getMedia().size();
     return (int) Math.min(Integer.MAX_VALUE, total);
   }
+  /** Reuses the bundled byte-pair tokenizers, taking the larger estimate and accounting for wire escaping. */
+  static TokenEstimator tokenizerAware() {
+    TokenEstimator heuristic=conservative();
+    return value -> {
+      if(value==null||value.isEmpty())return 0;
+      try {
+        String encoded=TokenizerHolder.JSON.writeValueAsString(value);
+        String wire=encoded.substring(1,encoded.length()-1);
+        long units=wire.codePoints().mapToLong(c->c<128?1:c<2048?8:c<65536?12:16).sum();
+        int estimate=(int)Math.min(Integer.MAX_VALUE,(units+3)/4);
+        estimate=Math.max(estimate,heuristic.text(wire));
+        estimate=Math.max(estimate,TokenizerHolder.CL.countTokensOrdinary(value));
+        estimate=Math.max(estimate,TokenizerHolder.O.countTokensOrdinary(value));
+        estimate=Math.max(estimate,TokenizerHolder.CL.countTokensOrdinary(wire));
+        return Math.max(estimate,TokenizerHolder.O.countTokensOrdinary(wire));
+      }catch(java.io.IOException invalid){throw new IllegalArgumentException("Cannot estimate serialized text",invalid);}
+    };
+  }
+  final class TokenizerHolder {
+    private TokenizerHolder() { }
+    static final com.fasterxml.jackson.databind.ObjectMapper JSON=new com.fasterxml.jackson.databind.ObjectMapper();
+    static final com.knuddels.jtokkit.api.EncodingRegistry REGISTRY=com.knuddels.jtokkit.Encodings.newDefaultEncodingRegistry();
+    static final com.knuddels.jtokkit.api.Encoding CL=REGISTRY.getEncoding(com.knuddels.jtokkit.api.EncodingType.CL100K_BASE);
+    static final com.knuddels.jtokkit.api.Encoding O=REGISTRY.getEncoding(com.knuddels.jtokkit.api.EncodingType.O200K_BASE);
+  }
   static TokenEstimator conservative() {
     return value -> {
       if (value == null || value.isEmpty()) return 0;

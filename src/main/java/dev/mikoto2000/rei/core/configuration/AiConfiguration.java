@@ -194,9 +194,9 @@ public class AiConfiguration {
             soundNotificationTools, blueskyPostTools, urlContentFetchTools, textTools, clockTools, schedulerTools, taskStateTools,
             conversationHistoryTools, summaryTools);
 
-    builder.defaultTools(dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(tools));
-    if (reviewTools != null) builder.defaultTools(dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(reviewTools));
-    if (rawResultTools != null) builder.defaultTools(dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(rawResultTools));
+    builder.defaultTools((Object[])dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(tools).getToolCallbacks());
+    if (reviewTools != null) builder.defaultTools((Object[])dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(reviewTools).getToolCallbacks());
+    if (rawResultTools != null) builder.defaultTools((Object[])dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(rawResultTools).getToolCallbacks());
     if (processDependencyTools != null) builder.defaultTools(processDependencyTools);
     if (fileDependencyTools != null) builder.defaultTools(fileDependencyTools);
     if (dependencyTools != null) builder.defaultTools(dependencyTools);

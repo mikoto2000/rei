@@ -10,7 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 /** Runs before ordinary Spring beans. The instance holds a process lease until application shutdown. */
 public final class StorageMigrationCoordinator implements AutoCloseable {
-  public static final int SCHEMA_VERSION=9;
+  public static final int SCHEMA_VERSION=10;
   public enum Stage { COPYING, COPIED, VERIFIED, APPLYING, SCHEMA_WRITTEN, ROWS_IMPORTED, COMPLETE }
   @FunctionalInterface interface Checkpoint { void reached(Stage stage,Path backup)throws Exception; }
   public record Result(int schemaVersion,Path backup) {}
@@ -127,6 +127,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
       if(version>=7)McpStorageMigration.verify(db);
       if(version>=8)DotStorageMigration.verify(db);
       if(version>=9)ReviewCoverageMigration.verify(db);
+      if(version>=10)ReviewRuntimeMigration.verify(db);
     }catch(SQLException error){throw new IOException("Storage schema is not a verified completed schema",error);}
   }
   synchronized void verifyCurrentReadyVersion()throws IOException {
@@ -161,6 +162,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
         if(sourceVersion<7)McpStorageMigration.apply(db);
         if(sourceVersion<8)DotStorageMigration.apply(db);
         if(sourceVersion<9)ReviewCoverageMigration.apply(db);
+        if(sourceVersion<10)ReviewRuntimeMigration.apply(db);
         checkpoint.reached(Stage.ROWS_IMPORTED,backup);
         if(backup!=null){StorageBackup.verify(backup);StorageBackup.verifyLegacySources(root,backup);}
         try(var insert=db.prepareStatement("INSERT INTO storage_migrations VALUES(?, 'COMPLETE', ?, ?)")) {

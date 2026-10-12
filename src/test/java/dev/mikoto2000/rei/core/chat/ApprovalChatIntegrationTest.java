@@ -49,7 +49,7 @@ class ApprovalChatIntegrationTest {
       assertEquals(1,effects.get());assertTrue(p.getInstructions().stream().filter(ToolResponseMessage.class::isInstance).map(ToolResponseMessage.class::cast).anyMatch(m->m.getResponses().getFirst().responseData().equals("validation passed")));
       return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("review completed")))));
     }};
-    var client=ChatClient.builder(new StagnationChatModel(model)).defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultToolCallbacks(tool).build();
+    var client=ChatClient.builder(new StagnationChatModel(model)).defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultToolCallbacks(List.of(tool)).build();
     var holder=mock(ModelHolderService.class);when(holder.get()).thenReturn("test");var settings=new LlmProperties();settings.getOutputLimit().setMaxLlmCallsPerRun(2);
     var chat=new ChatExecutionService(new FixedLlmChatClientProvider(client),holder,new FixedLlmModelProvider(),settings,cancellation,Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),clock,Optional.empty(),new AgentEventFactory(clock),bus);
     beans.addBean("chat",chat);beans.addBean("continuation",continuation);chat.setContinuations(beans.getBeanProvider(RunContinuation.class));chat.setToolPermissionGuard(guard);
@@ -66,4 +66,3 @@ class ApprovalChatIntegrationTest {
     assertTrue(events.stream().noneMatch(e->e.type()==AgentEventType.AGENT_RUN_FAILED));
   }
 }
-

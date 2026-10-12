@@ -47,7 +47,19 @@ public final class ReviewCoverageLedger {
         query.setString(1, scope.project()); query.setString(2, scope.conversation());
         try (var rows = query.executeQuery()) { rows.next(); if (rows.getInt(1) >= 128) throw new IllegalStateException("Review job capacity exceeded"); }
       }
-      write(db, job, true); return job;
+      write(db, job, true); writeParticipants(db,job); return job;
+    });
+  }
+  /** External delegates without a verified manifest remain explicitly unsealed and unverified. */
+  public Job createExternal(Scope scope,String criteria,String criteriaVersion,List<Target> targets) {
+    if(!targets.isEmpty()){var job=create(scope,criteria,criteriaVersion,targets);return externalReport(job.id(),scope,"External delivery is opaque");}
+    require(criteria);require(criteriaVersion);var now=Instant.now();
+    var job=new Job(UUID.randomUUID().toString(),scope,List.of(scope),criteria,criteriaVersion,List.of(),List.of(),List.of(),"REVIEW_UNVERIFIED",0,now,now);
+    return database.transaction(db->{
+      try(var query=db.prepareStatement("SELECT COUNT(*) FROM review_jobs WHERE project=? AND conversation=?")) {
+        query.setString(1,scope.project());query.setString(2,scope.conversation());try(var rows=query.executeQuery()){rows.next();if(rows.getInt(1)>=128)throw new IllegalStateException("Review job capacity exceeded");}
+      }
+      write(db,job,true);writeParticipants(db,job);return job;
     });
   }
   public Job get(String id, Scope scope) {
@@ -58,17 +70,20 @@ public final class ReviewCoverageLedger {
     }
   }
   public List<String> jobs(Scope scope) {
-    return database.read(db -> {
-      var ids = new ArrayList<String>();
-      try (var query = db.prepareStatement("SELECT id,record FROM review_jobs WHERE project=? AND conversation=? ORDER BY updated,id LIMIT 129")) {
-        query.setString(1, scope.project()); query.setString(2, scope.conversation());
-        try (var rows = query.executeQuery()) { while (rows.next()) {
-          var job = StorageDatabase.JSON.readValue(rows.getString(2), Job.class);
-          if (job.participants().contains(scope)) ids.add(rows.getString(1));
-        } }
+    return database.read(db->{
+      var ids=new ArrayList<String>();
+      try(var query=db.prepareStatement("SELECT j.id FROM review_participants p JOIN review_jobs j ON j.id=p.job WHERE p.project=? AND p.conversation=? AND p.run=? ORDER BY j.updated,j.id LIMIT 129")) {
+        query.setString(1,scope.project());query.setString(2,scope.conversation());query.setString(3,scope.run());
+        try(var rows=query.executeQuery()){while(rows.next())ids.add(rows.getString(1));}
       }
-      return List.copyOf(ids);
+      if(ids.size()>128)throw new IllegalStateException("Review job display capacity exceeded");return List.copyOf(ids);
     });
+  }
+  public static void writeParticipants(java.sql.Connection db,Job job)throws java.sql.SQLException {
+    try(var remove=db.prepareStatement("DELETE FROM review_participants WHERE job=?")){remove.setString(1,job.id());remove.executeUpdate();}
+    try(var insert=db.prepareStatement("INSERT INTO review_participants(job,project,conversation,run) VALUES(?,?,?,?)")) {
+      for(var scope:job.participants()){insert.setString(1,job.id());insert.setString(2,scope.project());insert.setString(3,scope.conversation());insert.setString(4,scope.run());insert.addBatch();}insert.executeBatch();
+    }
   }
   public Job grant(String id, Scope parent, Scope child) {
     return update(id, parent, job -> {
@@ -91,10 +106,22 @@ public final class ReviewCoverageLedger {
       return new Job(job.id(),job.owner(),participants,job.criteria(),job.criteriaVersion(),job.targets(),job.ranges(),job.findings(),status,job.revision(),job.createdAt(),job.updatedAt());
     });
   }
+  public Job rebuild(String id,Scope scope,List<Target> targets) {
+    return update(id,scope,job->{
+      if(!job.status().equals("STALE_VERSION")||targets.size()!=job.targets().size()
+          ||!new HashSet<>(targets.stream().map(Target::path).toList()).equals(new HashSet<>(job.targets().stream().map(Target::path).toList())))throw invalid();
+      var versions=new HashMap<String,String>();targets.forEach(target->versions.put(target.path(),target.version()));
+      var entries=job.ranges().stream().map(entry->versions.get(entry.range().path()).equals(entry.range().version())?entry:
+          new Entry(entry.range(),entry.delivered(),entry.reviewed(),true,entry.assessment())).toList();
+      var findings=job.findings().stream().map(finding->versions.get(finding.path()).equals(finding.version())?finding:
+          new Finding(finding.id(),finding.severity(),finding.path(),finding.version(),finding.location(),finding.evidence(),finding.assessment(),"STALE")).toList();
+      return new Job(job.id(),job.owner(),job.participants(),job.criteria(),job.criteriaVersion(),targets,entries,findings,"REVIEW_PARTIAL",job.revision(),job.createdAt(),job.updatedAt());
+    });
+  }
   public Job fetched(String id, Scope scope, Range range) {
     return update(id, scope, job -> {
       validateTarget(job, range);
-      for (var entry : job.ranges()) if (sameLocation(entry.range(), range)) {
+      for (var entry : job.ranges()) if (!entry.stale() && sameLocation(entry.range(), range)) {
         if (!entry.range().equals(range)) throw invalid(); return job;
       }
       if (job.ranges().size() >= 10000) throw new IllegalStateException("Review range capacity exceeded");
@@ -151,7 +178,7 @@ public final class ReviewCoverageLedger {
       if (changed.equals(old)) return old;
       var next = new Job(old.id(), old.owner(), changed.participants(), old.criteria(), old.criteriaVersion(),
           changed.targets(), changed.ranges(), changed.findings(), changed.status(), old.revision() + 1, old.createdAt(), Instant.now());
-      write(db, next, false); return next;
+      write(db, next, false); if(!old.participants().equals(next.participants()))writeParticipants(db,next); return next;
     });
   }
   private Job read(java.sql.Connection db, String id, Scope scope) throws Exception {
@@ -188,8 +215,9 @@ public final class ReviewCoverageLedger {
   }
   private static boolean contains(Span outer, Span inner) { return outer.start() <= inner.start() && inner.end() <= outer.end(); }
   private static boolean sameLocation(Range a, Range b) { return a.path().equals(b.path()) && a.version().equals(b.version()) && a.span().equals(b.span()); }
-  private static int find(List<Entry> entries, Range range) { for (int i = 0; i < entries.size(); i++) if (entries.get(i).range().equals(range)) return i; return -1; }
+  private static int find(List<Entry> entries, Range range) { for (int i = 0; i < entries.size(); i++) if (!entries.get(i).stale() && entries.get(i).range().equals(range)) return i; return -1; }
   private static boolean complete(List<Target> targets, List<Entry> entries) {
+    if(targets.isEmpty())return false;
     for (var target : targets) for (var required : target.required()) {
       int cursor = required.start();
       var ranges = entries.stream().filter(e -> e.reviewed() && e.delivered() && !e.stale() && e.range().path().equals(target.path())
