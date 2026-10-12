@@ -46,6 +46,8 @@ errorType は PermissionRequired / PermissionDenied、code は REQUIRE_APPROVAL 
 
 ## 一回限りの承認と再開
 
+ローカル子の失敗結果とShell/簡易CLIの通知には、権限拒否・承認不足、共有予算、最大ステップ、期限、取消、モデルHTTP認証/利用枠/応答、通信/入出力、結果検証、準備/内部エラーを分類した理由を返します。原因例外の本文やツール引数は表示しません。最終通知は親Runへ届け、子RunのIDをpayloadに保持します。
+
 `delegateTask` / `delegateTasks` の空文字・空白だけの任意文字列は省略として扱います。空の `backendId` はローカル委譲です。承認要求の作成・消費前に引数の型、必須項目、バッチ件数・ID重複、委譲先、ローカル／外部オプションの組合せを検証します。不正な引数には修正案を含むエラーを返し、承認では通しません。ローカル委譲では対象ファイルと出力条件を `task` / `context` に記載し、外部専用の `sourceRefs` / `expectedOutput` などは省略してください。承認の照合には元の正確な引数を使い、保存内容を書き換えません。
 
 確認が必要な Chat Tool は実行せず、SQLite に PENDING request を保存します。Shell/CLI の通知には操作内容・期限と「この操作を承認して続行するには、次のコマンドを入力してください」を表示し、`/approval approve <approvalId> --continue` をコピーできる独立した行で案内します。`list` で要求を探す必要はありません。詳細確認と拒否のコマンドも同じ通知に表示します。

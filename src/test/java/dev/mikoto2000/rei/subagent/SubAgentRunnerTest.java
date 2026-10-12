@@ -22,6 +22,16 @@ import reactor.core.publisher.Flux;
 
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentRunnerTest {
+  @Test void localFailureReturnsAndPublishesItsCategoryToTheParentRun() throws Exception {
+    var runner=runner(p->Flux.error(new IllegalStateException("password=secret")),"2s");
+    var parent=new dev.mikoto2000.rei.core.chat.AgentRunContext("parent","session",directory,"project");
+    try(var scope=dev.mikoto2000.rei.core.chat.AgentRunScope.open(parent)) {
+      var result=runner.run("reviewer","review",null);
+      assertThat(result.output()).contains("INTERNAL_ERROR").doesNotContain("secret");
+      assertThat(events).anyMatch(e->e.type()==AgentEventType.SUBAGENT_FAILED && e.runId().equals("parent")
+          && ((dev.mikoto2000.rei.event.SubAgentLifecyclePayload)e.payload()).failureReason().contains("INTERNAL_ERROR"));
+    }
+  }
   @Test void durableChildCancellationCanResumeUnderTheSameHumanWithConsumedCallsRetained() throws Exception {
     var source=new org.sqlite.SQLiteDataSource();source.setUrl("jdbc:sqlite:"+directory.resolve("children.db"));
     var repository=new DurableSubAgentRepository(source,Clock.systemUTC());

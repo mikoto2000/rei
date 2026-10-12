@@ -222,7 +222,7 @@ public final class SubAgentRunner {
                 if (error instanceof SubAgentValidationException invalid) {
                   log.warn("SubAgent {} result validation failed: {} errors", d.id(), invalid.errors().size());
                   complete.accept(new SubAgentResult(agent, runId, SubAgentResult.Status.FAILED,
-                      "SubAgent result validation failed", started, clock.instant(), null, invalid.errors(),
+                      LocalDelegationFailure.validation(invalid.errors()), started, clock.instant(), null, invalid.errors(),
                       repairAttempts.get(), validationHistory));
                   return;
                 }
@@ -235,18 +235,24 @@ public final class SubAgentRunner {
                 var status = error instanceof TimeoutException ? SubAgentResult.Status.TIMEOUT
                     : error instanceof BoundedToolLoop.MaxStepsExceeded ? SubAgentResult.Status.MAX_STEPS_EXCEEDED
                     : error instanceof CancellationException ? SubAgentResult.Status.CANCELLED : SubAgentResult.Status.FAILED;
-                finish.accept(status, "SubAgent stopped: " + status);
+                finish.accept(status, LocalDelegationFailure.describe(error,false));
               }));
-        } catch (RuntimeException error) { finish.accept(SubAgentResult.Status.FAILED, "SubAgent setup failed"); }
+        } catch (RuntimeException error) { finish.accept(SubAgentResult.Status.FAILED, LocalDelegationFailure.describe(error,true)); }
       }
       SubAgentResult result;
       try { result = completion.get(); }
       catch (InterruptedException error) { cancel.run(); Thread.currentThread().interrupt(); result = completion.join(); }
       catch (ExecutionException error) { throw new IllegalStateException(error); }
-      publisher.publish(events.subAgentLifecycle(result.status() == SubAgentResult.Status.COMPLETED
+      var terminalEvent=events.subAgentLifecycle(result.status() == SubAgentResult.Status.COMPLETED
           ? AgentEventType.SUBAGENT_COMPLETED : AgentEventType.SUBAGENT_FAILED, parentId, runId, agent, task,
           result.status().name(), (System.nanoTime() - nanos) / 1_000_000,
-          result.status() == SubAgentResult.Status.COMPLETED ? null : result.status().name()));
+          result.status() == SubAgentResult.Status.COMPLETED ? null : result.output());
+      if(parent!=null && result.status()!=SubAgentResult.Status.COMPLETED) {
+        terminalEvent=terminalEvent.withOwnership(parent);
+        terminalEvent=new dev.mikoto2000.rei.event.AgentEvent(terminalEvent.id(),terminalEvent.sequence(),terminalEvent.timestamp(),terminalEvent.type(),terminalEvent.version(),
+            terminalEvent.sessionId(),terminalEvent.turnId(),parent.runId(),terminalEvent.correlationId(),terminalEvent.parentEventId(),terminalEvent.payload(),terminalEvent.projectId());
+      }
+      publisher.publish(terminalEvent);
       if(claimed!=null)durable.complete(claimed.id(),runId,switch(result.status()){case COMPLETED->"COMPLETED";case CANCELLED->"CANCELLED";case TIMEOUT->"TIMEOUT";default->"FAILED";},result.output());
       if(tracked)taskLifecycle.finishMissingTerminal(owner,claimed!=null && durable.get(parent,claimed.id()).status().equals("UNKNOWN")?dev.mikoto2000.rei.application.run.RunStatus.UNKNOWN:switch(result.status()) {
         case COMPLETED->dev.mikoto2000.rei.application.run.RunStatus.COMPLETED;
