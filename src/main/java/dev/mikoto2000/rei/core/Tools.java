@@ -1238,6 +1238,45 @@ public class Tools {
     return readMultiFile(List.of(file), skill.directory()).getFirst();
   }
 
+  @Tool(name = "countFileLines", description = "複数ファイルの行数を本文を返さず確認します。pathsに具体的なファイルパスを1〜64件指定。globは先にfindFileで展開してください。wc -lと同じLFの数で、末尾に改行がない行は数えません。UTF-8等のLFを使うファイル向け。各fileのpath/lineCount/errorと成功分のtotalLinesを返します。読み取り専用、shell実行なし。各file最大64MiB。")
+  FileLineCounts countFileLines(List<String> paths) {
+    return countFileLines(paths, currentWorkingDirectory());
+  }
+
+  FileLineCounts countFileLines(List<String> paths, java.nio.file.Path workingDirectory) {
+    if (paths == null || paths.isEmpty() || paths.size() > 64)
+      throw new IllegalArgumentException("paths must contain 1 to 64 files");
+    for (String path : paths)
+      if (path == null || path.isBlank() || path.length() > 1024)
+        throw new IllegalArgumentException("File path must be nonblank and at most 1024 characters");
+    List<FileLineCount> results = new ArrayList<>();
+    long total = 0;
+    for (String requested : paths) {
+      try {
+        var path = resolveProjectPath(requested, workingDirectory);
+        if (!Files.isRegularFile(path)) throw new IOException("Not a regular file");
+        long count = 0, bytes = 0;
+        try (var input = Files.newInputStream(path)) {
+          byte[] buffer = new byte[8192];
+          int length;
+          while ((length = input.read(buffer)) != -1) {
+            bytes += length;
+            if (bytes > 64L * 1024 * 1024) throw new IOException("File exceeds 64MiB limit");
+            for (int i = 0; i < length; i++) if (buffer[i] == '\n') count++;
+          }
+        }
+        total += count;
+        results.add(new FileLineCount(requested, count, null));
+      } catch (IOException | IllegalArgumentException e) {
+        results.add(new FileLineCount(requested, null, e.getMessage()));
+      }
+    }
+    return new FileLineCounts(List.copyOf(results), total);
+  }
+
+  public record FileLineCount(String path, Long lineCount, String error) {}
+  public record FileLineCounts(List<FileLineCount> files, long totalLines) {}
+
   List<ReadFileResult> readMultiFile(List<ReadFileRequest> files, java.nio.file.Path workingDirectory)
       throws IOException {
     if (files == null || files.isEmpty()) {
