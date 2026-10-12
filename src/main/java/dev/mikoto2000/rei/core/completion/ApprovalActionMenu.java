@@ -15,7 +15,7 @@ public final class ApprovalActionMenu {
   private int action;
   private String inserted;
   private volatile boolean enabled;
-  public void enabled(boolean value) { enabled = value; }
+  public void enabled(boolean value) { enabled = value; if (!value) clearDisplay(); }
   private static final List<String> LABELS = List.of("詳細確認", "承認して続行", "拒否");
 
   public ApprovalActionMenu(LineReader reader, Supplier<Owner> owner) {
@@ -62,16 +62,18 @@ public final class ApprovalActionMenu {
     reader.getBuffer().clear(); reader.getBuffer().write(inserted);
     var display = new StringBuilder("承認 [" + selected.id + "]　↑↓: 選択 / Enter: 実行\n");
     for (int i = 0; i < LABELS.size(); i++) display.append(i == action ? "▶ " : "  ").append(LABELS.get(i)).append('\n');
-    reader.printAbove(display.toString().stripTrailing());
+    if (reader instanceof ApprovalMenuLineReader menuReader) menuReader.approvalMenu(display.toString().stripTrailing());
     return true;
   }
 
   private boolean history(int direction) {
+    clearDisplay();
     reader.callWidget(direction < 0 ? LineReader.UP_LINE_OR_HISTORY : LineReader.DOWN_LINE_OR_HISTORY);
     return true;
   }
 
   synchronized boolean enter() {
+    clearDisplay();
     if (enabled && selected != null && Objects.equals(reader.getBuffer().toString(), inserted)) {
       if (!selected.owner.equals(owner.get())) {
         reader.getBuffer().clear(); selected = null; inserted = null;
@@ -83,6 +85,10 @@ public final class ApprovalActionMenu {
     }
     reader.callWidget(LineReader.ACCEPT_LINE);
     return true;
+  }
+
+  private void clearDisplay() {
+    if (reader instanceof ApprovalMenuLineReader menuReader) menuReader.clearApprovalMenu();
   }
 
   private static String command(String id, int action) {

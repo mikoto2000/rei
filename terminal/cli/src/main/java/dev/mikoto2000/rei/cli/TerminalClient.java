@@ -41,7 +41,9 @@ public final class TerminalClient implements AutoCloseable {
     this.backend=backend;history=new ClientHistory(historyDirectory);recordHistory=!noHistory;history.enabled(recordHistory);
     this.terminal=terminal;
     var memory=new DefaultHistory(){@Override public void add(java.time.Instant time,String line){if(recordHistory&&history.accepts(line))super.add(time,line);}};
-    reader=LineReaderBuilder.builder().terminal(terminal).parser(commandParser()).history(memory).completer(this::complete).build();
+    var menuReader=new ApprovalMenuLineReader(terminal);
+    menuReader.setParser(commandParser());menuReader.setHistory(memory);menuReader.setCompleter(this::complete);
+    reader=menuReader;
     reader.setVariable(LineReader.HISTORY_SIZE,1000);reader.setVariable(LineReader.HISTORY_FILE_SIZE,1000);
     reader.setOpt(LineReader.Option.BRACKETED_PASTE);
     approvalMenu=new ApprovalActionMenu(reader,()->new ApprovalActionMenu.Owner(project,session));

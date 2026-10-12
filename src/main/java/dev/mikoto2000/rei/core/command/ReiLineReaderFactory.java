@@ -3,7 +3,6 @@ package dev.mikoto2000.rei.core.command;
 import java.io.IOException;
 import org.jline.reader.Completer;
 import org.jline.reader.LineReader;
-import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.Parser;
 import org.jline.terminal.Terminal;
 
@@ -30,14 +29,12 @@ public final class ReiLineReaderFactory {
       throw new IOException("履歴ファイル用ディレクトリの作成に失敗しました: " + ReiPaths.historyFilePath(), exception);
     }
     Completer completer = completer(command, engine);
-    LineReader reader = LineReaderBuilder.builder()
-        .terminal(terminal)
-        .completer(completer)
-        .parser(parser())
-        .variable(LineReader.HISTORY_FILE, ReiPaths.historyFilePath())
-        .variable(LineReader.HISTORY_SIZE, 1000)
-        .variable(LineReader.HISTORY_FILE_SIZE, 1000)
-        .build();
+    var reader = new ApprovalMenuLineReader(terminal);
+    reader.setCompleter(completer);
+    reader.setParser(parser());
+    reader.setVariable(LineReader.HISTORY_FILE, ReiPaths.historyFilePath());
+    reader.setVariable(LineReader.HISTORY_SIZE, 1000);
+    reader.setVariable(LineReader.HISTORY_FILE_SIZE, 1000);
     reader.setOpt(LineReader.Option.BRACKETED_PASTE);
     if (java.io.File.separatorChar == '\\') reader.setOpt(LineReader.Option.CASE_INSENSITIVE);
     return new Session(reader, completer);
