@@ -39,13 +39,28 @@ public class PersistentCheckpointService implements AutoCloseable {
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   void setRawResults(dev.mikoto2000.rei.core.contextbudget.RawToolResultStore store){rawResults=store;}
   public void preserveResults(AgentRunContext owner,List<org.springframework.ai.chat.messages.Message> history) {
-    if(rawResults==null||!active.containsKey(owner.runId())||history.isEmpty()||!(history.getLast() instanceof org.springframework.ai.chat.messages.ToolResponseMessage message))return;
+    preserveResults(owner, history, null);
+  }
+  public dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState progress(AgentRunContext owner) {
+    var saved=active.get(owner.runId());
+    if(saved==null) return null;
+    if(!saved.projectRoot().equals(owner.projectRoot().toString()) || !saved.sessionId().equals(owner.conversationId()) || !saved.projectId().equals(owner.projectId()))
+      throw new IllegalArgumentException("Progress ownership mismatch");
+    return saved.progress();
+  }
+  public boolean hasProgressHistory(AgentRunContext owner) {
+    var saved=active.get(owner.runId());return saved!=null && (saved.resumedFromRunId()!=null || saved.status().equals("WAITING"));
+  }
+  public void preserveResults(AgentRunContext owner,List<org.springframework.ai.chat.messages.Message> history,
+      dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState progress) {
+    if(!active.containsKey(owner.runId()))return;
     var references=new ArrayList<Evidence>();
-    for(var result:message.getResponses()) {
+    if(rawResults!=null && !history.isEmpty() && history.getLast() instanceof org.springframework.ai.chat.messages.ToolResponseMessage message) for(var result:message.getResponses()) {
       String reference=rawResults.save(owner.conversationId(),owner.runId(),result.name(),result.id(),Objects.toString(result.responseData(),""));
       references.add(new Evidence("RAW_RESULT_REFERENCE",reference,null,owner.runId(),result.id()));
     }
-    update(owner.runId(),"raw-results:"+UUID.randomUUID(),fields->{var evidence=new ArrayList<>(repository.fields(fields).evidence());evidence.addAll(references);fields.put("evidence",evidence);});
+    if(references.isEmpty() && progress==null)return;
+    update(owner.runId(),"raw-results:"+UUID.randomUUID(),fields->{var evidence=new ArrayList<>(repository.fields(fields).evidence());evidence.addAll(references);fields.put("evidence",evidence);if(progress!=null)fields.put("progress",progress);});
   }
   public PersistentCheckpointService(PersistentCheckpointRepository repository,CheckpointReconciler reconciler,
       CheckpointProperties settings,AgentEventBus bus,ObjectProvider<ConversationInputRouter> router,

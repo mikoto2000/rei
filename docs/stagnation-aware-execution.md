@@ -26,7 +26,7 @@ Spring AI の `ToolCallingManager` で既存 callback（MCP・組み込み双方
 
 | 種別 | 根拠 |
 | --- | --- |
-| `NEW_INFORMATION` | 対応する読み取り・検索ツールの、実行内で未取得の結果。`readMultiFile` はパス・行番号・行内容で重複排除し、範囲の重なりやバッチの並び替えでは進捗を増やさない。成功した `runCommand` の新しい標準出力も対象。 |
+| `NEW_INFORMATION` | 対応する読み取り・検索ツールの、実行内で未取得の結果。版付きの `readMultiFile` / `searchAndRead` は正規化パス・版・既読範囲で重複排除し、範囲の重なりやバッチの並び替えでは進捗を増やさない。成功した `runCommand` の新しい標準出力も対象。 |
 | `STATE_CHANGED` | 対応するファイル変更ツールの実行前後で、内容の SHA-256 または存在状態が変化した。同じ内容の書き戻しは対象外。 |
 | `SUBGOAL_COMPLETED` | 既存 ActionPlan の新しい DONE 遷移、または出力上限による分割実行で executor が確認したサブゴールの SUCCESS。同じステップ／ゴールの完了を重複加算しない。 |
 | `ERROR_RESOLVED` | 同じツール・正規化JSON引数で失敗を記録した後、構造化結果の成功・終了コード0、または正常な読み取り結果を確認した。 |
@@ -63,7 +63,7 @@ MCP ツールも共通境界で実行制御するが、独自名・独自形式�
 
 - `rei.llm.max-output-tokens`：1回の出力上限（既定8192）。
 - `rei.llm.output-limit.max-llm-calls-per-run`：外側の初期／サブゴール／統合呼び出し、分割プランナー、内部の追加LLM反復の合計（既定120）。
-- `rei.llm.output-limit.max-replans-per-goal`：名前は既存互換のまま、実装上はrun全体の再計画上限（既定2）。出力上限による分割と停滞再計画で共有する。
+- `rei.llm.output-limit.max-replans-per-goal`：名前は既存互換のまま、出力分割と停滞再計画それぞれのRun内絶対上限（既定2）。独立カウンターを使い、両方が共通のLLM呼び出し・トークン予算を消費する。
 
 意味のある進捗が続いてもこの上限を超えない。エピソードの回復は hard budget を回復しない。
 ここで数えるLLM呼び出しはアプリケーションの論理呼び出しであり、HTTPリトライ／サーバーフォールバックや
@@ -109,13 +109,13 @@ payload は evidence、連続停滞回数、閾値、停滞再計画回数・上
 
 `ProgressEvidence` は既存の kind / description / source に nullable `revision` を追加する。旧 constructor と旧 JSON は維持する。ファイル変更は現在の SHA-256、Change Set は APPLIED receipt の proposed/current SHA と実ファイルの一致、Dependency は対象 ID と観測状態を記録する。Change Set の再表示、古い receipt、同じファイル revision は追加進捗にならない。
 
-ファイル fingerprint は既存 FileGoalVerifier の Project 相対パス、symlink 拒否、1 MiB・キャンセル制限を再利用する。存在・ディレクトリの変化は `absent` / `directory`、観測できない状態は `unavailable` とし、未知を変更証拠に置き換えない。情報・revision・失敗の Run-local ledger は各 1024 件で飽和し、その後は保守的に追加証拠を出さない。古い要素を捨てて同じ情報を新規扱いする方式は使わない。
+ファイル fingerprint は既存 FileGoalVerifier の Project 相対パス、symlink 拒否、1 MiB・キャンセル制限を再利用する。存在・ディレクトリの変化は `absent` / `directory`、観測できない状態は `unavailable` とし、未知を変更証拠に置き換えない。汎用情報・revision・失敗の Run-local ledger は各 1024 件。情報が容量に達すると既知結果は DUPLICATE、新しい未記録結果は INFORMATION_UNKNOWN を返す。古い要素を捨てて同じ情報を新規扱いする方式は使わない。
 
 Web は以下を分離する。
 
 | 観測 | Planning の進捗 |
 | --- | --- |
-| webSearch の呼び出し・新URL・タイトル・snippetだけ | 増やさない。既存 Web metrics が扱う |
+| webSearch の新しいURL・snippet | 情報取得のみを NEW_INFORMATION とする。query・日時・順位だけでは増やさない |
 | webSearchAndRead / fetchUrlContent の新しい非空本文 | 本文 SHA が未観測なら NEW_INFORMATION |
 | 日時・取得件数・query・assessment・aliasesだけの変化 | 増やさない |
 | 別URL・別Webツールから同じ本文を取得 | 増やさない |
@@ -131,10 +131,24 @@ Web は以下を分離する。
 
 ### TDD と評価
 
-`EvidenceProgressTest` は 15 件。URL-only、日時による再計上、hybrid query-only、Change Set 未計上、Project外読み取りを Red で再現した。revision 未実装の compilation Red、メタデータだけの復旧・本文SHA・command alias の実行 Red も確認した。既存の局所停滞回復を絶対上限と混同した変更は関連テストで検出して戻し、既存 assertion を維持したまま実際の Run 予算で検証している。実 callback、混合した成功/失敗 Web 結果、旧 JSON、巨大ファイル、ledger 飽和も検証する。
+以前の `EvidenceProgressTest` は 15 件。今回URL発見は情報取得として扱い、作業完了とは分離した。日時・hybrid query・古いreceiptの変更だけでは進捗を増やさない検証は維持する。revision 未実装の compilation Red、メタデータだけの復旧・本文SHA・command alias の実行 Red も確認した。既存の局所停滞回復を絶対上限と混同した変更は関連テストで検出して戻し、既存 assertion を維持したまま実際の Run 予算で検証している。実 callback、混合した成功/失敗 Web 結果、旧 JSON、巨大ファイル、ledger 飽和も検証する。
 
 関連回帰（Goal 評価、Planning / Run 予算、Web / Search）は最終 227 件成功。最後の callback / 旧 JSON / 評価 / Web callback 集中検証は 16 件成功。再現は `./mvnw.cmd -B -Pfull "-Dtest=EvidenceProgressTest,GoalCompletionBaselineTest,WebBoundedToolOutputTest" test`、全体は `./mvnw.cmd -B -Pfull test`。
 
 同じ Phase 0 fixture は検証済み完遂 70%、誤完了自己申告 30%、未達終了 30%、scripted repair 1/1、介入2、不要反復4、二重実行0、権限逸脱0、Goal予約15を維持する。この fixture は Goal gateway の double を使い Planning/Web progress ledger を通らないため、この率の改善を主張しない。実モデルの有用性・token消費の評価は未取得。個別 Red/Green は旧判定の誤進捗を再現し、修正後に同じ観測で追加進捗が出ないことを証明する。
 
-ファイル読取も、正規化した対象パスと行位置・内容を共有して readMultiFile / readTextFile / range 間の同じ行を再計上しない。異なる読取ツールの同一内容で実行 Red を確認し、新しい行だけを進捗にする Green を得た。
+版のない旧ファイル読取は、正規化した対象パスと行位置・内容を共有して readMultiFile / readTextFile / range 間の同じ行を再計上しない。異なる読取ツールの同一内容で実行 Red を確認し、新しい行だけを進捗にする Green を得た。
+
+## 大量文書レビューと既読範囲
+
+`InformationLedger` は版付きファイル情報と汎用結果のダイジェストを分ける。ファイルは正規化絶対パスと読み取りツールが返す `version`（既存 FileSnapshots のファイル全体 SHA-256）ごとに、1始まり・終端を含まない範囲を保持する。重複・隣接範囲は統合する。1–400行の後に301–700行を読むと新規300行、保存範囲は `[1,701)`。1万行を25回で読んでも1範囲であり、120ファイルを処理しても120項目になる。旧版も有界容量内で保持し、版を戻したときも再計上しない。評価器は版取得のための追加ディスク読み取りを行わない。
+
+空結果、失敗、範囲外指定は既読範囲を増やさない。要求したendLineではなく返されたcontentの行数を使う。byte上限で切れた最終行、offset付き再開の先頭行は完全既読範囲に含めず、観測した断片をダイジェストで重複排除する。symbol表示は省略を含み得るため連続範囲と推定しない。版のない旧ツール結果は従来の内容識別を使う。版を保証できない結果をmtimeだけで新しい版と断定しない。既存ツールの1MiBファイル上限は維持する。
+
+ファイル版は最大1024、統合済み範囲も合計最大1024、パスと版の文字数合計は32768以内。汎用情報は最大1024ダイジェスト。満杯になっても既知の範囲・ダイジェストは重複と判定し、未記録情報はUNKNOWNにする。LRU削除は行わない。UNKNOWNはGoal完了・新規情報・通常の重複のいずれでもない。UNKNOWNだけの反復は通常の停滞カウントに加えない。16反復ごとに診断の再計画を最大2回促す。これは通常の停滞・出力分割カウンターを消費せず、後続モデル呼び出しは共通LLM/token上限を消費する。UNKNOWNが続いても共通Run予算で有限に停止する。
+
+情報取得と作業成果は別に扱う。NEW_INFORMATIONはActionPlanをDONEにしない。STATE_CHANGEDまたはSUBGOAL_COMPLETEDがなく情報取得だけが32反復続くとWORK_STALLEDとし、連続停滞閾値を通じて再計画する。読み取り・検索の成功だけでレビュー完了数を増やさない。文書120件のレビューではActionPlanに対象やバッチを登録し、「確認」「レビュー」「結果記録」を別工程として管理し、実際の工程完了でDONEへ進める。Goal完了は既存Completion Gateが独立検証する。これらの猶予は内部定数で、意味的なレビュー成果の自動判定ではない。
+
+Checkpointの既存ツール結果バッチ保存にnullable `progress` を併記し、範囲・結果ダイジェスト・予算・情報取得のみの反復数・判定不能の診断回数を保持する。本文は保存しない。SQLiteの既存JSONスナップショットに追加するためテーブル変更は不要。既存constructorを維持し、旧JSONはprogress=nullで読み込める。旧Checkpointからの再開は過去の情報が不明なためUNKNOWNとして扱い、未読と断定して進捗を水増ししない。Checkpoint保存失敗は既存の原子的トランザクションで前の版を残す。保存前の観測や反復末尾のカウンターはクラッシュ時に失われ得るため、直前バッチ以前の保存状態から再開する。別Runの新規実行には復元しない。Checkpoint無効時は永続的な既読状態復元を提供しない。
+
+診断イベントは既存ExecutionProgressPayloadを維持する。FILE_RANGE証拠のdescriptionに `type=FILE_RANGE newLines=300`、revisionに版を記録する。停滞reasonは `REPEATED_READ`、`REPEATED_SEARCH_OR_ACTION`、`TOOL_FAILURE`、`WORK_STALLED`、`INFORMATION_UNKNOWN` を区別する。本文・認証情報・巨大結果は証拠へ追加しない。ShellはUNKNOWNを「progress unknown」と表示し、既存カウンター表示を保った診断行でreasonとledgerStatusも表示する。汎用結果は結果自体の真偽や有用性を保証せず、独立完了検証を引き続き必要とする。

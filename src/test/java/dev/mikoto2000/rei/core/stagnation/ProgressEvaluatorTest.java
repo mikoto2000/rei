@@ -10,6 +10,12 @@ import org.junit.jupiter.api.io.TempDir;
 class ProgressEvaluatorTest {
   @TempDir Path root;
 
+  @Test void planResetAtRunStartDoesNotRetainPreviousRunsCompletedStepIdentities() {
+    var plan=new dev.mikoto2000.rei.core.actionplan.ActionPlan();plan.addStep("review");plan.completeStep("step-1");
+    var e=new ProgressEvaluator(root,plan);plan.restore(java.util.List.of());plan.addStep("review");
+    e.capturePlanBaseline();var before=e.beforeTool("plan","{}");plan.completeStep("step-1");
+    assertThat(e.afterTool("plan","{}","success",before)).extracting(ProgressEvidence::kind).containsExactly(ProgressEvent.SUBGOAL_COMPLETED);
+  }
   @Test
   void readFailureThenActualContentIsErrorResolved() {
     var evaluator = new ProgressEvaluator(root);

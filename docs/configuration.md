@@ -54,6 +54,7 @@ rei:
   llm:
     max-output-tokens: 8192
     output-limit:
+      # 出力分割と停滞再計画それぞれに独立した上限。共通LLM/token上限は維持。
       max-replans-per-goal: 2
       max-subgoals-per-replan: 8
       max-llm-calls-per-run: 120

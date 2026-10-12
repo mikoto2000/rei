@@ -1,15 +1,19 @@
 package dev.mikoto2000.rei.llm;
 
 /**
- * Absolute run budget, shared by output-limit splitting and stagnation replanning.
+ * Independent absolute counters for output splitting and stagnation replanning,
+ * sharing the same model call and token ceilings.
  * Meaningful progress never replenishes it. The executor reserves each outer prompt/planner call;
  * the controlled model loop reserves every additional LLM/tool cycle before invoking the model.
  */
 public class OutputLimitRunBudget {
-  public record Snapshot(int replans,int llmCalls,long totalTokens,boolean usageUnknown) {}
-  public synchronized Snapshot snapshot(){return new Snapshot(replans,llmCalls,totalTokens,usageUnknown);}
+  public record Snapshot(int replans,int llmCalls,long totalTokens,boolean usageUnknown,int stagnationReplans) {
+    public Snapshot(int replans,int llmCalls,long totalTokens,boolean usageUnknown){this(replans,llmCalls,totalTokens,usageUnknown,0);}
+  }
+  public synchronized Snapshot snapshot(){return new Snapshot(replans,llmCalls,totalTokens,usageUnknown,stagnationReplans);}
   public synchronized void restore(Snapshot saved){
-    if(saved==null||saved.replans()<0||saved.llmCalls()<0||saved.totalTokens()<0)throw new IllegalArgumentException("Invalid saved Run budget");
+    if(saved==null||saved.replans()<0||saved.stagnationReplans()<0||saved.llmCalls()<0||saved.totalTokens()<0)throw new IllegalArgumentException("Invalid saved Run budget");
+    stagnationReplans=Math.max(stagnationReplans,saved.stagnationReplans());
     replans=Math.max(replans,saved.replans());llmCalls=Math.max(llmCalls,saved.llmCalls());totalTokens=Math.max(totalTokens,saved.totalTokens());usageUnknown|=saved.usageUnknown();
   }
   /** Optional durable parent budget. Reservations precede every model call. */
@@ -26,6 +30,7 @@ public class OutputLimitRunBudget {
   private final int maxReplans;
   private final int maxLlmCalls;
   private int replans;
+  private int stagnationReplans;
   private int llmCalls;
   private final long maxTotalTokens;
   private long totalTokens;
@@ -66,6 +71,10 @@ public class OutputLimitRunBudget {
 
   public synchronized int replanCount() {
     return replans;
+  }
+  public synchronized boolean tryConsumeStagnationReplan() {
+    if (stagnationReplans >= maxReplans || remainingLlmCalls() <= 0) return false;
+    stagnationReplans++; return true;
   }
 
   public synchronized int remainingLlmCalls() {

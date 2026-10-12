@@ -30,6 +30,38 @@ class PersistentCheckpointServiceTest {
         factory.getBeanProvider(dev.mikoto2000.rei.core.working.WorkingSet.class),factory.getBeanProvider(dev.mikoto2000.rei.core.taskstate.TaskState.class),factory.getBeanProvider(dev.mikoto2000.rei.core.checkpoint.CheckpointStore.class));
     owner=new AgentRunContext("run","session",root,"A");service.start(owner,"original request");
   }
+  @Test void progressSurvivesCheckpointResumeAndStaysIsolated() {
+    var ledger=new dev.mikoto2000.rei.core.stagnation.InformationLedger();
+    ledger.observeRange("docs/A", "v1", 1, 10001);
+    var saved=new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(ledger.snapshot(),new dev.mikoto2000.rei.llm.OutputLimitRunBudget.Snapshot(0,4,0,false),12,2);
+    service.preserveResults(owner,List.of(),saved);
+    service.finish(owner,"INTERRUPTED");
+    var resumed=service.resume("A",state().taskId(),AgentRunContext.RequestSource.SHELL);
+    var context=new AgentRunContext(resumed.runId(),"session",root,"A");
+    var restored=service.progress(context);
+    assertEquals(saved,restored);
+    var other=new AgentRunContext("different","session",root,"A");
+    assertNull(service.progress(other));
+    var e=new dev.mikoto2000.rei.core.stagnation.InformationLedger();e.restore(restored.information());
+    assertEquals(dev.mikoto2000.rei.core.stagnation.InformationLedger.Status.DUPLICATE,e.observeRange("docs/A","v1",1,10001).status());
+  }
+  @Test void missingProgressInOldCheckpointIsReadableAndRestoresAsUnknown() {
+    var old=repository.fields(state());old.remove("progress");
+    assertNull(repository.fields(old).progress());
+    service.finish(owner,"INTERRUPTED");var resumed=service.resume("A",state().taskId(),AgentRunContext.RequestSource.SHELL);
+    var e=new dev.mikoto2000.rei.core.stagnation.InformationLedger();e.restore(null);
+    assertNull(service.progress(new AgentRunContext(resumed.runId(),"session",root,"A")));
+    assertEquals(dev.mikoto2000.rei.core.stagnation.InformationLedger.Status.UNKNOWN,e.observeRange("A","v1",1,2).status());
+  }
+  @Test void failedProgressSaveRetainsPreviouslyCommittedProgress() {
+    var ledger=new dev.mikoto2000.rei.core.stagnation.InformationLedger();ledger.observeRange("A","v1",1,2);
+    var saved=new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(ledger.snapshot(),new dev.mikoto2000.rei.llm.OutputLimitRunBudget.Snapshot(0,4,0,false),0,0);
+    service.preserveResults(owner,List.of(),saved);settings.setMaxSnapshotBytes(1024);
+    for(int i=0;i<100;i++)ledger.observe(String.format("%064d",i));
+    var larger=new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(ledger.snapshot(),saved.budget(),0,0);
+    assertThrows(CheckpointException.class,()->service.preserveResults(owner,List.of(),larger));
+    assertEquals(saved,repository.get("A",state().taskId()).progress());
+  }
   @AfterEach void close(){service.close();}
   @Test void restrictedRunPreservesModeAcrossResumeWithoutResettingActiveTask() {
     var plan = new dev.mikoto2000.rei.core.actionplan.ActionPlan();
