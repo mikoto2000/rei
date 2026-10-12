@@ -95,6 +95,23 @@ class StorageReferenceProtectionTest {
     repository.save(state,1,"new");assertThat(registry.references(registry.rawObject("chat",newRef).orElseThrow().id())).extracting(StorageObjectRegistry.Reference::kind).contains("CHECKPOINT");
     assertThat(repository.get("project","task").revision()).isEqualTo(2);
   }
+  @Test void committedCheckpointCleanupReleasesOnlyDeletedRevisionReferences()throws Exception {
+    prepare();var registry=registry();var object=produced(registry,UUID.randomUUID().toString(),100);
+    String project=UUID.randomUUID().toString();
+    var source=new org.sqlite.SQLiteDataSource();source.setUrl("jdbc:sqlite:"+root.resolve("memory-consolidation.db"));
+    var repository=new dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository(source,new dev.mikoto2000.rei.checkpoint.CheckpointProperties());
+    repository.setStorageObjectRegistry(registry);
+    var state=dev.mikoto2000.rei.checkpoint.PersistentCheckpoint.initial("task",project,"chat","run",root,"question");
+    var fields=repository.fields(state);fields.put("files",Map.of(root.resolve(object.relativePath()).toString(),"hash"));state=repository.fields(fields);
+    repository.save(state,0,"first");repository.save(state,1,"second");
+    registry.addReference(object.id(),"EXPORT","export");
+    assertThat(repository.cleanupHistory(false).removedRevisions()).isEqualTo(1);
+    assertThat(registry.references(object.id())).contains(new StorageObjectRegistry.Reference("CHECKPOINT",project+":task:1"));
+    repository.cleanupHistory(true);
+    assertThat(registry.references(object.id())).containsExactlyInAnyOrder(
+        new StorageObjectRegistry.Reference("CHECKPOINT",project+":task:2"),new StorageObjectRegistry.Reference("EXPORT","export"));
+    assertThat(root.resolve(object.relativePath())).exists();assertThat(repository.get(project,"task").revision()).isEqualTo(2);
+  }
   @Test void producerCannotAdoptAnExistingUnknownFileOrRegisterOutsideManagedPaths()throws Exception {
     String ref=new RawToolResultStore(root).save("chat","run","tool","call","旧結果");prepare();var registry=registry();
     new RawToolResultStore(root,registry).save("chat","run","tool","call","旧結果");

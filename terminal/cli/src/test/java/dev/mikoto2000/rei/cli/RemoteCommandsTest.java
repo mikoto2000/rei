@@ -3,6 +3,17 @@ import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 import java.util.*;
 class RemoteCommandsTest {
+  @Test void checkpointHistoryMaintenanceIsGlobalAndRequiresExplicitApply(){
+    var status=RemoteCommands.route(List.of("/checkpoint","status"),null,null);
+    assertEquals("GET",status.method());assertEquals("/api/v1/checkpoints/history/status",status.path());
+    var preview=RemoteCommands.route(List.of("/checkpoint","cleanup"),null,null);
+    assertEquals("GET",preview.method());assertEquals("/api/v1/checkpoints/history/cleanup",preview.path());
+    var apply=RemoteCommands.route(List.of("/checkpoint","cleanup","--apply"),null,null);
+    assertEquals("POST",apply.method());assertEquals("/api/v1/checkpoints/history/cleanup",apply.path());assertEquals(Map.of("apply",true),apply.body());
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/checkpoint","status","--apply"),null,null));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/checkpoint","cleanup","--all"),null,null));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/checkpoint","cleanup","--apply","extra"),null,null));
+  }
   @Test void explicitFilesAreResolvedByTheClientSelectedProject() {
     var base=java.nio.file.Path.of("selected-project").toAbsolutePath().normalize();
     var image=(Map<?,?>)RemoteCommands.route(List.of("/image","generate","scene","--output","picture.png"),"project",null,base).body();assertEquals(base.resolve("picture.png").toString(),image.get("output"));

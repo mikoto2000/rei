@@ -30,14 +30,18 @@ public class ApiExceptionHandler {
     return ResponseEntity.status(429).body(new Error("Run admission capacity reached"));
   }
   @ExceptionHandler(dev.mikoto2000.rei.checkpoint.CheckpointException.class)
-  public ResponseEntity<Error> checkpoint(dev.mikoto2000.rei.checkpoint.CheckpointException error) {
+  public ResponseEntity<?> checkpoint(dev.mikoto2000.rei.checkpoint.CheckpointException error) {
     int status=switch(error.code()) {
       case CAPACITY -> 507;
       case CORRUPT_CHECKPOINT,INCOMPATIBLE_SCHEMA -> 422;
       default -> 409;
     };
+    if(error.code()==dev.mikoto2000.rei.checkpoint.CheckpointException.Code.CAPACITY && error.capacityDetail()!=null)
+      return ResponseEntity.status(status).body(new CheckpointCapacityError(error.getMessage(),"CAPACITY",error.capacityDetail()));
     return ResponseEntity.status(status).body(new Error("Checkpoint: "+error.code()));
   }
+  public record CheckpointCapacityError(String message,String code,
+      dev.mikoto2000.rei.checkpoint.CheckpointException.CapacityDetail usage) {}
   @ExceptionHandler(java.util.ConcurrentModificationException.class)
   public ResponseEntity<Error> workContextConflict() {return ResponseEntity.status(409).body(new Error("Work Context revision changed"));}
   @ExceptionHandler(dev.mikoto2000.rei.application.state.OperationConflictException.class)

@@ -7,12 +7,15 @@
 | 操作 | コマンド |
 | --- | --- |
 | 現在の Session のタスクを保存 | `/checkpoint` |
+| 全プロジェクトの保存量・上限を確認 | `/checkpoint status` |
+| 過去の保存履歴の整理候補を確認 | `/checkpoint cleanup` |
+| 整理候補を削除 | `/checkpoint cleanup --apply` |
 | 再開候補を確認 | `/resume list` |
 | 保存状態と現在の照合結果を確認 | `/resume show <taskId>` |
 | 明示的に再開 | `/resume <taskId>` |
 | 候補から除外し、履歴を残す | `/resume abandon <taskId>` |
 
-プロジェクトを選択して実行します。保存先は Run 開始時のプロジェクトで固定されます。再開も保存されたプロジェクトディレクトリと Session を使用します。現在選択中の別プロジェクトから、同じ ID のタスクを操作することはできません。
+保存・再開はプロジェクトを選択して実行します。保存先は Run 開始時のプロジェクトで固定されます。再開も保存されたプロジェクトディレクトリと Session を使用します。現在選択中の別プロジェクトから、同じ ID のタスクを操作することはできません。`/checkpoint status` と `/checkpoint cleanup` は全プロジェクトの共通保存枠を対象にし、プロジェクト選択は不要です。簡易 CLI でも同じコマンドを使用できます。
 
 `/checkpoint` は実行中なら新しいリビジョンを保存し、実行が終わっている場合はその Session の最新の保存済み状態を返します。一覧・詳細・照合だけでは作業は開始しません。通常の新規チャット Run には新しいタスク ID が付きます。実行中に追加した指示は、その Run のタスクへ保存します。
 
@@ -44,7 +47,7 @@
 
 ## 保存と設定
 
-保存先は既存の `<rei-data-dir>/memory.db`、SQLite テーブル `checkpoint_heads`、`checkpoint_revisions`、`checkpoint_event_keys` です。Schema version 1 の JSON スナップショットをリビジョンとして保存します。ヘッド更新・スナップショット追加・重複防止キーを同じトランザクションで保存します。過去リビジョンを削除してもイベント ID の重複防止キーは残し、期待リビジョンの比較で更新競合を検出します。
+保存先は既存の `<rei-data-dir>/memory-consolidation.db`（`memoryConsolidationDataSource`）、SQLite テーブル `checkpoint_heads`、`checkpoint_revisions`、`checkpoint_event_keys` です。Schema version 1 の JSON スナップショットをリビジョンとして保存します。ヘッド更新・スナップショット追加・重複防止キーを同じトランザクションで保存します。過去リビジョンを削除してもイベント ID の重複防止キーは残し、期待リビジョンの比較で更新競合を検出します。
 
 ```yaml
 rei:
@@ -59,7 +62,15 @@ rei:
 
 有効が初期値です。保存のためだけに LLM は呼びません。計画更新、Tool 前後、ファイル・プロセスのイベント、追加指示、Run 終端などで保存し、トークン単位では保存しません。
 
-保持期間を超えた過去リビジョンを次の保存時に削除します。各タスクの最新の正常なリビジョンは完了・未完了を問わず保持し、破損した最新データも修復用に残します。件数上限は削除済みリビジョンの重複防止キーも含めます。容量上限は JSON スナップショット本体の合計です。既存の原文結果ストアと SQLite の管理領域は別です。上限に達したときは以前の状態を壊さず明示エラーにします。実行前の保存に失敗した場合は、副作用を開始しません。必要なら上限を増やしてください。自動のタスク履歴削除 UI はありません。
+保存件数・容量の上限は全プロジェクトの合計に適用します。`max-revisions` は現在保持している JSON スナップショットの件数、`max-bytes` はその UTF-8 バイト数の合計です。重複防止キーは整理後も保持しますが、保存件数の上限には含めません。既存の原文結果ストアと SQLite の管理領域は別です。
+
+次の保存時に保持期間を超えた過去リビジョンを整理します。新しいスナップショットを加えると件数・容量の上限を超える場合は、整理可能な履歴を古い順に、新しい保存が収まるまで自動で削除します。各タスクの最新の正常なリビジョンは完了・未完了を問わず保持します。実行中の所有権が有効なタスク、承認待ち・承認後の続行待ち・結果不明の続行があるタスク、最新状態に破損や Schema 不一致のあるタスクは、過去リビジョンも含めて保護します。新しい保存と整理は同じトランザクション内で行い、保存できなければ整理も取り消します。
+
+手動整理は、最初に `/checkpoint cleanup` で削除可能な件数・容量と保護対象の件数を確認し、`/checkpoint cleanup --apply` で実行します。保持期間内の履歴も含め、保護対象以外の過去リビジョンを整理します。最新状態を残すため、保存タスクの `/resume` は引き続き利用できます。削除した過去の revision 自体は復元できません。整理対象は実行時に再確認します。
+
+自動整理しても保存枠が足りない場合、エラーに使用量・上限・新しい保存に必要な量と、変更する設定名・具体的な操作を表示します。`/checkpoint status` で全体の保存量を確認し、必要に応じて `application.yaml` の `rei.checkpoint.max-bytes` または `rei.checkpoint.max-revisions` を増やし、Rei を再起動して `/resume <taskId>` で再開してください。単一スナップショットの上限に達した場合は `rei.checkpoint.max-snapshot-bytes` が対象です。実行前の保存に失敗した場合は、副作用を開始しません。
+
+ここでの使用量はスナップショット本体の論理容量です。整理しても SQLite ファイルの長さはそのままのことがありますが、チェックポイント保存枠は再利用できます。`/storage maintenance checkpoint` は SQLite の WAL を回収する操作で、保存履歴の整理とは別です。
 
 最新リビジョンが破損している場合、以前の正常なリビジョンを参照できます。照合で破損・Schema 不一致を表示し、古い状態のままの Resume は拒否します。全リビジョンが破損している場合は取得エラーです。修復 UI と Schema 移行は今回の対象外です。
 
@@ -77,6 +88,11 @@ rei:
 | POST | `/api/v1/projects/{projectId}/checkpoints`（`{"sessionId":"..."}`） |
 | POST | `/api/v1/projects/{projectId}/checkpoints/{taskId}/resume` |
 | POST | `/api/v1/projects/{projectId}/checkpoints/{taskId}/abandon` |
+| GET | `/api/v1/checkpoints/history/status`（全プロジェクトの保存量） |
+| GET | `/api/v1/checkpoints/history/cleanup`（整理候補の確認） |
+| POST | `/api/v1/checkpoints/history/cleanup`（`{"apply":true}` で整理） |
+
+全プロジェクトの履歴整理 API も既存 API キーの認証が必要です。GET は削除せず、POST は `apply` が明示的に `true` の場合だけ整理します。入力が空・`false`・未知のフィールドを含む場合は拒否します。
 
 Resume のレスポンスに新しい `runId`、元 Run、元リビジョン、照合結果を返します。既存の Run 状態・キャンセル・SSE API を利用します。イベント `checkpoint.revision.saved`、`checkpoint.reconciled`、`checkpoint.resumed` はタスクと Run の関係を含みます。
 

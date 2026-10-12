@@ -65,30 +65,108 @@ public class PersistentCheckpointRepository {
   }
   public PersistentCheckpoint save(PersistentCheckpoint state,long expected,String event) {
     var next=state.revision(expected+1);String encoded=encode(next);
-    if(encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>settings.getMaxSnapshotBytes())throw new CheckpointException(CheckpointException.Code.CAPACITY,"Checkpoint snapshot capacity reached");
+    long incomingBytes=encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+    if(incomingBytes>settings.getMaxSnapshotBytes())throw CheckpointException.snapshotCapacity(incomingBytes,settings.getMaxSnapshotBytes());
     // Cross-DB order deliberately favors extra protection if this save fails.
     if(objects!=null)objects.protectCheckpoint(next);
-    return transaction.execute(tx->{
+    var removed=new ArrayList<HistoricalRow>();
+    var saved=transaction.execute(tx->{
       db.sql("INSERT OR IGNORE INTO checkpoint_heads(project,task,revision) VALUES(?,?,0)").params(state.projectId(),state.taskId()).update();
       db.sql("UPDATE checkpoint_heads SET revision=revision WHERE project=? AND task=?").params(state.projectId(),state.taskId()).update();
       if(db.sql("SELECT COUNT(*) FROM checkpoint_event_keys WHERE project=? AND task=? AND event=?").params(state.projectId(),state.taskId(),event).query(Long.class).single()>0)return get(state.projectId(),state.taskId());
-      prune();
-      if(db.sql("SELECT COUNT(*) FROM checkpoint_event_keys").query(Long.class).single()>=settings.getMaxRevisions()
-          ||db.sql("SELECT COALESCE(SUM(length(CAST(snapshot AS BLOB))),0) FROM checkpoint_revisions").query(Long.class).single()+encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>settings.getMaxBytes())
-        throw new CheckpointException(CheckpointException.Code.CAPACITY,"Checkpoint storage capacity reached; previous revisions retained");
+      if(db.sql("SELECT revision FROM checkpoint_heads WHERE project=? AND task=?").params(state.projectId(),state.taskId()).query(Long.class).single()!=expected)
+        throw new ConcurrentModificationException("Checkpoint revision changed");
+      var usage=historyUsage();var originalUsage=usage;
+      Instant cutoff=Instant.now().minus(Duration.ofDays(settings.getRetentionDays()));
+      // Ordinary tool boundaries need not decode every task or inspect approval snapshots.
+      boolean expiredHistory=db.sql("SELECT EXISTS(SELECT 1 FROM checkpoint_revisions WHERE julianday(created)<julianday(?))")
+          .param(cutoff.toString()).query(Integer.class).single()!=0;
+      var candidates=exceeds(usage,incomingBytes)||expiredHistory?historyCandidates().rows():List.<HistoricalRow>of();
+      for(var candidate:candidates) {
+        boolean expired;
+        try {expired=Instant.parse(candidate.created()).isBefore(cutoff);}catch(RuntimeException invalid){expired=false;}
+        if(!expired&&!exceeds(usage,incomingBytes))continue;
+        remove(candidate);removed.add(candidate);
+        usage=afterRemoval(usage,1,candidate.bytes());
+      }
+      // Throwing rolls back all tentative deletions, so report the actually retained usage.
+      if(exceeds(usage,incomingBytes))throw CheckpointException.storageCapacity(originalUsage.revisions(),originalUsage.maxRevisions(),originalUsage.snapshotBytes(),incomingBytes,originalUsage.maxBytes());
       if(db.sql("UPDATE checkpoint_heads SET revision=? WHERE project=? AND task=? AND revision=?").params(next.revision(),state.projectId(),state.taskId(),expected).update()!=1)
         throw new ConcurrentModificationException("Checkpoint revision changed");
       db.sql("INSERT INTO checkpoint_revisions(project,task,revision,event,snapshot,created) VALUES(?,?,?,?,?,?)").params(state.projectId(),state.taskId(),next.revision(),event,encoded,next.createdAt().toString()).update();
       db.sql("INSERT INTO checkpoint_event_keys(project,task,event) VALUES(?,?,?)").params(state.projectId(),state.taskId(),event).update();return next;
     });
+    releaseReferences(removed);
+    return saved;
   }
-  private void prune() {
-    String cutoff=Instant.now().minus(Duration.ofDays(settings.getRetentionDays())).toString();
-    for(var candidate:db.sql("SELECT DISTINCT project,task FROM checkpoint_revisions WHERE created<?").param(cutoff).query((row,index)->new String[]{row.getString(1),row.getString(2)}).list()) {
-      try {long valid=get(candidate[0],candidate[1]).revision();
-        db.sql("DELETE FROM checkpoint_revisions WHERE project=? AND task=? AND created<? AND revision<?").params(candidate[0],candidate[1],cutoff,valid).update();
-      }catch(IllegalArgumentException|IllegalStateException corrupt){/* Retain damaged history for repair. */}
+  public CheckpointHistory.Usage historyUsage() {
+    return db.sql("SELECT COUNT(*) AS revisions,COALESCE(SUM(length(CAST(snapshot AS BLOB))),0) AS bytes,(SELECT COUNT(*) FROM checkpoint_event_keys) AS keys FROM checkpoint_revisions")
+        .query((row,index)->new CheckpointHistory.Usage(row.getLong("revisions"),row.getLong("keys"),row.getLong("bytes"),settings.getMaxRevisions(),settings.getMaxBytes())).single();
+  }
+  /** Preview and apply share the same eligibility rules; apply re-evaluates under SQLite's writer lock. */
+  public CheckpointHistory.Cleanup cleanupHistory(boolean apply) {
+    var removed=new ArrayList<HistoricalRow>();
+    var result=transaction.execute(tx->{
+      if(apply)db.sql("UPDATE checkpoint_heads SET revision=revision").update();
+      var before=historyUsage();var history=historyCandidates();long bytes=0;
+      for(var row:history.rows()){bytes+=row.bytes();if(apply){remove(row);removed.add(row);}}
+      return new CheckpointHistory.Cleanup(history.rows().size(),bytes,history.protectedTasks(),before,
+          afterRemoval(before,history.rows().size(),bytes),apply);
+    });
+    releaseReferences(removed);
+    return result;
+  }
+  private record TaskKey(String project,String task) {}
+  private record HistoricalRow(String project,String task,long revision,long bytes,String created) {}
+  private record HistoryCandidates(List<HistoricalRow> rows,long protectedTasks) {}
+  private HistoryCandidates historyCandidates() {
+    var protectedTasks=new HashSet<TaskKey>();
+    // Inspect the actual head, rather than get()'s valid fallback, to preserve damaged history for repair.
+    db.sql("SELECT h.project,h.task,h.revision,h.owner,r.snapshot FROM checkpoint_heads h LEFT JOIN checkpoint_revisions r ON r.project=h.project AND r.task=h.task AND r.revision=h.revision WHERE h.revision>0")
+        .query((row,index)->{
+          var key=new TaskKey(row.getString("project"),row.getString("task"));
+          try {var head=decode(new Row(row.getLong("revision"),row.getString("snapshot")),key.project(),key.task());
+            String owner=row.getString("owner");
+            if((owner!=null&&alive(owner))||"WAITING_APPROVAL".equals(head.status()))protectedTasks.add(key);
+          }catch(RuntimeException damaged){protectedTasks.add(key);}
+          return key;
+        }).list();
+    if(db.sql("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='approval_continuations'").query(Long.class).single()>0
+        &&db.sql("SELECT EXISTS(SELECT 1 FROM approval_continuations WHERE state NOT IN ('COMPLETED','CANCELLED','DENIED'))").query(Integer.class).single()!=0) {
+      protectedTasks.addAll(db.sql("""
+          SELECT DISTINCT r.project,r.task FROM checkpoint_revisions r
+          JOIN approval_continuations a ON a.run=json_extract(CASE WHEN json_valid(r.snapshot) THEN r.snapshot END,'$.runId')
+            OR a.run=json_extract(CASE WHEN json_valid(r.snapshot) THEN r.snapshot END,'$.originalRunId')
+            OR a.run=json_extract(CASE WHEN json_valid(r.snapshot) THEN r.snapshot END,'$.resumedFromRunId')
+          WHERE a.state NOT IN ('COMPLETED','CANCELLED','DENIED')
+          """).query((row,index)->new TaskKey(row.getString(1),row.getString(2))).list());
     }
+    var rows=db.sql("""
+        SELECT r.project,r.task,r.revision,length(CAST(r.snapshot AS BLOB)) AS bytes,r.created
+        FROM checkpoint_revisions r JOIN checkpoint_heads h ON h.project=r.project AND h.task=r.task
+        WHERE r.revision<h.revision
+        """).query((row,index)->new HistoricalRow(row.getString("project"),row.getString("task"),row.getLong("revision"),row.getLong("bytes"),row.getString("created"))).list()
+        .stream().filter(row->!protectedTasks.contains(new TaskKey(row.project(),row.task())))
+        .sorted(Comparator.comparing((HistoricalRow row)->historyTime(row.created())).thenComparing(HistoricalRow::project).thenComparing(HistoricalRow::task).thenComparingLong(HistoricalRow::revision)).toList();
+    return new HistoryCandidates(rows,protectedTasks.size());
+  }
+  private Instant historyTime(String created) {
+    try{return Instant.parse(created);}catch(RuntimeException invalid){return Instant.MAX;}
+  }
+  private boolean exceeds(CheckpointHistory.Usage usage,long incomingBytes) {
+    return usage.revisions()>=usage.maxRevisions()||incomingBytes>usage.maxBytes()-usage.snapshotBytes();
+  }
+  private CheckpointHistory.Usage afterRemoval(CheckpointHistory.Usage usage,long count,long bytes) {
+    return new CheckpointHistory.Usage(usage.revisions()-count,usage.eventKeys(),usage.snapshotBytes()-bytes,usage.maxRevisions(),usage.maxBytes());
+  }
+  private void remove(HistoricalRow row) {
+    db.sql("DELETE FROM checkpoint_revisions WHERE project=? AND task=? AND revision=?").params(row.project(),row.task(),row.revision()).update();
+    // Keep deduplication keys: a late event must never resurrect a removed revision or side effect.
+  }
+  private void releaseReferences(List<HistoricalRow> removed) {
+    if(objects!=null&&!removed.isEmpty())try {
+      objects.releaseCheckpointHistory(removed.stream().map(row->row.project()+":"+row.task()+":"+row.revision()).toList());
+    }catch(RuntimeException unavailable){/* Cross-DB failure leaves extra protection, never unprotected live evidence. */}
   }
   public boolean acquire(String project,String task,String run) {
     return Boolean.TRUE.equals(transaction.execute(tx->{

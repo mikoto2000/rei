@@ -115,6 +115,8 @@ public class PersistentCheckpointService implements AutoCloseable {
   public List<PersistentCheckpoint> list(String project) {
     return repository.list(project).stream().map(this::recoverView).filter(s->!"ABANDONED".equals(s.status())&&(!"COMPLETED".equals(s.status())||s.operations().stream().anyMatch(o->o.status()==OperationStatus.UNKNOWN))).sorted(Comparator.comparing(PersistentCheckpoint::createdAt).reversed()).toList();
   }
+  public CheckpointHistory.Usage historyUsage(){return repository.historyUsage();}
+  public CheckpointHistory.Cleanup cleanupHistory(boolean apply){return repository.cleanupHistory(apply);}
   public PersistentCheckpoint get(String project,String task){return recoverView(repository.get(project,task));}
   private PersistentCheckpoint recoverView(PersistentCheckpoint state) {
     if(!"RUNNING".equals(state.status())||repository.leased(state.projectId(),state.taskId()))return state;

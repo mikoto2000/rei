@@ -59,6 +59,20 @@ public final class StorageObjectRegistry {
     return database.transaction(db->{StorageBackup.force(rawPath(conversation,ref));return put(db,root,rawPath(conversation,ref),"RAW_RESULT",scope(conversation),key(conversation),run,createdByProducer?clock.instant():null,createdByProducer,List.of());});
   }
   public void protectCheckpoint(dev.mikoto2000.rei.checkpoint.PersistentCheckpoint state){database.transaction(db->{protectCheckpoint(db,root,state);return null;});}
+  /** Called only after checkpoint history deletion commits; retained revision references stay intact. */
+  public void releaseCheckpointHistory(List<String> owners) {
+    database.transaction(db->{
+      for(String owner:owners) {
+        try(var update=db.prepareStatement("UPDATE stored_objects SET revision=revision+1 WHERE id IN (SELECT object_id FROM object_references WHERE kind='CHECKPOINT' AND owner=?)")) {
+          update.setString(1,owner);update.executeUpdate();
+        }
+        try(var delete=db.prepareStatement("DELETE FROM object_references WHERE kind='CHECKPOINT' AND owner=?")) {
+          delete.setString(1,owner);delete.executeUpdate();
+        }
+      }
+      return null;
+    });
+  }
   static void protectCheckpoint(Connection db,Path root,dev.mikoto2000.rei.checkpoint.PersistentCheckpoint state)throws Exception {
     String owner=state.projectId()+":"+state.taskId()+":"+state.revision();
     String project=ProjectStorage.projectId(state.sessionId());Path base=project==null?root:root.resolve("projects").resolve(project);

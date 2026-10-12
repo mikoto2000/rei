@@ -45,6 +45,20 @@ class PersistentCheckpointServiceTest {
     var e=new dev.mikoto2000.rei.core.stagnation.InformationLedger();e.restore(restored.information());
     assertEquals(dev.mikoto2000.rei.core.stagnation.InformationLedger.Status.DUPLICATE,e.observeRange("docs/A","v1",1,10001).status());
   }
+  @Test void manualHistoryCleanupRetainsProgressAndResumeEvidence() {
+    var ledger=new dev.mikoto2000.rei.core.stagnation.InformationLedger();ledger.observeRange("docs/A","v1",1,200);
+    var progress=new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(ledger.snapshot(),new dev.mikoto2000.rei.llm.OutputLimitRunBudget.Snapshot(0,4,0,false),12,2);
+    var event=new AgentEventFactory(java.time.Clock.systemUTC()).toolStarted("call","deploy","deployment").withOwnership(owner);
+    bus.publishBoundary(event);service.preserveResults(owner,List.of(),progress);service.finish(owner,"INTERRUPTED");
+    var before=state();var preview=service.cleanupHistory(false);
+    assertTrue(preview.removedRevisions()>0);assertEquals(before, state());
+    service.cleanupHistory(true);
+    assertEquals(before,state());assertEquals(1,service.historyUsage().revisions());
+    assertEquals(PersistentCheckpoint.OperationStatus.UNKNOWN,state().operations().getFirst().status());
+    var resumed=service.resume("A",before.taskId(),AgentRunContext.RequestSource.SHELL);
+    assertEquals(progress,service.progress(new AgentRunContext(resumed.runId(),"session",root,"A")));
+    assertEquals(before.revision(),resumed.checkpointRevision());
+  }
   @Test void missingProgressInOldCheckpointIsReadableAndRestoresAsUnknown() {
     var old=repository.fields(state());old.remove("progress");
     assertNull(repository.fields(old).progress());

@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class CheckpointHttpSmokeTest {
   @TempDir Path root;
   @Configuration(proxyBeanMethods=false)
-  @Import({WebApiConfiguration.class,SecurityConfig.class,ChatController.class,RunController.class,CheckpointController.class,
+  @Import({WebApiConfiguration.class,SecurityConfig.class,ChatController.class,RunController.class,CheckpointController.class,CheckpointHistoryController.class,
       ApiExceptionHandler.class,PersistentCheckpointRepository.class,PersistentCheckpointService.class,CheckpointProperties.class})
   @ImportAutoConfiguration({org.springframework.boot.tomcat.autoconfigure.servlet.TomcatServletWebServerAutoConfiguration.class,
       org.springframework.boot.webmvc.autoconfigure.DispatcherServletAutoConfiguration.class,
@@ -72,6 +72,14 @@ class CheckpointHttpSmokeTest {
       var application=new SpringApplication(Config.class);WebApplication.configure(application,"checkpoint-smoke-key");
       try(var context=application.run("--rei.data-dir="+root,"--rei.web.port=0","--logging.config=classpath:web-test-logback.xml");var client=HttpClient.newHttpClient()) {
         int port=Integer.parseInt(context.getEnvironment().getProperty("local.server.port"));
+        String history="/api/v1/checkpoints/history";
+        assertEquals(401,request(client,port,history+"/status",null,false).statusCode());
+        assertEquals(401,request(client,port,history+"/cleanup","{\"apply\":true}",false).statusCode());
+        assertEquals(200,request(client,port,history+"/status",null,true).statusCode());
+        assertEquals(200,request(client,port,history+"/cleanup",null,true).statusCode());
+        assertEquals(400,request(client,port,history+"/cleanup","{}",true).statusCode());
+        assertEquals(400,request(client,port,history+"/cleanup","{\"apply\":false}",true).statusCode());
+        assertEquals(400,request(client,port,history+"/cleanup","{\"apply\":true,\"unexpected\":true}",true).statusCode());
         if(restart==0) {
           project=context.getBean(ProjectRegistry.class).resolve(root).id();
           var result=request(client,port,"/api/v1/chat","{\"projectId\":\""+project+"\",\"message\":\"long task\"}",true);

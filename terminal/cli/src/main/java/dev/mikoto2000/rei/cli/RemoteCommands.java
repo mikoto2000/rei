@@ -35,6 +35,13 @@ public final class RemoteCommands {
       };
     }
     if(!NAMES.contains(name))throw new IllegalArgumentException("Unsupported CLI command: "+name+". Use legacy-shell; this input was not sent to the model.");
+    if(name.equals("/checkpoint")&&Set.of("status","cleanup").contains(action)){
+      String base="/api/v1/checkpoints/history";
+      if(action.equals("status")){exact(words,2);return get(base+"/status");}
+      if(words.size()==2)return get(base+"/cleanup");
+      exact(words,3);if(!words.get(2).equals("--apply"))throw invalid();
+      return post(base+"/cleanup",Map.of("apply",true));
+    }
     if(name.equals("/feed")) {
       String base="/api/v1/feed/commands";
       if(action.equals("list")){exact(words,words.size()==1?1:2);return get(base);}

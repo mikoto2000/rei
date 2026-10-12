@@ -263,6 +263,7 @@ public class ChatExecutionService {
     ConversationTurnStore.Status turnStatus = ConversationTurnStore.Status.FAILED;
     String assistantMessage = null;
     boolean suspended=false;
+    boolean checkpointFinished=false;
 
     try {
       if(resumed==null)turns.startOrdered(context, promptText, clock.instant());
@@ -346,6 +347,17 @@ public class ChatExecutionService {
         if(context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand)maybeRefreshTopicCandidates();
         execution.completeRun();
         turnStatus = ConversationTurnStore.Status.COMPLETED;
+        // Persist terminal checkpoint metadata before announcing completion. Capacity failure
+        // must not turn a reported success into a second, contradictory terminal event.
+        if (checkpoints != null) {
+          checkpointFinished=true;
+          ErrorInformation checkpointError=finishCheckpoint(context,"COMPLETED");
+          if(checkpointError!=null) {
+            turnStatus=ConversationTurnStore.Status.FAILED;
+            eventPublisher.publish(eventFactory.runFailed(runId,checkpointError));
+            return ChatExecutionResult.failed(checkpointError.message(),checkpointError.code());
+          }
+        }
         GenerationMetrics metrics = lastGenerationMetrics.get();
         eventPublisher.publish(eventFactory.runCompleted(runId, elapsedMillis(startedAtNanos),
             usageAvailable.get() ? runCompletionTokens.get() : null,
@@ -358,12 +370,37 @@ public class ChatExecutionService {
         return ChatExecutionResult.success(result.text(), consolidationSuggested);
       } else {
         if (result.status() == ChatRunStatus.CANCELLED) execution.cancel();
-        eventPublisher.publish(eventFactory.runFailed(runId, terminalError(result.status())));
+        ErrorInformation failure=terminalError(result);
+        if(checkpoints!=null) {
+          checkpointFinished=true;
+          ErrorInformation checkpointError=finishCheckpoint(context,execution.isCancelled()?"CANCELLED":"FAILED");
+          if(checkpointError!=null && result.status()!=ChatRunStatus.CANCELLED && result.error()==null)failure=checkpointError;
+        }
+        eventPublisher.publish(eventFactory.runFailed(runId, failure));
         if (result.status() == ChatRunStatus.CANCELLED) return ChatExecutionResult.cancelled();
-        return ChatExecutionResult.failed(terminalError(result.status()).message(),terminalError(result.status()).code());
+        return ChatExecutionResult.failed(failure.message(),failure.code());
       }
     } catch (RuntimeException error) {
-      if(error instanceof RunWaitingException){suspended=true;return execution.hasApprovalContinuation()&&((dev.mikoto2000.rei.core.policy.ApprovalContinuationService)continuations).waitingApproval(context)?ChatExecutionResult.waiting("tool_approval_waiting"):ChatExecutionResult.waiting();}
+      if(error instanceof RunWaitingException){
+        suspended=true;
+        boolean approval=execution.hasApprovalContinuation()&&((dev.mikoto2000.rei.core.policy.ApprovalContinuationService)continuations).waitingApproval(context);
+        if(checkpoints!=null) {
+          checkpointFinished=true;
+          ErrorInformation checkpointError=finishCheckpoint(context,approval?"WAITING_APPROVAL":"WAITING");
+          if(checkpointError!=null) {
+            suspended=false;
+            eventPublisher.publish(eventFactory.runFailed(runId,checkpointError));
+            return ChatExecutionResult.failed(checkpointError.message(),checkpointError.code());
+          }
+        }
+        return approval?ChatExecutionResult.waiting("tool_approval_waiting"):ChatExecutionResult.waiting();
+      }
+      ErrorInformation checkpointError=checkpointError(error);
+      if(checkpointError!=null && !RunCancellation.isCancellation(error) && !execution.isCancelled()) {
+        if(checkpoints!=null && !checkpointFinished){checkpointFinished=true;finishCheckpoint(context,"FAILED");}
+        eventPublisher.publish(eventFactory.runFailed(runId,checkpointError));
+        return ChatExecutionResult.failed(checkpointError.message(),checkpointError.code());
+      }
       if (!RunCancellation.isCancellation(error) && !execution.isCancelled()) throw error;
       execution.cancel();
       eventPublisher.publish(eventFactory.runFailed(runId, terminalError(ChatRunStatus.CANCELLED)));
@@ -384,7 +421,7 @@ public class ChatExecutionService {
           cancellationHook.dispose();
           execution.close();
           try {if(!suspended||execution.isCancelled())turns.finish(context, execution.isCancelled() ? ConversationTurnStore.Status.CANCELLED : turnStatus, assistantMessage);}
-          finally {if (checkpoints != null) checkpoints.finish(context, execution.isCancelled() ? "CANCELLED" : suspended?(execution.hasApprovalContinuation()&&((dev.mikoto2000.rei.core.policy.ApprovalContinuationService)continuations).waitingApproval(context)?"WAITING_APPROVAL":"WAITING"):turnStatus.name());}
+          finally {if (checkpoints != null && !checkpointFinished) finishCheckpoint(context, execution.isCancelled() ? "CANCELLED" : suspended?(execution.hasApprovalContinuation()&&((dev.mikoto2000.rei.core.policy.ApprovalContinuationService)continuations).waitingApproval(context)?"WAITING_APPROVAL":"WAITING"):turnStatus.name());}
           if(!suspended&&continuations!=null)continuations.terminal(context);
           if (!suspended && workContext != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand) workContext.afterTerminal(context);
           if (!suspended && autoSleep != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand) autoSleep.afterTerminal(context);
@@ -422,6 +459,32 @@ public class ChatExecutionService {
       case TIMED_OUT -> new ErrorInformation("RunTimeout", "concurrent Run timeout", "run_timeout");
       case SUCCESS -> throw new IllegalArgumentException("SUCCESS is not a failed terminal state");
     };
+  }
+
+  private ErrorInformation terminalError(ChatRunResult result) {
+    return result.error()==null?terminalError(result.status()):result.error();
+  }
+
+  /** Known local checkpoint diagnostics are safe to expose; arbitrary cause messages remain private. */
+  private ErrorInformation checkpointError(Throwable error) {
+    var seen=java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable,Boolean>());
+    for(Throwable cause=error;cause!=null && seen.size()<32 && seen.add(cause);cause=cause.getCause())
+      if(cause instanceof dev.mikoto2000.rei.checkpoint.CheckpointException checkpoint
+          && checkpoint.code()==dev.mikoto2000.rei.checkpoint.CheckpointException.Code.CAPACITY)
+        return new ErrorInformation("CheckpointCapacity",checkpoint.capacityDetail()==null
+            ?"チェックポイント保存容量の上限に達しました。/checkpoint status で使用量を確認してください。"
+            :checkpoint.getMessage(),"checkpoint_capacity");
+    return null;
+  }
+
+  private ErrorInformation finishCheckpoint(AgentRunContext context,String status) {
+    try {checkpoints.finish(context,status);return null;}
+    catch(dev.mikoto2000.rei.checkpoint.CheckpointException error) {
+      if(error.code()!=dev.mikoto2000.rei.checkpoint.CheckpointException.Code.CAPACITY)throw error;
+      // PersistentCheckpointService still releases its lease in its finally block.
+      log.warn("Terminal checkpoint could not be saved: runId={}, reason=checkpoint_capacity",context.runId());
+      return checkpointError(error);
+    }
   }
 
   private ChatRunResult handleOutputLimit(String originalUserRequest, String currentGoal, String progressSoFar,
@@ -673,6 +736,8 @@ public class ChatExecutionService {
 
   private ChatRunResult failureResult(Throwable error) {
     if (RunCancellation.isCancellation(error)) return ChatRunResult.cancelled();
+    ErrorInformation checkpointError=checkpointError(error);
+    if(checkpointError!=null)return new ChatRunResult(ChatRunStatus.FAILED,"",checkpointError);
     for (Throwable cause = error; cause != null; cause = cause.getCause()) {
       if (cause instanceof ExecutionStoppedException stopped) {
         return new ChatRunResult(ChatRunStatus.valueOf(stopped.reason().name()), "");
@@ -927,7 +992,8 @@ public class ChatExecutionService {
     CANCELLED
   }
 
-  private record ChatRunResult(ChatRunStatus status, String text) {
+  private record ChatRunResult(ChatRunStatus status, String text, ErrorInformation error) {
+    ChatRunResult(ChatRunStatus status,String text){this(status,text,null);}
     static ChatRunResult success(String text) {
       return new ChatRunResult(ChatRunStatus.SUCCESS, text);
     }
