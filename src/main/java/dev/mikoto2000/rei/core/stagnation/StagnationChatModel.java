@@ -48,7 +48,9 @@ public class StagnationChatModel implements ChatModel {
         if(result.returnDirect())return Flux.just(new ChatResponse(ToolExecutionResult.buildGenerations(result)));
         return iteration(new Prompt(result.conversationHistory(),prepared.getOptions()),context,false,context.progressVersion());
       });
-    });
+    }).doOnError(error->{if(assembler!=null)assembler.finishReviewRun(context.runContext(),
+        error instanceof java.util.concurrent.CancellationException,false,null);})
+        .doOnCancel(()->{if(assembler!=null)assembler.finishReviewRun(context.runContext(),true,false,null);});
   }
 
   private Flux<ChatResponse> iteration(Prompt prompt, RunExecutionContext context, boolean prepaid, long progressAtLimit) {
@@ -58,6 +60,7 @@ public class StagnationChatModel implements ChatModel {
       if (!prepaid) context.consumeNextLlmCall();
       context.beginIteration();
       AtomicReference<ChatResponse> aggregate = new AtomicReference<>();
+      AtomicReference<Prompt> sent = new AtomicReference<>();
       var invoked=new java.util.concurrent.atomic.AtomicBoolean();
       var reported=new java.util.concurrent.atomic.AtomicBoolean();
       Flux<ChatResponse> requests = assembler == null || context.runContext() == null ? Flux.defer(() -> {
@@ -76,7 +79,7 @@ public class StagnationChatModel implements ChatModel {
           }).subscribeOn(Schedulers.boundedElastic()).flatMapMany(projected -> {
             context.checkActive();
             context.checkModelTokenBudget();invoked.set(true);
-            return delegate.stream(projected);
+            sent.set(projected); return delegate.stream(projected);
           });
       Flux<ChatResponse> response = new MessageAggregator().aggregate(requests, aggregate::set);
       return response.concatWith(Flux.defer(() -> {
@@ -86,6 +89,8 @@ public class StagnationChatModel implements ChatModel {
           context.endIteration();
           return Flux.empty();
         }
+        context.checkActive();
+        if (assembler != null && sent.get() != null) assembler.confirmedDelivery(sent.get(), context.runContext());
         var usage = result.getMetadata().getUsage();
         reported.set(true);
         context.recordTotalTokens(usage==null?null:usage.getTotalTokens());
@@ -118,7 +123,7 @@ public class StagnationChatModel implements ChatModel {
         context.endIteration();
         if (!OutputLimitDetector.isOutputLimitReached(result)) {
           var guidance = context.applyInterventions();
-          if (guidance.isEmpty()) return Flux.empty();
+          if (guidance.isEmpty()) { if(assembler!=null)assembler.requireReviewed(context.runContext()); return Flux.empty(); }
           List<Message> messages = new ArrayList<>(prompt.getInstructions());
           messages.add(result.getResult().getOutput());
           messages.addAll(guidance);
@@ -164,7 +169,7 @@ public class StagnationChatModel implements ChatModel {
   }
 
   private ToolCallback observe(ToolCallback delegateTool, RunExecutionContext context) {
-    return new ToolCallback() {
+    return dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.preservePolicy(delegateTool, new ToolCallback() {
       public ToolDefinition getToolDefinition() { return delegateTool.getToolDefinition(); }
       public ToolMetadata getToolMetadata() { return delegateTool.getToolMetadata(); }
       public String call(String input) { return call(input, null); }
@@ -201,7 +206,7 @@ public class StagnationChatModel implements ChatModel {
         return result;
         }
       }
-    };
+    });
   }
 
   private RunExecutionContext context(Prompt prompt) {

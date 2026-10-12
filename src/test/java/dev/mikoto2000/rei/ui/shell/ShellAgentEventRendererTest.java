@@ -82,7 +82,7 @@ class ShellAgentEventRendererTest {
     new ShellAgentEventRenderer(output).onEvent(new dev.mikoto2000.rei.event.AgentEvent("event",0,Instant.EPOCH,
         dev.mikoto2000.rei.event.AgentEventType.ATTENTION_REQUIRED,1,"session",null,"run",null,null,
         new dev.mikoto2000.rei.event.AttentionRequiredPayload("inbox-id","APPROVAL_REQUIRED","Review approval"),"project"));
-    assertEquals("[attention] APPROVAL_REQUIRED: Review approval (/attention show inbox-id)\n",output.text());
+    assertEquals("+-- [APPROVAL REQUIRED] ----------------\n| Review approval\n/approval list\n+--------------------------------------\n", output.text());
   }
   @Test void approvalNoticeKeepsTheContinueCommandOnItsOwnLine() {
     var output=new RecordingOutput();

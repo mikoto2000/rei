@@ -73,6 +73,48 @@ class LlmChatClientProviderTest {
         .containsExactly(expectedNames.split("\\|"));
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings={"EXCLUSIVE", "READ_ONLY"})
+  void toolUsingClientsReceiveCommonPolicyOnce(String mode) throws Exception {
+    var models = mock(LlmModelProvider.class);
+    var model = mock(ChatModel.class);
+    when(models.chatModel(LlmFeature.CHAT)).thenReturn(model);
+    when(models.subAgentChatModel()).thenReturn(model);
+    when(models.chatOptions(LlmFeature.CHAT, null)).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
+    var system = mock(SystemPromptService.class);
+    when(system.systemPrompt()).thenReturn("parent personality");
+    var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), system,
+        mock(ChatMemory.class), optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), null, null);
+    var client = provider.parallelChatClient(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.valueOf(mode));
+    var field = client.getClass().getDeclaredField("defaultChatClientRequest");
+    field.setAccessible(true);
+    var request = field.get(client);
+    var systemField = request.getClass().getDeclaredField("systemText");
+    systemField.setAccessible(true);
+    String prompt = (String) systemField.get(request);
+    assertThat(prompt).contains("Common tool usage policy", "same response", "documented limits");
+    assertThat(prompt.indexOf("Common tool usage policy")).isEqualTo(prompt.lastIndexOf("Common tool usage policy"));
+    if (mode.equals("READ_ONLY")) {
+      assertThat(prompt).doesNotContain("parent personality");
+      when(model.getOptions()).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
+      when(model.call(org.mockito.ArgumentMatchers.any(org.springframework.ai.chat.prompt.Prompt.class)))
+          .thenReturn(new org.springframework.ai.chat.model.ChatResponse(List.of(new org.springframework.ai.chat.model.Generation(
+              new org.springframework.ai.chat.messages.AssistantMessage("answer")))));
+      client.prompt(new org.springframework.ai.chat.prompt.Prompt(List.of(
+          new org.springframework.ai.chat.messages.SystemMessage("Request guidance"),
+          new org.springframework.ai.chat.messages.UserMessage("question")))).call().content();
+      var captured = org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
+      org.mockito.Mockito.verify(model).call(captured.capture());
+      String sent = captured.getValue().getInstructions().stream().map(org.springframework.ai.chat.messages.Message::getText)
+          .collect(java.util.stream.Collectors.joining("\n"));
+      assertThat(sent).contains("Request guidance", "Common tool usage policy").doesNotContain("parent personality");
+      assertThat(sent.indexOf("Common tool usage policy")).isEqualTo(sent.lastIndexOf("Common tool usage policy"));
+    }
+  }
+
   @Test
   void conversationClientHasNoSharedMemoryAdvisorsOrTools() {
     var model = mock(ChatModel.class);

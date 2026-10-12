@@ -137,6 +137,40 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   }
 
   @Test
+  void multiToolExamplesExecuteWithTwoTargets() throws Exception {
+    initGitRepo();
+    Files.createDirectories(tempDir.resolve("src"));
+    Files.writeString(tempDir.resolve("src/A.java"), "class A {}\n".repeat(40));
+    Files.writeString(tempDir.resolve("src/B.java"), "class B {}\n".repeat(40));
+    runGit("add", "src");
+    runGit("commit", "-m", "example fixtures");
+    var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+    Tools tools = new Tools();
+    for (String name : List.of("readMultiFile", "grepMultiQuery", "writeMultiFile")) {
+      String description = Tools.class.getDeclaredMethod(name, List.class).getAnnotation(Tool.class).description();
+      String example = description.lines().filter(line -> line.startsWith("Example: ")).findFirst().orElseThrow().substring(9);
+      var items = mapper.readTree(example).get(name.equals("grepMultiQuery") ? "queries" : "files");
+      assertEquals(2, items.size());
+      if (name.equals("readMultiFile")) {
+        var requests = mapper.convertValue(items, new tools.jackson.core.type.TypeReference<List<Tools.ReadFileRequest>>() {});
+        var results = tools.readMultiFile(requests, tempDir);
+        assertEquals(2, results.size());
+        assertTrue(results.stream().allMatch(result -> result.error() == null));
+      } else if (name.equals("grepMultiQuery")) {
+        var requests = mapper.convertValue(items, new tools.jackson.core.type.TypeReference<List<Tools.GrepQuery>>() {});
+        var results = tools.grepMultiQuery(requests, tempDir);
+        assertEquals(2, results.size());
+        assertTrue(results.stream().allMatch(result -> result.error() == null && !result.matches().isEmpty()));
+      } else {
+        var requests = mapper.convertValue(items, new tools.jackson.core.type.TypeReference<List<Tools.WriteFileRequest>>() {});
+        assertEquals(2, tools.writeMultiFile(requests, tempDir).size());
+        assertEquals("Alpha", Files.readString(tempDir.resolve("a.txt")));
+        assertEquals("Beta", Files.readString(tempDir.resolve("b.txt")));
+      }
+    }
+  }
+
+  @Test
   void codeAndFileToolDescriptionsRouteByIntent() throws Exception {
     Tool search = Tools.class.getDeclaredMethod("searchAndRead", Tools.SearchAndReadRequest.class)
         .getAnnotation(Tool.class);
