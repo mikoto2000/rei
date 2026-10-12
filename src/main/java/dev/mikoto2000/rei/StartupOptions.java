@@ -5,7 +5,8 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import picocli.CommandLine;
 
 /** Parsed before Spring starts; unrelated arguments remain available to Spring. */
-@CommandLine.Command(name = "rei", description = "AI シェル", mixinStandardHelpOptions = true, version = "v1.0.0")
+@CommandLine.Command(name = "rei", description = "AI シェル", mixinStandardHelpOptions = true,
+    versionProvider = ReiVersionProvider.class)
 public final class StartupOptions {
   @CommandLine.Option(names = "--mode", paramLabel = "<server|legacy-shell>",
       description = "起動方式を指定します（軽量 CLI への移行中は既定値 legacy-shell）")

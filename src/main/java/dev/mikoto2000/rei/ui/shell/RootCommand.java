@@ -29,7 +29,7 @@ import picocli.CommandLine.Command;
  */
 @Component
 @Command(
-version = "v1.0.0",
+versionProvider = dev.mikoto2000.rei.ReiVersionProvider.class,
 name = "",
 description = "AI シェル",
 subcommands = {
@@ -83,7 +83,7 @@ subcommands = {
   SummarizeCommand.class,
   ProfileCommand.class
 },
-mixinStandardHelpOptions = false)
+mixinStandardHelpOptions = true)
 @RequiredArgsConstructor
 public class RootCommand {
   @org.springframework.beans.factory.annotation.Value("${rei.embedding.enabled:true}")
