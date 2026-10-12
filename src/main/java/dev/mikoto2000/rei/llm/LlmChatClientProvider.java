@@ -203,10 +203,12 @@ public class LlmChatClientProvider {
           }
         }
       }
-      return ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(modelProvider.subAgentChatModel(), null))
+      var builder = ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(modelProvider.subAgentChatModel(), null))
           .defaultAdvisors(new RunAwareToolCallingAdvisor())
-          .defaultOptions(options.mutate().toolCallbacks(callbacks).toolChoice(callbacks.isEmpty() ? "none" : "auto"))
-          .build();
+          .defaultOptions(options.mutate().toolCallbacks(callbacks).toolChoice(callbacks.isEmpty() ? "none" : "auto"));
+      if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY)
+        builder.defaultSystem(dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.INSTRUCTIONS);
+      return builder.build();
     });
   }
 
@@ -252,7 +254,7 @@ public class LlmChatClientProvider {
     ChatClient.Builder builder = ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
         modelProvider.chatModel(feature), LlmFeature.CHAT.equals(feature) ? contextAssembler : null))
         .defaultAdvisors(new RunAwareToolCallingAdvisor())
-        .defaultSystem(systemPromptService.systemPrompt())
+        .defaultSystem(dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.appendTo(systemPromptService.systemPrompt()))
         .defaultOptions(modelProvider.chatOptions(feature, null).mutate())
         .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors));
 
@@ -309,7 +311,7 @@ public class LlmChatClientProvider {
       var computer = computerUseTools.getIfAvailable();
       if (computer != null) {
         builder.defaultTools(computer.callback());
-        builder.defaultSystem(systemPromptService.systemPrompt() + "\n\n" + computer.orchestrationPrompt());
+        builder.defaultSystem(dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.appendTo(systemPromptService.systemPrompt()) + "\n\n" + computer.orchestrationPrompt());
       }
     }
     return builder.build();

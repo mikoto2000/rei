@@ -210,7 +210,7 @@ public final class SubAgentRunner {
               .toolContext(null).toolContext(Map.of(AgentRunContext.class.getName(), owner)).build();
           ToolLoopSupport.requireNoRawTools(runOptions);
           String input = context == null || context.isBlank() ? task : task + "\n\nContext:\n" + context;
-          var prompt = new Prompt(List.of(new SystemMessage(d.systemPrompt() + SubAgentOutputPrompt.instructions(d)), new UserMessage(input)), runOptions);
+          var prompt = new Prompt(List.of(new SystemMessage(dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.appendTo(d.systemPrompt()) + SubAgentOutputPrompt.instructions(d)), new UserMessage(input)), runOptions);
           ChatModel model = models.apply(d.model());
           ToolLoopSupport.requireNoDefaultTools(model);
           subscriptions.add(validatedRun(model, prompt, d, owner, check, evidence,
