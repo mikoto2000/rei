@@ -250,7 +250,7 @@ public class ChatExecutionService {
     execution.setContinuation(continuations);execution.resume(resumed);
     if(context.mode()!=AgentRunContext.Mode.EXCLUSIVE)execution.setConversationSnapshot(completedHistorySnapshot(context));
     execution.setToolPermissionGuard(permissions);
-    if(checkpoints!=null)execution.setToolResultsCheckpoint(messages->checkpoints.preserveResults(context,messages));
+    if(checkpoints!=null)execution.setToolResultsCheckpoint(messages->checkpoints.preserveResults(context,messages,execution.progressSnapshot()));
     execution.setUserRequest(promptText);
     execution.setInterventions(interventions, text -> {
       if (chatMemory != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand) chatMemory.add(context.conversationId(), java.util.List.of(new UserMessage(text)));
@@ -264,6 +264,8 @@ public class ChatExecutionService {
     try {
       if(resumed==null)turns.startOrdered(context, promptText, clock.instant());
       if (checkpoints != null) checkpoints.start(context, promptText);
+      execution.evaluator().capturePlanBaseline();
+      if (checkpoints != null && checkpoints.hasProgressHistory(context)) execution.restoreProgress(checkpoints.progress(context));
       if (workContext != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand) workContext.afterStart(context);
       execution.checkActive();
       activityTracker.ifPresent(tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));

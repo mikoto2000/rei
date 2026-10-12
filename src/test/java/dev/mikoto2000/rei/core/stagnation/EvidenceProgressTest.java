@@ -7,9 +7,9 @@ import org.junit.jupiter.api.io.TempDir;
 class EvidenceProgressTest {
   @TempDir Path root;
   java.util.List<ProgressEvidence> observe(ProgressEvaluator e,String tool,String result){return e.afterTool(tool,"{}",result,e.beforeTool(tool,"{}"));}
-  @Test void searchCallsAndNewUrlsAloneDoNotProveProgress(){
+  @Test void searchDiscoveryIsAcquisitionButDoesNotProveCompletion(){
     var e=new ProgressEvaluator(root);
-    assertThat(observe(e,"webSearch","[{\"url\":\"https://one.example\",\"title\":\"new URL\",\"snippet\":\"metadata only\"}]" )).isEmpty();
+    assertThat(observe(e,"webSearch","[{\"url\":\"https://one.example\",\"title\":\"new URL\",\"snippet\":\"metadata only\"}]" )).extracting(ProgressEvidence::kind).containsExactly(ProgressEvent.NEW_INFORMATION);
     assertThat(observe(e,"webSearchAndRead","{\"query\":\"new query\",\"results\":[],\"searchQueries\":1,\"pageAttempts\":1}" )).isEmpty();
     assertThat(observe(e,"fetchUrlContent","{\"success\":false,\"errorType\":\"timeout\"}" )).isEmpty();
   }
@@ -54,7 +54,7 @@ class EvidenceProgressTest {
     assertThat(context.detector().replanCount()).isZero(); // Recovery is local; the absolute budget is separate.
     for(int i=0;i<4;i++){context.beginIteration();context.endIteration();}
     org.assertj.core.api.Assertions.assertThatThrownBy(context::requestReplan).hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
-    assertThat(budget.replanCount()).isEqualTo(1);
+    assertThat(budget.snapshot().stagnationReplans()).isEqualTo(1);assertThat(budget.replanCount()).isZero();
     for(int i=0;i<3;i++)context.consumeNextLlmCall();
     org.assertj.core.api.Assertions.assertThatThrownBy(context::consumeNextLlmCall).hasMessageContaining("LLM_CALL_BUDGET_EXCEEDED");
   }
@@ -79,7 +79,7 @@ class EvidenceProgressTest {
   @Test void ledgerSaturationNeverMakesAnOldBodyNewAgain(){
     var e=new ProgressEvaluator(root);
     for(int i=0;i<1024;i++)assertThat(observe(e,"fetchUrlContent","{\"success\":true,\"content\":\"fact-"+i+"\"}")).hasSize(1);
-    assertThat(observe(e,"fetchUrlContent","{\"success\":true,\"content\":\"overflow\"}")).isEmpty();
+    assertThat(observe(e,"fetchUrlContent","{\"success\":true,\"content\":\"overflow\"}")).extracting(ProgressEvidence::kind).containsExactly(ProgressEvent.INFORMATION_UNKNOWN);
     assertThat(observe(e,"fetchUrlContent","{\"success\":true,\"content\":\"fact-0\"}")).isEmpty();
   }  @Test void webEvidenceNamesTheSourceAndHashesTheActualBody()throws Exception{
     var e=new ProgressEvaluator(root);var evidence=observe(e,"fetchUrlContent","{\"success\":true,\"finalUrl\":\"https://one.example\",\"content\":\"useful fact\"}").getFirst();

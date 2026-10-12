@@ -95,7 +95,7 @@ public class StagnationDetector {
 
   /** 進展イベントを記録する。 */
   public void recordProgress(ProgressEvent event) {
-    if (event == ProgressEvent.FAILURE || event == ProgressEvent.TOOL_CALL) return;
+    if (event == ProgressEvent.FAILURE || event == ProgressEvent.TOOL_CALL || event == ProgressEvent.INFORMATION_UNKNOWN) return;
     stagnationCount = 0;
     replanCount = 0;
     replanRequested = false;

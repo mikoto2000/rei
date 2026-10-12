@@ -233,6 +233,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
           case PROGRESS_DETECTED -> "[progress] " + payload.evidence().kind() + ": "
               + payload.evidence().description() + " (" + payload.evidence().source() + ")";
           case STAGNATION_UPDATED -> "waiting_for_dependency".equals(payload.reason())?"[waiting] awaiting dependency":
+              "INFORMATION_UNKNOWN".equals(payload.reason()) ? "[stagnation] progress unknown: reason=INFORMATION_UNKNOWN ledgerStatus=UNKNOWN" :
               "[stagnation] no progress: " + payload.consecutiveNoProgressIterations() + "/" + payload.threshold();
           case STAGNATION_DETECTED -> "[stagnation] threshold reached";
           case STAGNATION_REPLAN_REQUESTED -> "[stagnation] replanning (" + payload.stagnationReplanCount()
@@ -241,6 +242,8 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
           default -> "[stagnation] repeated after replanning -> stopped (STAGNATED)";
         };
         output.println(text);
+        if (java.util.Set.of("REPEATED_READ", "REPEATED_SEARCH_OR_ACTION", "TOOL_FAILURE", "WORK_STALLED", "DUPLICATE_OR_UNSUPPORTED_INFORMATION").contains(java.util.Objects.toString(payload.reason(), "")))
+          output.println("[stagnation] reason=" + payload.reason() + " ledgerStatus=HEALTHY");
       }
       case AGENT_RUN_STARTED -> {
         closeAssistantLine();

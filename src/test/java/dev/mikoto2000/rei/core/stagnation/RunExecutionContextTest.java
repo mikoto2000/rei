@@ -57,7 +57,7 @@ class RunExecutionContextTest {
     assertThat(context.detector().stagnationCount()).isEqualTo(1);
     for (int i = 0; i < 3; i++) { context.beginIteration(); context.endIteration(); }
     assertThatThrownBy(context::requestReplan).hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
-    assertThat(budget.replanCount()).isEqualTo(1);
+    assertThat(budget.snapshot().stagnationReplans()).isEqualTo(1);assertThat(budget.replanCount()).isZero();
     assertThat(events).anyMatch(e -> e.type() == AgentEventType.STAGNATION_RECOVERED);
     assertThat(events.stream().filter(e -> e.type() == AgentEventType.PROGRESS_DETECTED).count()).isEqualTo(1);
   }

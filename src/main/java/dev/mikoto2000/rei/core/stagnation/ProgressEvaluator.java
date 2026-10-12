@@ -21,7 +21,11 @@ public class ProgressEvaluator {
   private final dev.mikoto2000.rei.goal.FileGoalVerifier verifier = new dev.mikoto2000.rei.goal.FileGoalVerifier();
   private final Path root;
   private final ActionPlan plan;
-  private final Set<String> information = new HashSet<>();
+  private final InformationLedger information = new InformationLedger();
+  public InformationLedger.State informationSnapshot() { return information.snapshot(); }
+  public void restoreInformation(InformationLedger.State state) { information.restore(state); }
+  /** Called after the Run's plan has been initialized/restored, before any tool executes. */
+  public synchronized void capturePlanBaseline() { completedSteps.clear(); completedSteps.addAll(doneSteps()); }
   private final Set<String> revisions = new HashSet<>();
   private final Set<String> failures = new HashSet<>();
   private final Set<String> completedSteps = new HashSet<>();
@@ -44,7 +48,7 @@ public class ProgressEvaluator {
     return new Snapshot(files, doneSteps());
   }
 
-  public List<ProgressEvidence> afterTool(String name, String arguments, String result, Snapshot before) {
+  public synchronized List<ProgressEvidence> afterTool(String name, String arguments, String result, Snapshot before) {
     List<ProgressEvidence> evidence = new ArrayList<>();
     before.files().forEach((path, original) -> {
       String current = fingerprint(path);
@@ -82,7 +86,8 @@ public class ProgressEvaluator {
     return List.copyOf(evidence);
   }
 
-  public void recordFailure(String name, String arguments) { remember(failures, actionKey(name, arguments)); }
+  public synchronized void recordFailure(String name, String arguments) { remember(failures, actionKey(name, arguments)); }
+  public static boolean failedResult(String result) { return failed(parse(result)); }
 
   public static String actionKey(String name, String arguments) {
     JsonNode node = parse(arguments);
@@ -92,7 +97,32 @@ public class ProgressEvaluator {
   private void collectInformation(JsonNode node, String raw, String name, String args,
       List<ProgressEvidence> evidence) {
     if (node != null && node.isArray()) {
-      node.forEach(item -> collectInformation(item, item.toString(), name, args, evidence));
+      JsonNode input = parse(args);
+      JsonNode requests = input == null ? null : input.get("files");
+      for (int index = 0; index < node.size(); index++) {
+        JsonNode item = node.get(index);
+        String itemArguments = args;
+        if (name.equals("readMultiFile") && requests != null && requests.isArray() && requests.size() == node.size()) {
+          JsonNode request = requests.get(index);
+          try {
+            // The built-in reader returns one result per request, in request order.
+            if (request.hasNonNull("path") && item.hasNonNull("path")
+                && normalizeSource(request.path("path").asText()).equals(normalizeSource(item.path("path").asText()))
+                && request.path("startLine").asInt(1) == item.path("startLine").asInt(0)) itemArguments = request.toString();
+          } catch (RuntimeException invalid) { /* Unknown association is handled conservatively below. */ }
+        }
+        collectInformation(item, item.toString(), name, itemArguments, evidence);
+      }
+    } else if (node != null && !failed(node) && name.equals("grepMultiQuery") && node.has("matches")) {
+      for (JsonNode match : node.path("matches")) {
+        if (!match.hasNonNull("path") || !match.hasNonNull("content")) continue;
+        try {
+          String source = normalizeSource(match.path("path").asText());
+          addInformation("grep:" + source + ":" + match.path("line").asInt() + ":" + match.path("content").asText(), source, evidence);
+        } catch (RuntimeException invalid) { /* Tool validates paths. */ }
+      }
+    } else if (node == null && Set.of("readMultiFile", "searchAndRead", "grepMultiQuery").contains(name)) {
+      unknown(name, "MALFORMED_RESULT", evidence);
     } else if (!failed(node) && raw != null && !raw.isBlank() && !raw.equals("null")
         && (node == null || !node.isContainerNode() || !node.isEmpty())) {
       JsonNode input = parse(args);
@@ -101,8 +131,19 @@ public class ProgressEvaluator {
           : input != null && input.hasNonNull("pathStr") ? input.get("pathStr").asText() : name;
       boolean fileSource = node != null && node.hasNonNull("path") || input != null && (input.hasNonNull("path") || input.hasNonNull("pathStr"));
       if (fileSource) {
-        try { source = root.resolve(source).normalize().toString(); }
+        try { source = normalizeSource(source); }
         catch (RuntimeException invalid) { return; }
+      }
+      if (fileSource && node != null && node.isObject() && node.hasNonNull("version")) {
+        if (node.hasNonNull("symbol")) {
+          // Symbol displays may omit lines: never infer a contiguous file range.
+          addInformation(source + ":" + node.path("version").asText() + ":" + canonical(node.path("content")), source, evidence);
+        } else if (node.has("sections")) {
+          for (JsonNode section : node.path("sections")) observeRange(source, node.path("version").asText(), section, node, input, evidence);
+        } else if (node.path("content").isArray()) {
+          observeRange(source, node.path("version").asText(), node, node, input, evidence);
+        } else unknown(source, "FILE_RANGE_UNAVAILABLE", evidence);
+        return;
       }
       // Share line identities across file readers; metadata and argument spelling do not add facts.
       int line = Math.max(1, node != null ? node.path("startLine").asInt(1) : input == null ? 1 : input.path("startLine").asInt(1));
@@ -118,13 +159,70 @@ public class ProgressEvaluator {
       }
     }
   }
+  private void observeRange(String source, String version, JsonNode section, JsonNode output, JsonNode input,
+      List<ProgressEvidence> evidence) {
+    int start = section.path("startLine").asInt(0);
+    int originalStart = start;
+    int count = section.path("content").size();
+    if (count == 0) return;
+    if (start < 1 || (long) start + count > Integer.MAX_VALUE) { unknown(source, "FILE_RANGE_UNAVAILABLE", evidence); return; }
+    boolean firstFragment = false;
+    int fragmentOffset = 0;
+    boolean ambiguousOffset = false;
+    if (input != null) {
+      fragmentOffset = Math.max(0, input.path("offset").asInt(0));
+      firstFragment = fragmentOffset > 0;
+      Set<Integer> offsets = new HashSet<>();
+      for (JsonNode request : input.path("files")) {
+        if (request.hasNonNull("path") && request.path("startLine").asInt(1) == originalStart) {
+          try {
+            if (normalizeSource(request.path("path").asText()).equals(source)) {
+              int offset = Math.max(0, request.path("offset").asInt(0));
+              offsets.add(offset);
+              if (offset > 0) { firstFragment = true; fragmentOffset = offset; }
+            }
+          }
+          catch (RuntimeException ignored) { /* Invalid paths remain unknown to the tool. */ }
+        }
+      }
+      ambiguousOffset = offsets.size() > 1;
+    }
+    int originalCount = count;
+    // A byte-limited result can end in a fragment of its last line. Retain only complete lines.
+    JsonNode next = output.path("nextRead");
+    if (next.path("offset").asInt(0) > 0 && next.path("startLine").asInt(0) == start + count - 1) count--;
+    else if (section.path("truncated").asBoolean() && !next.isObject()) count--;
+    if (firstFragment && count > 0) { start++; count--; }
+    if (count > 0) {
+      var observed = information.observeRange(source, version, start, start + count);
+      if (observed.status() == InformationLedger.Status.NEW) {
+        evidence.add(new ProgressEvidence(ProgressEvent.NEW_INFORMATION,
+            "type=FILE_RANGE newLines=" + observed.newLines(), source, version));
+      } else if (observed.status() == InformationLedger.Status.UNKNOWN) unknown(source, "LEDGER_CAPACITY_OR_HISTORY", evidence);
+    }
+    if (count < originalCount && !information.covers(source, version, originalStart, originalStart + originalCount)) {
+      // Deduplicate observed fragments, without claiming that their whole line was read.
+      if (ambiguousOffset) unknown(source, "FILE_RANGE_UNAVAILABLE", evidence);
+      else addInformation(source + ":" + version + ":fragment:" + originalStart + ":offset:" + fragmentOffset
+          + ":" + canonical(section.path("content")), source, evidence);
+    }
+  }
+  private static void unknown(String source, String reason, List<ProgressEvidence> evidence) {
+    if (evidence.stream().noneMatch(e -> e.kind() == ProgressEvent.INFORMATION_UNKNOWN))
+      evidence.add(new ProgressEvidence(ProgressEvent.INFORMATION_UNKNOWN, reason, source));
+  }
+  private String normalizeSource(String source) {
+    String path = root.resolve(source).normalize().toString();
+    return root.getFileSystem().getSeparator().equals("\\") ? path.toLowerCase(Locale.ROOT) : path;
+  }
   private void addInformation(String key, String source, List<ProgressEvidence> evidence) {
     addInformation(key, source, digest(key), evidence);
   }
   private void addInformation(String key, String source, String revision, List<ProgressEvidence> evidence) {
-    if (remember(information, digest(key)) && evidence.stream().noneMatch(e -> e.kind() == ProgressEvent.NEW_INFORMATION)) {
+    var status = information.observe(digest(key));
+    if (status == InformationLedger.Status.NEW && evidence.stream().noneMatch(e -> e.kind() == ProgressEvent.NEW_INFORMATION)) {
       evidence.add(new ProgressEvidence(ProgressEvent.NEW_INFORMATION, "Previously unseen tool information", source, revision));
-    }
+    } else if (status == InformationLedger.Status.UNKNOWN) unknown(source, "LEDGER_CAPACITY_OR_HISTORY", evidence);
   }
   private Set<String> doneSteps() {
     if (plan == null) return Set.of();
@@ -180,7 +278,7 @@ public class ProgressEvaluator {
   private record Information(String key,String source,String revision) {}
   private static List<Information> webInformation(String name,JsonNode output,String raw) {
     var items = new ArrayList<Information>();
-    if (name.equals("webSearch")) return items; // URL discovery and metadata stay in Web metrics.
+    if (name.equals("webSearch")) { collectDiscoveries(output, items); return items; }
     if (!name.equals("searchKnowledge")) { collectWeb(output, items); return items; }
     String result = output != null && output.isTextual() ? output.asText() : raw;
     if (result == null) return items;
@@ -197,6 +295,17 @@ public class ProgressEvaluator {
       }
     }
     return items;
+  }
+  private static void collectDiscoveries(JsonNode node, List<Information> items) {
+    if (node == null) return;
+    if (node.isArray()) { node.forEach(item -> collectDiscoveries(item, items)); return; }
+    if (!node.isObject() || failed(node)) return;
+    String url = node.path("url").asText();
+    if (!url.isBlank()) {
+      String key = "web-discovery:" + digest(url) + ":" + node.path("snippet").asText();
+      items.add(new Information(key, "web-source:" + digest(url), digest(key)));
+    }
+    collectDiscoveries(node.get("results"), items);
   }
   private static void collectWeb(JsonNode node,List<Information> items) {
     if (node == null) return;

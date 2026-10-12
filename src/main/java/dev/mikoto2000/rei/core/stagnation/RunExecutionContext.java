@@ -7,10 +7,27 @@ import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reaso
 
 /** One user run, explicitly passed in ToolContext across reactive scheduler boundaries. */
 public class RunExecutionContext {
+  private static final int ACQUISITION_ONLY_LIMIT = 32;
+  private static final int UNKNOWN_GRACE_ITERATIONS = 16;
+  public record ProgressState(InformationLedger.State information, OutputLimitRunBudget.Snapshot budget,
+      int acquisitionOnlyIterations, int unknownIterations, int unknownReplanNotices) {
+    public ProgressState(InformationLedger.State information, OutputLimitRunBudget.Snapshot budget,
+        int acquisitionOnlyIterations, int unknownIterations) { this(information,budget,acquisitionOnlyIterations,unknownIterations,0); }
+  }
+  public synchronized ProgressState progressSnapshot() {
+    return new ProgressState(evaluator.informationSnapshot(), budget.snapshot(), acquisitionOnlyIterations, unknownIterations, unknownReplanNotices);
+  }
+  public synchronized void restoreProgress(ProgressState saved) {
+    if (saved == null) { evaluator.restoreInformation(null); return; }
+    if (saved.acquisitionOnlyIterations() < 0 || saved.unknownIterations() < 0 || saved.unknownReplanNotices()<0 || saved.unknownReplanNotices()>2) throw new IllegalArgumentException("Invalid saved progress");
+    evaluator.restoreInformation(saved.information()); budget.restore(saved.budget());
+    acquisitionOnlyIterations = saved.acquisitionOnlyIterations(); unknownIterations = saved.unknownIterations();
+    unknownReplanNotices=saved.unknownReplanNotices();
+  }
   private dev.mikoto2000.rei.core.chat.RunContinuation continuation;
   private List<org.springframework.ai.chat.messages.Message> resumeMessages=List.of();
   public void setContinuation(dev.mikoto2000.rei.core.chat.RunContinuation continuation){this.continuation=continuation;}
-  public void resume(dev.mikoto2000.rei.core.chat.RunContinuation.Saved saved){if(saved!=null){budget.restore(saved.budget());resumeMessages=List.copyOf(saved.messages());}}
+  public void resume(dev.mikoto2000.rei.core.chat.RunContinuation.Saved saved){if(saved!=null){budget.restore(saved.budget());evaluator.restoreInformation(null);resumeMessages=List.copyOf(saved.messages());}}
   public List<org.springframework.ai.chat.messages.Message> takeResumeMessages(){var saved=resumeMessages;resumeMessages=List.of();return saved;}
   public OutputLimitRunBudget.Snapshot budgetSnapshot(){return budget.snapshot();}
   public boolean hasParentReservation(){return budget.sharedLlmReservation()!=null;}
@@ -70,7 +87,12 @@ public class RunExecutionContext {
   private final Deque<String> recentActions = new ArrayDeque<>();
   private final Set<String> completedSubgoals = new HashSet<>();
   private String lastError = "none";
+  private String lastToolName = "";
   private long progressVersion;
+  private int acquisitionOnlyIterations;
+  private int unknownIterations;
+  private int unknownReplanNotices;
+  private String stagnationReason = "no_progress";
   private long completionTokens;
   private boolean closed;
   private boolean cancelled;
@@ -165,6 +187,7 @@ public class RunExecutionContext {
     var evidence = new ProgressEvidence(ProgressEvent.SUBGOAL_COMPLETED,
         "Planned subgoal completed", ProgressEvaluator.actionKey("subgoal", goal));
     detector.recordProgress(evidence.kind());
+    acquisitionOnlyIterations = 0;
     progressVersion++;
     emit(AgentEventType.PROGRESS_DETECTED, evidence, "subgoal_completed");
     if (recovering) emit(AgentEventType.STAGNATION_RECOVERED, evidence, "progress_resumed");
@@ -192,6 +215,12 @@ public class RunExecutionContext {
     toolCalls++;
     if (closed) return;
     String action = ProgressEvaluator.actionKey(name, arguments);
+    lastToolName = name;
+    if (ProgressEvaluator.failedResult(result)) {
+      iterationFailed = true;
+      lastError = name + ":structured_failure";
+      detector.recordFailure("structured_failure", name);
+    }
     detector.recordToolCall(name, action);
     recentActions.addLast(action);
     if (recentActions.size() > 6) recentActions.removeFirst();
@@ -211,16 +240,32 @@ public class RunExecutionContext {
       emit(AgentEventType.STAGNATION_UPDATED,null,"waiting_for_dependency");return;
     }
     boolean recovering = detector.replanCount() > 0 || detector.isReplanRequested();
-    detector.recordIteration(!pending.isEmpty());
+    boolean work = pending.stream().anyMatch(e -> e.kind() == ProgressEvent.SUBGOAL_COMPLETED || e.kind() == ProgressEvent.STATE_CHANGED);
+    boolean known = pending.stream().anyMatch(e -> e.kind() != ProgressEvent.INFORMATION_UNKNOWN);
+    boolean unknown = pending.stream().anyMatch(e -> e.kind() == ProgressEvent.INFORMATION_UNKNOWN);
+    if (work) acquisitionOnlyIterations = 0;
+    else if (known) acquisitionOnlyIterations++;
+    if (unknown && !known) unknownIterations++; else unknownIterations = 0;
+    stagnationReason = acquisitionOnlyIterations >= ACQUISITION_ONLY_LIMIT ? "WORK_STALLED"
+        : unknown ? "INFORMATION_UNKNOWN" : iterationFailed ? "TOOL_FAILURE"
+        : detector.hasRepeatedToolCall() ? lastToolName.startsWith("read") ? "REPEATED_READ" : "REPEATED_SEARCH_OR_ACTION"
+        : toolCalls > 0 && !known ? "DUPLICATE_OR_UNSUPPORTED_INFORMATION" : "no_progress";
+    boolean stalledWork = acquisitionOnlyIterations >= ACQUISITION_ONLY_LIMIT;
+    // Unknown is neither progress nor a duplicate. Allow bounded diagnosis time before replanning.
+    if (!(unknown && !known)) detector.recordIteration(known && !stalledWork);
     for (ProgressEvidence evidence : pending) {
-      detector.recordProgress(evidence.kind());
+      if (evidence.kind() == ProgressEvent.INFORMATION_UNKNOWN) {
+        emit(AgentEventType.STAGNATION_UPDATED, evidence, stagnationReason);
+        continue;
+      }
+      if (!stalledWork) detector.recordProgress(evidence.kind());
       progressVersion++;
       emit(AgentEventType.PROGRESS_DETECTED, evidence, "meaningful_progress");
     }
-    if (!pending.isEmpty() && recovering) emit(AgentEventType.STAGNATION_RECOVERED, pending.getFirst(), "progress_resumed");
-    if (pending.isEmpty()) {
-      emit(AgentEventType.STAGNATION_UPDATED, null, "no_progress");
-      if (detector.isStagnant()) emit(AgentEventType.STAGNATION_DETECTED, null, "threshold_reached");
+    if (known && !stalledWork && recovering) emit(AgentEventType.STAGNATION_RECOVERED, pending.getFirst(), "progress_resumed");
+    if (!known || stalledWork) {
+      emit(AgentEventType.STAGNATION_UPDATED, null, stagnationReason);
+      if (detector.isStagnant()) emit(AgentEventType.STAGNATION_DETECTED, null, stagnationReason);
     }
     pending.clear();
   }
@@ -230,17 +275,29 @@ public class RunExecutionContext {
     if (!budget.tryConsumeLlmCall()) throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
   }
   public synchronized String requestReplan() {
-    if (!detector.isReplanRequested()) return null;
+    if (!detector.isReplanRequested()) {
+      if (unknownReplanNotices<2 && unknownIterations >= (unknownReplanNotices+1)*UNKNOWN_GRACE_ITERATIONS) {
+        if (!budget.hasRemainingLlmCalls()) throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
+        unknownReplanNotices++;
+        publisher.publish(factory.executionProgress(AgentEventType.STAGNATION_REPLAN_REQUESTED, runId,
+            new ExecutionProgressPayload(null,detector.stagnationCount(),detector.threshold(),unknownReplanNotices,2,"INFORMATION_UNKNOWN")).withOwnership(runContext));
+        return "Progress diagnosis: INFORMATION_UNKNOWN. Tracking capacity or historical evidence is insufficient to classify these reads. Replan toward independently verifiable work outcomes. Do not infer completion or stagnation from unknown information. The remaining shared Run budget is finite.";
+      }
+      return null;
+    }
     if (detector.isMaxReplanReached()) {
       emit(AgentEventType.STAGNATION_STOPPED, null, "STAGNATED");
       throw new ExecutionStoppedException(STAGNATED);
     }
     if (!budget.hasRemainingLlmCalls()) throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
-    if (!budget.tryConsumeReplan()) throw new ExecutionStoppedException(REPLAN_BUDGET_EXCEEDED);
+    if (!budget.tryConsumeStagnationReplan()) throw new ExecutionStoppedException(REPLAN_BUDGET_EXCEEDED);
     String notice = new StagnationAdvisor(detector).replanNotice(
         String.join(", ", recentActions), lastError);
+    notice += "\nProgress diagnosis: " + stagnationReason + ". Information acquisition does not complete planned work. Confirm work outcomes; do not infer completion from reads.";
     detector.recordReplan();
-    emit(AgentEventType.STAGNATION_REPLAN_REQUESTED, null, "stagnation");
+    acquisitionOnlyIterations = 0;
+    unknownIterations = 0;
+    emit(AgentEventType.STAGNATION_REPLAN_REQUESTED, null, stagnationReason);
     return notice;
   }
   private void emit(AgentEventType type, ProgressEvidence evidence, String reason) {

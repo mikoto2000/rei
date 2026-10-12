@@ -19,6 +19,15 @@ import dev.mikoto2000.rei.topic.TopicScoreBreakdown;
 import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
 
 class ShellAgentEventRendererTest {
+  @Test void distinguishesUnknownEvidenceFromConfirmedNoProgressInDiagnostics() {
+    var output=new RecordingOutput();var renderer=new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.executionProgress(dev.mikoto2000.rei.event.AgentEventType.STAGNATION_UPDATED,"run",
+      new dev.mikoto2000.rei.event.ExecutionProgressPayload(null,0,4,0,2,"INFORMATION_UNKNOWN")));
+    assertTrue(output.text().contains("reason=INFORMATION_UNKNOWN ledgerStatus=UNKNOWN"));
+    renderer.onEvent(events.executionProgress(dev.mikoto2000.rei.event.AgentEventType.STAGNATION_DETECTED,"run",
+      new dev.mikoto2000.rei.event.ExecutionProgressPayload(null,4,4,0,2,"REPEATED_READ")));
+    assertTrue(output.text().contains("reason=REPEATED_READ ledgerStatus=HEALTHY"));
+  }
   @Test void defersNotificationsUntilAnswerIsComplete() {
     var output = new RecordingOutput();
     var renderer = new ShellAgentEventRenderer(output);

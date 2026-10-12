@@ -5,6 +5,7 @@ package dev.mikoto2000.rei.core.stagnation;
  */
 public enum ProgressEvent {
   NEW_INFORMATION,
+  INFORMATION_UNKNOWN,
   STATE_CHANGED,
   SUBGOAL_COMPLETED,
   ERROR_RESOLVED,
