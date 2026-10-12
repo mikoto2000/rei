@@ -1,0 +1,13 @@
+{
+  "expected" : 5,
+  "detected" : 5,
+  "falsePositives" : 0,
+  "coverage" : 1.0,
+  "estimatedInputTokens" : 62727,
+  "modelCalls" : 30,
+  "toolCalls" : 62,
+  "elapsedMillis" : 4076,
+  "rawBodyReads" : 0,
+  "rawBodyWrites" : 30,
+  "diskStoredBytes" : 546851
+}

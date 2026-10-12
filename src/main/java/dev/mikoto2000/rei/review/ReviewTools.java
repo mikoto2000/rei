@@ -28,7 +28,7 @@ public final class ReviewTools {
     if (owner == null || owner.projectId() == null) throw new IllegalStateException("A Project run is required");
     return new Scope(owner.projectId(), owner.conversationId(), owner.runId());
   }
-  @Tool(description = "Begin a coverage-verified review of explicit Project UTF-8 files. Criteria and criteriaVersion are required. Read pages with readReviewFile, then submit one structured result for each delivered range. Reading alone never completes a review.")
+  @Tool(description = "Begin a coverage-verified review of explicit Project text/PDF files. Criteria and criteriaVersion are required. Read pages with readReviewFile, then submit one structured result for each delivered range. Reading alone never completes a review.")
   public Job beginReview(List<String> paths, String criteria, String criteriaVersion) throws java.io.IOException {
     var owner = AgentRunScope.current(); var scope = scope(owner);
     if (paths == null || paths.isEmpty() || paths.size() > 64) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
@@ -52,7 +52,7 @@ public final class ReviewTools {
     return ledger.rebuild(reviewJobId,scope,targets);
   }
   @ResultDelivery(ResultDelivery.Kind.FILE_CONTENT)
-  @Tool(description = "Read an exact UTF-8 review page. Pass reviewJobId, path, expectedVersion, UTF-16 offset, and tokenBudget 256..2048. Start at offset 0 and follow nextOffset while truncated. A version change invalidates the job. Preserve each returned range unchanged in submitReviewResult.")
+  @Tool(description = "Read an exact decoded review page. Pass reviewJobId, path, expectedVersion, UTF-16 offset, and tokenBudget 256..2048. Start at offset 0 and follow nextOffset while truncated. A version change invalidates the job. Preserve each returned range unchanged in submitReviewResult.")
   public Page readReviewFile(String reviewJobId, String path, String expectedVersion, int offset, int tokenBudget) throws java.io.IOException {
     var owner = AgentRunScope.current(); var scope = scope(owner); var job = ledger.get(reviewJobId, scope);
     var target = job.targets().stream().filter(t -> t.path().equals(path)).findFirst().orElseThrow(() -> new IllegalArgumentException("REVIEW_RESULT_INVALID"));
@@ -86,6 +86,7 @@ public final class ReviewTools {
         || !hash(source.text().substring(range.span().start(), range.span().end())).equals(range.contentHash())) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
     if (findings == null) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
     for (var finding : findings) {
+      if(!boundary(source.text(),finding.location().start())||!boundary(source.text(),finding.location().end()))throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
       if(finding.location().start()<range.span().start()||finding.location().end()>range.span().end()
           ||finding.location().end()>source.text().length())throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
       int[] from=position(source.text(),finding.location().start()),to=position(source.text(),finding.location().end());
@@ -182,6 +183,10 @@ public final class ReviewTools {
         "evidenceId","00000000-0000-0000-0000-000000000000","tool","readReviewFile","inputSha256","0".repeat(64),
         "outputSha256","0".repeat(64),"output",wire,"truncated",false));
     return estimator.text(wire); } catch (java.io.IOException error) { throw new IllegalStateException(error); } }
+  private static boolean boundary(String source,int offset){
+    return offset>=0&&offset<=source.length()&&(offset==0||offset==source.length()
+        ||!Character.isHighSurrogate(source.charAt(offset-1))||!Character.isLowSurrogate(source.charAt(offset)));
+  }
   private static int[] position(String source, int offset) {
     int line = 1, beginning = 0;
     for (int i = 0; i < offset; i++) if (source.charAt(i) == '\n') { line++; beginning = i + 1; }

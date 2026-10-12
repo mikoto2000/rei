@@ -12,4 +12,7 @@ class TokenizerDeliveryTest {
     assertThat(estimator.text(content)).isGreaterThanOrEqualTo(actual);
     assertThat(estimator.text(content)).isGreaterThanOrEqualTo(TokenEstimator.conservative().text(content));
   }
+  @Test void giantWordsUseABoundedByteUpperEstimateInsteadOfUnboundedBpeWork() {
+    assertThat(TokenEstimator.tokenizerAware().text("x".repeat(40000))).isGreaterThanOrEqualTo(40000);
+  }
 }

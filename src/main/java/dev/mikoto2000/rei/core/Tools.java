@@ -1140,7 +1140,7 @@ public class Tools {
   }
 
   FileSnapshots newSnapshots(){return new FileSnapshots();}
-  /** Exact immutable UTF-8 source for coverage reviews; uses the existing Project/MCP path boundary. */
+  /** Exact decoded source for coverage reviews; uses the existing Project/MCP path boundary. */
   public record ReviewSnapshot(String path, String version, String text) { }
   public ReviewSnapshot reviewSnapshot(String requested) throws IOException {
     var root = currentWorkingDirectory();
@@ -1159,7 +1159,9 @@ public class Tools {
       try{text=decodeStrict(bytes,charset);}catch(java.nio.charset.CharacterCodingException invalid){if(!charset.equals(StandardCharsets.UTF_8))throw invalid;text=decodeStrict(bytes,CP932);}
       if(text.indexOf(0)>=0)throw new IOException("Binary file is unsupported");
     }
-    return new ReviewSnapshot(root.toRealPath().relativize(snapshot.path()).toString().replace('\\', '/'), snapshot.version(), text);
+    var canonical=FileSnapshots.resolve(root,snapshot.path()).toRealPath();
+    if(!canonical.startsWith(root.toRealPath()))throw new IOException("Outside Project path");
+    return new ReviewSnapshot(root.toRealPath().relativize(canonical).toString().replace('\\', '/'), snapshot.version(), text);
   }
 
 
