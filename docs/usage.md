@@ -99,7 +99,9 @@ rei:
 
 Google Tasks の既定のタスクリストを操作します。[Google 連携を設定](configuration.md#google-calendar-と-google-tasks)し、初回に `/task auth` で認可してください。完了・削除には `/task list` に表示される ID を指定します。
 
-現在、優先度とタグの保存・絞り込みには対応していません。
+タスクのタグ引数・項目は削除しました。`/task add` と `/task list` の `--tag` は受理せず、一覧・レポートにはタグ列を表示しません。本体と簡易 CLI を同時に更新してください。旧スクリプトや一覧の出力解析への影響は [タグ削除の互換性変更](google-task-tags-removal.md) を参照してください。
+
+現在、優先度の保存・絞り込みには対応していません。
 
 追加:
 

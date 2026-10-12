@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
-import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -18,7 +17,7 @@ class TaskServiceTest {
     TaskService service = new TaskService(disabledCalendarProps());
 
     IllegalStateException ex = assertThrows(IllegalStateException.class,
-        () -> service.add("設計レビュー", LocalDate.of(2026, 3, 31), 2, List.of("backend")));
+        () -> service.add("設計レビュー", LocalDate.of(2026, 3, 31), 2));
 
     assertEquals("Google Tasks へのタスク追加に失敗しました", ex.getMessage());
     assertTrue(ex.getCause().getMessage().startsWith("Google OAuth credentials file was not found:"));
@@ -29,7 +28,7 @@ class TaskServiceTest {
     TaskService service = new TaskService(disabledTaskProps());
 
     IllegalStateException ex = assertThrows(IllegalStateException.class,
-        () -> service.add("設計レビュー", LocalDate.of(2026, 3, 31), 2, List.of("backend")));
+        () -> service.add("設計レビュー", LocalDate.of(2026, 3, 31), 2));
 
     assertEquals("Google Tasks へのタスク追加に失敗しました", ex.getMessage());
     assertEquals("Google Task integration is disabled", ex.getCause().getMessage());

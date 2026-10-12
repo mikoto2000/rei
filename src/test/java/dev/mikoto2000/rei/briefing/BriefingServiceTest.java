@@ -95,7 +95,6 @@ class BriefingServiceTest {
         LocalDate.of(2026, 3, 26),
         1,
         TaskStatus.OPEN,
-        List.of("sales"),
         OffsetDateTime.of(2026, 3, 20, 0, 0, 0, 0, ZoneOffset.UTC),
         null);
     Task todayTask = new Task(
@@ -104,7 +103,6 @@ class BriefingServiceTest {
         LocalDate.of(2026, 3, 27),
         2,
         TaskStatus.OPEN,
-        List.of("meeting"),
         OffsetDateTime.of(2026, 3, 21, 0, 0, 0, 0, ZoneOffset.UTC),
         null);
 

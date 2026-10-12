@@ -29,18 +29,16 @@ public class TaskTools {
   }
 
   @Tool(name = "taskCreate", description = "タスクを作成します。dueDate は yyyy-MM-dd 形式です。")
-  Task taskCreate(String title, String dueDate, int priority, List<String> tags) {
-    IO.println(String.format("タスク %s を作成するよ。期限=%s、優先度=%d、タグ=%s",
+  Task taskCreate(String title, String dueDate, int priority) {
+    IO.println(String.format("タスク %s を作成するよ。期限=%s、優先度=%d",
         title,
         dueDate,
-        priority,
-        tags == null ? List.of() : tags));
+        priority));
     try {
       Task created=taskService.add(
           title,
           dueDate == null || dueDate.isBlank() ? null : LocalDate.parse(dueDate),
-          priority,
-          tags == null ? List.of() : tags);
+          priority);
       publish(()->events.taskCreated(Long.toString(created.id()),null,created.title(),created.status().name()));
       return created;
     } catch (RuntimeException e) {
@@ -49,16 +47,15 @@ public class TaskTools {
     }
   }
 
-  @Tool(name = "taskUpdate", description = "タスクを更新します。title, dueDate, priority, tags のうち必要な項目だけ指定できます。dueDate は yyyy-MM-dd 形式です。")
-  Task taskUpdate(long id, String title, String dueDate, Integer priority, List<String> tags) {
-    IO.println(String.format("タスク %d を更新するよ。title=%s、dueDate=%s、priority=%s、tags=%s",
-        id, title, dueDate, priority, tags));
+  @Tool(name = "taskUpdate", description = "タスクを更新します。title, dueDate, priority のうち必要な項目だけ指定できます。dueDate は yyyy-MM-dd 形式です。")
+  Task taskUpdate(long id, String title, String dueDate, Integer priority) {
+    IO.println(String.format("タスク %d を更新するよ。title=%s、dueDate=%s、priority=%s",
+        id, title, dueDate, priority));
     return taskService.update(
         id,
         title,
         dueDate == null || dueDate.isBlank() ? null : LocalDate.parse(dueDate),
-        priority,
-        tags);
+        priority);
   }
 
   @Tool(name = "taskComplete", description = "タスクを完了にします")

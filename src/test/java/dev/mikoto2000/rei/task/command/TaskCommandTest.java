@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.task.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
@@ -26,6 +27,33 @@ import picocli.CommandLine;
 class TaskCommandTest {
 
   @Test
+  void addCommandRejectsRemovedTagOption() {
+    TaskService service = Mockito.mock(TaskService.class);
+
+    assertThrows(CommandLine.UnmatchedArgumentException.class,
+        () -> newCommand(service).parseArgs("add", "--tag", "backend", "design review"));
+    Mockito.verifyNoInteractions(service);
+  }
+
+  @Test
+  void listCommandRejectsRemovedTagOption() {
+    TaskService service = Mockito.mock(TaskService.class);
+
+    assertThrows(CommandLine.UnmatchedArgumentException.class,
+        () -> newCommand(service).parseArgs("list", "--tag", "backend"));
+    Mockito.verifyNoInteractions(service);
+  }
+
+  @Test
+  void listReportOmitsRemovedTagColumn() {
+    TaskService service = Mockito.mock(TaskService.class);
+    when(service.listOpen(any(TaskQuery.class)))
+        .thenReturn(List.of(task(1L, "design review", LocalDate.of(2026, 3, 31), 2, TaskStatus.OPEN)));
+
+    assertEquals("1 | 2 | 2026-03-31 | design review", TaskCommand.reportList(service, null, null));
+  }
+
+  @Test
   void authCommandDelegatesToTaskService() throws Exception {
     TaskService service = Mockito.mock(TaskService.class);
 
@@ -38,19 +66,19 @@ class TaskCommandTest {
   @Test
   void addCommandDelegatesToTaskService() {
     TaskService service = Mockito.mock(TaskService.class);
-    Task created = task(1L, "設計レビュー", LocalDate.of(2026, 3, 31), 2, TaskStatus.OPEN, List.of("backend", "review"));
-    when(service.add(any(), any(), any(Integer.class), any())).thenReturn(created);
+    Task created = task(1L, "設計レビュー", LocalDate.of(2026, 3, 31), 2, TaskStatus.OPEN);
+    when(service.add(any(), any(), any(Integer.class))).thenReturn(created);
 
-    int exitCode = newCommand(service).execute("add", "--due", "2026-03-31", "--priority", "2", "--tag", "backend", "--tag", "review", "設計レビュー");
+    int exitCode = newCommand(service).execute("add", "--due", "2026-03-31", "--priority", "2", "設計レビュー");
 
     assertEquals(0, exitCode);
-    verify(service).add("設計レビュー", LocalDate.of(2026, 3, 31), 2, List.of("backend", "review"));
+    verify(service).add("設計レビュー", LocalDate.of(2026, 3, 31), 2);
   }
 
   @Test
   void addCommandPrintsErrorWhenTaskCreationFails() {
     TaskService service = Mockito.mock(TaskService.class);
-    when(service.add(any(), any(), any(Integer.class), any()))
+    when(service.add(any(), any(), any(Integer.class)))
         .thenThrow(new IllegalStateException("Google Tasks へのタスク追加に失敗しました",
             new IllegalStateException("Google Task integration is disabled")));
 
@@ -70,7 +98,7 @@ class TaskCommandTest {
   @Test
   void listCommandPrintsOpenTasks() {
     TaskService service = Mockito.mock(TaskService.class);
-    when(service.listOpen(any(TaskQuery.class))).thenReturn(List.of(task(1L, "定例MTG", null, 1, TaskStatus.OPEN, List.of("meeting"))));
+    when(service.listOpen(any(TaskQuery.class))).thenReturn(List.of(task(1L, "定例MTG", null, 1, TaskStatus.OPEN)));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
@@ -90,21 +118,20 @@ class TaskCommandTest {
     TaskService service = Mockito.mock(TaskService.class);
     when(service.listOpen(any(TaskQuery.class))).thenReturn(List.of());
 
-    int exitCode = newCommand(service).execute("list", "--priority", "2", "--tag", "backend", "--due-before", "2026-03-31");
+    int exitCode = newCommand(service).execute("list", "--priority", "2", "--due-before", "2026-03-31");
 
     assertEquals(0, exitCode);
     ArgumentCaptor<TaskQuery> captor = ArgumentCaptor.forClass(TaskQuery.class);
     verify(service).listOpen(captor.capture());
     TaskQuery actual = captor.getValue();
     assertEquals(2, actual.priority());
-    assertEquals("backend", actual.tag());
     assertEquals(LocalDate.of(2026, 3, 31), actual.dueBefore());
   }
 
   @Test
   void doneAndDeleteCommandsDelegateToTaskService() {
     TaskService service = Mockito.mock(TaskService.class);
-    when(service.complete(10L)).thenReturn(task(10L, "メール返信", null, 3, TaskStatus.DONE, List.of()));
+    when(service.complete(10L)).thenReturn(task(10L, "メール返信", null, 3, TaskStatus.DONE));
 
     assertEquals(0, newCommand(service).execute("done", "10"));
     verify(service).complete(10L);
@@ -113,8 +140,8 @@ class TaskCommandTest {
     verify(service).delete(20L);
   }
 
-  private Task task(long id, String title, LocalDate dueDate, int priority, TaskStatus status, List<String> tags) {
-    return new Task(id, title, dueDate, priority, status, tags, OffsetDateTime.now(ZoneOffset.UTC), null);
+  private Task task(long id, String title, LocalDate dueDate, int priority, TaskStatus status) {
+    return new Task(id, title, dueDate, priority, status, OffsetDateTime.now(ZoneOffset.UTC), null);
   }
 
   private CommandLine newCommand(TaskService service) {

@@ -30,8 +30,8 @@ public class TaskCommand {
     java.io.PrintWriter out(){return reportOutput==null?new java.io.PrintWriter(System.out,true):reportOutput;}
   }
   private static String report(ReportCommand command){var text=new java.io.StringWriter();command.reportOutput=new java.io.PrintWriter(text,true);command.run();return text.toString().replaceFirst("[\\r\\n]+$","");}
-  public static String reportAdd(TaskService service,String title,LocalDate due,int priority,List<String> tags){var command=new AddCommand(service);command.titleParts=new String[]{title};command.dueDate=due;command.priority=priority;command.tags=List.copyOf(tags);return report(command);}
-  public static String reportList(TaskService service,Integer priority,String tag,LocalDate dueBefore){var command=new ListCommand(service);command.priority=priority;command.tag=tag;command.dueBefore=dueBefore;return report(command);}
+  public static String reportAdd(TaskService service,String title,LocalDate due,int priority){var command=new AddCommand(service);command.titleParts=new String[]{title};command.dueDate=due;command.priority=priority;return report(command);}
+  public static String reportList(TaskService service,Integer priority,LocalDate dueBefore){var command=new ListCommand(service);command.priority=priority;command.dueBefore=dueBefore;return report(command);}
   public static String reportDone(TaskService service,long id){var command=new DoneCommand(service);command.id=id;return report(command);}
   public static String reportDelete(TaskService service,long id){var command=new DeleteCommand(service);command.id=id;return report(command);}
   public static String reportAuthorization(TaskService service){return report(new AuthCommand(service));}
@@ -67,16 +67,13 @@ public class TaskCommand {
     @Option(names = "--priority", defaultValue = "3", description = "優先度。数値が小さいほど高優先")
     int priority;
 
-    @Option(names = "--tag", description = "タグ", split = ",")
-    List<String> tags = List.of();
-
     @Parameters(arity = "1..*", paramLabel = "TITLE", description = "タスク名")
     String[] titleParts;
 
     @Override
     public void run() {
       try {
-        Task created = taskService.add(String.join(" ", titleParts), dueDate, priority, tags);
+        Task created = taskService.add(String.join(" ", titleParts), dueDate, priority);
         out().println("追加: " + created.id() + " | " + created.title());
       } catch (RuntimeException e) {
         out().println("[error] " + userFacingMessage(e, "Google Tasks へのタスク追加に失敗しました"));
@@ -94,15 +91,12 @@ public class TaskCommand {
     @Option(names = "--priority", description = "この優先度以下で絞り込みます")
     Integer priority;
 
-    @Option(names = "--tag", description = "タグで絞り込みます")
-    String tag;
-
     @Option(names = "--due-before", description = "この日付以前の期限で絞り込みます。形式: yyyy-MM-dd")
     LocalDate dueBefore;
 
     @Override
     public void run() {
-      List<Task> tasks = taskService.listOpen(new TaskQuery(priority, tag, dueBefore));
+      List<Task> tasks = taskService.listOpen(new TaskQuery(priority, dueBefore));
       if (tasks.isEmpty()) {
         out().println("未完了タスクはありません");
         return;
@@ -110,8 +104,7 @@ public class TaskCommand {
 
       for (Task task : tasks) {
         String dueDate = task.dueDate() == null ? "" : task.dueDate().toString();
-        String tags = task.tags().isEmpty() ? "" : String.join(",", task.tags());
-        out().println(task.id() + " | " + task.priority() + " | " + dueDate + " | " + task.title() + " | " + tags);
+        out().println(task.id() + " | " + task.priority() + " | " + dueDate + " | " + task.title());
       }
     }
   }

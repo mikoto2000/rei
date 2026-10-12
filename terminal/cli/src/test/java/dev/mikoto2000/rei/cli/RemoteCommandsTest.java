@@ -76,11 +76,30 @@ class RemoteCommandsTest {
     assertEquals("/api/v1/google-operations/calendar/add",event.path());assertEquals("A meeting",((Map<?,?>)event.body()).get("title"));
     assertEquals("2026-10-11",((Map<?,?>)RemoteCommands.route(List.of("/schedule","list","--date","2026-10-11"),"project","session").body()).get("date"));
     assertEquals(Map.of("projectId","project","sessionId","session"),RemoteCommands.route(List.of("/task","auth"),"project","session").body());
-    var task=RemoteCommands.route(List.of("/task","add","Review","paper","--tag","science,reading","--tag","weekly"),"project","session");
-    var body=(Map<?,?>)task.body();assertEquals("Review paper",body.get("title"));assertEquals(3,body.get("priority"));assertEquals(List.of("science","reading","weekly"),body.get("tags"));
+    var task=RemoteCommands.route(List.of("/task","add","Review","paper"),"project","session");
+    var body=(Map<?,?>)task.body();assertEquals("Review paper",body.get("title"));assertEquals(3,body.get("priority"));assertNull(body.get("due"));
+    assertEquals(Set.of("projectId","sessionId","title","priority","due"),body.keySet());
     assertEquals("/api/v1/google-operations/tasks/12/complete",RemoteCommands.route(List.of("/task","done","12"),"project","session").path());
     assertEquals("POST",RemoteCommands.route(List.of("/task","delete","12"),"project","session").method());
     assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/schedule","add","Meeting","--start","2026-10-11T09:00:00"),"project","session"));
+  }
+  @Test void googleTaskAddAndListSendOnlyTheirSupportedFields() {
+    var added=RemoteCommands.route(List.of("/task","add","Review","paper","--due","2026-10-13","--priority","2"),"project","session");
+    assertEquals("POST",added.method());assertEquals("/api/v1/google-operations/tasks/add",added.path());
+    assertEquals(Map.of("projectId","project","sessionId","session","title","Review paper","due","2026-10-13","priority",2),added.body());
+    assertEquals(Map.of("projectId","project","sessionId","session"),RemoteCommands.route(List.of("/task"),"project","session").body());
+    var listed=RemoteCommands.route(List.of("/task","list","--priority","2","--due-before","2026-10-14"),"project","session");
+    assertEquals("POST",listed.method());assertEquals("/api/v1/google-operations/tasks/list",listed.path());
+    assertEquals(Map.of("projectId","project","sessionId","session","priority",2,"dueBefore","2026-10-14"),listed.body());
+  }
+  @Test void googleTaskCommandsRejectRemovedTagAndOtherUnknownOptions() {
+    for(String action:List.of("add","list"))for(String option:List.of("--tag","--unknown")) {
+      var words=new ArrayList<>(List.of("/task",action));if(action.equals("add"))words.add("Review paper");
+      words.add(option);words.add("science");
+      assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(words,"project","session"));
+      words.removeLast();words.removeLast();words.add(option+"=science");
+      assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(words,"project","session"));
+    }
   }
   @Test void responseModeAcceptsShellOptionalBooleanSyntax() {
     assertEquals(Map.of("projectId","project","style","CONVERSATION","voiceOnly",false),RemoteCommands.route(List.of("/mode","conversation","--voice-only=false"),"project","session").body());

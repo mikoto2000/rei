@@ -304,7 +304,7 @@ public class LlmChatClientProvider {
       builder.defaultTools(toolCallbackProvider);
     }
     if (LlmFeature.CHAT.equals(feature) && externalAgentTools != null) builder.defaultTools((Object[]) externalAgentTools.callbacks());
-    if(LlmFeature.CHAT.equals(feature)&&dotTools!=null&&dotTools.getIfAvailable()!=null)builder.defaultToolCallbacks(java.util.Arrays.asList(dotTools.getObject().callbacks()));
+    if(LlmFeature.CHAT.equals(feature)&&dotTools!=null&&dotTools.getIfAvailable()!=null)builder.defaultTools(java.util.Arrays.asList(dotTools.getObject().callbacks()));
     if (LlmFeature.CHAT.equals(feature) && slackAgentTools != null && slackAgentTools.getIfAvailable()!=null) builder.defaultTools((Object[]) slackAgentTools.getObject().callbacks());
     if (LlmFeature.CHAT.equals(feature) && subAgentTools != null && subAgentTools.getIfAvailable() != null) {
       for(String name:dev.mikoto2000.rei.subagent.SubAgentParentToolCatalog.names(subAgentProperties))
