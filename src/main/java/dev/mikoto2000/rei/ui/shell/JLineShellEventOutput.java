@@ -9,6 +9,11 @@ public final class JLineShellEventOutput implements ShellEventOutput {
   private final LineReader reader;
   private final PrintWriter writer;
   private final StringBuilder pending = new StringBuilder();
+  private dev.mikoto2000.rei.core.completion.ApprovalActionMenu approvalMenu;
+  public void setApprovalMenu(dev.mikoto2000.rei.core.completion.ApprovalActionMenu menu) { approvalMenu = menu; }
+  @Override public void approvalActions(String project, String session, String id) {
+    if (approvalMenu != null) approvalMenu.offer(project, session, id);
+  }
 
   public JLineShellEventOutput(LineReader reader) {
     this.reader = reader;

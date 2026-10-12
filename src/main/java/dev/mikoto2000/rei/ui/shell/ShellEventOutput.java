@@ -5,4 +5,5 @@ public interface ShellEventOutput {
   void print(String text);
   void println(String text);
   void flush();
+  default void approvalActions(String project, String session, String id) { }
 }

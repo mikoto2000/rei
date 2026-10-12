@@ -32,6 +32,7 @@ public final class TerminalClient implements AutoCloseable {
   private boolean catalogLoaded;
   private boolean recordHistory;
   private final ApprovalAliases approvalAliases=new ApprovalAliases();
+  private final ApprovalActionMenu approvalMenu;
   private static final List<String> COMMANDS=java.util.stream.Stream.concat(java.util.stream.Stream.of("/help","/exit","/project","/session","/chat","/run-mode","/cancel","/runs","/watch","/receipt","/input-history","/paste","/sh"),RemoteCommands.NAMES.stream()).sorted().toList();
   public TerminalClient(BackendClient backend,Path historyDirectory,boolean noHistory)throws IOException {
     this(backend,historyDirectory,noHistory,TerminalBuilder.builder().system(true).build());
@@ -43,6 +44,7 @@ public final class TerminalClient implements AutoCloseable {
     reader=LineReaderBuilder.builder().terminal(terminal).parser(commandParser()).history(memory).completer(this::complete).build();
     reader.setVariable(LineReader.HISTORY_SIZE,1000);reader.setVariable(LineReader.HISTORY_FILE_SIZE,1000);
     reader.setOpt(LineReader.Option.BRACKETED_PASTE);
+    approvalMenu=new ApprovalActionMenu(reader,()->new ApprovalActionMenu.Owner(project,session));
     if(java.io.File.separatorChar=='\\')reader.setOpt(LineReader.Option.CASE_INSENSITIVE);
     if(recordHistory)for(String line:history.entries())memory.add(java.time.Instant.now(),line);
     terminal.handle(Terminal.Signal.INT,signal->{backend.detach();attached=false;});
@@ -91,7 +93,11 @@ public final class TerminalClient implements AutoCloseable {
     out("Connected. /help lists commands. Ctrl+C detaches output; /cancel RUN_ID cancels a Run.");
     while(true) {
       String line;
-      try {line=reader.readLine("["+safeOutput(projectName)+" / "+safeOutput(session==null?"new":session)+"]> ");}
+      try {
+        approvalMenu.enabled(true);
+        try {line=reader.readLine("["+safeOutput(projectName)+" / "+safeOutput(session==null?"new":session)+"]> ");}
+        finally {approvalMenu.enabled(false);}
+      }
       catch(UserInterruptException interrupt){backend.detach();attached=false;continue;}
       catch(EndOfFileException eof){return;}
       if(line.isBlank())continue;
@@ -319,6 +325,10 @@ public final class TerminalClient implements AutoCloseable {
               var value=BackendClient.JSON.readTree(event.data());if(!id.equals(value.path("runId").asText()))throw new IllegalArgumentException("Event Run identity mismatch");
               sequence.set(event.sequence());
               eventOutput.accept(event.type(),value.path("payload"));
+              if(event.type().equals("attention.required")&&value.path("payload").path("kind").asText().equals("APPROVAL_REQUIRED")) {
+                var match=java.util.regex.Pattern.compile("(?m)^/approval approve ([0-9a-fA-F-]{36}) --continue$").matcher(value.path("payload").path("message").asText());
+                if(match.find())approvalMenu.offer(value.path("projectId").asText(),value.path("sessionId").asText(),match.group(1));
+              }
               if(Set.of("agent.run.completed","agent.run.failed","agent.run.cancelled").contains(event.type()))attached=false;
             }catch(IOException invalid){throw new IllegalArgumentException("Malformed Run event");}
           });

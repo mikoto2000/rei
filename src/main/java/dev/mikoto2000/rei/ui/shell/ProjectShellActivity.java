@@ -114,6 +114,9 @@ public class ProjectShellActivity implements AgentEventListener {
       public void print(String text) { if (id.equals(visibleProject)) output.print(text); }
       public void println(String text) { if (id.equals(visibleProject)) output.println(text); }
       public void flush() { if (id.equals(visibleProject)) output.flush(); }
+      public void approvalActions(String project, String session, String approval) {
+        if (id.equals(visibleProject)) output.approvalActions(project, session, approval);
+      }
     }, options));
   }
 }

@@ -189,6 +189,10 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         closeAssistantLine();closeThinkingLine();
         var payload=(dev.mikoto2000.rei.event.AttentionRequiredPayload)event.payload();
         output.println("[attention] "+payload.kind()+": "+payload.message()+" (/attention show "+payload.attentionId()+")");
+        if ("APPROVAL_REQUIRED".equals(payload.kind())) {
+          var match=java.util.regex.Pattern.compile("(?m)^/approval approve ([0-9a-fA-F-]{36}) --continue$").matcher(payload.message());
+          if(match.find())output.approvalActions(event.projectId(),event.sessionId(),match.group(1));
+        }
       }
       case WORK_CONTEXT_UPDATED, WORK_CONTEXT_UPDATE_FAILED -> {
         closeAssistantLine(); closeThinkingLine();

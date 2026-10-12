@@ -206,6 +206,12 @@ public class ReiApplication {
       capture.setConfirmation(prompt->{try{var answer=reader.readLine(prompt);return "y".equalsIgnoreCase(answer)||"yes".equalsIgnoreCase(answer);}catch(org.jline.reader.EndOfFileException|org.jline.reader.UserInterruptException declined){return false;}});
     configureMultilineKeyBinding(reader);
     var eventOutput = new JLineShellEventOutput(reader);
+    var approvalMenu = new dev.mikoto2000.rei.core.completion.ApprovalActionMenu(reader, () -> {
+      try (var scope = client.open()) {
+        return new dev.mikoto2000.rei.core.completion.ApprovalActionMenu.Owner(projects.currentContext().id(), projects.currentSessionId());
+      }
+    });
+    eventOutput.setApprovalMenu(approvalMenu);
     var notificationOptions = ShellAgentEventRenderer.TopicNotificationOptions.from(environment);
     dev.mikoto2000.rei.event.AgentEventListener shellListener;
     if (projectShellActivity != null) {
@@ -234,7 +240,10 @@ public class ReiApplication {
       startVoiceAutomatically(cmd, terminal, line -> eventOutput.printBlock(new org.jline.utils.AttributedString(line)));
       shellLoop: while (true) {
         try {
-          String line = runPrompt.readLine();
+          String line;
+          approvalMenu.enabled(true);
+          try { line = runPrompt.readLine(); }
+          finally { approvalMenu.enabled(false); }
           if (line == null) {
             break;
           }
