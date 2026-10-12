@@ -1,5 +1,7 @@
 # Sign in with ChatGPT を利用する SubAgent
 
+ChatGPTへの通常の `delegateTask` / `delegateTasks` は永続SubAgent機能に依存しません。`listDurableSubAgents` はChatGPT設定の確認コマンドではなく、有効化された永続子タスクの一覧です。永続・DAG・consensusが無効な場合、対応する管理ツールを親LLMへ提示しません。ChatGPTの許可先はRunの案内、`/chatgpt status` と設定で確認します。`sourceRefs` のファイルはホストが読み取りsnapshotを送信します。
+
 引数の不足・型・ローカル/外部の矛盾・出力条件とロールスキーマの不整合は、最初の1件で止めず一括表示します。`delegateTasks` では `requests[0].accountRef` のように要求位置と項目を示します。LLMは列挙された問題をまとめて修正してください。アカウント許可などの管理者ポリシー拒否は自動修正対象にしません。
 
 親Chatの実行前引数検証エラーは `INVALID_TOOL_ARGUMENTS` と `executed:false` のTool結果としてLLMへ返し、1 Runにつき最大2回まで修正を促します。回数は予算snapshotとともに保存・復元し、承認続行やresumeでリセットしません。修正後は新しい呼び出しとして通常の権限判定・正確な引数の承認を適用します。権限拒否・許可先の不一致・通信失敗・実行後エラーをこの修正対象にしません。ChatGPT委譲の `accountRef`・`modelId`・`sourceRefs`・`expectedOutput` はツール説明にも条件付き必須として明記しています。

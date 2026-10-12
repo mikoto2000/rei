@@ -24,7 +24,7 @@ When Task Manager tracking is enabled, its existing child Run retains the stable
 UNKNOWN Tool outcomes produce UNKNOWN in the child checkpoint and existing Run registry. The Task projection includes a `SUBAGENT_CHECKPOINT` reference.
 Enable the existing HTTP/Task Manager settings to display those Run projections in Native.
 
-The parent Chat Tool catalog exposes `listDurableSubAgents(offset, limit)` and `getDurableSubAgent(childId)`.
+When enabled, the parent Chat Tool catalog exposes `listDurableSubAgents(offset, limit)` and `getDurableSubAgent(childId)`; disabled durable, DAG and consensus tools are omitted from the parent catalog. Ordinary local/ChatGPT delegation remains available independently of these features.
 Listing/reading is scoped to the current human Project/root/session, supports bounded pagination, and never invokes a model or retries work.
 In an ordinary current user message, supply the exact text:
 

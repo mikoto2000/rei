@@ -111,6 +111,9 @@ public class AiConfiguration {
   @org.springframework.beans.factory.annotation.Autowired
   void setComputerUseTools(ObjectProvider<dev.mikoto2000.rei.computeruse.ComputerUseTools> tools) { this.computerUseTools = tools; }
   private ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> subAgentTools;
+  private dev.mikoto2000.rei.subagent.SubAgentProperties subAgentProperties=new dev.mikoto2000.rei.subagent.SubAgentProperties();
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setSubAgentProperties(dev.mikoto2000.rei.subagent.SubAgentProperties settings){this.subAgentProperties=settings;}
   @org.springframework.beans.factory.annotation.Autowired
   void setSubAgentTools(ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> tools) { this.subAgentTools = tools; }
 
@@ -209,17 +212,8 @@ public class AiConfiguration {
     // Lazy callback avoids a bean cycle through the model provider during ChatClient construction.
     if (externalAgentTools != null) builder.defaultTools((Object[]) externalAgentTools.callbacks());
     if (dotTools!=null&&dotTools.getIfAvailable()!=null)builder.defaultToolCallbacks(java.util.Arrays.asList(dotTools.getObject().callbacks()));
-    if (subAgentTools != null) builder.defaultTools(new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools),
-        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"delegateTasks"),
-        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"listDurableSubAgents"),
-        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"getDurableSubAgent"),
-        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"resumeSubAgent"),
-        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"reconcileSubAgent"),
-        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"delegateTaskGraph"),
-        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"getSubAgentGraph"),
-        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"resumeSubAgentGraph"),
-        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"compareSubAgentAnswers"),
-        new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"judgeSubAgentAnswers"));
+    if(subAgentTools!=null)for(String name:dev.mikoto2000.rei.subagent.SubAgentParentToolCatalog.names(subAgentProperties))
+      builder.defaultTools(new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,name));
     if (computerUseTools != null) {
       var computer = computerUseTools.getIfAvailable();
       if (computer != null) {

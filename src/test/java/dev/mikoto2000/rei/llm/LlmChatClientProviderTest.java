@@ -18,6 +18,61 @@ import dev.mikoto2000.rei.core.configuration.SystemPromptService;
 import dev.mikoto2000.rei.summarize.SummaryTools;
 
 class LlmChatClientProviderTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+      "false,false,false,false,delegateTask|delegateTasks",
+      "false,true,true,true,delegateTask|delegateTasks",
+      "true,false,false,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent",
+      "true,false,false,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent",
+      "true,true,false,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|delegateTaskGraph|getSubAgentGraph|resumeSubAgentGraph",
+      "true,false,true,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|compareSubAgentAnswers",
+      "true,false,true,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|compareSubAgentAnswers|judgeSubAgentAnswers",
+      "true,true,true,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|delegateTaskGraph|getSubAgentGraph|resumeSubAgentGraph|compareSubAgentAnswers|judgeSubAgentAnswers"
+  })
+  void chatClientOffersOnlyEnabledSubAgentTools(boolean durable, boolean dag, boolean consensus,
+      boolean judge, String expectedNames) throws Exception {
+    var models = mock(LlmModelProvider.class);
+    when(models.chatModel(LlmFeature.CHAT)).thenReturn(mock(ChatModel.class));
+    when(models.chatOptions(LlmFeature.CHAT, null))
+        .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
+    var system = mock(SystemPromptService.class);
+    when(system.systemPrompt()).thenReturn("system");
+    var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), system,
+        mock(ChatMemory.class), optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null),
+        optional(null), optional(null), null, null);
+    var settings = new dev.mikoto2000.rei.subagent.SubAgentProperties();
+    settings.setDurableEnabled(durable);
+    settings.setDagEnabled(dag);
+    settings.setConsensusEnabled(consensus);
+    settings.setConsensusJudgeEnabled(judge);
+    provider.setSubAgentProperties(settings);
+    var tools = mock(dev.mikoto2000.rei.subagent.SubAgentTools.class);
+    when(tools.callback(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> {
+      String name = invocation.getArgument(0);
+      var callback = mock(org.springframework.ai.tool.ToolCallback.class);
+      when(callback.getToolDefinition()).thenReturn(org.springframework.ai.tool.definition.ToolDefinition.builder()
+          .name(name).description(name).inputSchema("{}").build());
+      return callback;
+    });
+    ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> toolsProvider = optional(tools);
+    when(toolsProvider.getObject()).thenReturn(tools);
+    provider.setSubAgentTools(toolsProvider);
+
+    var client = provider.chatClient(LlmFeature.CHAT);
+    var requestField = client.getClass().getDeclaredField("defaultChatClientRequest");
+    requestField.setAccessible(true);
+    var request = requestField.get(client);
+    var callbacksField = request.getClass().getDeclaredField("toolCallbacks");
+    callbacksField.setAccessible(true);
+    var callbacks = ((List<?>) callbacksField.get(request)).stream()
+        .map(org.springframework.ai.tool.ToolCallback.class::cast).toList();
+    assertThat(callbacks).allMatch(dev.mikoto2000.rei.event.ToolEventCallbackDecorator.class::isInstance);
+    assertThat(callbacks.stream().map(callback -> callback.getToolDefinition().name()))
+        .containsExactly(expectedNames.split("\\|"));
+  }
+
   @Test
   void conversationClientHasNoSharedMemoryAdvisorsOrTools() {
     var model = mock(ChatModel.class);

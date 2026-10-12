@@ -49,6 +49,72 @@ import dev.mikoto2000.rei.websearch.WebSearchTools;
 
 class AiConfigurationTest {
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+      "false,false,false,false,delegateTask|delegateTasks",
+      "false,true,true,true,delegateTask|delegateTasks",
+      "true,false,false,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent",
+      "true,false,false,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent",
+      "true,true,false,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|delegateTaskGraph|getSubAgentGraph|resumeSubAgentGraph",
+      "true,false,true,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|compareSubAgentAnswers",
+      "true,false,true,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|compareSubAgentAnswers|judgeSubAgentAnswers",
+      "true,true,true,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|delegateTaskGraph|getSubAgentGraph|resumeSubAgentGraph|compareSubAgentAnswers|judgeSubAgentAnswers"
+  })
+  void chatClientOffersOnlyEnabledSubAgentToolsWithoutResolvingRunnerDuringConstruction(
+      boolean durable, boolean dag, boolean consensus, boolean judge, String expectedNames) throws Exception {
+    var configuration = subAgentConfiguration();
+    var settings = new dev.mikoto2000.rei.subagent.SubAgentProperties();
+    settings.setDurableEnabled(durable);
+    settings.setDagEnabled(dag);
+    settings.setConsensusEnabled(consensus);
+    settings.setConsensusJudgeEnabled(judge);
+    configuration.setSubAgentProperties(settings);
+    var tools = Mockito.mock(dev.mikoto2000.rei.subagent.SubAgentTools.class);
+    when(tools.callback(Mockito.anyString())).thenAnswer(invocation -> namedCallback(invocation.getArgument(0)));
+    ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> toolsProvider = mockProviderReturning(tools);
+    when(toolsProvider.getObject()).thenReturn(tools);
+    configuration.setSubAgentTools(toolsProvider);
+
+    Object request = getDefaultChatClientRequest(configuration.chatClient());
+    Mockito.verify(toolsProvider, Mockito.never()).getObject();
+    Field callbacksField = request.getClass().getDeclaredField("toolCallbacks");
+    callbacksField.setAccessible(true);
+    var subAgentNames = java.util.Set.of("delegateTask", "delegateTasks", "listDurableSubAgents",
+        "getDurableSubAgent", "resumeSubAgent", "reconcileSubAgent", "delegateTaskGraph",
+        "getSubAgentGraph", "resumeSubAgentGraph", "compareSubAgentAnswers", "judgeSubAgentAnswers");
+    var callbacks = ((List<?>) callbacksField.get(request)).stream()
+        .map(org.springframework.ai.tool.ToolCallback.class::cast)
+        .filter(callback -> subAgentNames.contains(callback.getToolDefinition().name())).toList();
+    org.assertj.core.api.Assertions.assertThat(callbacks)
+        .allMatch(dev.mikoto2000.rei.subagent.LazyDelegationCallback.class::isInstance);
+    org.assertj.core.api.Assertions.assertThat(callbacks.stream().map(callback -> callback.getToolDefinition().name()))
+        .containsExactly(expectedNames.split("\\|"));
+  }
+
+  private AiConfiguration subAgentConfiguration() {
+    return new AiConfiguration(
+        new CoreProperties("system prompt", 100), systemPromptService(), Mockito.mock(ChatModel.class),
+        Mockito.mock(ChatMemory.class), new Tools(), Mockito.mock(GoogleCalendarTools.class),
+        Mockito.mock(TaskTools.class), Mockito.mock(BriefingTools.class), Mockito.mock(FeedTools.class),
+        Mockito.mock(ReminderTools.class), Mockito.mock(SearchTools.class), Mockito.mock(WebSearchTools.class),
+        Mockito.mock(SoundNotificationTools.class), Mockito.mock(BlueskyPostTools.class),
+        Mockito.mock(dev.mikoto2000.rei.summarize.SummaryTools.class), Mockito.mock(UrlContentFetchTools.class),
+        Mockito.mock(TextTools.class), Mockito.mock(ClockTools.class), Mockito.mock(SchedulerTools.class),
+        Mockito.mock(ConversationHistoryTools.class), Mockito.mock(RuntimeContextAdvisor.class),
+        Mockito.mock(WorkingSetAdvisor.class), Mockito.mock(TaskStateAdvisor.class),
+        Mockito.mock(RecentChangesAdvisor.class), Mockito.mock(FileSummaryAdvisor.class),
+        Mockito.mock(RelatedFileGraphAdvisor.class), Mockito.mock(CheckpointAdvisor.class),
+        Mockito.mock(ActionPlanAdvisor.class), Mockito.mock(StagnationAdvisor.class),
+        Mockito.mock(TaskStateTools.class), new LlmProperties(), mockProviderReturning(null), mockProviderReturning(null));
+  }
+
+  private org.springframework.ai.tool.ToolCallback namedCallback(String name) {
+    var callback = Mockito.mock(org.springframework.ai.tool.ToolCallback.class);
+    when(callback.getToolDefinition()).thenReturn(org.springframework.ai.tool.definition.ToolDefinition.builder()
+        .name(name).description(name).inputSchema("{}").build());
+    return callback;
+  }
+
   @Test
   void chatClientIncludesMcpToolCallbackProviderWhenAvailable() throws Exception {
     ToolEventCallbackProvider mcpToolCallbackProvider = Mockito.mock(ToolEventCallbackProvider.class);

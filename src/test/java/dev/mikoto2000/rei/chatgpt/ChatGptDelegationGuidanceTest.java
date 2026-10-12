@@ -24,6 +24,8 @@ class ChatGptDelegationGuidanceTest {
   @Test void configuredAuthorizedRouteNamesExactToolAndDestinationsWithoutCredentials() {
     when(oauth.authorizedAccounts()).thenReturn(Set.of("default","unallowed"));
     String prompt=guidance(true).prompt();
+    assertTrue(prompt.contains("does not require durable SubAgents"));
+    assertTrue(prompt.contains("Do not call listDurableSubAgents/getDurableSubAgent to discover ChatGPT configuration"));
     for(String required:List.of("delegateTask", "delegateTasks", "backendId=chatgpt-plan", "reviewer", "accountRef", "default", "modelId", "gpt-6.1-sol", "sourceRefs", "expectedOutput", "approval still apply", "not a live catalog check"))assertTrue(prompt.contains(required),required);
     for(String excluded:List.of("secret-credential-directory","unallowed","missing"))assertFalse(prompt.contains(excluded));
     verify(oauth).authorizedAccounts();verifyNoMoreInteractions(oauth);

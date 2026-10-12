@@ -131,6 +131,9 @@ public class LlmChatClientProvider {
   @org.springframework.beans.factory.annotation.Autowired
   void setComputerUseTools(ObjectProvider<dev.mikoto2000.rei.computeruse.ComputerUseTools> tools) { this.computerUseTools = tools; }
   private ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> subAgentTools;
+  private dev.mikoto2000.rei.subagent.SubAgentProperties subAgentProperties=new dev.mikoto2000.rei.subagent.SubAgentProperties();
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setSubAgentProperties(dev.mikoto2000.rei.subagent.SubAgentProperties settings){this.subAgentProperties=settings;}
   @org.springframework.beans.factory.annotation.Autowired
   void setSubAgentTools(ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> tools) { this.subAgentTools = tools; }
 
@@ -299,11 +302,8 @@ public class LlmChatClientProvider {
     if(LlmFeature.CHAT.equals(feature)&&dotTools!=null&&dotTools.getIfAvailable()!=null)builder.defaultToolCallbacks(java.util.Arrays.asList(dotTools.getObject().callbacks()));
     if (LlmFeature.CHAT.equals(feature) && slackAgentTools != null && slackAgentTools.getIfAvailable()!=null) builder.defaultTools((Object[]) slackAgentTools.getObject().callbacks());
     if (LlmFeature.CHAT.equals(feature) && subAgentTools != null && subAgentTools.getIfAvailable() != null) {
-      builder.defaultTools(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
-          subAgentTools.getObject().callback(), eventFactory, eventPublisher));
-      builder.defaultTools(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
-          subAgentTools.getObject().callback("delegateTasks"), eventFactory, eventPublisher));
-      for(String name:java.util.List.of("listDurableSubAgents","getDurableSubAgent","resumeSubAgent","reconcileSubAgent","delegateTaskGraph","getSubAgentGraph","resumeSubAgentGraph","compareSubAgentAnswers","judgeSubAgentAnswers"))builder.defaultTools(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(subAgentTools.getObject().callback(name),eventFactory,eventPublisher));
+      for(String name:dev.mikoto2000.rei.subagent.SubAgentParentToolCatalog.names(subAgentProperties))
+        builder.defaultTools(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(subAgentTools.getObject().callback(name),eventFactory,eventPublisher));
     }
     if (LlmFeature.CHAT.equals(feature) && computerUseTools != null) {
       var computer = computerUseTools.getIfAvailable();
