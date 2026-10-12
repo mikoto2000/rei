@@ -1,5 +1,7 @@
 # Sign in with ChatGPT を利用する SubAgent
 
+引数の不足・型・ローカル/外部の矛盾・出力条件とロールスキーマの不整合は、最初の1件で止めず一括表示します。`delegateTasks` では `requests[0].accountRef` のように要求位置と項目を示します。LLMは列挙された問題をまとめて修正してください。アカウント許可などの管理者ポリシー拒否は自動修正対象にしません。
+
 親Chatの実行前引数検証エラーは `INVALID_TOOL_ARGUMENTS` と `executed:false` のTool結果としてLLMへ返し、1 Runにつき最大2回まで修正を促します。回数は予算snapshotとともに保存・復元し、承認続行やresumeでリセットしません。修正後は新しい呼び出しとして通常の権限判定・正確な引数の承認を適用します。権限拒否・許可先の不一致・通信失敗・実行後エラーをこの修正対象にしません。ChatGPT委譲の `accountRef`・`modelId`・`sourceRefs`・`expectedOutput` はツール説明にも条件付き必須として明記しています。
 
 `expectedOutput` は JSON Schema や出力形式の見本ではなく、`result` の指定フィールドに対する完全一致条件です。`"string"` は型指定ではなく、その文字列そのものとの一致を要求します。形式やレビュー観点は `task` / `constraints` に書いてください。`{"unverified":[]}` は未検証事項が厳密にゼロである条件です。未知の事項を隠すために指定しないでください。承認要求の作成・消費前に、JSONの厳密な構文、空でないobject、選択ロールのresultSchemaとの整合性を検証します。省略したルートフィールドは条件に含めません。

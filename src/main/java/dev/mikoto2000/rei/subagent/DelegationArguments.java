@@ -9,43 +9,65 @@ public final class DelegationArguments {
   private DelegationArguments() { }
   public static String optional(String value) { return value == null || value.isBlank() ? null : value; }
   public static void validate(String tool, String input) {
-    if (!Set.of("delegateTask", "delegateTasks").contains(tool)) return;
+    var problems=problems(tool,input);
+    if(!problems.isEmpty())throw new IllegalArgumentException("Invalid delegation arguments; correct all listed problems together:\n"+String.join("\n",problems));
+  }
+  public static List<String> problems(String tool,String input) {
+    if (!Set.of("delegateTask", "delegateTasks").contains(tool)) return List.of();
     JsonNode root;
     try { root = JsonMapper.builder().build().readTree(input); }
-    catch (RuntimeException error) { throw new IllegalArgumentException("Invalid delegation arguments: expected a JSON object"); }
-    if (root == null || !root.isObject()) throw new IllegalArgumentException("Invalid delegation arguments: expected a JSON object");
-    if (tool.equals("delegateTask")) { request(root, false, new HashSet<>()); return; }
+    catch (RuntimeException error) { return List.of("arguments: expected a JSON object"); }
+    if (root == null || !root.isObject()) return List.of("arguments: expected a JSON object");
+    var errors=new ArrayList<String>();
+    if (tool.equals("delegateTask")) { request(root, false, new HashSet<>(),errors,"request"); return List.copyOf(errors); }
     var requests = root.path("requests");
     if (!requests.isArray() || requests.isEmpty() || requests.size() > 8)
-      throw new IllegalArgumentException("Invalid delegation arguments: requests must contain 1 to 8 items");
+      return List.of("requests: must contain 1 to 8 items");
     var ids = new HashSet<String>();
-    for (var request : requests) request(request, true, ids);
+    int index=0;for (var request : requests) request(request, true, ids,errors,"requests["+(index++)+"]");
+    return List.copyOf(errors);
   }
-  private static void request(JsonNode request, boolean batch, Set<String> ids) {
-    if (!request.isObject()) throw new IllegalArgumentException("Invalid delegation arguments: each request must be an object");
+  private static void request(JsonNode request, boolean batch, Set<String> ids,List<String> errors,String prefix) {
+    if (!request.isObject()) {errors.add(prefix+": must be an object");return;}
     if (batch) {
-      String id = text(request, "id");
+      String id = text(request, "id",errors,prefix);
       if (id == null || !id.matches("[A-Za-z0-9_-]{1,64}") || !ids.add(id))
-        throw new IllegalArgumentException("Invalid delegation arguments: request id must be unique and contain 1 to 64 letters, digits, underscores or hyphens");
+        errors.add(prefix+".id: must be unique and contain 1 to 64 letters, digits, underscores or hyphens");
     }
-    String agent = text(request, "agent"), task = text(request, "task"), context = text(request, "context");
-    if (agent == null || task == null || task.length() > 16384 || context != null && context.length() > 32768)
-      throw new IllegalArgumentException("Invalid delegation arguments: agent and task are required; task/context exceed the allowed length");
-    String backend = text(request, "backendId");
+    String agent = text(request,"agent",errors,prefix), task = text(request,"task",errors,prefix), context = text(request,"context",errors,prefix);
+    if(agent==null)errors.add(prefix+".agent: required");
+    if(task==null)errors.add(prefix+".task: required");
+    else if(task.length()>16384)errors.add(prefix+".task: exceeds 16384 characters");
+    if(context!=null&&context.length()>32768)errors.add(prefix+".context: exceeds 32768 characters");
+    String backend = text(request,"backendId",errors,prefix);
     if (backend != null && !Set.of("local", "chatgpt-plan", "codex-app-server").contains(backend))
-      throw new IllegalArgumentException("Invalid delegation arguments: backendId must be local, chatgpt-plan or codex-app-server; omit it for local execution");
+      errors.add(prefix+".backendId: must be local, chatgpt-plan or codex-app-server; omit for local execution");
     boolean local = backend == null || backend.equals("local");
-    String account = text(request, "accountRef"), model = text(request, "modelId"), expected = text(request, "expectedOutput");
-    boolean sources = array(request, "sourceRefs", 64, 4096);
-    boolean constraints = array(request, "constraints", 16, 2048);
-    boolean criteria = array(request, "completionCriteria", 16, 2048);
-    if (local && (account != null || model != null || expected != null || sources || constraints || criteria))
-      throw new IllegalArgumentException("Invalid local delegation arguments: omit accountRef, modelId, sourceRefs, expectedOutput, constraints and completionCriteria; put target files and output requirements in task/context");
-    if (!local && (context != null || !sources || expected == null))
-      throw new IllegalArgumentException("Invalid external delegation arguments: omit context and provide nonempty sourceRefs and expectedOutput");
-    if(!local && account==null)throw dev.mikoto2000.rei.chatgpt.ChatGptException.permission(dev.mikoto2000.rei.chatgpt.ChatGptException.PermissionReason.ACCOUNT_REQUIRED);
-    if(!local && model==null)throw dev.mikoto2000.rei.chatgpt.ChatGptException.permission(dev.mikoto2000.rei.chatgpt.ChatGptException.PermissionReason.MODEL_REQUIRED);
-    if(!local)ExpectedOutputConditions.validate(expected,null);
+    String account=text(request,"accountRef",errors,prefix),model=text(request,"modelId",errors,prefix),expected=text(request,"expectedOutput",errors,prefix);
+    boolean sources=array(request,"sourceRefs",16,4096,errors,prefix);
+    boolean constraints=array(request,"constraints",16,2048,errors,prefix);
+    boolean criteria=array(request,"completionCriteria",16,2048,errors,prefix);
+    if(local) {
+      if(account!=null)errors.add(prefix+".accountRef: omit for local delegation");
+      if(model!=null)errors.add(prefix+".modelId: omit for local delegation");
+      if(sources)errors.add(prefix+".sourceRefs: put target files in task/context for local delegation");
+      if(expected!=null)errors.add(prefix+".expectedOutput: put output requirements in task/context for local delegation");
+      if(constraints)errors.add(prefix+".constraints: put requirements in task/context for local delegation");
+      if(criteria)errors.add(prefix+".completionCriteria: put requirements in task/context for local delegation");
+    } else {
+      if(context!=null)errors.add(prefix+".context: omit for external delegation; move its content into task");
+      if(account==null)errors.add(prefix+".accountRef: ACCOUNT_REQUIRED; specify the allowed account label from current host guidance");
+      if(model==null)errors.add(prefix+".modelId: MODEL_REQUIRED; specify the allowed model slug from current host guidance");
+      if(!sources)errors.add(prefix+".sourceRefs: nonempty Project-relative paths required (at most 16)");
+      if(expected==null)errors.add(prefix+".expectedOutput: nonempty literal result conditions required");
+      else try{ExpectedOutputConditions.validate(expected,null);}catch(IllegalArgumentException invalid){errors.add(prefix+".expectedOutput: "+invalid.getMessage());}
+    }
+  }
+  private static String text(JsonNode request,String field,List<String> errors,String prefix) {
+    try{return text(request,field);}catch(IllegalArgumentException invalid){errors.add(prefix+"."+field+": must be a string");return null;}
+  }
+  private static boolean array(JsonNode request,String field,int max,int length,List<String> errors,String prefix) {
+    try{return array(request,field,max,length);}catch(IllegalArgumentException invalid){errors.add(prefix+"."+field+": must be an array of at most "+max+" nonempty strings (each at most "+length+" characters)");return false;}
   }
   private static String text(JsonNode request, String field) {
     var value = request.path(field);

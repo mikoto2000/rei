@@ -27,16 +27,29 @@ public final class DelegationToolPermissionResolver {
   }
   public void validate(String tool,String input) {
     if(!Set.of("delegateTask","delegateTasks").contains(tool))return;
-    DelegationArguments.validate(tool,input);
-    var root=json.readTree(input);
-    Iterable<JsonNode> requests="delegateTasks".equals(tool)?root.path("requests"):List.of(root);
+    var issues=new ArrayList<>(DelegationArguments.problems(tool,input));
+    JsonNode root=null;try{root=json.readTree(input);}catch(RuntimeException invalid){/* Report the safe syntax error collected above. */}
+    Iterable<JsonNode> requests=root==null||!root.isObject()?List.of():"delegateTasks".equals(tool)?
+        (root.path("requests").isArray()&&root.path("requests").size()<=8?root.path("requests"):List.of()):List.of(root);
+    int index=0;
     for(var request:requests) {
-      var definition=registry.getObject().findById(request.path("agent").asString())
-          .orElseThrow(()->new IllegalArgumentException("Invalid delegation arguments: unavailable agent"));
-      childPolicy.getObject().validate(definition.requestedTools());
+      String prefix="delegateTasks".equals(tool)?"requests["+(index++)+"]":"request";
+      if(!request.isObject()||!request.path("agent").isString())continue;
+      var definition=registry.getObject().findById(request.path("agent").asString());
+      if(definition.isEmpty()){issues.add(prefix+".agent: unavailable registered role");continue;}
+      try{childPolicy.getObject().validate(definition.get().requestedTools());}
+      catch(IllegalArgumentException invalid){issues.add(prefix+".agent: role tool policy is incompatible");}
+      String backend=request.path("backendId").isString()?DelegationArguments.optional(request.path("backendId").asString()):null;
+      if(backend!=null&&!backend.equals("local")&&request.path("expectedOutput").isString()
+          &&DelegationArguments.optional(request.path("expectedOutput").asString())!=null) {
+        try{ExpectedOutputConditions.validate(request.path("expectedOutput").asString(),definition.get().resultSchema());}
+        catch(IllegalArgumentException invalid){String issue=prefix+".expectedOutput: "+invalid.getMessage();if(!issues.contains(issue))issues.add(issue);}
+      }
+    }
+    if(!issues.isEmpty())throw new IllegalArgumentException("Invalid delegation arguments; correct all listed problems together:\n"+String.join("\n",issues));
+    if(automatic!=null)for(var request:requests) {
       String backend=DelegationArguments.optional(request.path("backendId").asString(""));
-      if(backend!=null && !backend.equals("local"))ExpectedOutputConditions.validate(request.path("expectedOutput").asString(),definition.resultSchema());
-      if(backend!=null && !backend.equals("local") && automatic!=null)automatic.check(request.path("accountRef").asString(),request.path("modelId").asString());
+      if(backend!=null&&!backend.equals("local"))automatic.check(request.path("accountRef").asString(),request.path("modelId").asString());
     }
   }
   public Set<ActionCapability> resolve(String tool, String input,
