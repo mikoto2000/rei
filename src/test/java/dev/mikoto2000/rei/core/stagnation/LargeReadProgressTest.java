@@ -40,7 +40,7 @@ class LargeReadProgressTest {
     String prefix="{\"path\":\"A\",\"version\":\"v1\",\"startLine\":1,\"content\":[\"first\",\"pre\"],\"truncated\":true,\"nextRead\":{\"startLine\":2,\"offset\":3}}";
     e.afterTool("readMultiFile","{}",prefix,before);
     assertThat(e.informationSnapshot().files().getFirst().ranges()).containsExactly(new InformationLedger.LineRange(1,2));
-    e.afterTool("readMultiFile","{\"files\":[{\"path\":\"A\",\"offset\":3}]}","{\"path\":\"A\",\"version\":\"v1\",\"startLine\":2,\"content\":[\"suffix\",\"third\"]}",before);
+    e.afterTool("readMultiFile","{\"files\":[{\"path\":\"A\",\"startLine\":2,\"offset\":3}]}","{\"path\":\"A\",\"version\":\"v1\",\"startLine\":2,\"content\":[\"suffix\",\"third\"]}",before);
     assertThat(e.informationSnapshot().files().getFirst().ranges()).containsExactly(new InformationLedger.LineRange(1,2),new InformationLedger.LineRange(3,4));
     assertThat(e.afterTool("readMultiFile","{}","{\"path\":\"./A\",\"version\":\"v1\",\"startLine\":2,\"content\":[\"prefixsuffix\"]}",before))
       .extracting(ProgressEvidence::kind).contains(ProgressEvent.NEW_INFORMATION);
@@ -55,5 +55,21 @@ class LargeReadProgressTest {
     var e=new ProgressEvaluator(root);var before=e.beforeTool("readMultiFile","{}");
     e.afterTool("readMultiFile","{}","{\"path\":\"A\",\"version\":\"v1\",\"startLine\":1,\"content\":[\"whole line\"]}",before);
     assertThat(e.afterTool("readMultiFile","{}","{\"path\":\"A\",\"version\":\"v1\",\"startLine\":1,\"content\":[\"whole\"],\"truncated\":true,\"nextRead\":{\"startLine\":1,\"offset\":5}}",before)).isEmpty();
+  }
+  @Test void identicalCharactersAtDifferentContinuationOffsetsAreNewObservedFragments() {
+    var e=new ProgressEvaluator(root);var before=e.beforeTool("readMultiFile","{}");
+    String result="{\"path\":\"A\",\"version\":\"v1\",\"startLine\":1,\"content\":[\"aaa\"],\"truncated\":true,\"nextRead\":{\"startLine\":1,\"offset\":3}}";
+    e.afterTool("readMultiFile","{}",result,before);
+    String args="{\"files\":[{\"path\":\"A\",\"startLine\":1,\"offset\":3}]}";
+    String next=result.replace("\"offset\":3","\"offset\":6");
+    assertThat(e.afterTool("readMultiFile",args,next,before)).extracting(ProgressEvidence::kind).contains(ProgressEvent.NEW_INFORMATION);
+    assertThat(e.afterTool("readMultiFile",args,next,before)).isEmpty();
+  }
+  @Test void batchRequestsForSameFileAssociateTheirOwnContinuationOffsets() {
+    var e=new ProgressEvaluator(root);
+    String args="{\"files\":[{\"path\":\"A\",\"startLine\":1},{\"path\":\"A\",\"startLine\":1,\"endLine\":1,\"offset\":3}]}";
+    String result="[{\"path\":\"A\",\"version\":\"v1\",\"startLine\":1,\"content\":[\"whole line\",\"second\"]},{\"path\":\"A\",\"version\":\"v1\",\"startLine\":1,\"content\":[\"le line\"]}]";
+    e.afterTool("readMultiFile",args,result,e.beforeTool("readMultiFile",args));
+    assertThat(e.informationSnapshot().files().getFirst().ranges()).containsExactly(new InformationLedger.LineRange(1,3));
   }
 }

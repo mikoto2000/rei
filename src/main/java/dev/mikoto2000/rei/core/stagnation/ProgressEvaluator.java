@@ -97,7 +97,22 @@ public class ProgressEvaluator {
   private void collectInformation(JsonNode node, String raw, String name, String args,
       List<ProgressEvidence> evidence) {
     if (node != null && node.isArray()) {
-      node.forEach(item -> collectInformation(item, item.toString(), name, args, evidence));
+      JsonNode input = parse(args);
+      JsonNode requests = input == null ? null : input.get("files");
+      for (int index = 0; index < node.size(); index++) {
+        JsonNode item = node.get(index);
+        String itemArguments = args;
+        if (name.equals("readMultiFile") && requests != null && requests.isArray() && requests.size() == node.size()) {
+          JsonNode request = requests.get(index);
+          try {
+            // The built-in reader returns one result per request, in request order.
+            if (request.hasNonNull("path") && item.hasNonNull("path")
+                && normalizeSource(request.path("path").asText()).equals(normalizeSource(item.path("path").asText()))
+                && request.path("startLine").asInt(1) == item.path("startLine").asInt(0)) itemArguments = request.toString();
+          } catch (RuntimeException invalid) { /* Unknown association is handled conservatively below. */ }
+        }
+        collectInformation(item, item.toString(), name, itemArguments, evidence);
+      }
     } else if (node != null && !failed(node) && name.equals("grepMultiQuery") && node.has("matches")) {
       for (JsonNode match : node.path("matches")) {
         if (!match.hasNonNull("path") || !match.hasNonNull("content")) continue;
@@ -152,14 +167,25 @@ public class ProgressEvaluator {
     if (count == 0) return;
     if (start < 1 || (long) start + count > Integer.MAX_VALUE) { unknown(source, "FILE_RANGE_UNAVAILABLE", evidence); return; }
     boolean firstFragment = false;
+    int fragmentOffset = 0;
+    boolean ambiguousOffset = false;
     if (input != null) {
-      if (input.path("offset").asInt(0) > 0) firstFragment = true;
+      fragmentOffset = Math.max(0, input.path("offset").asInt(0));
+      firstFragment = fragmentOffset > 0;
+      Set<Integer> offsets = new HashSet<>();
       for (JsonNode request : input.path("files")) {
-        if (request.path("offset").asInt(0) > 0) {
-          try { if (normalizeSource(request.path("path").asText()).equals(source)) firstFragment = true; }
+        if (request.hasNonNull("path") && request.path("startLine").asInt(1) == originalStart) {
+          try {
+            if (normalizeSource(request.path("path").asText()).equals(source)) {
+              int offset = Math.max(0, request.path("offset").asInt(0));
+              offsets.add(offset);
+              if (offset > 0) { firstFragment = true; fragmentOffset = offset; }
+            }
+          }
           catch (RuntimeException ignored) { /* Invalid paths remain unknown to the tool. */ }
         }
       }
+      ambiguousOffset = offsets.size() > 1;
     }
     int originalCount = count;
     // A byte-limited result can end in a fragment of its last line. Retain only complete lines.
@@ -176,7 +202,9 @@ public class ProgressEvaluator {
     }
     if (count < originalCount && !information.covers(source, version, originalStart, originalStart + originalCount)) {
       // Deduplicate observed fragments, without claiming that their whole line was read.
-      addInformation(source + ":" + version + ":fragment:" + start + ":" + canonical(section.path("content")), source, evidence);
+      if (ambiguousOffset) unknown(source, "FILE_RANGE_UNAVAILABLE", evidence);
+      else addInformation(source + ":" + version + ":fragment:" + originalStart + ":offset:" + fragmentOffset
+          + ":" + canonical(section.path("content")), source, evidence);
     }
   }
   private static void unknown(String source, String reason, List<ProgressEvidence> evidence) {
