@@ -47,7 +47,7 @@ public class TaskService {
         new GoogleCalendarProperties.TaskProperties(true)));
   }
 
-  public Task add(String title, LocalDate dueDate, int priority, List<String> tags) {
+  public Task add(String title, LocalDate dueDate, int priority) {
     try {
       com.google.api.services.tasks.model.Task request = new com.google.api.services.tasks.model.Task();
       request.setTitle(title);
@@ -62,7 +62,7 @@ public class TaskService {
   }
 
   public List<Task> listOpen() {
-    return listOpen(new TaskQuery(null, null, null));
+    return listOpen(new TaskQuery(null, null));
   }
 
   public List<Task> listOpen(TaskQuery query) {
@@ -98,7 +98,7 @@ public class TaskService {
     }
   }
 
-  public Task update(long id, String title, LocalDate dueDate, Integer priority, List<String> tags) {
+  public Task update(long id, String title, LocalDate dueDate, Integer priority) {
     try {
       com.google.api.services.tasks.model.Task current = fetchByHashId(id, true);
       if (title != null && !title.isBlank()) {
@@ -180,7 +180,6 @@ public class TaskService {
         dueDate,
         3,
         status,
-        List.of(),
         updatedAt,
         completedAt);
   }

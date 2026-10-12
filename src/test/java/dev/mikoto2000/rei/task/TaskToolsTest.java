@@ -24,11 +24,11 @@ class TaskToolsTest {
     TaskService service = Mockito.mock(TaskService.class);
     TaskTools tools = new TaskTools(service);
 
-    Task created = task(1L, "資料作成", LocalDate.of(2026, 4, 3), 2, TaskStatus.OPEN, List.of("sales", "document"));
-    when(service.add("資料作成", LocalDate.of(2026, 4, 3), 2, List.of("sales", "document"))).thenReturn(created);
+    Task created = task(1L, "資料作成", LocalDate.of(2026, 4, 3), 2, TaskStatus.OPEN);
+    when(service.add("資料作成", LocalDate.of(2026, 4, 3), 2)).thenReturn(created);
     when(service.listOpen()).thenReturn(List.of(created));
 
-    Task actual = tools.taskCreate("資料作成", "2026-04-03", 2, List.of("sales", "document"));
+    Task actual = tools.taskCreate("資料作成", "2026-04-03", 2);
     List<Task> listed = tools.taskList();
 
     assertSame(created, actual);
@@ -41,14 +41,14 @@ class TaskToolsTest {
     TaskTools tools = new TaskTools(service);
     IllegalStateException failure = new IllegalStateException("Google Tasks へのタスク追加に失敗しました",
         new IllegalStateException("Google Task integration is disabled"));
-    when(service.add("資料作成", null, 3, List.of())).thenThrow(failure);
+    when(service.add("資料作成", null, 3)).thenThrow(failure);
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
       IllegalStateException actual = assertThrows(IllegalStateException.class,
-          () -> tools.taskCreate("資料作成", null, 3, null));
+          () -> tools.taskCreate("資料作成", null, 3));
       assertSame(failure, actual);
     } finally {
       System.setOut(originalOut);
@@ -61,7 +61,7 @@ class TaskToolsTest {
   void taskCompleteDelegatesToService() {
     TaskService service = Mockito.mock(TaskService.class);
     TaskTools tools = new TaskTools(service);
-    Task done = task(2L, "会議準備", null, 3, TaskStatus.DONE, List.of());
+    Task done = task(2L, "会議準備", null, 3, TaskStatus.DONE);
     when(service.complete(2L)).thenReturn(done);
 
     Task actual = tools.taskComplete(2L);
@@ -74,20 +74,20 @@ class TaskToolsTest {
   void taskUpdateDelegatesToService() {
     TaskService service = Mockito.mock(TaskService.class);
     TaskTools tools = new TaskTools(service);
-    Task updated = task(3L, "要件更新", LocalDate.of(2026, 4, 10), 1, TaskStatus.OPEN, List.of("urgent"));
-    when(service.update(3L, "要件更新", LocalDate.of(2026, 4, 10), 1, List.of("urgent"))).thenReturn(updated);
+    Task updated = task(3L, "要件更新", LocalDate.of(2026, 4, 10), 1, TaskStatus.OPEN);
+    when(service.update(3L, "要件更新", LocalDate.of(2026, 4, 10), 1)).thenReturn(updated);
 
-    Task actual = tools.taskUpdate(3L, "要件更新", "2026-04-10", 1, List.of("urgent"));
+    Task actual = tools.taskUpdate(3L, "要件更新", "2026-04-10", 1);
 
     assertSame(updated, actual);
-    verify(service).update(3L, "要件更新", LocalDate.of(2026, 4, 10), 1, List.of("urgent"));
+    verify(service).update(3L, "要件更新", LocalDate.of(2026, 4, 10), 1);
   }
 
   @Test
   void taskUpdateDeadlineDelegatesToService() {
     TaskService service = Mockito.mock(TaskService.class);
     TaskTools tools = new TaskTools(service);
-    Task updated = task(4L, "期限変更", LocalDate.of(2026, 4, 10), 2, TaskStatus.OPEN, List.of());
+    Task updated = task(4L, "期限変更", LocalDate.of(2026, 4, 10), 2, TaskStatus.OPEN);
     when(service.updateDeadline(4L, LocalDate.of(2026, 4, 10))).thenReturn(updated);
 
     Task actual = tools.taskUpdateDeadline(4L, "2026-04-10");
@@ -107,39 +107,39 @@ class TaskToolsTest {
   }
 
   @Test
-  void taskCreateUsesEmptyTagListWhenNull() {
+  void taskCreateAcceptsMissingDueDate() {
     TaskService service = Mockito.mock(TaskService.class);
     TaskTools tools = new TaskTools(service);
-    Task created = task(6L, "タグなし", null, 3, TaskStatus.OPEN, List.of());
-    when(service.add("タグなし", null, 3, List.of())).thenReturn(created);
+    Task created = task(6L, "no deadline", null, 3, TaskStatus.OPEN);
+    when(service.add("no deadline", null, 3)).thenReturn(created);
 
-    Task actual = tools.taskCreate("タグなし", null, 3, null);
+    Task actual = tools.taskCreate("no deadline", null, 3);
 
     assertSame(created, actual);
-    verify(service).add("タグなし", null, 3, List.of());
+    verify(service).add("no deadline", null, 3);
   }
 
   @Test
   void taskUpdatePassesNullValuesAsIs() {
     TaskService service = Mockito.mock(TaskService.class);
     TaskTools tools = new TaskTools(service);
-    Task updated = task(7L, "現状維持", LocalDate.of(2026, 4, 3), 2, TaskStatus.OPEN, List.of("team"));
-    when(service.update(7L, null, null, 1, null)).thenReturn(updated);
+    Task updated = task(7L, "現状維持", LocalDate.of(2026, 4, 3), 2, TaskStatus.OPEN);
+    when(service.update(7L, null, null, 1)).thenReturn(updated);
 
-    Task actual = tools.taskUpdate(7L, null, null, 1, null);
+    Task actual = tools.taskUpdate(7L, null, null, 1);
 
     assertSame(updated, actual);
-    verify(service).update(7L, null, null, 1, null);
+    verify(service).update(7L, null, null, 1);
   }
 
-  private Task task(long id, String title, LocalDate dueDate, int priority, TaskStatus status, List<String> tags) {
-    return new Task(id, title, dueDate, priority, status, tags, OffsetDateTime.now(ZoneOffset.UTC), null);
+  private Task task(long id, String title, LocalDate dueDate, int priority, TaskStatus status) {
+    return new Task(id, title, dueDate, priority, status, OffsetDateTime.now(ZoneOffset.UTC), null);
   }
   @Test void actualTaskCompletionPublishesOwnedLifecycleForReflection() {
     var service=Mockito.mock(TaskService.class);var tools=new TaskTools(service);
     var events=new java.util.ArrayList<dev.mikoto2000.rei.event.AgentEvent>();
     tools.setEvents(events::add,new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.fixed(java.time.Instant.EPOCH,java.time.ZoneOffset.UTC)));
-    var completed=task(7L,"expected",null,3,TaskStatus.DONE,List.of());when(service.complete(7L)).thenReturn(completed);
+    var completed=task(7L,"expected",null,3,TaskStatus.DONE);when(service.complete(7L)).thenReturn(completed);
     var owner=new dev.mikoto2000.rei.core.chat.AgentRunContext("run","session",java.nio.file.Path.of("."),"project");
     try(var scope=dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {assertSame(completed,tools.taskComplete(7L));}
     assertEquals(List.of(dev.mikoto2000.rei.event.AgentEventType.TASK_STARTED,dev.mikoto2000.rei.event.AgentEventType.TASK_COMPLETED),events.stream().map(dev.mikoto2000.rei.event.AgentEvent::type).toList());
@@ -158,11 +158,11 @@ class TaskToolsTest {
     var bus=new dev.mikoto2000.rei.event.InMemoryAgentEventBus();var observer=new dev.mikoto2000.rei.reflection.RunReflectionService(repo,bus);observer.start();
     try {
       var service=Mockito.mock(TaskService.class);var tools=new TaskTools(service);tools.setEvents(bus,new dev.mikoto2000.rei.event.AgentEventFactory(clock));
-      var done=task(9L,"expected",null,3,TaskStatus.DONE,List.of());when(service.complete(9L)).thenReturn(done);
+      var done=task(9L,"expected",null,3,TaskStatus.DONE);when(service.complete(9L)).thenReturn(done);
       var owner=new dev.mikoto2000.rei.core.chat.AgentRunContext("run","session",dir,"project");
       try(var scope=dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {tools.taskComplete(9L);}
       var item=repo.list("project").getFirst();assertEquals("TASK",item.sourceKind());assertEquals("9",item.sourceId());assertEquals("TASK_COMPLETION_REPORTED",item.gap());
-      when(service.complete(10L)).thenReturn(task(10L,"unfinished",null,3,TaskStatus.OPEN,List.of()));
+      when(service.complete(10L)).thenReturn(task(10L,"unfinished",null,3,TaskStatus.OPEN));
       try(var scope=dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {assertThrows(IllegalStateException.class,()->tools.taskComplete(10L));}
       assertEquals("FAILED",repo.list("project").stream().filter(i->i.sourceId().equals("10")).findFirst().orElseThrow().status());
     }finally {observer.close();}
