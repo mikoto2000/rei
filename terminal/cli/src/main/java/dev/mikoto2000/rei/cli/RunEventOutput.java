@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.cli;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 /** Keeps provider chunk boundaries out of terminal lines and preserves the input prompt. */
@@ -11,6 +13,8 @@ final class RunEventOutput {
   private final Set<String> streamed = new HashSet<>();
   private final StringBuilder pending = new StringBuilder();
   private String active;
+  private record Notice(String type, JsonNode payload) { }
+  private final List<Notice> notices = new ArrayList<>();
 
   RunEventOutput(Consumer<String> output) { this.output = output; }
 
@@ -39,8 +43,16 @@ final class RunEventOutput {
       }
       return;
     }
+    if (active != null && !type.startsWith("tool.") && !type.equals("attention.required")
+        && !Set.of("agent.run.completed", "agent.run.failed", "agent.run.cancelled").contains(type)) {
+      notices.add(new Notice(type, payload.deepCopy()));
+      return;
+    }
     flush();
-    active = null;
+    renderNotice(type, payload);
+  }
+
+  private void renderNotice(String type, JsonNode payload) {
     if ("attention.required".equals(type)) {
       output.accept("[attention] " + payload.path("kind").asText());
       payload.path("message").asText().lines().forEach(output);
@@ -64,5 +76,8 @@ final class RunEventOutput {
       output.accept(pending.toString());
       pending.setLength(0);
     }
+    active = null;
+    for (var notice : notices) renderNotice(notice.type(), notice.payload());
+    notices.clear();
   }
 }
