@@ -7,11 +7,14 @@ import dev.mikoto2000.rei.application.session.ShellConversationService;
 @Command(name="document",description="複数ファイルの変更提案を確認し、管理対象のテキストやステージングを明示的に復旧します")
 public final class DocumentCommand implements java.util.concurrent.Callable<Integer> {
   private final ShellConversationService conversations;
-  @Parameters(index="0",paramLabel="show|rollback|clean|reconcile-single") String action;
+  @Parameters(index="0",paramLabel="show|rollback|clean|reconcile-single",completionCandidates=ActionCandidates.class) String action;
   @Parameters(index="1",paramLabel="ID") String id;
   @Parameters(index="2",arity="0..1",paramLabel="PROPOSAL_SHA256") String hash;
   @Spec picocli.CommandLine.Model.CommandSpec spec;
   public DocumentCommand(){this(null);}
   @org.springframework.beans.factory.annotation.Autowired public DocumentCommand(ShellConversationService conversations){this.conversations=conversations;}
   @Override public Integer call(){if(conversations==null||id==null||!id.matches("[a-f0-9-]{36}")||!(action.equals("show")&&hash==null||java.util.Set.of("rollback","clean","reconcile-single").contains(action)&&hash!=null&&hash.matches("[a-f0-9]{64}"))){spec.commandLine().getErr().println("Use /document show UUID or /document rollback|clean|reconcile-single UUID proposalSha256");return 2;}conversations.submit("/document "+action+" "+id+(hash==null?"":" "+hash));return 0;}
+  public static final class ActionCandidates extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {
+    public ActionCandidates() { super("show", "rollback", "clean", "reconcile-single"); }
+  }
 }

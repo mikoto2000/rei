@@ -30,6 +30,57 @@ class ContextCompletionTest {
   List<String> values(CommandLine cmd, String line) {
     return complete(cmd, line, line.length()).stream().map(Candidate::value).toList();
   }
+  @Test void manuallyParsedActionsCompleteWithoutServicesOrLeakingIntoIds() {
+    var commands = List.of(
+        new dev.mikoto2000.rei.core.policy.ApprovalCommand(),
+        new dev.mikoto2000.rei.attention.AttentionCommand(),
+        new dev.mikoto2000.rei.goal.GoalCommand(),
+        new dev.mikoto2000.rei.core.dependency.DependencyCommand(),
+        new DocumentCommand(), new RepairCommand(),
+        new dev.mikoto2000.rei.reflection.ReflectionCommand(),
+        new dev.mikoto2000.rei.temporal.TimerCommand(),
+        new dev.mikoto2000.rei.dot.DotCommand());
+    var expected = List.of(
+        "list show approve deny",
+        "list show ack delivery deliver retry-delivery",
+        "list create show progress run verify cancel history reconcile completion wait wait-activate wait-resume wait-cancel",
+        "list show history check cancel answer",
+        "show rollback clean reconcile-single", "show apply",
+        "list show collect runs run collect-run promote lessons lesson lesson-observe lesson-observe-correction lesson-propose lesson-validate lesson-counterexample lesson-correct lesson-forget",
+        "list show activate cancel history reconcile",
+        "request requests status result cancel verify resume");
+    for (int i = 0; i < commands.size(); i++) {
+      var child = new CommandLine(commands.get(i));
+      String prefix = "/" + child.getCommandName() + " ";
+      var cmd = command().addSubcommand(child.getCommandName(), child);
+      assertThat(values(cmd, prefix)).as(prefix).containsExactly(expected.get(i).split(" "));
+      for (String action : expected.get(i).split(" ")) {
+        assertThat(values(cmd, prefix + action)).as(prefix + action).contains(action);
+        assertThat(values(cmd, prefix + action + " ")).as(prefix + action + " ID").isEmpty();
+      }
+    }
+    var cmd = command().addSubcommand("approval", new dev.mikoto2000.rei.core.policy.ApprovalCommand())
+        .addSubcommand("llm", new dev.mikoto2000.rei.llm.capture.LlmCaptureCommand());
+    assertThat(values(cmd, "/approval ap")).containsExactly("approve");
+    assertThat(values(cmd, "/approval --continue ap")).containsExactly("approve");
+    assertThat(values(cmd, "/approval approve id --con")).containsExactly("--continue");
+    assertThat(values(cmd, "/llm capture ")).containsExactly("next", "status", "off", "list", "show", "raw", "export", "delete", "clear");
+    assertThat(values(cmd, "/llm capture ex")).containsExactly("export");
+    assertThat(values(cmd, "/llm capture show ")).isEmpty();
+    assertThat(values(cmd, "/llm capture export id ")).isEmpty();
+  }
+  @Test void documentAndOpmlArgumentsCompletePathsWithoutExecutingImports() throws Exception {
+    Files.createFile(root.resolve("report.opml"));
+    Files.createDirectory(root.resolve("reports"));
+    var feed = new CommandLine(CommandSpec.create().name("feed"))
+        .addSubcommand("import-opml", new dev.mikoto2000.rei.feed.command.FeedCommand.ImportOpmlCommand());
+    var cmd = command().addSubcommand("feed", feed)
+        .addSubcommand("embed", new EmbedCommand(null, null));
+    assertThat(values(cmd, "/feed import-opml rep")).containsExactly("report.opml");
+    assertThat(values(cmd, "/embed rep")).containsExactly("report.opml", "reports" + java.io.File.separator);
+    assertThat(values(cmd, "/embed add rep")).containsExactly("report.opml", "reports" + java.io.File.separator);
+    assertThat(values(cmd, "/embed add first.txt rep")).containsExactly("report.opml", "reports" + java.io.File.separator);
+  }
   @Test void rootCommandsAndPrefixComeFromLiveRegistry() {
     var cmd = command();
     assertThat(values(cmd, "/")).contains("/project", "/history", "/agent");

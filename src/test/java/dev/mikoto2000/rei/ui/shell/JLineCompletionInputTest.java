@@ -23,7 +23,8 @@ class JLineCompletionInputTest {
     return read(input + "\t");
   }
   String read(String input) throws Exception {
-    var command = new CommandLine(CommandSpec.create()).addSubcommand("project", new ProjectCommand());
+    var command = new CommandLine(CommandSpec.create()).addSubcommand("project", new ProjectCommand())
+        .addSubcommand("approval", new dev.mikoto2000.rei.core.policy.ApprovalCommand());
     try (var terminal = new org.jline.terminal.impl.DumbTerminal("fixture", "xterm",
         new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream(), java.nio.charset.StandardCharsets.UTF_8)) {
       terminal.setSize(new Size(100, 30));
@@ -32,6 +33,9 @@ class JLineCompletionInputTest {
       reader.runMacro(input + "\n");
       return reader.readLine("");
     }
+  }
+  @Test void tabCompletesApprovalAction() throws Exception {
+    assertThat(tab("/approval ap")).isEqualTo("/approval approve ");
   }
   @ParameterizedTest
   @ValueSource(strings = {"f:\\project\\rei", "F:\\", "..\\rei\\", "\\\\server\\share\\rei",
@@ -76,7 +80,8 @@ class JLineCompletionInputTest {
   @Test void homeCandidateCanActuallyBeInsertedByJline() throws Exception {
     // An injected home keeps this test independent of the developer's real files.
     Files.createDirectory(root.resolve("reports"));
-    var command = new CommandLine(CommandSpec.create()).addSubcommand("project", new ProjectCommand());
+    var command = new CommandLine(CommandSpec.create()).addSubcommand("project", new ProjectCommand())
+        .addSubcommand("approval", new dev.mikoto2000.rei.core.policy.ApprovalCommand());
     try (var terminal = new org.jline.terminal.impl.DumbTerminal("fixture", "xterm",
         new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream(), java.nio.charset.StandardCharsets.UTF_8)) {
       terminal.setSize(new Size(100, 30));

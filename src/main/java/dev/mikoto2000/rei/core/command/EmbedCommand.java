@@ -45,7 +45,7 @@ public class EmbedCommand implements Runnable {
   private final VectorDocumentService vectorDocumentService;
   private final AsyncVectorDocumentService asyncVectorDocumentService;
 
-  @Parameters(arity = "0..*", paramLabel = "DOCUMENTS...", description = "埋め込み対象ドキュメントのパス")
+  @Parameters(arity = "0..*", paramLabel = "DOCUMENTS...", description = "埋め込み対象ドキュメントのパス", completionCandidates = dev.mikoto2000.rei.core.completion.PathCompletionCandidates.Any.class)
   String[] documents;
 
   @Override
@@ -66,7 +66,7 @@ public class EmbedCommand implements Runnable {
 
     private final AsyncVectorDocumentService asyncVectorDocumentService;
 
-    @Parameters(arity = "1..*", paramLabel = "DOCUMENTS...", description = "埋め込み対象ドキュメントのパス")
+    @Parameters(arity = "1..*", paramLabel = "DOCUMENTS...", description = "埋め込み対象ドキュメントのパス", completionCandidates = dev.mikoto2000.rei.core.completion.PathCompletionCandidates.Any.class)
     String[] documents;
 
     @Override

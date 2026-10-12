@@ -30,7 +30,7 @@ public class ReflectionCommand implements java.util.concurrent.Callable<Integer>
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   public void setRunReflections(RunReflectionRepository runReflections){this.runReflections=runReflections;}
   @Spec picocli.CommandLine.Model.CommandSpec spec;
-  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|show|collect|runs|run|collect-run|promote") String action;
+  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|show|collect|runs|run|collect-run|promote",completionCandidates=ActionCandidates.class) String action;
   @Parameters(index="1",arity="0..1",paramLabel="reflectionId|goalId") String id;
   private java.io.PrintWriter output;
   public ReflectionCommand(){this(null,null,null);}
@@ -66,4 +66,7 @@ public class ReflectionCommand implements java.util.concurrent.Callable<Integer>
   private String requiredId(){if(id==null||id.isBlank())throw new IllegalArgumentException("Reflection ID or Goal ID is required");return id;}
   private ReflectionLessonService lessonService(){if(lessons==null)throw new IllegalStateException("Reflection lessons are disabled");return lessons;}
   private dev.mikoto2000.rei.core.chat.AgentRunContext lessonOwner(){var project=projects.currentContext();return new dev.mikoto2000.rei.core.chat.AgentRunContext("human-reflection",projects.currentSessionId(),project.root(),project.id());}
+  public static final class ActionCandidates extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {
+    public ActionCandidates() { super("list", "show", "collect", "runs", "run", "collect-run", "promote", "lessons", "lesson", "lesson-observe", "lesson-observe-correction", "lesson-propose", "lesson-validate", "lesson-counterexample", "lesson-correct", "lesson-forget"); }
+  }
 }

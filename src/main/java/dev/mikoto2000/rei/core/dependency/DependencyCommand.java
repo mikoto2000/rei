@@ -12,7 +12,7 @@ import picocli.CommandLine.*;
 public class DependencyCommand implements java.util.concurrent.Callable<Integer> {
   private final PersistentDependencyRepository repo;private final DependencyObservationService service;private final ProjectService projects;private final ToolPermissionGuard guard;
   @Spec picocli.CommandLine.Model.CommandSpec spec;
-  @Parameters(index="0",arity="0..1",defaultValue="list") String action;
+  @Parameters(index="0",arity="0..1",defaultValue="list",completionCandidates=ActionCandidates.class) String action;
   @Parameters(index="1",arity="0..1") String id;
   @Option(names="--value",description="ユーザー本人の回答（LLM ツールからは指定できません）") String value;
   private java.io.PrintWriter output;
@@ -38,5 +38,8 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
       service.flushFacts();writer.println(CredentialRedactor.redact(String.valueOf(result)));return 0;
     }catch(RuntimeException error){writer.println("[error] "+CredentialRedactor.redact(error.getMessage()));return 2;}
     finally {writer.flush();}
+  }
+  public static final class ActionCandidates extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {
+    public ActionCandidates() { super("list", "show", "history", "check", "cancel", "answer"); }
   }
 }
