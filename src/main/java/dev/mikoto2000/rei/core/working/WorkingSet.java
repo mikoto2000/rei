@@ -30,7 +30,7 @@ public class WorkingSet {
   private static final Pattern SECRET_ASSIGNMENT = Pattern.compile(
       "(?i)((?:api[_-]?key|access[_-]?token|token|password|secret)\\s*[:=]\\s*)(?:\\\"[^\\\"]*\\\"|'[^']*'|\\S+)");
 
-  static final int DEFAULT_MAX_FILES = 20;
+  static final int DEFAULT_MAX_FILES = 50;
 
   private final int maxFiles;
   private final Clock clock;

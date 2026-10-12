@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 class PlanEventBoundaryTest {
   @Test
-  void managementEventsIdentifyPlanUsageWithoutTaskOrFailureBody() {
+  void managementEventsIdentifyPlanUsageAndSafeFailureWithoutTaskBody() {
     var factory = new AgentEventFactory(Clock.systemUTC());
     var event =
         factory.subAgentLifecycle(
@@ -21,14 +21,21 @@ class PlanEventBoundaryTest {
             "private task material",
             "OUTCOME_UNKNOWN",
             120,
-            "private remote body",
+            "OUTCOME_UNKNOWN",
             "chatgpt-plan",
             "selected-model",
             17);
     var payload = WebApiEventDto.from(event, false, "irrelevant-api-key").payload();
     assertEquals(
-        Set.of("agentId", "status", "duration", "backendId", "modelId", "totalTokens"),
+        Set.of("parentRunId", "subAgentRunId", "agentId", "status", "duration",
+            "failureReason", "backendId", "modelId", "totalTokens"),
         payload.keySet());
+    assertEquals("parent", payload.get("parentRunId"));
+    assertEquals("child", payload.get("subAgentRunId"));
+    assertEquals("reviewer", payload.get("agentId"));
+    assertEquals("OUTCOME_UNKNOWN", payload.get("status"));
+    assertEquals(120L, ((Number) payload.get("duration")).longValue());
+    assertEquals("OUTCOME_UNKNOWN", payload.get("failureReason"));
     assertEquals("chatgpt-plan", payload.get("backendId"));
     assertEquals("selected-model", payload.get("modelId"));
     assertEquals(17, payload.get("totalTokens"));

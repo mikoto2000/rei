@@ -27,6 +27,42 @@ class WorkingSetTest {
 
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
 
+  @Test
+  void defaultWorkingSetRetainsFiftyFilesAndEvictsOldestOnFiftyFirst() {
+    assertEquals(50, new WorkingSet().maxFiles());
+    WorkingSet ws = new WorkingSet(WorkingSet.DEFAULT_MAX_FILES, new AdvancingClock(new AtomicLong()));
+    for (int i = 0; i < 50; i++) {
+      ws.recordRead(Path.of("file-" + i));
+    }
+    assertEquals(50, ws.getFiles().size());
+    for (int i = 0; i < 50; i++) {
+      assertTrue(ws.contains(Path.of("file-" + i)));
+    }
+    ws.recordRead(Path.of("file-50"));
+    assertEquals(50, ws.getFiles().size());
+    assertFalse(ws.contains(Path.of("file-0")));
+    for (int i = 1; i <= 50; i++) {
+      assertTrue(ws.contains(Path.of("file-" + i)));
+    }
+  }
+
+  @Test
+  void defaultCapacityKeepsReAccessedFileAndEvictsNextOldest() {
+    WorkingSet ws = new WorkingSet(WorkingSet.DEFAULT_MAX_FILES, new AdvancingClock(new AtomicLong()));
+    for (int i = 0; i < 50; i++) {
+      ws.recordRead(Path.of("file-" + i));
+    }
+    ws.recordRead(Path.of("file-0"));
+    assertEquals(50, ws.getFiles().size());
+    ws.recordRead(Path.of("file-50"));
+    assertEquals(50, ws.getFiles().size());
+    assertTrue(ws.contains(Path.of("file-0")));
+    assertFalse(ws.contains(Path.of("file-1")));
+    for (int i = 2; i <= 50; i++) {
+      assertTrue(ws.contains(Path.of("file-" + i)));
+    }
+  }
+
   private WorkingSet workingSet(int maxFiles, Instant start) {
     return new WorkingSet(maxFiles, Clock.fixed(start, ZONE));
   }

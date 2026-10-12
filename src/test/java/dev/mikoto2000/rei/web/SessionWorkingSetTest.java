@@ -28,8 +28,12 @@ class SessionWorkingSetTest {
       var working = application.getBean(WorkingSet.class);
       var first = new AgentRunContext("one", "project:" + project + ":chat:first", directory, project);
       var second = new AgentRunContext("two", "project:" + project + ":chat:second", directory, project);
-      try (var scope = AgentRunScope.open(first)) { working.recordRead(directory.resolve("first.txt")); }
+      try (var scope = AgentRunScope.open(first)) {
+        assertThat(working.maxFiles()).isEqualTo(50);
+        working.recordRead(directory.resolve("first.txt"));
+      }
       try (var scope = AgentRunScope.open(second)) {
+        assertThat(working.maxFiles()).isEqualTo(50);
         assertThat(working.getFiles()).isEmpty();
         working.recordRead(directory.resolve("second.txt"));
       }
