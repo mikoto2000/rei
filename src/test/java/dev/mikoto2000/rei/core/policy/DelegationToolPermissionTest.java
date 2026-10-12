@@ -36,17 +36,35 @@ class DelegationToolPermissionTest {
   private ToolPermissionGuard guard() {
     return new ToolPermissionGuard(policy,new AgentEventFactory(Clock.systemUTC()),event->{});
   }
+  @Test void blankBackendIsLocalForPermissionChecks() {
+    String input="{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"  \",\"accountRef\":\"\",\"modelId\":\"\",\"context\":\"\",\"sourceRefs\":[],\"expectedOutput\":\"\"}";
+    assertEquals(Set.of(ActionCapability.READ),policy.capabilities("delegateTask",input));
+    assertDoesNotThrow(()->guard().check("delegateTask",input,owner(AgentRunContext.Mode.EXCLUSIVE,"session")));
+  }
+  @Test void invalidArgumentsNeverCreateOrConsumeApprovalEvenWithoutADenyList() {
+    policy=new ToolPermissionPolicy(new ToolPermissionProperties(true,Set.of(),Set.of(),Map.of()));
+    var repository=mock(ToolApprovalRepository.class);var guard=guard();guard.setApprovals(repository);
+    for(String input:List.of(
+        "{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"unknown\"}",
+        "{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"\",\"sourceRefs\":[\"docs/a.md\"],\"expectedOutput\":\"JSON\"}",
+        "{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":true}",
+        "{\"agent\":\"reviewer\"}"))
+      assertThrows(IllegalArgumentException.class,()->guard.check("delegateTask",input,owner(AgentRunContext.Mode.EXCLUSIVE,"session")));
+    assertThrows(IllegalArgumentException.class,()->guard.check("delegateTasks",
+        "{\"requests\":[{\"id\":\"same\",\"agent\":\"reviewer\",\"task\":\"review\"},{\"id\":\"same\",\"agent\":\"reviewer\",\"task\":\"review\"}]}",owner(AgentRunContext.Mode.EXCLUSIVE,"session")));
+    verifyNoInteractions(repository);
+  }
   @Test void localSingleAndParallelReviewsPassTheRealGuardWithDefaultPolicy() {
     var owner=owner(AgentRunContext.Mode.READ_ONLY,"session");
-    assertDoesNotThrow(()->guard().check("delegateTask","{\"agent\":\"reviewer\"}",owner));
-    assertDoesNotThrow(()->guard().check("delegateTasks","{\"requests\":[{\"agent\":\"reviewer\"},{\"agent\":\"judge\",\"backendId\":\"local\"}]}",owner));
+    assertDoesNotThrow(()->guard().check("delegateTask","{\"agent\":\"reviewer\",\"task\":\"review\",\"id\":\"review\"}",owner));
+    assertDoesNotThrow(()->guard().check("delegateTasks","{\"requests\":[{\"agent\":\"reviewer\",\"task\":\"review\",\"id\":\"review\"},{\"agent\":\"judge\",\"task\":\"judge\",\"id\":\"judge\",\"backendId\":\"local\"}]}",owner));
   }
   @Test void requiredChildCapabilitiesAreCombinedBeforeAnyChildStarts() {
-    String input="{\"requests\":[{\"agent\":\"reviewer\"},{\"agent\":\"researcher\"}]}";
+    String input="{\"requests\":[{\"agent\":\"reviewer\",\"task\":\"review\",\"id\":\"review\"},{\"agent\":\"researcher\",\"task\":\"research\",\"id\":\"research\"}]}";
     assertEquals(Set.of(ActionCapability.READ,ActionCapability.NETWORK_READ),policy.capabilities("delegateTasks",input));
     assertEquals(PermissionDecision.REQUIRE_APPROVAL,policy.evaluate("delegateTasks",input));
     assertThrows(ToolPermissionException.class,()->guard().check("delegateTasks",input,owner(AgentRunContext.Mode.EXCLUSIVE,"session")));
-    assertEquals(PermissionDecision.AUTO_APPROVE,policy.evaluate("delegateTask","{\"agent\":\"reviewer\"}"));
+    assertEquals(PermissionDecision.AUTO_APPROVE,policy.evaluate("delegateTask","{\"agent\":\"reviewer\",\"task\":\"review\",\"id\":\"review\"}"));
   }
   @Test void externalDestinationsRequireSendingAndAppServerRequiresExecution() {
     for(String tool:List.of("delegateTask","delegateTasks")) {
@@ -65,13 +83,13 @@ class DelegationToolPermissionTest {
     for(String input:List.of("{}","not json","{\"agent\":\"missing\"}","{\"agent\":\"writer\"}",
         "{\"agent\":\"reviewer\",\"backendId\":\"unknown\"}","{\"agent\":\"reviewer\",\"backendId\":true}"))
       assertEquals(PermissionDecision.DENY,policy.evaluate("delegateTask",input));
-    for(String input:List.of("{\"requests\":[]}","{\"requests\":[{\"agent\":\"reviewer\"},{\"agent\":\"missing\"}]}"))
+    for(String input:List.of("{\"requests\":[]}","{\"requests\":[{\"agent\":\"reviewer\",\"task\":\"review\",\"id\":\"review\"},{\"agent\":\"missing\"}]}"))
       assertEquals(PermissionDecision.DENY,policy.evaluate("delegateTasks",input));
   }
   @Test void disabledPolicyAndReadRelabelingCannotAuthorizeExternalOrRecursiveDelegation() {
-    var resolver=policy.capabilities("delegateTask","{\"agent\":\"reviewer\"}");
+    var resolver=policy.capabilities("delegateTask","{\"agent\":\"reviewer\",\"task\":\"review\",\"id\":\"review\"}");
     assertEquals(Set.of(ActionCapability.READ),resolver);
-    assertThrows(ToolPermissionException.class,()->guard().check("delegateTask","{\"agent\":\"reviewer\"}",owner(AgentRunContext.Mode.EXCLUSIVE,"subagent:child")));
+    assertThrows(ToolPermissionException.class,()->guard().check("delegateTask","{\"agent\":\"reviewer\",\"task\":\"review\",\"id\":\"review\"}",owner(AgentRunContext.Mode.EXCLUSIVE,"subagent:child")));
     var providers=new org.springframework.beans.factory.support.StaticListableBeanFactory();
     providers.addBean("registry",registry);
     providers.addBean("children",new SubAgentToolPolicy(Set.of("readMultiFile","webSearch")));
@@ -82,6 +100,6 @@ class DelegationToolPermissionTest {
   @Test void graphAndJudgeUseChildDefinitionsInsteadOfUnknownToolFallback() {
     assertEquals(PermissionDecision.AUTO_APPROVE,policy.evaluate("judgeSubAgentAnswers","{\"agent\":\"judge\"}"));
     assertEquals(Set.of(ActionCapability.READ,ActionCapability.NETWORK_READ,ActionCapability.LOCAL_WRITE),
-        policy.capabilities("delegateTaskGraph","{\"spec\":{\"nodes\":[{\"agent\":\"researcher\"}]}}"));
+        policy.capabilities("delegateTaskGraph","{\"spec\":{\"nodes\":[{\"agent\":\"researcher\",\"task\":\"research\",\"id\":\"research\"}]}}"));
   }
 }

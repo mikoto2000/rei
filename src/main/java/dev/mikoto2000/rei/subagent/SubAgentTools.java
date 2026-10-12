@@ -58,9 +58,12 @@ public class SubAgentTools {
       @ToolParam(required=false) java.util.List<String> constraints,
       @ToolParam(required=false) java.util.List<String> completionCriteria,
       @ToolParam(required=false) String expectedOutput, ToolContext toolContext) {
+    backendId=DelegationArguments.optional(backendId);accountRef=DelegationArguments.optional(accountRef);
+    modelId=DelegationArguments.optional(modelId);context=DelegationArguments.optional(context);
+    expectedOutput=DelegationArguments.optional(expectedOutput);
     if (backendId == null || backendId.equals("local")) {
-      if (accountRef != null || modelId != null || sourceRefs != null || constraints != null
-          || completionCriteria != null || expectedOutput != null)
+      if (accountRef != null || modelId != null || sourceRefs != null && !sourceRefs.isEmpty() || constraints != null && !constraints.isEmpty()
+          || completionCriteria != null && !completionCriteria.isEmpty() || expectedOutput != null)
         throw new IllegalArgumentException("External options require an explicit backend");
       return delegateTask(agent,task,context,toolContext);
     }

@@ -17,7 +17,12 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
   public record Request(String id, String agent, String task, String context, String backendId,
       String accountRef,String modelId,List<String> sourceRefs,String expectedOutput) {
     public Request(String id,String agent,String task,String context){this(id,agent,task,context,null,null,null,null,null);}
-    public Request {sourceRefs=sourceRefs==null?null:List.copyOf(sourceRefs);}
+    public Request {
+      backendId=DelegationArguments.optional(backendId);accountRef=DelegationArguments.optional(accountRef);
+      modelId=DelegationArguments.optional(modelId);context=DelegationArguments.optional(context);
+      expectedOutput=DelegationArguments.optional(expectedOutput);
+      sourceRefs=sourceRefs==null||sourceRefs.isEmpty()?null:List.copyOf(sourceRefs);
+    }
   }
   public enum Status { COMPLETED, PARTIAL, FAILED, CANCELLED, TIMEOUT, REJECTED }
   public record Item(String id, String agent, Status status, SubAgentResult result,ChatGptSubAgentBackend.Receipt receipt) {

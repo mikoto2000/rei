@@ -35,6 +35,25 @@ class ParallelSubAgentDelegatorTest {
   List<ParallelSubAgentDelegator.Request> requests(int count) {
     return java.util.stream.IntStream.range(0,count).mapToObj(i->new ParallelSubAgentDelegator.Request("item-"+i,"reviewer","task-"+i,null)).toList();
   }
+  @Test void blankOptionalFieldsDispatchLocally() throws Exception {
+    var runner=mock(SubAgentRunner.class);
+    when(runner.run("reviewer","review",null)).thenReturn(completed());
+    try(var delegator=new ParallelSubAgentDelegator(runner,registry(),new CommandCancellationService(),Duration.ofSeconds(1));
+        var scope=AgentRunScope.open(new AgentRunContext("parent","session",directory,"project"))) {
+      var request=new ParallelSubAgentDelegator.Request("review","reviewer","review"," ",""," ","",List.of(),"");
+      assertEquals(ParallelSubAgentDelegator.Status.COMPLETED,delegator.delegate(List.of(request)).status());
+      verify(runner).run("reviewer","review",null);
+      verify(runner,never()).runAutomaticBackend(any(),any(),any());
+    }
+  }
+  @Test void singleDelegationAlsoTreatsBlankOptionsAsOmitted() {
+    var runner=mock(SubAgentRunner.class);
+    when(runner.run("reviewer","review",null)).thenReturn(completed());
+    var tools=new SubAgentTools(runner,null);
+    assertInstanceOf(SubAgentResult.class,tools.delegateTask("reviewer","review"," ",""," ","",List.of(),List.of(),List.of(),"",null));
+    verify(runner).run("reviewer","review",null);
+    verify(runner,never()).runAutomaticBackend(any(),any(),any());
+  }
   SubAgentResult completed() {return new SubAgentResult("reviewer",UUID.randomUUID().toString(),SubAgentResult.Status.COMPLETED,"done",Instant.now(),Instant.now());}
   @Test void boundsConcurrencyPreservesOrderAndParentScope() throws Exception {
     var runner=mock(SubAgentRunner.class);var running=new AtomicInteger();var peak=new AtomicInteger();var started=new CountDownLatch(2);var release=new CountDownLatch(1);

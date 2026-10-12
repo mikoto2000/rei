@@ -45,6 +45,7 @@ public class ToolPermissionGuard {
     restricted |= owner!=null && owner.requestSource()==AgentRunContext.RequestSource.MCP
         && (owner.mode()!=AgentRunContext.Mode.READ_ONLY || !MCP_READ_TOOLS.contains(tool));
     var decision=restricted ? PermissionDecision.DENY : policy.evaluate(tool,input);
+    if(decision!=PermissionDecision.DENY)policy.validateDelegation(tool,input);
     // Recognized text is not a calibrated confidence/intent guarantee. Retain the existing
     // deny decision, and require the existing exact-input one-use approval for side effects.
     if(decision==PermissionDecision.AUTO_APPROVE&&owner!=null&&owner.voiceInput()

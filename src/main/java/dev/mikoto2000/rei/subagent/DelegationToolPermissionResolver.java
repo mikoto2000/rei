@@ -22,6 +22,17 @@ public final class DelegationToolPermissionResolver {
   public static boolean supports(String tool) {
     return Set.of("delegateTask", "delegateTasks", "delegateTaskGraph", "judgeSubAgentAnswers").contains(tool);
   }
+  public void validate(String tool,String input) {
+    if(!Set.of("delegateTask","delegateTasks").contains(tool))return;
+    DelegationArguments.validate(tool,input);
+    var root=json.readTree(input);
+    Iterable<JsonNode> requests="delegateTasks".equals(tool)?root.path("requests"):List.of(root);
+    for(var request:requests) {
+      var definition=registry.getObject().findById(request.path("agent").asString())
+          .orElseThrow(()->new IllegalArgumentException("Invalid delegation arguments: unavailable agent"));
+      childPolicy.getObject().validate(definition.requestedTools());
+    }
+  }
   public Set<ActionCapability> resolve(String tool, String input,
       Function<String, Set<ActionCapability>> capabilities) {
     try {
@@ -63,7 +74,7 @@ public final class DelegationToolPermissionResolver {
     }
     var backend = request.path("backendId");
     if (!backend.isMissingNode() && !backend.isNull() && !backend.isString()) return all();
-    switch (backend.isMissingNode() || backend.isNull() ? "local" : backend.asString()) {
+    switch (backend.isMissingNode() || backend.isNull() || backend.asString().isBlank() ? "local" : backend.asString()) {
       case "local" -> { }
       case "chatgpt-plan" -> {
         required.add(ActionCapability.NETWORK_WRITE);

@@ -19,6 +19,10 @@ public class ToolPermissionPolicy {
   private dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver delegation;
   @org.springframework.beans.factory.annotation.Autowired
   void setDelegationResolver(dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver resolver) {this.delegation=resolver;}
+  public void validateDelegation(String tool,String input) {
+    dev.mikoto2000.rei.subagent.DelegationArguments.validate(tool,input);
+    if(delegation!=null)delegation.validate(tool,input);
+  }
   public ToolPermissionPolicy(ToolPermissionProperties properties) {this.properties=properties;}
   /** Stable administrator policy identity for durable authorization audit. */
   public String authorityFingerprint(){return dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256((properties.enabled()+"|"+new TreeSet<>(properties.autoApprove())+"|"+new TreeSet<>(properties.denied())+"|"+new TreeMap<>(properties.capabilities()).entrySet().stream().map(e->e.getKey()+"="+new TreeSet<>(e.getValue())).toList()).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
