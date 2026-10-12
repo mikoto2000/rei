@@ -185,7 +185,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
       query.setString(1,context.projectId());query.setString(2,context.conversationId());try(var rows=query.executeQuery()) {
         if(rows.next()) {
           if(context.requestSource()==AgentRunContext.RequestSource.SHELL&&context.mode()==AgentRunContext.Mode.EXCLUSIVE&&!Set.of("WAITING","WAITING_APPROVAL").contains(rows.getString(2)))deferred=true;
-          else throw new SessionBusyException(context.projectId(),context.conversationId(),rows.getString(1));
+          else throw new SessionBusyException(context.projectId(),context.conversationId(),rows.getString(1),rows.getString(2));
         }
       }
     }
@@ -202,9 +202,9 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     database.transaction(db->{
       var saved=snapshot(db,context.runId());if(saved.isEmpty())return null;
       if(!saved.get().context().equals(context)||saved.get().status().isTerminal())throw new IllegalStateException("Run cannot start");
-      try(var query=db.prepareStatement("SELECT run_id FROM conversation_admissions WHERE project_id=? AND session_id=? AND (active=1 OR status IN ('WAITING','WAITING_APPROVAL')) AND run_id<>?")) {
+      try(var query=db.prepareStatement("SELECT run_id,status FROM conversation_admissions WHERE project_id=? AND session_id=? AND (active=1 OR status IN ('WAITING','WAITING_APPROVAL')) AND run_id<>?")) {
         query.setString(1,context.projectId());query.setString(2,context.conversationId());query.setString(3,context.runId());
-        try(var rows=query.executeQuery()){if(rows.next())throw new SessionBusyException(context.projectId(),context.conversationId(),rows.getString(1));}
+        try(var rows=query.executeQuery()){if(rows.next())throw new SessionBusyException(context.projectId(),context.conversationId(),rows.getString(1),rows.getString(2));}
       }
       try(var write=db.prepareStatement("UPDATE conversation_admissions SET active=1 WHERE run_id=? AND owner_instance=?")) {
         write.setString(1,context.runId());write.setString(2,instance);if(write.executeUpdate()!=1)throw new IllegalStateException("Run owner mismatch");
