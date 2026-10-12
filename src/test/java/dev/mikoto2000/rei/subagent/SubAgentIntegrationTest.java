@@ -25,7 +25,7 @@ import dev.mikoto2000.rei.llm.*;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentRepository;
 import reactor.core.publisher.Flux;
 
-@SpringBootTest(properties = "spring.ai.openai.api-key=test-key")
+@SpringBootTest(properties = {"spring.ai.openai.api-key=test-key", "rei.tool-permission.enabled=true"})
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentIntegrationTest {
   @MockitoBean ChatModel model;
@@ -38,6 +38,7 @@ class SubAgentIntegrationTest {
   @Autowired ChatMemory history;
   @Autowired WorkingSet workingSet;
   @Autowired LlmChatClientProvider clients;
+  @Autowired dev.mikoto2000.rei.core.policy.ToolPermissionPolicy permissions;
   static Path directory;
   @DynamicPropertySource static void properties(DynamicPropertyRegistry properties) throws Exception {
     directory = Files.createTempDirectory("rei-subagent-test-");
@@ -48,6 +49,10 @@ class SubAgentIntegrationTest {
     Files.writeString(directory.resolve("reviewer.yaml"), SubAgentConfigurationTest.yaml("reviewer"));
     Files.writeString(directory.resolve("note.txt"), "independent evidence");
     assertThat(registry.reload()).isEmpty();
+    assertThat(permissions.evaluate("delegateTask","{\"agent\":\"reviewer\"}"))
+        .isEqualTo(dev.mikoto2000.rei.core.policy.PermissionDecision.AUTO_APPROVE);
+    assertThat(permissions.evaluate("delegateTasks","{\"requests\":[{\"agent\":\"reviewer\"},{\"agent\":\"reviewer\"}]}"))
+        .isEqualTo(dev.mikoto2000.rei.core.policy.PermissionDecision.AUTO_APPROVE);
     String main = "test-parent-" + UUID.randomUUID();
     history.add(main, List.of(new UserMessage("parent private reasoning")));
     List<Prompt> requests = new CopyOnWriteArrayList<>();

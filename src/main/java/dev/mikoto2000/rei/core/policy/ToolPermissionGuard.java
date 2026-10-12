@@ -39,14 +39,16 @@ public class ToolPermissionGuard {
   }
   private void check(String tool,String input,AgentRunContext owner,AgentRunContext approvalOwner) {
     boolean restricted = owner != null && (owner.mode() == AgentRunContext.Mode.CONVERSATION
-        || owner.mode() == AgentRunContext.Mode.READ_ONLY && !ToolPermissionPolicy.intrinsicallyReadOnly(tool));
+        || owner.mode() == AgentRunContext.Mode.READ_ONLY && !policy.readOnly(tool,input));
+    restricted |= owner!=null && owner.conversationId().startsWith("subagent:")
+        && dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver.supports(tool);
     restricted |= owner!=null && owner.requestSource()==AgentRunContext.RequestSource.MCP
         && (owner.mode()!=AgentRunContext.Mode.READ_ONLY || !MCP_READ_TOOLS.contains(tool));
-    var decision=restricted ? PermissionDecision.DENY : policy.evaluate(tool);
+    var decision=restricted ? PermissionDecision.DENY : policy.evaluate(tool,input);
     // Recognized text is not a calibrated confidence/intent guarantee. Retain the existing
     // deny decision, and require the existing exact-input one-use approval for side effects.
     if(decision==PermissionDecision.AUTO_APPROVE&&owner!=null&&owner.voiceInput()
-        &&!ToolPermissionPolicy.intrinsicallyReadOnly(tool))decision=PermissionDecision.REQUIRE_APPROVAL;
+        &&!policy.readOnly(tool,input))decision=PermissionDecision.REQUIRE_APPROVAL;
     if(decision==PermissionDecision.AUTO_APPROVE)return;
     String request=null;
     if(decision==PermissionDecision.REQUIRE_APPROVAL && approvals!=null && approvalOwner!=null && approvalOwner.projectId()!=null) {

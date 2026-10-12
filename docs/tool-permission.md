@@ -17,13 +17,27 @@ rei:
 判定は AUTO_APPROVE、REQUIRE_APPROVAL、DENY。禁止能力が1つでもあれば DENY、必要能力がすべて auto-approve にあれば AUTO_APPROVE、
 それ以外は REQUIRE_APPROVAL です。分類の上書きは管理者設定に限定します。一回限りの承認は下記の明示操作で発行し、LLM の引数や自然言語の「承認済み」では解除しません。
 
-readMultiFile/grepMultiQuery/readPdfFile/searchAndRead、today/now/findFile/listFile/getShellProcessStatus は READ、
+readMultiFile/readRawToolResult/grepMultiQuery/readPdfFile/searchAndRead、today/now/findFile/listFile/getShellProcessStatus は READ、
 webSearch/webSearchAndRead は NETWORK_READ、searchKnowledge は READ + NETWORK_READ。
 applyTextDiff/writeMultiFile/createDirectory/copyFile は LOCAL_WRITE。
 deleteFile/moveFile/killShellProcess は LOCAL_WRITE + DESTRUCTIVE。
-その他は任意の能力を使える可能性があるため全能力として扱います。runCommand/executeExternalProgram、
-未知 MCP、Computer Use、外部 delegation もこの保守的な既定値の対象です。
+組み込み Tool は実装の能力を明示分類します。履歴・活動・Task/Feed一覧は READ、Task/Reminder作成やWork Context更新は LOCAL_WRITE、
+Task/Feed削除は LOCAL_WRITE + DESTRUCTIVE、Calendar参照は NETWORK_READ、Calendar作成/Bluesky投稿は NETWORK_WRITE + EXTERNAL_SIDE_EFFECTです。
+論文取得・要約・翻訳はダウンロードと保存を行い得るため READ + NETWORK_READ + LOCAL_WRITEです。
+外部CLIレビューには READ + EXECUTE + NETWORK_WRITE + EXTERNAL_SIDE_EFFECT、修正案保存にはさらに LOCAL_WRITE が必要です。
+runCommand/executeExternalProgram、任意commandを使う修正・検証、Computer Use、任意Taskを再開するcheckpointResumeは全能力の保守的分類を維持します。
+未知 MCPなど、未分類のcallbackも全能力として扱います。
 管理者が安全に分類できる Tool のみ capabilities へ追加してください。
+
+`delegateTask` / `delegateTasks` は入力の委譲先を確認し、管理者が登録した子定義とSubAgent allowlistから必要能力を解決します。
+ローカル委譲は READ と各子の必要能力の和集合です。読み取りだけのreviewerは既定のREAD許可で動作し、web検索を使う子にはNETWORK_READも必要です。
+並列委譲は全依頼の能力を実行前にまとめて判定します。chatgpt-planにはNETWORK_WRITE + EXTERNAL_SIDE_EFFECT、
+codex-app-serverにはさらにEXECUTEが必要です。外部バックエンド内部の資料・送信承認も別途適用し、入口の承認だけでは解除しません。
+未知のagent/backend、不正入力、利用できない定義、allowlist外の子Toolは全能力に倒します。管理者の分類上書きも委譲の必要能力を減らしません。
+子Toolの実行時権限・親のREAD_ONLY/CONVERSATION/MCP制限・再帰委譲禁止は維持します。
+delegateTaskGraphとjudgeSubAgentAnswersも登録子の能力を確認します。Graph登録にはLOCAL_WRITEも必要です。
+保存したローカル子/Graphの再開はREAD + NETWORK_READ + LOCAL_WRITEと、既存の明示再開条件を必要とします。
+組み込みToolの分類漏れは `BuiltinToolClassificationTest` で検出します。
 
 確認必要/禁止時は callback を呼ばず、所有 Project/Session/Run を持つ既存 `tool.failed` を発行します。
 errorType は PermissionRequired / PermissionDenied、code は REQUIRE_APPROVAL / DENY。
