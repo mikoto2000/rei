@@ -55,7 +55,7 @@ class SlackAgentChatIntegrationTest {
       }
     };
     var holder=mock(ModelHolderService.class);when(holder.get()).thenReturn("test");var llm=new LlmProperties();llm.getOutputLimit().setMaxLlmCallsPerRun(2);
-    var client=ChatClient.builder(new StagnationChatModel(model)).defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultToolCallbacks(tools.callbacks()).build();
+    var client=ChatClient.builder(new StagnationChatModel(model)).defaultAdvisors(new RunAwareToolCallingAdvisor()).defaultToolCallbacks(java.util.Arrays.asList(tools.callbacks())).build();
     var chat=new ChatExecutionService(new FixedLlmChatClientProvider(client),holder,new FixedLlmModelProvider(),llm,new CommandCancellationService(),Optional.empty(),Optional.empty());
     var beans=new StaticListableBeanFactory(Map.of("continuation",service));chat.setContinuations(beans.getBeanProvider(RunContinuation.class));
     service.onResume((o,s)->chat.execute(o,s.request(),new UserInterventionQueue()));

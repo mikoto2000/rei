@@ -18,14 +18,14 @@ public class ToolPermissionPolicy {
   public String authorityFingerprint(){return dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256((properties.enabled()+"|"+new TreeSet<>(properties.autoApprove())+"|"+new TreeSet<>(properties.denied())+"|"+new TreeMap<>(properties.capabilities()).entrySet().stream().map(e->e.getKey()+"="+new TreeSet<>(e.getValue())).toList()).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
   public boolean enforced(){return properties.enabled();}
   public Set<ActionCapability> capabilities(String tool) {
-    if("askExternalAgent".equals(tool))return intrinsicCapabilities(tool);
+    if(Set.of("askExternalAgent","requestDotResearch").contains(tool))return intrinsicCapabilities(tool);
     var configured=properties.capabilities().get(tool);
     if(configured!=null) return configured;
     return intrinsicCapabilities(tool);
   }
   /** Parallel authority uses known intrinsic behavior, never an administrator relabeling of arbitrary commands. */
   public static Set<ActionCapability> intrinsicCapabilities(String tool) {
-    if("askExternalAgent".equals(tool))return Set.of(ActionCapability.NETWORK_WRITE,ActionCapability.EXTERNAL_SIDE_EFFECT);
+    if(Set.of("askExternalAgent","requestDotResearch").contains(tool))return Set.of(ActionCapability.NETWORK_WRITE,ActionCapability.EXTERNAL_SIDE_EFFECT);
     if("externalAgentStatus".equals(tool))return Set.of(ActionCapability.READ);
     if(Set.of("searchMemoryHistory","episodeGet","episodeSources","episodeProcessingStatus").contains(tool))return Set.of(ActionCapability.READ);
     if(Set.of("doctorConnectivity","doctorInference").contains(tool))return Set.of(ActionCapability.NETWORK_READ);

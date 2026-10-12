@@ -34,7 +34,7 @@ class AttentionDeliveryTest {
   AttentionDeliveryProperties properties(boolean enabled,boolean automatic){return new AttentionDeliveryProperties(enabled,automatic,"http://127.0.0.1:"+server.getAddress().getPort()+"/notify","fixture-token",Set.of("project"));}
   ToolPermissionPolicy policy(boolean grant){return new ToolPermissionPolicy(new ToolPermissionProperties(true,grant?Set.of(ActionCapability.NETWORK_WRITE,ActionCapability.EXTERNAL_SIDE_EFFECT):null,null,null));}
   void start(AttentionDeliveryProperties props,boolean grant){delivery=new AttentionDeliveryService(props,inbox,outbox,bus,policy(grant),sender);delivery.start();}
-  AttentionRepository.Item fact(String run){bus.publish(new AgentEventFactory(clock).runCompleted(run,1).withOwnership(new AgentRunContext(run,"session",dir,"project")));return inbox.list("project").stream().filter(i->run.equals(i.runId())).findFirst().orElseThrow();}
+  AttentionRepository.Item fact(String run){bus.publish(new AgentEventFactory(clock).runCompleted(run,1).withOwnership(new AgentRunContext(run,"session",dir,"project")));String id=org.springframework.jdbc.core.simple.JdbcClient.create(new DriverManagerDataSource("jdbc:sqlite:"+dir.resolve("inbox.db"))).sql("SELECT id FROM agent_attention WHERE project=? AND run=?").params("project",run).query(String.class).single();return inbox.get("project",id);}
   @AfterEach void close(){if(delivery!=null)delivery.close();attention.close();sender.close();server.stop(0);}
   @Test void newOwnedFactQueuesThenDeliversOnlyMetadataOnce() {
     start(properties(true,true),true);var item=fact("run");assertEquals(0,calls.get());assertEquals("PENDING",delivery.status("project",item.id()).status());

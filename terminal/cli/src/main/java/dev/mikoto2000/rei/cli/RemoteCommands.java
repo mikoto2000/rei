@@ -9,7 +9,7 @@ public final class RemoteCommands {
           .streamReadConstraints(com.fasterxml.jackson.core.StreamReadConstraints.builder().maxNestingDepth(32).maxStringLength(32768).maxNumberLength(64).build()).build())
       .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
   public record Request(String method,String path,Object body) {}
-  public static final Set<String> NAMES=Set.of("/llm","/bsky","/activity","/storage","/embed","/schedule","/task","/sleep","/reflection","/subagent","/config","/paper","/material-review","/agent","/document","/repair","/timing","/doctor","/mode","/history","/feed","/skill","/profile","/briefing","/reminder","/interest","/memory","/search","/timer","/tasks","/goal","/attention","/checkpoint","/resume","/approval","/dependency","/work","/summarize","/image","/model","/models");
+  public static final Set<String> NAMES=Set.of("/dot","/llm","/bsky","/activity","/storage","/embed","/schedule","/task","/sleep","/reflection","/subagent","/config","/paper","/material-review","/agent","/document","/repair","/timing","/doctor","/mode","/history","/feed","/skill","/profile","/briefing","/reminder","/interest","/memory","/search","/timer","/tasks","/goal","/attention","/checkpoint","/resume","/approval","/dependency","/work","/summarize","/image","/model","/models");
   public static Request route(List<String> words,String project,String session) {
     return route(words,project,session,java.nio.file.Path.of(System.getProperty("user.dir")));
   }
@@ -26,6 +26,14 @@ public final class RemoteCommands {
   }
   private static Request routeDirect(List<String> words,String project,String session,java.nio.file.Path localBase) {
     String name=words.getFirst(),action=words.size()>1?words.get(1):"list";
+    if(name.equals("/dot")){
+      var command=dev.mikoto2000.rei.dot.DotCommandRequest.parse(words.subList(1,words.size()));String owner=command.projectId()==null?project:command.projectId();if(owner==null)throw new IllegalArgumentException("Select a Project first");
+      String base="/api/v1/projects/"+id(owner)+"/dot-requests";
+      return switch(command.action()){
+        case "request"->{var body=new LinkedHashMap<String,Object>(command.payload());body.putIfAbsent("request_id",java.util.UUID.randomUUID().toString());body.put("session_id",session);yield post(base,body);}
+        case "requests"->get(base);case "status"->get(base+"/"+id(command.requestId()));case "result"->get(base+"/"+id(command.requestId())+"/result");case "cancel"->post(base+"/"+id(command.requestId())+"/cancel",Map.of());case "verify","resume"->post(base+"/"+id(command.requestId())+"/"+command.action(),command.payload());default->throw invalid();
+      };
+    }
     if(!NAMES.contains(name))throw new IllegalArgumentException("Unsupported CLI command: "+name+". Use legacy-shell; this input was not sent to the model.");
     if(name.equals("/feed")) {
       String base="/api/v1/feed/commands";

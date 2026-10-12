@@ -379,6 +379,8 @@ public class ReiApplication {
     if (history != null && history.getCommand() instanceof dev.mikoto2000.rei.ui.shell.HistoryCommand command) {
       command.setShellOutput(writer);
     }
+    var dot=cmd.getSubcommands().get("dot");
+    if(dot!=null&&dot.getCommand() instanceof dev.mikoto2000.rei.dot.DotCommand command)command.setShellOutput(writer);
     var summarize=cmd.getSubcommands().get("summarize");
     if(summarize!=null && summarize.getCommand() instanceof dev.mikoto2000.rei.summarize.command.SummarizeCommand command) {
       command.setShellOutput(writer);
