@@ -62,7 +62,7 @@ public class RunService implements AutoCloseable {
     synchronized (monitor()) {
       purgeExpired();
       var current = registry.get(runId);
-      if(current.status()==RunStatus.WAITING&&!registry.claimWaiting(current.context()))return new CancellationResult(false,current);
+      if(current.status().isWaiting()&&!registry.claimWaiting(current.context()))return new CancellationResult(false,current);
       if (!registry.transition(runId, RunStatus.CANCELLED, null)) return new CancellationResult(false, current);
       if (current.status() == RunStatus.QUEUED && cancelQueued.test(runId)) {
         cancellation.forgetPendingCancellation(runId);
@@ -92,7 +92,7 @@ public class RunService implements AutoCloseable {
     try { runner.run(); }
     catch (RuntimeException error) { fail(context, "Runner failed"); }
     finally {
-      if(registry.get(context.runId()).status()!=RunStatus.WAITING)fail(context, "Runner ended without a terminal event");
+      if(!registry.get(context.runId()).status().isWaiting())fail(context, "Runner ended without a terminal event");
       cancellation.forgetPendingCancellation(context.runId());
     }
   }

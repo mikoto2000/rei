@@ -221,6 +221,9 @@ impl Projection {
                 self.failure = Some("Run failed".into());
             }
             "agent.run.cancelled" => self.status = RunStatus::Cancelled,
+            "attention.required" if event.payload["kind"].as_str() == Some("APPROVAL_REQUIRED") => {
+                self.status = RunStatus::WaitingApproval;
+            }
             "message.started" | "message.delta" | "message.completed" => {
                 let id = field("messageId")?;
                 let text = if event.kind == "message.started" {
@@ -370,6 +373,8 @@ impl Projection {
             activity.status = match self.status {
                 RunStatus::Queued => "QUEUED",
                 RunStatus::Running => "RUNNING",
+                RunStatus::Waiting => "WAITING",
+                RunStatus::WaitingApproval => "WAITING_APPROVAL",
                 RunStatus::Completed => "COMPLETED",
                 RunStatus::Failed => "FAILED",
                 RunStatus::Cancelled => "CANCELLED",

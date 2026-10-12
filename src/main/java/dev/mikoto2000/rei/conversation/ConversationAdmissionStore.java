@@ -45,7 +45,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
   private void recover() {
     database.transaction(db->{
       var lost=new ArrayList<String>();
-      try(var query=db.createStatement();var rows=query.executeQuery("SELECT run_id,owner_instance,owner_pid,owner_start FROM conversation_admissions WHERE active=1 OR status IN ('QUEUED','RUNNING','WAITING')")) {
+      try(var query=db.createStatement();var rows=query.executeQuery("SELECT run_id,owner_instance,owner_pid,owner_start FROM conversation_admissions WHERE active=1 OR status IN ('QUEUED','RUNNING','WAITING','WAITING_APPROVAL')")) {
         while(rows.next()) {
           long pid=rows.getLong(3);String start=rows.getString(4),owner=rows.getString(2);
           boolean alive=start!=null&&ProcessHandle.of(pid).filter(ProcessHandle::isAlive).flatMap(p->p.info().startInstant()).map(t->t.toString().equals(start)).orElse(false);
@@ -181,10 +181,10 @@ public final class ConversationAdmissionStore implements AutoCloseable {
       return;
     }
     boolean deferred=false;
-    try(var query=db.prepareStatement("SELECT run_id,status FROM conversation_admissions WHERE project_id=? AND session_id=? AND (active=1 OR status IN ('QUEUED','WAITING'))")) {
+    try(var query=db.prepareStatement("SELECT run_id,status FROM conversation_admissions WHERE project_id=? AND session_id=? AND (active=1 OR status IN ('QUEUED','WAITING','WAITING_APPROVAL'))")) {
       query.setString(1,context.projectId());query.setString(2,context.conversationId());try(var rows=query.executeQuery()) {
         if(rows.next()) {
-          if(context.requestSource()==AgentRunContext.RequestSource.SHELL&&context.mode()==AgentRunContext.Mode.EXCLUSIVE&&!"WAITING".equals(rows.getString(2)))deferred=true;
+          if(context.requestSource()==AgentRunContext.RequestSource.SHELL&&context.mode()==AgentRunContext.Mode.EXCLUSIVE&&!Set.of("WAITING","WAITING_APPROVAL").contains(rows.getString(2)))deferred=true;
           else throw new SessionBusyException(context.projectId(),context.conversationId(),rows.getString(1));
         }
       }
@@ -202,7 +202,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     database.transaction(db->{
       var saved=snapshot(db,context.runId());if(saved.isEmpty())return null;
       if(!saved.get().context().equals(context)||saved.get().status().isTerminal())throw new IllegalStateException("Run cannot start");
-      try(var query=db.prepareStatement("SELECT run_id FROM conversation_admissions WHERE project_id=? AND session_id=? AND (active=1 OR status='WAITING') AND run_id<>?")) {
+      try(var query=db.prepareStatement("SELECT run_id FROM conversation_admissions WHERE project_id=? AND session_id=? AND (active=1 OR status IN ('WAITING','WAITING_APPROVAL')) AND run_id<>?")) {
         query.setString(1,context.projectId());query.setString(2,context.conversationId());query.setString(3,context.runId());
         try(var rows=query.executeQuery()){if(rows.next())throw new SessionBusyException(context.projectId(),context.conversationId(),rows.getString(1));}
       }
@@ -231,7 +231,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
   public boolean claimWaiting(AgentRunContext context) {
     return database.transaction(db->{
       var saved=snapshot(db,context.runId());if(saved.isEmpty())return true;
-      if(saved.get().status()!=RunStatus.WAITING||!saved.get().context().equals(context))return false;
+      if(!saved.get().status().isWaiting()||!saved.get().context().equals(context))return false;
       try(var query=db.prepareStatement("SELECT owner_instance,owner_pid,owner_start FROM conversation_admissions WHERE run_id=?")) {
         query.setString(1,context.runId());try(var rows=query.executeQuery()) {
           if(!rows.next())return false;
@@ -253,13 +253,13 @@ public final class ConversationAdmissionStore implements AutoCloseable {
         query.setString(1,id);try(var rows=query.executeQuery()){if(!rows.next()||!instance.equals(rows.getString(1)))return null;}
       }
       var old=snapshot(db,id);if(old.isEmpty())return null;
-      if(!old.get().status().isTerminal()&&old.get().status()!=RunStatus.WAITING)unknown(db,id);
+      if(!old.get().status().isTerminal()&&!old.get().status().isWaiting())unknown(db,id);
       else try(var write=db.prepareStatement("UPDATE conversation_admissions SET active=0 WHERE run_id=? AND owner_instance=?")) {write.setString(1,id);write.setString(2,instance);write.executeUpdate();}
       return null;
     });
   }
   private void unknown(Connection db,String id)throws SQLException {
-    try(var write=db.prepareStatement("UPDATE conversation_admissions SET completed=CASE WHEN status='WAITING' THEN NULL ELSE COALESCE(completed,?) END,owner_pid=CASE WHEN status='WAITING' THEN 0 ELSE owner_pid END,owner_start=CASE WHEN status='WAITING' THEN NULL ELSE owner_start END,status=CASE WHEN status IN ('QUEUED','RUNNING') THEN 'UNKNOWN' ELSE status END,active=0 WHERE run_id=?")) {
+    try(var write=db.prepareStatement("UPDATE conversation_admissions SET completed=CASE WHEN status IN ('WAITING','WAITING_APPROVAL') THEN NULL ELSE COALESCE(completed,?) END,owner_pid=CASE WHEN status IN ('WAITING','WAITING_APPROVAL') THEN 0 ELSE owner_pid END,owner_start=CASE WHEN status IN ('WAITING','WAITING_APPROVAL') THEN NULL ELSE owner_start END,status=CASE WHEN status IN ('QUEUED','RUNNING') THEN 'UNKNOWN' ELSE status END,active=0 WHERE run_id=?")) {
       write.setString(1,clock.instant().toString());write.setString(2,id);write.executeUpdate();
     }
     try(var update=db.prepareStatement("UPDATE mcp_requests SET state_updated_at=? WHERE run_id=?")){update.setString(1,clock.instant().toString());update.setString(2,id);update.executeUpdate();}
@@ -268,7 +268,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     synchronized(database.writer) {
       if(closed)return;closed=true;
       if(subscription!=null)subscription.unsubscribe();
-      try {database.transaction(db->{var owned=new ArrayList<String>();try(var query=db.prepareStatement("SELECT run_id FROM conversation_admissions WHERE owner_instance=? AND (active=1 OR status IN ('QUEUED','RUNNING','WAITING'))")){query.setString(1,instance);try(var rows=query.executeQuery()){while(rows.next())owned.add(rows.getString(1));}}for(String id:owned)unknown(db,id);return null;});}
+      try {database.transaction(db->{var owned=new ArrayList<String>();try(var query=db.prepareStatement("SELECT run_id FROM conversation_admissions WHERE owner_instance=? AND (active=1 OR status IN ('QUEUED','RUNNING','WAITING','WAITING_APPROVAL'))")){query.setString(1,instance);try(var rows=query.executeQuery()){while(rows.next())owned.add(rows.getString(1));}}for(String id:owned)unknown(db,id);return null;});}
       finally {OPEN.remove(instance);}
     }
   }

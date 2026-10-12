@@ -49,7 +49,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     return saved.progress();
   }
   public boolean hasProgressHistory(AgentRunContext owner) {
-    var saved=active.get(owner.runId());return saved!=null && (saved.resumedFromRunId()!=null || saved.status().equals("WAITING"));
+    var saved=active.get(owner.runId());return saved!=null && (saved.resumedFromRunId()!=null || Set.of("WAITING","WAITING_APPROVAL").contains(saved.status()));
   }
   public void preserveResults(AgentRunContext owner,List<org.springframework.ai.chat.messages.Message> history,
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState progress) {
@@ -74,7 +74,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     if(!settings.isEnabled()||context.projectId()==null)return;
     var state=active.get(context.runId());
     if(state==null) {
-      var waiting=repository.list(context.projectId()).stream().filter(s->s.runId().equals(context.runId())&&s.status().equals("WAITING")&&s.sessionId().equals(context.conversationId())&&s.projectRoot().equals(context.projectRoot().toString())).findFirst();
+      var waiting=repository.list(context.projectId()).stream().filter(s->s.runId().equals(context.runId())&&Set.of("WAITING","WAITING_APPROVAL").contains(s.status())&&s.sessionId().equals(context.conversationId())&&s.projectRoot().equals(context.projectRoot().toString())).findFirst();
       state=waiting.orElseGet(()->PersistentCheckpoint.initial(UUID.randomUUID().toString(),context.projectId(),context.conversationId(),context.runId(),context.projectRoot(),request));
       var initial=repository.fields(state);initial.put("mode",context.mode());initial.put("voiceInput",context.voiceInput());initial.put("git",CheckpointReconciler.git(context.projectRoot()));state=repository.fields(initial);
       if(waiting.isEmpty())state=repository.save(state,0,"start:"+context.runId());
@@ -84,7 +84,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     executing.add(context.runId());
     if(context.mode()!=AgentRunContext.Mode.EXCLUSIVE)return;
     var plan=plans.getIfAvailable();if(plan!=null) {
-      if(state.resumedFromRunId()==null&&!state.status().equals("WAITING"))plan.restore(List.of());
+      if(state.resumedFromRunId()==null&&!Set.of("WAITING","WAITING_APPROVAL").contains(state.status()))plan.restore(List.of());
       else plan.restore(state.plan().stream().map(p->new dev.mikoto2000.rei.core.actionplan.PlanStep((String)p.get("id"),(String)p.get("description"),(String)p.get("status"),((Number)p.get("order")).intValue(),((Number)p.get("failureCount")).intValue())).toList());
     }
     var task=tasks.getIfAvailable();if(task!=null){task.reset();task.start(state.request());}
@@ -156,6 +156,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     try {
       // Re-read after acquiring the cross-process lease; never resume a stale pre-lock revision.
       state=get(project,task);
+      if("WAITING_APPROVAL".equals(state.status()))throw new IllegalStateException("承認待ちは /approval list で内容を確認し、/approval approve <approvalId> --continue で続行してください。");
       if(expectedRevision!=null&&state.revision()!=expectedRevision)throw new dev.mikoto2000.rei.application.state.OperationConflictException();
       var result=reconciler.check(state,false);
       if(expectedPrevious!=null){

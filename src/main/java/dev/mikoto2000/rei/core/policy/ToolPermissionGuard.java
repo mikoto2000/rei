@@ -59,6 +59,6 @@ public class ToolPermissionGuard {
     publisher.publishBoundary(events.toolFailed("permission-"+UUID.randomUUID(),tool,
         new ErrorInformation(decision==PermissionDecision.DENY?"PermissionDenied":"PermissionRequired",
             request==null?error.getMessage():"Approval required: "+request+". Review with /approval show "+request+"; approve explicitly, then resume or retry the task.",decision.name())).withOwnership(owner));
-    throw error;
+    throw error.withApprovalId(request);
   }
 }

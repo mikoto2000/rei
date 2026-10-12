@@ -136,7 +136,7 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
   @Override public boolean isInFlight(GoalRepository.Goal goal) {
     if(goal.currentRunId()==null)return false;
     if(router.containsRun(goal.projectId(),goal.currentRunId()))return true;
-    try{return runRegistry!=null&&runRegistry.get(goal.currentRunId()).status()==dev.mikoto2000.rei.application.run.RunStatus.WAITING;}
+    try{return runRegistry!=null&&runRegistry.get(goal.currentRunId()).status().isWaiting();}
     catch(dev.mikoto2000.rei.application.run.RunNotFoundException absent){return false;}
   }
   @Override public void cancel(GoalRepository.Goal goal) {

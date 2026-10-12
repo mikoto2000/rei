@@ -6,6 +6,37 @@ use axum::{
 use rei_client_lib::{api::HttpReiClient, domain::*, ports::ReiClient};
 use serde_json::json;
 #[tokio::test]
+async fn approval_continue_sends_the_explicit_decision_without_submitting_a_new_chat() {
+    let app = Router::new().route("/api/v1/projects/p/approvals/request/decision",post(|headers:HeaderMap,Json(body):Json<serde_json::Value>|async move {
+        assert_eq!(headers["authorization"],"Bearer secret");
+        assert_eq!(body,json!({"approved":true,"continueRun":true}));
+        Json(json!({"id":"request","projectId":"p","sessionId":"session","runId":"run","tool":"runCommand","argumentsPreview":"npm run textlint","status":"APPROVED","expiresAt":"2026-10-12T07:15:00Z","continuationState":"QUEUED"}))
+    }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let api = HttpReiClient::new(&url, Some(Secret::new("secret".into()))).unwrap();
+    let accepted = api
+        .workspace(WorkspaceOperation::ApprovalContinue {
+            project_id: "p".into(),
+            id: "request".into(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        accepted.items[0]
+            .fields
+            .iter()
+            .find(|(name, _)| name == "Continuation")
+            .unwrap()
+            .1,
+        "QUEUED"
+    );
+    task.abort();
+}
+#[tokio::test]
 async fn attention_and_approval_use_authenticated_project_scoped_endpoints() {
     let attention = json!({"id":"notice","projectId":"p","sessionId":"session","runId":null,"kind":"DECISION_REQUIRED","reference":"dependency","message":"Review question","status":"OPEN","createdAt":"2026-10-04T00:00:00Z"});
     let approval = json!({"id":"request","projectId":"p","sessionId":"session","runId":"run","tool":"writeFile","argumentsPreview":"redacted","status":"PENDING","expiresAt":"2026-10-04T01:00:00Z"});

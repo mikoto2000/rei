@@ -90,6 +90,8 @@ pub struct ChatReceipt {
 pub enum RunStatus {
     Queued,
     Running,
+    Waiting,
+    WaitingApproval,
     Completed,
     Failed,
     Cancelled,

@@ -5,12 +5,75 @@ import static org.mockito.Mockito.*;
 import java.io.*;
 import java.nio.file.Path;
 import java.util.UUID;
+import java.util.Optional;
+import java.time.Instant;
+import dev.mikoto2000.rei.checkpoint.*;
 import org.junit.jupiter.api.Test;
 import dev.mikoto2000.rei.core.project.*;
 import dev.mikoto2000.rei.web.ApprovalController;
 import picocli.CommandLine;
 
 class ApprovalPresentationTest {
+  @Test void shellNumbersStayBoundToTheDisplayedRequestAndContinueIsExplicit() {
+    var repository=mock(ToolApprovalRepository.class);var projects=mock(ProjectService.class);var continuations=mock(ApprovalContinuationService.class);
+    String project=UUID.randomUUID().toString();when(projects.currentContext()).thenReturn(new ProjectContext(project,"project",Path.of(".")));
+    var first=new ToolApprovalRepository.Request("first",project,"session","run","runCommand","npm run textlint","PENDING",Instant.now().plusSeconds(600));
+    var second=new ToolApprovalRepository.Request("second",project,"session","run-2","runCommand","npm run build","PENDING",Instant.now().plusSeconds(600));
+    when(continuations.list(project)).thenReturn(java.util.List.of(first,second));when(continuations.state(anyString())).thenReturn(Optional.of("WAITING_APPROVAL"));
+    when(repository.get(project,"first")).thenReturn(first);when(continuations.decide(project,"first",true,true)).thenReturn(first);
+    var command=new ApprovalCommand(repository,projects);command.setContinuations(continuations);
+    var output=new StringWriter();var cli=new CommandLine(command);cli.setOut(new PrintWriter(output));
+    assertEquals(0,cli.execute("list"));assertTrue(output.toString().contains("/approval approve 1 --continue"));
+    when(continuations.list(project)).thenReturn(java.util.List.of(second));assertEquals(0,cli.execute("list"));
+    assertEquals(0,cli.execute("show","1"));verify(repository).get(project,"first");
+    assertEquals(0,cli.execute("approve","1","--continue"));verify(continuations).decide(project,"first",true,true);
+    verify(repository,never()).decide(anyString(),anyString(),anyBoolean());
+    String other=UUID.randomUUID().toString();when(projects.currentContext()).thenReturn(new ProjectContext(other,"other",Path.of(".")));
+    assertEquals(2,cli.execute("show","1"));verify(repository,never()).get(other,"first");
+  }
+  @Test void showAndApprovePrintTheTaskIdInsteadOfApprovalOrRunId() {
+    var repository=mock(ToolApprovalRepository.class);var projects=mock(ProjectService.class);
+    var checkpoints=mock(PersistentCheckpointRepository.class);
+    String project=UUID.randomUUID().toString();
+    when(projects.currentContext()).thenReturn(new ProjectContext(project,"project",Path.of(".")));
+    var request=new ToolApprovalRepository.Request("approval-id",project,"session","old-run","runCommand","{}","APPROVED",Instant.now().plusSeconds(600));
+    var state=mock(PersistentCheckpoint.class);
+    when(state.taskId()).thenReturn("task-id");when(state.sessionId()).thenReturn("session");when(state.status()).thenReturn("FAILED");
+    when(repository.get(project,"approval-id")).thenReturn(request);
+    when(repository.decide(project,"approval-id",true)).thenReturn(request);
+    when(checkpoints.findByRun(project,"old-run")).thenReturn(Optional.of(state));
+    var command=new ApprovalCommand(repository,projects);command.setCheckpoints(checkpoints);
+    var output=new StringWriter();var cli=new CommandLine(command);cli.setOut(new PrintWriter(output));
+    assertEquals(0,cli.execute("show","approval-id"));
+    assertTrue(output.toString().contains("task ID: task-id"));
+    assertTrue(output.toString().contains("再開コマンド: /resume task-id"));
+    output.getBuffer().setLength(0);
+    assertEquals(0,cli.execute("approve","approval-id"));
+    assertTrue(output.toString().contains("task ID: task-id"));
+    assertTrue(output.toString().contains("再開コマンド: /resume task-id"));
+    assertFalse(output.toString().contains("/resume approval-id"));
+  }
+  @Test void missingCheckpointStillReportsSuccessfulApprovalWithLookupInstructions() {
+    var repository=mock(ToolApprovalRepository.class);var projects=mock(ProjectService.class);
+    String project=UUID.randomUUID().toString();
+    when(projects.currentContext()).thenReturn(new ProjectContext(project,"project",Path.of(".")));
+    when(repository.decide(project,"approval-id",true)).thenReturn(new ToolApprovalRepository.Request(
+        "approval-id",project,"session","run","runCommand","{}","APPROVED",Instant.now()));
+    var output=new StringWriter();var cli=new CommandLine(new ApprovalCommand(repository,projects));cli.setOut(new PrintWriter(output));
+    assertEquals(0,cli.execute("approve","approval-id"));
+    assertTrue(output.toString().contains("APPROVED"));assertTrue(output.toString().contains("/resume list"));
+    assertFalse(output.toString().contains("/resume approval-id"));
+  }
+  @Test @org.junit.jupiter.api.Tag("integration")
+  void approvalFromAnEarlierResumeResolvesThroughCheckpointHistory(@org.junit.jupiter.api.io.TempDir Path directory) {
+    var source=new org.sqlite.SQLiteDataSource();source.setUrl("jdbc:sqlite:"+directory.resolve("checkpoints.db"));
+    var checkpoints=new PersistentCheckpointRepository(source,new CheckpointProperties());
+    var initial=checkpoints.save(PersistentCheckpoint.initial("task-id","project","session","original-run",directory,"review"),0,"initial");
+    var resumed=checkpoints.save(initial.resume("approval-run"),initial.revision(),"first-resume");
+    var latest=checkpoints.save(resumed.resume("new-run"),resumed.revision(),"second-resume");
+    assertEquals(latest,checkpoints.findByRun("project","approval-run").orElseThrow());
+    assertTrue(checkpoints.findByRun("other-project","approval-run").isEmpty());
+  }
   @Test void shellDecisionsUseSelectedProjectAndRequireAnId() {
     var repository=mock(ToolApprovalRepository.class);var projects=mock(ProjectService.class);
     String project=UUID.randomUUID().toString();

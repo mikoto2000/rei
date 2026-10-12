@@ -20,6 +20,8 @@ public class AttentionService {
   private final Map<Run,Long> waiting=new LinkedHashMap<>();
   private final Set<Run> finished=new LinkedHashSet<>();
   private AgentEventBus.Subscription subscription;
+  private dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvals;
+  @Autowired(required=false) public void setApprovals(dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvals){this.approvals=approvals;}
   @Autowired
   public AttentionService(AttentionRepository inbox,AgentEventBus bus,AgentEventPublisher publisher,Clock clock,MonotonicTimeSource time) {
     this.inbox=inbox;this.bus=bus;this.publisher=publisher;this.clock=clock;this.time=time;
@@ -41,7 +43,7 @@ public class AttentionService {
       case TOOL_FAILED -> {
         var payload=(ToolFailedPayload)event.payload();if(payload.error()==null)return;
         switch(payload.error().errorType()) {
-          case "PermissionRequired" -> notify(event,"APPROVAL_REQUIRED",bounded(payload.toolName()),"Tool approval is required. Review /approval list, decide explicitly, then resume or retry.");
+          case "PermissionRequired" -> approvalNotice(event,payload);
           case "PermissionDenied" -> notify(event,"POLICY_DENIED",bounded(payload.toolName()),"Policy denied a Tool action. Review the task and policy; acknowledging this item does not grant permission.");
           case null,default -> { }
         }
@@ -67,6 +69,19 @@ public class AttentionService {
       }
       default -> { }
     }
+  }
+  private void approvalNotice(AgentEvent event,ToolFailedPayload payload) {
+    var match=java.util.regex.Pattern.compile("Approval required: ([0-9a-fA-F-]{36})").matcher(Objects.toString(payload.error().message(),""));
+    if(approvals!=null&&match.find()) {
+      try {
+        var request=approvals.get(event.projectId(),match.group(1));
+        if(!request.sessionId().equals(event.sessionId())||!request.runId().equals(event.runId()))throw new IllegalArgumentException("Approval notification owner mismatch");
+        String message="承認待ち: "+request.tool()+"\n"+request.argumentsPreview()+"\n有効期限: "+request.expiresAt().atZone(ZoneId.systemDefault())
+            +"\n詳細: /approval show "+request.id()+"\nこの操作を承認して続行するには、次のコマンドを入力してください:\n/approval approve "+request.id()+" --continue\n拒否: /approval deny "+request.id();
+        notify(event,"APPROVAL_REQUIRED",request.id(),message);return;
+      }catch(RuntimeException unavailable){/* Retain a generic notice when metadata is unavailable. */}
+    }
+    notify(event,"APPROVAL_REQUIRED",bounded(payload.toolName()),"Tool approval is required. Review /approval list, decide explicitly, then resume or retry.");
   }
   private void dependency(AgentEvent event) {
     if(!(event.payload() instanceof DependencyStatusPayload payload)||event.runId()!=null||payload.revision()<0

@@ -62,6 +62,17 @@ class AttentionServiceTest {
     assertThrows(dev.mikoto2000.rei.core.policy.ToolPermissionException.class,()->guard.check("writeMultiFile","{}",owner("guard-run")));
     assertEquals("PENDING",approvals.list("project").getFirst().status());assertTrue(repository.list("project").isEmpty());
   }
+  @Test void approvalNoticeIdentifiesTheExactRequestAndDisplaysTheActionAndContinueCommand() {
+    var approvals=new dev.mikoto2000.rei.core.policy.ToolApprovalRepository(new DriverManagerDataSource("jdbc:sqlite:"+dir.resolve("attention.db")),clock);
+    service.setApprovals(approvals);
+    var guard=new dev.mikoto2000.rei.core.policy.ToolPermissionGuard(new dev.mikoto2000.rei.core.policy.ToolPermissionPolicy(new dev.mikoto2000.rei.core.policy.ToolPermissionProperties(true,null,java.util.Set.of(),null)),factory(),bus);
+    guard.setApprovals(approvals);
+    assertThrows(dev.mikoto2000.rei.core.policy.ToolPermissionException.class,()->guard.check("runCommand","{\"command\":\"git status --short\"}",owner("approval-run")));
+    var request=approvals.list("project").getFirst();var notice=repository.list("project").getFirst();
+    assertEquals(request.id(),notice.reference());assertEquals("APPROVAL_REQUIRED",notice.kind());
+    assertTrue(notice.message().contains("git status --short"));assertTrue(notice.message().contains("/approval approve "+request.id()+" --continue"));
+    assertTrue(notice.message().contains("有効期限"));assertTrue(notice.message().contains("/approval deny "+request.id()));
+  }
   @Test void stoppedGoalProducesOneOwnedAttentionItem() {
     var event=new AgentEvent("goal-event",0,Instant.EPOCH,AgentEventType.GOAL_UPDATED,1,"session",null,"run",null,null,
         new GoalLifecyclePayload("goal","BLOCKED",3,3,20,20,"budget_exhausted"),"project");

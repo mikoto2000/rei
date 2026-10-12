@@ -73,6 +73,7 @@ export type WorkspaceOperation =
     }
   | { operation: "attention" | "approvals"; projectId: string }
   | { operation: "attentionAck"; projectId: string; id: string }
+  | { operation: "approvalContinue"; projectId: string; id: string }
   | {
       operation: "approvalDecision";
       projectId: string;

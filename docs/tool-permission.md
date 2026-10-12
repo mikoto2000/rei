@@ -46,34 +46,47 @@ errorType は PermissionRequired / PermissionDenied、code は REQUIRE_APPROVAL 
 
 ## 一回限りの承認と再開
 
-確認が必要な Chat Tool は実行せず、SQLite に PENDING request を保存します。イベントのメッセージに approvalId が表示されます。
+確認が必要な Chat Tool は実行せず、SQLite に PENDING request を保存します。Shell/CLI の通知には操作内容・期限と「この操作を承認して続行するには、次のコマンドを入力してください」を表示し、`/approval approve <approvalId> --continue` をコピーできる独立した行で案内します。`list` で要求を探す必要はありません。詳細確認と拒否のコマンドも同じ通知に表示します。
+通常のChatではRunとチェックポイントを `WAITING_APPROVAL` にし、未実行のTool呼び出し・正確な引数・会話・残予算を保存して実行スレッドを解放します。
+承認待ちはRun失敗ではなく、`RUN_FAILED` 通知を出しません。同じTool応答内で先に成功した呼び出しは保存し、続行時には繰り返しません。
 
 ```text
 /approval list
-/approval show <approvalId>
-/approval approve <approvalId>
-/approval deny <approvalId>
+/approval show 1
+/approval approve 1 --continue
+/approval deny 1
 /resume list
 /resume <taskId>
 ```
 
 `show` で Tool 名、資格情報を伏せた引数、元の Run / Session、期限を確認してから approve / deny を実行します。
-承認自体は Tool の呼び出しも LLM の呼び出しも行いません。既存 Checkpoint の taskId で明示 Resume するか、
-同じ Session で要求を再実行してください。新しい Run が同じ Tool・完全一致の引数文字列を選んだ場合だけ承認を消費します。
-再計画で引数が変われば新しい承認が必要です。JSON のキー順・空白が変わった場合も完全一致しないため再確認します。
+`--continue` は承認と続行受付を同じSQLite transactionで保存します。保存した呼び出しを現在の権限・Project/Session・取消状態で再確認し、
+正確な引数で一度だけ実行してTool結果を会話に戻してからモデルの続きを呼びます。モデルに承認済み引数を再生成させません。
+`/approval approve <approvalId>` は承認のみを保存します。続行する場合は同じIDに `--continue` を付けてください。
+一覧の番号は表示した要求とClient・Project・選択Sessionに固定し、別の要求へ再割当てしません。選択変更・端末再起動後は一覧を再表示してください。UUIDも利用できます。
+Shell の `/approval show` と `/approval approve` は、要求のRunをチェックポイント履歴と照合してtask IDも表示します。
+この改修以前の保存呼び出しを持たない要求には従来の `/resume <taskId>` を案内します。承認ID・通知ID・Run IDは `/resume` の引数ではありません。
+照合できない場合は `/resume list` でtask IDと依頼内容を確認し、必要なら `/resume show <taskId>` で詳細を確認してください。
+完了・除外済み・実行中のタスクや拒否済み承認には再開コマンドを表示しません。
+従来の再計画で引数が変われば新しい承認が必要です。JSON のキー順・空白が変わった場合も完全一致しないため再確認します。
 
 承認は Project / Session / Tool / Project の絶対パスと引数の SHA-256 に固定し、15分で失効します。Project を移動すると承認は使えません。PENDING → APPROVED / DENIED → CONSUMED の遷移です。
 実行前の単一 SQL update で承認を消費するため、並行 Run・別プロセス・再起動でも再利用できません。
 callback 失敗、キャンセル、監査失敗でも消費済み承認は復活しません。DENY は承認で解除できません。
-保存先は memory-consolidation.db の tool_approvals。引数原文は保存せず、SHA-256 と CredentialRedactor 適用後の preview を保存します。
-16,384文字を超える引数は承認要求を拒否します。一覧は有効な PENDING / APPROVED の最大256件です。
+保存先は memory-consolidation.db の tool_approvals。承認レコードはSHA-256とCredentialRedactor適用後のpreviewを保存します。
+`approval_continuations` は正確な再実行に必要な引数原文・非System会話・成功済みTool結果・残予算を保存します（最大1MiB・256messages・32calls）。
+画面・通知にはredacted previewのみ表示します。原文を持つ継続データはローカルDBの保護対象です。
+16,384文字を超える引数は承認要求を拒否します。一覧は最大256件で、有効な承認に加えて続行中・期限切れ・結果不明のreceiptも表示します。
+続行受付はWAITING_APPROVAL → QUEUED → RESUMING → COMPLETEDとして永続化し、二重クリック・重複要求は同じreceiptを返します。
+QUEUEDは再起動後も実行可能ですが、RESUMINGの所有プロセスが失われた場合はUNKNOWNにし、自動再実行しません。
+期限切れ・拒否・取消しは実行せず終了します。管理されたGoalの親予算が再起動で失われた場合もUNKNOWNとし、新しい予算で勝手に再開しません。
 
 Web API は既存 API キー認証下で `GET /api/v1/projects/{projectId}/approvals`、
 `GET /api/v1/projects/{projectId}/approvals/{approvalId}`、
-`POST /api/v1/projects/{projectId}/approvals/{approvalId}/decision`（`{"approved":true}` / `false`）を公開します。
-その後は既存 Checkpoint Resume API を明示実行します。承認操作はモデル Tool として公開しません。
+`POST /api/v1/projects/{projectId}/approvals/{approvalId}/decision`（承認のみは `{"approved":true}`、拒否はfalse、承認して続行は `{"approved":true,"continueRun":true}`）を公開します。
+一覧・詳細・判断結果にはcontinuationStateも返します。`GET .../{approvalId}/continuation` で続行状態を参照できます。承認操作はモデルToolとして公開しません。
 
-Native Client の専用承認ボタン、実行スレッドの保留と自動再開は未対応です。
+Native Clientの通知・承認画面で内容を確認して「承認して続行」を選べます。「一回だけ承認」は承認のみを保存します。
 SubAgent は呼び出しごとに独立 Session なので承認の継承・再利用は行わず、従来どおり拒否イベントで停止します。
 
 Policy 自体は LLM を呼びません。起動時に設定を読み込み、プロセス内で固定します。

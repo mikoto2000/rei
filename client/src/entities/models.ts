@@ -1,6 +1,13 @@
 export type RunMode = "EXCLUSIVE" | "READ_ONLY" | "CONVERSATION";
 export type RunStatus =
-  "QUEUED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" | "UNKNOWN";
+  | "QUEUED"
+  | "RUNNING"
+  | "WAITING"
+  | "WAITING_APPROVAL"
+  | "COMPLETED"
+  | "FAILED"
+  | "CANCELLED"
+  | "UNKNOWN";
 export type StreamState =
   "CONNECTING" | "CONNECTED" | "RECONNECTING" | "CLOSED";
 export type ConnectionState =

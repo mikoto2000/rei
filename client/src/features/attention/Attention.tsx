@@ -26,6 +26,7 @@ export function Attention({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [review, setReview] = useState<Item | null>(null);
+  const [accepted, setAccepted] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const generation = useRef(0);
   const busy = useRef(false);
@@ -35,6 +36,7 @@ export function Attention({
     setProject(projects[0]?.id ?? "");
     setSnapshot(null);
     setReview(null);
+    setAccepted(null);
     busy.current = false;
     setPending(false);
   }, [serverId, projects]);
@@ -88,6 +90,7 @@ export function Attention({
     try {
       await call("workspace_execute", { serverId, operation });
       if (revision === generation.current) {
+        if (operation.operation === "approvalContinue") setAccepted(owner);
         setReview(null);
         setRefresh((value) => value + 1);
       }
@@ -132,6 +135,11 @@ export function Attention({
       </button>
       {!serverId && <p>サーバーを選択し、認証を解除してください。</p>}
       {error && <p role="alert">{error}</p>}
+      {accepted === owner && (
+        <p role="status">
+          続行を受け付けました。保存した呼び出しから再開します。
+        </p>
+      )}
       {pending && <p role="status">処理中…</p>}
       <h2>通知</h2>
       {visible?.notices.length === 0 && <p>未確認の通知はありません。</p>}
@@ -143,6 +151,23 @@ export function Attention({
             Session: {field(item, "Session")} / Run:{" "}
             {field(item, "Run") || "なし"} / 対象: {field(item, "Reference")}
           </p>
+          {item.title === "APPROVAL_REQUIRED" &&
+            visible.approvals.some(
+              (a) => a.id === field(item, "Reference"),
+            ) && (
+              <button
+                disabled={pending}
+                onClick={() =>
+                  setReview(
+                    visible.approvals.find(
+                      (a) => a.id === field(item, "Reference"),
+                    ) ?? null,
+                  )
+                }
+              >
+                承認内容の詳細
+              </button>
+            )}
           {item.id && field(item, "Status") === "OPEN" && (
             <button
               disabled={pending}
@@ -161,7 +186,7 @@ export function Attention({
       ))}
       <h2>Toolの承認</h2>
       <p>
-        承認は一回の呼び出しに対する判断です。通知の確認や承認だけでは実行を再開しません。
+        「承認して続行」は、表示した呼び出しを一度だけ実行して作業を再開します。通知の確認や承認のみでは再開しません。
       </p>
       {visible?.approvals.length === 0 && <p>有効な承認要求はありません。</p>}
       {visible?.approvals.map((item) => (
@@ -172,6 +197,32 @@ export function Attention({
             Session: {field(item, "Session")} / Run: {field(item, "Run")} /
             期限: {field(item, "Expires")} / {field(item, "Status")}
           </p>
+          {field(item, "Continuation") && (
+            <p>続行状態: {field(item, "Continuation")}</p>
+          )}
+          {field(item, "Continuation") === "UNKNOWN" && (
+            <p role="alert">
+              実行結果が不明です。作業結果とチェックポイントを確認してください。自動再実行は行いません。
+            </p>
+          )}
+          {field(item, "Continuation") === "EXPIRED" && (
+            <p>承認期限が切れたため実行しませんでした。</p>
+          )}
+          {field(item, "Status") === "APPROVED" &&
+            field(item, "Continuation") === "WAITING_APPROVAL" && (
+              <button
+                disabled={pending}
+                onClick={() =>
+                  void mutate({
+                    operation: "approvalContinue",
+                    projectId: project,
+                    id: item.id!,
+                  })
+                }
+              >
+                承認済みの呼び出しから続行
+              </button>
+            )}
           {item.id && field(item, "Status") === "PENDING" && (
             <>
               <button disabled={pending} onClick={() => setReview(item)}>
@@ -203,6 +254,23 @@ export function Attention({
             Project: {project} / Session: {field(review, "Session")} / Run:{" "}
             {field(review, "Run")}
           </p>
+          <button
+            disabled={
+              pending ||
+              !["WAITING_APPROVAL", "QUEUED"].includes(
+                field(review, "Continuation"),
+              )
+            }
+            onClick={() =>
+              void mutate({
+                operation: "approvalContinue",
+                projectId: project,
+                id: review.id!,
+              })
+            }
+          >
+            承認して続行
+          </button>
           <button
             disabled={pending}
             onClick={() =>

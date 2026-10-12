@@ -64,6 +64,10 @@ public class ToolApprovalRepository {
     return db.sql("UPDATE tool_approvals SET status='CONSUMED' WHERE id=(SELECT id FROM tool_approvals WHERE project=? AND session=? AND tool=? AND digest=? AND status='APPROVED' AND expires>? ORDER BY expires,id LIMIT 1) AND status='APPROVED'")
         .params(owner.projectId(),owner.conversationId(),tool,actionDigest(input,owner),clock.millis()).update()==1;
   }
+  /** A completed/uncertain continuation must not leave a reusable grant after a policy became automatic. */
+  public void retireContinuationGrant(String project,String id) {
+    db.sql("UPDATE tool_approvals SET status='CONSUMED' WHERE project=? AND id=? AND status='APPROVED'").params(project,id).update();
+  }
   private static void validate(AgentRunContext owner) {
     if(owner==null||owner.projectId()==null||owner.projectId().isBlank()||owner.conversationId().isBlank())
       throw new IllegalArgumentException("Approval requires an owning project and session");

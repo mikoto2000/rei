@@ -4,6 +4,58 @@ import { afterEach, it, expect, vi } from "vitest";
 import type { Command } from "../../tauri/commands";
 import { Attention } from "./Attention";
 afterEach(cleanup);
+it("continues only the reviewed saved invocation and suppresses duplicate clicks", async () => {
+  let release: (() => void) | undefined;
+  const saved = {
+    id: "saved",
+    title: "runCommand",
+    fields: [
+      ["Arguments", "npm run textlint"],
+      ["Status", "PENDING"],
+      ["Project", "p"],
+      ["Session", "session"],
+      ["Continuation", "WAITING_APPROVAL"],
+    ],
+  };
+  const call = vi.fn().mockImplementation((_name, args) => {
+    if (args.operation.operation === "approvalContinue")
+      return new Promise((resolve) => {
+        release = () => resolve({ title: "Accepted", items: [] });
+      });
+    return Promise.resolve({
+      title: "items",
+      items: args.operation.operation === "approvals" ? [saved] : [],
+    });
+  });
+  render(
+    <Attention
+      call={call as Command}
+      serverId="s"
+      projects={[{ id: "p", name: "Project", path: "/project" }]}
+    />,
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "承認内容を確認" }),
+  );
+  expect(screen.getAllByText("npm run textlint")).toHaveLength(2);
+  const button = screen.getByRole("button", { name: "承認して続行" });
+  await userEvent.dblClick(button);
+  expect(
+    call.mock.calls.filter(
+      ([, args]) => args.operation.operation === "approvalContinue",
+    ),
+  ).toHaveLength(1);
+  expect(call).toHaveBeenCalledWith("workspace_execute", {
+    serverId: "s",
+    operation: { operation: "approvalContinue", projectId: "p", id: "saved" },
+  });
+  release!();
+  expect(
+    await screen.findByText(
+      "続行を受け付けました。保存した呼び出しから再開します。",
+    ),
+  ).toBeTruthy();
+});
 const project = { id: "p", name: "Project", path: "/project" };
 const item = {
   id: "notice",

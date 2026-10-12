@@ -31,6 +31,7 @@ public final class TerminalClient implements AutoCloseable {
   private volatile CachedCatalog catalog=new CachedCatalog(new dev.mikoto2000.rei.application.cli.CliCatalog(List.of()));
   private boolean catalogLoaded;
   private boolean recordHistory;
+  private final ApprovalAliases approvalAliases=new ApprovalAliases();
   private static final List<String> COMMANDS=java.util.stream.Stream.concat(java.util.stream.Stream.of("/help","/exit","/project","/session","/chat","/run-mode","/cancel","/runs","/watch","/receipt","/input-history","/paste","/sh"),RemoteCommands.NAMES.stream()).sorted().toList();
   public TerminalClient(BackendClient backend,Path historyDirectory,boolean noHistory)throws IOException {
     this(backend,historyDirectory,noHistory,TerminalBuilder.builder().system(true).build());
@@ -156,6 +157,7 @@ public final class TerminalClient implements AutoCloseable {
     }
     if(name.equals("/llm")&&words.size()==2&&words.get(1).equals("capture")){out("/llm capture next|status|off|list [run-id]|show <attempt-id>|raw <attempt-id>|export <attempt-id> <path>|delete <run-id>|clear");return;}
     if(name.equals("/llm")&&words.size()==3&&words.get(1).equals("capture")&&words.get(2).equals("next")&&session==null){requireProject();createSession(null);}
+    if(name.equals("/approval")){approvalCommand(words);return;}
     if(RemoteCommands.NAMES.contains(name)&&!(name.equals("/history")&&Set.of("off","on").contains(action))) {
       var request=RemoteCommands.route(words,project,session,projectDirectory==null?Path.of("").toAbsolutePath():projectDirectory);
       if(Set.of("/api/v1/activity/commands/coaching/settings","/api/v1/activity/commands/coaching/enabled").contains(request.path())) {
@@ -266,6 +268,40 @@ public final class TerminalClient implements AutoCloseable {
       default->throw new IllegalArgumentException("Unsupported CLI command: "+name+". Use legacy-shell; this input was not sent to the model.");
     }
   }
+  private void approvalCommand(List<String> words)throws IOException,InterruptedException {
+    requireProject();String action=words.size()==1?"list":words.get(1);
+    String base="/api/v1/projects/"+BackendClient.segment(project)+"/approvals";
+    if(action.equals("list")) {
+      if(words.size()>2)throw new IllegalArgumentException("Usage: /approval list");
+      var rows=backend.get(base);if(!rows.isArray()||rows.size()>256)throw new IOException("Invalid approval list");
+      if(rows.isEmpty())out("有効な承認要求はありません。");
+      for(var row:rows){checkApproval(row);String number=approvalAliases.bind(project,session,row.path("id").asText());printApproval(row,number);}
+      return;
+    }
+    boolean continued=words.size()==4&&words.get(3).equals("--continue");
+    if(words.size()!=3&&!continued||continued&&!action.equals("approve"))throw new IllegalArgumentException("Usage: /approval show|approve|deny ID [--continue]");
+    String id=approvalAliases.resolve(project,session,words.get(2));
+    String path=base+"/"+BackendClient.segment(id);JsonNode row;
+    if(action.equals("show"))row=backend.get(path);
+    else if(Set.of("approve","deny","reject").contains(action)) {
+      Map<String,Object> body=continued?Map.of("approved",true,"continueRun",true):Map.of("approved",action.equals("approve"));
+      row=backend.post(path+"/decision",body);
+    }else throw new IllegalArgumentException("Usage: /approval list|show|approve|deny");
+    checkApproval(row);if(!row.path("id").asText().equals(id))throw new IOException("Approval response identity mismatch");
+    printApproval(row,id);
+    if(continued){run=row.path("runId").asText();session=row.path("sessionId").asText();out("続行を受け付けました。保存した呼び出しから再開します。");watch(run);}
+  }
+  private void checkApproval(JsonNode row)throws IOException {
+    if(!row.isObject()||!row.path("projectId").asText().equals(project)||row.path("id").asText().isBlank()||row.path("runId").asText().isBlank()||row.path("sessionId").asText().isBlank())throw new IOException("Invalid approval ownership");
+  }
+  private void printApproval(JsonNode row,String reference) {
+    out("承認 "+reference+": "+row.path("tool").asText()+" ["+row.path("status").asText()+"]");
+    out(row.path("argumentsPreview").asText());
+    out("有効期限: "+row.path("expiresAt").asText()+" / 続行状態: "+row.path("continuationState").asText("UNAVAILABLE"));
+    out("承認ID: "+row.path("id").asText());
+    out("詳細: /approval show "+reference+"　拒否: /approval deny "+reference);
+    if(row.path("continuationState").asText().equals("WAITING_APPROVAL"))out("承認して続行: /approval approve "+reference+" --continue");
+  }
   private void createSession(String title)throws IOException,InterruptedException {
     var body=new LinkedHashMap<String,Object>();body.put("projectId",project);body.put("title",title);
     var value=backend.post("/api/v1/sessions",body);session=value.path("sessionId").asText();out("Current session: "+session);
@@ -273,7 +309,8 @@ public final class TerminalClient implements AutoCloseable {
   private void watch(String id) {
     long generation=subscriptionGeneration.incrementAndGet();backend.detach();if(watching!=null)watching.cancel(true);attached=true;
     watching=streams.submit(()->{
-      var sequence=new AtomicLong();var partialMessages=new HashSet<String>();int reconnects=0;
+      var sequence=new AtomicLong();var eventOutput=new RunEventOutput(this::out);int reconnects=0;
+      try {
       while(attached&&generation==subscriptionGeneration.get()&&!Thread.currentThread().isInterrupted()) {
         try {
           backend.events(id,sequence.get(),event->{
@@ -281,10 +318,7 @@ public final class TerminalClient implements AutoCloseable {
             try {
               var value=BackendClient.JSON.readTree(event.data());if(!id.equals(value.path("runId").asText()))throw new IllegalArgumentException("Event Run identity mismatch");
               sequence.set(event.sequence());
-              String messageId=value.path("payload").path("messageId").asText();
-              if(event.type().equals("message.delta")){partialMessages.add(messageId);out(value.path("payload").path("delta").asText());}
-              else if(event.type().equals("message.completed")){if(!partialMessages.remove(messageId))out(value.path("payload").path("text").asText());}
-              else if(event.type().startsWith("tool.")||event.type().startsWith("agent.run."))out(event.type()+": "+value.path("payload"));
+              eventOutput.accept(event.type(),value.path("payload"));
               if(Set.of("agent.run.completed","agent.run.failed","agent.run.cancelled").contains(event.type()))attached=false;
             }catch(IOException invalid){throw new IllegalArgumentException("Malformed Run event");}
           });
@@ -297,6 +331,7 @@ public final class TerminalClient implements AutoCloseable {
         if(++reconnects>3){out("Stream disconnected. /watch "+id+" reconnects; the Run continues on Backend.");return;}
         try{Thread.sleep(250L*reconnects);}catch(InterruptedException interrupt){Thread.currentThread().interrupt();return;}
       }
+      } finally { if(generation==subscriptionGeneration.get())eventOutput.flush(); }
     });
   }
   private void poll(String id,long generation) {

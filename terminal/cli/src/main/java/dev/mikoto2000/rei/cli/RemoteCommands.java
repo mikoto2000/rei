@@ -373,7 +373,11 @@ public final class RemoteCommands {
     if(name.equals("/checkpoint")&&action.equals("inspect")){exact(words,3);return get(base+"/"+id(words.get(2))+"/reconciliation");}
     if(name.equals("/checkpoint")&&action.equals("save")){exact(words,2);if(session==null)throw new IllegalArgumentException("Select a Session first");return post(base,Map.of("sessionId",session));}
     if(name.equals("/checkpoint")&&action.equals("abandon")){exact(words,3);return post(base+"/"+id(words.get(2))+"/abandon",Map.of());}
-    if(name.equals("/approval")&&Set.of("approve","deny","reject").contains(action)){exact(words,3);return post(base+"/"+id(words.get(2))+"/decision",Map.of("approved",action.equals("approve")));}
+    if(name.equals("/approval")&&Set.of("approve","deny","reject").contains(action)){
+      boolean continued=words.size()==4&&words.get(3).equals("--continue")&&action.equals("approve");
+      if(!continued)exact(words,3);
+      return post(base+"/"+id(words.get(2))+"/decision",continued?Map.of("approved",true,"continueRun",true):Map.of("approved",action.equals("approve")));
+    }
     if(Set.of("/goal","/timer").contains(name)&&action.equals("reconcile")) {
       if(words.size()<3)throw invalid();
       var options=options(words,3,Set.of("--run-id"),Set.of("--acknowledge-uncertain-side-effects"));

@@ -1,0 +1,68 @@
+package dev.mikoto2000.rei.cli;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.function.Consumer;
+
+/** Keeps provider chunk boundaries out of terminal lines and preserves the input prompt. */
+final class RunEventOutput {
+  private final Consumer<String> output;
+  private final Set<String> streamed = new HashSet<>();
+  private final StringBuilder pending = new StringBuilder();
+  private String active;
+
+  RunEventOutput(Consumer<String> output) { this.output = output; }
+
+  void accept(String type, JsonNode payload) {
+    boolean thinking = type.startsWith("thinking.");
+    if (thinking || type.startsWith("message.")) {
+      String key = (thinking ? "thinking:" : "message:")
+          + payload.path(thinking ? "thinkingId" : "messageId").asText();
+      if (!key.equals(active)) {
+        flush();
+        active = key;
+        if (thinking) output.accept("[thinking]");
+      }
+      if (type.endsWith(".delta")) {
+        streamed.add(key);
+        append(payload.path("delta").asText());
+      } else if (type.endsWith(".completed")) {
+        if (!streamed.remove(key)) append(payload.path("text").asText());
+        flush();
+        active = null;
+      } else if (type.endsWith(".started")) {
+        // The content itself is displayed by delta/completed events.
+      } else {
+        flush();
+        output.accept(type + ": " + payload);
+      }
+      return;
+    }
+    flush();
+    active = null;
+    if ("attention.required".equals(type)) {
+      output.accept("[attention] " + payload.path("kind").asText());
+      payload.path("message").asText().lines().forEach(output);
+      return;
+    }
+    output.accept(type + ": " + payload);
+  }
+
+  private void append(String text) {
+    pending.append(text);
+    int newline;
+    while ((newline = pending.indexOf("\n")) >= 0) {
+      String line = pending.substring(0, newline);
+      output.accept(line.endsWith("\r") ? line.substring(0, line.length() - 1) : line);
+      pending.delete(0, newline + 1);
+    }
+  }
+
+  void flush() {
+    if (!pending.isEmpty()) {
+      output.accept(pending.toString());
+      pending.setLength(0);
+    }
+  }
+}

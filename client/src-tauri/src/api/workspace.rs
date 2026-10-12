@@ -453,6 +453,7 @@ impl HttpReiClient {
             op @ (WorkspaceOperation::Attention { .. }
             | WorkspaceOperation::AttentionAck { .. }
             | WorkspaceOperation::Approvals { .. }
+            | WorkspaceOperation::ApprovalContinue { .. }
             | WorkspaceOperation::ApprovalDecision { .. }) => self.attention_operation(op).await,
             WorkspaceOperation::WorkContext { project_id } => {
                 let dto: serde_json::Value = Self::json(

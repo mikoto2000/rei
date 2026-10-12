@@ -77,6 +77,16 @@ class ShellAgentEventRendererTest {
         new dev.mikoto2000.rei.event.AttentionRequiredPayload("inbox-id","APPROVAL_REQUIRED","Review approval"),"project"));
     assertEquals("[attention] APPROVAL_REQUIRED: Review approval (/attention show inbox-id)\n",output.text());
   }
+  @Test void approvalNoticeKeepsTheContinueCommandOnItsOwnLine() {
+    var output=new RecordingOutput();
+    String command="/approval approve ca880320-1482-4d84-8fb9-53c0b3234997 --continue";
+    new ShellAgentEventRenderer(output).onEvent(new dev.mikoto2000.rei.event.AgentEvent("event",0,Instant.EPOCH,
+        dev.mikoto2000.rei.event.AgentEventType.ATTENTION_REQUIRED,1,"session",null,"run",null,null,
+        new dev.mikoto2000.rei.event.AttentionRequiredPayload("inbox-id","APPROVAL_REQUIRED",
+            "承認待ち: runCommand\nこの操作を承認して続行するには、次のコマンドを入力してください:\n"+command+"\n拒否: /approval deny ca880320-1482-4d84-8fb9-53c0b3234997"),"project"));
+    assertTrue(output.text().contains("\n"+command+"\n"));
+  }
+
   @Test void rendersDependencyWaitingSeparatelyFromStagnation() {
     var output=new RecordingOutput();
     new ShellAgentEventRenderer(output).onEvent(events.executionProgress(dev.mikoto2000.rei.event.AgentEventType.STAGNATION_UPDATED,"run",

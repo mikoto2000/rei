@@ -46,7 +46,7 @@ public final class RunRegistry implements AutoCloseable {
         if(document.length()>20000)throw new IllegalStateException("Run snapshot capacity exceeded");
         var stored=json.readValue(document,StoredRun.class);var value=stored.snapshot();
         documents.put(value.context().runId(),document);
-        if(!value.status().isTerminal() && value.status()!=RunStatus.WAITING && !stored.ownerAlive()) {
+        if(!value.status().isTerminal() && !value.status().isWaiting() && !stored.ownerAlive()) {
           value=unknown(value);save(value);
         }
         runs.put(value.context().runId(),value);
@@ -85,8 +85,8 @@ public final class RunRegistry implements AutoCloseable {
     if(db==null)return;
     for(String run:owned) {
       var value=runs.get(run);
-      if(value!=null && !value.status().isTerminal() && value.status()!=RunStatus.WAITING){value=unknown(value);save(value);runs.put(run,value);}
-      else if(value!=null && value.status()==RunStatus.WAITING)save(value,null);
+      if(value!=null && !value.status().isTerminal() && !value.status().isWaiting()){value=unknown(value);save(value);runs.put(run,value);}
+      else if(value!=null && value.status().isWaiting())save(value,null);
     }
     owned.clear();
   }
@@ -137,7 +137,7 @@ public final class RunRegistry implements AutoCloseable {
           var stored=json.readValue(document.get(),StoredRun.class);var refreshed=stored.snapshot();
           if(!runId.equals(refreshed.context().runId()))throw new IllegalStateException("Run identity mismatch");
           documents.put(runId,document.get());
-          if(!refreshed.status().isTerminal()&&refreshed.status()!=RunStatus.WAITING&&!stored.ownerAlive()){refreshed=unknown(refreshed);save(refreshed);}
+          if(!refreshed.status().isTerminal()&&!refreshed.status().isWaiting()&&!stored.ownerAlive()){refreshed=unknown(refreshed);save(refreshed);}
           runs.put(runId,refreshed);restored.add(runId);
         }catch(java.io.IOException error){throw new IllegalStateException("Cannot refresh Run registry",error);}
       }
@@ -172,7 +172,7 @@ public final class RunRegistry implements AutoCloseable {
   public synchronized boolean ownsExecution(String runId) { return db==null || owned.contains(runId); }
   /** Only an exact durable waiting owner can be adopted after its previous process exited. */
   public synchronized boolean claimWaiting(AgentRunContext context) {
-    var current=get(context.runId());if(current.status()!=RunStatus.WAITING||!current.context().equals(context))return false;
+    var current=get(context.runId());if(!current.status().isWaiting()||!current.context().equals(context))return false;
     if(db!=null&&!owned.contains(context.runId())) {
       var document=db.sql("SELECT snapshot FROM rei_run_registry WHERE run_id=:id").param("id",context.runId()).query(String.class).optional();
       if(document.isEmpty())return false;

@@ -21,7 +21,8 @@ public record ChatExecutionResult(Status status, String text, boolean memoryCons
   public static ChatExecutionResult cancelled() {
     return new ChatExecutionResult(Status.CANCELLED, "", false, "chat run cancelled");
   }
-  public static ChatExecutionResult waiting(){return new ChatExecutionResult(Status.WAITING,"",false,null,"external_dependency_waiting");}
+  public static ChatExecutionResult waiting(){return waiting("external_dependency_waiting");}
+  public static ChatExecutionResult waiting(String reason){return new ChatExecutionResult(Status.WAITING,"",false,null,reason);}
 
   public enum Status {
     SUCCESS,

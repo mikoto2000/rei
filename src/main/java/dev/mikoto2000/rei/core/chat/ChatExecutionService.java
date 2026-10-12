@@ -270,7 +270,7 @@ public class ChatExecutionService {
       execution.checkActive();
       activityTracker.ifPresent(tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));
       if(resumed==null)appendConversationLog(context.conversationId(), "user", promptText);
-      if (!structuredCommand && !budget.tryConsumeLlmCall()) {
+      if (!structuredCommand && (resumed==null||resumed.pendingTools()==null) && !budget.tryConsumeLlmCall()) {
         log.warn("Chat skipped: LLM call budget exhausted before initial prompt");
         return ChatExecutionResult.failed("LLM call budget exhausted before initial prompt","llm_call_budget_exceeded");
       }
@@ -360,7 +360,7 @@ public class ChatExecutionService {
         return ChatExecutionResult.failed(terminalError(result.status()).message(),terminalError(result.status()).code());
       }
     } catch (RuntimeException error) {
-      if(error instanceof RunWaitingException){suspended=true;return ChatExecutionResult.waiting();}
+      if(error instanceof RunWaitingException){suspended=true;return execution.hasApprovalContinuation()&&((dev.mikoto2000.rei.core.policy.ApprovalContinuationService)continuations).waitingApproval(context)?ChatExecutionResult.waiting("tool_approval_waiting"):ChatExecutionResult.waiting();}
       if (!RunCancellation.isCancellation(error) && !execution.isCancelled()) throw error;
       execution.cancel();
       eventPublisher.publish(eventFactory.runFailed(runId, terminalError(ChatRunStatus.CANCELLED)));
@@ -381,7 +381,7 @@ public class ChatExecutionService {
           cancellationHook.dispose();
           execution.close();
           try {if(!suspended||execution.isCancelled())turns.finish(context, execution.isCancelled() ? ConversationTurnStore.Status.CANCELLED : turnStatus, assistantMessage);}
-          finally {if (checkpoints != null) checkpoints.finish(context, execution.isCancelled() ? "CANCELLED" : suspended?"WAITING":turnStatus.name());}
+          finally {if (checkpoints != null) checkpoints.finish(context, execution.isCancelled() ? "CANCELLED" : suspended?(execution.hasApprovalContinuation()&&((dev.mikoto2000.rei.core.policy.ApprovalContinuationService)continuations).waitingApproval(context)?"WAITING_APPROVAL":"WAITING"):turnStatus.name());}
           if(!suspended&&continuations!=null)continuations.terminal(context);
           if (!suspended && workContext != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand) workContext.afterTerminal(context);
           if (!suspended && autoSleep != null && context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand) autoSleep.afterTerminal(context);

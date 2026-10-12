@@ -34,7 +34,21 @@ public class StagnationChatModel implements ChatModel {
   @Override public Flux<ChatResponse> stream(Prompt prompt) {
     RunExecutionContext context = context(prompt);
     if (context == null) return delegate.stream(prompt);
-    return Flux.defer(() -> iteration(prepare(prompt, context), context, true, context.progressVersion()));
+    return Flux.defer(() -> {
+      var prepared=prepare(prompt,context);var pending=context.takePendingApprovalTools();
+      if(pending==null)return iteration(prepared,context,true,context.progressVersion());
+      return Mono.fromCallable(()->{
+        context.checkActive();context.beginIteration();
+        try {
+          context.planTools(pending.calls().subList(pending.completed().size(),pending.calls().size()));
+          var result=tools.executePending(prepared,pending,context);
+          context.preserveToolResults(result.conversationHistory());context.suspendIfWaiting(result.conversationHistory());return result;
+        }finally{context.endIteration();}
+      }).subscribeOn(Schedulers.boundedElastic()).flatMapMany(result->{
+        if(result.returnDirect())return Flux.just(new ChatResponse(ToolExecutionResult.buildGenerations(result)));
+        return iteration(new Prompt(result.conversationHistory(),prepared.getOptions()),context,false,context.progressVersion());
+      });
+    });
   }
 
   private Flux<ChatResponse> iteration(Prompt prompt, RunExecutionContext context, boolean prepaid, long progressAtLimit) {
@@ -83,7 +97,7 @@ public class StagnationChatModel implements ChatModel {
             context.checkActive();
             try {
               context.planTools(result.getResult().getOutput().getToolCalls());
-              var toolResult = tools.execute(prompt, result);
+              var toolResult = tools.executeResumable(prompt, result,context);
               if (assembler != null && context.runContext() != null)
                 assembler.preserveToolResults(toolResult.conversationHistory(), context.runContext().conversationId(),
                     context.runContext().runId());

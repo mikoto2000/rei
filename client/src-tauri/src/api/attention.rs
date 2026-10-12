@@ -25,6 +25,8 @@ struct Approval {
     arguments_preview: String,
     status: String,
     expires_at: String,
+    #[serde(default)]
+    continuation_state: String,
 }
 impl Notice {
     fn item(self, project: &str) -> Result<WorkspaceItem> {
@@ -65,6 +67,7 @@ impl Approval {
                 ("Session".into(), self.session_id),
                 ("Run".into(), self.run_id),
                 ("Expires".into(), self.expires_at),
+                ("Continuation".into(), self.continuation_state),
             ],
         })
     }
@@ -135,6 +138,29 @@ impl HttpReiClient {
                     rows.into_iter()
                         .map(|row| row.item(&project_id))
                         .collect::<Result<Vec<_>>>()?,
+                ))
+            }
+            WorkspaceOperation::ApprovalContinue { project_id, id } => {
+                let row: Approval = Self::json(
+                    self.request(
+                        Method::POST,
+                        &format!(
+                            "/api/v1/projects/{}/approvals/{}/decision",
+                            segment(&project_id)?,
+                            segment(&id)?
+                        ),
+                        true,
+                    )?
+                    .json(&serde_json::json!({"approved":true,"continueRun":true})),
+                    Operation::Resource,
+                )
+                .await?;
+                if row.id != id || !matches!(row.status.as_str(), "APPROVED" | "CONSUMED") {
+                    return Err(AppError::InvalidResponse);
+                }
+                Ok(result(
+                    "Approval continuation accepted",
+                    vec![row.item(&project_id)?],
                 ))
             }
             WorkspaceOperation::ApprovalDecision {

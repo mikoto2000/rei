@@ -130,6 +130,10 @@ pub enum WorkspaceOperation {
     Approvals {
         project_id: String,
     },
+    ApprovalContinue {
+        project_id: String,
+        id: String,
+    },
     ApprovalDecision {
         project_id: String,
         id: String,

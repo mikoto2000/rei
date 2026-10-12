@@ -27,7 +27,16 @@ public class RunExecutionContext {
   private dev.mikoto2000.rei.core.chat.RunContinuation continuation;
   private List<org.springframework.ai.chat.messages.Message> resumeMessages=List.of();
   public void setContinuation(dev.mikoto2000.rei.core.chat.RunContinuation continuation){this.continuation=continuation;}
-  public void resume(dev.mikoto2000.rei.core.chat.RunContinuation.Saved saved){if(saved!=null){budget.restore(saved.budget());evaluator.restoreInformation(null);resumeMessages=List.copyOf(saved.messages());}}
+  private dev.mikoto2000.rei.core.chat.RunContinuation.PendingTools pendingApprovalTools;
+  public void resume(dev.mikoto2000.rei.core.chat.RunContinuation.Saved saved){if(saved!=null){budget.restore(saved.budget());evaluator.restoreInformation(null);resumeMessages=List.copyOf(saved.messages());pendingApprovalTools=saved.pendingTools();}}
+  public dev.mikoto2000.rei.core.chat.RunContinuation.PendingTools takePendingApprovalTools(){var pending=pendingApprovalTools;pendingApprovalTools=null;return pending;}
+  public boolean hasApprovalContinuation(){return continuation instanceof dev.mikoto2000.rei.core.policy.ApprovalContinuationService;}
+  public void checkApprovalContinuationExecution(){if(continuation instanceof dev.mikoto2000.rei.core.policy.ApprovalContinuationService approvals)approvals.checkExecution(runContext);}
+  public boolean suspendForApproval(String approvalId,List<org.springframework.ai.chat.messages.Message> history,
+      dev.mikoto2000.rei.core.chat.RunContinuation.PendingTools pending) {
+    if(continuation instanceof dev.mikoto2000.rei.core.policy.ApprovalContinuationService approvals){approvals.suspendApproval(this,approvalId,history,pending);return true;}
+    return false;
+  }
   public List<org.springframework.ai.chat.messages.Message> takeResumeMessages(){var saved=resumeMessages;resumeMessages=List.of();return saved;}
   public OutputLimitRunBudget.Snapshot budgetSnapshot(){return budget.snapshot();}
   public boolean hasParentReservation(){return budget.sharedLlmReservation()!=null;}
