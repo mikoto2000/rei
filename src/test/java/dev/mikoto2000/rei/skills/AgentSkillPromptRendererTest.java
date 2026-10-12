@@ -20,6 +20,8 @@ class AgentSkillPromptRendererTest {
     assertThat(rendered).contains("## Skill: sample");
     assertThat(rendered).contains("Description: Sample description");
     assertThat(rendered).contains("Sample instructions");
+    assertThat(rendered).contains("Skill directory: " + Path.of("sample").toAbsolutePath().normalize());
+    assertThat(rendered).contains("readSkillResource");
     assertThat(rendered).contains("--- User request ---");
     assertThat(rendered).endsWith("hello");
   }
@@ -29,5 +31,17 @@ class AgentSkillPromptRendererTest {
     AgentSkillPromptRenderer renderer = new AgentSkillPromptRenderer();
 
     assertThat(renderer.render("hello", List.of())).isEqualTo("hello");
+  }
+
+  @Test
+  void keepsSeparateDirectoriesAndReferenceInstructionsForMultipleSkills() {
+    var first = new AgentSkill("first", "", true, Path.of("one"), Path.of("one/SKILL.md"),
+        "Read [guide](references/guide.md)");
+    var second = new AgentSkill("second", "", true, Path.of("two"), Path.of("two/SKILL.md"),
+        "Read [guide](references/guide.md)");
+    String rendered = new AgentSkillPromptRenderer().render("review", List.of(first, second));
+    assertThat(rendered).contains("Skill directory: " + first.directory().toAbsolutePath().normalize(),
+        "Skill directory: " + second.directory().toAbsolutePath().normalize());
+    assertThat(rendered).endsWith("review");
   }
 }

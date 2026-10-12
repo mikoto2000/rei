@@ -1207,6 +1207,37 @@ public class Tools {
     return readMultiFile(files, currentWorkingDirectory());
   }
 
+  private dev.mikoto2000.rei.skills.AgentSkillRepository skillRepository;
+  private dev.mikoto2000.rei.skills.AgentSkillsProperties skillProperties;
+
+  @Autowired
+  void setSkillResources(dev.mikoto2000.rei.skills.AgentSkillRepository repository,
+      dev.mikoto2000.rei.skills.AgentSkillsProperties properties) {
+    skillRepository = repository;
+    skillProperties = properties;
+  }
+
+  @Tool(description = """
+      Read a reference file inside an enabled Agent Skill, independent of the current Project directory.
+      Specify skillName and file.path relative to that skill's directory (e.g. references/learning-design.md).
+      Absolute paths, paths outside the skill directory, sensitive files and linked paths are rejected.
+      file supports line ranges, charset, expectedVersion and offset; Java symbol requests are unsupported.
+      If truncated, call this tool again with the same skillName and returned nextRead as file.
+      Reads only; does not execute scripts or grant permission to modify files.
+      """)
+  ReadFileResult readSkillResource(String skillName, ReadFileRequest file) throws IOException {
+    if (skillRepository == null || skillProperties == null || !skillProperties.isEnabled()) {
+      throw new IllegalStateException("Agent Skills are unavailable or disabled");
+    }
+    var skill = skillRepository.findByName(skillName).filter(dev.mikoto2000.rei.skills.AgentSkill::enabled)
+        .orElseThrow(() -> new IllegalArgumentException("Unknown or disabled skill"));
+    if (file == null || file.path() == null || file.path().isBlank() || file.symbol() != null
+        || Paths.get(file.path()).isAbsolute()) {
+      throw new IllegalArgumentException("A relative skill resource path is required; symbols are unsupported");
+    }
+    return readMultiFile(List.of(file), skill.directory()).getFirst();
+  }
+
   List<ReadFileResult> readMultiFile(List<ReadFileRequest> files, java.nio.file.Path workingDirectory)
       throws IOException {
     if (files == null || files.isEmpty()) {
