@@ -12,14 +12,48 @@ import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.event.*;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarService;
-import dev.mikoto2000.rei.task.TaskService;
+import dev.mikoto2000.rei.task.*;
 
 class IntegrationRunSubmitServiceTest {
   @TempDir Path directory;
   @Test void implicitOAuthOperationsAreQueuedAndRetainClientOwnership()throws Exception {
     var projects=new ProjectRegistry(directory.resolve("projects.json"));var project=projects.resolve(directory);var lifecycle=mock(SessionLifecycle.class);var registry=new RunRegistry(Clock.systemUTC());var bus=new InMemoryAgentEventBus();var events=new AgentEventFactory(Clock.systemUTC());var cancellation=new CommandCancellationService();var pending=new ArrayDeque<Runnable>();var router=new ConversationInputRouter(pending::add,(context,prompt,queue)->{throw new AssertionError();});var calendar=mock(GoogleCalendarService.class);var tasks=mock(TaskService.class);when(tasks.listOpen(any())).thenAnswer(call->{assertEquals(project.id(),AgentRunScope.current().projectId());assertEquals("session",AgentRunScope.current().conversationId());return java.util.List.of();});
     try(var runs=new RunService(registry,bus,events,cancellation,router::cancelQueued)){
-      var service=new IntegrationRunSubmitService(projects,lifecycle,registry,runs,router,cancellation,events,bus,calendar,tasks);var operation=service.listGoogleTasks(project.id(),"session",null,null,null);verifyNoInteractions(tasks);verify(lifecycle).validate("session",project.id());pending.remove().run();assertEquals(RunStatus.COMPLETED,runs.get(operation.runId()).status());verify(tasks).listOpen(any());assertNull(AgentRunScope.current());
+      var service=new IntegrationRunSubmitService(projects,lifecycle,registry,runs,router,cancellation,events,bus,calendar,tasks);var operation=service.listGoogleTasks(project.id(),"session",null,null);verifyNoInteractions(tasks);verify(lifecycle).validate("session",project.id());pending.remove().run();assertEquals(RunStatus.COMPLETED,runs.get(operation.runId()).status());verify(tasks).listOpen(any());assertNull(AgentRunScope.current());
+    }
+  }
+  @Test void taglessTaskCreationRetainsFieldsAndRunsOnlyInsideCapturedOwnership() throws Exception {
+    var projects = new ProjectRegistry(directory.resolve("projects.json"));
+    var project = projects.resolve(directory);
+    var lifecycle = mock(SessionLifecycle.class);
+    var registry = new RunRegistry(Clock.systemUTC());
+    var bus = new InMemoryAgentEventBus();
+    var events = new AgentEventFactory(Clock.systemUTC());
+    var cancellation = new CommandCancellationService();
+    var pending = new ArrayDeque<Runnable>();
+    var router = new ConversationInputRouter(pending::add, (context, prompt, queue) -> {
+      throw new AssertionError("Task creation must not execute chat");
+    });
+    var calendar = mock(GoogleCalendarService.class);
+    var tasks = mock(TaskService.class);
+    var due = java.time.LocalDate.of(2026, 10, 20);
+    var task = new Task(7, "Review", due, 2, TaskStatus.OPEN, java.time.OffsetDateTime.now(), null);
+    when(tasks.add("Review", due, 2)).thenAnswer(call -> {
+      assertEquals(project.id(), AgentRunScope.current().projectId());
+      assertEquals("session", AgentRunScope.current().conversationId());
+      return task;
+    });
+    try (var runs = new RunService(registry, bus, events, cancellation, router::cancelQueued)) {
+      var service = new IntegrationRunSubmitService(projects, lifecycle, registry, runs, router,
+          cancellation, events, bus, calendar, tasks);
+      var operation = service.addGoogleTask(project.id(), "session", "Review", due, 2);
+      verifyNoInteractions(tasks, calendar);
+      verify(lifecycle).validate("session", project.id());
+      pending.remove().run();
+      assertEquals(RunStatus.COMPLETED, runs.get(operation.runId()).status());
+      verify(tasks).add("Review", due, 2);
+      verifyNoInteractions(calendar);
+      assertNull(AgentRunScope.current());
     }
   }
   @Test void authorizationBeginsOnlyInsideTheCapturedWebRun() throws Exception {

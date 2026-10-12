@@ -41,7 +41,6 @@ class BriefingCommandTest {
             LocalDate.of(2026, 3, 27),
             1,
             TaskStatus.OPEN,
-            List.of("sales"),
             OffsetDateTime.of(2026, 3, 20, 0, 0, 0, 0, ZoneOffset.UTC),
             null)),
         List.of(),

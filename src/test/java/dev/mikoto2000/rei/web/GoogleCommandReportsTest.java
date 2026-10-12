@@ -17,11 +17,11 @@ class GoogleCommandReportsTest {
     verify(service).listEventsForDate(date);verify(service,never()).parseDateTime(anyString());
   }
   @Test void taskReportsKeepDefaultsFilteringAndMessages() {
-    var service=mock(TaskService.class);var task=new Task(12,"Review",null,3,TaskStatus.OPEN,List.of(),OffsetDateTime.now(),null);
-    when(service.add("Review",null,3,List.of())).thenReturn(task);
-    assertEquals("追加: 12 | Review",TaskCommand.reportAdd(service,"Review",null,3,List.of()));
-    when(service.listOpen(new TaskQuery(3,"research",null))).thenReturn(List.of(task));
-    assertEquals("12 | 3 |  | Review | ",TaskCommand.reportList(service,3,"research",null));
+    var service=mock(TaskService.class);var task=new Task(12,"Review",null,3,TaskStatus.OPEN,OffsetDateTime.now(),null);
+    when(service.add("Review",null,3)).thenReturn(task);
+    assertEquals("追加: 12 | Review",TaskCommand.reportAdd(service,"Review",null,3));
+    when(service.listOpen(new TaskQuery(3,null))).thenReturn(List.of(task));
+    assertEquals("12 | 3 |  | Review",TaskCommand.reportList(service,3,null));
     when(service.complete(12)).thenReturn(task);assertEquals("完了: 12 | Review",TaskCommand.reportDone(service,12));
     assertEquals("削除: 12",TaskCommand.reportDelete(service,12));verify(service).delete(12);
   }

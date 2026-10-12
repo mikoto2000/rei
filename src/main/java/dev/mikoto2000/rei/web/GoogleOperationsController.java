@@ -8,7 +8,6 @@ import dev.mikoto2000.rei.task.TaskService;
 import dev.mikoto2000.rei.task.command.TaskCommand;
 import java.net.URI;
 import java.time.LocalDate;
-import java.util.List;
 import org.springframework.boot.autoconfigure.condition.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,7 +21,7 @@ public final class GoogleOperationsController {
   public record Text(String text) {}
   public record Scope(String projectId,String sessionId) implements StrictApiRequest {}
   public record Event(String title,String start,String end,String location,String description) implements StrictApiRequest {}
-  public record Task(String title,LocalDate due,Integer priority,List<String> tags) implements StrictApiRequest {}
+  public record Task(String title,LocalDate due,Integer priority) implements StrictApiRequest {}
   public GoogleOperationsController(GoogleCalendarService calendar,TaskService tasks,IntegrationRunSubmitService runs){this.calendar=calendar;this.tasks=tasks;this.runs=runs;}
   @GetMapping("/google-calendar/events") public Text events(@RequestParam(required=false) LocalDate date,@RequestParam(required=false) String from,@RequestParam(required=false) String to){optional(from);optional(to);return text(ScheduleCommand.reportList(calendar,date,from,to));}
   @PostMapping("/google-calendar/events") public Text addEvent(@RequestBody Event request){
@@ -31,10 +30,10 @@ public final class GoogleOperationsController {
   }
   @PostMapping("/google-calendar/authorize") public ResponseEntity<ChatResponse> authorizeCalendar(@RequestBody Scope request,@RequestHeader("Idempotency-Key") String key){scope(request);return accepted(runs.authorizeCalendar(request.projectId(),request.sessionId(),key));}
   @PostMapping("/google-calendar/refresh-token") public ResponseEntity<ChatResponse> refresh(@RequestBody Scope request,@RequestHeader("Idempotency-Key") String key){scope(request);return accepted(runs.refreshCalendar(request.projectId(),request.sessionId(),key));}
-  @GetMapping("/google-tasks") public Text tasks(@RequestParam(required=false) Integer priority,@RequestParam(required=false) String tag,@RequestParam(required=false) LocalDate dueBefore){optional(tag);return text(TaskCommand.reportList(tasks,priority,tag,dueBefore));}
+  @GetMapping("/google-tasks") public Text tasks(@RequestParam(required=false) Integer priority,@RequestParam(required=false) LocalDate dueBefore){return text(TaskCommand.reportList(tasks,priority,dueBefore));}
   @PostMapping("/google-tasks") public Text addTask(@RequestBody Task request){
-    if(request==null)throw new IllegalArgumentException("Task required");required(request.title());var tags=request.tags()==null?List.<String>of():request.tags();if(tags.size()>100)throw new IllegalArgumentException("Too many tags");tags.forEach(GoogleOperationsController::required);
-    return text(TaskCommand.reportAdd(tasks,request.title(),request.due(),request.priority()==null?3:request.priority(),tags));
+    if(request==null)throw new IllegalArgumentException("Task required");required(request.title());
+    return text(TaskCommand.reportAdd(tasks,request.title(),request.due(),request.priority()==null?3:request.priority()));
   }
   @PostMapping("/google-tasks/{id}/complete") public Text done(@PathVariable long id){return text(TaskCommand.reportDone(tasks,id));}
   @DeleteMapping("/google-tasks/{id}") public Text delete(@PathVariable long id){return text(TaskCommand.reportDelete(tasks,id));}
