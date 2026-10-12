@@ -19,6 +19,13 @@ import dev.mikoto2000.rei.topic.TopicScoreBreakdown;
 import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
 
 class ShellAgentEventRendererTest {
+  @Test void subAgentFailureDisplaysTheSpecificFailureReason() {
+    var output=new RecordingOutput();
+    new ShellAgentEventRenderer(output).onEvent(new dev.mikoto2000.rei.event.AgentEvent("event",0,Instant.EPOCH,
+        dev.mikoto2000.rei.event.AgentEventType.SUBAGENT_FAILED,1,"subagent:child",null,"child",null,null,
+        new dev.mikoto2000.rei.event.SubAgentLifecyclePayload("parent","child","reviewer","review","FAILED",10,"SEND_LIMIT: 資料を分割してください。"),"project"));
+    assertTrue(output.text().contains("原因: SEND_LIMIT: 資料を分割してください。"));
+  }
   @Test void distinguishesUnknownEvidenceFromConfirmedNoProgressInDiagnostics() {
     var output=new RecordingOutput();var renderer=new ShellAgentEventRenderer(output);
     renderer.onEvent(events.executionProgress(dev.mikoto2000.rei.event.AgentEventType.STAGNATION_UPDATED,"run",

@@ -10,7 +10,7 @@ public final class WebApiEventMapper {
       .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
   private static Set<String> fields(AgentEventType type) {
     String names = switch (type) {
-      case SUBAGENT_STARTED, SUBAGENT_COMPLETED, SUBAGENT_FAILED -> "agentId status duration backendId modelId totalTokens";
+      case SUBAGENT_STARTED, SUBAGENT_COMPLETED, SUBAGENT_FAILED -> "parentRunId subAgentRunId agentId status duration failureReason backendId modelId totalTokens";
       case GOAL_UPDATED -> "goalId status attempts maxRuns llmCallsUsed maxLlmCalls";
       case ATTENTION_REQUIRED -> "attentionId kind message";
       case AUTO_SLEEP_STOPPED, MEMORY_SLEEP_STARTED, MEMORY_SLEEP_COMPLETED, MEMORY_SLEEP_FAILED, MEMORY_RETRIEVAL_COMPLETED ->

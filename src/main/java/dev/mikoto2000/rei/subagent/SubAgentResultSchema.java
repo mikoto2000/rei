@@ -61,6 +61,12 @@ public final class SubAgentResultSchema {
   }
   public java.util.List<com.networknt.schema.Error> validate(JsonNode node) { return compiled.validate(node); }
   public String json() { return json; }
+  /** Conditions constrain a subset of root result fields; each specified value must satisfy its schema. */
+  public java.util.List<com.networknt.schema.Error> validateConditions(JsonNode conditions) {
+    var schema=new SubAgentResultParser().parse(json).deepCopy();
+    if(schema.isObject())((tools.jackson.databind.node.ObjectNode)schema).remove("required");
+    return new SubAgentResultSchema(schema).validate(conditions);
+  }
   private static IllegalArgumentException invalid() {
     return new IllegalArgumentException("resultSchema: missing, unsafe, oversized or invalid Draft 2020-12 schema (external references are disabled)");
   }

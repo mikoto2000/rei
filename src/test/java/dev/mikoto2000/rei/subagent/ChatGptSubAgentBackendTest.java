@@ -17,6 +17,18 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
 class ChatGptSubAgentBackendTest {
+  @Test void sendLimitFailureIsPublishedToTheParentRunWithItsCause() throws Exception {
+    Files.writeString(root.resolve("a.txt"),"a".repeat(140000));
+    Files.writeString(root.resolve("b.txt"),"b".repeat(140000));
+    runs.register(owner);runs.transition(owner.runId(),RunStatus.RUNNING,null);
+    var receipt=backend.run(request(List.of("a.txt","b.txt"),"{\"decision\":\"accept\"}"),owner,false,mock(LlmCallReservation.class));
+    assertEquals(ChatGptException.Code.SEND_LIMIT,receipt.error());
+    var events=org.mockito.ArgumentCaptor.forClass(AgentEvent.class);verify(publisher,atLeastOnce()).publish(events.capture());
+    var failure=events.getAllValues().stream().filter(e->e.type()==AgentEventType.SUBAGENT_FAILED).findFirst().orElseThrow();
+    assertEquals(owner.runId(),failure.runId());
+    assertTrue(((SubAgentLifecyclePayload)failure.payload()).failureReason().contains("SEND_LIMIT"));
+    verifyNoInteractions(client);
+  }
   @TempDir Path root;
   PlanClient client;
   ToolPermissionGuard permissions;

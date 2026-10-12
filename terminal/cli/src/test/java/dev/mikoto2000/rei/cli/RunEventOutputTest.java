@@ -6,6 +6,10 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class RunEventOutputTest {
+  @Test void delegatedFailureDisplaysItsCauseAsReadableText() throws Exception {
+    output.accept("subagent.failed",BackendClient.JSON.readTree("{\"agentId\":\"reviewer\",\"status\":\"FAILED\",\"subAgentRunId\":\"child\",\"failureReason\":\"SEND_LIMIT: 資料を分割してください。\"}"));
+    assertEquals(List.of("[subagent] reviewer FAILED [child]","[subagent] 原因: SEND_LIMIT: 資料を分割してください。"),lines);
+  }
   private final List<String> lines = new ArrayList<>();
   private final RunEventOutput output = new RunEventOutput(lines::add);
 

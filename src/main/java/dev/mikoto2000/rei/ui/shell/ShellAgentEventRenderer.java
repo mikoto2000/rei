@@ -116,6 +116,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       closeThinkingLine();
       output.println("[subagent] " + child.agentId() + " " + child.status().toLowerCase(java.util.Locale.ROOT)
           + " (" + formatSeconds(child.duration()) + " s)" + " [" + child.subAgentRunId() + "]");
+      if(child.failureReason()!=null)output.println("[subagent] 原因: "+dev.mikoto2000.rei.event.CredentialRedactor.redact(child.failureReason()));
       output.flush();
       return;
     }

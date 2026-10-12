@@ -43,6 +43,7 @@ public final class DelegationArguments {
       throw new IllegalArgumentException("Invalid local delegation arguments: omit accountRef, modelId, sourceRefs, expectedOutput, constraints and completionCriteria; put target files and output requirements in task/context");
     if (!local && (context != null || !sources || expected == null))
       throw new IllegalArgumentException("Invalid external delegation arguments: omit context and provide nonempty sourceRefs and expectedOutput");
+    if(!local)ExpectedOutputConditions.validate(expected,null);
   }
   private static String text(JsonNode request, String field) {
     var value = request.path(field);

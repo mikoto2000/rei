@@ -53,6 +53,11 @@ final class RunEventOutput {
   }
 
   private void renderNotice(String type, JsonNode payload) {
+    if("subagent.failed".equals(type)) {
+      output.accept("[subagent] " + payload.path("agentId").asText() + " " + payload.path("status").asText()+" ["+payload.path("subAgentRunId").asText()+"]");
+      output.accept("[subagent] 原因: " + payload.path("failureReason").asText("失敗理由がありません。返却結果を確認してください。"));
+      return;
+    }
     if ("attention.required".equals(type)) {
       output.accept("[attention] " + payload.path("kind").asText());
       payload.path("message").asText().lines().forEach(output);

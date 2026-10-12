@@ -31,6 +31,8 @@ public final class DelegationToolPermissionResolver {
       var definition=registry.getObject().findById(request.path("agent").asString())
           .orElseThrow(()->new IllegalArgumentException("Invalid delegation arguments: unavailable agent"));
       childPolicy.getObject().validate(definition.requestedTools());
+      String backend=DelegationArguments.optional(request.path("backendId").asString(""));
+      if(backend!=null && !backend.equals("local"))ExpectedOutputConditions.validate(request.path("expectedOutput").asString(),definition.resultSchema());
     }
   }
   public Set<ActionCapability> resolve(String tool, String input,

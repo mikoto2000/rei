@@ -41,6 +41,15 @@ class DelegationToolPermissionTest {
     assertEquals(Set.of(ActionCapability.READ),policy.capabilities("delegateTask",input));
     assertDoesNotThrow(()->guard().check("delegateTask",input,owner(AgentRunContext.Mode.EXCLUSIVE,"session")));
   }
+  @Test void expectedOutputTemplateIsRejectedBeforeApprovalCreationOrConsumption() {
+    var original=definition("reviewer",List.of("readMultiFile"));
+    var schema=SubAgentResultSchema.load(Path.of("."),"classpath:/subagents/schemas/reviewer-result.schema.json");
+    when(registry.findById("reviewer")).thenReturn(Optional.of(new SubAgentDefinition(original.id(),original.name(),original.description(),original.systemPrompt(),original.requestedTools(),original.model(),original.maxSteps(),original.timeout(),original.source(),schema)));
+    var repository=mock(ToolApprovalRepository.class);var guard=guard();guard.setApprovals(repository);
+    String input="{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"chatgpt-plan\",\"accountRef\":\"default\",\"modelId\":\"gpt-6.1-sol\",\"sourceRefs\":[\"docs/design.md\"],\"expectedOutput\":\"{\\\"summary\\\":\\\"string\\\"}\"}";
+    var error=assertThrows(IllegalArgumentException.class,()->guard.check("delegateTask",input,owner(AgentRunContext.Mode.EXCLUSIVE,"session")));
+    assertTrue(error.getMessage().contains("exact-match"));verifyNoInteractions(repository);
+  }
   @Test void invalidArgumentsNeverCreateOrConsumeApprovalEvenWithoutADenyList() {
     policy=new ToolPermissionPolicy(new ToolPermissionProperties(true,Set.of(),Set.of(),Map.of()));
     var repository=mock(ToolApprovalRepository.class);var guard=guard();guard.setApprovals(repository);

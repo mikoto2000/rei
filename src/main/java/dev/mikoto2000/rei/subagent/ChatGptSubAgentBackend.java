@@ -172,7 +172,9 @@ public final class ChatGptSubAgentBackend {
     if(execution.enabled() && role.maxSteps()<=execution.refinementRounds())
       throw ChatGptException.of(PERMISSION_DENIED);
     var parser = new SubAgentResultParser();
-    var expected = parser.parse(request.expectedResult());
+    tools.jackson.databind.JsonNode expected;
+    try {expected=ExpectedOutputConditions.validate(request.expectedResult(),role.resultSchema());}
+    catch(IllegalArgumentException invalid){throw ChatGptException.of(VALIDATION_FAILED);}
     if (!expected.isObject() || expected.isEmpty()) throw ChatGptException.of(VALIDATION_FAILED);
     if (!CredentialRedactor.redact(request.task()).equals(request.task()))
       throw ChatGptException.of(PERMISSION_DENIED);
@@ -400,7 +402,8 @@ public final class ChatGptSubAgentBackend {
                 true,
                 request.modelId(),
                 usage,
-                Math.max(0, Duration.between(started, clock.instant()).toMillis()));
+                Math.max(0, Duration.between(started, clock.instant()).toMillis()),
+                state==State.COMPLETED?null:failureSummary(state,error,errors),owner);
           }
         }
       } finally {
@@ -570,8 +573,25 @@ public final class ChatGptSubAgentBackend {
       String model,
       Integer usage,
       long duration) {
-    publisher.publish(
-        events
+    publish(parent,id,role,state,terminal,model,usage,duration,null);
+  }
+  static String failureSummary(State state,dev.mikoto2000.rei.chatgpt.ChatGptException.Code error,List<ValidationError> errors) {
+    String code=error==null?state.name():error.name();
+    String paths=errors.stream().limit(8).map(e->dev.mikoto2000.rei.event.CredentialRedactor.redact(e.path()).replaceAll("[\\p{Cntrl}]"," "))
+        .map(p->p.length()>160?p.substring(0,160):p).collect(java.util.stream.Collectors.joining(", "));
+    String advice=switch(code) {
+      case "SEND_LIMIT" -> "送信サイズ上限を超えています。資料を小さなグループに分割してください。";
+      case "VALIDATION_FAILED" -> "結果のスキーマ・完全一致条件・引用の検証に失敗しました。";
+      case "PERMISSION_DENIED" -> "権限、委譲先の許可設定、送信対象資料を確認してください。";
+      default -> "返却結果の error と状態を確認してください。結果不明の場合は自動再実行しないでください。";
+    };
+    return code+": "+advice+(paths.isEmpty()?"":" 検証箇所: "+paths);
+  }
+  private void publish(String parent,String id,String role,State state,boolean terminal,String model,Integer usage,long duration,String reason) {
+    publish(parent,id,role,state,terminal,model,usage,duration,reason,AgentRunScope.current());
+  }
+  private void publish(String parent,String id,String role,State state,boolean terminal,String model,Integer usage,long duration,String reason,AgentRunContext eventOwner) {
+    var event=events
             .subAgentLifecycle(
                 terminal
                     ? (state == State.COMPLETED
@@ -584,10 +604,13 @@ public final class ChatGptSubAgentBackend {
                 "ChatGPT plan usage ("+backendId+")",
                 state.name(),
                 duration,
-                terminal && state != State.COMPLETED ? state.name() : null,
+                terminal && state != State.COMPLETED ? (reason==null?state.name():reason) : null,
                 backendId,
                 model,
                 usage)
-            .withOwnership(AgentRunScope.current()));
+            .withOwnership(eventOwner);
+    if(terminal && eventOwner!=null)event=new AgentEvent(event.id(),event.sequence(),event.timestamp(),event.type(),event.version(),
+        event.sessionId(),event.turnId(),eventOwner.runId(),event.correlationId(),event.parentEventId(),event.payload(),event.projectId());
+    publisher.publish(event);
   }
 }
