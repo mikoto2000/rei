@@ -76,6 +76,8 @@ public class LlmChatClientProvider {
     contextHistory = history;
     if (properties.isEnabled()) { contextAssembler = assembler; rawResultTools = rawTools; }
   }
+  private ObjectProvider<dev.mikoto2000.rei.dot.DotTools> dotTools;
+  @org.springframework.beans.factory.annotation.Autowired void setDotTools(ObjectProvider<dev.mikoto2000.rei.dot.DotTools> tools){dotTools=tools;}
   private dev.mikoto2000.rei.externalagent.ExternalAgentTools externalAgentTools;
   private dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService externalDelegation;
   @org.springframework.beans.factory.annotation.Autowired
@@ -294,6 +296,7 @@ public class LlmChatClientProvider {
       builder.defaultTools(toolCallbackProvider);
     }
     if (LlmFeature.CHAT.equals(feature) && externalAgentTools != null) builder.defaultTools((Object[]) externalAgentTools.callbacks());
+    if(LlmFeature.CHAT.equals(feature)&&dotTools!=null&&dotTools.getIfAvailable()!=null)builder.defaultToolCallbacks(java.util.Arrays.asList(dotTools.getObject().callbacks()));
     if (LlmFeature.CHAT.equals(feature) && slackAgentTools != null && slackAgentTools.getIfAvailable()!=null) builder.defaultTools((Object[]) slackAgentTools.getObject().callbacks());
     if (LlmFeature.CHAT.equals(feature) && subAgentTools != null && subAgentTools.getIfAvailable() != null) {
       builder.defaultTools(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(

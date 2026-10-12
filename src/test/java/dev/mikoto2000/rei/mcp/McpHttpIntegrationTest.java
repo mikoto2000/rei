@@ -40,6 +40,8 @@ class McpHttpIntegrationTest {
     @Bean static org.springframework.context.support.PropertySourcesPlaceholderConfigurer placeholders(){return new org.springframework.context.support.PropertySourcesPlaceholderConfigurer();}
     @Bean Clock clock(){return Clock.systemUTC();}
 
+    @Bean dev.mikoto2000.rei.dot.DotRequestRepository dotRequests(@Value("${rei.data-dir}") String root,Clock clock){return new dev.mikoto2000.rei.dot.DotRequestRepository(Path.of(root),clock);}
+    @Bean dev.mikoto2000.rei.dot.DotMcpTools dotTools(dev.mikoto2000.rei.dot.DotRequestRepository repo,ProjectRegistry projects){return new dev.mikoto2000.rei.dot.DotMcpTools(repo,projects.list().stream().map(ProjectContext::id).collect(java.util.stream.Collectors.toSet()),true);}
     @Bean ProjectRegistry projects(@Value("${rei.data-dir}") String root){return new ProjectRegistry(Path.of(root,"projects.json"));}
     @Bean AgentEventBus bus(){return new InMemoryAgentEventBus();}
     @Bean AgentEventFactory events(Clock clock){return new AgentEventFactory(clock);}
@@ -97,8 +99,13 @@ class McpHttpIntegrationTest {
       }
       var transport=HttpClientStreamableHttpTransport.builder("http://127.0.0.1:"+port).endpoint("/mcp").build();
       try(var client=McpClient.sync(transport).requestTimeout(Duration.ofSeconds(5)).build()) {
-        assertNotNull(client.initialize());assertEquals(new HashSet<>(McpTools.NAMES),new HashSet<>(client.listTools().tools().stream().map(McpSchema.Tool::name).toList()));
+        assertNotNull(client.initialize());var expected=new HashSet<>(McpTools.NAMES);expected.addAll(dev.mikoto2000.rei.dot.DotMcpTools.NAMES);assertEquals(expected,new HashSet<>(client.listTools().tools().stream().map(McpSchema.Tool::name).toList()));
         assertFalse(client.callTool(new McpSchema.CallToolRequest("rei_projects_list",Map.of())).isError());
+        String dot=(String)context.getBean(dev.mikoto2000.rei.dot.DotRequestRepository.class).create(p.id(),"session",null,root.toString(),Map.of("category","TECH_RESEARCH","instruction","Dummy","acceptance_criteria",List.of()),Duration.ofHours(1)).get("request_id");
+        assertFalse(client.callTool(new McpSchema.CallToolRequest("rei_requests_list",Map.of())).isError());
+        assertFalse(client.callTool(new McpSchema.CallToolRequest("rei_request_get",Map.of("request_id",dot))).isError());
+        String claim=UUID.randomUUID().toString();assertFalse(client.callTool(new McpSchema.CallToolRequest("rei_request_claim",Map.of("request_id",dot,"claim_id",claim))).isError());
+        var receipt=client.callTool(new McpSchema.CallToolRequest("rei_request_result_submit",Map.of("request_id",dot,"claim_id",claim,"submission_id",UUID.randomUUID().toString(),"outcome","COMPLETED","summary","Fixed short report")));assertFalse(receipt.isError());assertEquals(true,((Map<?,?>)receipt.structuredContent()).get("persisted"));
         assertFalse(client.callTool(new McpSchema.CallToolRequest("rei_context_get",Map.of("project_id",p.id()))).isError());
         var submitted=client.callTool(new McpSchema.CallToolRequest("rei_task_submit",Map.of("project_id",p.id(),"instruction","review","request_id","sdk-key")));assertFalse(submitted.isError(),submitted.toString());
         var data=(Map<String,Object>)submitted.structuredContent();String run=(String)data.get("run_id");

@@ -104,6 +104,18 @@ public class ExternalConfigFileService {
               enabled: false
 
         rei:
+          dot-delegation:
+            enabled: ${REI_DOT_DELEGATION_ENABLED:false}
+            parent-llm-enabled: ${REI_DOT_PARENT_LLM_ENABLED:false}
+            auto-resume: false
+            allowed-projects: ${REI_DOT_ALLOWED_PROJECTS:}
+            allowed-categories: TECH_RESEARCH,COMPARISON,REVIEW
+            active-limit: 2
+            queue-limit: 8
+            default-timeout: 1h
+            claim-lease: 30m
+            result-retention-days: 30
+            request-retention-days: 90
           mcp-server:
             enabled: ${REI_MCP_SERVER_ENABLED:false}
             port: ${REI_MCP_SERVER_PORT:8091}

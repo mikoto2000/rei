@@ -1,0 +1,18 @@
+# Dot委譲のセキュリティ境界
+MCPは127.0.0.1限定、既存Host/Origin検証、OAuth2なし、Secure MCP Tunnel想定、principal local-mcp固定。Web APIは既存Bearer認証を維持。Tunnel設定やキーは変更しない。
+
+INBOX_READ/INBOX_CLAIM/INBOX_RESULT_WRITEは固定4ツールだけの業務Capability。任意ファイル編集、Shell、Git、設定変更、Run再開の許可ではない。既存READ_ONLYへの特例を追加しない。requestDotResearchにはNETWORK_WRITEとEXTERNAL_SIDE_EFFECTが必須で、管理者がREADへ再分類しても弱められない。登録済みDotToolCallbackのみが専用snapshot権限検査を利用できる。
+
+認証なしのローカル入口では、ローカルプロセスが許可Projectの依頼を読んだり、先にclaimして偽の結果を送れる。Tunnelやclaim_idは本人の署名を証明しない。このMVPはこれを排除できない。結果保存を完了扱いにせず、人間の独立検証を必須にし、MCPからverify/resumeを提供しない。端末上の悪意ある同権限プロセスからの完全隔離は保証しない。
+
+公開snapshotは必要なinstruction、context summary、期待成果、制約、criteriaのみ。会話全文、内部checkpoint、root絶対パス、プロンプト/推論履歴、トークン、Bearer、環境変数を自動添付しない。共有CredentialRedactorとローカル絶対パス除去を使い、未知のstructured reasoningフィールドを拒否する。自由文に未知の秘密・推論を書くことを完全には検出できないため、依頼者・結果提供者は公開内容を確認する。識別子やfingerprintだけを監査し、依頼本文・秘密をログに出さない。
+
+結果は構造・型・サイズ・URL scheme・criteria/evidence indexを検査する。URLは保存する参照であり、れいが自動fetchしない。外部のSATISFIEDは自己申告で、ローカル検証と区別する。外部文によるShell実行、パッチ適用、Git操作、設定変更を行わない。再開RunのREAD_ONLY/MCP権限がPrompt Injectionによる副作用やBot間ループを遮断する。元の指示や既存所有者情報を外部結果で変更できない。
+
+親委譲は人間のWeb/Shell受付時にProject・Session・Run・categoryを固定する。生成文や引用文から人間許可を作らない。サブエージェント、MCP、音声、READ_ONLY、Goal予約は拒否する。明示入力判定は保守的なheuristicで、誤検出を避けるため拒否することがある。許可はTTL・件数上限を持ち再起動で失効する。
+
+claim・result・取消は同一writerで競合制御。lease切れはUNKNOWNで、自動再配布しない。重複submissionは不変receipt。保存応答が失われても同じIDを再送し、新しいIDで実行をやり直さない。親RunがWAITINGでなければ新規claim/結果を受け付けない。過去のclaim/receipt再送は履歴応答だけを返す。
+
+再開は人間確認と完全なcriteria検証後のみ。Project rootの登録・実在・実パス、Session、親Run WAITING、checkpoint WAITING・revision・lease・未知操作を確認する。変更・終了・UNKNOWN時は無条件再開しない。再開intentを先に永続保存し、既存schedulerの固定Run IDを使う。中断で実行が不明なintentはUNKNOWNとして自動再実行しない。
+
+MVPは手動のみ。auto-resume=trueを受け付けない。既存管理Goalの予算予約/自動継続を迂回しないためGoal親委譲も拒否する。この制限を既存通常resumeで自動回避しない。

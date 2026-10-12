@@ -31,7 +31,9 @@ public class RunExecutionContext {
   public List<org.springframework.ai.chat.messages.Message> takeResumeMessages(){var saved=resumeMessages;resumeMessages=List.of();return saved;}
   public OutputLimitRunBudget.Snapshot budgetSnapshot(){return budget.snapshot();}
   public boolean hasParentReservation(){return budget.sharedLlmReservation()!=null;}
-  public void suspendIfWaiting(List<org.springframework.ai.chat.messages.Message> history){checkActive();if(continuation!=null&&continuation.suspend(this,history))throw new dev.mikoto2000.rei.core.chat.RunWaitingException();}
+  private java.util.function.Predicate<List<org.springframework.ai.chat.messages.Message>> dotWait;
+  public void setDotWait(java.util.function.Predicate<List<org.springframework.ai.chat.messages.Message>> wait){this.dotWait=wait;}
+  public void suspendIfWaiting(List<org.springframework.ai.chat.messages.Message> history){checkActive();if(dotWait!=null&&dotWait.test(history))throw new dev.mikoto2000.rei.core.chat.RunWaitingException();if(continuation!=null&&continuation.suspend(this,history))throw new dev.mikoto2000.rei.core.chat.RunWaitingException();}
   public static final String KEY = RunExecutionContext.class.getName();
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
   public void setToolPermissionGuard(dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {this.permissions=permissions;}

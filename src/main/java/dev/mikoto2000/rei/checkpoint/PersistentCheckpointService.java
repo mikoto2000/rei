@@ -142,8 +142,15 @@ public class PersistentCheckpointService implements AutoCloseable {
     return resume(project,task,source,null);
   }
   public ResumeResult resume(String project,String task,AgentRunContext.RequestSource source,Long expectedRevision) {
+    return resumeChecked(project,task,source,expectedRevision,null,null,null);
+  }
+  /** Narrow continuation for a manually verified Dot request; fixed scheduler Run and read-only authority. */
+  public ResumeResult resumeForDot(String project,String task,long revision,String run,String previousRun,String untrustedSummary) {
+    return resumeChecked(project,task,AgentRunContext.RequestSource.MCP,revision,run,previousRun,untrustedSummary);
+  }
+  private ResumeResult resumeChecked(String project,String task,AgentRunContext.RequestSource source,Long expectedRevision,String assignedRun,String expectedPrevious,String untrustedSummary) {
     if(!settings.isEnabled())throw new CheckpointException(CheckpointException.Code.DISABLED,"Checkpoint saving is disabled");
-    CheckpointReconciler.active();var state=get(project,task);String run=UUID.randomUUID().toString();
+    CheckpointReconciler.active();var state=get(project,task);String run=assignedRun==null?UUID.randomUUID().toString():assignedRun;
     if(!repository.acquire(project,task,run))throw new CheckpointException(CheckpointException.Code.TASK_BUSY,"Task already executing");
     boolean submitted=false;
     try {
@@ -151,9 +158,19 @@ public class PersistentCheckpointService implements AutoCloseable {
       state=get(project,task);
       if(expectedRevision!=null&&state.revision()!=expectedRevision)throw new dev.mikoto2000.rei.application.state.OperationConflictException();
       var result=reconciler.check(state,false);
+      if(expectedPrevious!=null){
+        var registry=runs.getIfAvailable();if(registry==null)throw new IllegalStateException("Dot continuation requires persistent Run tracking");
+        var original=registry.get(expectedPrevious);
+        if(original.status()!=RunStatus.WAITING||!original.context().projectId().equals(project)||!original.context().conversationId().equals(state.sessionId())||!original.context().projectRoot().toString().equals(state.projectRoot()))throw new IllegalStateException("Dot parent ownership changed");
+      }
+      if(expectedPrevious!=null&&(!state.runId().equals(expectedPrevious)||!state.status().equals("WAITING")||state.mode()!=AgentRunContext.Mode.EXCLUSIVE||!result.automaticResumeSafe()))throw new IllegalStateException("Dot continuation owner or reconciliation changed");
       if(!repository.diagnostics(project,task).isEmpty())throw new CheckpointException(CheckpointException.Code.RECONCILIATION_REQUIRED,"Damaged or incompatible latest checkpoint; inspect before resume");
       if("BLOCKED".equals(result.decision()))throw new CheckpointException(CheckpointException.Code.RECONCILIATION_REQUIRED,String.join("; ",result.blockers()));
       CheckpointReconciler.active();var next=state.resume(run);var fields=repository.fields(next);fields.put("nextAction",result.nextAction());fields.put("reconciliation",result);
+      if(expectedPrevious!=null){
+        fields.put("mode",AgentRunContext.Mode.READ_ONLY);fields.put("voiceInput",false);
+        var evidence=new ArrayList<>(state.evidence());evidence.add(new Evidence("EXTERNAL_RESULT_UNTRUSTED",bounded(untrustedSummary,4000),null,expectedPrevious,null));fields.put("evidence",evidence);
+      }
       next=repository.save(repository.fields(fields),state.revision(),"resume:"+run);
       active.put(run,next);
       var context=new AgentRunContext(run,next.sessionId(),Path.of(next.projectRoot()),project,source,next.mode(),next.voiceInput());

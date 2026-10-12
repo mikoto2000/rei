@@ -45,6 +45,8 @@ public final class ShellConversationService {
       return cancelled;
     }
   }
+  private org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.dot.DotDelegationService> dotDelegations;
+  @org.springframework.beans.factory.annotation.Autowired public void setDotDelegations(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.dot.DotDelegationService> dots){this.dotDelegations=dots;}
   private final java.time.Clock clock;
   private final ProjectService projects;
   private final SessionLifecycle lifecycle;
@@ -78,6 +80,7 @@ public final class ShellConversationService {
             var captureStore=captures;var client=projects.currentClient();
       var context = gateway.submit(input,mode,run->{
         rememberOwner(client,run);
+        if(dotDelegations!=null)dotDelegations.ifAvailable(dot->dot.authoriseHumanInput(run,message));
         if(captureStore!=null)captureStore.accept(client,run.conversationId(),input.inputId().toString(),run.runId());
       },run->{if(captureStore!=null)captureStore.startFailed(run.runId());});
       projects.selectSession(context.conversationId());

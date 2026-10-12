@@ -98,6 +98,8 @@ public class AiConfiguration {
       dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties properties) {
     if (properties.isEnabled()) { contextAssembler = assembler; contextHistory = history; rawResultTools = rawTools; }
   }
+  private ObjectProvider<dev.mikoto2000.rei.dot.DotTools> dotTools;
+  @org.springframework.beans.factory.annotation.Autowired void setDotTools(ObjectProvider<dev.mikoto2000.rei.dot.DotTools> tools){dotTools=tools;}
   private dev.mikoto2000.rei.externalagent.ExternalAgentTools externalAgentTools;
   private dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService externalDelegation;
   @org.springframework.beans.factory.annotation.Autowired
@@ -206,6 +208,7 @@ public class AiConfiguration {
 
     // Lazy callback avoids a bean cycle through the model provider during ChatClient construction.
     if (externalAgentTools != null) builder.defaultTools((Object[]) externalAgentTools.callbacks());
+    if (dotTools!=null&&dotTools.getIfAvailable()!=null)builder.defaultToolCallbacks(java.util.Arrays.asList(dotTools.getObject().callbacks()));
     if (subAgentTools != null) builder.defaultTools(new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools),
         new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"delegateTasks"),
         new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools,"listDurableSubAgents"),

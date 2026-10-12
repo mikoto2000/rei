@@ -16,6 +16,8 @@ import dev.mikoto2000.rei.application.session.SessionRepository;
 @Component
 @EnableConfigurationProperties(AgentSchedulerProperties.class)
 public class AgentScheduleDispatcher {
+  private dev.mikoto2000.rei.dot.DotResumeService dotResumes;
+  @Autowired(required=false) public void configureDotResumes(dev.mikoto2000.rei.dot.DotResumeService service){dotResumes=service;}
   private RunContinuation continuations;
   @Autowired(required=false) public void setContinuations(RunContinuation continuations){this.continuations=continuations;}
   @FunctionalInterface interface Gateway {
@@ -114,7 +116,10 @@ public class AgentScheduleDispatcher {
         },result.success()?result.text():result.errorMessage());}
         finally {release(owned);}
       };
-      if(goalWaits!=null&&goalWaits.handles(owned))goalWaits.dispatch(owned,completed);else gateway.dispatch(owned,completed);
+      if(owned.task().action().startsWith("dot-resume:")){
+        if(dotResumes==null)throw new IllegalStateException("Dot continuation service unavailable");
+        completed.accept(dotResumes.dispatch(owned));
+      }else if(goalWaits!=null&&goalWaits.handles(owned))goalWaits.dispatch(owned,completed);else gateway.dispatch(owned,completed);
     } catch(RuntimeException error) {
       try {if(claim!=null&&schedules.activeClaim(claim))schedules.finish(claim,"FAILED",error.getMessage());}
       finally {if(claim==null)busy.set(false);else release(claim);}

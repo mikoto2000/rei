@@ -13,6 +13,8 @@ public final class ChatSubmitService {
   private final SessionLifecycle lifecycle;
   private final BiConsumer<AgentRunContext, String> dispatch;
   private final boolean concurrentEnabled;
+  private org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.dot.DotDelegationService> dotDelegations;
+  @org.springframework.beans.factory.annotation.Autowired public void setDotDelegations(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.dot.DotDelegationService> dots){this.dotDelegations=dots;}
   private dev.mikoto2000.rei.llm.capture.CaptureStore captures;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   public void setCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore store){captures=store;}
@@ -54,6 +56,7 @@ public final class ChatSubmitService {
       sessions.remember(context.conversationId(), project.id());
       try {
         runs.register(context);
+        if(dotDelegations!=null)dotDelegations.ifAvailable(dot->dot.authoriseHumanInput(context,message));
         if(captures!=null&&clientId!=null)captures.accept("cli:"+clientId,context.conversationId(),key==null?context.runId():key,context.runId());
         dispatch.accept(context, message);
       } catch (RuntimeException | Error error) {
