@@ -160,11 +160,14 @@ public class ReiApplication {
     application.setDefaultProperties(ExternalConfigSupport.defaultProperties());
     dev.mikoto2000.rei.web.WebApplication.configure(application, System.getenv("REI_API_KEY"));
     ConfigurableApplicationContext context = application.run(args);
-    if (mode == dev.mikoto2000.rei.launcher.BackendMode.SERVER) return;
+    boolean consoleExit=context.getEnvironment().getProperty(ForegroundConsole.PROPERTY,Boolean.class,false);
+    if (mode == dev.mikoto2000.rei.launcher.BackendMode.SERVER && !consoleExit) return;
     int exitCode;
     try {
       var app = context.getBean(ReiApplication.class);
-      if(backend) {
+      if(backend && consoleExit) {
+        ForegroundConsole.run(context);
+      }else if(backend) {
         var stopped=new java.util.concurrent.CountDownLatch(1);
         context.addApplicationListener((org.springframework.context.ApplicationListener<org.springframework.context.event.ContextClosedEvent>)e->stopped.countDown());
         try{stopped.await();}catch(InterruptedException interrupted){Thread.currentThread().interrupt();}
@@ -277,6 +280,7 @@ public class ReiApplication {
           }
 
         } catch (UserInterruptException e) {
+          if(environment!=null&&environment.getProperty(ForegroundConsole.PROPERTY,Boolean.class,false))break;
           // Ctrl-C でその行だけキャンセル
         } catch (EndOfFileException e) {
           // Ctrl-D (EOF) は即時終了する
@@ -393,7 +397,13 @@ public class ReiApplication {
     Attributes originalAttributes = terminal.enterRawMode();
     try {
       var future = commandExecutor.submit(() -> executeWithOutputPolicy(cmd, args));
-      escCancellationMonitor.await(future, timeoutMillis -> terminal.reader().read(timeoutMillis), commandCancellationService::cancel);
+      try {
+        boolean consoleExit=environment!=null&&environment.getProperty(ForegroundConsole.PROPERTY,Boolean.class,false);
+        escCancellationMonitor.await(future, timeoutMillis -> consoleExit
+            ?ForegroundConsole.readCommandInput(terminal.reader(),timeoutMillis):terminal.reader().read(timeoutMillis), commandCancellationService::cancel);
+      }catch(UserInterruptException|EndOfFileException exit) {
+        commandCancellationService.cancel();future.cancel(true);throw exit;
+      }
     } finally {
       terminal.setAttributes(originalAttributes);
       if (!chatResponseNarrator.wasNarrated() && commandCompletionNotificationPolicy.shouldNotify(args)) {

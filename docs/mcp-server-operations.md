@@ -17,7 +17,9 @@
 
 MCP用のenabled/port/allowed-projectsは上記環境変数またはrei.mcp-server.*設定で指定する。起動中のBackendに重ねてこのコマンドを実行しない。
 
-foreground起動ならCtrl+C、常駐起動なら既存Backendの停止方法を使う。設定を無効化して再起動すると追加listenerは作成されない。設定変更に再起動が必要。
+`start.bat`は端末にBackendの寿命を連動させる。通常Shellと`--mode=server`のどちらもCtrl+D/Ctrl+Cで終了し、同じJVMのWeb/MCP listenerとストレージ所有権を解放する。サーバーモードでは入力ストリームのEOFでも終了する。終了処理中は既存のgraceful shutdownの待ち時間がかかる場合がある。
+
+`start.bat`が指定する`-Drei.console-exit.enabled=true`はforeground用である。直接Javaで起動するバックグラウンドBackendや軽量CLIからの常駐起動には指定しない。軽量CLIを閉じても共有Backendは停止しない。常駐起動の停止には既存Backendの停止方法を使う。設定を無効化して再起動すると追加listenerは作成されない。設定変更に再起動が必要。
 
 ## トラブルシューティング
 
