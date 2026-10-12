@@ -51,6 +51,11 @@ class ToolPermissionPolicyTest {
     assertEquals(PermissionDecision.DENY,p.evaluate("unknownMcpTool"));
     assertEquals(PermissionDecision.REQUIRE_APPROVAL,p.evaluate("searchKnowledge"));
   }
+  @Test void rawToolResultReadIsAllowedByDefaultEnforcedProfile() {
+    var p=new ToolPermissionPolicy(new ToolPermissionProperties(true,null,null,null));
+    assertEquals(PermissionDecision.AUTO_APPROVE,p.evaluate("readRawToolResult"));
+    assertTrue(ToolPermissionPolicy.intrinsicallyReadOnly("readRawToolResult"));
+  }
   @Test void eventStorageFailureStillPreventsExecution() {
     var guard=new ToolPermissionGuard(policy(Set.of(),Set.of()),new AgentEventFactory(Clock.systemUTC()),
         event->{throw new IllegalStateException("storage failure");});
