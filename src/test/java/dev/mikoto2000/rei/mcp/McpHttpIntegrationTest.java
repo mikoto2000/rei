@@ -83,6 +83,12 @@ class McpHttpIntegrationTest {
       assertEquals(403,status("http://127.0.0.1:"+port+"/mcp","{}","https://evil.test",null));
       assertEquals(403,status("http://localhost:"+port+"/mcp","{}",null,null));
       assertEquals(400,status("http://127.0.0.1:"+port+"/mcp","{",null,null));
+      var tunnelInitialize=HttpRequest.newBuilder(URI.create("http://127.0.0.1:"+port+"/mcp"))
+          .timeout(Duration.ofSeconds(5)).header("Content-Type","application/json")
+          .header("Accept","application/json, text/event-stream").header("X-Forwarded-Client-Cert","untrusted tunnel metadata")
+          .POST(HttpRequest.BodyPublishers.ofString("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"tunnel-test\",\"version\":\"1\"}}}"))
+          .build();
+      assertEquals(200,HttpClient.newHttpClient().send(tunnelInitialize,HttpResponse.BodyHandlers.discarding()).statusCode());
       var addresses=Collections.list(NetworkInterface.getNetworkInterfaces()).stream().filter(n->{try{return n.isUp();}catch(SocketException ignored){return false;}}).flatMap(n->Collections.list(n.getInetAddresses()).stream())
           .filter(a->a instanceof Inet4Address&&a.isSiteLocalAddress()).toList();
       for(var address:addresses) {
