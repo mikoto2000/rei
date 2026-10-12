@@ -8,6 +8,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /** Dedicated connector boundary, applied before authentication and MCP dispatch. */
 public final class McpIngressFilter extends OncePerRequestFilter {
+  private static final String TUNNEL_CERTIFICATE_HEADER="X-Forwarded-Client-Cert";
   private final McpIngressPolicy policy;
   public McpIngressFilter(int port) { policy=new McpIngressPolicy(port); }
   @Override protected void doFilterInternal(HttpServletRequest request,HttpServletResponse response,FilterChain chain)
@@ -19,7 +20,8 @@ public final class McpIngressFilter extends OncePerRequestFilter {
       return;
     }
     boolean forwarded=Collections.list(request.getHeaderNames()).stream()
-        .anyMatch(name->name.equalsIgnoreCase("Forwarded")||name.toLowerCase(java.util.Locale.ROOT).startsWith("x-forwarded-"));
+        .anyMatch(name->!name.equalsIgnoreCase(TUNNEL_CERTIFICATE_HEADER)
+            &&(name.equalsIgnoreCase("Forwarded")||name.toLowerCase(java.util.Locale.ROOT).startsWith("x-forwarded-")));
     if(forwarded || Collections.list(request.getHeaders("Host")).size()!=1
         || Collections.list(request.getHeaders("Origin")).size()>1
         || !policy.allows(request.getRemoteAddr(),request.getLocalAddr(),request.getLocalPort(),
@@ -28,6 +30,17 @@ public final class McpIngressFilter extends OncePerRequestFilter {
     byte[] body=request.getInputStream().readNBytes(65537);
     if(body.length>65536) { response.setStatus(413);return; }
     chain.doFilter(new HttpServletRequestWrapper(request) {
+      // Tunnel certificate metadata is not a credential or a source of network identity.
+      @Override public String getHeader(String name) {
+        return name.equalsIgnoreCase(TUNNEL_CERTIFICATE_HEADER)?null:super.getHeader(name);
+      }
+      @Override public java.util.Enumeration<String> getHeaders(String name) {
+        return name.equalsIgnoreCase(TUNNEL_CERTIFICATE_HEADER)?Collections.emptyEnumeration():super.getHeaders(name);
+      }
+      @Override public java.util.Enumeration<String> getHeaderNames() {
+        return Collections.enumeration(Collections.list(super.getHeaderNames()).stream()
+            .filter(name->!name.equalsIgnoreCase(TUNNEL_CERTIFICATE_HEADER)).toList());
+      }
       @Override public ServletInputStream getInputStream() {
         var input=new ByteArrayInputStream(body);
         return new ServletInputStream() {

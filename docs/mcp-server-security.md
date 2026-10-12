@@ -4,7 +4,7 @@
 
 このMVPは本人専用・認証なしである。127.0.0.1は利用者認証ではない。同じPCのプロセスはMCPを呼び出せる。Host/Originも悪意あるローカルプロセスを認証しない。利用PC・tunnel-client・OpenAI側のアカウントと権限を管理者が信頼できることが前提。
 
-専用Tomcat connectorをIPv4 127.0.0.1に固定する。接続元・接続先・接続先ポート・Hostを検証する。Hostは127.0.0.1:<専用ポート>のみ。Originは欠落または同じhttp originのみ。null/外部origin/重複Host/Origin/Forwarded/X-Forwarded-*を拒否する。DNS rebindingと通常WebポートへのMCP要求を拒否し、MCP専用ポートには通常APIを公開しない。servlet decoded pathも検証する。
+専用Tomcat connectorをIPv4 127.0.0.1に固定する。接続元・接続先・接続先ポート・Hostを検証する。Hostは127.0.0.1:<専用ポート>のみ。Originは欠落または同じhttp originのみ。null/外部origin/重複Host/Origin/Forwarded/X-Forwarded-*を拒否する。ただしSecure MCP Tunnelが送るX-Forwarded-Client-Certだけは認証情報として信用せず、SDKや後続フィルターへ渡す前に破棄する。このヘッダーによって接続元・Host・Originの検査を省略しない。DNS rebindingと通常WebポートへのMCP要求を拒否し、MCP専用ポートには通常APIを公開しない。servlet decoded pathも検証する。
 
 tunnel-clientは上記URLへ直接接続する。Originを転送する構成なら許可originと一致することを実接続で確認する。Origin検証を解除して解決しない。
 
