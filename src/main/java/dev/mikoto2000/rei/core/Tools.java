@@ -684,7 +684,9 @@ public class Tools {
       @param queries 検索条件のリスト。
       Each query may specify charset; otherwise BOM, strict UTF-8, then CP932 are tried.
       @return query ごとの結果。queryIndex で入力順と対応し、読めないファイルは fileErrors に含む。
-      """)
+
+      Example: {"queries":[{"pattern":"class A","baseDir":"src","fixedString":true},{"pattern":"class B","baseDir":"src","fixedString":true}]}
+      """ + dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.BATCHING)
   List<GrepQueryResult> grepMultiQuery(List<GrepQuery> queries) throws IOException, InterruptedException {
     return grepMultiQuery(queries, currentWorkingDirectory());
   }
@@ -1234,7 +1236,9 @@ public class Tools {
       Use this when target paths are already known. If relevant files must first be located, prefer searchAndRead.
       @param files 読み込むファイルのリスト。各要素は path と任意の startLine / endLine を持つ。
       @return ファイルごとの読み込み結果。path で識別できる。
-      """)
+
+      Example: {"files":[{"path":"src/A.java","startLine":1,"endLine":40},{"path":"src/B.java","startLine":1,"endLine":40}]}
+      """ + dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.BATCHING)
   List<ReadFileResult> readMultiFile(List<ReadFileRequest> files) throws IOException {
     return readMultiFile(files, currentWorkingDirectory());
   }
@@ -1428,10 +1432,11 @@ public class Tools {
       Always pass a non-empty files array, even for one file. Put path, content, append, and charset inside each
       files element, not at the top level. append: true appends; append: false or omitted replaces complete contents.
       Use this for full-file writes or appending chunks. For a small edit to existing text, prefer applyTextDiff.
-      Example: {"files":[{"path":"notes.md","content":"More text","append":true,"charset":"UTF-8"}]}
       @param files 書き込むファイルの空でないリスト。各要素に必須の path と content、任意の append と charset を指定する。
       @return ファイルごとの書き込み結果。path で識別できる。
-      """)
+
+      Example: {"files":[{"path":"a.txt","content":"Alpha","append":false,"charset":"UTF-8"},{"path":"b.txt","content":"Beta","append":false,"charset":"UTF-8"}]}
+      """ + dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.BATCHING)
   List<WriteFileResult> writeMultiFile(List<WriteFileRequest> files) throws IOException {
     return writeMultiFile(files, currentWorkingDirectory());
   }
