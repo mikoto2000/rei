@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.core.taskstate;
 import java.util.List;
 
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
 /**
@@ -34,12 +35,16 @@ public class TaskStateTools {
    */
   @Tool(name = "updateTaskState", description = """
       現在の作業目的・進捗・次に行うべきことを更新する。
-      @param goal      現在の目的。新しいタスクを開始する場合は設定する。
-      @param status    状態（IDLE / IN_PROGRESS / COMPLETED / BLOCKED）
-      @param completed 完了した作業単位の追加リスト
-      @param pending   次に行う作業単位の追加リスト
+      status は必須で、IDLE / IN_PROGRESS / COMPLETED / BLOCKED のいずれかを指定する。
+      goal は新しいタスクを開始する場合に指定し、既存タスクの継続では省略できる。
+      completed と pending は文字列の JSON 配列。例: {"status":"IN_PROGRESS","completed":["資料の特定"],"pending":["レビュー委譲","指摘の検証"]}。
+      作業がなければ [] または項目自体を省略する。カンマ区切りの文字列や JSON 配列を文字列化した値は指定しない。
       """)
-  String updateTaskState(String goal, String status, List<String> completed, List<String> pending) {
+  String updateTaskState(
+      @ToolParam(required = false, description = "現在の目的。新しいタスクでは指定し、既存タスクの継続では省略可能。") String goal,
+      @ToolParam(description = "必須。IDLE / IN_PROGRESS / COMPLETED / BLOCKED のいずれか。") String status,
+      @ToolParam(required = false, description = "完了した作業を追加する文字列の JSON 配列。例: [\"資料の特定\",\"設定の確認\"]。空なら [] または省略。文字列化した配列やカンマ区切り文字列は不可。") List<String> completed,
+      @ToolParam(required = false, description = "次に行う作業を追加する文字列の JSON 配列。例: [\"レビュー委譲\",\"指摘の検証\"]。空なら [] または省略。文字列化した配列やカンマ区切り文字列は不可。") List<String> pending) {
     if (status == null || status.isBlank()) {
       return "status は必須です";
     }

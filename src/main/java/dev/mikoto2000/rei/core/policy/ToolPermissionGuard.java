@@ -23,7 +23,7 @@ public class ToolPermissionGuard {
   public void check(String tool,AgentRunContext owner) {
     check(tool,"",owner);
   }
-  public void validateArguments(String tool,String input){policy.validateDelegation(tool,input);}
+  public void validateArguments(String tool,String input){policy.validateArguments(tool,input);}
   /** A one-use approval is never a reusable grant for background read retries. */
   public boolean automaticallyApprovedRead(String tool){return policy.evaluate(tool)==PermissionDecision.AUTO_APPROVE&&policy.capabilities(tool).stream().allMatch(c->c==ActionCapability.READ||c==ActionCapability.NETWORK_READ);}
   public void check(String tool,String input,AgentRunContext owner) {
@@ -46,7 +46,7 @@ public class ToolPermissionGuard {
     restricted |= owner!=null && owner.requestSource()==AgentRunContext.RequestSource.MCP
         && (owner.mode()!=AgentRunContext.Mode.READ_ONLY || !MCP_READ_TOOLS.contains(tool));
     var decision=restricted ? PermissionDecision.DENY : policy.evaluate(tool,input);
-    if(decision!=PermissionDecision.DENY)policy.validateDelegation(tool,input);
+    if(decision!=PermissionDecision.DENY)policy.validateArguments(tool,input);
     // Recognized text is not a calibrated confidence/intent guarantee. Retain the existing
     // deny decision, and require the existing exact-input one-use approval for side effects.
     if(decision==PermissionDecision.AUTO_APPROVE&&owner!=null&&owner.voiceInput()

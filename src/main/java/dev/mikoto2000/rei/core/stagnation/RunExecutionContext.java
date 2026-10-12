@@ -48,6 +48,7 @@ public class RunExecutionContext {
   public void setToolPermissionGuard(dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {this.permissions=permissions;}
   public void validateToolArguments(String name,String input) {
     if(permissions!=null)permissions.validateArguments(name,input);
+    else dev.mikoto2000.rei.core.taskstate.TaskStateArguments.validate(name,input);
   }
   public String argumentCorrection(String callId,String name,dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException error) {
     if(!budget.tryCorrectArguments())throw new ExecutionStoppedException(TOOL_ARGUMENT_REPAIR_EXHAUSTED);

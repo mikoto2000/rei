@@ -165,6 +165,56 @@ class ApprovalContinuationTest {
     assertThrows(ToolPermissionException.class,()->new StagnationChatModel(model).stream(prompt(resumed,tool)).blockLast());
     assertEquals(0,effects.get());assertEquals(0,modelCalls.get());assertEquals("APPROVED",approvals.get(owner.projectId(),id).status());
   }
+  @Test void malformedTaskStateSavedByAnOlderVersionIsRepairedAndRequiresFreshApproval() {
+    String malformed="{\"goal\":\"review\",\"status\":\"IN_PROGRESS\",\"completed\":[],\"pending\":\"レビュー委譲, 指摘の検証\"}";
+    String corrected="{\"goal\":\"review\",\"status\":\"IN_PROGRESS\",\"completed\":[],\"pending\":[\"レビュー委譲\",\"指摘の検証\"]}";
+    var oldPending=new RunContinuation.PendingTools("save progress",List.of(new AssistantMessage.ToolCall("old","function","updateTaskState",malformed)),List.of());
+    var initial=execution();initial.consumeNextLlmCall();
+    // Older versions admitted malformed arguments before requesting approval. Preserve that exact JSON.
+    String oldId=approvals.request("updateTaskState",malformed,owner).id();
+    service.suspendApproval(initial,oldId,List.of(new UserMessage("review")),oldPending);
+    service.decide(owner.projectId(),oldId,true,true);assertTrue(store.claim(oldId));registry.transition("run",RunStatus.RUNNING,null);
+
+    var state=new dev.mikoto2000.rei.core.taskstate.TaskState();
+    var actual=Arrays.stream(org.springframework.ai.tool.method.MethodToolCallbackProvider.builder()
+        .toolObjects(new dev.mikoto2000.rei.core.taskstate.TaskStateTools(state)).build().getToolCallbacks())
+        .filter(tool->tool.getToolDefinition().name().equals("updateTaskState")).findFirst().orElseThrow();
+    var effects=new AtomicInteger();var modelCalls=new AtomicInteger();
+    var tool=callback("updateTaskState",input->{effects.incrementAndGet();assertEquals(corrected,input);return actual.call(input);});
+    var model=new ChatModel(){
+      public ChatResponse call(Prompt p){throw new AssertionError();}
+      public Flux<ChatResponse> stream(Prompt p){
+        if(modelCalls.incrementAndGet()==1) {
+          assertEquals(0,effects.get());assertEquals("IDLE",state.status());assertTrue(state.pending().isEmpty());
+          assertEquals("APPROVED",approvals.get(owner.projectId(),oldId).status());
+          var feedback=p.getInstructions().stream().filter(ToolResponseMessage.class::isInstance)
+              .map(ToolResponseMessage.class::cast).flatMap(message->message.getResponses().stream())
+              .filter(response->response.id().equals("old")).findFirst().orElseThrow().responseData();
+          assertTrue(feedback.contains("INVALID_TOOL_ARGUMENTS"));assertTrue(feedback.contains("pending"));
+          assertTrue(feedback.contains("\"executed\":false"));
+          return Flux.just(new ChatResponse(List.of(new Generation(AssistantMessage.builder()
+              .content("correct the array").toolCalls(List.of(new AssistantMessage.ToolCall("corrected","function","updateTaskState",corrected))).build()))));
+        }
+        assertEquals(1,effects.get());assertEquals("IN_PROGRESS",state.status());
+        assertEquals(List.of("レビュー委譲","指摘の検証"),state.pending());
+        return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("done")))));
+      }
+    };
+    var controlled=new StagnationChatModel(model);var resumed=execution();resumed.resume(service.restore(owner));
+    assertThrows(RunWaitingException.class,()->controlled.stream(prompt(resumed,tool)).blockLast());
+    assertEquals(0,effects.get());assertEquals("IDLE",state.status());assertEquals(1,modelCalls.get());
+    assertEquals(1,resumed.budgetSnapshot().argumentCorrections());
+    assertEquals("CONSUMED",approvals.get(owner.projectId(),oldId).status());assertEquals("COMPLETED",service.state(oldId).orElseThrow());
+    var fresh=approvals.list(owner.projectId()).stream().filter(request->request.status().equals("PENDING")).findFirst().orElseThrow();
+    assertNotEquals(oldId,fresh.id());assertEquals(corrected,fresh.argumentsPreview());
+    assertEquals("WAITING_APPROVAL",service.state(fresh.id()).orElseThrow());
+    assertEquals(corrected,store.document(store.find(fresh.id()).orElseThrow()).pending().calls().getFirst().arguments());
+
+    service.decide(owner.projectId(),fresh.id(),true,true);assertTrue(store.claim(fresh.id()));registry.transition("run",RunStatus.RUNNING,null);
+    var accepted=execution();accepted.resume(service.restore(owner));
+    assertEquals("done",controlled.stream(prompt(accepted,tool)).blockLast().getResult().getOutput().getText());
+    assertEquals(1,effects.get());assertEquals("CONSUMED",approvals.get(owner.projectId(),fresh.id()).status());
+  }
   @Test void aSecondApprovalInTheSameBatchDoesNotSpendAModelCallOrRepeatTheFirstEffect() {
     var effects=new ArrayList<String>();var modelCalls=new AtomicInteger();
     var command=callback("runCommand",input->{effects.add(input);return "done";});

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
 class TaskStateToolsTest {
 
@@ -64,5 +65,37 @@ class TaskStateToolsTest {
   void rejectsMissingGoalWhenIdle() {
     String result = tools.updateTaskState(null, TaskState.STATUS_IN_PROGRESS, List.of(), List.of());
     assertTrue(result.contains("goal は必須"));
+  }
+
+  @Test
+  void toolDefinitionRequiresOnlyStatusAndExplainsStringArrays() throws Exception {
+    var definition = MethodToolCallbackProvider.builder().toolObjects(tools).build().getToolCallbacks()[0].getToolDefinition();
+    var schema = new com.fasterxml.jackson.databind.ObjectMapper().readTree(definition.inputSchema());
+
+    assertEquals(List.of("status"), new com.fasterxml.jackson.databind.ObjectMapper()
+        .convertValue(schema.get("required"), new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {}));
+    for (String field : List.of("completed", "pending")) {
+      var property = schema.path("properties").path(field);
+      assertEquals("array", property.path("type").asText());
+      assertEquals("string", property.path("items").path("type").asText());
+      assertTrue(property.path("description").asText().contains("JSON 配列"));
+      assertTrue(property.path("description").asText().contains("[] または省略"));
+      assertTrue(property.path("description").asText().contains("カンマ区切り文字列は不可"));
+    }
+    assertTrue(schema.path("properties").path("goal").path("description").asText().contains("省略可能"));
+    assertTrue(schema.path("properties").path("status").path("description").asText().contains("IN_PROGRESS"));
+    assertTrue(definition.description().contains("\"pending\":[\"レビュー委譲\",\"指摘の検証\"]"));
+  }
+
+  @Test
+  void generatedCallbackAcceptsOmittedGoalAndOptionalListsForAnExistingTask() {
+    var callback = MethodToolCallbackProvider.builder().toolObjects(tools).build().getToolCallbacks()[0];
+    callback.call("{\"goal\":\"goal\",\"status\":\"IN_PROGRESS\"}");
+    callback.call("{\"status\":\"IN_PROGRESS\",\"completed\":null,\"pending\":[]}");
+
+    assertEquals("goal", state.goal());
+    assertEquals(TaskState.STATUS_IN_PROGRESS, state.status());
+    assertTrue(state.completed().isEmpty());
+    assertTrue(state.pending().isEmpty());
   }
 }
