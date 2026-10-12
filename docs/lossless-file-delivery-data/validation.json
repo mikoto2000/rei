@@ -1,0 +1,12 @@
+{
+  "baseCommit": "407ca34093556c2bea0290a5e6ee40c1ff21ed87",
+  "integratedMain": "05847e5a5fb34bf40b08b8bb2478482121f551cc",
+  "testedCodeCommit": "904ecd31",
+  "command": ".github/ci/full-test.ps1 -TimeoutSeconds 1200 (-Pfull test)",
+  "tests": 5409,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 5,
+  "elapsed": "12:21",
+  "liveEvaluationExecuted": false
+}

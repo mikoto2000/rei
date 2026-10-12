@@ -124,3 +124,5 @@ Windowsの全体結合テスト中、ExternalAgentProcessRunnerのProcessHandle.
 巨大な原文がraw-cache-max-bytesに入らない場合は本文の再読込が発生する。通常のnative producerは予算内にページ化するためこの経路を避ける。大きな一般ログを反復回収する運用では、原文上限とcache上限を合わせて調整する。保存データの容量上限を無効にして最適化しない。
 
 32768文字を超える入力はBPEの巨大単一語マージを回避し、JSON escaping後のUTF-8 byte数を上界として使う。短いページは従来どおり両tokenizerと保守的見積りを比較する。これは大きな入力を過大評価して保留することがあるが、計算量とモデル入力上限を守るための調整である。巨大語のRed/Greenを追加した。Windowsの大小文字aliasはcanonicalファイル名で一つの対象に正規化し、指摘の根拠位置もサロゲート境界を検証する。行/文字位置はUTF-16単位で、末尾改行後の空行位置も含む。
+
+最終ローカル検証（コード904ecd31、main05847e5a統合後）: CIと同じ .github/ci/full-test.ps1 の-Pfullで5409件、失敗0、エラー0、スキップ5、12分21秒。REI_TEST_WINDOWS_CODEX未設定2件、REI_TEST_WSL_CODEX未設定1件、実PlantUML renderer条件1件、rei.io.benchmark未設定1件を除く。liveタグの実LLM評価は通常CIから独立し、今回は未接続。固定応答・process I/OのJSONと検証概要はdocs/lossless-file-delivery-data/に保存した。既存Native Clientのコード/API契約は今回変更していない。
