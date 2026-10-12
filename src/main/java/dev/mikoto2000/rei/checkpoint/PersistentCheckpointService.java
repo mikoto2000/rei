@@ -35,6 +35,9 @@ public class PersistentCheckpointService implements AutoCloseable {
   private final ConcurrentMap<String,String> currentGuidance=new ConcurrentHashMap<>();
   public String currentGuidance(String run){return currentGuidance.getOrDefault(run,"");}
   private final AgentEventBus.Subscription subscription,boundaries;
+  private dev.mikoto2000.rei.review.ReviewCoverageLedger reviewLedger;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  void setReviewLedger(dev.mikoto2000.rei.review.ReviewCoverageLedger ledger){reviewLedger=ledger;}
   private dev.mikoto2000.rei.core.contextbudget.RawToolResultStore rawResults;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   void setRawResults(dev.mikoto2000.rei.core.contextbudget.RawToolResultStore store){rawResults=store;}
@@ -56,8 +59,17 @@ public class PersistentCheckpointService implements AutoCloseable {
     if(!active.containsKey(owner.runId()))return;
     var references=new ArrayList<Evidence>();
     if(rawResults!=null && !history.isEmpty() && history.getLast() instanceof org.springframework.ai.chat.messages.ToolResponseMessage message) for(var result:message.getResponses()) {
-      String reference=rawResults.save(owner.conversationId(),owner.runId(),result.name(),result.id(),Objects.toString(result.responseData(),""));
-      references.add(new Evidence("RAW_RESULT_REFERENCE",reference,null,owner.runId(),result.id()));
+      String reference;
+      if(dev.mikoto2000.rei.core.contextbudget.ToolResultCompressor.policy(message,result.id())==dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.RAW_RESULT_PAGE) {
+        reference=result.responseData().lines().limit(7).filter(line->line.startsWith("rawResultRef: ")).map(line->line.substring(14)).findFirst().orElseThrow(()->new IllegalArgumentException("Invalid raw page provenance"));
+        if(!rawResults.exists(owner.conversationId(),reference))throw new IllegalArgumentException("Raw page source unavailable");
+      }else reference=rawResults.save(owner.conversationId(),owner.runId(),result.name(),result.id(),Objects.toString(result.responseData(),""));
+      if(active.get(owner.runId()).evidence().stream().noneMatch(e->e.origin().equals("RAW_RESULT_REFERENCE")&&e.summary().equals(reference)))
+        references.add(new Evidence("RAW_RESULT_REFERENCE",reference,null,owner.runId(),result.id()));
+    }
+    if(reviewLedger!=null)for(String job:reviewLedger.jobs(dev.mikoto2000.rei.review.ReviewTools.scope(owner))) {
+      if(active.get(owner.runId()).evidence().stream().noneMatch(e->e.origin().equals("REVIEW_JOB_REFERENCE")&&e.summary().equals(job)))
+        references.add(new Evidence("REVIEW_JOB_REFERENCE",job,null,owner.runId(),null));
     }
     if(references.isEmpty() && progress==null)return;
     update(owner.runId(),"raw-results:"+UUID.randomUUID(),fields->{var evidence=new ArrayList<>(repository.fields(fields).evidence());evidence.addAll(references);fields.put("evidence",evidence);if(progress!=null)fields.put("progress",progress);});
@@ -81,6 +93,8 @@ public class PersistentCheckpointService implements AutoCloseable {
       if(!repository.acquire(state.projectId(),state.taskId(),context.runId()))throw new IllegalStateException("Task execution already owned");
       active.put(context.runId(),state);
     }
+    if(reviewLedger!=null&&state.resumedFromRunId()!=null)for(var evidence:state.evidence())if(evidence.origin().equals("REVIEW_JOB_REFERENCE"))
+      reviewLedger.resume(evidence.summary(),new dev.mikoto2000.rei.review.ReviewCoverageLedger.Scope(state.projectId(),state.sessionId(),state.resumedFromRunId()),dev.mikoto2000.rei.review.ReviewTools.scope(context));
     executing.add(context.runId());
     if(context.mode()!=AgentRunContext.Mode.EXCLUSIVE)return;
     var plan=plans.getIfAvailable();if(plan!=null) {

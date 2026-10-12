@@ -1,0 +1,22 @@
+[
+  {
+    "path": "lesson.md",
+    "evidence": "Javaは常に参照渡しである。"
+  },
+  {
+    "path": "Example.java",
+    "evidence": "return a == b;"
+  },
+  {
+    "path": "multi-a.md",
+    "evidence": "volatileだけで複合加算は原子的になる。"
+  },
+  {
+    "path": "multi-b.md",
+    "evidence": "非同期APIは必ず呼出順に完了する。"
+  },
+  {
+    "path": "long-line.md",
+    "evidence": "負の値の平方根は必ず正の実数。"
+  }
+]

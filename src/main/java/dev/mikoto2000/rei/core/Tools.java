@@ -57,6 +57,10 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 @Component
 public class Tools {
   private static final com.fasterxml.jackson.databind.ObjectMapper FILE_RESULT_JSON=new com.fasterxml.jackson.databind.ObjectMapper();
+  private dev.mikoto2000.rei.core.contextbudget.TokenEstimator deliveryEstimator=dev.mikoto2000.rei.core.contextbudget.TokenEstimator.tokenizerAware();
+  private dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties deliveryProperties=new dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties();
+  @Autowired public void configureDelivery(dev.mikoto2000.rei.core.contextbudget.TokenEstimator estimator,dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties properties){deliveryEstimator=estimator;deliveryProperties=properties;}
+
   private DocumentRendererService documentRenderer;
   @Autowired(required=false) void setDocumentRenderer(DocumentRendererService service){documentRenderer=service;}
   @Tool(description="既定OFFの管理者指定PlantUML rendererで現在の.puml/.plantumlと正確なsourceSha256をPNG検証します。directive/function/resource link禁止、SANDBOX、20秒/4MiB/4096px、exit/parse/画像/size/hashを記録。file Applyはせず、Artifact有効時だけ既存deliveryへ公開。モデルの説明は描画証拠ではありません。")
@@ -114,6 +118,7 @@ public class Tools {
   TextDocumentChangeSetService.View cleanTextDocumentStaging(String id,String proposalSha256,org.springframework.ai.chat.model.ToolContext context)throws IOException{var run=documentRecoveryRun(context);return changeSets().cleanDocumentStaging(run.runContext(),id,proposalSha256,run.userRequest());}
   private dev.mikoto2000.rei.core.stagnation.RunExecutionContext documentRecoveryRun(org.springframework.ai.chat.model.ToolContext context){var run=context==null?null:(dev.mikoto2000.rei.core.stagnation.RunExecutionContext)context.getContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY);if(run==null||run.runContext()==null)throw new IllegalArgumentException("Captured human recovery request required");run.checkActive();return run;}
 
+  @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(description="Change Set用に現在Project内の既存UTF-8ファイルを最大64KiB読み、BOM/CRLF/末尾改行を保持した正確なtextとSHA-256を返します。readMultiFileの行表示で失われる改行情報も保持します。返されたtextをproposeTextChangeSetのexpectedTextに使います。提案保存・ファイル変更は行いません。")
   TextChangeSetService.Baseline readTextChangeSetBase(String path)throws IOException {
     var project=changeSetProject();var baseline=changeSets().readBase(project,path);
@@ -952,6 +957,7 @@ public class Tools {
    *
    * <p>検索結果から対象ファイルを選び、ヒット行の前後を読み込んでまとめて返す。</p>
    */
+  @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(name = "searchAndRead", description = """
       Search for one or more code patterns and immediately read the relevant surrounding source code in a single tool call.
       Use this as the default tool for locating and inspecting code or text when exact file locations are not known.
@@ -980,6 +986,7 @@ public class Tools {
     int tokenLimit=request.maxTokens()==null?8000:request.maxTokens();
     int lineLimit=request.maxLines()==null?MAX_SEARCH_AND_READ_TOTAL_LINES:request.maxLines();
     if(byteLimit<256 || byteLimit>TextReadBudget.MAX_BYTES || tokenLimit<256 || tokenLimit>32000 || lineLimit<1 || lineLimit>MAX_SEARCH_AND_READ_TOTAL_LINES)throw new IllegalArgumentException("Search budget: bytes 256..65536, estimated tokens 256..32000, lines 1..5000");
+    if(dev.mikoto2000.rei.core.chat.AgentRunScope.current()!=null)tokenLimit=Math.min(tokenLimit,deliveryProperties.getPageTargetTokens());
     List<String> preferred=new ArrayList<>();
     if(request.preferredPaths()!=null){
       if(request.preferredPaths().size()>20)throw new IllegalArgumentException("At most 20 preferred paths");
@@ -1133,6 +1140,30 @@ public class Tools {
   }
 
   FileSnapshots newSnapshots(){return new FileSnapshots();}
+  /** Exact decoded source for coverage reviews; uses the existing Project/MCP path boundary. */
+  public record ReviewSnapshot(String path, String version, String text) { }
+  public ReviewSnapshot reviewSnapshot(String requested) throws IOException {
+    var root = currentWorkingDirectory();
+    var snapshot = newSnapshots().get(root, resolveProjectPath(requested, root));
+    byte[] bytes=snapshot.bytes();String text;
+    if(snapshot.path().getFileName().toString().toLowerCase(java.util.Locale.ROOT).endsWith(".pdf")) {
+      try(var pdf=org.apache.pdfbox.Loader.loadPDF(bytes)) {
+        var parts=new java.util.ArrayList<String>();var stripper=new org.apache.pdfbox.text.PDFTextStripper();
+        for(int page=1;page<=pdf.getNumberOfPages();page++){stripper.setStartPage(page);stripper.setEndPage(page);var part=stripper.getText(pdf);if(part.length()>8*1024*1024||parts.stream().mapToLong(String::length).sum()+part.length()>8*1024*1024)throw new IOException("PDF extracted text capacity exceeded");parts.add(part);}
+        text=String.join("\f",parts);
+      }
+    }else {
+      java.nio.charset.Charset charset=StandardCharsets.UTF_8;
+      if(bytes.length>=2&&(bytes[0]&255)==255&&(bytes[1]&255)==254)charset=StandardCharsets.UTF_16LE;
+      else if(bytes.length>=2&&(bytes[0]&255)==254&&(bytes[1]&255)==255)charset=StandardCharsets.UTF_16BE;
+      try{text=decodeStrict(bytes,charset);}catch(java.nio.charset.CharacterCodingException invalid){if(!charset.equals(StandardCharsets.UTF_8))throw invalid;text=decodeStrict(bytes,CP932);}
+      if(text.indexOf(0)>=0)throw new IOException("Binary file is unsupported");
+    }
+    var canonical=FileSnapshots.resolve(root,snapshot.path()).toRealPath();
+    if(!canonical.startsWith(root.toRealPath()))throw new IOException("Outside Project path");
+    return new ReviewSnapshot(root.toRealPath().relativize(canonical).toString().replace('\\', '/'), snapshot.version(), text);
+  }
+
 
   private List<String> snapshotLines(FileSnapshots.Snapshot snapshot, String charset) throws IOException {
     byte[] bytes = snapshot.bytes();
@@ -1196,6 +1227,9 @@ public class Tools {
    *
    * <p>ファイルが 1 件だけの場合もこのツールを使用する。</p>
    */
+
+
+  @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(name = "readMultiFile", description = """
       Read one or more known file paths or line ranges in a single call.
       For Java declarations, pass symbol (e.g. p.C#work(String[])), optionally path to narrow candidates.
@@ -1221,6 +1255,9 @@ public class Tools {
     skillProperties = properties;
   }
 
+
+
+  @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(description = """
       Read a reference file inside an enabled Agent Skill, independent of the current Project directory.
       Specify skillName and file.path relative to that skill's directory (e.g. references/learning-design.md).
@@ -1297,7 +1334,7 @@ public class Tools {
     for (ReadFileRequest request : files) {
       try {
         ReadFileResult result = request.symbol()!=null
-          ? JavaSymbolReads.read(request,workingDirectory,snapshots,repositoryMaps,budget,MAX_READ_TOTAL_LINES-totalLines,8000/files.size()-16)
+          ? JavaSymbolReads.read(request,workingDirectory,snapshots,repositoryMaps,budget,MAX_READ_TOTAL_LINES-totalLines,(dev.mikoto2000.rei.core.chat.AgentRunScope.current()==null?8000:deliveryProperties.getPageTargetTokens())/files.size()-16)
           : readSingleFile(request, workingDirectory, snapshots, budget, MAX_READ_TOTAL_LINES-totalLines);
         if(request.symbol()!=null && result.error()==null)workingSet.recordRead(workingDirectory.resolve(result.path()));
         int remaining = MAX_READ_TOTAL_LINES - totalLines;
@@ -1312,7 +1349,7 @@ public class Tools {
       }
     }
     if(files.stream().anyMatch(request->request.symbol()!=null))FileResultBudget.require(results,65536,8000);
-    return boundedFileResult(results);
+    return boundedFileResult(dev.mikoto2000.rei.core.chat.AgentRunScope.current()==null?results:new FileResultTokenPager(deliveryEstimator).page(results,files,deliveryProperties.getPageMaxTokens()));
   }
 
   /** 1 ファイルの読み込みを実行する。 */
@@ -1339,7 +1376,7 @@ public class Tools {
     }
     java.nio.file.Path path = resolveProjectPath(request.path(), workingDirectory);
     var snapshot=snapshots.get(workingDirectory,path);
-    if(request.expectedVersion()!=null && !request.expectedVersion().equals(snapshot.version()))throw new IOException("File version mismatch; search/read again");
+    if(request.expectedVersion()!=null && !request.expectedVersion().equals(snapshot.version()))throw new IOException("STALE_VERSION: File version mismatch; search/read again");
     List<String> lines = snapshotLines(snapshot, request.charset());
     workingSet.recordRead(path);
     int fromIndex = startLine == null ? 0 : startLine - 1;
@@ -1599,7 +1636,39 @@ public class Tools {
     return lines.subList(fromIndex, toIndex);
   }
 
-  @Tool(name = "readPdfFile", description = "PDF ファイルから本文テキストを抽出して読み込む。")
+
+
+  public record PdfPage(String path,String version,int page,int totalPages,int offset,int nextOffset,
+      int nextPage,boolean truncated,String content) { }
+  @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
+  @Tool(name="readPdfFile",description="Read a lossless PDF text page with original page number and source version. Optional page defaults to 1, offset to 0, tokenBudget to 2048. Continue with nextPage/nextOffset while truncated; expectedVersion must match across pages. Scanned PDFs require OCR and cannot prove visual coverage.")
+  public PdfPage readPdfPage(String pathStr,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) Integer page,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) Integer offset,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) String expectedVersion,
+      @org.springframework.ai.tool.annotation.ToolParam(required=false) Integer tokenBudget)throws IOException {
+    int number=page==null?1:page,start=offset==null?0:offset,budget=tokenBudget==null?deliveryProperties.getPageTargetTokens():tokenBudget;
+    if(budget<deliveryProperties.getPageMinTokens()||budget>deliveryProperties.getPageMaxTokens())throw new IOException("CONTEXT_BUDGET_INSUFFICIENT");
+    var root=currentWorkingDirectory();var snapshot=newSnapshots().get(root,resolveProjectPath(pathStr,root));
+    if(expectedVersion!=null&&!expectedVersion.isBlank()&&!snapshot.version().equals(expectedVersion))throw new IOException("STALE_VERSION");
+    String relative=root.toRealPath().relativize(snapshot.path()).toString().replace('\\','/');
+    try(var document=org.apache.pdfbox.Loader.loadPDF(snapshot.bytes())) {
+      int count=document.getNumberOfPages();if(number<1||number>count||start<0)throw new IOException("INVALID_CURSOR");
+      var stripper=new org.apache.pdfbox.text.PDFTextStripper();stripper.setStartPage(number);stripper.setEndPage(number);
+      String text=stripper.getText(document);
+      if(text.length()>8*1024*1024)throw new IOException("PDF extracted text capacity exceeded");
+      if(start>text.length()||start>0&&start<text.length()&&Character.isHighSurrogate(text.charAt(start-1))&&Character.isLowSurrogate(text.charAt(start)))throw new IOException("INVALID_CURSOR");
+      int low=0,high=text.codePointCount(start,text.length());
+      while(low<high){int mid=low+(high-low+1)/2;var candidate=pdfPage(relative,snapshot.version(),number,count,start,text.offsetByCodePoints(start,mid),text);
+        if(deliveryEstimator.text(FILE_RESULT_JSON.writeValueAsString(candidate))<=budget)low=mid;else high=mid-1;}
+      var result=pdfPage(relative,snapshot.version(),number,count,start,text.offsetByCodePoints(start,low),text);
+      if(deliveryEstimator.text(FILE_RESULT_JSON.writeValueAsString(result))>budget||low==0&&start<text.length())throw new IOException("CONTEXT_BUDGET_INSUFFICIENT");
+      workingSet.recordRead(snapshot.path());return result;
+    }
+  }
+  private PdfPage pdfPage(String path,String version,int page,int count,int start,int end,String text){
+    boolean more=end<text.length();return new PdfPage(path,version,page,count,start,more?end:0,more?page:page<count?page+1:0,more||page<count,text.substring(start,end));
+  }
   String readPdfFile(String pathStr) throws IOException {
     IO.println(String.format("%s の PDF ファイルを読むよ", pathStr));
     java.nio.file.Path path = resolveProjectPath(pathStr);

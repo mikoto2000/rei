@@ -66,6 +66,8 @@ public class LlmChatClientProvider {
   void setActivityTools(ObjectProvider<dev.mikoto2000.rei.activity.ActivityTools> tools) { this.activityTools = tools; }
   private dev.mikoto2000.rei.core.contextbudget.ContextAssembler contextAssembler;
   private dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor contextHistory;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  private dev.mikoto2000.rei.review.ReviewTools reviewTools;
   private dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawResultTools;
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setContextCompression(dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler,
@@ -74,7 +76,7 @@ public class LlmChatClientProvider {
       dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties properties) {
     // Session continuation must load persisted history even when compression is disabled.
     contextHistory = history;
-    if (properties.isEnabled()) { contextAssembler = assembler; rawResultTools = rawTools; }
+    contextAssembler = assembler; rawResultTools = rawTools;
   }
   private ObjectProvider<dev.mikoto2000.rei.dot.DotTools> dotTools;
   @org.springframework.beans.factory.annotation.Autowired void setDotTools(ObjectProvider<dev.mikoto2000.rei.dot.DotTools> tools){dotTools=tools;}
@@ -196,14 +198,16 @@ public class LlmChatClientProvider {
         addIfAvailable(objects, searchTools);
         addIfAvailable(objects, webSearchTools);
         addIfAvailable(objects, urlContentFetchTools);
+        if(rawResultTools!=null)objects.add(rawResultTools);
+        if(reviewTools!=null)objects.add(reviewTools);
         if (!objects.isEmpty()) {
-          for (var callback : MethodToolCallbackProvider.builder().toolObjects(objects.toArray()).build().getToolCallbacks()) {
+          for (var callback : dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(objects.toArray()).getToolCallbacks()) {
             if (dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.intrinsicallyReadOnly(callback.getToolDefinition().name()))
               callbacks.add(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(callback, eventFactory, eventPublisher));
           }
         }
       }
-      var builder = ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(modelProvider.subAgentChatModel(), null))
+      var builder = ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(modelProvider.subAgentChatModel(), contextAssembler))
           .defaultAdvisors(new RunAwareToolCallingAdvisor())
           .defaultOptions(options.mutate().toolCallbacks(callbacks).toolChoice(callbacks.isEmpty() ? "none" : "auto"));
       if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY)
@@ -269,6 +273,7 @@ public class LlmChatClientProvider {
     if (LlmFeature.CHAT.equals(feature) && summaryTools != null) addIfAvailable(toolObjects, summaryTools);
     if (LlmFeature.CHAT.equals(feature) && activityTools != null) addIfAvailable(toolObjects, activityTools);
     if (LlmFeature.CHAT.equals(feature) && rawResultTools != null) toolObjects.add(rawResultTools);
+    if (LlmFeature.CHAT.equals(feature) && reviewTools != null) toolObjects.add(reviewTools);
     addIfAvailable(toolObjects, tools);
     addIfAvailable(toolObjects, googleCalendarTools);
     addIfAvailable(toolObjects, taskTools);
@@ -290,9 +295,7 @@ public class LlmChatClientProvider {
     if(LlmFeature.CHAT.equals(feature) && dependencyTools!=null)toolObjects.add(dependencyTools);
     if(LlmFeature.CHAT.equals(feature) && schedulerTools!=null)toolObjects.add(schedulerTools);
     if (!toolObjects.isEmpty()) {
-      MethodToolCallbackProvider methodTools = MethodToolCallbackProvider.builder()
-          .toolObjects(toolObjects.toArray())
-          .build();
+      var methodTools = dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(toolObjects.toArray());
       builder.defaultTools(new ToolEventCallbackProvider(methodTools, eventFactory, eventPublisher));
     }
 

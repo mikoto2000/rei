@@ -25,12 +25,12 @@ public final class StableToolDefinitions {
   try {schema=MAPPER.writeValueAsString(ordered(MAPPER.readTree(schema)));}catch(Exception invalid){return callback;}
   if(schema.equals(original.inputSchema()))return callback;
   var definition=ToolDefinition.builder().name(original.name()).description(original.description()).inputSchema(schema).build();
-  return new ToolCallback() {
+  return dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.preservePolicy(callback,new ToolCallback() {
    public ToolDefinition getToolDefinition(){return definition;}
    public ToolMetadata getToolMetadata(){return callback.getToolMetadata();}
    public String call(String input){return callback.call(input);}
    public String call(String input,org.springframework.ai.chat.model.ToolContext context){return callback.call(input,context);}
-  };
+  });
  }
  private static JsonNode ordered(JsonNode node) {
   if(node==null)return MAPPER.nullNode();
