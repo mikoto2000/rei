@@ -157,3 +157,15 @@ temp directory と注入可能な directory lister により、読み取り失�
 取得可能な権限で再実行し、全件成功を確認した。権限切替先の Maven mirror 設定と既存キャッシュの差は、
 `target/completion-maven-settings.xml` の空 settings を明示して解消した。ユーザーの Maven 設定・POM は変更していない。
 検証用 data-dir も target 内に分離している。
+
+## 手動で解釈する操作名と文書パスの補完
+
+/approval、/attention、/goal、/dependency、/document、/repair、
+/reflection、/timer、/dot、/llm capture は picocli のサブコマンドではなく
+位置引数として操作名を解釈するため、各定義に ActionCandidates を指定する。
+共通の FirstArgumentCandidates は最初の位置引数だけに候補を返す。
+ID、本文、後続引数には操作名を表示しない。補完時にはサービスを実行しない。
+
+/embed と /embed add の文書引数はファイル・ディレクトリ、
+/feed import-opml はファイルを補完する。
+自由入力の本文、URL、未定義の動的 ID・モデル名は固定候補を生成しない。

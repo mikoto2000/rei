@@ -10,7 +10,7 @@ public class AttentionCommand implements java.util.concurrent.Callable<Integer> 
   private final AttentionRepository repository;
   private final ProjectService projects;
   @Spec picocli.CommandLine.Model.CommandSpec spec;
-  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|show|ack|delivery|deliver|retry-delivery") String action;
+  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|show|ack|delivery|deliver|retry-delivery",completionCandidates=ActionCandidates.class) String action;
   @Parameters(index="1",arity="0..1",paramLabel="attentionId") String id;
   private java.io.PrintWriter output;
   private AttentionDeliveryService delivery;
@@ -40,4 +40,7 @@ public class AttentionCommand implements java.util.concurrent.Callable<Integer> 
   }
   private String requiredId(){if(id==null||id.isBlank())throw new IllegalArgumentException("attentionId is required");return id;}
   private AttentionDeliveryService requireDelivery(){if(delivery==null)throw new IllegalArgumentException("Attention delivery is unavailable");return delivery;}
+  public static final class ActionCandidates extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {
+    public ActionCandidates() { super("list", "show", "ack", "delivery", "deliver", "retry-delivery"); }
+  }
 }

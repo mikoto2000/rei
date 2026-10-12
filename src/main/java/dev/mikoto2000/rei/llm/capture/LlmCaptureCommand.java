@@ -44,7 +44,7 @@ public final class LlmCaptureCommand implements Runnable {
   @Command(name="capture",description="次のCLI依頼のHTTP本文をJVMメモリへ記録",mixinStandardHelpOptions=true)
   public static final class Capture implements java.util.concurrent.Callable<Integer> {
     @ParentCommand LlmCaptureCommand parent;
-    @Parameters(arity="0..*",paramLabel="ACTION [ID] [PATH]") String[] args;
+    @Parameters(arity="0..*",paramLabel="ACTION [ID] [PATH]",completionCandidates=ActionCandidates.class) String[] args;
     public Integer call(){return parent.execute(args==null?new String[0]:args);}
   }
   private int execute(String[] args){
@@ -83,5 +83,8 @@ public final class LlmCaptureCommand implements Runnable {
     if(!parent.toRealPath().equals(parent))throw new IOException("Aliased parent rejected");
     var options=Set.<OpenOption>of(StandardOpenOption.CREATE_NEW,StandardOpenOption.WRITE,LinkOption.NOFOLLOW_LINKS);
     try(var channel=Files.newByteChannel(target,options)){var buffer=java.nio.ByteBuffer.wrap(bytes);while(buffer.hasRemaining())channel.write(buffer);}
+  }
+  public static final class ActionCandidates extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {
+    public ActionCandidates() { super("next", "status", "off", "list", "show", "raw", "export", "delete", "clear"); }
   }
 }

@@ -12,7 +12,7 @@ public final class DotCommand implements java.util.concurrent.Callable<Integer> 
   private final DotDelegationService service;
   private final ProjectService projects;
 
-  @Parameters(arity = "0..*", paramLabel = "ACTION [ID|INSTRUCTION] [OPTIONS]")
+  @Parameters(arity = "0..*", paramLabel = "ACTION [ID|INSTRUCTION] [OPTIONS]",completionCandidates=ActionCandidates.class)
   String[] arguments;
 
   @Option(names = "--project-id")
@@ -137,5 +137,8 @@ public final class DotCommand implements java.util.concurrent.Callable<Integer> 
     } finally {
       out.flush();
     }
+  }
+  public static final class ActionCandidates extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {
+    public ActionCandidates() { super("request", "requests", "status", "result", "cancel", "verify", "resume"); }
   }
 }

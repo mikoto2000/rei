@@ -21,7 +21,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
   @Option(names="--wait-version") Long waitVersion;
   private long waitVersion(){if(waitVersion==null||waitVersion<1)throw new IllegalArgumentException("Use the observed --wait-version");return waitVersion;}
   @Spec picocli.CommandLine.Model.CommandSpec spec;
-  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|create|show|progress|run|verify|cancel|history|reconcile|completion|wait|wait-activate|wait-resume|wait-cancel") String action;
+  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|create|show|progress|run|verify|cancel|history|reconcile|completion|wait|wait-activate|wait-resume|wait-cancel",completionCandidates=ActionCandidates.class) String action;
   @Parameters(index="1",arity="0..1",paramLabel="goalId|objective") String value;
   @Option(names="--file",description="プロジェクトからの相対パスで指定する完了確認用ファイル") String file;
   @Option(names="--sha256",description="ファイルに期待する正確な SHA-256 値") String digest;
@@ -84,4 +84,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
     return JsonFileGoalCondition.parseCriteria(criteriaJson);
   }
   private String requiredValue(){if(value==null||value.isBlank())throw new IllegalArgumentException("Goal ID or objective is required");return value;}
+  public static final class ActionCandidates extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {
+    public ActionCandidates() { super("list", "create", "show", "progress", "run", "verify", "cancel", "history", "reconcile", "completion", "wait", "wait-activate", "wait-resume", "wait-cancel"); }
+  }
 }

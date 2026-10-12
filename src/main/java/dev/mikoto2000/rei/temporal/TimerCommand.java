@@ -11,7 +11,7 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
   private final ProjectService projects;
   private final AgentScheduleDispatcher dispatcher;
   @Spec picocli.CommandLine.Model.CommandSpec spec;
-  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|show|activate|cancel|history|reconcile") String action;
+  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|show|activate|cancel|history|reconcile",completionCandidates=ActionCandidates.class) String action;
   @Parameters(index="1",arity="0..1",paramLabel="timerId") String id;
   @Option(names="--run-id",description="結果が不明な実行の ID") String expectedRunId;
   @Option(names="--acknowledge-uncertain-side-effects",description="実行による影響が不明であることを承認します（スケジュールは再実行しません）") boolean acknowledgeUncertain;
@@ -42,4 +42,7 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
     finally {writer.flush();}
   }
   private String requiredId(){if(id==null||id.isBlank())throw new IllegalArgumentException("timerId is required");return id;}
+  public static final class ActionCandidates extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {
+    public ActionCandidates() { super("list", "show", "activate", "cancel", "history", "reconcile"); }
+  }
 }

@@ -19,7 +19,7 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   public void setCheckpoints(dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints){this.checkpoints=checkpoints;}
   @Spec picocli.CommandLine.Model.CommandSpec spec;
-  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|show|approve|deny") String action;
+  @Parameters(index="0",arity="0..1",defaultValue="list",paramLabel="list|show|approve|deny",completionCandidates=ActionCandidates.class) String action;
   @Parameters(index="1",arity="0..1",paramLabel="approvalId") String id;
   private java.io.PrintWriter output;
   public ApprovalCommand(){this(null,null);}
@@ -105,5 +105,8 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
         throw new IllegalArgumentException("表示した承認番号が見つかりません。現在のProject/Sessionで /approval list を実行してください。");
       return item.id();
     }
+  }
+  public static final class ActionCandidates extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {
+    public ActionCandidates() { super("list", "show", "approve", "deny"); }
   }
 }

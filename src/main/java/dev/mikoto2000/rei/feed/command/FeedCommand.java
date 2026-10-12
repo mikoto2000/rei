@@ -73,7 +73,7 @@ public class FeedCommand {
     @Spec
     CommandSpec spec;
 
-    @Parameters(index = "0", paramLabel = "PATH", description = "OPML ファイルのパス")
+    @Parameters(index = "0", paramLabel = "PATH", description = "OPML ファイルのパス", completionCandidates = dev.mikoto2000.rei.core.completion.PathCompletionCandidates.File.class)
     String path;
 
     @Override
