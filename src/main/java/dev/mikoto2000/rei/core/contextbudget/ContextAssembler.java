@@ -17,6 +17,11 @@ public class ContextAssembler {
   private final ConversationCompressor compressor;
   private final AgentEventFactory events;
   private final AgentEventPublisher publisher;
+  private dev.mikoto2000.rei.review.ReviewTools reviewTools;
+  public void setReviewTools(dev.mikoto2000.rei.review.ReviewTools tools) { reviewTools = tools; }
+  public void confirmedDelivery(Prompt prompt, dev.mikoto2000.rei.core.chat.AgentRunContext owner) {
+    if (reviewTools != null) reviewTools.confirmedPrompt(prompt, owner);
+  }
   private java.util.function.Supplier<String> workingSet;
   public void setWorkingSet(java.util.function.Supplier<String> workingSet) { this.workingSet = workingSet; }
   public void preserveToolResults(List<Message> messages, String conversation, String run) {
@@ -32,9 +37,15 @@ public class ContextAssembler {
   public Prompt assemble(Prompt raw, String conversation, String run, Runnable checkActive) {
     if (!properties.isEnabled()) {
       checkActive.run();
-      if (estimate(raw) > hardLimit(raw)) throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
+      var messages = raw.getInstructions().stream().map(message -> {
+        if (message instanceof ToolResponseMessage tool && tool.getResponses().stream().anyMatch(response ->
+            ToolResultCompressor.policy(tool,response.id()) == ResultDelivery.Kind.FILE_CONTENT)) return tools.compact(message,conversation,run);
+        return message;
+      }).toList();
+      var projected = tools.fit(new Prompt(messages,raw.getOptions()),conversation,run,hardLimit(raw));
+      if (estimate(projected) > hardLimit(raw)) throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
           dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.CONTEXT_HARD_LIMIT);
-      return raw;
+      return projected;
     }
     var lock = summaries.lock(conversation);
     try {
@@ -83,7 +94,7 @@ public class ContextAssembler {
     }
     while (estimate(project(raw, h, a)) > hard && dropOldest(h)) { }
     while (estimate(project(raw, h, a)) > hard && dropOldest(a)) { }
-    Prompt result = project(raw, h, a);
+    Prompt result = tools.fit(project(raw, h, a),conversation,run,hard);
     long after = estimate(result);
     if (after > hard) throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
         dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.CONTEXT_HARD_LIMIT);
@@ -225,4 +236,3 @@ public class ContextAssembler {
         .withOwnership(execution == null ? null : execution.runContext()));
   }
 }
-

@@ -42,11 +42,17 @@ public final class ToolLoopSupport {
     for (var callback : options.getToolCallbacks()) policies.put(callback.getToolDefinition().name(),
         dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.kind(callback));
     var history = new java.util.ArrayList<>(result.conversationHistory());
+    var registered = new java.util.HashMap<String,org.springframework.ai.tool.ToolCallback>();
+    options.getToolCallbacks().forEach(callback -> registered.put(callback.getToolDefinition().name(),callback));
     if (!history.isEmpty() && history.getLast() instanceof org.springframework.ai.chat.messages.ToolResponseMessage message) {
       var calls = new java.util.HashMap<String, dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind>();
       for (var response : message.getResponses()) calls.put(response.id(), policies.getOrDefault(response.name(),
           dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.GENERAL));
+      var receipts = new java.util.HashMap<String, dev.mikoto2000.rei.review.ReviewTools.Receipt>();
+      for (var response : message.getResponses()) if (registered.get(response.name()) instanceof dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.Registered callback && callback.reviewPage())
+        receipts.put(response.id(), dev.mikoto2000.rei.review.ReviewTools.receipt(response.responseData()));
       var metadata = new java.util.HashMap<>(message.getMetadata()); metadata.put("rei.deliveryPolicies", java.util.Map.copyOf(calls));
+      if (!receipts.isEmpty()) metadata.put("rei.reviewReceipts", java.util.Map.copyOf(receipts));
       history.set(history.size() - 1, org.springframework.ai.chat.messages.ToolResponseMessage.builder()
           .responses(message.getResponses()).metadata(metadata).build());
     }
@@ -104,4 +110,3 @@ public final class ToolLoopSupport {
     return deliveryMetadata(prompt, ToolExecutionResult.builder().conversationHistory(history).returnDirect(direct&&!corrected).build());
   }
 }
-

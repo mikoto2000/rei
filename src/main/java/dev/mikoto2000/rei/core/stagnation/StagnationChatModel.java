@@ -58,6 +58,7 @@ public class StagnationChatModel implements ChatModel {
       if (!prepaid) context.consumeNextLlmCall();
       context.beginIteration();
       AtomicReference<ChatResponse> aggregate = new AtomicReference<>();
+      AtomicReference<Prompt> sent = new AtomicReference<>();
       var invoked=new java.util.concurrent.atomic.AtomicBoolean();
       var reported=new java.util.concurrent.atomic.AtomicBoolean();
       Flux<ChatResponse> requests = assembler == null || context.runContext() == null ? Flux.defer(() -> {
@@ -76,7 +77,7 @@ public class StagnationChatModel implements ChatModel {
           }).subscribeOn(Schedulers.boundedElastic()).flatMapMany(projected -> {
             context.checkActive();
             context.checkModelTokenBudget();invoked.set(true);
-            return delegate.stream(projected);
+            sent.set(projected); return delegate.stream(projected);
           });
       Flux<ChatResponse> response = new MessageAggregator().aggregate(requests, aggregate::set);
       return response.concatWith(Flux.defer(() -> {
@@ -86,6 +87,8 @@ public class StagnationChatModel implements ChatModel {
           context.endIteration();
           return Flux.empty();
         }
+        context.checkActive();
+        if (assembler != null && sent.get() != null) assembler.confirmedDelivery(sent.get(), context.runContext());
         var usage = result.getMetadata().getUsage();
         reported.set(true);
         context.recordTotalTokens(usage==null?null:usage.getTotalTokens());
@@ -210,4 +213,3 @@ public class StagnationChatModel implements ChatModel {
     return null;
   }
 }
-

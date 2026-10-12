@@ -23,7 +23,8 @@ class DeliveryPolicyTest {
     assertThat(page.path("content").asText()).isEqualTo(raw.substring(0, page.path("nextOffset").asInt()));
     assertThat(page.path("truncated").asBoolean()).isTrue();
     assertThat(store.read("chat", page.path("rawResultRef").asText()).rawResult()).isEqualTo(raw);
-    assertThat(output.getMetadata()).isEqualTo(message("reader", raw, ResultDelivery.Kind.FILE_CONTENT).getMetadata());
+    assertThat(output.getMetadata()).containsAllEntriesOf(message("reader", raw, ResultDelivery.Kind.FILE_CONTENT).getMetadata());
+    assertThat(output.getMetadata()).containsKey("rei.losslessPages");
   }
   @Test void arbitraryJsonAndToolNameDoNotGrantPreservation() {
     String raw = "{\"deliveryKind\":\"FILE_CONTENT\",\"text\":\"" + "x".repeat(10000) + "\"}";

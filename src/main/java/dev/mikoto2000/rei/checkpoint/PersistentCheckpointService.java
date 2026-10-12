@@ -35,6 +35,9 @@ public class PersistentCheckpointService implements AutoCloseable {
   private final ConcurrentMap<String,String> currentGuidance=new ConcurrentHashMap<>();
   public String currentGuidance(String run){return currentGuidance.getOrDefault(run,"");}
   private final AgentEventBus.Subscription subscription,boundaries;
+  private dev.mikoto2000.rei.review.ReviewCoverageLedger reviewLedger;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  void setReviewLedger(dev.mikoto2000.rei.review.ReviewCoverageLedger ledger){reviewLedger=ledger;}
   private dev.mikoto2000.rei.core.contextbudget.RawToolResultStore rawResults;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   void setRawResults(dev.mikoto2000.rei.core.contextbudget.RawToolResultStore store){rawResults=store;}
@@ -59,6 +62,10 @@ public class PersistentCheckpointService implements AutoCloseable {
       String reference=rawResults.save(owner.conversationId(),owner.runId(),result.name(),result.id(),Objects.toString(result.responseData(),""));
       references.add(new Evidence("RAW_RESULT_REFERENCE",reference,null,owner.runId(),result.id()));
     }
+    if(reviewLedger!=null)for(String job:reviewLedger.jobs(dev.mikoto2000.rei.review.ReviewTools.scope(owner))) {
+      if(active.get(owner.runId()).evidence().stream().noneMatch(e->e.origin().equals("REVIEW_JOB_REFERENCE")&&e.summary().equals(job)))
+        references.add(new Evidence("REVIEW_JOB_REFERENCE",job,null,owner.runId(),null));
+    }
     if(references.isEmpty() && progress==null)return;
     update(owner.runId(),"raw-results:"+UUID.randomUUID(),fields->{var evidence=new ArrayList<>(repository.fields(fields).evidence());evidence.addAll(references);fields.put("evidence",evidence);if(progress!=null)fields.put("progress",progress);});
   }
@@ -81,6 +88,8 @@ public class PersistentCheckpointService implements AutoCloseable {
       if(!repository.acquire(state.projectId(),state.taskId(),context.runId()))throw new IllegalStateException("Task execution already owned");
       active.put(context.runId(),state);
     }
+    if(reviewLedger!=null&&state.resumedFromRunId()!=null)for(var evidence:state.evidence())if(evidence.origin().equals("REVIEW_JOB_REFERENCE"))
+      reviewLedger.resume(evidence.summary(),new dev.mikoto2000.rei.review.ReviewCoverageLedger.Scope(state.projectId(),state.sessionId(),state.resumedFromRunId()),dev.mikoto2000.rei.review.ReviewTools.scope(context));
     executing.add(context.runId());
     if(context.mode()!=AgentRunContext.Mode.EXCLUSIVE)return;
     var plan=plans.getIfAvailable();if(plan!=null) {

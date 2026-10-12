@@ -28,6 +28,7 @@ public class ToolEventCallbackDecorator implements dev.mikoto2000.rei.core.conte
     this.eventPublisher = eventPublisher;
   }
 
+  @Override public boolean reviewPage() { return delegate instanceof dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.Registered registered && registered.reviewPage(); }
   @Override public dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind deliveryKind() {
     return dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.kind(delegate);
   }
@@ -103,4 +104,3 @@ public class ToolEventCallbackDecorator implements dev.mikoto2000.rei.core.conte
     return sanitized.substring(0, maxLength) + "... (" + sanitized.length() + " chars)";
   }
 }
-

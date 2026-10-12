@@ -90,6 +90,8 @@ public class AiConfiguration {
   void setPaperTools(ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> tools) { this.paperTools = tools; }
   private dev.mikoto2000.rei.core.contextbudget.ContextAssembler contextAssembler;
   private dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor contextHistory;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  private dev.mikoto2000.rei.review.ReviewTools reviewTools;
   private dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawResultTools;
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setContextCompression(dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler,
@@ -193,6 +195,7 @@ public class AiConfiguration {
             conversationHistoryTools, summaryTools);
 
     builder.defaultTools(dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(tools));
+    if (reviewTools != null) builder.defaultTools(dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(reviewTools));
     if (rawResultTools != null) builder.defaultTools(dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(rawResultTools));
     if (processDependencyTools != null) builder.defaultTools(processDependencyTools);
     if (fileDependencyTools != null) builder.defaultTools(fileDependencyTools);
@@ -225,5 +228,3 @@ public class AiConfiguration {
     return builder.build();
   }
 }
-
-

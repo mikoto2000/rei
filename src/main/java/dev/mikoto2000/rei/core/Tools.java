@@ -1131,6 +1131,18 @@ public class Tools {
   }
 
   FileSnapshots newSnapshots(){return new FileSnapshots();}
+  /** Exact immutable UTF-8 source for coverage reviews; uses the existing Project/MCP path boundary. */
+  public record ReviewSnapshot(String path, String version, String text) { }
+  public ReviewSnapshot reviewSnapshot(String requested) throws IOException {
+    var root = currentWorkingDirectory();
+    var snapshot = newSnapshots().get(root, resolveProjectPath(requested, root));
+    String text = java.nio.charset.StandardCharsets.UTF_8.newDecoder()
+        .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+        .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+        .decode(java.nio.ByteBuffer.wrap(snapshot.bytes())).toString();
+    return new ReviewSnapshot(root.toRealPath().relativize(snapshot.path()).toString().replace('\\', '/'), snapshot.version(), text);
+  }
+
 
   private List<String> snapshotLines(FileSnapshots.Snapshot snapshot, String charset) throws IOException {
     byte[] bytes = snapshot.bytes();
@@ -1194,8 +1206,8 @@ public class Tools {
    *
    * <p>ファイルが 1 件だけの場合もこのツールを使用する。</p>
    */
-  
-  
+
+
   @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(name = "readMultiFile", description = """
       Read one or more known file paths or line ranges in a single call.
@@ -1220,8 +1232,8 @@ public class Tools {
     skillProperties = properties;
   }
 
-  
-  
+
+
   @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(description = """
       Read a reference file inside an enabled Agent Skill, independent of the current Project directory.
@@ -1600,8 +1612,8 @@ public class Tools {
     return lines.subList(fromIndex, toIndex);
   }
 
-  
-  
+
+
   @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(name = "readPdfFile", description = "PDF ファイルから本文テキストを抽出して読み込む。")
   String readPdfFile(String pathStr) throws IOException {
@@ -1993,4 +2005,3 @@ public class Tools {
   private record ResolvedTextFile(String content, Charset charset) {
   }
 }
-
