@@ -12,6 +12,9 @@ import reactor.core.publisher.Mono;
 
 /** Independent, tool-free judgement; probabilistic verification, never a proof of correctness. */
 final class SubAgentSemanticValidator {
+  private final dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler;
+  SubAgentSemanticValidator(){this(null);}
+  SubAgentSemanticValidator(dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler){this.assembler=assembler;}
   private static final Set<String> ISSUES=Set.of("UNSUPPORTED_CLAIM","CONTRADICTION","INCOMPLETE_TASK");
   Mono<Void> validate(ChatModel model,Prompt original,SubAgentDefinition definition,String output,
       SubAgentEvidence evidence,AtomicInteger remaining,AgentRunContext owner,Runnable check,
@@ -49,7 +52,7 @@ final class SubAgentSemanticValidator {
           Allowed issue codes: UNSUPPORTED_CLAIM, CONTRADICTION, INCOMPLETE_TASK.
           Do not output prose, quotes, tool calls, private values or extra fields.
           """),new UserMessage(input)),options);
-      return new BoundedToolLoop().runWithHistory(model,prompt,remaining,owner,check,reservation,retries)
+      return new BoundedToolLoop(assembler).runWithHistory(model,prompt,remaining,owner,check,reservation,retries)
           .flatMap(result->{check.run();return decision(result.output());});
     });
   }

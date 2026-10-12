@@ -11,6 +11,9 @@ import dev.mikoto2000.rei.checkpoint.PersistentCheckpoint.*;
 @Component
 public class CheckpointReconciler {
   private final BackgroundProcessManager processes;
+  private dev.mikoto2000.rei.review.ReviewCoverageLedger reviewLedger;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  void setReviewLedger(dev.mikoto2000.rei.review.ReviewCoverageLedger ledger){reviewLedger=ledger;}
   private dev.mikoto2000.rei.event.ProjectAgentEventStore eventStore;
   @org.springframework.beans.factory.annotation.Autowired(required=false)
   void setEventStore(dev.mikoto2000.rei.event.ProjectAgentEventStore store){eventStore=store;}
@@ -52,6 +55,16 @@ public class CheckpointReconciler {
         if(same)usable.add("Managed process: "+process.processId()+" status="+managed.status()+"; wait/query existing result, do not spawn again");
       }
       if(!same)recheck.add("Process identity/reconnection unknown: "+process.processId()+"; do not restart or terminate");
+    }
+    if(reviewLedger!=null)for(var evidence:saved.evidence())if(evidence.origin().equals("REVIEW_JOB_REFERENCE")) {
+      try {
+        var job=reviewLedger.get(evidence.summary(),new dev.mikoto2000.rei.review.ReviewCoverageLedger.Scope(saved.projectId(),saved.sessionId(),saved.runId()));
+        for(var target:job.targets()) {
+          var path=root.resolve(target.path()).normalize();
+          if(!path.startsWith(root)||!fingerprint(path).equals("sha256:"+target.version()))changed.add("Review source changed: "+target.path());
+        }
+        usable.add("Review Job: "+job.id()+" status="+job.status()+"; read coverage before continuing");
+      }catch(RuntimeException invalid){blockers.add("Review Job unavailable or ownership mismatch: "+evidence.summary());}
     }
     var unknown=saved.operations().stream().filter(o->o.status()==OperationStatus.STARTED||o.status()==OperationStatus.UNKNOWN).toList();
     if(saved.evidence().stream().anyMatch(e->e.origin().equals("ASSISTANT_CLAIM")))recheck.add("Assistant completion claims are unverified; validate against tool evidence and acceptance criteria");

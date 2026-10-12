@@ -19,9 +19,9 @@ class DotMigrationTest {
         var s = c.createStatement()) {
       s.execute("INSERT INTO mcp_settings VALUES('test_preserved','existing')");
       for (String table :
-          new String[] {"dot_requests", "dot_receipts", "dot_resume_intents", "dot_audit"})
+          new String[] {"dot_requests", "dot_receipts", "dot_resume_intents", "dot_audit", "review_participants", "review_jobs"})
         s.execute("DROP TABLE " + table);
-      s.execute("DELETE FROM storage_migrations WHERE version=8");
+      s.execute("DELETE FROM storage_migrations WHERE version>=8");
       s.execute("PRAGMA user_version=7");
     }
   }
@@ -30,7 +30,7 @@ class DotMigrationTest {
   void verifiedSevenMigratesAtomicallyAndPreservesExistingData() throws Exception {
     versionSeven();
     try (var gate = new StorageMigrationCoordinator(root)) {
-      assertEquals(8, gate.prepare().schemaVersion());
+      assertEquals(StorageMigrationCoordinator.SCHEMA_VERSION, gate.prepare().schemaVersion());
     }
     try (var c = DriverManager.getConnection("jdbc:sqlite:" + root.resolve("storage.db"));
         var s = c.createStatement();
@@ -39,7 +39,7 @@ class DotMigrationTest {
       assertEquals("existing", r.getString(1));
     }
     try (var gate = new StorageMigrationCoordinator(root)) {
-      assertEquals(8, gate.prepare().schemaVersion());
+      assertEquals(StorageMigrationCoordinator.SCHEMA_VERSION, gate.prepare().schemaVersion());
     }
     assertTrue(Files.isDirectory(root.resolve(".storage/backups")));
   }
@@ -63,7 +63,7 @@ class DotMigrationTest {
       assertEquals(7, r.getInt(1));
     }
     try (var gate = new StorageMigrationCoordinator(root)) {
-      assertEquals(8, gate.prepare().schemaVersion());
+      assertEquals(StorageMigrationCoordinator.SCHEMA_VERSION, gate.prepare().schemaVersion());
     }
   }
 }

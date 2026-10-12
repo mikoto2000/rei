@@ -30,6 +30,22 @@ class PersistentCheckpointServiceTest {
         factory.getBeanProvider(dev.mikoto2000.rei.core.working.WorkingSet.class),factory.getBeanProvider(dev.mikoto2000.rei.core.taskstate.TaskState.class),factory.getBeanProvider(dev.mikoto2000.rei.core.checkpoint.CheckpointStore.class));
     owner=new AgentRunContext("run","session",root,"A");service.start(owner,"original request");
   }
+  @Test void reviewJobReferencesAndVerifiedCoverageSurviveResume()throws Exception {
+    Path data=root.resolve("review-data");try(var migration=new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(data)){migration.prepare();}
+    var ledger=new dev.mikoto2000.rei.review.ReviewCoverageLedger(new dev.mikoto2000.rei.storage.StorageDatabase(data));
+    service.setReviewLedger(ledger);
+    var actor=dev.mikoto2000.rei.review.ReviewTools.scope(owner);
+    var range=new dev.mikoto2000.rei.review.ReviewCoverageLedger.Range("lesson.md","v1",new dev.mikoto2000.rei.review.ReviewCoverageLedger.Span(0,4,1,1,0,4),"hash");
+    var job=ledger.create(actor,"correctness","v1",List.of(new dev.mikoto2000.rei.review.ReviewCoverageLedger.Target("lesson.md","v1",1,List.of(new dev.mikoto2000.rei.review.ReviewCoverageLedger.Span(0,8,1,1,0,8)))));
+    ledger.fetched(job.id(),actor,range);ledger.delivered(job.id(),actor,List.of(range));ledger.reviewed(job.id(),actor,range,"checked",List.of());
+    service.preserveResults(owner,List.of(),null);service.finish(owner,"INTERRUPTED");
+    assertTrue(state().evidence().stream().anyMatch(e->e.origin().equals("REVIEW_JOB_REFERENCE")&&e.summary().equals(job.id())));
+    var resumed=service.resume("A",state().taskId(),AgentRunContext.RequestSource.SHELL);
+    var next=new AgentRunContext(resumed.runId(),"session",root,"A");service.start(next,"resume");
+    var restored=ledger.get(job.id(),dev.mikoto2000.rei.review.ReviewTools.scope(next));
+    assertEquals("REVIEW_PARTIAL",restored.status());assertTrue(restored.ranges().getFirst().reviewed());
+    assertEquals(range,restored.ranges().getFirst().range());
+  }
   @Test void progressSurvivesCheckpointResumeAndStaysIsolated() {
     var ledger=new dev.mikoto2000.rei.core.stagnation.InformationLedger();
     ledger.observeRange("docs/A", "v1", 1, 10001);

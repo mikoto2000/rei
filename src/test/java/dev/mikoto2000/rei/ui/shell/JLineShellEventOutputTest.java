@@ -11,6 +11,17 @@ import org.jline.terminal.Terminal;
 import org.junit.jupiter.api.Test;
 
 class JLineShellEventOutputTest {
+  @Test void redirectedApprovalNoticeUsesPlainWriterWithoutRedraw() {
+    var reader = mock(LineReader.class); var terminal = mock(Terminal.class);
+    var text = new java.io.StringWriter();
+    when(reader.getTerminal()).thenReturn(terminal); when(terminal.writer()).thenReturn(new java.io.PrintWriter(text));
+    when(reader.isReading()).thenReturn(true); when(terminal.getType()).thenReturn("xterm");
+    var output = new JLineShellEventOutput(reader);
+    output.approvalRequired("runCommand\npassword=secret");
+    org.assertj.core.api.Assertions.assertThat(text.toString()).contains("[APPROVAL REQUIRED]", "[REDACTED]", "/approval list").doesNotContain("secret", "\u001b");
+    verify(reader, never()).printAbove(org.mockito.ArgumentMatchers.anyString());
+    verify(reader, never()).printAbove(org.mockito.ArgumentMatchers.any(org.jline.utils.AttributedString.class));
+  }
   @Test
   void longStreamingOutputIsVisibleBeforeTheMessageCompletes() {
     LineReader reader = mock(LineReader.class);

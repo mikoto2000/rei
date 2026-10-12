@@ -5,7 +5,7 @@ import java.util.function.Supplier;
 import org.jline.reader.*;
 
 /** Arrow-key approval actions share the ordinary input reader; never read on an event thread. */
-public final class ApprovalActionMenu {
+public final class ApprovalActionMenu implements AutoCloseable {
   public record Owner(String project, String session) {}
   private record Request(Owner owner, String id) {}
   private final LineReader reader;
@@ -15,7 +15,64 @@ public final class ApprovalActionMenu {
   private int action;
   private String inserted;
   private volatile boolean enabled;
-  public void enabled(boolean value) { enabled = value; if (!value) clearDisplay(); }
+  private volatile boolean closed;
+  private long revision;
+  private java.util.concurrent.ScheduledExecutorService updates;
+  @FunctionalInterface public interface PendingSource { List<String> pending(Owner owner) throws Exception; }
+  public void enabled(boolean value) { enabled = value; if (!value) clearDisplay(); refreshStatus(); }
+  public synchronized int pendingCount() {
+    Owner current = owner.get();
+    return (int) requests.stream().filter(r -> r.owner.equals(current)).count();
+  }
+  private void refreshStatus() {
+    int count = pendingCount();
+    if (reader instanceof ApprovalMenuLineReader menuReader)
+      menuReader.approvalStatus(!closed && count > 0
+          ? "[APPROVAL PENDING: " + count + "] /approval list | " + (enabled
+              ? "\u7a7a\u306e\u5165\u529b\u6b04: \u2191\u2193 \u3067\u9078\u629e / Enter \u3067\u5b9f\u884c (\u6700\u521d\u306f\u8a73\u7d30\u78ba\u8a8d)"
+              : "\u901a\u5e38\u306e\u5165\u529b\u6b04\u3067\u64cd\u4f5c\u3067\u304d\u307e\u3059") : "");
+  }
+  /** Read-only reconciliation; failure retains the last known state, never a grant. */
+  public synchronized void follow(PendingSource source) {
+    if (updates != null) throw new IllegalStateException("Already following approvals");
+    updates = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+      var thread = new Thread(r, "approval-display"); thread.setDaemon(true); return thread;
+    });
+    updates.scheduleWithFixedDelay(() -> {
+      if (closed) return;
+      try {
+        Owner captured = owner.get(); long version;
+        synchronized (this) { version = revision; }
+        var ids = source.pending(captured);
+        reconcile(captured, ids, version);
+      } catch (Exception unavailable) { if (unavailable instanceof InterruptedException) Thread.currentThread().interrupt(); }
+    }, 0, 1, java.util.concurrent.TimeUnit.SECONDS);
+  }
+  public void reconcile(Owner captured, List<String> ids) {
+    reconcile(captured, ids, -1);
+  }
+  private void reconcile(Owner captured, List<String> ids, long version) {
+    boolean removedSelection;
+    synchronized (this) {
+      if (!captured.equals(owner.get()) || version >= 0 && version != revision) return;
+      var replacements = new LinkedHashSet<Request>();
+      for (String id : ids) {
+        if (replacements.size() >= 256) break;
+        try { if (UUID.fromString(id).toString().equalsIgnoreCase(id)) replacements.add(new Request(captured, id)); }
+        catch (RuntimeException invalid) { }
+      }
+      requests.clear();
+      requests.addAll(replacements); revision++;
+      removedSelection = selected != null && !requests.contains(selected);
+    }
+    if (removedSelection) clearDisplay();
+    refreshStatus();
+  }
+  @Override public void close() {
+    closed = true;
+    if (updates != null) updates.shutdownNow();
+    enabled(false);
+  }
   private static final List<String> LABELS = List.of("詳細確認", "承認して続行", "拒否");
 
   public ApprovalActionMenu(LineReader reader, Supplier<Owner> owner) {
@@ -37,7 +94,8 @@ public final class ApprovalActionMenu {
     catch (RuntimeException invalid) { return; }
     var request = new Request(new Owner(project, session), id);
     boolean added;
-    synchronized (this) { added = requests.size() < 256 && requests.add(request); }
+    synchronized (this) { added = requests.size() < 256 && requests.add(request); if (added) revision++; }
+    refreshStatus();
     if (added) reader.printAbove("承認メニュー: 入力欄が空のとき ↑↓ で選択、Enter で実行（最初は詳細確認）。");
   }
 
@@ -75,12 +133,11 @@ public final class ApprovalActionMenu {
   synchronized boolean enter() {
     clearDisplay();
     if (enabled && selected != null && Objects.equals(reader.getBuffer().toString(), inserted)) {
-      if (!selected.owner.equals(owner.get())) {
+      if (!selected.owner.equals(owner.get()) || !requests.contains(selected)) {
         reader.getBuffer().clear(); selected = null; inserted = null;
         reader.printAbove("Project/Session が変わったため、承認の選択を取り消しました。");
         return true;
       }
-      if (action != 0) requests.remove(selected);
       selected = null; inserted = null;
     }
     reader.callWidget(LineReader.ACCEPT_LINE);

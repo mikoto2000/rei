@@ -120,9 +120,9 @@ class RunEventOutputTest {
     payload.put("kind", "APPROVAL_REQUIRED");
     payload.put("message", "承認待ち: runCommand\nこの操作を承認して続行するには、次のコマンドを入力してください:\n/approval approve ca880320-1482-4d84-8fb9-53c0b3234997 --continue");
     output.accept("attention.required", payload);
-    assertEquals(List.of("[attention] APPROVAL_REQUIRED", "承認待ち: runCommand",
-        "この操作を承認して続行するには、次のコマンドを入力してください:",
-        "/approval approve ca880320-1482-4d84-8fb9-53c0b3234997 --continue"), lines);
+    assertEquals(1, lines.size());
+    assertTrue(lines.getFirst().startsWith("+-- [APPROVAL REQUIRED]"));
+    assertTrue(lines.getFirst().contains("\n/approval approve ca880320-1482-4d84-8fb9-53c0b3234997 --continue\n"));
   }
 
   @Test void detachFlushesAnUnfinishedLineOnce() throws Exception {

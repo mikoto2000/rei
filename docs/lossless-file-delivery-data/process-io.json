@@ -1,0 +1,10 @@
+{
+  "elapsedMillis": 54037,
+  "observedProcessReadBytes": 223692357,
+  "observedProcessWriteBytes": 29729137,
+  "observedProcessReadOperations": 63127,
+  "exitCode": 0,
+  "observedPeakWorkingSetBytes": 1811419136,
+  "observedProcessWriteOperations": 6143,
+  "notes": "Sampled process-tree I/O includes Maven compilation, SQLite native I/O, files and pipes. Last sample may miss exit I/O; it is an observed lower bound, not physical disk attribution."
+}

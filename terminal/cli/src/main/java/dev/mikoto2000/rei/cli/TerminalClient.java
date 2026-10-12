@@ -22,7 +22,8 @@ public final class TerminalClient implements AutoCloseable {
   private volatile boolean attached;
   private final AtomicLong subscriptionGeneration=new AtomicLong();
   private String mode="EXCLUSIVE";
-  private String project,projectName="none",session,run;
+  private volatile String project,session;
+  private String projectName="none",run;
   private String currentModel="unknown";
   private Path projectDirectory;
   private volatile List<String> projectIds=List.of(),sessionIds=List.of();
@@ -48,9 +49,36 @@ public final class TerminalClient implements AutoCloseable {
     reader.setVariable(LineReader.HISTORY_SIZE,1000);reader.setVariable(LineReader.HISTORY_FILE_SIZE,1000);
     reader.setOpt(LineReader.Option.BRACKETED_PASTE);
     approvalMenu=new ApprovalActionMenu(reader,()->new ApprovalActionMenu.Owner(project,session));
+    approvalMenu.follow(this::pendingApprovals);
     if(java.io.File.separatorChar=='\\')reader.setOpt(LineReader.Option.CASE_INSENSITIVE);
     if(recordHistory)for(String line:history.entries())memory.add(java.time.Instant.now(),line);
     terminal.handle(Terminal.Signal.INT,signal->{backend.detach();attached=false;});
+  }
+  List<String> pendingApprovals(ApprovalActionMenu.Owner owner) throws IOException, InterruptedException {
+    if (owner.project() == null || owner.session() == null) return List.of();
+    var rows = backend.get("/api/v1/projects/" + BackendClient.segment(owner.project()) + "/approvals");
+    if (!rows.isArray() || rows.size() > 256) throw new IOException("Invalid approval list");
+    var ids = new ArrayList<String>();
+    var activeRuns = new HashMap<String, Boolean>();
+    for (var row : rows) {
+      if (!owner.project().equals(row.path("projectId").asText())) throw new IOException("Invalid approval ownership");
+      if (owner.session().equals(row.path("sessionId").asText())
+          && ApprovalDisplayState.pending(row.path("status").asText(), java.time.Instant.parse(row.path("expiresAt").asText()),
+              row.path("continuationState").asText("UNAVAILABLE"), java.time.Instant.now())) {
+        // Legacy requests can have no continuation record; still remove terminal/cancelled Runs.
+        if (row.path("continuationState").asText("UNAVAILABLE").equals("UNAVAILABLE")) {
+          String runId = row.path("runId").asText();
+          if (runId.isBlank()) throw new IOException("Invalid approval Run");
+          if (!activeRuns.containsKey(runId)) {
+            var status = backend.get("/api/v1/runs/" + BackendClient.segment(runId)).path("status").asText();
+            activeRuns.put(runId, Set.of("QUEUED", "RUNNING", "WAITING", "WAITING_APPROVAL").contains(status));
+          }
+          if (!activeRuns.get(runId)) continue;
+        }
+        ids.add(row.path("id").asText());
+      }
+    }
+    return ids;
   }
   public void selectInitialProject(Path path)throws IOException,InterruptedException {
     Path selected=(path==null?Path.of(""):path).toAbsolutePath().normalize();
@@ -320,7 +348,7 @@ public final class TerminalClient implements AutoCloseable {
   private void watch(String id) {
     long generation=subscriptionGeneration.incrementAndGet();backend.detach();if(watching!=null)watching.cancel(true);attached=true;
     watching=streams.submit(()->{
-      var sequence=new AtomicLong();var eventOutput=new RunEventOutput(this::out);int reconnects=0;
+      var sequence=new AtomicLong();var eventOutput=new RunEventOutput(this::out, this::approvalNotice);int reconnects=0;
       try {
       while(attached&&generation==subscriptionGeneration.get()&&!Thread.currentThread().isInterrupted()) {
         try {
@@ -373,5 +401,10 @@ public final class TerminalClient implements AutoCloseable {
   String buildPrompt(java.time.LocalTime time){return time.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))+" "+safeOutput(currentModel)+"> ";}
   private String safeOutput(String value){return backend.redact(value).replaceAll("[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]","");}
   private void out(String value){reader.printAbove(safeOutput(value));}
-  @Override public void close()throws IOException {attached=false;backend.detach();streams.shutdownNow();history.close();terminal.close();}
+  private void approvalNotice(String message) {
+    String safe = safeOutput(message);
+    if (ApprovalDisplayState.interactive(terminal)) reader.printAbove(ApprovalNotice.format(safe));
+    else { terminal.writer().println(ApprovalNotice.text(safe)); terminal.writer().flush(); }
+  }
+  @Override public void close()throws IOException {approvalMenu.close();attached=false;backend.detach();streams.shutdownNow();history.close();terminal.close();}
 }

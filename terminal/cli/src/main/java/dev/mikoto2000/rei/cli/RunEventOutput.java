@@ -10,6 +10,7 @@ import java.util.function.Consumer;
 /** Keeps provider chunk boundaries out of terminal lines and preserves the input prompt. */
 final class RunEventOutput {
   private final Consumer<String> output;
+  private final Consumer<String> approvalOutput;
   private final Set<String> streamed = new HashSet<>();
   private final Set<String> ignoredMessages = new HashSet<>();
   private final StringBuilder pending = new StringBuilder();
@@ -17,7 +18,8 @@ final class RunEventOutput {
   private record Notice(String type, JsonNode payload) { }
   private final List<Notice> notices = new ArrayList<>();
 
-  RunEventOutput(Consumer<String> output) { this.output = output; }
+  RunEventOutput(Consumer<String> output) { this(output, message -> output.accept(dev.mikoto2000.rei.core.completion.ApprovalNotice.text(message))); }
+  RunEventOutput(Consumer<String> output, Consumer<String> approvalOutput) { this.output = output; this.approvalOutput = approvalOutput; }
 
   void accept(String type, JsonNode payload) {
     accept(type, payload, java.time.Instant.now());
@@ -75,6 +77,9 @@ final class RunEventOutput {
       return;
     }
     if ("attention.required".equals(type)) {
+      if ("APPROVAL_REQUIRED".equals(payload.path("kind").asText())) {
+        approvalOutput.accept(payload.path("message").asText()); return;
+      }
       output.accept("[attention] " + payload.path("kind").asText());
       payload.path("message").asText().lines().forEach(output);
       return;

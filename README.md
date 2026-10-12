@@ -262,3 +262,5 @@ LLM送信本文の明示記録は [LLM Request Capture](docs/llm-request-capture
 対話Shell起動時の音声入力は、[自動開始設定](docs/configuration.md#音声入力の自動開始)で明示的に有効化できます。既定はOFFです。
 
 Sign in with ChatGPT の手動 SubAgent は [利用・設計ドキュメント](docs/chatgpt-plan-subagents.md) を参照してください。
+
+承認待ちの強調枠・入力欄付近の件数表示と端末フォールバックは [承認待ちの端末表示](docs/approval-display.md) を参照してください。

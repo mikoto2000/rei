@@ -122,6 +122,22 @@ public class ExternalAgentProcessRunner {
     catch (InterruptedException error) { Thread.currentThread().interrupt(); }
   }
   private static Set<Long> protectedProcessIds() {
+    if(com.sun.jna.Platform.isWindows()) {
+      var kernel=com.sun.jna.platform.win32.Kernel32.INSTANCE;
+      var snapshot=kernel.CreateToolhelp32Snapshot(com.sun.jna.platform.win32.Tlhelp32.TH32CS_SNAPPROCESS,new com.sun.jna.platform.win32.WinDef.DWORD(0));
+      if(com.sun.jna.platform.win32.WinBase.INVALID_HANDLE_VALUE.equals(snapshot))throw new IllegalStateException("Cannot verify process ancestry");
+      try {
+        var parents=new HashMap<Long,Long>();var entry=new com.sun.jna.platform.win32.Tlhelp32.PROCESSENTRY32();
+        long deadline=System.nanoTime()+java.time.Duration.ofSeconds(1).toNanos();
+        if(!kernel.Process32First(snapshot,entry))throw new IllegalStateException("Cannot verify process ancestry");
+        do {
+          if(parents.size()>=65536||System.nanoTime()>deadline)throw new IllegalStateException("Process ancestry limit");
+          parents.put(entry.th32ProcessID.longValue(),entry.th32ParentProcessID.longValue());
+        }while(kernel.Process32Next(snapshot,entry));
+        if(kernel.GetLastError()!=com.sun.jna.platform.win32.WinError.ERROR_NO_MORE_FILES)throw new IllegalStateException("Incomplete process ancestry snapshot");
+        return ancestorIds(parents,ProcessHandle.current().pid());
+      }finally{kernel.CloseHandle(snapshot);}
+    }
     Set<Long> ids = new HashSet<>();
     ProcessHandle current = ProcessHandle.current();
     ids.add(current.pid());
@@ -129,6 +145,14 @@ public class ExternalAgentProcessRunner {
       if (!ids.add(parent.get().pid())) break;
     }
     return ids;
+  }
+  static Set<Long> ancestorIds(Map<Long,Long> parents,long current) {
+    var ids=new HashSet<Long>();
+    while(current!=0&&ids.add(current)) {
+      if(ids.size()>64)throw new IllegalStateException("Process ancestry limit");
+      current=parents.getOrDefault(current,0L);
+    }
+    return Set.copyOf(ids);
   }
   private static void rememberDescendants(Process process, Set<ProcessHandle> known) {
     // Windows can retain a stale parent PID after exit. Never infer ownership from
