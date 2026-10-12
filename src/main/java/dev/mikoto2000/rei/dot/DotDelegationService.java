@@ -257,12 +257,12 @@ public class DotDelegationService {
 
   public List<Map<String, Object>> list(String project) {
     project(project);
-    return repo.list(Set.of(project), "PENDING", null, 20);
+    return repo.open(project);
   }
 
   public Map<String, Object> get(String project, String id) {
     project(project);
-    return repo.get(project, id);
+    return repo.status(project, id);
   }
 
   public Map<String, Object> result(String project, String id) {

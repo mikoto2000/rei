@@ -24,6 +24,7 @@ fullはintegration/e2eを含みliveを除く。対象テストはstrict DTO、�
 - Phase 3: dot-phase3-red.log → dot-phase3-green.log、dot-phase3-loop.log
 - Phase 4: dot-phase4-red.log → dot-phase4-green.log、dot-phase4-acceptance.log
 - 追加の作成再送・未完了slot: dot-create-red.log / dot-capacity-red.log → 最終対象回帰
+- 保存期間の追加検証: dot-retention-red.log → dot-retention-green.log（未完了本文の削除、metadata・取消、不変receipt、domainエラー）
 - 最終対象回帰: dot-focused-final.log
 - 全体: dot-full-test.log
 

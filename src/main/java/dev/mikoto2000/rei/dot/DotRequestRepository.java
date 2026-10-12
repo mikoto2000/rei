@@ -116,11 +116,11 @@ public class DotRequestRepository {
 
   public Owner owner(String project, String id) {
     maintain();
-    return db.read(c -> owner(c, project, id));
+    return read(c -> owner(c, project, id));
   }
 
   public byte[] cursorKey() {
-    return db.read(
+    return read(
         c -> {
           try (var s = c.createStatement();
               var r = s.executeQuery("SELECT value FROM mcp_settings WHERE name='cursor_key'")) {
@@ -131,7 +131,7 @@ public class DotRequestRepository {
   }
 
   public Optional<String> project(String id) {
-    return db.read(
+    return read(
         c -> {
           try (var s = c.prepareStatement("SELECT project FROM dot_requests WHERE id=?")) {
             s.setString(1, id);
@@ -256,7 +256,7 @@ public class DotRequestRepository {
             .contains(status)) throw new DotException("INVALID_ARGUMENT");
     maintain();
     if (projects.isEmpty()) return List.of();
-    return db.read(
+    return read(
         c -> {
           var out = new ArrayList<Map<String, Object>>();
           var slots = String.join(",", Collections.nCopies(projects.size(), "?"));
@@ -321,7 +321,7 @@ public class DotRequestRepository {
 
   public Map<String, Object> get(String project, String id) {
     maintain();
-    return db.read(c -> get(c, project, id));
+    return read(c -> get(c, project, id));
   }
 
   public Map<String, Object> claim(String project, String id, String claim) {
@@ -468,13 +468,13 @@ public class DotRequestRepository {
                   + " status IN ('NOT_REQUESTED','REQUESTED')",
               clock.millis(),
               id);
-          return get(c, project, id);
+          return status(c, project, id);
         });
   }
 
   public Map<String, Object> result(String project, String id) {
     maintain();
-    return db.read(
+    return read(
         c -> {
           var owner = owner(c, project, id);
           try (var s =
@@ -494,7 +494,7 @@ public class DotRequestRepository {
   }
 
   public boolean published(String project, String id) {
-    return db.read(
+    return read(
         c ->
             count(
                     c,
@@ -505,7 +505,7 @@ public class DotRequestRepository {
   }
 
   public Optional<Owner> byRun(String project, String run) {
-    return db.read(
+    return read(
         c -> {
           try (var s =
               c.prepareStatement("SELECT id FROM dot_requests WHERE project=? AND run=?")) {
@@ -590,9 +590,7 @@ public class DotRequestRepository {
               now - resultRetention.toMillis());
           update(
               c,
-              "UPDATE dot_requests SET publication=NULL,review_note=NULL WHERE created<=? AND"
-                  + " status IN"
-                  + " ('VERIFIED','PARTIALLY_VERIFIED','REJECTED','FAILED','CANCELLED','EXPIRED')",
+              "UPDATE dot_requests SET publication=NULL,review_note=NULL WHERE created<=?",
               now - requestRetention.toMillis());
           update(c, "DELETE FROM dot_audit WHERE created<=?", now - requestRetention.toMillis());
           return null;
@@ -693,7 +691,7 @@ public class DotRequestRepository {
   }
 
   public Map<String, Object> intent(String project, String id) {
-    return db.read(
+    return read(
         c -> {
           owner(c, project, id);
           try (var s = c.prepareStatement("SELECT * FROM dot_resume_intents WHERE request=?")) {
@@ -736,6 +734,115 @@ public class DotRequestRepository {
                   + " (status='REQUESTED' AND schedule IS NULL)",
               clock.millis());
           return null;
+        });
+  }
+
+  /**
+   * Human-only unfinished metadata, including unpublished/expired snapshots needing cancellation.
+   */
+  public List<Map<String, Object>> open(String project) {
+    maintain();
+    return read(
+        c -> {
+          var out = new ArrayList<Map<String, Object>>();
+          try (var q =
+              c.prepareStatement(
+                  "SELECT q.id,q.status,q.validation,q.publication,q.created,q.expires,i.status AS"
+                      + " resume_status FROM dot_requests q LEFT JOIN dot_resume_intents i ON"
+                      + " q.id=i.request WHERE q.project=? AND q.status IN"
+                      + " ('PENDING','CLAIMED','RESULT_RECEIVED','UNKNOWN') ORDER BY q.created,q.id"
+                      + " LIMIT 20")) {
+            q.setString(1, project);
+            try (var r = q.executeQuery()) {
+              while (r.next())
+                out.add(
+                    Map.of(
+                        "request_id",
+                        r.getString("id"),
+                        "project_id",
+                        project,
+                        "status",
+                        r.getString("status"),
+                        "validation_status",
+                        r.getString("validation"),
+                        "resume_status",
+                        Objects.toString(r.getString("resume_status"), "NOT_REQUESTED"),
+                        "snapshot_expired",
+                        r.getString("publication") == null,
+                        "created_at",
+                        Instant.ofEpochMilli(r.getLong("created")).toString(),
+                        "expires_at",
+                        Instant.ofEpochMilli(r.getLong("expires")).toString()));
+            }
+          }
+          return List.copyOf(out);
+        });
+  }
+
+  private <T> T read(StorageDatabase.Work<T> work) {
+    try {
+      return db.read(work);
+    } catch (IllegalStateException failure) {
+      if (failure.getCause() instanceof DotException domain) throw domain;
+      throw failure;
+    }
+  }
+
+  private Map<String, Object> status(Connection c, String project, String id) throws SQLException {
+    try {
+      return get(c, project, id);
+    } catch (DotException expired) {
+      if (!expired.code.equals("REQUEST_EXPIRED")) throw expired;
+      var owner = owner(c, project, id);
+      String resume = "NOT_REQUESTED";
+      try (var q = c.prepareStatement("SELECT status FROM dot_resume_intents WHERE request=?")) {
+        q.setString(1, id);
+        try (var r = q.executeQuery()) {
+          if (r.next()) resume = r.getString(1);
+        }
+      }
+      return Map.of(
+          "schema_version",
+          1,
+          "request_id",
+          id,
+          "project_id",
+          project,
+          "status",
+          owner.status(),
+          "validation_status",
+          owner.validation(),
+          "resume_status",
+          resume,
+          "snapshot_expired",
+          true,
+          "expires_at",
+          Instant.ofEpochMilli(owner.expires()).toString());
+    }
+  }
+
+  public Map<String, Object> status(String project, String id) {
+    maintain();
+    return read(c -> status(c, project, id));
+  }
+
+  /** Immutable acknowledgement only; never grants a new claim, validation or resume. */
+  public Optional<Map<String, Object>> replayReceipt(
+      String project, String id, String submission, String fingerprint) {
+    return read(
+        c -> {
+          owner(c, project, id);
+          try (var q =
+              c.prepareStatement(
+                  "SELECT submission,fingerprint,receipt FROM dot_receipts WHERE request=?")) {
+            q.setString(1, id);
+            try (var r = q.executeQuery()) {
+              if (!r.next()) return Optional.empty();
+              if (!submission.equals(r.getString(1)) || !fingerprint.equals(r.getString(2)))
+                throw new DotException("SUBMISSION_CONFLICT");
+              return Optional.of(document(r.getString(3)));
+            }
+          }
         });
   }
 }

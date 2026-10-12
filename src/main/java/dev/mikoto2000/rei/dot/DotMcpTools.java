@@ -122,20 +122,30 @@ public final class DotMcpTools {
                 yield repo.claim(project, id, DotPayload.id(a, "claim_id"));
               }
               case "rei_request_result_submit" -> {
+                DotPayload.keys(
+                    a,
+                    Set.of(
+                        "request_id",
+                        "claim_id",
+                        "submission_id",
+                        "outcome",
+                        "summary",
+                        "content",
+                        "evidence",
+                        "unresolved_items",
+                        "acceptance_results"));
+                String claim = DotPayload.id(a, "claim_id"),
+                    submission = DotPayload.id(a, "submission_id");
+                String fingerprint =
+                    dev.mikoto2000.rei.conversation.ConversationAdmissionStore.hash(
+                        StorageDatabase.JSON.writeValueAsString(a));
+                var replay = repo.replayReceipt(project, id, submission, fingerprint);
+                if (replay.isPresent()) yield replay.get();
                 var request = repo.get(project, id);
                 var normalized =
                     DotPayload.result(
                         a, (List<?>) request.getOrDefault("acceptance_criteria", List.of()));
-                String fingerprint =
-                    dev.mikoto2000.rei.conversation.ConversationAdmissionStore.hash(
-                        StorageDatabase.JSON.writeValueAsString(a));
-                yield repo.submit(
-                    project,
-                    id,
-                    DotPayload.id(a, "claim_id"),
-                    DotPayload.id(a, "submission_id"),
-                    normalized,
-                    fingerprint);
+                yield repo.submit(project, id, claim, submission, normalized, fingerprint);
               }
               default -> throw new DotException("INVALID_ARGUMENT");
             };

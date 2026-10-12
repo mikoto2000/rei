@@ -49,7 +49,7 @@ storage.db:
 - dot_audit: operation・結果・actor（本文は記録しない）
 
 resultと初期resume intentは同一SQLite transaction。依頼DBと既存dependency/scheduler DBは別なので、親依頼は作成→dependency/checkpoint紐付け→tool結果保存→Run WAITING→公開の段階的受付。公開前の中断はUNKNOWN。再開もintent→既存schedule作成→紐付け→activationで、曖昧な中断を再実行しない。
-結果本文30日、公開依頼/監査90日。冪等性のidentity/fingerprint/receipt tombstoneは保持する。UNKNOWN未解決依頼は容量を占有するので確認・取消が必要。内部maintenanceは期限・保持期間処理だけを行う。
+結果本文30日、公開依頼本文/検証note・監査90日（未完了でも本文は削除）。CLI/Webの状態確認はsnapshot_expired=trueの本文なしmetadataを返し、/dot requestsは未完了のmetadata一覧を表示する。期限後も取消で容量を解放できる。MCP getはREQUEST_EXPIREDを返すが、元のsubmissionの完全一致再送は本文を復元せず不変receiptだけを返す。冪等性のidentity/fingerprint/receipt tombstoneは保持する。UNKNOWN未解決依頼は容量を占有するので確認・取消が必要。内部maintenanceは期限・保持期間処理だけを行う。
 
 ## 設定
 既定はすべて委譲無効。既存application.yamlのreiに以下を統合する（同じキーを重複作成しない）。
@@ -75,7 +75,7 @@ MCPの既存enabled/port/allowed-projectsは維持する。同時未完了はCLA
 legacy-shellと軽量CLIは共通の固定grammar・ドメインAPIを利用。汎用Shell転送はない。
 ```text
 /dot request "WindowsとLinuxの違いを調べて" --category COMPARISON --context "対象は起動処理" --expected-output "出典付き比較表" --acceptance-criterion "一次資料で比較する" --timeout 3600
-/dot requests
+/dot requests # 未完了のmetadata（PENDING/CLAIMED/RESULT_RECEIVED/UNKNOWN）
 /dot status <request-id>
 /dot result <request-id>
 /dot cancel <request-id>
