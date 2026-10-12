@@ -29,8 +29,10 @@ class TerminalClientTest {
     try(var backend=new BackendClient(URI.create("http://127.0.0.1:"+server.getAddress().getPort()),"fixture");
         var client=new TerminalClient(backend,directory,true,TerminalBuilder.builder().system(false).dumb(true).streams(new ByteArrayInputStream(new byte[0]),output).build())) {
       client.command("/models");assertTrue(output.toString().contains("* chosen"));assertFalse(output.toString().contains("currentModel"));
+      assertEquals("20:34 chosen> ",client.buildPrompt(java.time.LocalTime.of(20,34)));
       assertEquals(java.util.List.of("other"),client.completionValues(java.util.List.of("/model","o"),1,"o"));
       output.reset();client.command("/model chosen");assertTrue(output.toString().contains("current model: chosen"));
+      assertEquals("09:05 chosen> ",client.buildPrompt(java.time.LocalTime.of(9,5)));
     }finally{server.stop(0);}
   }
   @Test void startupWithoutProjectOptionSelectsTheClientWorkingDirectory()throws Exception {

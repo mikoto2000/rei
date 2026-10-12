@@ -20,8 +20,16 @@ public class ToolPermissionPolicy {
   @org.springframework.beans.factory.annotation.Autowired
   void setDelegationResolver(dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver resolver) {this.delegation=resolver;}
   public void validateDelegation(String tool,String input) {
-    dev.mikoto2000.rei.subagent.DelegationArguments.validate(tool,input);
-    if(delegation!=null)delegation.validate(tool,input);
+    try {
+      dev.mikoto2000.rei.subagent.DelegationArguments.validate(tool,input);
+      if(delegation!=null)delegation.validate(tool,input);
+    }catch(IllegalArgumentException invalid){throw new InvalidToolArgumentsException(invalid.getMessage());}
+    catch(dev.mikoto2000.rei.chatgpt.ChatGptException denied) {
+      if(denied.permissionReason()==dev.mikoto2000.rei.chatgpt.ChatGptException.PermissionReason.ACCOUNT_REQUIRED
+          ||denied.permissionReason()==dev.mikoto2000.rei.chatgpt.ChatGptException.PermissionReason.MODEL_REQUIRED)
+        throw new InvalidToolArgumentsException(denied.getMessage());
+      throw denied;
+    }
   }
   public ToolPermissionPolicy(ToolPermissionProperties properties) {this.properties=properties;}
   /** Stable administrator policy identity for durable authorization audit. */

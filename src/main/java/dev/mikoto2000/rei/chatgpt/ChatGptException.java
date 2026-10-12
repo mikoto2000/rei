@@ -23,6 +23,23 @@ public final class ChatGptException extends RuntimeException {
   }
 
   private final Code code;
+  private PermissionReason permissionReason;
+  public PermissionReason permissionReason(){return permissionReason;}
+  public enum PermissionReason {
+    AUTO_DELEGATION_DISABLED("auto-delegation.enabled が無効です。管理者設定を確認してください。"),
+    ACCOUNT_REQUIRED("accountRef が未指定です。/chatgpt status のアカウントラベルを明示してください。"),
+    ACCOUNT_NOT_ALLOWED("accountRef が auto-delegation.allowed-accounts に含まれていません。"),
+    MODEL_REQUIRED("modelId が未指定です。/chatgpt models --account <ラベル> で確認して指定してください。"),
+    MODEL_NOT_ALLOWED("modelId が auto-delegation.allowed-models に含まれていません。"),
+    ROLE_NOT_ALLOWED("agent または backendId が許可されていません。allowed-roles と委譲先を確認してください。"),
+    OWNER_NOT_EXCLUSIVE("Project を選択した親の EXCLUSIVE Run が必要です。子からの再委譲はできません。");
+    final String guidance;
+    PermissionReason(String guidance){this.guidance=guidance;}
+  }
+  public static ChatGptException permission(PermissionReason reason) {
+    var error=new ChatGptException(Code.PERMISSION_DENIED,reason.name()+": "+reason.guidance);
+    error.permissionReason=reason;return error;
+  }
 
   public ChatGptException(Code code) {
     super("ChatGPT plan: " + code.name(), null, false, false);

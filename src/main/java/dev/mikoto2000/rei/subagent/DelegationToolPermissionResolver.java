@@ -15,6 +15,9 @@ public final class DelegationToolPermissionResolver {
   private final ObjectProvider<SubAgentRegistry> registry;
   private final ObjectProvider<SubAgentToolPolicy> childPolicy;
   private final JsonMapper json = JsonMapper.builder().build();
+  private dev.mikoto2000.rei.chatgpt.PlanDelegationProperties automatic;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setAutomatic(dev.mikoto2000.rei.chatgpt.PlanDelegationProperties automatic){this.automatic=automatic;}
   public DelegationToolPermissionResolver(ObjectProvider<SubAgentRegistry> registry,
       ObjectProvider<SubAgentToolPolicy> childPolicy) {
     this.registry = registry; this.childPolicy = childPolicy;
@@ -33,6 +36,7 @@ public final class DelegationToolPermissionResolver {
       childPolicy.getObject().validate(definition.requestedTools());
       String backend=DelegationArguments.optional(request.path("backendId").asString(""));
       if(backend!=null && !backend.equals("local"))ExpectedOutputConditions.validate(request.path("expectedOutput").asString(),definition.resultSchema());
+      if(backend!=null && !backend.equals("local") && automatic!=null)automatic.check(request.path("accountRef").asString(),request.path("modelId").asString());
     }
   }
   public Set<ActionCapability> resolve(String tool, String input,

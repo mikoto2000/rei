@@ -23,6 +23,7 @@ public class ToolPermissionGuard {
   public void check(String tool,AgentRunContext owner) {
     check(tool,"",owner);
   }
+  public void validateArguments(String tool,String input){policy.validateDelegation(tool,input);}
   /** A one-use approval is never a reusable grant for background read retries. */
   public boolean automaticallyApprovedRead(String tool){return policy.evaluate(tool)==PermissionDecision.AUTO_APPROVE&&policy.capabilities(tool).stream().allMatch(c->c==ActionCapability.READ||c==ActionCapability.NETWORK_READ);}
   public void check(String tool,String input,AgentRunContext owner) {

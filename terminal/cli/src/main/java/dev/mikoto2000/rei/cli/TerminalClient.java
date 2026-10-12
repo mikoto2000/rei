@@ -23,6 +23,7 @@ public final class TerminalClient implements AutoCloseable {
   private final AtomicLong subscriptionGeneration=new AtomicLong();
   private String mode="EXCLUSIVE";
   private String project,projectName="none",session,run;
+  private String currentModel="unknown";
   private Path projectDirectory;
   private volatile List<String> projectIds=List.of(),sessionIds=List.of();
   private volatile List<String> modelIds=List.of();
@@ -97,7 +98,7 @@ public final class TerminalClient implements AutoCloseable {
       String line;
       try {
         approvalMenu.enabled(true);
-        try {line=reader.readLine("["+safeOutput(projectName)+" / "+safeOutput(session==null?"new":session)+"]> ");}
+        try {line=reader.readLine(buildPrompt(java.time.LocalTime.now()));}
         finally {approvalMenu.enabled(false);}
       }
       catch(UserInterruptException interrupt){backend.detach();attached=false;continue;}
@@ -124,6 +125,8 @@ public final class TerminalClient implements AutoCloseable {
   }
   private void refresh()throws IOException,InterruptedException {
     refreshCatalog();
+    try{currentModel=backend.get("/api/v1/models/current").path("model").asText("unknown");}
+    catch(BackendClient.ApiException unavailable){if(unavailable.status()!=404)throw unavailable;}
     var projects=backend.get("/api/v1/projects");var ids=new ArrayList<String>();var registeredPaths=new ArrayList<String>();for(var value:projects){ids.add(value.path("id").asText());if(value.hasNonNull("path"))registeredPaths.add(value.path("path").asText());}projectIds=List.copyOf(ids);projectPaths=List.copyOf(registeredPaths);
     try{allSessionIds=sessionCompletion(null);}catch(BackendClient.ApiException unavailable){if(unavailable.status()!=400&&unavailable.status()!=404)throw unavailable;}
     if(project!=null)sessionIds=sessionCompletion(project);
@@ -216,10 +219,10 @@ public final class TerminalClient implements AutoCloseable {
         out("Response mode: "+style+(style.equals("auto")?" (text: normal, voice: conversation)":response.path("voiceOnly").asBoolean()?" (voice only)":" (text and voice)"));return;
       }
       if(name.equals("/models")) {
-        var names=new ArrayList<String>();String current=response.path("currentModel").asText();
+        var names=new ArrayList<String>();String current=response.path("currentModel").asText();currentModel=current;
         for(var model:response.path("models")){String value=model.asText();names.add(value);out((value.equals(current)?"* ":"")+value);}modelIds=List.copyOf(names);return;
       }
-      if(name.equals("/model")){out((request.method().equals("GET")?"":"current model: ")+response.path("model").asText());return;}
+      if(name.equals("/model")){currentModel=response.path("model").asText();out((request.method().equals("GET")?"":"current model: ")+currentModel);return;}
       if(response.isObject()&&response.path("text").isTextual())out(response.path("text").asText());else show(response);return;
     }
     switch(name) {
@@ -326,7 +329,7 @@ public final class TerminalClient implements AutoCloseable {
             try {
               var value=BackendClient.JSON.readTree(event.data());if(!id.equals(value.path("runId").asText()))throw new IllegalArgumentException("Event Run identity mismatch");
               sequence.set(event.sequence());
-              eventOutput.accept(event.type(),value.path("payload"));
+              eventOutput.accept(event.type(),value.path("payload"),java.time.Instant.parse(value.path("timestamp").asText()));
               if(event.type().equals("attention.required")&&value.path("payload").path("kind").asText().equals("APPROVAL_REQUIRED")) {
                 var match=java.util.regex.Pattern.compile("(?m)^/approval approve ([0-9a-fA-F-]{36}) --continue$").matcher(value.path("payload").path("message").asText());
                 if(match.find())approvalMenu.offer(value.path("projectId").asText(),value.path("sessionId").asText(),match.group(1));
@@ -367,6 +370,7 @@ public final class TerminalClient implements AutoCloseable {
   }
   private static String argument(List<String> words,int index){if(index>=words.size())throw new IllegalArgumentException("Missing command argument");return words.get(index);}
   private void show(JsonNode value)throws IOException{out(BackendClient.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(value));}
+  String buildPrompt(java.time.LocalTime time){return time.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))+" "+safeOutput(currentModel)+"> ";}
   private String safeOutput(String value){return backend.redact(value).replaceAll("[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]","");}
   private void out(String value){reader.printAbove(safeOutput(value));}
   @Override public void close()throws IOException {attached=false;backend.detach();streams.shutdownNow();history.close();terminal.close();}

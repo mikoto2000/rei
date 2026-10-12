@@ -12,8 +12,10 @@ public record PlanDelegationProperties(boolean enabled, Set<String> allowedAccou
     allowedModels = allowedModels == null ? Set.of() : Set.copyOf(allowedModels);
   }
   public void check(String account, String model) {
-    if (!enabled || account == null || model == null
-        || !allowedAccounts.contains(account) || !allowedModels.contains(model))
-      throw ChatGptException.of(ChatGptException.Code.PERMISSION_DENIED);
+    if(!enabled)throw ChatGptException.permission(ChatGptException.PermissionReason.AUTO_DELEGATION_DISABLED);
+    if(account==null||account.isBlank())throw ChatGptException.permission(ChatGptException.PermissionReason.ACCOUNT_REQUIRED);
+    if(model==null||model.isBlank())throw ChatGptException.permission(ChatGptException.PermissionReason.MODEL_REQUIRED);
+    if(!allowedAccounts.contains(account))throw ChatGptException.permission(ChatGptException.PermissionReason.ACCOUNT_NOT_ALLOWED);
+    if(!allowedModels.contains(model))throw ChatGptException.permission(ChatGptException.PermissionReason.MODEL_NOT_ALLOWED);
   }
 }

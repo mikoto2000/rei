@@ -12,6 +12,12 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class DelegationToolPermissionTest {
+  @Test void missingAccountIsRejectedBeforeRequestingOrConsumingApproval() {
+    var repository=mock(ToolApprovalRepository.class);var guard=guard();guard.setApprovals(repository);
+    String input="{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"chatgpt-plan\",\"modelId\":\"gpt-6.1-sol\",\"sourceRefs\":[\"docs/design.md\"],\"expectedOutput\":\"{\\\"unverified\\\":[]}\"}";
+    var error=assertThrows(InvalidToolArgumentsException.class,()->guard.check("delegateTask",input,owner(AgentRunContext.Mode.EXCLUSIVE,"session")));
+    assertTrue(error.getMessage().contains("ACCOUNT_REQUIRED"));verifyNoInteractions(repository);
+  }
   private ToolPermissionPolicy policy;
   private SubAgentRegistry registry;
   @BeforeEach @SuppressWarnings("unchecked") void setup() {

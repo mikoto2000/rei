@@ -6,18 +6,47 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class RunEventOutputTest {
+  @Test void permissionFailureShowsItsSpecificReasonWithoutJsonEscapes() throws Exception {
+    output.accept("tool.failed",BackendClient.JSON.readTree("{\"toolName\":\"delegateTask\",\"error\":{\"message\":\"PERMISSION_DENIED (ACCOUNT_REQUIRED: accountRef を指定してください。)\"}}"));
+    assertEquals(List.of("✗ delegateTask: PERMISSION_DENIED (ACCOUNT_REQUIRED: accountRef を指定してください。)"),lines);
+  }
   @Test void delegatedFailureDisplaysItsCauseAsReadableText() throws Exception {
     output.accept("subagent.failed",BackendClient.JSON.readTree("{\"agentId\":\"reviewer\",\"status\":\"FAILED\",\"subAgentRunId\":\"child\",\"failureReason\":\"SEND_LIMIT: 資料を分割してください。\"}"));
     assertEquals(List.of("[subagent] reviewer FAILED [child]","[subagent] 原因: SEND_LIMIT: 資料を分割してください。"),lines);
   }
   private final List<String> lines = new ArrayList<>();
-  private final RunEventOutput output = new RunEventOutput(lines::add);
+  private final List<String> headings = new ArrayList<>();
+  private final RunEventOutput output = new RunEventOutput(line -> {
+    if (line.startsWith("=== ")) headings.add(line); else lines.add(line);
+  });
+  private final java.time.Instant timestamp = java.time.Instant.parse("2026-10-12T11:34:56Z");
 
   private void event(String type, String id, String text) throws Exception {
     var payload = BackendClient.JSON.createObjectNode();
     payload.put(type.startsWith("thinking.") ? "thinkingId" : "messageId", id);
     payload.put(type.endsWith(".delta") ? "delta" : "text", text);
-    output.accept(type, payload);
+    output.accept(type, payload, timestamp);
+  }
+
+  @Test void headingsUseShellFormatAndEventTime() throws Exception {
+    event("thinking.started", "t", "");
+    event("thinking.delta", "t", "検討");
+    event("thinking.completed", "t", "検討");
+    event("message.started", "m", "");
+    event("message.delta", "m", "回答");
+    event("message.completed", "m", "回答");
+    String time = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
+        .withZone(java.time.ZoneId.systemDefault()).format(timestamp);
+    assertEquals(List.of("=== thinking (" + time + ") ===", "=== answer (" + time + ") ==="), headings);
+    assertEquals(List.of("検討", "回答"), lines);
+  }
+
+  @Test void userMessagesDoNotCreateAnswerHeadings() throws Exception {
+    output.accept("message.started", BackendClient.JSON.readTree("{\"messageId\":\"u\",\"role\":\"user\"}"), timestamp);
+    event("message.delta", "u", "入力");
+    output.accept("message.completed", BackendClient.JSON.readTree("{\"messageId\":\"u\",\"role\":\"user\",\"text\":\"入力\"}"), timestamp);
+    assertTrue(headings.isEmpty());
+    assertTrue(lines.isEmpty());
   }
 
   @Test void answerChunksJoinAndPreserveOnlyContentNewlines() throws Exception {
@@ -37,13 +66,13 @@ class RunEventOutputTest {
     event("thinking.delta", "t", "中です");
     event("thinking.completed", "t", "考え中です");
     event("message.completed", "m", "回答です");
-    assertEquals(List.of("[thinking]", "考え中です", "回答です"), lines);
+    assertEquals(List.of("考え中です", "回答です"), lines);
   }
 
   @Test void completedOnlyThinkingAndAnswerAreVisible() throws Exception {
     event("thinking.completed", "t", "検討結果");
     event("message.completed", "m", "回答\n続き");
-    assertEquals(List.of("[thinking]", "検討結果", "回答", "続き"), lines);
+    assertEquals(List.of("検討結果", "回答", "続き"), lines);
   }
 
   @Test void otherEventsWaitUntilAnswerCompletesAndRemainVisible() throws Exception {

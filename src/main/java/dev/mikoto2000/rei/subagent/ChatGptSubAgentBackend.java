@@ -145,10 +145,10 @@ public final class ChatGptSubAgentBackend {
         || owner.projectId() == null
         || owner.conversationId().startsWith("subagent:")
         || owner.mode() != AgentRunContext.Mode.EXCLUSIVE)
-      throw ChatGptException.of(PERMISSION_DENIED);
+      throw ChatGptException.permission(ChatGptException.PermissionReason.OWNER_NOT_EXCLUSIVE);
     if (!backendId.equals(request.backendId())
         || !settings.allowedRoles().contains(request.roleId()))
-      throw ChatGptException.of(PERMISSION_DENIED);
+      throw ChatGptException.permission(ChatGptException.PermissionReason.ROLE_NOT_ALLOWED);
     if (request.account() == null
         || !request.account().matches("[A-Za-z0-9_-]{1,64}")
         || request.modelId() == null

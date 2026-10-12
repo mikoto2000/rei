@@ -37,7 +37,7 @@ public final class ToolLoopSupport {
     return manager.executeToolCalls(prompt, response);
   }
   public ToolExecutionResult executeResumable(Prompt prompt,ChatResponse response,dev.mikoto2000.rei.core.stagnation.RunExecutionContext context) {
-    if(!context.hasApprovalContinuation())return execute(prompt,response);
+    if(!context.hasApprovalContinuation() && response.getResult().getOutput().getToolCalls().stream().noneMatch(call->java.util.Set.of("delegateTask","delegateTasks").contains(call.name())))return execute(prompt,response);
     if(response.getResults().size()!=1)throw new IllegalArgumentException("Approval continuation requires a single selected generation");
     var output=response.getResult().getOutput();
     return executePending(prompt,new RunContinuation.PendingTools(java.util.Objects.toString(output.getText(),""),output.getToolCalls(),java.util.List.of()),context,false);
@@ -54,11 +54,17 @@ public final class ToolLoopSupport {
     var ids=new java.util.HashSet<String>();
     for(var call:pending.calls())if(!callbacks.containsKey(call.name())||!ids.add(call.id()))throw new IllegalArgumentException("Unrequested or duplicate saved Tool");
     var completed=new java.util.ArrayList<>(pending.completed());
+    boolean corrected=false;
     if(completed.size()>pending.calls().size())throw new IllegalArgumentException("Invalid completed Tool prefix");
     for(int i=0;i<completed.size();i++)if(!completed.get(i).id().equals(pending.calls().get(i).id())||!completed.get(i).name().equals(pending.calls().get(i).name()))throw new IllegalArgumentException("Saved Tool prefix mismatch");
     for(int i=completed.size();i<pending.calls().size();i++) {
       var call=pending.calls().get(i);context.checkActive();
       if(replay)context.checkApprovalContinuationExecution();
+      try {context.validateToolArguments(call.name(),call.arguments());}
+      catch(dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException invalid) {
+        completed.add(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(call.id(),call.name(),context.argumentCorrection(call.id(),call.name(),invalid)));
+        corrected=true;continue;
+      }
       try {
         var values=new java.util.HashMap<String,Object>();if(options.getToolContext()!=null)values.putAll(options.getToolContext());
         values.put("toolCallId",call.id());
@@ -79,6 +85,6 @@ public final class ToolLoopSupport {
     history.add(org.springframework.ai.chat.messages.AssistantMessage.builder().content(pending.text()).toolCalls(pending.calls()).build());
     history.add(org.springframework.ai.chat.messages.ToolResponseMessage.builder().responses(completed).build());
     boolean direct=pending.calls().stream().allMatch(call->callbacks.get(call.name()).getToolMetadata().returnDirect());
-    return ToolExecutionResult.builder().conversationHistory(history).returnDirect(direct).build();
+    return ToolExecutionResult.builder().conversationHistory(history).returnDirect(direct&&!corrected).build();
   }
 }

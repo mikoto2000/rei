@@ -11,6 +11,7 @@ import java.util.function.Consumer;
 final class RunEventOutput {
   private final Consumer<String> output;
   private final Set<String> streamed = new HashSet<>();
+  private final Set<String> ignoredMessages = new HashSet<>();
   private final StringBuilder pending = new StringBuilder();
   private String active;
   private record Notice(String type, JsonNode payload) { }
@@ -19,14 +20,25 @@ final class RunEventOutput {
   RunEventOutput(Consumer<String> output) { this.output = output; }
 
   void accept(String type, JsonNode payload) {
+    accept(type, payload, java.time.Instant.now());
+  }
+
+  void accept(String type, JsonNode payload, java.time.Instant timestamp) {
     boolean thinking = type.startsWith("thinking.");
     if (thinking || type.startsWith("message.")) {
       String key = (thinking ? "thinking:" : "message:")
           + payload.path(thinking ? "thinkingId" : "messageId").asText();
+      if (!thinking && payload.hasNonNull("role") && !"assistant".equalsIgnoreCase(payload.path("role").asText())) ignoredMessages.add(key);
+      if (ignoredMessages.contains(key)) {
+        if (type.endsWith(".completed")) ignoredMessages.remove(key);
+        return;
+      }
       if (!key.equals(active)) {
         flush();
         active = key;
-        if (thinking) output.accept("[thinking]");
+        String time = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
+            .withZone(java.time.ZoneId.systemDefault()).format(timestamp);
+        output.accept("=== " + (thinking ? "thinking" : "answer") + " (" + time + ") ===");
       }
       if (type.endsWith(".delta")) {
         streamed.add(key);
@@ -53,6 +65,10 @@ final class RunEventOutput {
   }
 
   private void renderNotice(String type, JsonNode payload) {
+    if("tool.failed".equals(type)) {
+      output.accept("✗ " + payload.path("toolName").asText() + ": " + payload.path("error").path("message").asText("原因の詳細がありません。"));
+      return;
+    }
     if("subagent.failed".equals(type)) {
       output.accept("[subagent] " + payload.path("agentId").asText() + " " + payload.path("status").asText()+" ["+payload.path("subAgentRunId").asText()+"]");
       output.accept("[subagent] 原因: " + payload.path("failureReason").asText("失敗理由がありません。返却結果を確認してください。"));

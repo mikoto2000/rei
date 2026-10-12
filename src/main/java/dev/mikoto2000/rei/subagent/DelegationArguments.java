@@ -43,6 +43,8 @@ public final class DelegationArguments {
       throw new IllegalArgumentException("Invalid local delegation arguments: omit accountRef, modelId, sourceRefs, expectedOutput, constraints and completionCriteria; put target files and output requirements in task/context");
     if (!local && (context != null || !sources || expected == null))
       throw new IllegalArgumentException("Invalid external delegation arguments: omit context and provide nonempty sourceRefs and expectedOutput");
+    if(!local && account==null)throw dev.mikoto2000.rei.chatgpt.ChatGptException.permission(dev.mikoto2000.rei.chatgpt.ChatGptException.PermissionReason.ACCOUNT_REQUIRED);
+    if(!local && model==null)throw dev.mikoto2000.rei.chatgpt.ChatGptException.permission(dev.mikoto2000.rei.chatgpt.ChatGptException.PermissionReason.MODEL_REQUIRED);
     if(!local)ExpectedOutputConditions.validate(expected,null);
   }
   private static String text(JsonNode request, String field) {

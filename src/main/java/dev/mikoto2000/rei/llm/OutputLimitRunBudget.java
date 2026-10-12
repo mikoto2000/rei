@@ -7,12 +7,16 @@ package dev.mikoto2000.rei.llm;
  * the controlled model loop reserves every additional LLM/tool cycle before invoking the model.
  */
 public class OutputLimitRunBudget {
-  public record Snapshot(int replans,int llmCalls,long totalTokens,boolean usageUnknown,int stagnationReplans) {
+  public record Snapshot(int replans,int llmCalls,long totalTokens,boolean usageUnknown,int stagnationReplans,int argumentCorrections) {
+    public Snapshot(int replans,int llmCalls,long totalTokens,boolean usageUnknown,int stagnationReplans){this(replans,llmCalls,totalTokens,usageUnknown,stagnationReplans,0);}
     public Snapshot(int replans,int llmCalls,long totalTokens,boolean usageUnknown){this(replans,llmCalls,totalTokens,usageUnknown,0);}
   }
-  public synchronized Snapshot snapshot(){return new Snapshot(replans,llmCalls,totalTokens,usageUnknown,stagnationReplans);}
+  private int argumentCorrections;
+  public synchronized boolean tryCorrectArguments(){if(argumentCorrections>=2)return false;argumentCorrections++;return true;}
+  public synchronized Snapshot snapshot(){return new Snapshot(replans,llmCalls,totalTokens,usageUnknown,stagnationReplans,argumentCorrections);}
   public synchronized void restore(Snapshot saved){
-    if(saved==null||saved.replans()<0||saved.stagnationReplans()<0||saved.llmCalls()<0||saved.totalTokens()<0)throw new IllegalArgumentException("Invalid saved Run budget");
+    if(saved==null||saved.replans()<0||saved.stagnationReplans()<0||saved.llmCalls()<0||saved.totalTokens()<0||saved.argumentCorrections()<0||saved.argumentCorrections()>2)throw new IllegalArgumentException("Invalid saved Run budget");
+    argumentCorrections=Math.max(argumentCorrections,saved.argumentCorrections());
     stagnationReplans=Math.max(stagnationReplans,saved.stagnationReplans());
     replans=Math.max(replans,saved.replans());llmCalls=Math.max(llmCalls,saved.llmCalls());totalTokens=Math.max(totalTokens,saved.totalTokens());usageUnknown|=saved.usageUnknown();
   }
