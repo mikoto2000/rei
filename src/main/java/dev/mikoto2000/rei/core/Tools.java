@@ -1194,6 +1194,9 @@ public class Tools {
    *
    * <p>ファイルが 1 件だけの場合もこのツールを使用する。</p>
    */
+  
+  
+  @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(name = "readMultiFile", description = """
       Read one or more known file paths or line ranges in a single call.
       For Java declarations, pass symbol (e.g. p.C#work(String[])), optionally path to narrow candidates.
@@ -1217,6 +1220,9 @@ public class Tools {
     skillProperties = properties;
   }
 
+  
+  
+  @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(description = """
       Read a reference file inside an enabled Agent Skill, independent of the current Project directory.
       Specify skillName and file.path relative to that skill's directory (e.g. references/learning-design.md).
@@ -1594,6 +1600,9 @@ public class Tools {
     return lines.subList(fromIndex, toIndex);
   }
 
+  
+  
+  @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(name = "readPdfFile", description = "PDF ファイルから本文テキストを抽出して読み込む。")
   String readPdfFile(String pathStr) throws IOException {
     IO.println(String.format("%s の PDF ファイルを読むよ", pathStr));
@@ -1984,3 +1993,4 @@ public class Tools {
   private record ResolvedTextFile(String content, Charset charset) {
   }
 }
+

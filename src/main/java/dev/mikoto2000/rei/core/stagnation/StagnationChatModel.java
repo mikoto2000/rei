@@ -164,7 +164,7 @@ public class StagnationChatModel implements ChatModel {
   }
 
   private ToolCallback observe(ToolCallback delegateTool, RunExecutionContext context) {
-    return new ToolCallback() {
+    return dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.preservePolicy(delegateTool, new ToolCallback() {
       public ToolDefinition getToolDefinition() { return delegateTool.getToolDefinition(); }
       public ToolMetadata getToolMetadata() { return delegateTool.getToolMetadata(); }
       public String call(String input) { return call(input, null); }
@@ -201,7 +201,7 @@ public class StagnationChatModel implements ChatModel {
         return result;
         }
       }
-    };
+    });
   }
 
   private RunExecutionContext context(Prompt prompt) {
@@ -210,3 +210,4 @@ public class StagnationChatModel implements ChatModel {
     return null;
   }
 }
+

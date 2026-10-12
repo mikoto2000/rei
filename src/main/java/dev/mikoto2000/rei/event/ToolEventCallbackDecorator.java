@@ -15,7 +15,7 @@ import org.springframework.ai.tool.definition.ToolDefinition;
  * tool.started / tool.completed / tool.failed を発行する。
  * 結果全文は payload に格納せず、要約情報のみを保持する。</p>
  */
-public class ToolEventCallbackDecorator implements ToolCallback {
+public class ToolEventCallbackDecorator implements dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.Registered {
 
   private final ToolCallback delegate;
   private final AgentEventFactory eventFactory;
@@ -28,6 +28,9 @@ public class ToolEventCallbackDecorator implements ToolCallback {
     this.eventPublisher = eventPublisher;
   }
 
+  @Override public dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind deliveryKind() {
+    return dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.kind(delegate);
+  }
   @Override
   public ToolDefinition getToolDefinition() {
     return delegate.getToolDefinition();
@@ -100,3 +103,4 @@ public class ToolEventCallbackDecorator implements ToolCallback {
     return sanitized.substring(0, maxLength) + "... (" + sanitized.length() + " chars)";
   }
 }
+

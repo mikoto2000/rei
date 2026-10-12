@@ -13,7 +13,7 @@ public class ToolResultCompressor {
   }
   public void preserve(Message message, String conversation, String run) {
     if (message instanceof ToolResponseMessage tool) for (var response : tool.getResponses())
-      store.save(conversation, run, response.name(), response.id(), Objects.toString(response.responseData(), ""));
+      if (policy(tool, response.id()) != ResultDelivery.Kind.RAW_RESULT_PAGE) store.save(conversation, run, response.name(), response.id(), Objects.toString(response.responseData(), ""));
   }
   public Message compact(Message message, String conversation, String run) {
     if (!(message instanceof ToolResponseMessage tool)) return message;
@@ -21,7 +21,16 @@ public class ToolResultCompressor {
     boolean changed = false;
     for (var response : tool.getResponses()) {
       String raw = Objects.toString(response.responseData(), "");
+      ResultDelivery.Kind policy = policy(tool, response.id());
+      if (policy == ResultDelivery.Kind.RAW_RESULT_PAGE) { responses.add(response); continue; }
       String ref = store.save(conversation, run, response.name(), response.id(), raw);
+      if (policy == ResultDelivery.Kind.FILE_CONTENT) {
+        if (estimator.text(raw) <= 2048) { responses.add(response); continue; }
+        changed = true;
+        responses.add(new ToolResponseMessage.ToolResponse(response.id(), response.name(),
+            new LosslessResultPager(estimator).page(ref, response.id(), response.name(), raw, 0, 2048)));
+        continue;
+      }
       if (estimator.text(raw) <= threshold) { responses.add(response); continue; }
       changed = true;
       String header = "[Compact tool result; omitted output is available via readRawToolResult]\n"
@@ -35,6 +44,11 @@ public class ToolResultCompressor {
           estimator.text(raw), estimator.text(compact));
     }
     return changed ? ToolResponseMessage.builder().responses(responses).metadata(tool.getMetadata()).build() : message;
+  }
+  static ResultDelivery.Kind policy(ToolResponseMessage message, String call) {
+    Object policies = message.getMetadata().get("rei.deliveryPolicies");
+    if (policies instanceof Map<?, ?> registered && registered.get(call) instanceof ResultDelivery.Kind kind) return kind;
+    return ResultDelivery.Kind.GENERAL;
   }
   private String important(String raw) {
     // JSON command results frequently put escaped stdout/stderr in a single physical line.
@@ -59,3 +73,4 @@ public class ToolResultCompressor {
     return text.substring(0, end);
   }
 }
+

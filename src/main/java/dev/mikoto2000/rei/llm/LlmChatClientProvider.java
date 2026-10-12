@@ -74,7 +74,7 @@ public class LlmChatClientProvider {
       dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties properties) {
     // Session continuation must load persisted history even when compression is disabled.
     contextHistory = history;
-    if (properties.isEnabled()) { contextAssembler = assembler; rawResultTools = rawTools; }
+    contextAssembler = assembler; rawResultTools = rawTools;
   }
   private ObjectProvider<dev.mikoto2000.rei.dot.DotTools> dotTools;
   @org.springframework.beans.factory.annotation.Autowired void setDotTools(ObjectProvider<dev.mikoto2000.rei.dot.DotTools> tools){dotTools=tools;}
@@ -288,9 +288,7 @@ public class LlmChatClientProvider {
     if(LlmFeature.CHAT.equals(feature) && dependencyTools!=null)toolObjects.add(dependencyTools);
     if(LlmFeature.CHAT.equals(feature) && schedulerTools!=null)toolObjects.add(schedulerTools);
     if (!toolObjects.isEmpty()) {
-      MethodToolCallbackProvider methodTools = MethodToolCallbackProvider.builder()
-          .toolObjects(toolObjects.toArray())
-          .build();
+      var methodTools = dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(toolObjects.toArray());
       builder.defaultTools(new ToolEventCallbackProvider(methodTools, eventFactory, eventPublisher));
     }
 
@@ -326,3 +324,5 @@ public class LlmChatClientProvider {
     }
   }
 }
+
+

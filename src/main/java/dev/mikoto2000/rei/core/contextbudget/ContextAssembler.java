@@ -30,7 +30,12 @@ public class ContextAssembler {
     this.tools = tools; this.compressor = compressor; this.events = events; this.publisher = publisher;
   }
   public Prompt assemble(Prompt raw, String conversation, String run, Runnable checkActive) {
-    if (!properties.isEnabled()) return raw;
+    if (!properties.isEnabled()) {
+      checkActive.run();
+      if (estimate(raw) > hardLimit(raw)) throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
+          dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.CONTEXT_HARD_LIMIT);
+      return raw;
+    }
     var lock = summaries.lock(conversation);
     try {
       lock.lockInterruptibly();
@@ -220,3 +225,4 @@ public class ContextAssembler {
         .withOwnership(execution == null ? null : execution.runContext()));
   }
 }
+

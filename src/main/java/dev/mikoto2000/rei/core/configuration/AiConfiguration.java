@@ -96,7 +96,7 @@ public class AiConfiguration {
       dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor history,
       dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawTools,
       dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties properties) {
-    if (properties.isEnabled()) { contextAssembler = assembler; contextHistory = history; rawResultTools = rawTools; }
+    contextAssembler = assembler; rawResultTools = rawTools; if (properties.isEnabled()) contextHistory = history;
   }
   private ObjectProvider<dev.mikoto2000.rei.dot.DotTools> dotTools;
   @org.springframework.beans.factory.annotation.Autowired void setDotTools(ObjectProvider<dev.mikoto2000.rei.dot.DotTools> tools){dotTools=tools;}
@@ -188,11 +188,12 @@ public class AiConfiguration {
         .defaultAdvisors(new dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor())
         .defaultOptions(defaultChatOptions())
         .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors))
-        .defaultTools(tools, googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
+        .defaultTools(googleCalendarTools, taskTools, briefingTools, feedTools, reminderTools, searchTools, webSearchTools,
             soundNotificationTools, blueskyPostTools, urlContentFetchTools, textTools, clockTools, schedulerTools, taskStateTools,
             conversationHistoryTools, summaryTools);
 
-    if (rawResultTools != null) builder.defaultTools(rawResultTools);
+    builder.defaultTools(dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(tools));
+    if (rawResultTools != null) builder.defaultTools(dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(rawResultTools));
     if (processDependencyTools != null) builder.defaultTools(processDependencyTools);
     if (fileDependencyTools != null) builder.defaultTools(fileDependencyTools);
     if (dependencyTools != null) builder.defaultTools(dependencyTools);
@@ -224,3 +225,5 @@ public class AiConfiguration {
     return builder.build();
   }
 }
+
+
