@@ -395,11 +395,12 @@ public class ChatExecutionService {
         }
         return approval?ChatExecutionResult.waiting("tool_approval_waiting"):ChatExecutionResult.waiting();
       }
-      ErrorInformation checkpointError=checkpointError(error);
-      if(checkpointError!=null && !RunCancellation.isCancellation(error) && !execution.isCancelled()) {
+      ErrorInformation knownFailure=checkpointError(error);
+      if(knownFailure==null)knownFailure=dev.mikoto2000.rei.chatgpt.ChatGptRunFailure.find(error);
+      if(knownFailure!=null && !RunCancellation.isCancellation(error) && !execution.isCancelled()) {
         if(checkpoints!=null && !checkpointFinished){checkpointFinished=true;finishCheckpoint(context,"FAILED");}
-        eventPublisher.publish(eventFactory.runFailed(runId,checkpointError));
-        return ChatExecutionResult.failed(checkpointError.message(),checkpointError.code());
+        eventPublisher.publish(eventFactory.runFailed(runId,knownFailure));
+        return ChatExecutionResult.failed(knownFailure.message(),knownFailure.code());
       }
       if (!RunCancellation.isCancellation(error) && !execution.isCancelled()) throw error;
       execution.cancel();
@@ -744,6 +745,8 @@ public class ChatExecutionService {
       }
       if (cause instanceof java.util.concurrent.CancellationException) return ChatRunResult.cancelled();
     }
+    ErrorInformation chatGptError=dev.mikoto2000.rei.chatgpt.ChatGptRunFailure.find(error);
+    if(chatGptError!=null)return new ChatRunResult(ChatRunStatus.FAILED,"",chatGptError);
     return ChatRunResult.failed();
   }
   private ChatRunStatus budgetStopStatus(OutputLimitRunBudget budget) {

@@ -55,7 +55,7 @@ public class SubAgentTools {
   public Object delegateTask(String agent, String task, @ToolParam(required=false) String context,
       @ToolParam(required=false,description="Omit for local; use chatgpt-plan for ChatGPT. External delegation requires accountRef, modelId, sourceRefs and expectedOutput.") String backendId,
       @ToolParam(required=false,description="REQUIRED for chatgpt-plan or codex-app-server: an explicitly allowed account label from current host guidance, e.g. default. Never omit or send blank for ChatGPT.") String accountRef,
-      @ToolParam(required=false,description="REQUIRED for chatgpt-plan or codex-app-server: an explicitly allowed model slug from current host guidance. Never omit or send blank for ChatGPT.") String modelId,
+      @ToolParam(required=false,description="REQUIRED for chatgpt-plan or codex-app-server: copy an explicitly allowed model ID from current host guidance exactly, preserving case and punctuation. A model display name, guessed alias, or another catalog model does not grant permission. Never omit or send blank for ChatGPT.") String modelId,
       @ToolParam(required=false,description="REQUIRED for external delegation: nonempty Project-relative source paths; at most 16.") java.util.List<String> sourceRefs,
       @ToolParam(required=false) java.util.List<String> constraints,
       @ToolParam(required=false) java.util.List<String> completionCriteria,

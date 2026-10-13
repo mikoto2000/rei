@@ -38,6 +38,7 @@ public final class ChatGptDelegationGuidance {
     return "Current host ChatGPT delegation configuration (guidance, not authorization):\n"
         +"ChatGPT delegation is enabled with saved plan authorization. Use delegateTask or delegateTasks with backendId=chatgpt-plan.\n"
         +"agent (eligible allowed roles): "+roles+"; accountRef (allowed authorized accounts): "+ready+"; modelId (administrator-allowed models): "+models+".\n"
+        +"Copy accountRef and modelId exactly from these lists, preserving case and punctuation. Use the model ID, not its display name or a guessed alias. A model appearing in /chatgpt models is not automatically allowed for delegation; administrator-allowed models above are the permitted choices.\n"
         +"For a human request such as 'ChatGPT にレビューして', use this ChatGPT route, not requestCodexReview or Claude Code. Do not claim ChatGPT cannot be called.\n"
         +"ChatGPT delegation does not require durable SubAgents, DAGs or consensus features. Do not call listDurableSubAgents/getDurableSubAgent to discover ChatGPT configuration; the allowed account/model/role labels are listed above. sourceRefs are read by the host and supplied as document snapshots; ChatGPT does not read local files directly.\n"
         +"Single-request example: {\"agent\":\""+example+"\",\"backendId\":\"chatgpt-plan\",\"accountRef\":\""+ready.getFirst()+"\",\"modelId\":\""+models.getFirst()+"\",\"task\":\"Review the supplied project documents\",\"sourceRefs\":[\"docs/design.md\"],\"expectedOutput\":\"{\\\"unverified\\\":[]}\"}.\n"

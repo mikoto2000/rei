@@ -75,6 +75,7 @@ class DelegationArgumentRepairTest {
     var single=tools.callback("delegateTask").getToolDefinition();
     assertTrue(single.description().contains("REQUIRED accountRef, modelId"));
     assertTrue(single.inputSchema().contains("Never omit or send blank for ChatGPT"));
+    assertTrue(single.inputSchema().contains("preserving case and punctuation"));
     assertTrue(tools.callback("delegateTasks").getToolDefinition().description().contains("Every ChatGPT request MUST"));
   }
 }

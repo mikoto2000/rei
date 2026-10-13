@@ -87,6 +87,11 @@ public final class ToolLoopSupport {
       catch(dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException invalid) {
         completed.add(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(call.id(),call.name(),context.argumentCorrection(call.id(),call.name(),invalid)));
         corrected=true;continue;
+      }catch(dev.mikoto2000.rei.chatgpt.ChatGptException denied) {
+        // Host policy refusals are terminal, not model-correctable arguments. Report them before
+        // the callback boundary so the client can show why no approval or execution occurred.
+        context.reportToolPermissionFailure(call.id(),call.name(),denied);
+        throw denied;
       }
       try {
         var values=new java.util.HashMap<String,Object>();if(options.getToolContext()!=null)values.putAll(options.getToolContext());
