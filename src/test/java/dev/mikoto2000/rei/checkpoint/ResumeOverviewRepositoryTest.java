@@ -115,4 +115,22 @@ class ResumeOverviewRepositoryTest {
     }
     assertEquals(Set.of("boundary","unknown-failure"),new HashSet<>(repo.overviewCandidates("A",Instant.parse("2026-09-13T00:00:00Z")).stream().map(ResumeOverview.Candidate::taskId).toList()));
   }
+  @Test void completionUsesRecordedPlanAndClaimsButNeverRawToolOutput() {
+    var state=save("task","INTERRUPTED",0);var fields=repo.fields(state);
+    fields.put("evidence",List.of(new PersistentCheckpoint.Evidence("TOOL_CONFIRMED","raw tool output",null,null,null)));
+    repo.save(repo.fields(fields),1,"raw");assertEquals("未記録",repo.overviewSelection("A",Instant.EPOCH).latest().completed());
+    fields.put("plan",List.of(Map.of("id","step","description","recorded completion","status","DONE","order",1,"failureCount",0)));
+    fields.put("nextAction","recorded pending");repo.save(repo.fields(fields),2,"plan");
+    var candidate=repo.overviewSelection("A",Instant.EPOCH).latest();assertEquals("recorded completion",candidate.completed());assertEquals("recorded pending",candidate.remaining());
+    fields.put("plan",List.of());fields.put("evidence",List.of(new PersistentCheckpoint.Evidence("ASSISTANT_CLAIM","claimed completion",null,null,null)));
+    repo.save(repo.fields(fields),3,"claim");assertEquals("claimed completion（保存された申告）",repo.overviewSelection("A",Instant.EPOCH).latest().completed());
+  }
+  @Test void unsupportedSchemaAndNullCollectionFallBackToTheExistingDecoder() throws Exception {
+    save("schema","WAITING_APPROVAL",0);save("schema","COMPLETED",1);save("null","INTERRUPTED",0);save("null","COMPLETED",1);
+    try(var c=java.sql.DriverManager.getConnection("jdbc:sqlite:"+directory.resolve("overview.db"));var s=c.createStatement()) {
+      s.executeUpdate("UPDATE checkpoint_revisions SET snapshot=json_set(snapshot,'$.schemaVersion',2) WHERE task='schema' AND revision=2");
+      s.executeUpdate("UPDATE checkpoint_revisions SET snapshot=json_set(snapshot,'$.operations',null) WHERE task='null' AND revision=2");
+    }
+    var rows=repo.overviewCandidates("A",Instant.EPOCH);assertEquals(2,rows.size());assertTrue(rows.stream().allMatch(c->c.fallback()&&c.revision()==1));
+  }
 }

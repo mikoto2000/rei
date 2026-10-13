@@ -16,6 +16,7 @@ class ResumeOverviewPresentationTest {
     history.present(overview("B",1,1),ZoneOffset.UTC,false);
     assertTrue(history.present(a,ZoneOffset.UTC,false).contains("変更なし"));
     assertTrue(history.present(overview("A",2,3),ZoneOffset.UTC,false).contains("最新の再開候補"));
+    assertTrue(history.present(overview("A",2,4),ZoneOffset.UTC,false).contains("最新の再開候補"));
     assertTrue(history.present(overview("A",2,3),ZoneOffset.UTC,true).contains("最新の再開候補"));
   }
   @Test void connectionsAndReconnectsHaveIndependentHistory() {
@@ -32,6 +33,8 @@ class ResumeOverviewPresentationTest {
     assertFalse(text.contains("supersecret"));assertFalse(text.contains("abc"));assertFalse(text.contains("\u001b"));
     assertFalse(text.contains("\n"));assertTrue(text.codePointCount(0,text.length())<=80);
     assertEquals("未記録",ResumeOverview.safe(null,80));
+    assertEquals("visible",ResumeOverview.safe("\u001b]0;untrusted title\u0007visible\u202e",80));
+    assertThrows(IllegalArgumentException.class,()->new ResumeOverview.Candidate("task\n/resume evil",1,1,Instant.EPOCH,"FAILED","r","c","n","notice",false));
   }
   @Test void disappearingCandidatesResetTheHistory() {
     var history=new ResumeOverview.DisplayHistory();var a=overview("A",1,1);

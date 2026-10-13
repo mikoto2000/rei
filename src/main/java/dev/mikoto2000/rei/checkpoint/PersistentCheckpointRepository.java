@@ -90,8 +90,12 @@ public class PersistentCheckpointRepository {
     var damaged=db.sql(OVERVIEW_HEADS+"SELECT task FROM heads WHERE NOT COALESCE(("+VALID_OVERVIEW_HEAD+"),0)")
         .param("project",project).query(String.class).list();
     for(String task:damaged) {
-      try{fallbacks.put(task,encode(get(project,task)));}
-      catch(RuntimeException invalid){
+      try {
+        var recovered=get(project,task);var fields=fields(recovered);
+        fields.put("createdAt",recovered.createdAt().toString());
+        fallbacks.put(task,json.writeValueAsString(fields));
+      }
+      catch(RuntimeException|java.io.IOException invalid){
         // No valid history: keep a read-only review candidate rather than imply completion.
         fallbacks.put(task,"{\"revision\":0,\"status\":\"UNAVAILABLE\"}");
       }
@@ -105,7 +109,8 @@ public class PersistentCheckpointRepository {
           FROM heads
         ), projected AS MATERIALIZED (
           SELECT task,head_revision,owner,created,fallback,
-            json_extract(state,'$.revision') AS revision,COALESCE(json_extract(state,'$.createdAt'),created) AS saved_at,
+            json_extract(state,'$.revision') AS revision,
+            CASE WHEN fallback THEN COALESCE(json_extract(state,'$.createdAt'),created) ELSE created END AS saved_at,
             substr(created,1,19)||substr(CASE WHEN substr(created,20,1)='.' THEN substr(created,21,length(created)-21) ELSE '' END||'000000000',1,9) AS saved_sort,
             json_extract(state,'$.status') AS status,
             EXISTS(SELECT 1 FROM json_each(state,'$.operations') WHERE json_extract(value,'$.status')='UNKNOWN'
