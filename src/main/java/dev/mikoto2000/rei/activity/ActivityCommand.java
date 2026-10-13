@@ -82,7 +82,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
         spec.commandLine().getErr().println(e.getMessage());
         spec.commandLine().getErr().println("Usage: /activity summary [today|yesterday|YYYY-MM-DD]");return 2;
       }
-      catch(Exception e) {spec.commandLine().getErr().println("Activity の操作に失敗しました。ログを確認してください。");return 1;}
+      catch(Exception e) {spec.commandLine().getErr().println("Activity の操作に失敗しました。ログを確認してください。" + " 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));return 1;}
     }
   }
   public abstract static class PeriodCommand implements java.util.concurrent.Callable<Integer> {
@@ -92,8 +92,8 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
     protected abstract ActivityPeriodAnalysis.Period period();
     @Override public Integer call() {
       try {spec.commandLine().getOut().println(parent.timeline.periodAnalysis(period(),date));return 0;}
-      catch(java.time.DateTimeException | IllegalArgumentException e) {spec.commandLine().getErr().println("日付を today|yesterday|YYYY-MM-DD で指定してください（未来は不可）。");return 2;}
-      catch(Exception e) {spec.commandLine().getErr().println("Activity 分析に失敗しました。ログを確認してください。");return 1;}
+      catch(java.time.DateTimeException | IllegalArgumentException e) {spec.commandLine().getErr().println("日付を today|yesterday|YYYY-MM-DD で指定してください（未来は不可）。" + " 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));return 2;}
+      catch(Exception e) {spec.commandLine().getErr().println("Activity 分析に失敗しました。ログを確認してください。" + " 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));return 1;}
     }
   }
   @Command(name="weekly",description="暦週単位の活動分析と前週との比較を表示します")
@@ -136,8 +136,8 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
           default -> throw new IllegalArgumentException("coaching: status | configure | on | off | weekly | monthly");
         }
         spec.commandLine().getOut().println(dev.mikoto2000.rei.event.CredentialRedactor.redact(result));return 0;
-      } catch(java.time.DateTimeException | IllegalArgumentException e){spec.commandLine().getErr().println("Coachingの引数・基準を確認してください。未来日付は指定できません。");return 2;}
-      catch(Exception e){if(expectedRevision!=null&&e instanceof java.util.ConcurrentModificationException conflict)throw conflict;spec.commandLine().getErr().println("Coachingの操作に失敗しました。ログを確認してください。");return 1;}
+      } catch(java.time.DateTimeException | IllegalArgumentException e){spec.commandLine().getErr().println("Coachingの引数・基準を確認してください。未来日付は指定できません。" + " 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));return 2;}
+      catch(Exception e){if(expectedRevision!=null&&e instanceof java.util.ConcurrentModificationException conflict)throw conflict;spec.commandLine().getErr().println("Coachingの操作に失敗しました。ログを確認してください。" + " 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));return 1;}
     }
     private boolean automaticEnabled(){return parent.properties!=null && parent.properties.getCoaching().isAutomaticEnabled();}
   }
@@ -152,8 +152,8 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
         if(project==null)throw new IllegalArgumentException("Select a Project");
         var links=parent.workLinks.links(project.id(),date);
         spec.commandLine().getOut().println(dev.mikoto2000.rei.event.CredentialRedactor.redact(parent.workLinks.format(links)));return 0;
-      }catch(java.time.DateTimeException | IllegalArgumentException e){spec.commandLine().getErr().println("Projectを選択し、日付を today|yesterday|YYYY-MM-DD で指定してください（未来は不可）。");return 2;}
-      catch(Exception e){spec.commandLine().getErr().println("Activityの保存参照を取得できませんでした。ログを確認してください。");return 1;}
+      }catch(java.time.DateTimeException | IllegalArgumentException e){spec.commandLine().getErr().println("Projectを選択し、日付を today|yesterday|YYYY-MM-DD で指定してください（未来は不可）。" + " 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));return 2;}
+      catch(Exception e){spec.commandLine().getErr().println("Activityの保存参照を取得できませんでした。ログを確認してください。" + " 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));return 1;}
     }
   }
   @Command(name="behavior",description="行動評価の有効化・無効化・状態表示・手動評価を行います（手動評価では通知しません）")
@@ -181,7 +181,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
           default -> {spec.commandLine().getErr().println("activity behavior: on | off | status | evaluate | uncertain | suggest-rules");return 2;}
         }
         return 0;
-      } catch(Exception e) {spec.commandLine().getErr().println("Behavior の操作に失敗しました。");return 1;}
+      } catch(Exception e) {spec.commandLine().getErr().println("Behavior の操作に失敗しました。" + " 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));return 1;}
     }
   }
   @Command(name="classification",description="活動分類の状態表示・再読み込み・未分類項目表示・ルール表示・ルール提案を行います")
@@ -205,7 +205,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
           default -> {spec.commandLine().getErr().println("activity classification: status | reload | unknowns | rules | suggest-rules");return 2;}
         }
         spec.commandLine().getOut().println(result.isBlank()?"候補なし。":result);return 0;
-      }catch(Exception e){spec.commandLine().getErr().println("分類運用情報を取得できませんでした。有効ルールは維持されています。");return 1;}
+      }catch(Exception e){spec.commandLine().getErr().println("分類運用情報を取得できませんでした。有効ルールは維持されています。" + " 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));return 1;}
     }
   }
   @Override public Integer call() {
@@ -218,6 +218,6 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
       }
       spec.commandLine().getOut().println(result);return 0;
     }catch(java.time.DateTimeException | IllegalArgumentException e) {spec.commandLine().getErr().println("activity: [today|yesterday|YYYY-MM-DD] [--verbose] | summary [today|yesterday|YYYY-MM-DD] | pause | resume");return 2;}
-    catch(Exception e) {spec.commandLine().getErr().println("Activity の操作に失敗しました。ログを確認してください。");return 1;}
+    catch(Exception e) {spec.commandLine().getErr().println("Activity の操作に失敗しました。ログを確認してください。" + " 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));return 1;}
   }
 }

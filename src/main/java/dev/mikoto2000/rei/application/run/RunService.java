@@ -52,7 +52,7 @@ public class RunService implements AutoCloseable {
       registry.transition(runId,RunStatus.CANCELLED,null);
       cancellation.forgetPendingCancellation(runId);
       notify=queuedCancellation.remove(runId);
-      bus.publish(events.runCancelled(runId,null).withOwnership(current.context()));
+      bus.publish(events.runCancelled(runId,new ErrorInformation("CancellationException", "ユーザーの要求により待機中の依頼を取り消しました。", "user_cancelled")).withOwnership(current.context()));
       result=new CancellationResult(true,registry.get(runId));
     }
     notifyCancellation(notify);return result;
@@ -68,7 +68,7 @@ public class RunService implements AutoCloseable {
         cancellation.forgetPendingCancellation(runId);
         notify=queuedCancellation.remove(runId);
       } else cancellation.cancelRun(runId);
-      bus.publish(events.runCancelled(runId, null).withOwnership(current.context()));
+      bus.publish(events.runCancelled(runId, new ErrorInformation("CancellationException", "ユーザーの要求により実行を停止しました。", "user_cancelled")).withOwnership(current.context()));
       result=new CancellationResult(true, registry.get(runId));
     }
     // Durable application callbacks can acquire their own locks. Never invoke them under the bus monitor.
@@ -90,7 +90,7 @@ public class RunService implements AutoCloseable {
     }
     if(!started){notifyCancellation(skipped);return;}
     try { runner.run(); }
-    catch (RuntimeException error) { fail(context, "Runner failed"); }
+    catch (RuntimeException error) { fail(context, "Runner failed: " + dev.mikoto2000.rei.event.FailureMessages.describe(error)); }
     finally {
       if(!registry.get(context.runId()).status().isWaiting())fail(context, "Runner ended without a terminal event");
       cancellation.forgetPendingCancellation(context.runId());

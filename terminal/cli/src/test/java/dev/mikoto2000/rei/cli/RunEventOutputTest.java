@@ -6,6 +6,20 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class RunEventOutputTest {
+  @Test void nullErrorCodeDoesNotDisplayNullAsAReason() throws Exception {
+    output.accept("agent.run.failed", BackendClient.JSON.readTree("{\"error\":{\"message\":null,\"errorType\":\"IOException\",\"code\":null}}"));
+    assertEquals(List.of("[agent.run.failed] 原因: IOException"), lines);
+  }
+
+  @Test void runCancellationDisplaysRedactedReasonAndCode() throws Exception {
+    output.accept("agent.run.cancelled",BackendClient.JSON.readTree("{\"error\":{\"message\":\"approval denied token=hidden\",\"code\":\"approval_denied\"}}"));
+    assertEquals(List.of("[agent.run.cancelled] 原因: [approval_denied] approval denied token=[REDACTED]"), lines);
+  }
+  @Test void blankToolFailureStillReportsExceptionType() throws Exception {
+    output.accept("tool.failed",BackendClient.JSON.readTree("{\"toolName\":\"readFile\",\"error\":{\"message\":\"\",\"errorType\":\"AccessDeniedException\"}}"));
+    assertEquals(List.of("✗ readFile: AccessDeniedException"), lines);
+  }
+
   @Test void permissionFailureShowsItsSpecificReasonWithoutJsonEscapes() throws Exception {
     output.accept("tool.failed",BackendClient.JSON.readTree("{\"toolName\":\"delegateTask\",\"error\":{\"message\":\"PERMISSION_DENIED (ACCOUNT_REQUIRED: accountRef を指定してください。)\"}}"));
     assertEquals(List.of("✗ delegateTask: PERMISSION_DENIED (ACCOUNT_REQUIRED: accountRef を指定してください。)"),lines);
@@ -112,7 +126,7 @@ class RunEventOutputTest {
     output.accept("stagnation.updated", BackendClient.JSON.createObjectNode());
     output.accept("agent.run.cancelled", BackendClient.JSON.createObjectNode());
     event("message.completed", "next", "次の回答");
-    assertEquals(List.of("途中", "stagnation.updated: {}", "agent.run.cancelled: {}", "次の回答"), lines);
+    assertEquals(List.of("途中", "stagnation.updated: {}", "[agent.run.cancelled] 原因: 原因の詳細がありません。", "次の回答"), lines);
   }
 
   @Test void approvalNotificationDisplaysTheExactContinueCommandOnItsOwnLine() {

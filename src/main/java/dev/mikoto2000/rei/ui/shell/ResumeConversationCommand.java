@@ -24,7 +24,7 @@ public final class ResumeConversationCommand implements java.util.concurrent.Cal
     } catch (SessionConflictException error) {
       spec.commandLine().getErr().println("Session belongs to another project. Select that project first."); return 2;
     } catch (RuntimeException error) {
-      spec.commandLine().getErr().println("Cannot select session."); return 1;
+      spec.commandLine().getErr().println("Cannot select session." + " 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(error)); return 1;
     }
   }
 }

@@ -35,7 +35,7 @@ public class AttentionCommand implements java.util.concurrent.Callable<Integer> 
         default -> throw new IllegalArgumentException("Use /attention list|show|ack|delivery|deliver|retry-delivery [attentionId]");
       };
       writer.println(dev.mikoto2000.rei.event.CredentialRedactor.redact(String.valueOf(result)));return 0;
-    } catch(RuntimeException error){writer.println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));return 2;}
+    } catch(RuntimeException error){writer.println("[error] "+dev.mikoto2000.rei.event.FailureMessages.describe(error));return 2;}
     finally {writer.flush();}
   }
   private String requiredId(){if(id==null||id.isBlank())throw new IllegalArgumentException("attentionId is required");return id;}

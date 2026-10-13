@@ -159,10 +159,10 @@ public final class ChatGptCommand {
       operation.run();
       return 0;
     } catch (ChatGptException e) {
-      out(e.getMessage());
+      out(dev.mikoto2000.rei.event.FailureMessages.describe(e));
       return 2;
     } catch (Exception e) {
-      out("ChatGPT plan operation unavailable");
+      out("ChatGPT plan operation unavailable 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));
       return 2;
     } finally {
       output().flush();

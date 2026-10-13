@@ -17,13 +17,16 @@ public class DoctorCommand implements java.util.concurrent.Callable<Integer> {
     this.doctor=doctor;this.conversations=conversations;
   }
   public Integer call() {
+    String operation = "引数の検証";
     try {
       var args=arguments==null?new String[0]:arguments;
       var request=DoctorRequest.parse(args);
       if(request.checks().isEmpty()) {
+        operation = "受動診断";
         if(doctor==null)throw new IllegalArgumentException("Doctor runtime unavailable");
         spec.commandLine().getOut().println(DoctorService.render(doctor.passive(request.details())));
       }else {
+        operation = "診断Runの受付";
         if(conversations==null)throw new IllegalArgumentException("Doctor Run queue unavailable");
         spec.commandLine().getOut().println(request.plan());
         spec.commandLine().getOut().flush();
@@ -34,7 +37,7 @@ public class DoctorCommand implements java.util.concurrent.Callable<Integer> {
       return 0;
     }catch(RuntimeException failure) {
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(failure);
-      spec.commandLine().getErr().println("Doctor diagnosis unavailable or invalid arguments. Use /doctor [--details] [--check connectivity|inference|codex|claude|microphone]. Details omitted.");
+      spec.commandLine().getErr().println("Doctor diagnosis unavailable or invalid arguments. Use /doctor [--details] [--check connectivity|inference|codex|claude|microphone]. " + "原因: " + operation + "に失敗しました (" + failure.getClass().getSimpleName() + ")。設定を /doctor --details で確認してください。");
       return 2;
     }
   }

@@ -217,7 +217,7 @@ public class MemoryCommand {
       } catch (dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException e) {
         out().println("[stopped] " + e.reason().name());
       } catch (IllegalStateException e) {
-        out().println("[error] " + e.getMessage());
+        out().println("[error] " + dev.mikoto2000.rei.event.FailureMessages.describe(e));
       }
     }
   }
@@ -283,7 +283,7 @@ public class MemoryCommand {
       } catch (dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException e) {
         out().println("[stopped] " + e.reason().name());
       } catch (IllegalStateException e) {
-        out().println("[error] " + e.getMessage());
+        out().println("[error] " + dev.mikoto2000.rei.event.FailureMessages.describe(e));
       }
     }
 

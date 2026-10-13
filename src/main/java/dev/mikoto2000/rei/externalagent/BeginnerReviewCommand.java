@@ -22,6 +22,6 @@ public class BeginnerReviewCommand implements java.util.concurrent.Callable<Inte
           .map(a -> dev.mikoto2000.rei.core.command.UserInputParser.quote(a, true, (char)0))
           .collect(java.util.stream.Collectors.joining(" ")));
       return 0;
-    } catch (IllegalArgumentException error) { spec.commandLine().getErr().println(error.getMessage()); return 2; }
+    } catch (IllegalArgumentException error) { spec.commandLine().getErr().println(dev.mikoto2000.rei.event.FailureMessages.describe(error)); return 2; }
   }
 }

@@ -47,9 +47,9 @@ public class SleepCommand implements Callable<Integer> {
     }
     catch(RuntimeException error) {
       if(dev.mikoto2000.rei.core.chat.RunCancellation.isCancellation(error)||Thread.currentThread().isInterrupted()) {
-        out().println("Sleep cancelled. Checkpoint unchanged."); return 130;
+        out().println("Sleep cancelled. Checkpoint unchanged. 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(error)); return 130;
       }
-      out().println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage())); return 2;
+      out().println("[error] "+dev.mikoto2000.rei.event.FailureMessages.describe(error)); return 2;
     } finally { out().flush(); }
   }
   @Command(name="preview") public static class Preview implements Callable<Integer> {

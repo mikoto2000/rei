@@ -120,7 +120,7 @@ public final class TerminalClient implements AutoCloseable {
     catalogLoaded=true;
   }
   public void run()throws IOException {
-    try{refresh();}catch(Exception error){out("Completion metadata unavailable; /project list can retry.");}
+    try{refresh();}catch(Exception error){out("Completion metadata unavailable; /project list can retry. 原因: "+dev.mikoto2000.rei.event.FailureMessages.describe(error));}
     out("Connected. /help lists commands. Ctrl+C detaches output; /cancel RUN_ID cancels a Run.");
     while(true) {
       String line;
@@ -129,7 +129,7 @@ public final class TerminalClient implements AutoCloseable {
         try {line=reader.readLine(buildPrompt(java.time.LocalTime.now()));}
         finally {approvalMenu.enabled(false);}
       }
-      catch(UserInterruptException interrupt){backend.detach();attached=false;continue;}
+      catch(UserInterruptException interrupt){backend.detach();attached=false;out("入力または表示を Ctrl-C で中断しました。Backend の実行は継続します。");continue;}
       catch(EndOfFileException eof){return;}
       if(line.isBlank())continue;
       if(line.equals("/exit")||line.equals("/quit"))return;
@@ -144,11 +144,11 @@ public final class TerminalClient implements AutoCloseable {
         if(message.toString().stripLeading().startsWith("/"))command(message.toString().strip());else send(message.toString());
       } catch(BackendClient.UncertainAcceptanceException uncertain){out(uncertain.getMessage());}
       catch(BackendClient.ApiException rejected){out(rejected.getMessage());}
-      catch(InterruptedException interrupted){Thread.currentThread().interrupt();return;}
-      catch(UserInterruptException interrupted){/* The input was not sent. */}
+      catch(InterruptedException interrupted){out("コマンドが割り込みにより中断されました。 原因: "+dev.mikoto2000.rei.event.FailureMessages.describe(interrupted));Thread.currentThread().interrupt();return;}
+      catch(UserInterruptException interrupted){out("Ctrl-C により入力を中止しました。依頼は送信していません。");}
       catch(EndOfFileException eof){return;}
       catch(IllegalArgumentException invalid){out(invalid.getMessage());}
-      catch(IOException failure){out("Backend connection failed. Inspect the Run or receipt before submitting again.");}
+      catch(IOException failure){out("Command I/O failed. Inspect the Run or receipt before submitting again. 原因: "+dev.mikoto2000.rei.event.FailureMessages.describe(failure));}
     }
   }
   private void refresh()throws IOException,InterruptedException {
@@ -368,9 +368,10 @@ public final class TerminalClient implements AutoCloseable {
           if(!attached)return;
         } catch(BackendClient.ApiException error) {
           if(error.status()==409){out("Event history has a gap; output is incomplete. Fetching Run status and saved Session turns.");poll(id,generation);return;}
-          if(error.status()==401||error.status()==403){out("Backend authentication failed");return;}
+          if(error.status()==401||error.status()==403){out("Backend authentication failed: "+dev.mikoto2000.rei.event.FailureMessages.describe(error));return;}
+          out("Run event stream rejected: "+dev.mikoto2000.rei.event.FailureMessages.describe(error));
         } catch(InterruptedException interrupt){Thread.currentThread().interrupt();return;}
-        catch(IOException|IllegalArgumentException error){if(!attached)return;}
+        catch(IOException|IllegalArgumentException error){if(!attached)return;out("Run event stream interrupted: "+dev.mikoto2000.rei.event.FailureMessages.describe(error));}
         if(++reconnects>3){out("Stream disconnected. /watch "+id+" reconnects; the Run continues on Backend.");return;}
         try{Thread.sleep(250L*reconnects);}catch(InterruptedException interrupt){Thread.currentThread().interrupt();return;}
       }
@@ -387,7 +388,7 @@ public final class TerminalClient implements AutoCloseable {
         }
         Thread.sleep(1000);
       }catch(InterruptedException interrupted){Thread.currentThread().interrupt();return;}
-      catch(IOException connection){out("Status polling failed; inspect /runs "+id);return;}
+      catch(IOException connection){out("Status polling failed; inspect /runs "+id+" 原因: "+dev.mikoto2000.rei.event.FailureMessages.describe(connection));return;}
     }
     out("Status polling ended; inspect /runs "+id+". Backend execution was not cancelled.");
   }

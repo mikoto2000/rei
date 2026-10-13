@@ -40,7 +40,7 @@ public final class StorageCommand {
   private String reportRetention(RetentionAction action){action.parent=new Retention();action.parent.parent=this;return render(out->{if(planner==null)throw new IllegalStateException("Storage startup gate has not initialized retention");action.execute(planner,out);});}
   private String reportAuto(AutoAction action){action.parent=new Auto();action.parent.parent=new Retention();action.parent.parent.parent=this;return render(out->{if(automatic==null)throw new IllegalStateException("Automatic retention has not initialized");action.execute(automatic,out);});}
   private String reportMaintenance(MaintenanceAction action){action.parent=new Maintenance();action.parent.parent=this;return render(out->{if(maintenance==null)throw new IllegalStateException("Storage maintenance has not initialized");action.execute(maintenance,out);});}
-  private static String render(java.util.function.Consumer<java.io.PrintWriter> action){var text=new java.io.StringWriter();var out=new java.io.PrintWriter(text,true);try{action.accept(out);}catch(RuntimeException error){out.println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));}out.flush();return reportText(text);}
+  private static String render(java.util.function.Consumer<java.io.PrintWriter> action){var text=new java.io.StringWriter();var out=new java.io.PrintWriter(text,true);try{action.accept(out);}catch(RuntimeException error){out.println("[error] "+dev.mikoto2000.rei.event.FailureMessages.describe(error));}out.flush();return reportText(text);}
   private static String reportText(java.io.StringWriter text){return text.toString().replaceFirst("[\\r\\n]+$","");}
   @Command(name="retention",subcommands={Plan.class,Approve.class,History.class,Apply.class,Restore.class,ApprovePurge.class,Purge.class,Policy.class,Auto.class},description="dry-run、明示承認、隔離・復元。定期整理は既定で無効です")
   public static final class Retention { @ParentCommand StorageCommand parent; }
@@ -53,7 +53,7 @@ public final class StorageCommand {
   abstract static class RetentionAction implements java.util.concurrent.Callable<Integer> {
     @ParentCommand Retention parent;@Spec picocli.CommandLine.Model.CommandSpec spec;
     abstract void execute(dev.mikoto2000.rei.storage.RetentionPlanner planner,java.io.PrintWriter out);
-    @Override public Integer call(){try{if(parent.parent.planner==null)throw new IllegalStateException("Storage startup gate has not initialized retention");execute(parent.parent.planner,spec.commandLine().getOut());return 0;}catch(RuntimeException error){spec.commandLine().getErr().println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));return 2;}}
+    @Override public Integer call(){try{if(parent.parent.planner==null)throw new IllegalStateException("Storage startup gate has not initialized retention");execute(parent.parent.planner,spec.commandLine().getOut());return 0;}catch(RuntimeException error){spec.commandLine().getErr().println("[error] "+dev.mikoto2000.rei.event.FailureMessages.describe(error));return 2;}}
   }
   @Command(name="plan",description="有界な整理候補を記録します。本文は変更しません")
   public static final class Plan extends RetentionAction {
@@ -100,7 +100,7 @@ public final class StorageCommand {
   @Command abstract static class AutoAction implements java.util.concurrent.Callable<Integer> {
     @ParentCommand Auto parent;@Spec picocli.CommandLine.Model.CommandSpec spec;
     abstract void execute(dev.mikoto2000.rei.storage.AutomaticRetention automatic,java.io.PrintWriter out);
-    @Override public Integer call(){try{var automatic=parent.parent.parent.automatic;if(automatic==null)throw new IllegalStateException("Automatic retention has not initialized");execute(automatic,spec.commandLine().getOut());return 0;}catch(RuntimeException error){spec.commandLine().getErr().println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));return 2;}}
+    @Override public Integer call(){try{var automatic=parent.parent.parent.automatic;if(automatic==null)throw new IllegalStateException("Automatic retention has not initialized");execute(automatic,spec.commandLine().getOut());return 0;}catch(RuntimeException error){spec.commandLine().getErr().println("[error] "+dev.mikoto2000.rei.event.FailureMessages.describe(error));return 2;}}
     void print(dev.mikoto2000.rei.storage.AutomaticRetention.Consent consent,java.io.PrintWriter out){out.printf("consent=%s category=%s scope=%s snapshot=%s policy_version=%d retention_seconds=%s max_policy_bytes=%s max_count=%s max_objects=%d max_bytes=%d interval_seconds=%d permanent_purge=false%n",consent.id(),consent.policy().id(),consent.scope().isEmpty()?"global":consent.scope(),consent.snapshotHash(),consent.policy().version(),consent.policy().retentionSeconds(),consent.policy().maxBytes(),consent.policy().maxCount(),consent.maxObjects(),consent.maxBytes(),consent.intervalSeconds());}
   }
   @Command(name="propose",description="定期隔離の具体的な同意内容を作成・表示します。まだ実行しません")
@@ -120,7 +120,7 @@ public final class StorageCommand {
   @Command abstract static class MaintenanceAction implements java.util.concurrent.Callable<Integer> {
     @ParentCommand Maintenance parent;@Spec picocli.CommandLine.Model.CommandSpec spec;
     abstract void execute(dev.mikoto2000.rei.storage.StorageMaintenance maintenance,java.io.PrintWriter out);
-    @Override public Integer call(){try{if(parent.parent.maintenance==null)throw new IllegalStateException("Storage maintenance has not initialized");execute(parent.parent.maintenance,spec.commandLine().getOut());return 0;}catch(RuntimeException error){spec.commandLine().getErr().println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));return 2;}}
+    @Override public Integer call(){try{if(parent.parent.maintenance==null)throw new IllegalStateException("Storage maintenance has not initialized");execute(parent.parent.maintenance,spec.commandLine().getOut());return 0;}catch(RuntimeException error){spec.commandLine().getErr().println("[error] "+dev.mikoto2000.rei.event.FailureMessages.describe(error));return 2;}}
   }
   @Command(name="status",description="DB・WAL・空きページ・ディスク残量を読み取り専用で観測します")
   public static final class MaintenanceStatus extends MaintenanceAction {@Override void execute(dev.mikoto2000.rei.storage.StorageMaintenance maintenance,java.io.PrintWriter out){var status=maintenance.status();out.printf("database_bytes=%d wal_bytes=%d temporary_bytes=%d page_size=%d page_count=%d free_pages=%d used_page_bytes=%d auto_vacuum=%d usable_disk_bytes=%d%n",status.databaseBytes(),status.walBytes(),status.temporaryBytes(),status.pageSize(),status.pageCount(),status.freePages(),status.estimatedUsedPageBytes(),status.autoVacuum(),status.usableDiskBytes());}}
@@ -162,8 +162,8 @@ public final class StorageCommand {
         managed.objects().forEach(row->out.printf("managed %s count=%d recorded_body_bytes=%d%n",row.kind(),row.count(),row.recordedBodyBytes()));
         managed.protectionReasons().forEach((reason,count)->out.printf("protected %s count=%d%n",reason,count));
         out.printf("reference_scan_limited=%s; run retention plan for bounded, verified candidates%n",managed.referenceScanLimited());
-      }catch(RuntimeException error){out.println("unknown: managed metadata could not be read");}
-      if(parent.maintenance!=null)try{var database=parent.maintenance.status();out.printf("storage.db physical_bytes=%d wal_bytes=%d free_pages=%d estimated_used_page_bytes=%d temporary_bytes=%d usable_disk_bytes=%d%n",database.databaseBytes(),database.walBytes(),database.freePages(),database.estimatedUsedPageBytes(),database.temporaryBytes(),database.usableDiskBytes());}catch(RuntimeException error){out.println("unknown: database page statistics could not be read");}
+      }catch(RuntimeException error){out.println("unknown: managed metadata could not be read: " + dev.mikoto2000.rei.event.FailureMessages.describe(error));}
+      if(parent.maintenance!=null)try{var database=parent.maintenance.status();out.printf("storage.db physical_bytes=%d wal_bytes=%d free_pages=%d estimated_used_page_bytes=%d temporary_bytes=%d usable_disk_bytes=%d%n",database.databaseBytes(),database.walBytes(),database.freePages(),database.estimatedUsedPageBytes(),database.temporaryBytes(),database.usableDiskBytes());}catch(RuntimeException error){out.println("unknown: database page statistics could not be read: " + dev.mikoto2000.rei.event.FailureMessages.describe(error));}
       out.println("Custom paths and explicit exports outside this root are unscanned. Measurements may race with writers.");
       return 0;
     }

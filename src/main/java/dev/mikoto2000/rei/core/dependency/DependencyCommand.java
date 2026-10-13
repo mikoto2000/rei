@@ -36,7 +36,7 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
         };
       }
       service.flushFacts();writer.println(CredentialRedactor.redact(String.valueOf(result)));return 0;
-    }catch(RuntimeException error){writer.println("[error] "+CredentialRedactor.redact(error.getMessage()));return 2;}
+    }catch(RuntimeException error){writer.println("[error] "+dev.mikoto2000.rei.event.FailureMessages.describe(error));return 2;}
     finally {writer.flush();}
   }
   public static final class ActionCandidates extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {

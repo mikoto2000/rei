@@ -48,7 +48,7 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
         else if(!"deny".equals(action))printResume(writer,request);
       } else writer.println(result);
       return 0;
-    } catch(RuntimeException error) {writer.println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));return 2;}
+    } catch(RuntimeException error) {writer.println("[error] "+dev.mikoto2000.rei.event.FailureMessages.describe(error));return 2;}
     finally {writer.flush();}
   }
   private ApprovalContinuationService requiredContinuations(){if(continuations==null)throw new IllegalStateException("Approval continuation unavailable");return continuations;}
@@ -94,7 +94,7 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
       } else writer.println("現在のタスク状態: "+state.status()+"、承認状態: "+request.status()+"。/resume list で確認してください。");
     } catch(RuntimeException unavailable) {
       // A hint lookup failure must not make a successfully saved approval look unsuccessful.
-      writer.println("task ID の照合に失敗しました。/resume list で確認してください。");
+      writer.println("task ID の照合に失敗しました。/resume list で確認してください。 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(unavailable));
     }
   }
   private String requiredId(){

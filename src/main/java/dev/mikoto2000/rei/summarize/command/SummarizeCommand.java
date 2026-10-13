@@ -58,7 +58,7 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
         background.summarize(source);
         return 0;
       } catch(RuntimeException error) {
-        out.println("要約処理を開始・表示できません: "+new dev.mikoto2000.rei.conversation.HistoryFormatter().label(error.getMessage()));
+        out.println("要約処理を開始・表示できません: "+new dev.mikoto2000.rei.conversation.HistoryFormatter().label(dev.mikoto2000.rei.event.FailureMessages.describe(error)));
         return 1;
       } finally { out.flush(); }
     }

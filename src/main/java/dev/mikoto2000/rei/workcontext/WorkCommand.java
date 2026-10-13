@@ -37,8 +37,8 @@ public class WorkCommand implements Callable<Integer> {
   int execute(java.util.function.Supplier<String> action) {
     try {if(service==null) throw new IllegalStateException("Work Context runtime unavailable");out().println(action.get());return 0;}
     catch(RuntimeException error) {
-      if(RunCancellation.isCancellation(error)||Thread.currentThread().isInterrupted()) {out().println("Work Context update cancelled. Saved state retained.");return 130;}
-      out().println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));return 2;
+      if(RunCancellation.isCancellation(error)||Thread.currentThread().isInterrupted()) {out().println("Work Context update cancelled. Saved state retained. 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(error));return 130;}
+      out().println("[error] "+dev.mikoto2000.rei.event.FailureMessages.describe(error));return 2;
     } finally {out().flush();}
   }
   @Command(name="show") public static class Show implements Callable<Integer> {@ParentCommand WorkCommand parent;public Integer call(){return parent.show();}}

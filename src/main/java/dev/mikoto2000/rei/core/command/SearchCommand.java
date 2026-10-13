@@ -148,12 +148,12 @@ public class SearchCommand implements Runnable {
     } catch (InterruptedException e) {
       if (cancellationService.consumeCancellationRequested()) {
         println("");
-        println("[cancelled]");
+        println("[cancelled] ユーザーの停止要求により検索を中止しました。");
         return;
       }
       Thread.currentThread().interrupt();
       log.warn("Search interrupted", e);
-      println("[error] 検索が中断されました");
+      println("[error] 検索が中断されました: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));
     } finally {
       cancellationService.clear();
     }
@@ -170,8 +170,7 @@ public class SearchCommand implements Runnable {
   }
 
   private String safeMessage(Throwable error, String fallback) {
-    String message = error.getMessage();
-    return message == null || message.isBlank() ? fallback : message;
+    return error == null ? fallback : dev.mikoto2000.rei.event.FailureMessages.describe(error);
   }
 
   private Throwable rootCause(Throwable error) {

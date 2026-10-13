@@ -17,7 +17,7 @@ public class ExternalAgentCommand implements java.util.concurrent.Callable<Integ
   @Override public Integer call() {
     String text = "/agent" + (arguments == null ? "" : " " + String.join(" ", arguments));
     try { ExternalAgentCommandRequest.parse(text); }
-    catch (IllegalArgumentException error) { spec.commandLine().getErr().println(error.getMessage()); return 2; }
+    catch (IllegalArgumentException error) { spec.commandLine().getErr().println(dev.mikoto2000.rei.event.FailureMessages.describe(error)); return 2; }
     if (conversations == null) { spec.commandLine().getErr().println("External agent runtime unavailable"); return 2; }
     conversations.submit(text);
     return 0;

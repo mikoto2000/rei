@@ -23,7 +23,7 @@ public class ResumeCommand implements Callable<Integer> {
     var writer=output==null?spec.commandLine().getOut():output;
     cancellation.begin(Thread.currentThread());
     try{CheckpointReconciler.active();writer.println(action.get());return 0;}
-    catch(RuntimeException e){writer.println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(e.getMessage()));return Thread.currentThread().isInterrupted()?130:2;}
+    catch(RuntimeException e){writer.println("[error] "+dev.mikoto2000.rei.event.FailureMessages.describe(e));return Thread.currentThread().isInterrupted()?130:2;}
     finally{cancellation.clear();writer.flush();}
   }
   String project(){return projects.currentContext().id();}

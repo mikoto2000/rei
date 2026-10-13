@@ -19,7 +19,7 @@ public final class NewConversationCommand implements java.util.concurrent.Callab
       spec.commandLine().getOut().println("Current session: " + session.sessionId());
       return 0;
     } catch (RuntimeException error) {
-      spec.commandLine().getErr().println("Cannot create session."); return 1;
+      spec.commandLine().getErr().println("Cannot create session." + " 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(error)); return 1;
     }
   }
 }

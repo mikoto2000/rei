@@ -54,12 +54,12 @@ public class BackgroundCommands {
           states.saveCompleted(CompletedExecution.of(e,source,result,clock.instant()));
           publish(e,"COMPLETED",result);
         } catch(Exception error) {
-          publish(e,status(error),new HistoryFormatter().label(error.getMessage()==null?error.getClass().getSimpleName():error.getMessage()));
+          publish(e,status(error),new HistoryFormatter().label(dev.mikoto2000.rei.event.FailureMessages.describe(error)));
           org.slf4j.LoggerFactory.getLogger(getClass()).debug("Background execution failed: {}",e.id(),error);
         }
       });
     } catch(RuntimeException error) {
-      if(registered.get()!=null) publish(registered.get(),"FAILED","Execution could not be started");
+      if(registered.get()!=null) publish(registered.get(),"FAILED","Execution could not be started: " + dev.mikoto2000.rei.event.FailureMessages.describe(error));
       throw error;
     }
   }
