@@ -55,9 +55,10 @@ User / 完了済み Tool Result → StagnationChatModel の request 境界
 | `recent-tokens` | 12000 | 会話 / Tool 往復それぞれの最近の原文を残す予算 |
 | `summary-tokens` | 3000 | 各 Summary の出力 token 上限 |
 | `minimum-compression-gain` | 0.1 | 最低10%の削減を要求 |
-| `tool-result-threshold` | 8000 | Tool result を短縮する推定 token 数 |
-| `tool-result-tokens` | 2000 | 診断・head・tail 本文の予算（参照ヘッダーは別途計測） |
+| `tool-result-threshold` | 8000 | 一般ログを抜粋する推定 token 数。ファイル本文・delegateTask / delegateTasks の結果には適用しない |
+| `tool-result-tokens` | 2000 | 一般ログの診断・head・tail 本文の予算（参照ヘッダーは別途計測） |
 | `summary-timeout-seconds` | 60 | 要約 request の制限時間 |
+| `retry-cooldown-seconds` | 120 | 同じ要約範囲の失敗後、再試行まで待つ基準秒数。1〜3600 |
 
 実効 hard limit は `min(hard-limit, model-context-limit - completion - tools - safety)`。
 threshold がその上限以上の場合は実効上限の直前に下げる。System Prompt 等は実際の Message として計測する。
@@ -75,6 +76,9 @@ rei:
 
 `TokenEstimator` は差し替え可能。既定は ASCII 約4文字/token、非ASCII 約2token/codepoint、message / tool-call の overhead と media 予約を加える概算。
 正確な tokenizer ではない。最終 prompt を再計測し、保護対象だけで上限を超える場合は `CONTEXT_HARD_LIMIT` を返す。
+
+要約 request の出力上限も `summary-tokens` を使う。受信後は、モデルが報告した出力 token 数で上限を検査し、使用量が返らない場合は `TokenEstimator` による推定を使う。
+出力が `length` で終了した場合も要約は採用しない。思考を出力 token に含めるモデルでは、本文が短くても上限に達することがある。
 
 ## Summary・原文の保存
 
@@ -110,16 +114,46 @@ AI は `readRawToolResult(rawResultRef, offset, limit)` で原文をページ取
 - 要約 request も Run の LLM call budget を消費する。上限超過・キャンセルを通常の要約失敗として握りつぶさない。
 - 各境界で会話・Runにつき最大1回の要約。要約入力もモデルの window に合わせて prefix を制限する。
 - 失敗、空出力、出力上限、削減率不足、要約 timeout では既存 Summary を保持する。
+- 同じ要約範囲で失敗した直後は LLM 呼び出しを繰り返さない。`retry-cooldown-seconds`（既定120秒）から待機を始め、連続失敗ごとに2倍、最大8倍まで延ばす。再試行待ちの通知は一度だけ出し、各 request で同じ通知を増やさない。
+- タイムアウト・出力上限・要約の長さ・削減率不足で失敗した場合は、次の要約対象を半分に縮める。最小の候補予算は `summary-tokens` の2倍とし、完結した Tool 往復の境界を守る。最初の完結した往復だけでも予算に収まらない場合は、LLM を呼ばず入力上限の原因を表示する。
+- 再試行状態は会話の要約範囲、Run、モデル、圧縮設定を区別する。容量を制限したメモリ内キャッシュで管理し、再起動すると待機状態は失われる。保存済み Summary と原履歴は残る。
 - hard limit 超過時は Projection の古い会話・完結した Tool 往復を順に外す。Tool call/result の対を分断せず、最新の一往復を保持する。
 - それでも収まらなければ明示エラー。System / 現在のユーザー入力 / Working Set を黙って削除しない。
 
 ## イベントと UI
 
-`context.compression.started` / `.completed` / `.failed` を既存 Agent Event API に追加。
-beforeEstimatedTokens、afterEstimatedTokens、compressedMessageCount、summaryThroughSequence、固定の reason を含む。
+`context.compression.started` / `.completed` / `.failed` / `.skipped` を既存 Agent Event API に追加。
+beforeEstimatedTokens、afterEstimatedTokens、compressedMessageCount、summaryThroughSequence、固定の reason と安全な details を含む。
 token 数は要約する prefix と以前の Summary の合計に対する値で、request 全体の推定値は debug log で確認できる。
 owner / runId / timestamp / sequence は既存規約を使い、JSONL audit と SSE / Web DTO を通る。
-要約本文・Tool 原文・例外の詳細は payload に含めない。
+要約本文・Tool 原文・プロバイダーの応答本文や例外メッセージは payload に含めない。details は対処方法と token 数・上限・再試行待ち時間などに限る。
+
+Shell／簡易 CLI は次のように理由と詳細を表示する。通知は回答のストリームが終わってから表示する。
+
+```text
+[context.compression] failed: summary_timeout (要約の制限時間を超えました。…)
+[context.compression] skipped: retry_backoff (…)
+[llm] request sent (context-summary)
+```
+
+要約の LLM purpose は `context-summary` とし、通常回答の `chat` と区別する。使用するモデルと Run／Goal の予算は従来と同じであり、要約だけ別枠の予算になるわけではない。
+
+| reason | 原因と確認する項目 |
+|---|---|
+| `summary_input_budget` | 要約対象が入力上限を超過。モデルの context limit と対象範囲 |
+| `summary_empty` | 空の要約。モデルの応答・出力設定 |
+| `summary_too_long` | 要約が保存する token 上限を超過。`summary-tokens` |
+| `summary_insufficient_gain` | 削減率不足。`minimum-compression-gain` と `summary-tokens` |
+| `summary_output_limit` | モデルの出力上限で終了。思考 token を含む出力設定 |
+| `summary_timeout` | 要約の制限時間超過。接続先・`summary-timeout-seconds` |
+| `summary_authentication` | 認証・アクセス拒否。接続先の認証・権限 |
+| `summary_rate_limit` | 利用枠・呼び出し制限。接続先の利用枠 |
+| `summary_model_unavailable` | モデル・接続先を利用できない。モデル名・API・稼働状態 |
+| `summary_transport` | 通信失敗。ネットワーク・接続先 |
+| `summary_storage` | 要約の保存失敗。データ保存先の容量・権限 |
+| `summary_invalid_response` | 不正な応答形式。ツール呼び出しを含まないテキスト応答が必要 |
+| `summary_unknown` | 未分類のエラー。モデル設定と接続先のログ |
+| `retry_backoff` | 直前の失敗による再試行待ち。details の待ち時間 |
 
 Java Projection と Native Client は unknown event を無視して cursor を進めるため、互換性を維持する。
 今回は新しい UI パネルを追加していない。

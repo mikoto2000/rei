@@ -16,6 +16,7 @@ public final class WslPlanAppServerLauncher implements PlanAppServerClient.Launc
   public String authority(){return dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256((settings.distribution()+"|"+settings.executable()+"|"+configuration()).getBytes(StandardCharsets.UTF_8));}
   public PlanAppServerClient.Started start(TokenSet tokens,Duration timeout,BooleanSupplier stop) {
     if(!settings.enabled()||!System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win"))throw ChatGptException.of(ROUTE_UNAVAILABLE);
+    var deadline=new PlanProcessDeadline(timeout);
     Path home=null;
     try {
       Files.createDirectories(settings.runtimeDirectory());
@@ -23,22 +24,24 @@ public final class WslPlanAppServerLauncher implements PlanAppServerClient.Launc
       home=Files.createTempDirectory(settings.runtimeDirectory(),"rei-plan-");Path cwd=Files.createDirectory(home.resolve("workspace"));
       Files.writeString(home.resolve("config.toml"),configuration().replace("[permissions.rei-read.network]","\""+settings.executable()+"\" = \"read\"\n[permissions.rei-read.network]"));
       String linuxCwd=linuxPath(cwd);
-      var version=process(home,linuxCwd,null,List.of("--version")).start();
+      if(stop.getAsBoolean())throw ChatGptException.of(CANCELLED);
+      var version=process(home,linuxCwd,null,List.of("--version"),deadline.wslWatchdogDuration()).start();
       try {
-        if(!version.waitFor(Math.min(10000,Math.max(1,timeout.toMillis())),TimeUnit.MILLISECONDS)){version.destroyForcibly();throw ChatGptException.of(TIMEOUT);}
+        if(!version.waitFor(deadline.probeWaitMillis(),TimeUnit.MILLISECONDS)){version.destroyForcibly();throw ChatGptException.of(TIMEOUT);}
         byte[] output=version.getInputStream().readNBytes(256);
         if(version.exitValue()!=0||!new String(output,StandardCharsets.UTF_8).strip().equals("codex-cli 0.154.0"))throw ChatGptException.of(PROTOCOL);
       } finally {version.destroyForcibly();}
       if(stop.getAsBoolean())throw ChatGptException.of(CANCELLED);
-      var child=process(home,linuxCwd,tokens.accessToken(),List.of("app-server","--listen","stdio://")).start();
+      var child=process(home,linuxCwd,tokens.accessToken(),List.of("app-server","--listen","stdio://"),deadline.wslWatchdogDuration()).start();
       Path ownedHome=home;
       return new PlanAppServerClient.Started(new AppServerProcessSession(child,()->stopLinux(ownedHome,"TERM"),()->stopLinux(ownedHome,"KILL"),()->remove(ownedHome)),linuxCwd);
     } catch(ChatGptException e){remove(home);throw e;}catch(Exception e){remove(home);throw ChatGptException.of(ROUTE_UNAVAILABLE);}
   }
-  ProcessBuilder process(Path home,String linuxCwd,String token,List<String> arguments) {
+  ProcessBuilder process(Path home,String linuxCwd,String token,List<String> arguments,String watchdogDuration) {
+    if(watchdogDuration==null||!watchdogDuration.matches("[1-9][0-9]{0,3}s"))throw new IllegalArgumentException("Invalid Plan process watchdog duration");
     String systemRoot=System.getenv("SystemRoot");if(systemRoot==null)throw ChatGptException.of(ROUTE_UNAVAILABLE);
     var command=new ArrayList<String>(List.of(Path.of(systemRoot,"System32","wsl.exe").toString(),"--distribution",settings.distribution(),"--cd",linuxCwd,"--exec"));
-    if(!arguments.isEmpty()&&arguments.getFirst().equals("app-server"))command.addAll(List.of("/bin/sh","-c","printf '%s\\n' \"$$\" > \"$CODEX_HOME/process.pid\"; exec \"$@\"","rei-plan-launcher","/usr/bin/timeout","--signal=TERM","--kill-after=1s","125s"));
+    if(!arguments.isEmpty()&&arguments.getFirst().equals("app-server"))command.addAll(List.of("/bin/sh","-c","printf '%s\\n' \"$$\" > \"$CODEX_HOME/process.pid\"; exec \"$@\"","rei-plan-launcher","/usr/bin/timeout","--signal=TERM","--kill-after=1s",watchdogDuration));
     command.add(settings.executable());command.addAll(arguments);
     var builder=new ProcessBuilder(command).directory(home.toFile());var env=builder.environment();env.clear();
     for(String name:List.of("SystemRoot","TEMP","TMP")){String value=System.getenv(name);if(value!=null)env.put(name,value);}
@@ -53,7 +56,7 @@ public final class WslPlanAppServerLauncher implements PlanAppServerClient.Launc
       if(!pid.matches("[1-9][0-9]{0,9}")||Long.parseLong(pid)<=1)return;
       // Check the dedicated home in the process environment before signalling its private timeout group.
       String script="test -r /proc/\"$1\"/environ || exit 0; tr '\\000' '\\n' < /proc/\"$1\"/environ | grep -F -x -- \"CODEX_HOME=$2\" >/dev/null || exit 0; kill -\"$3\" -- -\"$1\" 2>/dev/null || kill -\"$3\" \"$1\" 2>/dev/null";
-      var base=process(home,linuxPath(home),null,List.of("--version"));
+      var base=process(home,linuxPath(home),null,List.of("--version"),"10s");
       var command=List.of(base.command().getFirst(),"--distribution",settings.distribution(),"--exec","/bin/sh","-c",script,"rei-plan-stop",pid,linuxPath(home),signal);
       var kill=new ProcessBuilder(command);kill.environment().clear();kill.environment().putAll(base.environment());
       kill.redirectOutput(ProcessBuilder.Redirect.DISCARD);kill.redirectError(ProcessBuilder.Redirect.DISCARD);

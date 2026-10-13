@@ -27,7 +27,8 @@ public class WorkContextAdvisor implements BaseAdvisor {
       return request.mutate().prompt(new Prompt(messages,request.prompt().getOptions())).build();
     } catch(RuntimeException error) {
       RunCancellation.propagate(error);
-      org.slf4j.LoggerFactory.getLogger(getClass()).warn("Work Context unavailable; continuing chat ({})",error.getClass().getSimpleName());return request;
+      org.slf4j.LoggerFactory.getLogger(getClass()).warn("Work Context unavailable; continuing chat: {} /work show で保存状態を確認してください。",
+          dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(error).display());return request;
     }
   }
   @Override public ChatClientResponse after(ChatClientResponse response,AdvisorChain chain) {return response;}

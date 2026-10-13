@@ -9,6 +9,19 @@ import dev.mikoto2000.rei.event.*;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 
 class RunExecutionContextTest {
+  @Test void durableToolFailureKeepsCallIdentityAndSpecificSafeCause() {
+    var events=new ArrayList<AgentEvent>();
+    var context=new RunExecutionContext("run",new OutputLimitRunBudget(1,10),new ProgressEvaluator(Path.of(".")),
+        new AgentEventFactory(Clock.systemUTC()),events::add);
+    context.setRunContext(new dev.mikoto2000.rei.core.chat.AgentRunContext("run","session",Path.of("."),"project"));
+    context.failDurableTool("call","runCommand",new IllegalStateException("PRIVATE_COMMAND",new java.net.SocketTimeoutException("PRIVATE_URL")));
+    assertThat(events).hasSize(1);
+    var payload=(ToolFailedPayload)events.getFirst().payload();
+    assertThat(payload.toolCallId()).isEqualTo("call");assertThat(payload.toolName()).isEqualTo("runCommand");
+    assertThat(payload.error().code()).isEqualTo("timeout");
+    assertThat(payload.error().message()).contains("実行結果を確認").doesNotContain("PRIVATE","Tool failed");
+    assertThat(events.getFirst().sessionId()).isEqualTo("session");
+  }
   @Test void restrictedModeCannotBypassPermissionWhenNoGuardIsInstalled() {
     var context=new RunExecutionContext("run",new OutputLimitRunBudget(1,10),new ProgressEvaluator(Path.of(".")),new AgentEventFactory(Clock.systemUTC()),event->{});
     context.setRunContext(new dev.mikoto2000.rei.core.chat.AgentRunContext("run","session",Path.of("."),"A",

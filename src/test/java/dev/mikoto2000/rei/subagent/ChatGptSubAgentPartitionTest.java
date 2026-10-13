@@ -98,6 +98,26 @@ class ChatGptSubAgentPartitionTest {
     var receipt=backend(guard).run(request(names),owner,false,budget);
     assertThat(receipt.state()).isEqualTo(ChatGptSubAgentBackend.State.COMPLETED);assertThat(tasks).hasSize(2);
   }
+  @Test void thirtyMinuteDeadlineIsSharedAcrossGroupsWithoutResettingParentAccounting() throws Exception {
+    var definition=root.resolve("review.yaml");
+    Files.writeString(definition,Files.readString(definition).replace("timeout: 120s","timeout: 30m"));
+    assertThat(registry.reload()).isEmpty();
+    var remaining=new ArrayList<Duration>();
+    doAnswer(call->{
+      remaining.add(call.getArgument(4));
+      ((Runnable)call.getArgument(8)).run();String task=call.getArgument(3);tasks.add(task);
+      Thread.sleep(20);return response(task);
+    }).when(client).infer(anyString(),anyString(),anyString(),anyString(),any(),anyInt(),anyInt(),any(),any());
+    var service=backend(guard);
+    service.configureExecution(new PlanExecutionProperties(false,null,null,null,null,null,Duration.ofMinutes(30),false));
+    var receipt=service.run(request(files(8,"x".repeat(70000))),owner,false,budget);
+    assertThat(receipt.state()).isEqualTo(ChatGptSubAgentBackend.State.COMPLETED);
+    assertThat(remaining).hasSize(4);
+    assertThat(remaining.getFirst()).isGreaterThan(Duration.ofMinutes(29)).isLessThanOrEqualTo(Duration.ofMinutes(30));
+    for(int i=1;i<remaining.size();i++)assertThat(remaining.get(i)).isLessThan(remaining.get(i-1).minusMillis(15));
+    verify(budget,times(4)).tryReserve();verify(budget,times(4)).recordTotalTokens(17);
+    assertThat(receipt.totalTokens()).isEqualTo(68);
+  }
   @Test void failureInTheSecondGroupStopsThirdAndRetainsFirstResult() throws Exception {
     var names=files(8,"x".repeat(70000));var count=new AtomicInteger();
     doAnswer(call->{((Runnable)call.getArgument(8)).run();String task=call.getArgument(3);tasks.add(task);

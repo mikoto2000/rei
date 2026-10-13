@@ -97,7 +97,7 @@ public class RunExecutionContext {
     publisher.publishBoundary(factory.toolCompleted(call,name,0,summary).withOwnership(runContext));
   }
   public void failDurableTool(String call,String name,RuntimeException error) {
-    publisher.publishBoundary(factory.toolFailed(call,name,new ErrorInformation(error.getClass().getSimpleName(),"Tool failed",null)).withOwnership(runContext));
+    publisher.publishBoundary(factory.toolFailed(call,name,dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(error)).withOwnership(runContext));
   }
   private final List<ProgressEvidence> pending = new ArrayList<>();
   private final Map<String,dev.mikoto2000.rei.core.dependency.DependencyState> dependencies=new LinkedHashMap<>();

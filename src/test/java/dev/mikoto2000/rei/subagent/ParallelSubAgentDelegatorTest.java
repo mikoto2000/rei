@@ -55,6 +55,50 @@ class ParallelSubAgentDelegatorTest {
     verify(runner,never()).runAutomaticBackend(any(),any(),any());
   }
   SubAgentResult completed() {return new SubAgentResult("reviewer",UUID.randomUUID().toString(),SubAgentResult.Status.COMPLETED,"done",Instant.now(),Instant.now());}
+  List<ParallelSubAgentDelegator.Request> externalRequests(int count) {
+    return java.util.stream.IntStream.range(0,count).mapToObj(i->new ParallelSubAgentDelegator.Request(
+        "item-"+i,"reviewer","task-"+i,null,"chatgpt-plan","default","allowed-model",List.of("docs/source.md"),"{\"findings\":[]}")).toList();
+  }
+  dev.mikoto2000.rei.chatgpt.PlanExecutionProperties externalSettings(Duration timeout) {
+    return new dev.mikoto2000.rei.chatgpt.PlanExecutionProperties(true,null,null,null,null,null,timeout,false,null);
+  }
+  @Test void externalBatchUsesConfiguredThirtyMinuteDeadlineAndLocalDagLimitsStayBounded() throws Exception {
+    try(var delegator=new ParallelSubAgentDelegator(mock(SubAgentRunner.class),registry(),new CommandCancellationService())) {
+      assertEquals(Duration.ofSeconds(120),delegator.batchDeadline(requests(1)));
+      assertEquals(Duration.ofMinutes(10),delegator.batchDeadline(externalRequests(1)));
+      delegator.setPlanExecutionProperties(externalSettings(Duration.ofMinutes(30)));
+      assertEquals(Duration.ofMinutes(30),delegator.batchDeadline(externalRequests(1)));
+      assertEquals(Duration.ofSeconds(120),delegator.batchDeadline(requests(1)));
+      assertThrows(IllegalArgumentException.class,()->delegator.delegate(requests(1),null,(r,b)->completed(),Duration.ofMinutes(30)));
+    }
+  }
+  @Test void externalCallCanOutliveTheLocalBatchLimitWithoutWaitingMinutes() throws Exception {
+    var runner=mock(SubAgentRunner.class);var receipt=mock(ChatGptSubAgentBackend.Receipt.class);
+    when(receipt.result()).thenReturn(completed());
+    when(runner.runAutomaticBackend(any(),any(),any())).thenAnswer(invocation->{Thread.sleep(300);return receipt;});
+    var budget=mock(dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation.class);
+    try(var delegator=new ParallelSubAgentDelegator(runner,registry(),new CommandCancellationService(),Duration.ofMillis(100));
+        var scope=AgentRunScope.open(new AgentRunContext("parent","chat",directory,"project"))) {
+      delegator.setPlanExecutionProperties(externalSettings(Duration.ofSeconds(2)));
+      assertEquals(ParallelSubAgentDelegator.Status.COMPLETED,delegator.delegate(externalRequests(1),budget).status());
+      verify(runner).runAutomaticBackend(any(),any(),same(budget));
+    }
+  }
+  @Test void externalDeadlineStillCancelsWorkersAndNeverStartsQueuedChildren() throws Exception {
+    var runner=mock(SubAgentRunner.class);var interrupted=new CountDownLatch(2);var calls=new AtomicInteger();
+    when(runner.runAutomaticBackend(any(),any(),any())).thenAnswer(invocation->{
+      calls.incrementAndGet();try{new CountDownLatch(1).await();}catch(InterruptedException e){interrupted.countDown();}
+      var receipt=mock(ChatGptSubAgentBackend.Receipt.class);when(receipt.result()).thenReturn(completed());return receipt;
+    });
+    var budget=mock(dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation.class);
+    try(var delegator=new ParallelSubAgentDelegator(runner,registry(),new CommandCancellationService(),Duration.ofMillis(100));
+        var scope=AgentRunScope.open(new AgentRunContext("parent","chat",directory,"project"))) {
+      delegator.setPlanExecutionProperties(externalSettings(Duration.ofMillis(300)));
+      var result=delegator.delegate(externalRequests(4),budget);
+      assertEquals(ParallelSubAgentDelegator.Status.TIMEOUT,result.status());
+      assertTrue(interrupted.await(2,TimeUnit.SECONDS));assertEquals(2,calls.get());assertEquals(4,result.items().size());
+    }
+  }
   @Test void boundsConcurrencyPreservesOrderAndParentScope() throws Exception {
     var runner=mock(SubAgentRunner.class);var running=new AtomicInteger();var peak=new AtomicInteger();var started=new CountDownLatch(2);var release=new CountDownLatch(1);
     var parent=new AgentRunContext("parent","chat",directory,"project",AgentRunContext.RequestSource.WEB);

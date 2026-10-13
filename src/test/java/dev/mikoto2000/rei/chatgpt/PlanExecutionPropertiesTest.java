@@ -22,7 +22,27 @@ class PlanExecutionPropertiesTest {
       assertThat(context).hasNotFailed();
       assertThat(context.getBean(PlanExecutionProperties.class)).isEqualTo(
           new PlanExecutionProperties(false, 3, 2, 2, 262144, 1048576,
-              Duration.ofSeconds(120), false, 0));
+              Duration.ofMinutes(10), false, 0));
+    });
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings={"10m","20m","30m","120s"})
+  void acceptsLongTotalDeadlinesAndExistingShortLimits(String timeout) {
+    runner.withPropertyValues("rei.chatgpt-plan.execution.timeout="+timeout).run(context->{
+      assertThat(context).hasNotFailed();
+      assertThat(context.getBean(PlanExecutionProperties.class).timeout()).isEqualTo(
+          org.springframework.boot.convert.DurationStyle.detectAndParse(timeout));
+    });
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings={"0s","-1s","1801s","31m"})
+  void rejectsInvalidOrUnboundedDeadlinesWithTheExactSettingName(String timeout) {
+    runner.withPropertyValues("rei.chatgpt-plan.execution.timeout="+timeout).run(context->{
+      assertThat(context).hasFailed();
+      assertThat(context.getStartupFailure()).hasRootCauseMessage(
+          "rei.chatgpt-plan.execution.timeout must be positive and at most 30m");
     });
   }
 

@@ -36,6 +36,7 @@ public class WorkCommand implements Callable<Integer> {
   });}
   int execute(java.util.function.Supplier<String> action) {
     try {if(service==null) throw new IllegalStateException("Work Context runtime unavailable");out().println(action.get());return 0;}
+    catch(WorkContextExtractionException error) {out().println("[error] "+error.diagnostic().display());return 2;}
     catch(RuntimeException error) {
       if(RunCancellation.isCancellation(error)||Thread.currentThread().isInterrupted()) {out().println("Work Context update cancelled. Saved state retained. 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(error));return 130;}
       out().println("[error] "+dev.mikoto2000.rei.event.FailureMessages.describe(error));return 2;

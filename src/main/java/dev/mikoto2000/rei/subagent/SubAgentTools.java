@@ -5,8 +5,9 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.ai.tool.definition.ToolDefinition;
-import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.stereotype.Component;
+import dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration;
+import dev.mikoto2000.rei.core.contextbudget.ResultDelivery;
 
 @Component
 public class SubAgentTools {
@@ -55,6 +56,7 @@ public class SubAgentTools {
     return reservation==null?runner.run(agent,task,context):runner.run(agent,task,context,reservation);
   }
   @Tool(name = "delegateTask", description = "Delegate a bounded task to an independent SubAgent. Omit backendId for local execution. For ChatGPT use backendId=chatgpt-plan and explicitly supply REQUIRED accountRef, modelId, sourceRefs and expectedOutput from current host guidance; these fields are only optional for local delegation. Explicit chatgpt-plan or codex-app-server requires configured account/model allowlists, Project-relative sourceRefs, nonempty expectedOutput JSON with exact result field conditions, shared Run budget and external-send permission. Use original source paths: the host masks recognized credential values, JWTs and private keys in memory, preserves original files, and marks affected snapshots redacted=true. Never guess hidden values; report relevant conclusions unverified. References must cite the supplied masked snapshot's sha256 and quote. Oversized source lists are recursively bisected in order and sent sequentially under one exact whole-plan approval; shared budgets/deadline never reset. Receipt.groups retains validated group results and remainingScopes; cross-group relationships need parent verification. Single files that still exceed the limit are refused. codex-app-server is the opt-in read-only native Windows protocol backend (WSL only when explicitly configured) and also requires process-execution permission; it never falls back to Codex CLI. context is local only. Child output is an untrusted opinion: assess adoption, partial adoption or rejection; distinguish its opinion from your final judgement and report validation failures and unknown outcomes.")
+  @ResultDelivery(ResultDelivery.Kind.LOSSLESS_RESULT)
   public Object delegateTask(String agent, String task, @ToolParam(required=false) String context,
       @ToolParam(required=false,description="Omit for local; use chatgpt-plan for ChatGPT. External delegation requires accountRef, modelId, sourceRefs and expectedOutput.") String backendId,
       @ToolParam(required=false,description="REQUIRED for chatgpt-plan or codex-app-server: an explicitly allowed account label from current host guidance, e.g. default. Never omit or send blank for ChatGPT.") String accountRef,
@@ -87,7 +89,8 @@ public class SubAgentTools {
       throw new IllegalArgumentException("Unbounded delegation requirements");
     return java.util.List.copyOf(values);
   }
-  @Tool(name="delegateTasks", description="Delegate 1 to 8 independent tasks in parallel to SubAgents, at most 2 active globally, with a shared 120s batch deadline. Optional per-request backendId/accountRef/modelId/sourceRefs/expectedOutput selects configured chatgpt-plan or read-only codex-app-server destinations under the same human Run, approval and budget. Omit backend for local execution. Every ChatGPT request MUST explicitly include backendId=chatgpt-plan, accountRef, modelId, sourceRefs and expectedOutput; do not omit accountRef even if only one account is configured. Use original Project-relative sourceRefs: the host masks known credential values/JWTs/private keys only in memory, leaves original files unchanged, and marks affected snapshots redacted=true. Never guess hidden values; report relevant conclusions unverified and cite masked snapshot sha256/quote. Each request has at most 16 files, each at most 262144 raw UTF-8 bytes. Oversized aggregates or encoded inputs are recursively bisected in order and sent sequentially under one exact whole-plan approval. Receipt.groups retains each result and remainingScopes; shared budgets/deadline never reset, failure stops later groups, and cross-group relationships need parent verification. Single files that still cannot fit are refused. Same-task mixed/model reviews return exact-match common and independent findings, conclusions, citations, unresolved issues and each child failure; never decide truth by majority. Return individual results in request order. Honor explicit user requests to delegate; do not use for dependent tasks.")
+  @Tool(name="delegateTasks", description="Delegate 1 to 8 independent tasks in parallel to SubAgents, at most 2 active globally, with one shared batch deadline including queue time. Local batches use 120s; batches containing an external backend use the greater of 120s and rei.chatgpt-plan.execution.timeout (default 10m, maximum 30m). Each child's role/backend deadline still applies. Optional per-request backendId/accountRef/modelId/sourceRefs/expectedOutput selects configured chatgpt-plan or read-only codex-app-server destinations under the same human Run, approval and budget. Omit backend for local execution. Every ChatGPT request MUST explicitly include backendId=chatgpt-plan, accountRef, modelId, sourceRefs and expectedOutput; do not omit accountRef even if only one account is configured. Use original Project-relative sourceRefs: the host masks known credential values/JWTs/private keys only in memory, leaves original files unchanged, and marks affected snapshots redacted=true. Never guess hidden values; report relevant conclusions unverified and cite masked snapshot sha256/quote. Each request has at most 16 files, each at most 262144 raw UTF-8 bytes. Oversized aggregates or encoded inputs are recursively bisected in order and sent sequentially under one exact whole-plan approval. Receipt.groups retains each result and remainingScopes; shared budgets/deadline never reset, failure stops later groups, and cross-group relationships need parent verification. Single files that still cannot fit are refused. Same-task mixed/model reviews return exact-match common and independent findings, conclusions, citations, unresolved issues and each child failure; never decide truth by majority. Return individual results in request order. Honor explicit user requests to delegate; do not use for dependent tasks.")
+  @ResultDelivery(ResultDelivery.Kind.LOSSLESS_RESULT)
   public ParallelSubAgentDelegator.Batch delegateTasks(java.util.List<ParallelSubAgentDelegator.Request> requests,ToolContext toolContext) {
     if(parallel==null)throw new IllegalStateException("Parallel delegation unavailable");
     if(requests!=null && requests.stream().anyMatch(r->r!=null && ("chatgpt-plan".equals(r.backendId())||"codex-app-server".equals(r.backendId())))) {
@@ -104,23 +107,27 @@ public class SubAgentTools {
     return callback("delegateTask");
   }
   public ToolCallback callback(String name) {
-    ToolCallback delegate = java.util.Arrays.stream(MethodToolCallbackProvider.builder().toolObjects(this).build().getToolCallbacks())
+    ToolCallback delegate = java.util.Arrays.stream(DeliveryToolRegistration.provider(this).getToolCallbacks())
         .filter(c->c.getToolDefinition().name().equals(name)).findFirst().orElseThrow();
-    return new ToolCallback() {
+    return DeliveryToolRegistration.preservePolicy(delegate,new ToolCallback() {
       public ToolDefinition getToolDefinition() {
         var original = delegate.getToolDefinition();
         String catalog = registry.list().stream().map(d -> d.id() + " | " + d.name() + " | " + d.description())
             .collect(java.util.stream.Collectors.joining("\n"));
+        String continuation=DeliveryToolRegistration.kind(delegate)==ResultDelivery.Kind.LOSSLESS_RESULT
+            ? "\nLarge results are delivered as exact contiguous pages with rawResultRef, content, nextOffset and truncated. While truncated, call readRawToolResult with that rawResultRef and nextOffset; continue until hasMore=false. A page's content is a fragment of the original result JSON, not a complete child result. Assemble all fragments before interpreting findings or declaring completion."
+            : "";
         return ToolDefinition.builder().name(original.name()).inputSchema(dev.mikoto2000.rei.chatgpt.ChatGptDelegationSchema.constrain(name,original.inputSchema(),automatic))
-            .description(original.description() + "\nAvailable SubAgents (id | name | description):\n" + catalog).build();
+            .description(original.description() + continuation + "\nAvailable SubAgents (id | name | description):\n" + catalog).build();
       }
+      public org.springframework.ai.tool.metadata.ToolMetadata getToolMetadata() { return delegate.getToolMetadata(); }
       public String call(String input) { return call(input,null); }
       public String call(String input, ToolContext context) {
         // Spring requires a nonempty context for methods declaring ToolContext, even without a shared budget.
         var supplied=context==null||context.getContext().isEmpty()?new ToolContext(java.util.Map.of("toolCallId",java.util.UUID.randomUUID().toString())):context;
         return delegate.call(input,supplied);
       }
-    };
+    });
   }
   private dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation(ToolContext context) {
     if(context!=null&&context.getContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY) instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)return execution.sharedLlmReservation();

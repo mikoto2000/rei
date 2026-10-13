@@ -7,10 +7,11 @@ public final class WorkContextOutput {
   private static final SubAgentResultSchema SCHEMA=SubAgentResultSchema.load(java.nio.file.Path.of("."),"classpath:/subagents/schemas/work-context.schema.json");
   public String schema() { return SCHEMA.json(); }
   public List<WorkContextCandidate> parse(String text) {
+    if(text==null||text.isBlank()) throw new WorkContextExtractionException(WorkContextExtractionException.Reason.EMPTY_OUTPUT);
     tools.jackson.databind.JsonNode root;
     try { root=new SubAgentResultParser().parse(text); }
-    catch(SubAgentValidationException error) { throw new IllegalArgumentException("Invalid Work Context JSON",error); }
-    if(!SCHEMA.validate(root).isEmpty()) throw new IllegalArgumentException("Work Context output violates schema");
+    catch(SubAgentValidationException error) { throw new WorkContextExtractionException(WorkContextExtractionException.Reason.INVALID_JSON,error); }
+    if(!SCHEMA.validate(root).isEmpty()) throw new WorkContextExtractionException(WorkContextExtractionException.Reason.INVALID_SCHEMA);
     var changes=new ArrayList<WorkContextCandidate>();
     for(var row:root.get("changes")) {
       var ids=new ArrayList<String>(); for(var id:row.get("sourceIds")) ids.add(id.asString());

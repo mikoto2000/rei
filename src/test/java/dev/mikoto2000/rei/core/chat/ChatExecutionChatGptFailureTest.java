@@ -67,7 +67,7 @@ class ChatExecutionChatGptFailureTest {
 
   @Test void arbitraryFailuresRemainRedacted() {
     var result=service(new IllegalStateException("PRIVATE model response")).execute(owner,"work",new UserInterventionQueue());
-    assertThat(result.errorMessage()).isEqualTo("chat run failed");assertThat(result.stopCode()).isEmpty();
+    assertThat(result.errorMessage()).contains("必要な状態").doesNotContain("PRIVATE","chat run failed");assertThat(result.stopCode()).isEqualTo("invalid_state");
     assertThat(terminals()).hasSize(1);assertThat(events.toString()).doesNotContain("PRIVATE");
   }
 }

@@ -7,6 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record PlanExecutionProperties(boolean enabled, Integer maxIterations, Integer maxRepairs,
     Integer maxConcurrent, Integer maxInputBytes, Integer maxOutputBytes, Duration timeout,
     boolean semanticValidation, Integer refinementRounds) {
+  public static final Duration DEFAULT_TIMEOUT=Duration.ofMinutes(10);
+  public static final Duration MAX_TIMEOUT=Duration.ofMinutes(30);
   public PlanExecutionProperties(boolean enabled,Integer maxIterations,Integer maxRepairs,Integer maxConcurrent,
       Integer maxInputBytes,Integer maxOutputBytes,Duration timeout,boolean semanticValidation) {
     this(enabled,maxIterations,maxRepairs,maxConcurrent,maxInputBytes,maxOutputBytes,timeout,semanticValidation,0);
@@ -20,9 +22,9 @@ public record PlanExecutionProperties(boolean enabled, Integer maxIterations, In
     maxOutputBytes=bounded(maxOutputBytes,1048576,1024,1048576);
     refinementRounds=bounded(refinementRounds,0,0,2);
     if(refinementRounds>=maxIterations)throw new IllegalArgumentException("Refinement exceeds inference budget");
-    timeout=timeout==null?Duration.ofSeconds(120):timeout;
-    if(timeout.isZero()||timeout.isNegative()||timeout.compareTo(Duration.ofSeconds(120))>0)
-      throw new IllegalArgumentException("Invalid Plan execution timeout");
+    timeout=timeout==null?DEFAULT_TIMEOUT:timeout;
+    if(timeout.isZero()||timeout.isNegative()||timeout.compareTo(MAX_TIMEOUT)>0)
+      throw new IllegalArgumentException("rei.chatgpt-plan.execution.timeout must be positive and at most 30m");
   }
   private static int bounded(Integer value,int fallback,int min,int max) {
     int result=value==null?fallback:value;

@@ -58,6 +58,8 @@
 
 - 検索条件は、1件だけの場合も grepMultiQuery にまとめてください。
 - ファイルを読む場合は、1件だけの場合も readMultiFile にまとめてください。
+- `readMultiFile` の `truncated: true` と `nextRead` は返却予算による継続を示します。空 `content` だけで空ファイルやツール故障と判断せず、`truncationReason` / `continuationInstruction` を確認してください。
+- 続きを読む場合は各結果の `nextRead` を改変せず、次の `files` 配列にまとめて渡してください。本文は連続 prefix であり、途中を読んだものとして扱わないでください。
 - ファイル行数だけを確認する場合は `countFileLines` を使用してください。`wc -l` のために `runCommand` を使わず、glob は `findFile` で展開してから具体的なパスをまとめて渡してください。
 - ファイルへ書き込む場合は、1件だけの場合も writeMultiFile にまとめてください。
 

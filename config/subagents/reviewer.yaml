@@ -15,4 +15,4 @@ tools:
   - grepMultiQuery
   - searchAndRead
 maxSteps: 10
-timeout: 120s
+timeout: 30m

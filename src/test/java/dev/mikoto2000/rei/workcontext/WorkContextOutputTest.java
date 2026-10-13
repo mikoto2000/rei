@@ -2,6 +2,18 @@ package dev.mikoto2000.rei.workcontext;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 class WorkContextOutputTest {
+  @Test void outputFailuresHaveDistinctControlledReasonsWithoutModelText() {
+    var parser=new WorkContextOutput();
+    assertEquals(WorkContextExtractionException.Reason.EMPTY_OUTPUT,
+        assertThrows(WorkContextExtractionException.class,()->parser.parse(" ")).reason());
+    var malformed=assertThrows(WorkContextExtractionException.class,()->parser.parse("PRIVATE_OUTPUT"));
+    assertEquals(WorkContextExtractionException.Reason.INVALID_JSON,malformed.reason());
+    assertFalse(malformed.diagnostic().display().contains("PRIVATE"));
+    var schema=assertThrows(WorkContextExtractionException.class,()->parser.parse("{\"PRIVATE_KEY\":\"PRIVATE_VALUE\"}"));
+    assertEquals(WorkContextExtractionException.Reason.INVALID_SCHEMA,schema.reason());
+    assertFalse(schema.diagnostic().display().contains("PRIVATE"));
+    assertTrue(schema.diagnostic().display().contains("/work update"));
+  }
   @Test void acceptsSchemaAndRejectsInstructionsUnknownEnumsDuplicateKeysAndTrailingText() {
     var parser=new WorkContextOutput();
     String valid="""

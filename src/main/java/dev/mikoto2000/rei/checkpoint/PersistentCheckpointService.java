@@ -61,8 +61,9 @@ public class PersistentCheckpointService implements AutoCloseable {
     if(rawResults!=null && !history.isEmpty() && history.getLast() instanceof org.springframework.ai.chat.messages.ToolResponseMessage message) for(var result:message.getResponses()) {
       String reference;
       if(dev.mikoto2000.rei.core.contextbudget.ToolResultCompressor.policy(message,result.id())==dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.RAW_RESULT_PAGE) {
-        reference=result.responseData().lines().limit(7).filter(line->line.startsWith("rawResultRef: ")).map(line->line.substring(14)).findFirst().orElseThrow(()->new IllegalArgumentException("Invalid raw page provenance"));
-        if(!rawResults.exists(owner.conversationId(),reference))throw new IllegalArgumentException("Raw page source unavailable");
+        reference=dev.mikoto2000.rei.core.contextbudget.RawResultPage.parse(result.responseData()).rawResultRef();
+        if(!rawResults.exists(owner.conversationId(),reference))throw new dev.mikoto2000.rei.core.contextbudget.RawResultPageException(
+            dev.mikoto2000.rei.core.contextbudget.RawResultPageException.Reason.SOURCE_UNAVAILABLE);
       }else reference=rawResults.save(owner.conversationId(),owner.runId(),result.name(),result.id(),Objects.toString(result.responseData(),""));
       if(active.get(owner.runId()).evidence().stream().noneMatch(e->e.origin().equals("RAW_RESULT_REFERENCE")&&e.summary().equals(reference)))
         references.add(new Evidence("RAW_RESULT_REFERENCE",reference,null,owner.runId(),result.id()));

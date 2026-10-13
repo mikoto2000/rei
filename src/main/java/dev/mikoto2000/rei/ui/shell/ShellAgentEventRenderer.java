@@ -191,10 +191,15 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         var payload = (dev.mikoto2000.rei.event.MemoryLifecyclePayload) event.payload();
         output.println("[memory.sleep] " + payload.status() + " (" + payload.sleepRunId() + ")");
       }
-      case CONTEXT_COMPRESSION_FAILED -> {
+      case CONTEXT_COMPRESSION_FAILED, CONTEXT_COMPRESSION_SKIPPED -> {
         closeAssistantLine(); closeThinkingLine();
         var payload = (dev.mikoto2000.rei.event.ContextCompressionPayload) event.payload();
-        output.println("[context.compression] failed: " + dev.mikoto2000.rei.event.FailureMessages.text(payload.reason()));
+        String state = event.type() == dev.mikoto2000.rei.event.AgentEventType.CONTEXT_COMPRESSION_FAILED
+            ? "failed" : "skipped";
+        String details = payload.details() == null || payload.details().isBlank() ? ""
+            : " (" + dev.mikoto2000.rei.event.FailureMessages.text(payload.details()) + ")";
+        output.println("[context.compression] " + state + ": "
+            + dev.mikoto2000.rei.event.FailureMessages.text(payload.reason()) + details);
       }
       case TASK_FAILED -> {
         closeAssistantLine(); closeThinkingLine();

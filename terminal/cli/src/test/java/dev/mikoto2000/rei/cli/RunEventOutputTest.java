@@ -6,6 +6,26 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class RunEventOutputTest {
+  @Test void compressionDetailsAndCooldownDoNotSplitAnswerChunks() throws Exception {
+    event("message.delta", "m", "続き");
+    output.accept("context.compression.failed", BackendClient.JSON.readTree(
+        "{\"reason\":\"summary_timeout\",\"details\":\"timeoutSeconds=60\\ntoken=hidden\"}"));
+    output.accept("context.compression.skipped", BackendClient.JSON.readTree(
+        "{\"reason\":\"retry_cooldown\",\"details\":\"retryAfterSeconds=120\"}"));
+    assertTrue(lines.isEmpty());
+    event("message.delta", "m", "を進めます。");
+    event("message.completed", "m", "続きを進めます。");
+    assertEquals(List.of("続きを進めます。",
+        "[context.compression] failed: summary_timeout (timeoutSeconds=60 token=[REDACTED])",
+        "[context.compression] skipped: retry_cooldown (retryAfterSeconds=120)"), lines);
+  }
+
+  @Test void oldCompressionPayloadAndNullDetailsRemainReadable() throws Exception {
+    output.accept("context.compression.failed", BackendClient.JSON.readTree("{\"reason\":\"summary_empty\"}"));
+    output.accept("context.compression.skipped", BackendClient.JSON.readTree("{\"reason\":\"retry_cooldown\",\"details\":null}"));
+    assertEquals(List.of("[context.compression] failed: summary_empty", "[context.compression] skipped: retry_cooldown"), lines);
+  }
+
   @Test void nullErrorCodeDoesNotDisplayNullAsAReason() throws Exception {
     output.accept("agent.run.failed", BackendClient.JSON.readTree("{\"error\":{\"message\":null,\"errorType\":\"IOException\",\"code\":null}}"));
     assertEquals(List.of("[agent.run.failed] 原因: IOException"), lines);

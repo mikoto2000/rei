@@ -17,6 +17,8 @@ public class ContextAssembler {
   private final ConversationCompressor compressor;
   private final AgentEventFactory events;
   private final AgentEventPublisher publisher;
+  private CompressionRetryGuard compressionRetries=new CompressionRetryGuard();
+  void setCompressionRetryClock(java.time.Clock clock){compressionRetries=new CompressionRetryGuard(clock::millis);}
   private boolean requireReviewCoverage=true;
   public void setRequireReviewCoverage(boolean required){requireReviewCoverage=required;}
   public void requireReviewed(dev.mikoto2000.rei.core.chat.AgentRunContext owner) {
@@ -47,7 +49,7 @@ public class ContextAssembler {
       checkActive.run();
       var messages = raw.getInstructions().stream().map(message -> {
         if (message instanceof ToolResponseMessage tool && tool.getResponses().stream().anyMatch(response ->
-            ToolResultCompressor.policy(tool,response.id()) == ResultDelivery.Kind.FILE_CONTENT)) return tools.compact(message,conversation,run);
+            ToolResultCompressor.lossless(ToolResultCompressor.policy(tool,response.id())))) return tools.compact(message,conversation,run);
         return message;
       }).toList();
       var projected = tools.fit(new Prompt(messages,raw.getOptions()),conversation,run,hardLimit(raw));
@@ -84,8 +86,8 @@ public class ContextAssembler {
     ConversationSummary runSummary = summaries.read(runKey);
     history.removeIf(e -> e.sequence() <= conversationSummary.throughSequence());
     active.removeIf(e -> e.sequence() <= runSummary.throughSequence());
-    var h = new Segment(historyKey, conversationSummary, history);
-    var a = new Segment(runKey, runSummary, active);
+    var h = new Segment(historyKey, conversationSummary, history,run);
+    var a = new Segment(runKey, runSummary, active,run);
     long before = estimate(project(raw, h, a));
     log.debug("Context estimated tokens={}, threshold={}, hardLimit={}", before, threshold, hard);
     if (before > threshold) {
@@ -112,10 +114,12 @@ public class ContextAssembler {
   }
   private static final class Segment {
     final String key;
+    final String retryKey;
     ConversationSummary summary;
     final ArrayList<Entry> entries;
-    Segment(String key, ConversationSummary summary, ArrayList<Entry> entries) {
+    Segment(String key, ConversationSummary summary, ArrayList<Entry> entries,String run) {
       this.key = key; this.summary = summary; this.entries = entries;
+      this.retryKey=key+"/retry/"+Objects.toString(run,"standalone");
     }
   }
   private void compress(Segment segment, Prompt raw, Runnable check,dev.mikoto2000.rei.llm.ModelCallBudget budget) {
@@ -125,12 +129,26 @@ public class ContextAssembler {
     var prefix = segment.entries.subList(0, count);
     long through = prefix.getLast().sequence();
     long before = estimator.text(segment.summary.summary()) + prefix.stream().mapToLong(e -> estimator.message(e.message())).sum();
+    String configuration=Objects.toString(raw.getOptions()==null?null:raw.getOptions().getModel(),"")+"|"
+        +properties.getSummaryTokens()+"|"+properties.getSummaryTimeoutSeconds()+"|"+properties.getMinimumCompressionGain()
+        +"|"+properties.getRecentTokens()+"|"+properties.getSafetyMargin()+"|"+properties.getRetryCooldownSeconds()
+        +"|"+properties.contextLimit(raw.getOptions()==null?null:raw.getOptions().getModel());
+    var retry=compressionRetries.decision(segment.retryKey,configuration);
+    if(!retry.allowed()) {
+      if(retry.announce())emit(raw,AgentEventType.CONTEXT_COMPRESSION_SKIPPED,before,before,count,through,"retry_backoff",
+          "前回の原因: "+retry.lastReason()+"。同じ実行の要約を繰り返さず、あと "+retry.waitSeconds()+" 秒は再試行を抑制します。"
+          +"既存要約を保持し、必要なら今回送信する古い履歴を減らします。原履歴は変更しません。"
+          +"設定: rei.context-compression.retry-cooldown-seconds。");
+      return;
+    }
+    long after=before;
     emit(raw, AgentEventType.CONTEXT_COMPRESSION_STARTED, before, before, count, through, null);
     try {
       check.run();
       // The summarizer itself must not exceed its input budget. Process a bounded prefix per request.
       long max = properties.contextLimit(raw.getOptions() == null ? null : raw.getOptions().getModel())
           - properties.getSummaryTokens() - properties.getSafetyMargin() - 2048L;
+      max=compressionRetries.inputLimit(segment.retryKey,configuration,max);
       while (before > max && count > 1) {
         count--;
         while (count > 0 && segment.entries.get(count).message() instanceof ToolResponseMessage) count--;
@@ -138,35 +156,78 @@ public class ContextAssembler {
         prefix = segment.entries.subList(0, count);
         before = estimator.text(segment.summary.summary()) + prefix.stream().mapToLong(e -> estimator.message(e.message())).sum();
       }
-      if (count == 0 || before > max) throw new IllegalStateException("summary_input_budget");
+      after=before;
+      if (count == 0 || before > max) throw new ContextCompressionException(ContextCompressionException.Reason.INPUT_BUDGET,before,max);
       through = prefix.getLast().sequence();
       var messages=prefix.stream().map(Entry::message).toList();
-      String text = budget==null?compressor.summarize(segment.summary.summary(),messages,properties.getSummaryTokens(),raw)
-          :compressor.summarize(segment.summary.summary(),messages,properties.getSummaryTokens(),raw,budget);
+      var result = budget==null?compressor.summarizeResult(segment.summary.summary(),messages,properties.getSummaryTokens(),raw)
+          :compressor.summarizeResult(segment.summary.summary(),messages,properties.getSummaryTokens(),raw,budget);
       check.run();
-      int after = estimator.text(text);
-      if (text == null || text.isBlank() || after > properties.getSummaryTokens()
-          || after > before * (1 - properties.getMinimumCompressionGain())) throw new IllegalStateException("insufficient_gain");
+      String text=result==null?null:result.text();
+      if(text==null||text.isBlank())throw new ContextCompressionException(ContextCompressionException.Reason.EMPTY_SUMMARY);
+      after=estimator.text(text);
+      long outputTokens=result.outputTokens()!=null&&result.outputTokens()>0?result.outputTokens():after;
+      if(outputTokens>properties.getSummaryTokens())throw new ContextCompressionException(ContextCompressionException.Reason.SUMMARY_TOO_LONG,
+          outputTokens,properties.getSummaryTokens());
+      if(after>before*(1-properties.getMinimumCompressionGain()))throw new ContextCompressionException(ContextCompressionException.Reason.INSUFFICIENT_GAIN,
+          after,(long)(before*(1-properties.getMinimumCompressionGain())));
       var summary = new ConversationSummary(text, through, Instant.now());
       // Cancellation and commit share the run monitor, preventing a late write after cancel().
       var execution = execution(raw);
       synchronized (execution == null ? this : execution) {
         check.run();
-        summaries.save(segment.key, summary);
+        try {summaries.save(segment.key, summary);}
+        catch(RuntimeException storage){RunCancellation.propagate(storage);throw ContextCompressionException.storageFailure(storage);}
       }
       segment.summary = summary;
       segment.entries.subList(0, count).clear();
+      compressionRetries.succeeded(segment.retryKey);
       emit(raw, AgentEventType.CONTEXT_COMPRESSION_COMPLETED, before, after, count, through, null);
       log.debug("Context compressed: messages={}, before={}, after={}, gain={}, through={}",
           count, before, after, 1 - (double) after / before, through);
     } catch (RuntimeException error) {
-      emit(raw, AgentEventType.CONTEXT_COMPRESSION_FAILED, before, before, count, through,
-          RunCancellation.isCancellation(error) ? "cancelled" : "compression_unavailable");
+      boolean cancelled=RunCancellation.isCancellation(error);
+      var stopped=stopped(error);
+      var classified=ContextCompressionException.from(error);
+      String reason=cancelled?"cancelled":stopped==null?classified.reason().code():stopped.reason().name().toLowerCase(java.util.Locale.ROOT);
+      String details=cancelled?"要約が取り消されました。":stopped==null?classified.details():budgetDetails(stopped.reason(),execution(raw)!=null);
+      if(classified.actualTokens()>=0)details+=" token数="+classified.actualTokens()+", 上限="+classified.limitTokens()+"。";
+      if(stopped==null&&!cancelled)details+=" 要約対象="+before+" 推定tokens、要約上限="+properties.getSummaryTokens()
+          +" tokens、制限時間="+properties.getSummaryTimeoutSeconds()+" 秒。";
+      if(stopped!=null)for(var suppressed:stopped.getSuppressed())if(suppressed instanceof ContextCompressionException original)
+        details+=" 元の原因: "+original.reason().code()+": "+original.details();
+      if(!cancelled&&stopped==null) {
+        boolean shrink=switch(classified.reason()){case TIMEOUT,OUTPUT_LIMIT,SUMMARY_TOO_LONG,INSUFFICIENT_GAIN->true;default->false;};
+        long wait=compressionRetries.failed(segment.retryKey,configuration,reason,before,properties.getSummaryTokens(),properties.getRetryCooldownSeconds(),shrink);
+        details+=" 再試行は "+wait+" 秒以上あけます。"+(shrink?"次の要約対象を小さくします。":"");
+      }
+      emit(raw, AgentEventType.CONTEXT_COMPRESSION_FAILED, before, after, count, through,reason,details);
       RunCancellation.propagate(error);
-      if (error instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException) throw error;
+      if (stopped!=null) throw stopped;
       check.run();
-      log.debug("Context compression degraded: {}", error.getClass().getSimpleName());
+      log.debug("Context compression degraded: {}",reason);
     }
+  }
+  private static String budgetDetails(dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason reason,boolean owned) {
+    String callSetting=owned?"rei.llm.output-limit.max-llm-calls-per-run":"rei.context-compression.standalone-summary-max-llm-calls";
+    String tokenSettings=owned?"rei.llm.output-limit.max-total-tokens-per-run、max-total-tokens-per-goal"
+        :"rei.context-compression.standalone-summary-max-total-tokens";
+    return switch(reason) {
+      case LLM_CALL_BUDGET_EXCEEDED -> "要約中に LLM 呼び出し回数の上限に達しました。"
+          +callSetting+" と呼び出し元の残予算を確認してください。"+(owned?"再開時にも消費済み回数を引き継ぎます。":"");
+      case TOKEN_BUDGET_EXCEEDED -> "要約中に報告 token 使用量の上限に達しました。"
+          +tokenSettings+" と呼び出し元の残予算を確認してください。";
+      case TOKEN_USAGE_UNKNOWN -> "要約の token 使用量を確認できず、予算上限を保証できないため停止します。"
+          +"利用するモデルがストリームの usage を返す設定か確認してください。"
+          +"設定: "+tokenSettings+"。呼び出し元の予算設定も確認してください。";
+      default -> "要約中に Run が停止しました。停止理由: "+reason.name()+"。保存済みのタスク状態と親の残予算を確認してください。";
+    };
+  }
+  private dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped(Throwable error) {
+    var seen=Collections.newSetFromMap(new IdentityHashMap<Throwable,Boolean>());
+    for(int depth=0;error!=null&&depth<16&&seen.add(error);depth++,error=error.getCause())
+      if(error instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)return stopped;
+    return null;
   }
   private boolean dropOldest(Segment segment) {
     if (segment.entries.size() <= 1) return false;
@@ -239,9 +300,12 @@ public class ContextAssembler {
     return null;
   }
   private void emit(Prompt prompt, AgentEventType type, long before, long after, int count, long through, String reason) {
+    emit(prompt,type,before,after,count,through,reason,null);
+  }
+  private void emit(Prompt prompt, AgentEventType type, long before, long after, int count, long through, String reason,String details) {
     if (events == null || publisher == null) return;
     var execution = execution(prompt);
-    publisher.publish(events.contextCompression(type, new ContextCompressionPayload(before, after, count, through, reason))
+    publisher.publish(events.contextCompression(type, new ContextCompressionPayload(before, after, count, through, reason,details))
         .withOwnership(execution == null ? null : execution.runContext()));
   }
 }

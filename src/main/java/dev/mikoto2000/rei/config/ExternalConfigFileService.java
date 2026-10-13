@@ -152,8 +152,12 @@ public class ExternalConfigFileService {
             review-ledger:
               enabled: ${REI_REVIEW_LEDGER_ENABLED:true}
               require-coverage: ${REI_REVIEW_REQUIRE_COVERAGE:true}
+          chatgpt-plan:
+            execution:
+              timeout: ${REI_CHATGPT_PLAN_EXECUTION_TIMEOUT:10m}
           context-compression:
             enabled: ${REI_CONTEXT_COMPRESSION_ENABLED:true}
+            retry-cooldown-seconds: ${REI_CONTEXT_RETRY_COOLDOWN_SECONDS:120}
             standalone-summary-max-llm-calls: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_LLM_CALLS:0}
             standalone-summary-max-total-tokens: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_TOTAL_TOKENS:0}
           computer-use:

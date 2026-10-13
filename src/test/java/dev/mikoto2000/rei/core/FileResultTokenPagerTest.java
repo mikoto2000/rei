@@ -25,4 +25,44 @@ class FileResultTokenPagerTest {
     assertThat(result.nextRead().offset()).isEqualTo(17+result.content().getFirst().length());
     assertThat(result.nextRead().charset()).isEqualTo("Shift_JIS");
   }
+  @Test void largeBatchReturnsAContiguousPrefixForEveryFileWithinTheSharedTokenBudget() throws Exception {
+    var requests=new ArrayList<Tools.ReadFileRequest>();
+    var originals=new ArrayList<Tools.ReadFileResult>();
+    String source="教材🙂\\\"".repeat(1000);
+    for(int index=0;index<3;index++) {
+      String path="lesson"+index+".md";
+      requests.add(new Tools.ReadFileRequest(path,5,5,"sha"+index,11,"UTF-8"));
+      originals.add(new Tools.ReadFileResult(path,5,5,List.of(source),false,null,"sha"+index,null,source.length()));
+    }
+    var results=new FileResultTokenPager(TokenEstimator.conservative()).page(originals,requests,4096);
+    assertThat(results).extracting(Tools.ReadFileResult::path).containsExactly("lesson0.md","lesson1.md","lesson2.md");
+    for(int index=0;index<results.size();index++) {
+      var result=results.get(index);
+      assertThat(result.content()).hasSize(1);
+      assertThat(result.content().getFirst()).isNotEmpty().isEqualTo(source.substring(0,result.nextRead().offset()-11));
+      assertThat(result.nextRead().expectedVersion()).isEqualTo("sha"+index);
+      assertThat(result.nextRead().startLine()).isEqualTo(5);
+      assertThat(result.truncationReason()).isEqualTo("RESULT_TOKEN_BUDGET");
+      assertThat(result.continuationInstruction()).contains("nextRead unchanged","not an empty file");
+    }
+    var sizes=results.stream().mapToInt(result->result.content().getFirst().codePointCount(0,result.content().getFirst().length())).summaryStatistics();
+    assertThat(sizes.getMax()-sizes.getMin()).isLessThanOrEqualTo(1);
+    assertThat(TokenEstimator.conservative().text(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(results))).isLessThanOrEqualTo(4096);
+  }
+  @Test void shortFilesGiveUnusedTokenQuotaToLaterFilesAndKeepTheirNativeCursor() throws Exception {
+    var requests=List.of(new Tools.ReadFileRequest("short",1,1),new Tools.ReadFileRequest("long",1,1));
+    var shortFile=new Tools.ReadFileResult("short",1,1,List.of("done"),false,null,"short-version",null,5);
+    var source="日本語".repeat(1000);
+    var longFile=new Tools.ReadFileResult("long",1,1,List.of(source),false,null,"long-version",null,9000);
+    var results=new FileResultTokenPager(TokenEstimator.conservative()).page(List.of(shortFile,longFile),requests,1024);
+    assertThat(results.getFirst()).isEqualTo(shortFile);
+    assertThat(results.getLast().content().getFirst()).isNotEmpty().isEqualTo(source.substring(0,results.getLast().nextRead().offset()));
+    assertThat(results.getLast().truncationReason()).isEqualTo("RESULT_TOKEN_BUDGET");
+  }
+  @Test void aPageTooSmallForTheBatchFailsExplicitlyRatherThanSilentlyStarvingLaterFiles() {
+    var request=new Tools.ReadFileRequest("a".repeat(1024),1,1);
+    var result=new Tools.ReadFileResult(request.path(),1,1,List.of("body"),false,null,"sha",null,5);
+    assertThatThrownBy(()->new FileResultTokenPager(TokenEstimator.conservative()).page(List.of(result),List.of(request),32))
+        .isInstanceOf(java.io.IOException.class).hasMessageContaining("CONTEXT_BUDGET_INSUFFICIENT").hasMessageContaining("narrow the file batch");
+  }
 }

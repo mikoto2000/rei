@@ -13,10 +13,15 @@
 | 種類 | 配送 |
 |---|---|
 | FILE_CONTENT | 連続した本文ページ。中間抜粋なし。元の全結果をraw参照で回収可能 |
+| LOSSLESS_RESULT | 委譲結果のJSONを連続ページで配送。指摘・失敗理由・各子の結果を抜粋せず、元の全結果をraw参照で回収可能 |
 | RAW_RESULT_PAGE | 再抜粋・再保存しない。予算不足時は原文から連続ページを縮小 |
 | SEARCH_RESULT / GENERAL / DIAGNOSTIC_LOG | 既存の重要行・先頭・末尾方式とraw参照。本文ツールと混同しない |
 
-対象は readMultiFile、searchAndRead、readSkillResource、readTextChangeSetBase、readPdfFile、readReviewFile。検索の候補・matchesと本文sectionsは既存の構造を保つ。一般ログではexitCode/error/status/stderr/diagnosisを優先する。登録されたレビューPage以外の文字列から配送receiptを作らない。
+FILE_CONTENTの対象は readMultiFile、searchAndRead、readSkillResource、readTextChangeSetBase、readPdfFile、readReviewFile。検索の候補・matchesと本文sectionsは既存の構造を保つ。delegateTask / delegateTasks は LOSSLESS_RESULT として登録し、動的なツール定義・遅延callback・イベント・安定化ラッパーでも分類を保持する。委譲結果はファイルの配送・レビュー完了を証明するreceiptにはしない。
+
+大きい委譲結果は `rawResultRef` / `content` / `nextOffset` / `truncated` を持つページになる。`content` は元の結果JSONの連続した断片であり、単独の完全な結果JSONとは限らない。`truncated=true` なら `readRawToolResult(rawResultRef, offset=nextOffset, limit=16000)` を呼び、`hasMore=false` まで次の `nextOffset` を辿る。各本文を順番に連結すれば、単一・バッチとも元JSONと一致する。小さい結果は既存の結果JSONのまま返す。会話要約を無効にしても、この配送と最終入力上限の調整は有効。
+
+一般ログの GENERAL / DIAGNOSTIC_LOG / SEARCH_RESULT では重要行・先頭・末尾の表示が引き続き残る。例えば runCommand の大きいログはexitCode/error/status/stderr/diagnosisを優先し、完全ログはraw参照で取得する。本文と委譲結果にはこの抜粋方式を適用しない。登録されたレビューPage以外の文字列から配送receiptを作らない。
 
 ## ページ分割と予算
 
@@ -126,3 +131,9 @@ Windowsの全体結合テスト中、ExternalAgentProcessRunnerのProcessHandle.
 32768文字を超える入力はBPEの巨大単一語マージを回避し、JSON escaping後のUTF-8 byte数を上界として使う。短いページは従来どおり両tokenizerと保守的見積りを比較する。これは大きな入力を過大評価して保留することがあるが、計算量とモデル入力上限を守るための調整である。巨大語のRed/Greenを追加した。Windowsの大小文字aliasはcanonicalファイル名で一つの対象に正規化し、指摘の根拠位置もサロゲート境界を検証する。行/文字位置はUTF-16単位で、末尾改行後の空行位置も含む。
 
 最終ローカル検証（コード904ecd31、main05847e5a統合後）: CIと同じ .github/ci/full-test.ps1 の-Pfullで5409件、失敗0、エラー0、スキップ5、12分21秒。REI_TEST_WINDOWS_CODEX未設定2件、REI_TEST_WSL_CODEX未設定1件、実PlantUML renderer条件1件、rei.io.benchmark未設定1件を除く。liveタグの実LLM評価は通常CIから独立し、今回は未接続。固定応答・process I/OのJSONと検証概要はdocs/lossless-file-delivery-data/に保存した。既存Native Clientのコード/API契約は今回変更していない。
+
+## 原結果ページの保存形式
+
+`readRawToolResult` は専用の結果 converter で改行を含むテキストをそのまま返す。既定の JSON converter が String 全体を引用すると、チェックポイント保存側が `rawResultRef` のヘッダーを検出できず、成功したツール呼び出しの後で停止するためである。
+
+保存と最終入力調整は共通の `RawResultPage` parser を使う。旧形式の JSON 文字列ラップは一度だけ解除し、参照・cursor・本文長・継続状態を検証する。本文中の `rawResultRef` や任意の結果 JSON は出所として採用しない。予算調整でページを再生成する際も、元の要求範囲より広げない。チェックポイントにはページを新しい原文として保存せず、元結果の参照を保持する。不正な形式は `raw_page_invalid_provenance`、元結果を参照できない場合は `raw_page_source_unavailable` として対処方法を表示する。

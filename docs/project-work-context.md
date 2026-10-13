@@ -75,6 +75,8 @@ rei:
 
 自動更新を有効にすると、成功・失敗・キャンセルのTurn終端情報を保存した後、専用キューで更新します。失敗・キャンセルしたタスク全体を完了とは扱いません。抽出・保存の失敗で元のRun結果は変更しません。イベントは`work_context.update.started / work_context.updated / work_context.update.failed`です。失敗やキュー満杯の場合は`/work update`で再処理できます。強制終了時の処理は保証しません。
 
+失敗通知には、認証・権限・利用制限・タイムアウト・接続・入出力などの原因コードと対処方法を表示します。抽出の失敗は `work_context_input_too_large / work_context_output_truncated / work_context_output_too_large / work_context_empty_output / work_context_invalid_json / work_context_invalid_schema` に分け、入力超過は推定使用量・上限・変更する設定名も表示します。提供元の応答本文や会話の内容は診断に含めません。保存済みの引き継ぎは保持され、必要に応じて `/work update` で更新できます。
+
 ## 再開とコンテキスト
 
 Shellのプロジェクト選択・切替、新規Session、Native Clientの会話選択で、現在の作業・前回の進捗・未解決点・次のアクション・最終更新日時を短く表示します。アプリ内では同じSession／会話に繰り返し提示しません。引き継ぎがなければ簡潔に案内します。

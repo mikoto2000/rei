@@ -29,7 +29,7 @@ public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.L
   public String authority(){return dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256(("windows|"+settings.executable()+"|"+configuration()).getBytes(StandardCharsets.UTF_8));}
   public PlanAppServerClient.Started start(TokenSet tokens,Duration timeout,BooleanSupplier stop) {
     if(!settings.enabled()||!settings.executionMode().equals("windows")||!System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win"))throw ChatGptException.of(ROUTE_UNAVAILABLE);
-    long deadline=System.nanoTime()+Math.min(timeout.toNanos(),Duration.ofSeconds(125).toNanos());
+    var deadline=new PlanProcessDeadline(timeout);
     Path home=null;
     try {
       if(!Files.isRegularFile(Path.of(settings.executable())))throw ChatGptException.of(ROUTE_UNAVAILABLE);
@@ -38,15 +38,21 @@ public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.L
       home=Files.createTempDirectory(settings.runtimeDirectory(),"rei-plan-windows-");
       Path cwd=Files.createDirectory(home.resolve("workspace"));
       Files.writeString(home.resolve("config.toml"),configuration());
+      if(stop.getAsBoolean())throw ChatGptException.of(CANCELLED);
+      deadline.remaining();
       var probe=process(home,cwd,null,List.of("--version")).redirectError(ProcessBuilder.Redirect.DISCARD).start();
       try {
-        if(!probe.waitFor(Math.min(10000,Math.max(1,timeout.toMillis())),TimeUnit.MILLISECONDS)){probe.destroyForcibly();throw ChatGptException.of(TIMEOUT);}
+        if(!probe.waitFor(deadline.probeWaitMillis(),TimeUnit.MILLISECONDS)){probe.destroyForcibly();throw ChatGptException.of(TIMEOUT);}
         String output=new String(probe.getInputStream().readNBytes(256),StandardCharsets.UTF_8).strip();
         if(probe.exitValue()!=0||!output.equals("codex-cli "+version()))throw ChatGptException.of(PROTOCOL);
       } finally {probe.destroyForcibly();}
       if(stop.getAsBoolean())throw ChatGptException.of(CANCELLED);
+      deadline.remaining();
       var child=process(home,cwd,tokens.accessToken(),List.of("app-server","--listen","stdio://")).start();
-      var expiry=DEADLINES.schedule(()->{if(child.isAlive()){child.descendants().forEach(ProcessHandle::destroyForcibly);child.destroyForcibly();}},Math.max(1,deadline-System.nanoTime()),TimeUnit.NANOSECONDS);
+      long remaining;
+      try {remaining=deadline.remaining().toNanos();}
+      catch(ChatGptException expired){child.descendants().forEach(ProcessHandle::destroyForcibly);child.destroyForcibly();throw expired;}
+      var expiry=DEADLINES.schedule(()->{if(child.isAlive()){child.descendants().forEach(ProcessHandle::destroyForcibly);child.destroyForcibly();}},remaining,TimeUnit.NANOSECONDS);
       child.onExit().thenRun(()->expiry.cancel(false));
       Path ownedHome=home;
       return new PlanAppServerClient.Started(new AppServerProcessSession(child,

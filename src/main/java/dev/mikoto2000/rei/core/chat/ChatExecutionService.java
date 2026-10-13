@@ -13,7 +13,6 @@ import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
@@ -23,6 +22,7 @@ import dev.mikoto2000.rei.core.command.InlineFileAttachmentResolver;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.ErrorInformation;
+import dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.llm.ConversationIds;
 import dev.mikoto2000.rei.llm.FixedLlmChatClientProvider;
@@ -296,7 +296,7 @@ public class ChatExecutionService {
             chatMemory.add(context.conversationId(), java.util.List.of(new UserMessage(promptText), new org.springframework.ai.chat.messages.AssistantMessage(response)));
           result = ChatRunResult.success(response);
         } catch (RuntimeException error) {
-          eventPublisher.publish(eventFactory.toolFailed(callId, "materialReview", new ErrorInformation("MaterialReview", "Material review failed", "material_review_failed")));
+          eventPublisher.publish(eventFactory.toolFailed(callId, "materialReview", toolFailureError(error)));
           throw error;
         }
       } else if (doctorCommand) {
@@ -319,7 +319,7 @@ public class ChatExecutionService {
           result = ChatRunResult.success(response);
         } catch (RuntimeException error) {
           eventPublisher.publish(eventFactory.toolFailed(callId, "paper",
-              new ErrorInformation("Paper", "論文処理失敗", "paper_failed")));
+              toolFailureError(error)));
           throw error;
         }
       } else {
@@ -461,8 +461,9 @@ public class ChatExecutionService {
       case TOKEN_BUDGET_EXCEEDED -> new ErrorInformation("TokenBudgetExceeded","Reported Run token limit exceeded","token_budget_exceeded");
       case TOKEN_USAGE_UNKNOWN -> new ErrorInformation("TokenUsageUnknown","Token limit enabled but model usage is unknown","token_usage_unknown");
       case REPLAN_BUDGET_EXCEEDED -> new ErrorInformation("ReplanBudgetExceeded", "replan hard budget exceeded", "replan_budget_exceeded");
+      case REVIEW_PARTIAL -> new ErrorInformation("ReviewPartial", "レビューの対象範囲を確認できていません。レビュー記録で未完了の対象を確認してから再開してください。", "review_partial");
       case CANCELLED -> new ErrorInformation("Cancelled", "chat run cancelled", "cancelled");
-      case FAILED -> new ErrorInformation("ChatRunFailed", "chat run failed", null);
+      case FAILED -> FailureDiagnostics.safeError(null);
       case TIMED_OUT -> new ErrorInformation("RunTimeout", "concurrent Run timeout", "run_timeout");
       case SUCCESS -> throw new IllegalArgumentException("SUCCESS is not a failed terminal state");
     };
@@ -694,9 +695,8 @@ public class ChatExecutionService {
       completeThinking(thinkingEventStarted, thinkingEventCompleted, thinkingId, thinkingBuilder);
       Throwable error = errorRef.get();
       if (error != null) {
-        for(Throwable cause=error;cause!=null;cause=cause.getCause()){
+        for(Throwable cause:failureCauses(error)){
           if(cause instanceof RunWaitingException waiting)throw waiting;
-          if(cause.getCause()==cause)break;
         }
         ChatRunResult failure = failureResult(error);
         if (failure.status() == ChatRunStatus.FAILED) logChatFailure("Chat response failed", error);
@@ -721,20 +721,19 @@ public class ChatExecutionService {
         return ChatRunResult.cancelled();
       }
       Thread.currentThread().interrupt();
-      log.warn("Chat response wait interrupted", e);
-      return ChatRunResult.failed();
+      logChatFailure("Chat response wait interrupted", e);
+      return ChatRunResult.cancelled();
     }
   }
 
   private void logChatFailure(String message, Throwable error) {
-    for (Throwable cause = error; cause != null; cause = cause.getCause()) {
-      if (cause instanceof WebClientResponseException response) {
-        log.warn("{}: HTTP {}, responseBody={}", message, response.getStatusCode(),
-            response.getResponseBodyAsString(), error);
-        return;
-      }
-    }
-    log.warn(message, error);
+    var diagnostic=FailureDiagnostics.safeError(error);
+    log.warn("{}: errorType={}, cause={}, detail={}",message,diagnostic.errorType(),diagnostic.code(),diagnostic.message());
+  }
+
+  private ErrorInformation toolFailureError(Throwable error) {
+    var known=dev.mikoto2000.rei.chatgpt.ChatGptRunFailure.find(error);
+    return known==null?FailureDiagnostics.safeError(error):known;
   }
 
   private long elapsedMillis(long startedAtNanos) {
@@ -745,7 +744,7 @@ public class ChatExecutionService {
     if (RunCancellation.isCancellation(error)) return ChatRunResult.cancelled();
     ErrorInformation checkpointError=checkpointError(error);
     if(checkpointError!=null)return new ChatRunResult(ChatRunStatus.FAILED,"",checkpointError);
-    for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+    for (Throwable cause : failureCauses(error)) {
       if (cause instanceof ExecutionStoppedException stopped) {
         return new ChatRunResult(ChatRunStatus.valueOf(stopped.reason().name()), "");
       }
@@ -753,7 +752,14 @@ public class ChatExecutionService {
     }
     ErrorInformation chatGptError=dev.mikoto2000.rei.chatgpt.ChatGptRunFailure.find(error);
     if(chatGptError!=null)return new ChatRunResult(ChatRunStatus.FAILED,"",chatGptError);
-    return ChatRunResult.failed();
+    return new ChatRunResult(ChatRunStatus.FAILED,"",FailureDiagnostics.safeError(error));
+  }
+
+  private static java.util.List<Throwable> failureCauses(Throwable error) {
+    var causes=new java.util.ArrayList<Throwable>();
+    var seen=java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable,Boolean>());
+    for(Throwable cause=error;cause!=null && causes.size()<32 && seen.add(cause);cause=cause.getCause())causes.add(cause);
+    return causes;
   }
   private ChatRunStatus budgetStopStatus(OutputLimitRunBudget budget) {
     return budget.usageUnknown()?ChatRunStatus.TOKEN_USAGE_UNKNOWN:
@@ -994,6 +1000,7 @@ public class ChatExecutionService {
     TOKEN_BUDGET_EXCEEDED,
     TOKEN_USAGE_UNKNOWN,
     REPLAN_BUDGET_EXCEEDED,
+    REVIEW_PARTIAL,
     OUTPUT_LIMIT,
     CONTEXT_HARD_LIMIT,
     FAILED,

@@ -29,6 +29,10 @@ SubAgent は、目的・独立コンテキスト・制限された Tool 権限�
 ```
 
 `init` は ID を検証し、既存ファイルを上書きしません。生成後の編集と reload は明示的に行います。
+同梱 reviewer と `/subagent init reviewer` の総期限は `30m` です。他の ID の初期値は `120s` です。
+既存の reviewer 定義は自動更新されないため、その YAML の `timeout` を変更して `/subagent reload` してください。
+ChatGPT 委譲では `rei.chatgpt-plan.execution.timeout` とロールの `timeout` の短い方が、
+自動分割した全グループを通した総期限になります。30分のレビューでは両方を `30m` に揃えてください。
 `/subagent` 単体は `list` と同じです。`show` は定義元パス、要求／有効 Tool、モデル、制限値を表示します。
 通常表示では systemPrompt 本文を表示しません。validate はファイルを検査するだけで登録しません。
 既存 Picocli の Shell コマンドに統合しており、新しい CLI フレームワークはありません。
@@ -43,7 +47,7 @@ systemPrompt: |
   渡されたタスクを独立して検証し、根拠と結論を報告してください。
 tools: [readMultiFile, grepMultiQuery]
 maxSteps: 10
-timeout: 120s
+timeout: 30m
 # model: my-model
 ```
 
@@ -55,7 +59,7 @@ timeout: 120s
 | tools | Tool 名のリスト。省略時は空。権限ではなく利用要求 |
 | model | 任意。未指定なら現在のチャットモデル設定 |
 | maxSteps | 必須の正整数。初回を含む論理 LLM 呼び出し回数の上限。provider 内部 retry/fallback は同一 step |
-| timeout | 必須の正の時間。`ms` / `s` / `m` / `h`、例 `120s` |
+| timeout | 必須の正の時間。`ms` / `s` / `m` / `h`、例 `120s` / `30m` |
 | resultSchema | 任意。`result` の JSON Schema。未指定でも共通 envelope を検証 |
 
 モデル指定は既存チャット provider 内のモデル ID です。現在のモデル、chat feature の設定モデル、
@@ -92,6 +96,8 @@ Tool 引数のファイルアクセス範囲やネットワークアクセス制
 `delegateTask(agent, task, context?)` は以下の情報を返します。
 `agentId`, `subAgentRunId`, `status`, `output`, `startedAt`, `completedAt`, `structuredOutput`, `validationErrors`。
 状態は `COMPLETED`, `FAILED`, `UNKNOWN_AGENT`, `MAX_STEPS_EXCEEDED`, `TIMEOUT`, `CANCELLED` です。
+
+`delegateTask` / `delegateTasks` の結果が大きい場合は、先頭・末尾の抜粋ではなく、元の結果JSONの連続ページを親へ渡します。`truncated=true` の間は `rawResultRef` と `nextOffset` を使って `readRawToolResult` を呼び、`hasMore=false` まで全断片を取得してください。ページの `content` は単独の完全なJSONとは限らず、順番に連結した結果から指摘・各子の状態を解釈します。元の全文は保存され、小さい結果は従来のJSONのままです。これはファイルの読了や指摘の検証を証明するreceiptにはなりません。
 
 子の入力は YAML の systemPrompt、共通／個別 Schema と JSON 出力指示、task、明示的 context です。
 親の ChatMemory、ConversationLog、Skill・Working Set・計画・要約 Advisor を使いません。

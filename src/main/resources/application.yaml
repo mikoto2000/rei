@@ -113,6 +113,9 @@ rei:
     read-timeout: ${REI_PAPER_READ_TIMEOUT:10s}
     timeout: ${REI_PAPER_TIMEOUT:30s}
     max-redirects: ${REI_PAPER_MAX_REDIRECTS:5}
+  chatgpt-plan:
+    execution:
+      timeout: ${REI_CHATGPT_PLAN_EXECUTION_TIMEOUT:10m}
   tool-result-delivery:
     page-target-tokens: ${REI_RESULT_PAGE_TARGET:2048}
     page-min-tokens: ${REI_RESULT_PAGE_MIN:256}
@@ -139,6 +142,7 @@ rei:
     tool-result-threshold: ${REI_CONTEXT_TOOL_RESULT_THRESHOLD:8000}
     tool-result-tokens: ${REI_CONTEXT_TOOL_RESULT_TOKENS:2000}
     summary-timeout-seconds: ${REI_CONTEXT_SUMMARY_TIMEOUT_SECONDS:60}
+    retry-cooldown-seconds: ${REI_CONTEXT_RETRY_COOLDOWN_SECONDS:120}
     standalone-summary-max-llm-calls: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_LLM_CALLS:0}
     standalone-summary-max-total-tokens: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_TOTAL_TOKENS:0}
   external-agents:

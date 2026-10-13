@@ -39,8 +39,9 @@ class PlanAppServerClientTest {
   @Test @org.junit.jupiter.api.condition.EnabledOnOs(org.junit.jupiter.api.condition.OS.WINDOWS)
   void wslEnvironmentDoesNotCarryAmbientKeysOrTokenArguments() {
     var settings=new PlanAppServerProperties(true,root,"Ubuntu-24.04","/opt/codex/codex");var launcher=new WslPlanAppServerLauncher(settings);
-    var process=launcher.process(root,"/isolated/workspace","access-secret",List.of("app-server","--listen","stdio://"));
+    var process=launcher.process(root,"/isolated/workspace","access-secret",List.of("app-server","--listen","stdio://"),"1805s");
     assertFalse(process.command().toString().contains("access-secret"));assertEquals("access-secret",process.environment().get("REI_PLAN_ACCESS_TOKEN"));
+    assertTrue(process.command().contains("1805s"));assertFalse(process.command().contains("125s"));
     assertFalse(process.environment().containsKey("OPENAI_API_KEY"));assertFalse(process.environment().containsKey("USERPROFILE"));
     assertTrue(process.environment().get("WSLENV").contains("REI_PLAN_ACCESS_TOKEN/u"));assertEquals(root.toString(),process.environment().get("CODEX_HOME"));
     assertTrue(WslPlanAppServerLauncher.configuration().contains("inherit = \"none\""));assertTrue(WslPlanAppServerLauncher.configuration().contains("shell_tool = false"));

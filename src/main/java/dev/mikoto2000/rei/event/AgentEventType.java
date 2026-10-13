@@ -26,6 +26,7 @@ public enum AgentEventType {
   CONTEXT_COMPRESSION_STARTED("context.compression.started"),
   CONTEXT_COMPRESSION_COMPLETED("context.compression.completed"),
   CONTEXT_COMPRESSION_FAILED("context.compression.failed"),
+  CONTEXT_COMPRESSION_SKIPPED("context.compression.skipped"),
   DELEGATION_STARTED("delegation.started"),
   DELEGATION_COMPLETED("delegation.completed"),
   DELEGATION_FAILED("delegation.failed"),

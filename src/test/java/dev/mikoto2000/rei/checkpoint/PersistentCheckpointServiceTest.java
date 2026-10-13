@@ -161,6 +161,29 @@ class PersistentCheckpointServiceTest {
     var ref=state().evidence().getFirst();assertEquals("RAW_RESULT_REFERENCE",ref.origin());assertEquals("actual-model-call",ref.toolCallId());
     assertEquals(body,raw.read("session",ref.summary()).rawResult());assertFalse(repository.encode(state()).contains("large output"));
   }
+  @Test void rawPagesFromRealCallbacksAndLegacyQuotedPagesPreserveSourceReferenceWithoutSavingAnotherBody() throws Exception {
+    var raw=new dev.mikoto2000.rei.core.contextbudget.RawToolResultStore(root);service.setRawResults(raw);
+    String body="委譲レビュー🙂\\\"\r\n".repeat(30);
+    String reference=raw.save("session","run","delegateTask","child-call",body);
+    var callbacks=dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(
+        new dev.mikoto2000.rei.core.contextbudget.RawToolResultTools(raw)).getToolCallbacks();
+    String page;
+    try(var scope=AgentRunScope.open(owner)) {
+      page=callbacks[0].call("{\"rawResultRef\":\""+reference+"\",\"offset\":0,\"limit\":16000}");
+      for(String response:List.of(page,new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(page))) {
+        var message=org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+            .responses(List.of(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse("page-call","readRawToolResult",response)))
+            .metadata(Map.of("rei.deliveryPolicies",Map.of("page-call",dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.RAW_RESULT_PAGE))).build();
+        assertDoesNotThrow(()->service.preserveResults(owner,List.of(message)));
+      }
+    }
+    var evidence=state().evidence().stream().filter(e->e.origin().equals("RAW_RESULT_REFERENCE")).toList();
+    assertEquals(1,evidence.size());assertEquals(reference,evidence.getFirst().summary());
+    assertEquals(1,raw.bodyWriteCount());assertEquals(body,raw.read("session",reference).rawResult());
+    service.finish(owner,"FAILED");var resumed=service.resume("A",state().taskId(),AgentRunContext.RequestSource.SHELL);
+    assertTrue(state().evidence().stream().anyMatch(e->e.origin().equals("RAW_RESULT_REFERENCE")&&e.summary().equals(reference)));
+    assertNotNull(resumed.runId());
+  }
   @Test void resumedLlmCancellationSavesProgressReleasesLeaseAndInjectsReferenceSeparately() {
     service.finish(owner,"CANCELLED");var prompts=new ArrayList<org.springframework.ai.chat.prompt.Prompt>();
     var model=new org.springframework.ai.chat.model.ChatModel(){

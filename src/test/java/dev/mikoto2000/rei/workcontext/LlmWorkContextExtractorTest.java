@@ -4,6 +4,7 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.*;
 import org.springframework.ai.chat.messages.*;
+import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
@@ -13,6 +14,24 @@ import static org.junit.jupiter.api.Assertions.*;
 import static dev.mikoto2000.rei.workcontext.WorkContext.*;
 class LlmWorkContextExtractorTest {
   List<Evidence> evidence(String text) {var now=Instant.now();return List.of(new Evidence("user-1",Origin.USER,"session","run","run",null,null,null,now,now,text));}
+  @Test void truncatedOversizedAndEmptyResponsesHaveDistinctControlledFailures() {
+    var models=mock(LlmModelProvider.class);var model=mock(ChatModel.class);when(models.memoryChatModel()).thenReturn(model);
+    when(models.chatOptions(LlmFeature.MEMORY,null)).thenAnswer(c->OpenAiChatOptions.builder().build());
+    var extractor=new LlmWorkContextExtractor(models,new WorkContextProperties(false,true,1200,12000,1,20));
+    when(model.stream(any(Prompt.class))).thenReturn(Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("PRIVATE_OUTPUT"),
+        ChatGenerationMetadata.builder().finishReason("length").build())))));
+    var truncated=assertThrows(WorkContextExtractionException.class,()->extractor.extract(evidence("task"),List.of(),"COMPLETED"));
+    assertEquals(WorkContextExtractionException.Reason.OUTPUT_TRUNCATED,truncated.reason());
+    assertFalse(truncated.diagnostic().message().contains("PRIVATE"));
+    when(model.stream(any(Prompt.class))).thenReturn(Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage(
+        "s".repeat(dev.mikoto2000.rei.subagent.SubAgentResultParser.MAX_OUTPUT_CHARS+1)))))));
+    var oversized=assertThrows(WorkContextExtractionException.class,()->extractor.extract(evidence("task"),List.of(),"COMPLETED"));
+    assertEquals(WorkContextExtractionException.Reason.OUTPUT_TOO_LARGE,oversized.reason());
+    assertTrue(oversized.diagnostic().message().contains("1048577 文字"));
+    when(model.stream(any(Prompt.class))).thenReturn(Flux.empty());
+    assertEquals(WorkContextExtractionException.Reason.EMPTY_OUTPUT,
+        assertThrows(WorkContextExtractionException.class,()->extractor.extract(evidence("task"),List.of(),"COMPLETED")).reason());
+  }
   @Test void fixedLlmOutputUsesNoToolsAndHistoricalInstructionsStayInDataMessage() {
     var models=mock(LlmModelProvider.class);var model=mock(ChatModel.class);
     when(models.memoryChatModel()).thenReturn(model);when(models.chatOptions(LlmFeature.MEMORY,null)).thenAnswer(c->OpenAiChatOptions.builder().build());
@@ -60,10 +79,14 @@ class LlmWorkContextExtractorTest {
     when(models.chatOptions(LlmFeature.MEMORY,null)).thenAnswer(c->OpenAiChatOptions.builder().build());
     var extractor=new LlmWorkContextExtractor(models,new WorkContextProperties(false,true,1200,12000,1,20));
     when(model.stream(any(Prompt.class))).thenReturn(Flux.never());
-    assertThrows(RuntimeException.class,()->extractor.extract(evidence("task"),List.of(),"COMPLETED"));
+    var timedOut=assertThrows(RuntimeException.class,()->extractor.extract(evidence("task"),List.of(),"COMPLETED"));
+    assertEquals("timeout",dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(timedOut).code());
     when(model.stream(any(Prompt.class))).thenReturn(Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("{bad json"))))));
-    assertThrows(IllegalArgumentException.class,()->extractor.extract(evidence("task"),List.of(),"COMPLETED"));
-    assertThrows(IllegalArgumentException.class,()->extractor.extract(evidence("巨大".repeat(20000)),List.of(),"COMPLETED"));
+    var invalid=assertThrows(WorkContextExtractionException.class,()->extractor.extract(evidence("task"),List.of(),"COMPLETED"));
+    assertEquals(WorkContextExtractionException.Reason.INVALID_JSON,invalid.reason());
+    var oversized=assertThrows(WorkContextExtractionException.class,()->extractor.extract(evidence("巨大".repeat(20000)),List.of(),"COMPLETED"));
+    assertEquals(WorkContextExtractionException.Reason.INPUT_TOO_LARGE,oversized.reason());
+    assertTrue(oversized.diagnostic().message().contains("rei.work-context.max-input-tokens"));
   }
   @Test void aLargeExistingProjectIsProjectedWithinBudgetWithoutErasingItsStoredItems() {
     var models=mock(LlmModelProvider.class);var model=mock(ChatModel.class);when(models.memoryChatModel()).thenReturn(model);

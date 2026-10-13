@@ -51,6 +51,8 @@ class ExternalConfigFileServiceTest {
     assertTrue(Files.exists(service.additionalSystemPromptFilePath()));
     String content = Files.readString(created);
     assertTrue(content.contains("enabled: ${REI_ATTENTION_DELIVERY_ENABLED:false}"));
+    assertTrue(content.contains("retry-cooldown-seconds: ${REI_CONTEXT_RETRY_COOLDOWN_SECONDS:120}"));
+    assertTrue(content.contains("timeout: ${REI_CHATGPT_PLAN_EXECUTION_TIMEOUT:10m}"));
     assertTrue(content.contains("automatic: ${REI_ATTENTION_DELIVERY_AUTOMATIC:false}"));
     assertTrue(content.contains("max-transient-model-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_MODEL_RETRIES:0}"));
     assertTrue(content.contains("spring:"));

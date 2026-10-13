@@ -83,7 +83,8 @@ class ContextSummaryTokenBudgetTest {
     var budget=new OutputLimitRunBudget(0,10,null,100);
     var execution=new RunExecutionContext("run",budget,null,null,null);
     assertThatThrownBy(()->compressor(model).summarize("",List.of(new UserMessage("history")),100,owner(execution)))
-        .hasMessage("Summary output limit");
+        .isInstanceOfSatisfying(ContextCompressionException.class, failure ->
+            assertThat(failure.reason()).isEqualTo(ContextCompressionException.Reason.OUTPUT_LIMIT));
     assertThat(budget.totalTokens()).isEqualTo(2);assertThat(budget.usageUnknown()).isFalse();
   }
   @Test void summaryTimeoutCancelsProviderAndBlocksUnknownUsage() {
@@ -93,7 +94,14 @@ class ContextSummaryTokenBudgetTest {
     var execution=new RunExecutionContext("run",new OutputLimitRunBudget(0,10,null,100),null,null,null);
     var properties=new ContextCompressionProperties();properties.setSummaryTimeoutSeconds(1);
     assertThatThrownBy(()->compressor(model,properties).summarize("",List.of(new UserMessage("history")),100,owner(execution)))
-        .hasMessageContaining("TOKEN_USAGE_UNKNOWN");
+        .isInstanceOfSatisfying(ExecutionStoppedException.class, stopped -> {
+          assertThat(stopped.reason()).isEqualTo(ExecutionStoppedException.Reason.TOKEN_USAGE_UNKNOWN);
+          assertThat(stopped.getSuppressed()).singleElement().isInstanceOfSatisfying(ContextCompressionException.class, summaryFailure -> {
+            assertThat(summaryFailure.reason()).isEqualTo(ContextCompressionException.Reason.TIMEOUT);
+            assertThat(summaryFailure.getCause()).isNull();
+            assertThat(summaryFailure.getSuppressed()).isEmpty();
+          });
+        });
     assertThat(cancelled).isTrue();assertThat(execution.sharedLlmReservation().tryReserve()).isFalse();
   }
   ContextCompressionProperties compressionConfig() {

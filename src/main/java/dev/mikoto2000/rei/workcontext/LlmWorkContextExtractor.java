@@ -45,8 +45,9 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
         Match equivalent phrasing to existing items. Return empty changes if no new evidence.
         Schema:
         """+output.schema();
-    if(TokenEstimator.conservative().text(data)+TokenEstimator.conservative().text(system)>properties.maxInputTokens())
-      throw new IllegalArgumentException("Work Context input exceeds budget; reduce max-turns");
+    int inputTokens=TokenEstimator.conservative().text(data)+TokenEstimator.conservative().text(system);
+    if(inputTokens>properties.maxInputTokens())
+      throw new WorkContextExtractionException(WorkContextExtractionException.Reason.INPUT_TOO_LARGE,inputTokens,properties.maxInputTokens());
     var model=models.memoryChatModel(); ToolLoopSupport.requireNoDefaultTools(model);
     var options=models.chatOptions(LlmFeature.MEMORY,null).mutate()
         .toolCallbacks(List.of()).toolChoice("none").build();
@@ -56,9 +57,11 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
       WorkContextRepository.checkCancellation();
       model.stream(new Prompt(List.of(new SystemMessage(system),new UserMessage(data)),options)).doOnNext(r->{
         WorkContextRepository.checkCancellation();
-        if(OutputLimitDetector.isOutputLimitReached(r)) throw new IllegalArgumentException("Work Context output truncated");
+        if(OutputLimitDetector.isOutputLimitReached(r)) throw new WorkContextExtractionException(WorkContextExtractionException.Reason.OUTPUT_TRUNCATED);
         if(r.getResult()!=null&&r.getResult().getOutput().getText()!=null) result.append(r.getResult().getOutput().getText());
-        if(result.length()>dev.mikoto2000.rei.subagent.SubAgentResultParser.MAX_OUTPUT_CHARS) throw new IllegalArgumentException("Work Context output too large");
+        if(result.length()>dev.mikoto2000.rei.subagent.SubAgentResultParser.MAX_OUTPUT_CHARS)
+          throw new WorkContextExtractionException(WorkContextExtractionException.Reason.OUTPUT_TOO_LARGE,
+              result.length(),dev.mikoto2000.rei.subagent.SubAgentResultParser.MAX_OUTPUT_CHARS);
       }).blockLast(Duration.ofSeconds(properties.timeoutSeconds()));
       WorkContextRepository.checkCancellation();return output.parse(result.toString());
     } catch(RuntimeException error) { RunCancellation.propagate(error);throw error; }

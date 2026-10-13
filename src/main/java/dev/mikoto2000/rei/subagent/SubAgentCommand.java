@@ -126,8 +126,8 @@ public class SubAgentCommand implements Callable<Integer> {
             TODO
           tools: []
           maxSteps: 10
-          timeout: 120s
-          """.formatted(id, id), StandardOpenOption.CREATE_NEW);
+          timeout: %s
+          """.formatted(id, id, id.equals("reviewer") ? "30m" : "120s"), StandardOpenOption.CREATE_NEW);
       parent.out("Created: " + target + " (edit, validate, then reload)");
     }); }
   }

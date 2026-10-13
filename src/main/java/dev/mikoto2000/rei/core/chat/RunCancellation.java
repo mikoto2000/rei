@@ -14,7 +14,7 @@ public final class RunCancellation {
   }
 
   public static boolean isCancellation(Throwable error) {
-    for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+    for (Throwable cause : causes(error)) {
       if (cause instanceof InterruptedException || cause instanceof CancellationException
           || reactor.core.Exceptions.isCancel(cause)) return true;
     }
@@ -23,11 +23,18 @@ public final class RunCancellation {
 
   public static void propagate(Throwable error) {
     if (!isCancellation(error) && !Thread.currentThread().isInterrupted()) return;
-    for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+    for (Throwable cause : causes(error)) {
       if (cause instanceof InterruptedException) Thread.currentThread().interrupt();
     }
     var cancelled = new CancellationException("chat run cancelled");
     if (error != null) cancelled.initCause(error);
     throw cancelled;
+  }
+
+  private static java.util.List<Throwable> causes(Throwable error) {
+    var causes=new java.util.ArrayList<Throwable>();
+    var seen=java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable,Boolean>());
+    for(Throwable cause=error;cause!=null && causes.size()<32 && seen.add(cause);cause=cause.getCause())causes.add(cause);
+    return causes;
   }
 }

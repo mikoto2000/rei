@@ -14,6 +14,9 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
   private SubAgentProperties standaloneBudgetProperties=new SubAgentProperties();
   @org.springframework.beans.factory.annotation.Autowired
   public void setStandaloneBudgetProperties(SubAgentProperties properties){standaloneBudgetProperties=properties;}
+  private Duration externalTimeout=dev.mikoto2000.rei.chatgpt.PlanExecutionProperties.DEFAULT_TIMEOUT;
+  @org.springframework.beans.factory.annotation.Autowired(required=false)
+  public void setPlanExecutionProperties(dev.mikoto2000.rei.chatgpt.PlanExecutionProperties properties){externalTimeout=properties.timeout();}
   public record Request(String id, String agent, String task, String context, String backendId,
       String accountRef,String modelId,List<String> sourceRefs,String expectedOutput) {
     public Request(String id,String agent,String task,String context){this(id,agent,task,context,null,null,null,null,null);}
@@ -49,7 +52,11 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
   }
   public Batch delegate(List<Request> input) {return delegate(input,null);}
   public Batch delegate(List<Request> input,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
-    return delegate(input,reservation,null,timeout);
+    return delegate(input,reservation,null,batchDeadline(input));
+  }
+  Duration batchDeadline(List<Request> input) {
+    boolean hasExternal=input!=null&&input.stream().anyMatch(r->r!=null&&external(r.backendId()));
+    return hasExternal&&externalTimeout.compareTo(timeout)>0?externalTimeout:timeout;
   }
   Batch delegate(List<Request> input,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,
       java.util.function.BiFunction<Request,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation,SubAgentResult> child,Duration deadlineLimit) {
@@ -57,7 +64,8 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
   }
   Batch delegate(List<Request> input,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,
       java.util.function.BiFunction<Request,dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation,SubAgentResult> child,Duration deadlineLimit,boolean failFast) {
-    if(deadlineLimit==null || deadlineLimit.isNegative() || deadlineLimit.isZero() || deadlineLimit.compareTo(timeout)>0)throw new IllegalArgumentException("Invalid DAG wave deadline");
+    Duration maximum=child==null?batchDeadline(input):timeout;
+    if(deadlineLimit==null || deadlineLimit.isNegative() || deadlineLimit.isZero() || deadlineLimit.compareTo(maximum)>0)throw new IllegalArgumentException("Invalid delegation batch deadline");
     var parent=AgentRunScope.current();
     if(parent!=null && parent.conversationId().startsWith("subagent:"))throw new IllegalArgumentException("Recursive delegation is prohibited");
     if(input==null || input.isEmpty() || input.size()>8)throw new IllegalArgumentException("Expected 1 to 8 delegation requests");

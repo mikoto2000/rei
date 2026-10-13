@@ -41,7 +41,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     String requestId = UUID.randomUUID().toString();
     var measured=measurement(prompt,requestId);
     long startedAtNanos = System.nanoTime();
-    publisher(prompt).publish(eventFactory.llmRequestStarted(null, requestId, feature));
+    publisher(prompt).publish(eventFactory.llmRequestStarted(null, requestId, observedFeature(prompt)));
     try {
       ChatResponse response = delegate.call(prompt);
       publisher(prompt).publish(eventFactory.llmResponseCompleted(null, requestId, elapsedMillis(startedAtNanos)));
@@ -65,7 +65,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
       var measured=measurement(prompt,requestId,trace);
     long startedAtNanos = System.nanoTime();
       java.util.concurrent.atomic.AtomicBoolean firstTokenPublished = new java.util.concurrent.atomic.AtomicBoolean();
-      publisher(prompt).publish(eventFactory.llmRequestStarted(null, requestId, feature));
+      publisher(prompt).publish(eventFactory.llmRequestStarted(null, requestId, observedFeature(prompt)));
       return Flux.defer(() -> delegate.stream(prompt))
           .doOnNext(response -> {
             observeChunk(prompt,measured,response);
@@ -112,8 +112,15 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     var owner=owner(prompt);if(owner==null)return null;
     if(trace!=null)trace.physicalSpan().set(request);
     var span=timing.startSpanWithId(owner.runId(),request,owner.runId(),trace==null?request:trace.requestId(),trace==null?request:Integer.toString(trace.number()),dev.mikoto2000.rei.timing.TimingRecorder.Category.LLM);
-    span.prompt(feature,prompt);
+    span.prompt(observedFeature(prompt),prompt);
     return span;
+  }
+  private String observedFeature(Prompt prompt) {
+    if (LlmFeature.CHAT.equals(feature)
+        && prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
+        && options.getToolContext() != null
+        && "context-summary".equals(options.getToolContext().get("rei.modelCallPurpose"))) return "context-summary";
+    return feature;
   }
   private void observeChunk(Prompt prompt,dev.mikoto2000.rei.timing.TimingExecution.SpanLease measured,ChatResponse response) {
     if(measured==null)return;

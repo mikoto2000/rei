@@ -1235,6 +1235,10 @@ public class Tools {
       For Java declarations, pass symbol (e.g. p.C#work(String[])), optionally path to narrow candidates.
       Overloaded names return candidates; select an exact symbolId. includeBody defaults true, includeJavadoc true,
       contextLines defaults 0 (max 25), includeOwnerOverview defaults false. Use returned nextRead unchanged.
+      A batch shares source byte/line and result token budgets fairly across files. A truncated result is a
+      contiguous prefix, never head/tail excerpts. Empty content with truncated=true and nextRead is a budget
+      continuation, not an empty file or a read failure; pass each returned nextRead unchanged in the next batch.
+      truncationReason identifies SOURCE_BYTE_BUDGET, SOURCE_LINE_BUDGET, or RESULT_TOKEN_BUDGET.
       Use this when target paths are already known. If relevant files must first be located, prefer searchAndRead.
       @param files 読み込むファイルのリスト。各要素は path と任意の startLine / endLine を持つ。
       @return ファイルごとの読み込み結果。path で識別できる。
@@ -1331,11 +1335,16 @@ public class Tools {
     FileSnapshots snapshots=newSnapshots();
     TextReadBudget budget=new TextReadBudget();
     int totalLines = 0;
-    for (ReadFileRequest request : files) {
+    for (int index = 0; index < files.size(); index++) {
+      ReadFileRequest request = files.get(index);
+      int remainingRequests = files.size() - index;
+      int byteBudget = budget.remaining() / remainingRequests;
+      TextReadBudget fileBudget = new TextReadBudget(byteBudget);
+      int lineBudget = (MAX_READ_TOTAL_LINES - totalLines) / remainingRequests;
       try {
         ReadFileResult result = request.symbol()!=null
-          ? JavaSymbolReads.read(request,workingDirectory,snapshots,repositoryMaps,budget,MAX_READ_TOTAL_LINES-totalLines,(dev.mikoto2000.rei.core.chat.AgentRunScope.current()==null?8000:deliveryProperties.getPageTargetTokens())/files.size()-16)
-          : readSingleFile(request, workingDirectory, snapshots, budget, MAX_READ_TOTAL_LINES-totalLines);
+          ? JavaSymbolReads.read(request,workingDirectory,snapshots,repositoryMaps,fileBudget,lineBudget,(dev.mikoto2000.rei.core.chat.AgentRunScope.current()==null?8000:deliveryProperties.getPageTargetTokens())/files.size()-16)
+          : readSingleFile(request, workingDirectory, snapshots, fileBudget, lineBudget);
         if(request.symbol()!=null && result.error()==null)workingSet.recordRead(workingDirectory.resolve(result.path()));
         int remaining = MAX_READ_TOTAL_LINES - totalLines;
         if (result.content().size() > remaining) {
@@ -1346,6 +1355,8 @@ public class Tools {
         results.add(result);
       } catch (IllegalArgumentException | IOException e) {
         results.add(new ReadFileResult(request.path(), null, null, List.of(), false, e.getMessage()));
+      } finally {
+        budget.reserve(byteBudget - fileBudget.remaining());
       }
     }
     if(files.stream().anyMatch(request->request.symbol()!=null))FileResultBudget.require(results,65536,8000);
@@ -1385,9 +1396,12 @@ public class Tools {
     }
     int toIndex = endLine == null ? lines.size() : Math.min(endLine, lines.size());
     if(toIndex<fromIndex)throw new IllegalArgumentException("endLine must not precede startLine");
-    var slice=budget.take(lines,fromIndex,toIndex,request.offset()==null?0:request.offset(),Math.min(MAX_READ_LINES_PER_FILE,Math.max(0,lineBudget)));
+    int maxLines = Math.min(MAX_READ_LINES_PER_FILE,Math.max(0,lineBudget));
+    var slice=budget.take(lines,fromIndex,toIndex,request.offset()==null?0:request.offset(),maxLines);
     var next=slice.truncated()?new ReadFileRequest(request.path(),slice.nextLine(),endLine,snapshot.version(),slice.nextOffset(),request.charset()):null;
-    return new ReadFileResult(request.path(),fromIndex+1,slice.lines().isEmpty()?null:fromIndex+slice.lines().size(),slice.lines(),slice.truncated(),null,snapshot.version(),next,slice.bytes());
+    String reason = slice.truncated() ? slice.lines().size() >= maxLines && slice.nextOffset() == 0
+        ? "SOURCE_LINE_BUDGET" : "SOURCE_BYTE_BUDGET" : null;
+    return new ReadFileResult(request.path(),fromIndex+1,slice.lines().isEmpty()?null:fromIndex+slice.lines().size(),slice.lines(),slice.truncated(),null,snapshot.version(),next,slice.bytes(),null,List.of(),List.of(),reason);
   }
 
   /** 1 ファイルの読み込み要求。startLine / endLine は任意。 */
@@ -1410,9 +1424,16 @@ public class Tools {
   /** 1 ファイルの読み込み結果。 */
   public record ReadFileResult(String path, Integer startLine, Integer endLine, List<String> content,
       boolean truncated, String error,String version,ReadFileRequest nextRead,int returnedBytes,
-      RepositoryMapService.Symbol symbol,List<JavaSymbolReads.Candidate> candidates,List<String> ownerOverview) {
+      RepositoryMapService.Symbol symbol,List<JavaSymbolReads.Candidate> candidates,List<String> ownerOverview,
+      String truncationReason) {
+    public ReadFileResult(String path,Integer startLine,Integer endLine,List<String> content,boolean truncated,String error,String version,ReadFileRequest nextRead,int returnedBytes,RepositoryMapService.Symbol symbol,List<JavaSymbolReads.Candidate> candidates,List<String> ownerOverview){this(path,startLine,endLine,content,truncated,error,version,nextRead,returnedBytes,symbol,candidates,ownerOverview,null);}
     public ReadFileResult(String path,Integer startLine,Integer endLine,List<String> content,boolean truncated,String error,String version,ReadFileRequest nextRead,int returnedBytes){this(path,startLine,endLine,content,truncated,error,version,nextRead,returnedBytes,null,List.of(),List.of());}
     public ReadFileResult(String path,Integer startLine,Integer endLine,List<String> content,boolean truncated,String error){this(path,startLine,endLine,content,truncated,error,null,null,0);}
+    @com.fasterxml.jackson.annotation.JsonProperty(value="continuationInstruction",access=com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public String continuationInstruction() {
+      return truncated && nextRead != null ? "Use nextRead unchanged. Empty content with nextRead is a budget continuation, not an empty file." : null;
+    }
   }
 
   /** 1 リクエストあたりの最大ファイル数。 */

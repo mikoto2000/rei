@@ -50,7 +50,8 @@ public class AgentEventFactory {
 
   public AgentEvent contextCompression(AgentEventType type, ContextCompressionPayload payload) {
     if (type != AgentEventType.CONTEXT_COMPRESSION_STARTED && type != AgentEventType.CONTEXT_COMPRESSION_COMPLETED
-        && type != AgentEventType.CONTEXT_COMPRESSION_FAILED) throw new IllegalArgumentException("Not a compression event");
+        && type != AgentEventType.CONTEXT_COMPRESSION_FAILED
+        && type != AgentEventType.CONTEXT_COMPRESSION_SKIPPED) throw new IllegalArgumentException("Not a compression event");
     return newEvent(type, null, null, payload);
   }
 
@@ -143,7 +144,7 @@ public class AgentEventFactory {
   public AgentEvent llmRequestFailed(String runId, String requestId, long durationMs, Throwable error) {
     return newEvent(AgentEventType.LLM_REQUEST_FAILED, runId, requestId,
         new LlmRequestFailedPayload(requestId, durationMs,
-            new ErrorInformation(error.getClass().getSimpleName(), bounded(error.getMessage(), 120), null)));
+            dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(error)));
   }
 
   public AgentEvent llmResponseFirstToken(String runId, String requestId, long durationMs) {

@@ -46,6 +46,81 @@ class FileOperationsOptimizationTest {
     assertEquals(1,reads.get());assertEquals(List.of("b"),results.getLast().content());
     Thread.currentThread().interrupt();try{assertThrows(java.util.concurrent.CancellationException.class,()->tools.readMultiFile(List.of(new Tools.ReadFileRequest("a.txt",1,1)),root));}finally{Thread.interrupted();}
   }
+  @Test void byteBudgetIsSharedAcrossLargeFilesAndAllNativeContinuationsRecoverExactSource() throws Exception {
+    String source="日本語😀".repeat(10000);
+    var requests=new ArrayList<Tools.ReadFileRequest>();
+    var recovered=new LinkedHashMap<String,StringBuilder>();
+    for(int index=0;index<3;index++) {
+      String path="lesson"+index+".md";
+      Files.writeString(root.resolve(path),source);
+      requests.add(new Tools.ReadFileRequest(path,1,1));
+      recovered.put(path,new StringBuilder());
+    }
+    var tools=tools();
+    int pages=0;
+    while(!requests.isEmpty()) {
+      var results=tools.readMultiFile(requests,root);
+      assertTrue(results.stream().mapToInt(Tools.ReadFileResult::returnedBytes).sum()<=TextReadBudget.MAX_BYTES);
+      var next=new ArrayList<Tools.ReadFileRequest>();
+      for(var result:results) {
+        assertNull(result.error());assertFalse(result.content().isEmpty());
+        recovered.get(result.path()).append(String.join("",result.content()));
+        if(result.nextRead()!=null) {
+          assertEquals("SOURCE_BYTE_BUDGET",result.truncationReason());
+          assertEquals(result.version(),result.nextRead().expectedVersion());
+          assertFalse(Character.isLowSurrogate(source.charAt(result.nextRead().offset())));
+          next.add(result.nextRead());
+        }
+      }
+      requests=next;
+      assertTrue(++pages<20,"continuations must make progress");
+    }
+    recovered.values().forEach(value->assertEquals(source,value.toString()));
+  }
+  @Test void totalLineBudgetLeavesAUsefulPageForEveryFileAndReportsItsContinuationCause() throws Exception {
+    var requests=new ArrayList<Tools.ReadFileRequest>();
+    for(int index=0;index<6;index++) {
+      String path="lines"+index+".txt";
+      Files.writeString(root.resolve(path),"line\n".repeat(1200));
+      requests.add(new Tools.ReadFileRequest(path,null,null));
+    }
+    var results=tools().readMultiFile(requests,root);
+    assertEquals(Tools.MAX_READ_TOTAL_LINES,results.stream().mapToInt(result->result.content().size()).sum());
+    for(var result:results) {
+      assertFalse(result.content().isEmpty());assertTrue(result.content().size()<=Tools.MAX_READ_LINES_PER_FILE);
+      assertEquals("SOURCE_LINE_BUDGET",result.truncationReason());
+      assertEquals(result.content().size()+1,result.nextRead().startLine());
+    }
+    Files.writeString(root.resolve("empty.txt"),"");
+    var empty=tools().readMultiFile(List.of(new Tools.ReadFileRequest("empty.txt",null,null)),root).getFirst();
+    assertFalse(empty.truncated());assertNull(empty.nextRead());assertNull(empty.truncationReason());assertNull(empty.continuationInstruction());
+  }
+  @Test void tokenAndSourcePaginationTogetherRecoverEveryBatchedFileWithoutGaps() throws Exception {
+    String source="日本語😀\\\"".repeat(1000);
+    var requests=new ArrayList<Tools.ReadFileRequest>();
+    var recovered=new LinkedHashMap<String,StringBuilder>();
+    for(int index=0;index<3;index++) {
+      String path="paged"+index+".md";
+      Files.writeString(root.resolve(path),source);
+      requests.add(new Tools.ReadFileRequest(path,1,1));
+      recovered.put(path,new StringBuilder());
+    }
+    var tools=tools();
+    var pager=new FileResultTokenPager(dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative());
+    int pages=0;
+    while(!requests.isEmpty()) {
+      var results=pager.page(tools.readMultiFile(requests,root),requests,4096);
+      var next=new ArrayList<Tools.ReadFileRequest>();
+      for(var result:results) {
+        assertNull(result.error());assertFalse(result.content().isEmpty());
+        recovered.get(result.path()).append(String.join("",result.content()));
+        if(result.nextRead()!=null)next.add(result.nextRead());
+      }
+      requests=next;
+      assertTrue(++pages<30,"each batched page must advance every readable file");
+    }
+    recovered.values().forEach(value->assertEquals(source,value.toString()));
+  }
   @Test void cacheCapacityIsBoundedAndParallelReadsAreCoalesced()throws Exception {
     var reads=new java.util.concurrent.atomic.AtomicInteger();var snapshots=new FileSnapshots(path->{reads.incrementAndGet();return Files.readAllBytes(path);});
     Files.writeString(root.resolve("same.txt"),"same");

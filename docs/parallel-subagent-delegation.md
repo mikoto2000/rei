@@ -15,7 +15,7 @@ idは1〜64文字の英数字・ハイフン・underscore、バッチ内で一�
 
 並列バッチはアプリ内で1件のみ受け付ける。別バッチが動作中ならREJECTEDを返して子を開始しない。共有executorは2worker・queue上限8であり、呼び出しごとにworkerを増やさない。単独delegateTaskの同時実行はこのバッチ枠に含めない。
 
-バッチ全体に120秒の期限を適用し、待機時間も含める。期限後に待機依頼を開始せず、期限切れ・親キャンセル・呼び出しthreadの割り込みでは全futureをcancelし、queueを除去する。子Runnerの割り込み処理が既存のstream/Toolキャンセルを行う。割り込みを無視するproviderは即時停止を保証できないが、executorのworker上限は維持する。アプリ終了時もexecutorを停止する。
+ローカルだけのバッチ全体には120秒の期限を適用する。`chatgpt-plan` または `codex-app-server` を含むバッチでは、120秒と `rei.chatgpt-plan.execution.timeout`（既定10分・上限30分）の長い方をバッチ期限とする。各子ではロールと外部実行設定の短い方の期限も適用する。バッチ期限は待機時間を含む1回の総期限で、子や自動分割グループの開始ごとにリセットしない。期限後に待機依頼を開始せず、期限切れ・親キャンセル・呼び出しthreadの割り込みでは全futureをcancelし、queueを除去する。子Runnerの割り込み処理が既存のstream/Toolキャンセルを行う。割り込みを無視するproviderは即時停止を保証できないが、executorのworker上限は維持する。アプリ終了時もexecutorを停止する。
 
 各子は親のRun ID・Project・Session・SHELL/WEB sourceを捕捉し、独立した子Run ID・履歴・Tool contextで動く。既存のread-only Tool Policy、Permission、maxSteps、timeout、検証、任意repairをそのまま使う。子の並列・単独再帰委譲は禁止する。親の会話履歴とWorking Setを共有しない。依頼順に並べるために子を順次実行することはない。
 

@@ -3,6 +3,8 @@ import java.time.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.model.*;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -54,5 +56,22 @@ class AgentEventChatModelTimingTest {
  @Test void subscriberDisconnectionIsRecordedWithoutChangingCancellation() {
   var delegate=mock(ChatModel.class);when(delegate.stream(prompt)).thenReturn(Flux.never());var subscription=model(delegate).stream(prompt).subscribe();subscription.dispose();
   assertEquals(Status.DISCONNECTED,store.latest("project","session").orElseThrow().spans().getFirst().status());
+ }
+ @ParameterizedTest @ValueSource(booleans={false,true})
+ void summaryPurposeIsRecordedForCallAndStream(boolean streaming) {
+  var context=Map.<String,Object>of(AgentRunContext.class.getName(),owner,"rei.modelCallPurpose","context-summary");
+  var summary=new Prompt("SUMMARY-SECRET",OpenAiChatOptions.builder().toolContext(context).build());
+  var delegate=mock(ChatModel.class);var result=response("OK");
+  when(delegate.call(summary)).thenReturn(result);when(delegate.stream(summary)).thenReturn(Flux.just(result));
+  var wrapped=model(delegate);if(streaming)wrapped.stream(summary).blockLast();else wrapped.call(summary);
+  var span=store.latest("project","session").orElseThrow().spans().getFirst();
+  assertEquals("context-summary",span.llm().feature());assertFalse(span.toString().contains("SUMMARY-SECRET"));
+ }
+ @Test void unknownPurposeDoesNotEnterTimingLabel() {
+  var context=Map.<String,Object>of(AgentRunContext.class.getName(),owner,"rei.modelCallPurpose","PRIVATE-PURPOSE");
+  var unknown=new Prompt("SECRET",OpenAiChatOptions.builder().toolContext(context).build());
+  var delegate=mock(ChatModel.class);when(delegate.call(unknown)).thenReturn(response("OK"));model(delegate).call(unknown);
+  var span=store.latest("project","session").orElseThrow().spans().getFirst();
+  assertEquals(LlmFeature.CHAT,span.llm().feature());assertFalse(span.toString().contains("PRIVATE-PURPOSE"));
  }
 }

@@ -32,6 +32,8 @@ class SubAgentCommandTest {
     assertThat(command.execute("validate", directory.resolve("reviewer.yaml").toString())).isZero();
     assertThat(command.execute("init", "java-expert")).isZero();
     assertThat(loader.load(directory.resolve("java-expert.yaml")).id()).isEqualTo("java-expert");
+    assertThat(loader.load(directory.resolve("java-expert.yaml")).timeout())
+        .isEqualTo(java.time.Duration.ofSeconds(120));
     assertThat(command.execute("init", "java-expert")).isNotZero();
     assertThat(command.execute("init", "../outside")).isNotZero();
     assertThat(command.execute("reload")).isZero();
@@ -41,5 +43,17 @@ class SubAgentCommandTest {
     assertThat(registry.list()).hasSize(2);
     assertThat(command.execute("validate", directory.resolve("bad.yaml").toString())).isNotZero();
     assertThat(command.execute("show", "missing")).isNotZero();
+  }
+
+  @Test void initializeReviewerWithThirtyMinuteTotalDeadline() throws Exception {
+    var policy = new SubAgentToolPolicy(Set.of());
+    var loader = new SubAgentDefinitionLoader(policy, m -> true);
+    var registry = new SubAgentRegistry(directory, loader);
+    var command = new CommandLine(new SubAgentCommand(registry, loader, policy));
+    command.setOut(new PrintWriter(new StringWriter()));
+
+    assertThat(command.execute("init", "reviewer")).isZero();
+    assertThat(loader.load(directory.resolve("reviewer.yaml")).timeout())
+        .isEqualTo(java.time.Duration.ofMinutes(30));
   }
 }

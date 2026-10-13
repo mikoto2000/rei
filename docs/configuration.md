@@ -479,8 +479,13 @@ rei:
 - 送信中の通信例外などで成否が不明になった対象は、再起動後も再送を抑止します。送信直前の終了で未送信となる場合もあるため、再試行が必要なときは Bluesky 上の投稿状況を確認してください。API が明示的に失敗を返した場合は送信予約を解除します。
 ## 記憶の保存タイムアウト
 
+ChatGPT の委譲総期限は `rei.chatgpt-plan.execution.timeout`（環境変数 `REI_CHATGPT_PLAN_EXECUTION_TIMEOUT`）です。既定 `10m`、上限 `30m`。実際はロールの `timeout` と短い方を使い、全グループと修復で共有します。最大値を使う場合は既存の `rei.chatgpt-plan` 配下に `execution.timeout: 30m` を追加し、reviewer ロールも `timeout: 30m` に揃えて再起動してください。[委譲の設定](chatgpt-plan-subagents.md#phase-3-上限付き実行修復比較)を参照してください。
+
 会話が長くなったときの自動圧縮は、[コンテキスト自動圧縮](context-compression.md) を参照してください。
 `rei.context-compression` でモデル上限、圧縮閾値、最近の会話・要約・Tool Result の予算を調整できます。
+`rei.context-compression.retry-cooldown-seconds`（環境変数 `REI_CONTEXT_RETRY_COOLDOWN_SECONDS`、既定 `120`、指定可能範囲 `1`〜`3600`）は、同じ要約範囲の失敗後に再試行まで待つ基準秒数です。
+連続失敗では2倍ずつ、最大8倍まで延ばします。待機中は要約の LLM 呼び出しを省き、保存済み要約を使います。待機状態は容量を制限したメモリ内キャッシュのため、再起動すると失われます。
+`context.compression.failed` はタイムアウト、出力上限、削減率不足、通信・認証・保存エラーなどを区別し、Shell／簡易 CLI には安全な対処方法も表示します。要約の LLM request は `context-summary` と表示し、通常回答の `chat` と区別します。
 
 `REI_MEMORY_CONFLICT_TIMEOUT_SECONDS`（既定: `60`）は、記憶候補を保存する前の競合確認の制限時間です。タイムアウトした候補は保存されず、警告が表示されます。
 

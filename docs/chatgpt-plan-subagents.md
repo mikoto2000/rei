@@ -129,7 +129,7 @@ Receipt には request ID、parent Run、Project、Session、role/backend/model�
 | 委譲深さ | 1。子からの委譲は拒否 |
 | 同時実行 | アプリプロセス内で1 |
 | 推論回数 / Tool | 1 / 0 |
-| 通信期限 | 原則120秒、ロールの短い期限を優先 |
+| 委譲総期限 | 既定10分、設定上限30分。ロールの短い期限を優先し、全グループで共有 |
 | 送信 / 受信 | JSON全体256KiB / SSE全体1MiB |
 | 修復 / retry / fallback | すべて無効 |
 
@@ -314,6 +314,10 @@ rei:
 
 ## Phase 3: 上限付き実行・修復・比較
 
+`rei.chatgpt-plan.execution.timeout` は既定10分、指定可能な上限は30分です。`10m`、`20m`、`30m` を指定でき、既存の短い期限も使用できます。環境変数は `REI_CHATGPT_PLAN_EXECUTION_TIMEOUT` です。実効期限はロールYAMLの `timeout` とこの設定の短い方で、`execution.enabled=false` でも適用されます。
+
+期限は一つの委譲計画全体で共有し、自動分割したグループ、修復、再検討のたびにリセットしません。30分を使う場合は既存の reviewer.yaml も `timeout: 30m` に揃え、`/subagent reload` で読み直してください。外部 application.yaml の変更は新しい Rei の再起動後に反映されます。送信済みの結果不明を理由に自動で再送する処理は追加していません。
+
 以下は追加の管理者設定です。execution.enabled=false（既定）ならPhase 1/2の1回推論・修復なし・同時実行1を維持します。
 
 ```yaml
@@ -327,7 +331,7 @@ rei:
       max-concurrent: 2
       max-input-bytes: 262144
       max-output-bytes: 1048576
-      timeout: 120s
+      timeout: 30m # 既定10分、最大30分。全グループ・修復で共有
       semantic-validation: true
 ```
 
@@ -350,7 +354,7 @@ truthVerifiedは常にfalseです。引用への文字列一致も、因果関�
 {"requests":[{"id":"local","agent":"reviewer","task":"この設計をレビュー","context":"必要な公開資料のみ"},{"id":"plan-a","agent":"reviewer","task":"この設計をレビュー","backendId":"chatgpt-plan","accountRef":"personal","modelId":"<許可slug-A>","sourceRefs":["docs/design.md"],"expectedOutput":"{\"unverified\":[]}"},{"id":"plan-b","agent":"reviewer","task":"この設計をレビュー","backendId":"chatgpt-plan","accountRef":"personal","modelId":"<許可slug-B>","sourceRefs":["docs/design.md"],"expectedOutput":"{\"unverified\":[]}"}]}
 ```
 
-既存ワーカーは全体2、batch期限120秒、キュー最大8です。Plan側は設定の1〜2をさらに適用します。各Plan子はPhase 2の自動許可リスト・資料承認を通り、同じProject/Session/親Run予算へ所属します。失敗した子があっても成功した結果は保持し、全体はPARTIALまたはFAILEDです。各Plan receiptはOUTCOME_UNKNOWNや利用枠の分類も維持します。異なるtaskのbatchには比較を付けません。
+既存ワーカーは全体2、キュー最大8です。外部委譲を含む batch は `execution.timeout` と既存120秒の長い方を総期限に使い、待機中の子を含めて共有します。ローカルのみの batch と DAG は既存の120秒期限です。Plan側は設定の1〜2をさらに適用します。各Plan子はPhase 2の自動許可リスト・資料承認を通り、同じProject/Session/親Run予算へ所属します。失敗した子があっても成功した結果は保持し、全体はPARTIALまたはFAILEDです。各Plan receiptはOUTCOME_UNKNOWNや利用枠の分類も維持します。異なるtaskのbatchには比較を付けません。
 
 comparisonは結論、JSON厳密一致の共通指摘、独自指摘、引用、未確認事項と失敗状態を区別します。多数決は行いません。ローカル結果がsnapshot引用を持たない場合は根拠比較を未解決として明記します。別Run・別モデルでも統計的独立性や正解は保証しません。
 

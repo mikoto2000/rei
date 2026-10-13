@@ -72,8 +72,12 @@ final class RunEventOutput {
       output.accept("[" + type + "] 原因: " + errorReason(payload.path("error")));
       return;
     }
-    if ("context.compression.failed".equals(type)) {
-      output.accept("[context.compression] failed: " + dev.mikoto2000.rei.event.FailureMessages.text(payload.path("reason").asText()));
+    if (Set.of("context.compression.failed", "context.compression.skipped").contains(type)) {
+      String state = type.endsWith(".failed") ? "failed" : "skipped";
+      String details = payload.path("details").asText("");
+      String suffix = details.isBlank() ? "" : " (" + dev.mikoto2000.rei.event.FailureMessages.text(details) + ")";
+      output.accept("[context.compression] " + state + ": "
+          + dev.mikoto2000.rei.event.FailureMessages.text(payload.path("reason").asText("")) + suffix);
       return;
     }
     if ("goal.updated".equals(type) && payload.hasNonNull("reason")) {

@@ -34,6 +34,30 @@ class ShellAgentEventRendererTest {
     assertTrue(output.text().contains("answer\n[context.compression] failed: compression_unavailable\n"));
   }
 
+  @Test void compressionDetailsAndRetryDelayWaitUntilAnswerCompletes() {
+    var output = new RecordingOutput(); var renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.messageStarted("m", "assistant"));
+    renderer.onEvent(events.messageDelta("m", "先に"));
+    renderer.onEvent(events.contextCompression(dev.mikoto2000.rei.event.AgentEventType.CONTEXT_COMPRESSION_FAILED,
+        new dev.mikoto2000.rei.event.ContextCompressionPayload(100,100,2,1,"summary_timeout",
+            "timeoutSeconds=60\ntoken=hidden")));
+    renderer.onEvent(events.contextCompression(dev.mikoto2000.rei.event.AgentEventType.CONTEXT_COMPRESSION_SKIPPED,
+        new dev.mikoto2000.rei.event.ContextCompressionPayload(100,100,2,1,"retry_cooldown", "retryAfterSeconds=120")));
+    assertTrue(!output.text().contains("summary_timeout"));
+    renderer.onEvent(events.messageDelta("m", "進めます。"));
+    renderer.onEvent(events.messageCompleted("m", "assistant", "先に進めます。"));
+    assertTrue(output.text().contains("先に進めます。\n[context.compression] failed: summary_timeout (timeoutSeconds=60 token=[REDACTED])\n"
+        + "[context.compression] skipped: retry_cooldown (retryAfterSeconds=120)\n"));
+    assertTrue(!output.text().contains("hidden"));
+  }
+
+  @Test void oldCompressionPayloadAndBlankSkippedDetailsDoNotAddEmptySuffix() {
+    var output = new RecordingOutput(); var renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.contextCompression(dev.mikoto2000.rei.event.AgentEventType.CONTEXT_COMPRESSION_SKIPPED,
+        new dev.mikoto2000.rei.event.ContextCompressionPayload(100,100,2,1,"retry_cooldown", " ")));
+    assertEquals("[context.compression] skipped: retry_cooldown\n", output.text());
+  }
+
   @Test void subAgentFailureDisplaysTheSpecificFailureReason() {
     var output=new RecordingOutput();
     new ShellAgentEventRenderer(output).onEvent(new dev.mikoto2000.rei.event.AgentEvent("event",0,Instant.EPOCH,
@@ -417,7 +441,7 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.backgroundProcessKilled("proc-3", 1235L, null, 2.5d));
 
     assertEquals("[llm] first token (42 ms)\n"
-        + "[llm] request failed (84 ms): boom\n"
+        + "[llm] request failed (84 ms): [invalid_state] 処理に必要な状態が整っていません。保存済みの状態と接続先の状態を確認してください。\n"
         + "[context] injected task_state (123 chars)\n"
         + "[context] budget evaluated: 700/800 tokens, included 1, dropped 0\n"
         + "[context] budget trimmed: dropped OLD_HISTORY\n"

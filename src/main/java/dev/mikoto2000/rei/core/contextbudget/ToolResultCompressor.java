@@ -3,7 +3,7 @@ package dev.mikoto2000.rei.core.contextbudget;
 import java.util.*;
 import org.springframework.ai.chat.messages.*;
 
-/** Deterministic representation: selected diagnostic lines plus head/tail; the raw body is always saved first. */
+/** Exact source/delegated pages; diagnostic excerpts for general logs. Raw bodies are saved first. */
 public class ToolResultCompressor {
   private final RawToolResultStore store;
   private final TokenEstimator estimator;
@@ -28,7 +28,7 @@ public class ToolResultCompressor {
       ResultDelivery.Kind policy = policy(tool, response.id());
       if (policy == ResultDelivery.Kind.RAW_RESULT_PAGE) { responses.add(response); continue; }
       String ref = store.save(conversation, run, response.name(), response.id(), raw);
-      if (policy == ResultDelivery.Kind.FILE_CONTENT) {
+      if (lossless(policy)) {
         if (tool.getMetadata().get("rei.reviewReceipts") instanceof Map<?,?> receipts && receipts.containsKey(response.id())) {
           if(estimator.text(raw)>delivery.getPageMaxTokens())throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT: reduce readReviewFile tokenBudget");
           responses.add(response);continue;
@@ -69,13 +69,13 @@ public class ToolResultCompressor {
         existing.forEach((key,value) -> { if (key instanceof String id && value instanceof PagedResult page) pages.put(id,page); });
       for (int r = 0; r < responses.size() && total > hard; r++) {
         var response = responses.get(r); var policy = policy(tool, response.id());
-        if (policy != ResultDelivery.Kind.FILE_CONTENT && policy != ResultDelivery.Kind.RAW_RESULT_PAGE) continue;
+        if (!lossless(policy) && policy != ResultDelivery.Kind.RAW_RESULT_PAGE) continue;
         if(tool.getMetadata().get("rei.reviewReceipts") instanceof Map<?,?> receipts&&receipts.containsKey(response.id()))continue;
         long remainder = estimator.text(response.responseData()) - (total - hard) - delivery.getPageSafetyTokens();
         if (remainder < delivery.getPageMinTokens()) continue;
         int budget = (int)Math.min(delivery.getPageMaxTokens(), remainder);
         String replacement;
-        if (policy == ResultDelivery.Kind.FILE_CONTENT) {
+        if (lossless(policy)) {
           var page = pages.get(response.id());
           String source;
           if (page == null) {
@@ -86,11 +86,9 @@ public class ToolResultCompressor {
           pages.put(response.id(),page);
         } else {
           // These headers originate in the registered RawToolResultTools, not arbitrary result JSON.
-          String[] header = response.responseData().split("\\n",8);
-          if (header.length != 8 || !header[2].startsWith("rawResultRef: ") || !header[3].startsWith("offset: "))
-            throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
-          String ref = header[2].substring(14); int offset = Integer.parseInt(header[3].substring(8));
-          replacement = new RawToolResultTools(store,estimator).pageText(ref,store.read(conversation,ref),offset,16000,budget);
+          var page = RawResultPage.parse(response.responseData());
+          replacement = new RawToolResultTools(store,estimator).pageText(page.rawResultRef(),store.read(conversation,page.rawResultRef()),
+              page.offset(),Math.min(16000,page.nextOffset()-page.offset()),budget);
         }
         responses.set(r,new ToolResponseMessage.ToolResponse(response.id(),response.name(),replacement));
         var metadata = new HashMap<>(tool.getMetadata()); if (!pages.isEmpty()) metadata.put("rei.losslessPages",Map.copyOf(pages));
@@ -104,6 +102,9 @@ public class ToolResultCompressor {
     Object policies = message.getMetadata().get("rei.deliveryPolicies");
     if (policies instanceof Map<?, ?> registered && registered.get(call) instanceof ResultDelivery.Kind kind) return kind;
     return ResultDelivery.Kind.GENERAL;
+  }
+  public static boolean lossless(ResultDelivery.Kind kind) {
+    return kind == ResultDelivery.Kind.FILE_CONTENT || kind == ResultDelivery.Kind.LOSSLESS_RESULT;
   }
   private String important(String raw) {
     // JSON command results frequently put escaped stdout/stderr in a single physical line.

@@ -72,7 +72,7 @@ class ChatExecutionCheckpointCapacityTest {
 
   @Test void arbitraryFailureMessagesAndNonFactoryCheckpointMessagesRemainPrivate() {
     var service=service(Flux.error(new IllegalStateException("PRIVATE MODEL MESSAGE")));
-    assertThat(service.execute(owner,"work",new UserInterventionQueue()).errorMessage()).isEqualTo("chat run failed");
+    assertThat(service.execute(owner,"work",new UserInterventionQueue()).errorMessage()).contains("必要な状態").doesNotContain("PRIVATE","chat run failed");
     service=service(Flux.error(new CheckpointException(CheckpointException.Code.CAPACITY,"PRIVATE CAPACITY MESSAGE")));
     assertThat(service.execute(new AgentRunContext("run2","session2",Path.of("."),"project"),"work",new UserInterventionQueue())
         .errorMessage()).contains("/checkpoint status").doesNotContain("PRIVATE");

@@ -22,10 +22,13 @@ public class ContextCompressionProperties {
   private int toolResultTokens = 2000;
   private double minimumCompressionGain = 0.1;
   private int summaryTimeoutSeconds = 60;
+  private int retryCooldownSeconds = 120;
   private int standaloneSummaryMaxLlmCalls;
   private long standaloneSummaryMaxTotalTokens;
 
   public void validate() {
+    if(retryCooldownSeconds<1||retryCooldownSeconds>3600)
+      throw new IllegalArgumentException("rei.context-compression.retry-cooldown-seconds must be between 1 and 3600");
     if (modelContextLimit <= 0 || completionReserve < 0 || toolReserve < 0 || safetyMargin < 0
         || threshold <= 0 || hardLimit < threshold || recentTokens <= 0 || summaryTokens <= 0
         || toolResultThreshold <= 0 || toolResultTokens <= 0 || toolResultTokens >= toolResultThreshold

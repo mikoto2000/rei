@@ -11,7 +11,7 @@ public class RawToolResultTools {
   public RawToolResultTools(RawToolResultStore store, TokenEstimator estimator) { this(store,estimator,2048); }
   public RawToolResultTools(RawToolResultStore store, TokenEstimator estimator, int pageTokens) { this.store = store; this.estimator = estimator; this.pageTokens=pageTokens; }
   @ResultDelivery(ResultDelivery.Kind.RAW_RESULT_PAGE)
-  @Tool(description = "Read an exact contiguous page of a saved result. Offset is a UTF-16 character offset; limit 1..16000 is an upper bound. Follow nextOffset while hasMore. A page may shrink to its token budget.")
+  @Tool(resultConverter=RawResultPageTextConverter.class,description = "Read an exact contiguous page of a saved result. Offset is a UTF-16 character offset; limit 1..16000 is an upper bound. Follow nextOffset while hasMore. A page may shrink to its token budget.")
   public String readRawToolResult(String rawResultRef, int offset, int limit) {
     var owner = AgentRunScope.current();
     if (owner == null) throw new IllegalStateException("A run is required");

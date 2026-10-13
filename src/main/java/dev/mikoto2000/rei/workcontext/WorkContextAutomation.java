@@ -15,7 +15,7 @@ public class WorkContextAutomation implements AutoCloseable {
   public WorkContextAutomation(WorkContextService service,WorkContextProperties properties,AgentEventPublisher events) {this.service=service;this.properties=properties;this.events=events;}
   public void afterStart(AgentRunContext context) {
     try {service.captureRunStart(context);}
-    catch(RuntimeException error) {dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);org.slf4j.LoggerFactory.getLogger(getClass()).warn("Work-time Git metadata unavailable ({})",error.getClass().getSimpleName());}
+    catch(RuntimeException error) {dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);org.slf4j.LoggerFactory.getLogger(getClass()).warn("Work-time Git metadata unavailable: {}",dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(error).display());}
   }
   public void afterTerminal(AgentRunContext context) {
     if(!properties.autoUpdate()||context.projectId()==null) return;
@@ -25,9 +25,12 @@ public class WorkContextAutomation implements AutoCloseable {
         var result=service.update(context.conversationId(),context.runId());
         publish(context,AgentEventType.WORK_CONTEXT_UPDATED,result.map(WorkContext::revision).orElse(null),"completed");
       } catch(RuntimeException error) {
-        publish(context,AgentEventType.WORK_CONTEXT_UPDATE_FAILED,null,"failed:"+error.getClass().getSimpleName());
+        var diagnostic=dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(error);
+        publish(context,AgentEventType.WORK_CONTEXT_UPDATE_FAILED,null,diagnostic.display()
+            +("timeout".equals(diagnostic.code())?" 設定: rei.work-context.timeout-seconds。":"")
+            +" 元 Run の結果には影響しません。/work show で保存状態を確認し、必要なら /work update を実行してください。");
       }
-    });} catch(RejectedExecutionException error) {publish(context,AgentEventType.WORK_CONTEXT_UPDATE_FAILED,null,"queue_unavailable; use /work update");}
+    });} catch(RejectedExecutionException error) {publish(context,AgentEventType.WORK_CONTEXT_UPDATE_FAILED,null,dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(error).display()+" /work update で手動更新できます。");}
   }
   private void publish(AgentRunContext owner,AgentEventType type,Long revision,String status) {
     try {events.publish(new AgentEvent(UUID.randomUUID().toString(),0,Instant.now(),type,1,owner.conversationId(),null,
