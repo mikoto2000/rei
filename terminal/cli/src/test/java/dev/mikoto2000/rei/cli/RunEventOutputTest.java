@@ -6,6 +6,11 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class RunEventOutputTest {
+  @Test void nullErrorCodeDoesNotDisplayNullAsAReason() throws Exception {
+    output.accept("agent.run.failed", BackendClient.JSON.readTree("{\"error\":{\"message\":null,\"errorType\":\"IOException\",\"code\":null}}"));
+    assertEquals(List.of("[agent.run.failed] 原因: IOException"), lines);
+  }
+
   @Test void runCancellationDisplaysRedactedReasonAndCode() throws Exception {
     output.accept("agent.run.cancelled",BackendClient.JSON.readTree("{\"error\":{\"message\":\"approval denied token=hidden\",\"code\":\"approval_denied\"}}"));
     assertEquals(List.of("[agent.run.cancelled] 原因: [approval_denied] approval denied token=[REDACTED]"), lines);

@@ -102,9 +102,9 @@ final class RunEventOutput {
   }
 
   private static String errorReason(JsonNode error) {
-    String message = error.path("message").asText();
-    if (message.isBlank()) message = error.path("errorType").asText();
-    String code = error.path("code").asText();
+    String message = error.path("message").asText("");
+    if (message.isBlank()) message = error.path("errorType").asText("");
+    String code = error.path("code").asText("");
     if (!code.isBlank()) message = "[" + code + "] " + message;
     return dev.mikoto2000.rei.event.FailureMessages.text(message);
   }
