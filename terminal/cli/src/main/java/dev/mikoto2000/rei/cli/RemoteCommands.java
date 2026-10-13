@@ -334,6 +334,7 @@ public final class RemoteCommands {
     if(name.equals("/checkpoint")&&words.size()==1){if(session==null)throw new IllegalArgumentException("Select a Session first");return post(scoped+"/checkpoints",Map.of("sessionId",session));}
     if(name.equals("/resume")) {
       String base=scoped+"/checkpoints";
+      if(action.equals("overview")){exact(words,2);return get(scoped+"/resume-overview");}
       if(words.size()==1||action.equals("list")){exact(words,words.size()==1?1:2);return get(base+(words.size()==1?"/report":"/report/list"));}
       if(Set.of("show","abandon").contains(action)){exact(words,3);String path=base+"/"+id(words.get(2));return action.equals("show")?get(path+"/report"):post(path+"/abandon",Map.of());}
       exact(words,2);return post(base+"/"+id(action)+"/resume",Map.of());

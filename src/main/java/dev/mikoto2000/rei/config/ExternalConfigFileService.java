@@ -104,6 +104,10 @@ public class ExternalConfigFileService {
               enabled: false
 
         rei:
+          resume:
+            overview:
+              enabled: ${REI_RESUME_OVERVIEW_ENABLED:true}
+              failed-max-age-days: ${REI_RESUME_OVERVIEW_FAILED_MAX_AGE_DAYS:30}
           dot-delegation:
             enabled: ${REI_DOT_DELEGATION_ENABLED:false}
             parent-llm-enabled: ${REI_DOT_PARENT_LLM_ENABLED:false}
