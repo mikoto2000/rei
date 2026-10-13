@@ -13,6 +13,9 @@ import dev.mikoto2000.rei.core.completion.*;
 
 /** Client-local selection, JLine input and ordinary terminal output. */
 public final class TerminalClient implements AutoCloseable {
+  private final dev.mikoto2000.rei.checkpoint.ResumeOverview.DisplayHistory resumeSeen=new dev.mikoto2000.rei.checkpoint.ResumeOverview.DisplayHistory();
+  private boolean resumeStartupRead,resumeAutoEnabled=true;
+  private java.time.ZoneId resumeZone=java.time.ZoneId.systemDefault();
   private final BackendClient backend;
   private final Terminal terminal;
   private final LineReader reader;
@@ -166,6 +169,29 @@ public final class TerminalClient implements AutoCloseable {
     JsonNode match=null;for(var value:backend.get("/api/v1/projects"))if(id.equals(value.path("id").asText()))match=value;
     if(match==null)throw new IllegalArgumentException("Unknown registered Project ID");
     project=id;projectName=match.path("name").asText();projectDirectory=match.path("path").asText().isBlank()?null:Path.of(match.path("path").asText());session=null;refresh();
+    presentResume(false);
+  }
+  private void presentResume(boolean force) throws InterruptedException {
+    try {
+      if(!resumeStartupRead) {
+        var startup=backend.get("/api/v1/resume-overview");
+        resumeAutoEnabled=startup.path("enabled").asBoolean(true);
+        String zone=startup.path("preferredZone").asText("");if(!zone.isBlank())resumeZone=java.time.ZoneId.of(zone);
+        if(resumeAutoEnabled) {
+          var counts=new ArrayList<dev.mikoto2000.rei.checkpoint.ResumeOverview.ProjectCount>();
+          for(var row:startup.path("projects"))counts.add(BackendClient.JSON.treeToValue(row,dev.mikoto2000.rei.checkpoint.ResumeOverview.ProjectCount.class));
+          String summary=dev.mikoto2000.rei.checkpoint.ResumeOverview.summary(counts);if(!summary.isBlank())out(summary);
+        }
+        resumeStartupRead=true;
+      }
+      if(project==null||(!force&&!resumeAutoEnabled))return;
+      var value=backend.get("/api/v1/projects/"+BackendClient.segment(project)+"/resume-overview");
+      var overview=BackendClient.JSON.treeToValue(value,dev.mikoto2000.rei.checkpoint.ResumeOverview.class);
+      if(!project.equals(overview.projectId()))throw new IOException("Invalid overview ownership");
+      String text=resumeSeen.present(overview,resumeZone,force);if(!text.isBlank())out(text);
+    }catch(IOException|RuntimeException unavailable) {
+      if(force)out("再開候補の取得に失敗しました。/resume list で確認してください。");
+    }
   }
   private void send(String message)throws IOException,InterruptedException {
     send(message,mode);
@@ -184,6 +210,7 @@ public final class TerminalClient implements AutoCloseable {
     if(requestedHelp!=null){if(!requestedHelp.isEmpty())out(requestedHelp);return;}
     var words=catalog.normalize(rawWords);
     String name=words.getFirst();String action=words.size()>1?words.get(1):"list";
+    if(name.equals("/resume")&&action.equals("overview")&&words.size()==2){requireProject();presentResume(true);return;}
     if(catalog.requiresSubcommand(words)){out(catalog.help(words));return;}
     if(words.size()>1&&!words.contains("--")&&Set.of("--help","-h").contains(words.getLast())) {
       String help=catalog.help(words.subList(0,words.size()-1));if(!help.isEmpty()){out(help);return;}
@@ -260,7 +287,7 @@ public final class TerminalClient implements AutoCloseable {
         case "list"->{if(words.size()!=2&&words.size()!=1)throw new IllegalArgumentException("Usage: /project list");for(var value:backend.get("/api/v1/projects"))out((value.path("id").asText().equals(project)?"* ":"  ")+value.path("path").asText());refresh();}
         case "select"->{if(words.size()!=3)throw new IllegalArgumentException("Usage: /project select ID");selectProject(argument(words,2));}
         case "remove"->{if(words.size()!=3)throw new IllegalArgumentException("Usage: /project remove DIR");var target=localProjectPath(words.get(2)).toRealPath();for(var value:backend.get("/api/v1/projects")){if(target.toString().equals(value.path("path").asText())){String removed=value.path("id").asText();backend.mutation("DELETE","/api/v1/projects/"+BackendClient.segment(removed),null);if(removed.equals(project)){var fallback=backend.post("/api/v1/projects/register",Map.of("path",Path.of("").toAbsolutePath().normalize().toString()));selectProject(fallback.path("id").asText());}break;}}out("project removed: "+target);out("current project: "+(projectDirectory==null?Path.of("").toAbsolutePath():projectDirectory));refresh();}
-        case "register","add","cd"->{if(words.size()!=3)throw new IllegalArgumentException("Usage: /project "+action+" DIR");var value=backend.post("/api/v1/projects/register",Map.of("path",localProjectPath(argument(words,2)).toString()));if(!action.equals("add")){boolean changed=!value.path("id").asText().equals(project);if(changed||!action.equals("cd"))selectProject(value.path("id").asText());if(action.equals("cd")&&changed){var latest=backend.get("/api/v1/sessions?projectId="+BackendClient.segment(project)+"&limit=1").path("items");if(!latest.isEmpty())session=latest.get(0).path("sessionId").asText();}}out((action.equals("add")?"project added: ":"current project: ")+value.path("path").asText());refresh();}
+        case "register","add","cd"->{if(words.size()!=3)throw new IllegalArgumentException("Usage: /project "+action+" DIR");var value=backend.post("/api/v1/projects/register",Map.of("path",localProjectPath(argument(words,2)).toString()));if(!action.equals("add")){boolean changed=!value.path("id").asText().equals(project);if(changed||!action.equals("cd"))selectProject(value.path("id").asText());else presentResume(false);if(action.equals("cd")&&changed){var latest=backend.get("/api/v1/sessions?projectId="+BackendClient.segment(project)+"&limit=1").path("items");if(!latest.isEmpty())session=latest.get(0).path("sessionId").asText();}}out((action.equals("add")?"project added: ":"current project: ")+value.path("path").asText());refresh();}
         default->throw new IllegalArgumentException("Usage: /project list|add DIR|cd DIR|select ID|register LOCAL_PATH");}}
 
       case "/session"->{
