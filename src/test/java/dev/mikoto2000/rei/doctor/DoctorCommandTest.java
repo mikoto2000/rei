@@ -34,6 +34,7 @@ class DoctorCommandTest {
     when(service.passive(anyBoolean())).thenThrow(new IllegalArgumentException("URL-SECRET token=KEY-SECRET"));
     var error = new StringWriter(); var command = new CommandLine(new DoctorCommand(service)); command.setErr(new PrintWriter(error));
     assertEquals(2, command.execute());
+    assertTrue(error.toString().contains("受動診断に失敗しました (IllegalArgumentException)"));
     assertFalse(error.toString().contains("URL-SECRET")); assertFalse(error.toString().contains("KEY-SECRET"));
   }
 }
