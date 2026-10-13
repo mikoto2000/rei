@@ -16,6 +16,7 @@ public class ToolPermissionPolicy {
   private static final Set<String> NETWORK_READ=Set.of("webSearch","webSearchAndRead","fetchUrlContent","checkHttpDependency","waitForHttpDependency");
   private static final Set<String> LOCAL_WRITE=Set.of("applyTextDiff","writeMultiFile","proposeTextChangeSet","applyTextChangeSet","discardTextChangeSet","reconcileTextChangeSet","createDirectory","copyFile","scheduleAfter","scheduleAt","scheduleInterval","scheduleCron","scheduleOnEvent","cancelScheduledAction","registerDependency","cancelDependency");
   private final ToolPermissionProperties properties;
+  private final boolean fullAuto;
   private dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver delegation;
   @org.springframework.beans.factory.annotation.Autowired
   void setDelegationResolver(dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver resolver) {this.delegation=resolver;}
@@ -35,10 +36,17 @@ public class ToolPermissionPolicy {
       throw denied;
     }
   }
-  public ToolPermissionPolicy(ToolPermissionProperties properties) {this.properties=properties;}
+  public ToolPermissionPolicy(ToolPermissionProperties properties) {this(properties,false);}
+  @org.springframework.beans.factory.annotation.Autowired
+  public ToolPermissionPolicy(ToolPermissionProperties properties,
+      dev.mikoto2000.rei.computeruse.FullAutoOptions options) {this(properties,options.enabled());}
+  private ToolPermissionPolicy(ToolPermissionProperties properties,boolean fullAuto) {
+    this.properties=properties;this.fullAuto=fullAuto;
+  }
+  public boolean fullAuto(){return fullAuto;}
   /** Stable administrator policy identity for durable authorization audit. */
-  public String authorityFingerprint(){return dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256((properties.enabled()+"|"+new TreeSet<>(properties.autoApprove())+"|"+new TreeSet<>(properties.denied())+"|"+new TreeMap<>(properties.capabilities()).entrySet().stream().map(e->e.getKey()+"="+new TreeSet<>(e.getValue())).toList()).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
-  public boolean enforced(){return properties.enabled();}
+  public String authorityFingerprint(){return dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256((properties.enabled()+"|"+new TreeSet<>(properties.autoApprove())+"|"+new TreeSet<>(properties.denied())+"|"+new TreeMap<>(properties.capabilities()).entrySet().stream().map(e->e.getKey()+"="+new TreeSet<>(e.getValue())).toList()+(fullAuto?"|fullauto=true":"")).getBytes(java.nio.charset.StandardCharsets.UTF_8));}
+  public boolean enforced(){return properties.enabled()||fullAuto;}
   public Set<ActionCapability> capabilities(String tool,String input) {
     if(dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver.supports(tool)) {
       var required=EnumSet.noneOf(ActionCapability.class);
@@ -135,6 +143,7 @@ public class ToolPermissionPolicy {
   private PermissionDecision evaluateCapabilities(Set<ActionCapability> required) {
     if(!properties.enabled()) return PermissionDecision.AUTO_APPROVE;
     if(required.stream().anyMatch(properties.denied()::contains)) return PermissionDecision.DENY;
+    if(fullAuto) return PermissionDecision.AUTO_APPROVE;
     return properties.autoApprove().containsAll(required)?PermissionDecision.AUTO_APPROVE:PermissionDecision.REQUIRE_APPROVAL;
   }
 }

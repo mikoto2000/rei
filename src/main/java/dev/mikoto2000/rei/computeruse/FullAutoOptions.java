@@ -18,8 +18,8 @@ public final class FullAutoOptions implements ApplicationRunner {
   }
   public boolean enabled() { return enabled; }
   public String startupMessage() {
-    return enabled ? "[computer_use] --fullauto enabled: CONFIRM_REQUIRED operations (投稿・送信・削除・購入など) are allowed; PROHIBITED remains blocked."
-        : "[computer_use] --fullauto disabled: only LOW operations are allowed.";
+    return enabled ? "[tool_permission] --fullauto enabled: tool approval requests (including voice input) are automatically approved; DENY and execution-mode restrictions remain enforced. [computer_use] CONFIRM_REQUIRED operations (投稿・送信・削除・購入など) are allowed; PROHIBITED remains blocked."
+        : "[tool_permission] --fullauto disabled: configured tool approvals apply. [computer_use] only LOW operations are allowed.";
   }
   @Override public void run(ApplicationArguments args) { System.out.println(startupMessage()); }
 }

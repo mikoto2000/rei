@@ -47,9 +47,8 @@ public class ToolPermissionGuard {
         && (owner.mode()!=AgentRunContext.Mode.READ_ONLY || !MCP_READ_TOOLS.contains(tool));
     var decision=restricted ? PermissionDecision.DENY : policy.evaluate(tool,input);
     if(decision!=PermissionDecision.DENY)policy.validateArguments(tool,input);
-    // Recognized text is not a calibrated confidence/intent guarantee. Retain the existing
-    // deny decision, and require the existing exact-input one-use approval for side effects.
-    if(decision==PermissionDecision.AUTO_APPROVE&&owner!=null&&owner.voiceInput()
+    // Speech requires exact-input approval unless startup explicitly opted into common full auto.
+    if(decision==PermissionDecision.AUTO_APPROVE&&!policy.fullAuto()&&owner!=null&&owner.voiceInput()
         &&!policy.readOnly(tool,input))decision=PermissionDecision.REQUIRE_APPROVAL;
     if(decision==PermissionDecision.AUTO_APPROVE)return;
     String request=null;

@@ -51,7 +51,7 @@ STOPPING 中は再開しない。選択 Project/Session が変わった場合は
 
 認識文の確認は Tool 実行の承認ではない。`AgentRunContext.voiceInput` を共通 Gateway で設定し、RunRegistry、checkpoint、resume、アプリの SubAgentRunner へ引き継ぐ。旧 JSON と既存のテキスト入力は false のまま互換性を維持する。RequestSource と既存の実行 Mode は変更しない。
 
-VOICE 由来の Run では、既存 Policy が AUTO と判断しても、既知の intrinsically read-only Tool 以外は既存の明示承認経路を要求する。DENY や restricted Mode は維持する。ポリシー無効化や管理者による unknown Tool の READ 分類でもこの確認を迂回できない。承認は既存の Tool・入力引数単位の仕組みを使い、音声の slash command や認識確認を承認として扱わない。
+VOICE 由来の Run では、既存 Policy が AUTO と判断しても、既知の intrinsically read-only Tool 以外は既存の明示承認経路を要求する。起動引数 `--fullauto` を明示した場合は、この追加承認も共通 Tool 承認とともに自動承認する。DENY や restricted Mode は維持する。`--fullauto` がない場合、ポリシー無効化や管理者による unknown Tool の READ 分類でもこの確認を迂回できない。承認は既存の Tool・入力引数単位の仕組みを使い、音声の slash command や認識確認を承認として扱わない。
 
 ## ネイティブ推論と表示保護
 

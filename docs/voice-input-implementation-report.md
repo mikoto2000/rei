@@ -60,7 +60,7 @@ Phase 7のローカル検証と実Agent受け入れ結果を記録する。各Ph
 読み上げ中と既定800msの余韻中は入力を抑止するため、その間は話さずに待つ。
 音声受付を止めるのは `/voice off`、状態確認は `/voice status`。
 認識内容を確認してから送る設定は `/voice config --confirmation true` と `/voice confirm <ID>` を使う。
-認識の確認はツール実行の承認を兼ねない。VOICEの副作用Toolは従来の `/approval` による引数付き明示承認が必要。
+認識の確認はツール実行の承認を兼ねない。VOICEの副作用Toolは従来の `/approval` による引数付き明示承認が必要。起動引数 `--fullauto` を指定した場合は共通 Tool 承認とともに自動承認する。設定上の `DENY` と実行モードによる禁止は維持する。
 
 ## 確認済み範囲と制約
 

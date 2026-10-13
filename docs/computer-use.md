@@ -57,7 +57,7 @@ Linux / macOS:
 ./mvnw spring-boot:run "-Dspring-boot.run.arguments=--fullauto"
 ```
 
-この指定で許可されるのは Computer Use の操作です。禁止操作は引き続き拒否され、位置特定と結果の検証も行われます。起動時に有効状態を表示します。引数を省略するか `--fullauto=false` を指定すると無効になります。YAML や環境変数では有効化できません。
+この指定は共通 Tool 承認にも適用し、音声入力を含む承認待ちを自動承認します。設定上の `DENY`、実行モードの禁止、Computer Use の禁止操作は引き続き拒否され、位置特定と結果の検証も行われます。起動時に有効状態を表示します。引数を省略するか `--fullauto=false` を指定すると無効になります。YAML や環境変数では有効化できません。詳細は [Tool Permission Policy](tool-permission.md) を参照してください。
 
 ## 問題を調べる
 

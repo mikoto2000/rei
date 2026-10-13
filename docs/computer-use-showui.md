@@ -4,7 +4,7 @@
 
 `java -jar target/rei-0.0.1-SNAPSHOT.jar --fullauto` で起動すると、Computer Use は `LOW` に加えて `CONFIRM_REQUIRED` も実行できます。投稿・送信・削除・購入なども対象です。`PROHIBITED` は常に拒否します。位置特定・検証・重複入力防止は引き続き適用します。Computer Use 自体の有効化設定は別途必要です。
 
-省略時と `--fullauto=false` は従来どおり `LOW` のみです。`--fullauto=true` も使用できます。YAMLや環境変数では有効にせず、起動引数で指定します。起動時に有効・無効とポリシーを表示します。この指定はComputer Useの実行ポリシーにだけ適用し、他のツールの権限は変更しません。
+省略時と `--fullauto=false` は従来どおり `LOW` のみです。`--fullauto=true` も使用できます。YAMLや環境変数では有効にせず、起動引数で指定します。起動時に有効・無効とポリシーを表示します。`--fullauto` は共通 Tool 承認にも適用され、音声入力を含む承認待ちを自動承認します。設定上の `DENY` と実行モードの禁止は維持します。詳細は [Tool Permission Policy](tool-permission.md) を参照してください。
 
 ## 操作履歴の詳細
 
