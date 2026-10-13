@@ -55,9 +55,9 @@ class TaskStateArgumentRepairTest {
     assertEquals(2,modelCalls.get());assertEquals(0,effects.get());verify(approvals).request("updateTaskState",valid,owner);
   }
   @Test void validationAndDurableRepairLimitWorkWithoutPermissionGuard() {
-    var budget=new OutputLimitRunBudget(2,20);var context=context(budget,false);var loop=new ToolLoopSupport();
+    var budget=new OutputLimitRunBudget(2,20,null,0,2);var context=context(budget,false);var loop=new ToolLoopSupport();
     for(int i=0;i<2;i++)loop.executeResumable(prompt(context,update()),call("invalid-"+i,invalid),context);
-    var restored=new OutputLimitRunBudget(2,20);restored.restore(budget.snapshot());var next=context(restored,false);
+    var restored=new OutputLimitRunBudget(2,20,null,0,2);restored.restore(budget.snapshot());var next=context(restored,false);
     var stopped=assertThrows(ExecutionStoppedException.class,()->loop.executeResumable(prompt(next,update()),call("third",invalid),next));
     assertEquals(ExecutionStoppedException.Reason.TOOL_ARGUMENT_REPAIR_EXHAUSTED,stopped.reason());assertEquals(0,effects.get());verifyNoInteractions(approvals);
   }

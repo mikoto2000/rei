@@ -4,11 +4,27 @@ ChatGPTへの通常の `delegateTask` / `delegateTasks` は永続SubAgent機能�
 
 引数の不足・型・ローカル/外部の矛盾・出力条件とロールスキーマの不整合は、最初の1件で止めず一括表示します。`delegateTasks` では `requests[0].accountRef` のように要求位置と項目を示します。LLMは列挙された問題をまとめて修正してください。アカウント許可などの管理者ポリシー拒否は自動修正対象にしません。
 
-親Chatの実行前引数検証エラーは `INVALID_TOOL_ARGUMENTS` と `executed:false` のTool結果としてLLMへ返し、1 Runにつき最大2回まで修正を促します。回数は予算snapshotとともに保存・復元し、承認続行やresumeでリセットしません。修正後は新しい呼び出しとして通常の権限判定・正確な引数の承認を適用します。権限拒否・許可先の不一致・通信失敗・実行後エラーをこの修正対象にしません。ChatGPT委譲の `accountRef`・`modelId`・`sourceRefs`・`expectedOutput` はツール説明にも条件付き必須として明記しています。
+親Chatの実行前引数検証エラーは `INVALID_TOOL_ARGUMENTS` と `executed:false` のTool結果としてLLMへ返します。修正回数は `rei.llm.output-limit.max-tool-argument-corrections-per-run` で設定し、既定は1 Runにつき5回、`0` は自動修正無効です。不正なツール呼び出し1件で1回を消費し、1呼び出し内の複数の問題はまとめて1回です。別のツールも同じ Run の予算を使います。回数は予算snapshotとともに保存・復元し、承認続行やresumeでリセットしません。現在の設定上限から残りを計算するため、2回消費済みのタスクで上限を5回に増やすと残りは3回です。上限に達したら引数を確認し、必要に応じて外部の `application.yaml` を更新して Rei を再起動した後、対象プロジェクトで `/resume <taskId>` を実行してください。修正後は新しい呼び出しとして通常の権限判定・正確な引数の承認を適用します。ChatGPT委譲の `accountRef`・`modelId`・`sourceRefs`・`expectedOutput` はツール説明にも条件付き必須として明記しています。
+
+自動委譲が有効でアカウントが許可され、管理者の許可モデルをすべて提示できる場合、候補外の `modelId` は修正可能な選択エラーとして具体的な許可モデル ID を返します。`context` などの不備とまとめて同じ修正予算を使い、コード側でモデルを置き換えることはありません。人間が特定モデルを要求している場合は、別モデルを提案する前に確認するよう指示します。能力・実行モードによる `DENY`、自動委譲無効、アカウント拒否、候補なし、別バックエンドのモデル拒否、通信失敗、実行後エラーは修正対象にせず停止します。実行時の現在の許可設定も引き続き確認します。
 
 `expectedOutput` は JSON Schema や出力形式の見本ではなく、`result` の指定フィールドに対する完全一致条件です。`"string"` は型指定ではなく、その文字列そのものとの一致を要求します。形式やレビュー観点は `task` / `constraints` に書いてください。`{"unverified":[]}` は未検証事項が厳密にゼロである条件です。未知の事項を隠すために指定しないでください。承認要求の作成・消費前に、JSONの厳密な構文、空でないobject、選択ロールのresultSchemaとの整合性を検証します。省略したルートフィールドは条件に含めません。
 
-ChatGPT委譲の失敗イベントには、失敗コード、対処方法、検証エラーの箇所を含め、Shellと簡易CLIにも表示します。たとえば `SEND_LIMIT` では資料を小さいグループへ分割するよう案内します。資料本文やプロバイダの生例外を失敗理由に含めません。
+ChatGPT委譲の失敗イベントには、失敗コード、対処方法、検証エラーの箇所を含め、Shellと簡易CLIにも表示します。たとえば `SEND_LIMIT` では、単独ファイルや指示文でも上限を超える場合の対処を案内します。資料本文やプロバイダの生例外を失敗理由に含めません。
+
+外側の `delegateTask` に `✓` が付いても、委譲先の処理が成功したとは限りません。失敗した Receipt を返せた場合も `✓` になります。子の `state`・`error`・`result.output` と親に届く `failureReason` を確認してください。資料の準備段階の失敗では、`sourceRefs[0]` のような項目位置と、パス不正・不存在・読取失敗・不正UTF-8・サイズ超過などを区別して表示します。これらの準備エラーと、実際の権限拒否・承認不足・共有予算不足を区別し、同じ安全な診断を `receipt.result.output` と親の `failureReason` に保存します。資料本文、検出した値、プロバイダ応答本文、原因例外の生メッセージは診断に含めません。
+
+`sourceRefs` には元資料の Project 相対パスを指定できます。ホストは読み取った本文の既知の資格情報値、JWT、秘密鍵を、送信するメモリ上の snapshot だけでマスクします。教材のデモ用 `password` 設定やトークン例も対象になり、通常の操作で送信用コピーを作る必要はありません。元ファイルを書き換えず、マスク前の本文やその SHA-256 を外部モデルに送信しません。`sources[i].redacted` が `true` なら、その snapshot の内容をマスクしたことを示します。
+
+子モデルには伏せた値を推測・復元せず、その値に依存する判断を `unverified` に残すよう指示します。`references.sha256` と `quote` は、実際に供給したマスク済み snapshot のハッシュと本文に照合します。親は結果を元資料と独立に確認できます。自動マスクは資料本文に適用し、アカウント・モデル・ロール・Project・読取権限・外部送信承認の制約を解除しません。タスク本文や指示文に保護対象の値を直接埋め込んで送信しないでください。
+
+`sourceRefs` は1依頼につき最大16ファイルで、各ファイルのマスク前の生UTF-8サイズは256 KiB（262,144バイト）以下です。合計サイズはこの上限を超えても指定できます。ホストは全資料を読み取り・マスクし、ファイル一覧を元の順序のまま前半・後半へ二分割します。各グループの生サイズ、マスク後のサイズ、指示文・JSONエスケープを含む実際の送信JSONが上限に収まるまで、再帰的に分割を繰り返します。教材15ファイル計392,704バイトも、利用者が手作業でグループを指定する必要はありません。単独ファイルでも収まらない場合は送信前に `UNSPLITTABLE_INPUT` または `sourceRefs[i]: TOO_LARGE` を返します。ファイル内の行範囲への自動分割は行いません。
+
+全グループの正確な送信内容・順序・ロール・モデル・アカウント・実行設定を、最初の送信前に一つの承認対象として確定します。後のグループを含む送信内容や計画が変われば、再承認が必要になります。承認後は同じ委譲先へ順番に送信し、各送信前に現在のポリシーと取消状態を再確認します。承認をグループごとに消費し直したり、失敗した呼び出しを自動で再送したりしません。
+
+親の呼び出し・トークン予算、ロールの `maxSteps`、有効な `execution.max-iterations`、修正・追加確認の回数、絶対期限は全グループで共有します。グループごとに予算・期限をリセットしません。実行機能が無効の場合も分割グループの初回呼び出しはロールの `maxSteps` 内で順次実行します。計画したグループ数が呼び出し上限を超える場合は送信前に `GROUP_CALL_BUDGET_EXCEEDED` を返します。
+
+分割結果は `Receipt.groups` に、順番・対象scope・検証済み結果・使用量・失敗原因を保持します。すべてのグループが完了した場合だけ全体を `COMPLETED` にします。途中で失敗・部分完了・取消・結果不明になれば後続を停止し、完了済み結果と未実行の `remainingScopes` を返します。全体の `result.output` はホストが作るグループ一覧で、単一のロール結果を合成したものではありません。資料間の横断的な整合性は、親が別途確認します。再開・再依頼する際は失敗したグループと未実行scopeを確認し、完了済み資料を含む元の依頼を安易に再送しないでください。
 
 親のChat Runには、現在の有効設定から生成した委譲先の案内をSystem contextとして渡します。案内は登録済みの適合ロール、許可されたアカウント・モデル、保存済みのChatGPT利用認証を区別します。無効化・許可不足・未認証の場合は不足条件を示します。認証トークン・subject・client ID・資格情報パスは渡さず、この確認でネットワーク通信もしません。許可モデルの一覧は管理者設定であり、実際の利用可否や利用枠は `/chatgpt models` と実行時の確認が必要です。
 
@@ -60,9 +76,9 @@ ID Token の検証と推論許可は別です。token response に `chatgpt.toke
 /subagent run reviewer --backend chatgpt-plan --account personal --model <slug> --task "この設計をレビューし、指摘と未検証事項を報告してください" --source docs/design.md --expected-result '{"unverified":[]}'
 ```
 
-外部送信の承認は、role/backend/model/accountと、ロール指示文・スキーマ・タスク・実際の資料内容をまとめたdigestに結び付けます。承認後にロール定義や資料が変われば、再度承認が必要です。
+外部送信の承認は、role/backend/model/accountと、ロール指示文・スキーマ・タスク・実際に送るマスク済み snapshot をまとめたdigestに結び付けます。承認対象の呼び出しや送信内容が変われば、再度承認が必要です。
 
-`--source` は複数回指定できます。UTF-8 テキストのみです。PDF、画像、binary、隠しディレクトリ、別 Project、絶対パス、`..`、代表的な token / private key を含む資料はこの MVP では拒否します。資料をれい側で読み、参照 ID・Project 相対パス・SHA-256 を発行します。モデルへファイル読み取り権限は渡しません。必要な秘密情報を含まない資料を選ぶ責任も利用者にあります。scanner は任意の秘密情報を完全に判別する仕組みではありません。
+`--source` は複数回指定できます。UTF-8 テキストのみです。PDF、画像、binary、隠しディレクトリ、別 Project、絶対パス、`..` は拒否します。資料をれい側で読み、既知の資格情報値・JWT・秘密鍵をメモリ上の snapshot でマスクして、参照 ID・Project 相対パス・マスク済み本文の SHA-256・`redacted` を発行します。元ファイルを変更せず、モデルへローカルファイル読み取り権限やマスク前のハッシュは渡しません。検出は保守的で、任意の秘密情報を完全に判別する仕組みではありません。
 
 `--expected-result` は空でない JSON object を必須とし、**既存ロールの result 内の指定フィールドとの厳密一致**を完了条件とします。例の `unverified: []` は未検証事項が残れば成功しない指定です。完了条件に合わない回答を成功にするためだけに値を緩めないでください。`--context` はローカル経路用であり、このバックエンドでは拒否します。
 
@@ -96,13 +112,13 @@ flowchart TD
   "conclusion": "レビューの結論",
   "findings": [],
   "proposals": [],
-  "references": [{"referenceId":"source-1","path":"docs/design.md","sha256":"<れいが発行したhash>","quote":"資料中の短い原文"}],
+  "references": [{"referenceId":"source-1","path":"docs/design.md","sha256":"<れいが発行したsnapshotのhash>","quote":"供給されたsnapshot中の短い引用"}],
   "unverified": [],
   "scope": ["docs/design.md"]
 }
 ```
 
-通信正常終了 → strict JSON parsing → 既存 envelope / ロール schema → wrapper の型 → reference ID・パス・hash・原文引用 → exact scope → expected result の順に確認します。全資料への引用を必須とし、不明・重複・範囲外の参照を拒否します。conclusion は summary と一致させ、ロールの findings / unverified があれば wrapper も一致させます。SUCCESS という自己申告だけでは完了になりません。引用が一致しても論理的・実質的な正しさの証明にはなりません。MVP は別 LLM による意味検証を行いません。
+通信正常終了 → strict JSON parsing → 既存 envelope / ロール schema → wrapper の型 → reference ID・パス・供給した snapshot の hash・引用 → exact scope → expected result の順に確認します。マスク済み資料の引用と hash を元の生本文に照合しません。全資料への引用を必須とし、不明・重複・範囲外の参照を拒否します。conclusion は summary と一致させ、ロールの findings / unverified があれば wrapper も一致させます。SUCCESS という自己申告だけでは完了になりません。引用が一致しても論理的・実質的な正しさの証明にはなりません。MVP は別 LLM による意味検証を行いません。
 
 Receipt には request ID、parent Run、Project、Session、role/backend/model、状態、usage、分類済みエラー、既存 SubAgentResult が含まれます。親 Run を伴う内部呼び出しは共有予約が必須です。単独 CLI は既存 standalone SubAgent 予算も適用します。従来の `delegateTask` に backend を自動付与しません。
 

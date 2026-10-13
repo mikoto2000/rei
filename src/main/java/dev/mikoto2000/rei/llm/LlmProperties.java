@@ -108,6 +108,7 @@ public class LlmProperties {
     private Integer maxReplansPerGoal = DEFAULT_MAX_REPLANS_PER_GOAL;
     private Integer maxSubgoalsPerReplan = DEFAULT_MAX_SUBGOALS_PER_REPLAN;
     private Integer maxLlmCallsPerRun = DEFAULT_MAX_LLM_CALLS_PER_RUN;
+    private Integer maxToolArgumentCorrectionsPerRun = OutputLimitRunBudget.DEFAULT_MAX_ARGUMENT_CORRECTIONS;
     private long maxTotalTokensPerRun;
     private long maxTotalTokensPerGoal;
     public long getMaxTotalTokensPerGoal(){return maxTotalTokensPerGoal;}
@@ -137,6 +138,17 @@ public class LlmProperties {
 
     public void setMaxLlmCallsPerRun(Integer maxLlmCallsPerRun) {
       this.maxLlmCallsPerRun = maxLlmCallsPerRun;
+    }
+
+    public Integer getMaxToolArgumentCorrectionsPerRun() {
+      return maxToolArgumentCorrectionsPerRun == null
+          ? OutputLimitRunBudget.DEFAULT_MAX_ARGUMENT_CORRECTIONS : maxToolArgumentCorrectionsPerRun;
+    }
+
+    public void setMaxToolArgumentCorrectionsPerRun(Integer value) {
+      if(value != null && value < 0)
+        throw new IllegalArgumentException("max-tool-argument-corrections-per-run must be nonnegative");
+      maxToolArgumentCorrectionsPerRun = value;
     }
 
     private int positiveOrDefault(Integer value, int defaultValue) {

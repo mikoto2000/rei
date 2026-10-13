@@ -25,7 +25,7 @@ import dev.mikoto2000.rei.subagent.*;
 import reactor.core.publisher.Flux;
 
 class DelegationPreflightFailureTest {
-  @Test void argumentRepairFollowedByForbiddenModelReportsPolicyFailureWithoutAnotherRepair() {
+  @Test void argumentRepairFollowedByForbiddenAccountReportsPolicyFailureWithoutAnotherRepair() {
     var owner=new AgentRunContext("run","session",Path.of("."),"project");
     var approvals=mock(ToolApprovalRepository.class);
     var automatic=new PlanDelegationProperties(true,Set.of("default"),Set.of("allowed-model"));
@@ -52,9 +52,9 @@ class DelegationPreflightFailureTest {
     var effects=new AtomicInteger();
     var tool=new ToolCallback(){
       public ToolDefinition getToolDefinition(){return ToolDefinition.builder().name("delegateTask").description("delegate").inputSchema("{}").build();}
-      public String call(String input){effects.incrementAndGet();throw new AssertionError("A forbidden model must never be executed or substituted");}
+      public String call(String input){effects.incrementAndGet();throw new AssertionError("A forbidden account must never be executed or substituted");}
     };
-    String corrected="{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"chatgpt-plan\",\"accountRef\":\"default\",\"modelId\":\"private-forbidden-model\",\"sourceRefs\":[\"docs/a.md\"],\"expectedOutput\":\"{\\\"unverified\\\":[]}\"}";
+    String corrected="{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"chatgpt-plan\",\"accountRef\":\"private-forbidden-account\",\"modelId\":\"allowed-model\",\"sourceRefs\":[\"docs/a.md\"],\"expectedOutput\":\"{\\\"unverified\\\":[]}\"}";
     String malformed=corrected.substring(0,corrected.length()-1)+",\"context\":\"private-context\"}";
     var calls=new AtomicInteger();
     var model=new ChatModel(){
@@ -74,7 +74,7 @@ class DelegationPreflightFailureTest {
     var prompt=new Prompt(List.of(new UserMessage("ChatGPT にレビューして")),ToolCallingChatOptions.builder()
         .toolCallbacks(List.of(tool)).toolContext(Map.of(RunExecutionContext.KEY,context)).build());
     var error=assertThrows(ChatGptException.class,()->new StagnationChatModel(model).call(prompt));
-    assertEquals(ChatGptException.PermissionReason.MODEL_NOT_ALLOWED,error.permissionReason());
+    assertEquals(ChatGptException.PermissionReason.ACCOUNT_NOT_ALLOWED,error.permissionReason());
     assertEquals(2,calls.get());assertEquals(1,budget.snapshot().argumentCorrections());assertEquals(0,effects.get());verifyNoInteractions(approvals);
     assertEquals(Set.of("allowed-model"),automatic.allowedModels());
     var failures=recorded.stream().filter(event->event.payload() instanceof ToolFailedPayload).toList();
@@ -83,8 +83,8 @@ class DelegationPreflightFailureTest {
     var payload=(ToolFailedPayload)refused.payload();
     assertEquals("corrected",payload.toolCallId());assertEquals("delegateTask",payload.toolName());
     assertEquals("run",refused.runId());assertEquals("project",refused.projectId());assertEquals("session",refused.sessionId());
-    assertTrue(payload.error().message().contains("MODEL_NOT_ALLOWED"));assertTrue(payload.error().message().contains("allowed-models"));
-    assertFalse(payload.error().message().contains("private-forbidden-model"));assertFalse(payload.error().message().contains("private-context"));
+    assertTrue(payload.error().message().contains("ACCOUNT_NOT_ALLOWED"));assertTrue(payload.error().message().contains("allowed-accounts"));
+    assertFalse(payload.error().message().contains("private-forbidden-account"));assertFalse(payload.error().message().contains("private-context"));
     assertTrue(recorded.stream().noneMatch(event->event.type()==AgentEventType.TOOL_STARTED));
   }
 }

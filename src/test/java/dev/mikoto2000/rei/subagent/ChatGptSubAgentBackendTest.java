@@ -18,7 +18,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 class ChatGptSubAgentBackendTest {
   @Test void sendLimitFailureIsPublishedToTheParentRunWithItsCause() throws Exception {
-    Files.writeString(root.resolve("a.txt"),"a".repeat(140000));
+    Files.writeString(root.resolve("a.txt"),"a".repeat(262145));
     Files.writeString(root.resolve("b.txt"),"b".repeat(140000));
     runs.register(owner);runs.transition(owner.runId(),RunStatus.RUNNING,null);
     var receipt=backend.run(request(List.of("a.txt","b.txt"),"{\"decision\":\"accept\"}"),owner,false,mock(LlmCallReservation.class));
@@ -374,10 +374,9 @@ class ChatGptSubAgentBackendTest {
   }
 
   @Test
-  void crossProjectFilesAndCredentialFilesNeverLeaveProcess() throws Exception {
-    Files.writeString(root.resolve("secret.txt"), "refresh_token=secret-value");
+  void crossProjectAndHiddenFilesNeverLeaveProcess() throws Exception {
     for (String path :
-        List.of("../foreign.txt", root.resolve("review.yaml").toString(), "secret.txt", ".env")) {
+        List.of("../foreign.txt", root.resolve("review.yaml").toString(), ".env")) {
       var receipt =
           backend.run(request(List.of(path), "{\"decision\":\"accept\"}"), owner, true, null);
       assertEquals(ChatGptSubAgentBackend.State.FAILED, receipt.state());

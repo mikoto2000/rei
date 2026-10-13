@@ -244,7 +244,8 @@ public class ChatExecutionService {
     OutputLimitRunBudget budget = new OutputLimitRunBudget(
         llmProperties.getOutputLimit().getMaxReplansPerGoal(),
         llmProperties.getOutputLimit().getMaxLlmCallsPerRun(),reservation,
-        llmProperties.getOutputLimit().getMaxTotalTokensPerRun());
+        llmProperties.getOutputLimit().getMaxTotalTokensPerRun(),
+        llmProperties.getOutputLimit().getMaxToolArgumentCorrectionsPerRun());
     RunExecutionContext execution = new RunExecutionContext(runId, budget,
         new ProgressEvaluator(context.projectRoot(),
             context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand ? actionPlan : null), eventFactory, eventPublisher);
@@ -451,7 +452,12 @@ public class ChatExecutionService {
           "context_hard_limit");
       case STAGNATED -> new ErrorInformation("Stagnated", "STAGNATED: no meaningful progress after replanning", "stagnated");
       case LLM_CALL_BUDGET_EXCEEDED -> new ErrorInformation("LlmCallBudgetExceeded", "LLM call budget exceeded", "llm_call_budget_exceeded");
-      case TOOL_ARGUMENT_REPAIR_EXHAUSTED -> new ErrorInformation("ToolArgumentRepairExhausted","ツール引数の修正上限（2回）に達しました。引数と設定を確認してください。","tool_argument_repair_exhausted");
+      case TOOL_ARGUMENT_REPAIR_EXHAUSTED -> new ErrorInformation("ToolArgumentRepairExhausted",
+          "ツール引数の修正上限（"+llmProperties.getOutputLimit().getMaxToolArgumentCorrectionsPerRun()+"回）に達しました。"
+          +"直前の引数エラーと委譲設定を確認してください。さらに修正を試す場合は application.yaml の "
+          +"rei.llm.output-limit.max-tool-argument-corrections-per-run を増やして Rei を再起動し、"
+          +"/resume list でタスクを確認して /resume <taskId> で再開してください。消費済み回数は引き継ぎます。",
+          "tool_argument_repair_exhausted");
       case TOKEN_BUDGET_EXCEEDED -> new ErrorInformation("TokenBudgetExceeded","Reported Run token limit exceeded","token_budget_exceeded");
       case TOKEN_USAGE_UNKNOWN -> new ErrorInformation("TokenUsageUnknown","Token limit enabled but model usage is unknown","token_usage_unknown");
       case REPLAN_BUDGET_EXCEEDED -> new ErrorInformation("ReplanBudgetExceeded", "replan hard budget exceeded", "replan_budget_exceeded");

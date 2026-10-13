@@ -32,6 +32,7 @@ public final class DelegationToolPermissionResolver {
     Iterable<JsonNode> requests=root==null||!root.isObject()?List.of():"delegateTasks".equals(tool)?
         (root.path("requests").isArray()&&root.path("requests").size()<=8?root.path("requests"):List.of()):List.of(root);
     int index=0;
+    boolean modelSelection=false;
     for(var request:requests) {
       String prefix="delegateTasks".equals(tool)?"requests["+(index++)+"]":"request";
       if(!request.isObject()||!request.path("agent").isString())continue;
@@ -45,8 +46,35 @@ public final class DelegationToolPermissionResolver {
         try{ExpectedOutputConditions.validate(request.path("expectedOutput").asString(),definition.get().resultSchema());}
         catch(IllegalArgumentException invalid){String issue=prefix+".expectedOutput: "+invalid.getMessage();if(!issues.contains(issue))issues.add(issue);}
       }
+      var models=dev.mikoto2000.rei.chatgpt.ChatGptModelChoices.models(automatic);
+      String account=request.path("accountRef").isString()?DelegationArguments.optional(request.path("accountRef").asString()):null;
+      String model=request.path("modelId").isString()?DelegationArguments.optional(request.path("modelId").asString()):null;
+      // This is selection from an enabled, administrator-owned enum, never expansion of a grant.
+      // Account denial, disabled delegation, missing choices and other backends stay policy refusals.
+      if("chatgpt-plan".equals(backend)&&!models.isEmpty()&&account!=null&&automatic.allowedAccounts().contains(account)
+          &&model!=null&&!automatic.allowedModels().contains(model)) {
+        modelSelection=true;
+        issues.add(prefix+".modelId: choose an exact administrator-permitted ID from "+json.writeValueAsString(models)
+            +"; use the ID, not a display name or guessed alias. If the human explicitly requested a different model, ask before proposing another. This validation does not authorize execution; normal policy and approval still apply.");
+      }
     }
-    if(!issues.isEmpty())throw new IllegalArgumentException("Invalid delegation arguments; correct all listed problems together:\n"+String.join("\n",issues));
+    if(!issues.isEmpty()) {
+      String guidance="Invalid delegation arguments; correct all listed problems together:\n"+String.join("\n",issues);
+      if(modelSelection) {
+        // Another request in the batch may have a real account/backend-policy refusal.
+        // Do not mask that refusal with a repairable model selection from a different request.
+        for(var request:requests)if(request.isObject()) {
+          String backend=request.path("backendId").isString()?DelegationArguments.optional(request.path("backendId").asString()):null;
+          String account=request.path("accountRef").isString()?DelegationArguments.optional(request.path("accountRef").asString()):null;
+          String model=request.path("modelId").isString()?DelegationArguments.optional(request.path("modelId").asString()):null;
+          if(backend!=null&&!backend.equals("local")&&account!=null
+              &&(!automatic.allowedAccounts().contains(account)||!backend.equals("chatgpt-plan")&&model!=null&&!automatic.allowedModels().contains(model)))
+            automatic.check(account,model);
+        }
+        throw new dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException(guidance,dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException.Kind.MODEL_SELECTION);
+      }
+      throw new IllegalArgumentException(guidance);
+    }
     if(automatic!=null)for(var request:requests) {
       String backend=DelegationArguments.optional(request.path("backendId").asString(""));
       if(backend!=null&&!backend.equals("local"))automatic.check(request.path("accountRef").asString(),request.path("modelId").asString());

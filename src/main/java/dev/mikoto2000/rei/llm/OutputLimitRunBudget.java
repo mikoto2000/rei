@@ -7,15 +7,18 @@ package dev.mikoto2000.rei.llm;
  * the controlled model loop reserves every additional LLM/tool cycle before invoking the model.
  */
 public class OutputLimitRunBudget {
+  public static final int DEFAULT_MAX_ARGUMENT_CORRECTIONS = 5;
   public record Snapshot(int replans,int llmCalls,long totalTokens,boolean usageUnknown,int stagnationReplans,int argumentCorrections) {
     public Snapshot(int replans,int llmCalls,long totalTokens,boolean usageUnknown,int stagnationReplans){this(replans,llmCalls,totalTokens,usageUnknown,stagnationReplans,0);}
     public Snapshot(int replans,int llmCalls,long totalTokens,boolean usageUnknown){this(replans,llmCalls,totalTokens,usageUnknown,0);}
   }
   private int argumentCorrections;
-  public synchronized boolean tryCorrectArguments(){if(argumentCorrections>=2)return false;argumentCorrections++;return true;}
+  public synchronized boolean tryCorrectArguments(){if(argumentCorrections>=maxArgumentCorrections)return false;argumentCorrections++;return true;}
+  public int maxArgumentCorrections(){return maxArgumentCorrections;}
+  public synchronized int remainingArgumentCorrections(){return Math.max(0,maxArgumentCorrections-argumentCorrections);}
   public synchronized Snapshot snapshot(){return new Snapshot(replans,llmCalls,totalTokens,usageUnknown,stagnationReplans,argumentCorrections);}
   public synchronized void restore(Snapshot saved){
-    if(saved==null||saved.replans()<0||saved.stagnationReplans()<0||saved.llmCalls()<0||saved.totalTokens()<0||saved.argumentCorrections()<0||saved.argumentCorrections()>2)throw new IllegalArgumentException("Invalid saved Run budget");
+    if(saved==null||saved.replans()<0||saved.stagnationReplans()<0||saved.llmCalls()<0||saved.totalTokens()<0||saved.argumentCorrections()<0)throw new IllegalArgumentException("Invalid saved Run budget");
     argumentCorrections=Math.max(argumentCorrections,saved.argumentCorrections());
     stagnationReplans=Math.max(stagnationReplans,saved.stagnationReplans());
     replans=Math.max(replans,saved.replans());llmCalls=Math.max(llmCalls,saved.llmCalls());totalTokens=Math.max(totalTokens,saved.totalTokens());usageUnknown|=saved.usageUnknown();
@@ -33,6 +36,7 @@ public class OutputLimitRunBudget {
 
   private final int maxReplans;
   private final int maxLlmCalls;
+  private final int maxArgumentCorrections;
   private int replans;
   private int stagnationReplans;
   private int llmCalls;
@@ -47,7 +51,12 @@ public class OutputLimitRunBudget {
     this(maxReplans,maxLlmCalls,reservation,0);
   }
   public OutputLimitRunBudget(int maxReplans,int maxLlmCalls,LlmCallReservation reservation,long maxTotalTokens) {
+    this(maxReplans,maxLlmCalls,reservation,maxTotalTokens,DEFAULT_MAX_ARGUMENT_CORRECTIONS);
+  }
+  public OutputLimitRunBudget(int maxReplans,int maxLlmCalls,LlmCallReservation reservation,long maxTotalTokens,int maxArgumentCorrections) {
     if(maxTotalTokens<0)throw new IllegalArgumentException("Token limit must be nonnegative");
+    if(maxArgumentCorrections<0)throw new IllegalArgumentException("Argument correction limit must be nonnegative");
+    this.maxArgumentCorrections=maxArgumentCorrections;
     this.maxTotalTokens=maxTotalTokens;
     this.maxReplans = Math.max(0, maxReplans);
     this.maxLlmCalls = Math.max(0, maxLlmCalls);

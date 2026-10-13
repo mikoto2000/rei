@@ -23,6 +23,16 @@ public final class PlanClient implements PlanInference {
     @Override public String toString(){return "Input["+role+", protected text]";}
   }
 
+  private static byte[] encodeRequest(String model,String instructions,List<Input> input) {
+    try {
+      return new ObjectMapper().writeValueAsBytes(Map.of("model",model,"instructions",instructions,
+          "input",input,"store",false,"stream",true));
+    } catch(com.fasterxml.jackson.core.JsonProcessingException invalid){throw ChatGptException.of(PROTOCOL);}
+  }
+  public static int encodedRequestBytes(String model,String instructions,List<Input> input) {
+    return encodeRequest(model,instructions,input).length;
+  }
+
   private record Catalog(String clientId, String subject, Instant expires, List<Model> models) {}
 
   private final PlanOAuth oauth;
@@ -168,24 +178,7 @@ public final class PlanClient implements PlanInference {
     if (stop.getAsBoolean()) throw ChatGptException.of(CANCELLED);
     if (models(account, false).stream().noneMatch(m -> m.id().equals(model)))
       throw ChatGptException.of(MODEL_UNAVAILABLE);
-    byte[] body;
-    try {
-      body =
-          json.writeValueAsBytes(
-              Map.of(
-                  "model",
-                  model,
-                  "instructions",
-                  instructions,
-                  "input",
-                  input,
-                  "store",
-                  false,
-                  "stream",
-                  true));
-    } catch (Exception e) {
-      throw ChatGptException.of(PROTOCOL);
-    }
+    byte[] body=encodeRequest(model,instructions,input);
     if (body.length > sendLimit) throw ChatGptException.of(SEND_LIMIT);
     var token = oauth.access(account);
     if (stop.getAsBoolean()) throw ChatGptException.of(CANCELLED);

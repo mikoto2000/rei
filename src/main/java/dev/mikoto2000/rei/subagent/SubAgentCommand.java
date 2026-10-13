@@ -72,7 +72,7 @@ public class SubAgentCommand implements Callable<Integer> {
       var request=new ChatGptSubAgentBackend.Request(role,backend,model,account,task,sources,expected);
       var receipt=parent.runner.runManualBackend(request,owner,true,null);
       parent.out("ChatGPT plan usage | "+receipt.backendId()+" | "+receipt.requestId()+" | "+receipt.state()+" | tokens="+receipt.totalTokens()+" | error="+receipt.error());
-      if(receipt.result().structuredOutput()!=null)parent.out(dev.mikoto2000.rei.event.CredentialRedactor.redact(receipt.result().output()));
+      if(!receipt.result().output().isBlank())parent.out(dev.mikoto2000.rei.event.CredentialRedactor.redact(receipt.result().output()));
       if(receipt.state()!=ChatGptSubAgentBackend.State.COMPLETED)throw new IllegalArgumentException("SubAgent did not complete; inspect Run status before retrying");
     });}
   }

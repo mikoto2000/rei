@@ -53,10 +53,10 @@ class DelegationArgumentRepairTest {
     verify(approvals).request("delegateTask",valid,owner);
   }
   @Test void correctionLimitSurvivesSnapshotRestoreAndNeverExecutesInvalidCalls() {
-    var budget=new OutputLimitRunBudget(2,20);var ctx=context(budget);var loop=new ToolLoopSupport();
+    var budget=new OutputLimitRunBudget(2,20,null,0,2);var ctx=context(budget);var loop=new ToolLoopSupport();
     for(int i=0;i<2;i++)loop.executeResumable(prompt(ctx),call("bad"+i,"{}"),ctx);
     assertEquals(0,invoked.get());verifyNoInteractions(approvals);
-    var restored=new OutputLimitRunBudget(2,20);restored.restore(budget.snapshot());var next=context(restored);
+    var restored=new OutputLimitRunBudget(2,20,null,0,2);restored.restore(budget.snapshot());var next=context(restored);
     var stopped=assertThrows(ExecutionStoppedException.class,()->loop.executeResumable(prompt(next),call("third","{}"),next));
     assertEquals(ExecutionStoppedException.Reason.TOOL_ARGUMENT_REPAIR_EXHAUSTED,stopped.reason());
   }

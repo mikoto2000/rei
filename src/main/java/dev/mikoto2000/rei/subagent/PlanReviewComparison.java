@@ -13,7 +13,22 @@ public final class PlanReviewComparison {
     for(var item:items) {
       var values=new LinkedHashSet<String>();var references=new ArrayList<String>();
       if(item.status()!=ParallelSubAgentDelegator.Status.COMPLETED)unresolved.add(item.id()+": "+(item.receipt()==null?item.status():item.receipt().state()));
-      if(item.result()!=null && item.result().structuredOutput()!=null) {
+      if(item.receipt()!=null&&!item.receipt().groups().isEmpty()) {
+        unresolved.add(item.id()+": groups reviewed separately; cross-group relationships require parent verification");
+        for(var group:item.receipt().groups()) {
+          var answer=group.result();
+          if(answer.structuredOutput()==null){unresolved.add(item.id()+" group "+group.number()+": "+group.state());continue;}
+          conclusions.add(answer.structuredOutput().summary());
+          for(var finding:answer.structuredOutput().result().path("findings"))values.add(finding.toString());
+          for(var value:answer.structuredOutput().result().path("unverified"))unresolved.add(item.id()+" group "+group.number()+": "+value.asString());
+          if(group.state()==ChatGptSubAgentBackend.State.COMPLETED) {
+            var wrapper=new SubAgentResultParser().parse(answer.output());
+            for(var reference:wrapper.path("references"))references.add(reference.toString());
+          } else unresolved.add(item.id()+" group "+group.number()+": "+group.state());
+          if(group.semantic()!=null&&group.semantic().support()!=PlanReviewSemanticValidator.Support.SUPPORTED)
+            unresolved.add(item.id()+" group "+group.number()+": semantic support "+group.semantic().support());
+        }
+      } else if(item.result()!=null && item.result().structuredOutput()!=null) {
         conclusions.add(item.result().structuredOutput().summary());
         var result=item.result().structuredOutput().result();
         for(var finding:result.path("findings"))values.add(finding.toString());

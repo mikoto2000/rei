@@ -47,7 +47,7 @@ public class RunExecutionContext {
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
   public void setToolPermissionGuard(dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {this.permissions=permissions;}
   public void validateToolArguments(String name,String input) {
-    if(permissions!=null)permissions.validateArguments(name,input);
+    if(permissions!=null)permissions.validateArguments(name,input,runContext);
     else dev.mikoto2000.rei.core.taskstate.TaskStateArguments.validate(name,input);
   }
   public void reportToolPermissionFailure(String callId,String name,dev.mikoto2000.rei.chatgpt.ChatGptException error) {
@@ -59,7 +59,7 @@ public class RunExecutionContext {
     publisher.publish(factory.toolFailed(callId,name,new ErrorInformation("InvalidToolArguments",guidance,"invalid_tool_arguments")).withOwnership(runContext));
     return tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(java.util.Map.of("error","INVALID_TOOL_ARGUMENTS","executed",false,
         "guidance",guidance,"instruction","Correct only the invalid call arguments and issue a new tool call. Do not repeat successful sibling calls. This is not permission; normal authorization and approval still apply.",
-        "correctionsRemaining",2-budget.snapshot().argumentCorrections()));
+        "correctionsRemaining",budget.remainingArgumentCorrections(),"maxCorrections",budget.maxArgumentCorrections()));
   }
   public void checkToolPermission(String name,String input) {
     if(permissions!=null){permissions.check(name,input,runContext);return;}

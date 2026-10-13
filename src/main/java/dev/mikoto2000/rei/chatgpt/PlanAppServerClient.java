@@ -30,6 +30,14 @@ public final class PlanAppServerClient implements PlanInference {
   public PlanAppServerClient(PlanClient accounts,Launcher launcher,ToolPermissionGuard permissions){this.accounts=accounts;this.launcher=launcher;this.permissions=permissions;}
   public PlanAppServerRpc.Trace takeTrace(){var trace=traces.get();traces.remove();return trace;}
   public String authority(){return launcher.authority();}
+  private static String snapshotInstructions(String instructions) {
+    return instructions.replace("The external backend has zero tools.","The external backend permits only rei_read_source for the exact approved snapshots. Initial sources contain metadata; fetch their content with that tool. All native tools are disabled.")
+        .replace("Never invoke tools, change files or delegate.","Only rei_read_source may read each supplied snapshot once. Never execute commands, change files, use network tools or delegate.");
+  }
+  public static int encodedSnapshotBytes(String instructions,List<PlanClient.Input> input) {
+    try {return new ObjectMapper().writeValueAsBytes(Map.of("instructions",snapshotInstructions(instructions),"input",input)).length;}
+    catch(com.fasterxml.jackson.core.JsonProcessingException invalid){throw ChatGptException.of(PROTOCOL);}
+  }
   public PlanSseAssembler.Result inferHistory(String account,String model,String instructions,List<PlanClient.Input> input,
       Duration timeout,int sendLimit,int receiveLimit,BooleanSupplier cancelled,Runnable onDispatch) {
     traces.remove();nativeTokens.set(0);var budget=nativeBudget.get();nativeBudget.remove();
@@ -38,10 +46,9 @@ public final class PlanAppServerClient implements PlanInference {
     long deadline=System.nanoTime()+timeout.toNanos();
     Map<String,String> snapshots=new LinkedHashMap<>();Set<String> served=new HashSet<>();
     List<PlanClient.Input> nativeInput;
-    String adjusted=instructions.replace("The external backend has zero tools.","The external backend permits only rei_read_source for the exact approved snapshots. Initial sources contain metadata; fetch their content with that tool. All native tools are disabled.")
-        .replace("Never invoke tools, change files or delegate.","Only rei_read_source may read each supplied snapshot once. Never execute commands, change files, use network tools or delegate.");
+    String adjusted=snapshotInstructions(instructions);
     try {
-      if(json.writeValueAsBytes(Map.of("instructions",adjusted,"input",input)).length>sendLimit)throw ChatGptException.of(SEND_LIMIT);
+      if(encodedSnapshotBytes(instructions,input)>sendLimit)throw ChatGptException.of(SEND_LIMIT);
       var task=json.readTree(input.getFirst().content());
       if(!task.path("sources").isArray())throw ChatGptException.of(PERMISSION_DENIED);
       for(var source:task.path("sources")) {
@@ -72,7 +79,8 @@ public final class PlanAppServerClient implements PlanInference {
     for(String value:List.of(Objects.toString(trace.threadId(),""),Objects.toString(trace.turnId(),"")))
       if(value.contains(lease.tokens().accessToken())||!CredentialRedactor.redact(value).equals(value))throw ChatGptException.of(PROTOCOL);
     traces.set(trace);
-    if(result.result().text().contains(lease.tokens().accessToken())||!CredentialRedactor.redact(result.result().text()).equals(result.result().text()))
+    if(result.result().text().contains(lease.tokens().accessToken())
+        ||dev.mikoto2000.rei.subagent.ExternalDelegationContentGuard.hasUnmaskedCredentials(result.result().text()))
       return new PlanSseAssembler.Result(PlanSseAssembler.State.FAILED,"",result.result().totalTokens(),result.result().responseId(),PERMISSION_DENIED);
     return result.result();
   }

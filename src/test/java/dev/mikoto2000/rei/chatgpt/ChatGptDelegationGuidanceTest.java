@@ -26,6 +26,10 @@ class ChatGptDelegationGuidanceTest {
     String prompt=guidance(true).prompt();
     assertTrue(prompt.contains("does not require durable SubAgents"));
     assertTrue(prompt.contains("Do not call listDurableSubAgents/getDurableSubAgent to discover ChatGPT configuration"));
+    for(String masking:List.of("original Project-relative sourceRefs", "in-memory source snapshots",
+        "does not change the original files", "redacted=true", "unverified", "never guess",
+        "references.sha256 and quote", "262144", "recursively bisects", "whole plan once",
+        "Receipt.groups", "remainingScopes", "limits never reset"))assertTrue(prompt.contains(masking),masking);
     assertTrue(prompt.contains("Copy accountRef and modelId exactly from these lists"));
     assertTrue(prompt.contains("A model appearing in /chatgpt models is not automatically allowed for delegation"));
     for(String required:List.of("delegateTask", "delegateTasks", "backendId=chatgpt-plan", "reviewer", "accountRef", "default", "modelId", "gpt-6.1-sol", "sourceRefs", "expectedOutput", "approval still apply", "not a live catalog check"))assertTrue(prompt.contains(required),required);

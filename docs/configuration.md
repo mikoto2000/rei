@@ -58,6 +58,7 @@ rei:
       max-replans-per-goal: 2
       max-subgoals-per-replan: 8
       max-llm-calls-per-run: 120
+      max-tool-argument-corrections-per-run: 5
   image:
     output-directory: ${rei.data-dir}/images
     size: 1024x1024
@@ -189,6 +190,7 @@ rei:
       max-replans-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL:2}
       max-subgoals-per-replan: ${REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN:8}
       max-llm-calls-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN:120}
+      max-tool-argument-corrections-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_TOOL_ARGUMENT_CORRECTIONS_PER_RUN:5}
     features:
       chat:
         base-url: ${REI_LLM_CHAT_BASE_URL:}
@@ -219,6 +221,10 @@ rei:
 `max-output-tokens` は 1 回の LLM 呼び出しで生成させる最大トークン数です。
 チャットモデルを使う機能では `rei.llm.features.<機能キー>.max-output-tokens` で共通値を上書きできます。ShowUI の位置特定は128トークン固定です。
 出力上限に達した要求は、処理を分割して継続します。`output-limit` で再計画回数・分割数・呼び出し回数の上限を調整できます。
+
+`rei.llm.output-limit.max-tool-argument-corrections-per-run` は、実行前に検出した不正なツール引数を LLM に返して修正させる回数です。既定は Run 全体で5回、`0` は自動修正を無効にします。環境変数は `REI_LLM_OUTPUT_LIMIT_MAX_TOOL_ARGUMENT_CORRECTIONS_PER_RUN` です。不正なツール呼び出し1件につき1回を消費し、1呼び出し内の複数の不備はまとめて1回です。別のツールや同時に出された別の呼び出しも同じ Run の予算を使います。LLM 呼び出し数・トークン上限も引き続き適用します。権限拒否や実行を始めた後の例外は修正対象になりません。
+
+承認からの続行・`/resume` では消費回数を引き継ぎ、現在の設定上限から残りを計算します。既に2回消費したタスクで上限を5回に増やすと、残りは3回です。上限を消費済み回数以下へ下げても回数は戻らず、追加の修正はできません。上限到達のエラーには設定名と対処を表示します。変更が必要な場合は外部の `application.yaml` を更新して Rei を再起動し、対象プロジェクトを選択して `/resume <taskId>` で再開してください。
 
 対応している機能キー:
 

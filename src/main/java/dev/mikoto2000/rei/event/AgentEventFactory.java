@@ -81,9 +81,12 @@ public class AgentEventFactory {
     var base=subAgentLifecycle(type,parentRunId,subAgentRunId,agentId,task,status,duration,failureReason);
     var original=(SubAgentLifecyclePayload)base.payload();
     var payload=new SubAgentLifecyclePayload(original.parentRunId(),original.subAgentRunId(),original.agentId(),
-        original.taskSummary(),original.status(),original.duration(),original.failureReason(),backendId,modelId,totalTokens);
+        original.taskSummary(),original.status(),original.duration(),subAgentFailureReason(failureReason),backendId,modelId,totalTokens);
     return new AgentEvent(base.id(),base.sequence(),base.timestamp(),base.type(),base.version(),base.sessionId(),base.turnId(),base.runId(),base.correlationId(),base.parentEventId(),payload,base.projectId());
   }
+
+  /** Keep a bounded, redacted diagnostic identical in external child receipts and notifications. */
+  public String subAgentFailureReason(String reason) {return bounded(reason,1000);}
 
   public AgentEvent historySearchCompleted(HistorySearchCompletedPayload payload) {
     var event = newEvent(AgentEventType.HISTORY_SEARCH_COMPLETED, null, null, payload);

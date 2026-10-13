@@ -62,4 +62,22 @@ class PlanAppServerClientTest {
     int interruptIndex=-1,replyIndex=-1;for(int i=0;i<s.sent.size();i++){if(s.sent.get(i).path("method").asText().equals("turn/interrupt"))interruptIndex=i;if(s.sent.get(i).path("id").asInt()==91)replyIndex=i;}
     assertTrue(interruptIndex>=0&&replyIndex>interruptIndex);assertTrue(s.closed);verify(budget).recordTotalTokens(17);assertEquals(17,client.takeNativeTokens());
   }
+
+  @Test void maskedQuotedReferencesCanReturnThroughTheNativeAdapterWhileUnmaskedRepliesStayRestricted() throws Exception {
+    for(boolean masked:List.of(true,false)) {
+      var accounts=mock(PlanClient.class);when(accounts.lease(anyString(),anyString())).thenReturn(new PlanClient.Lease(tokens(),()->true));
+      String reply=PlanAppServerRpcTest.JSON.writeValueAsString(Map.of("references",List.of(Map.of("quote",
+          "spring.datasource.password=\""+(masked?"[REDACTED]":"unmasked-reply-value")+"\""))));
+      var terminal=PlanAppServerRpcTest.JSON.readTree(PlanAppServerRpcTest.done("completed"));
+      ((com.fasterxml.jackson.databind.node.ObjectNode)terminal.path("params").path("turn").path("items").get(0)).put("text",reply);
+      var session=new PlanAppServerRpcTest.Fake(PlanAppServerRpcTest.USAGE,terminal.toString());
+      var client=new PlanAppServerClient(accounts,(own,t,c)->new PlanAppServerClient.Started(session,"/isolated/workspace"),mock(ToolPermissionGuard.class));
+      try(var scope=AgentRunScope.open(new AgentRunContext("run","session",root,"project"))) {
+        var result=client.inferHistory("account","model","instructions",input,Duration.ofSeconds(1),4096,4096,()->false,()->{});
+        assertEquals(masked?PlanSseAssembler.State.COMPLETED:PlanSseAssembler.State.FAILED,result.state());
+        assertEquals(masked?reply:"",result.text());
+        if(!masked)assertEquals(ChatGptException.Code.PERMISSION_DENIED,result.error());
+      }
+    }
+  }
 }
