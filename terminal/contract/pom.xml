@@ -5,6 +5,7 @@
     <include>dev/mikoto2000/rei/launcher/BackendEndpoint.java</include><include>dev/mikoto2000/rei/launcher/BackendEndpointStore.java</include><include>dev/mikoto2000/rei/launcher/BackendConnectionProbe.java</include><include>dev/mikoto2000/rei/launcher/BackendOwnership.java</include><include>dev/mikoto2000/rei/core/datasource/ReiDataDirectory.java</include>
     <include>dev/mikoto2000/rei/core/command/UserInputParser.java</include>
     <include>dev/mikoto2000/rei/dot/DotCommandRequest.java</include>
+    <include>dev/mikoto2000/rei/checkpoint/ResumeOverview.java</include>
     <include>dev/mikoto2000/rei/application/cli/CliCatalog.java</include>
     <include>dev/mikoto2000/rei/application/cli/CliGrammar.java</include>
     <include>dev/mikoto2000/rei/application/cli/ActivityRequest.java</include>
