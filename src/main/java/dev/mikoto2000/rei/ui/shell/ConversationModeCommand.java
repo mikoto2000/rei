@@ -34,7 +34,7 @@ public final class ConversationModeCommand implements java.util.concurrent.Calla
  }
  private int display(Runnable action) {
   try{action.run();return 0;}
-  catch(RuntimeException failed){spec.commandLine().getErr().println("Cannot update or read response mode.");return 1;}
+  catch(RuntimeException failed){spec.commandLine().getErr().println("Cannot update or read response mode." + " 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(failed));return 1;}
   finally{spec.commandLine().getOut().flush();spec.commandLine().getErr().flush();}
  }
 }

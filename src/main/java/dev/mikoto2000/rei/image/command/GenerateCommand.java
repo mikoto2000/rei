@@ -60,7 +60,7 @@ public class GenerateCommand implements Callable<Integer> {
         return 0;
       } catch(RuntimeException error) {
         var out=spec.commandLine().getErr();
-        out.println("画像生成を開始できません: "+new dev.mikoto2000.rei.conversation.HistoryFormatter().label(error.getMessage()));
+        out.println("画像生成を開始できません: "+new dev.mikoto2000.rei.conversation.HistoryFormatter().label(dev.mikoto2000.rei.event.FailureMessages.describe(error)));
         out.flush(); return 1;
       }
     }
@@ -88,7 +88,7 @@ public class GenerateCommand implements Callable<Integer> {
       System.out.println("[error] 画像生成に失敗しました: " + result.message());
       return 1;
     } catch (IllegalArgumentException e) {
-      System.out.println("[error] 画像生成に失敗しました: " + e.getMessage());
+      System.out.println("[error] 画像生成に失敗しました: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));
       return 1;
     } finally {
       cancellationService.clear();
@@ -101,7 +101,7 @@ public class GenerateCommand implements Callable<Integer> {
 
   private int cancelled() {
     System.out.println();
-    System.out.println("[cancelled]");
+    System.out.println("[cancelled] 停止要求または実行の中断により画像生成を中止しました。");
     return 130;
   }
 }

@@ -34,7 +34,7 @@ public class DoctorCommand implements java.util.concurrent.Callable<Integer> {
       return 0;
     }catch(RuntimeException failure) {
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(failure);
-      spec.commandLine().getErr().println("Doctor diagnosis unavailable or invalid arguments. Use /doctor [--details] [--check connectivity|inference|codex|claude|microphone]. Details omitted.");
+      spec.commandLine().getErr().println("Doctor diagnosis unavailable or invalid arguments. Use /doctor [--details] [--check connectivity|inference|codex|claude|microphone]. " + "原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(failure));
       return 2;
     }
   }

@@ -68,7 +68,7 @@ public final class SessionCommand implements java.util.concurrent.Callable<Integ
   private int display(Runnable action) {
     try { action.run(); return 0; }
     catch (ResourceNotFoundException error) { spec.commandLine().getErr().println("Session not found."); return 2; }
-    catch (RuntimeException error) { spec.commandLine().getErr().println("Cannot read sessions."); return 1; }
+    catch (RuntimeException error) { spec.commandLine().getErr().println("Cannot read sessions." + " 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(error)); return 1; }
     finally { spec.commandLine().getOut().flush(); }
   }
 }

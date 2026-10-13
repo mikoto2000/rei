@@ -132,7 +132,7 @@ public final class DotCommand implements java.util.concurrent.Callable<Integer> 
       out.println(dev.mikoto2000.rei.storage.StorageDatabase.JSON.writeValueAsString(result));
       return 0;
     } catch (Exception e) {
-      out.println("[error] " + (e instanceof DotException dot ? dot.code : "INVALID_ARGUMENT"));
+      out.println("[error] " + (e instanceof DotException dot ? dot.code : "INVALID_ARGUMENT") + ": " + dev.mikoto2000.rei.event.FailureMessages.describe(e));
       return 2;
     } finally {
       out.flush();

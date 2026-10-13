@@ -28,10 +28,18 @@ public final class ShellProjectCommands {
     });
   }
   public static void installBusyHandler(CommandLine command) {
-    var previous=command.getExecutionExceptionHandler();
     command.setExecutionExceptionHandler((error,line,parsed)->{
-      if(!(error instanceof dev.mikoto2000.rei.application.run.SessionBusyException busy))
-        return previous.handleExecutionException(error,line,parsed);
+      if(!(error instanceof dev.mikoto2000.rei.application.run.SessionBusyException busy)) {
+        boolean cancelled = dev.mikoto2000.rei.core.chat.RunCancellation.isCancellation(error)
+            || Thread.currentThread().isInterrupted();
+        line.getErr().println((cancelled ? "[cancelled] " : "[error] ")
+            + line.getCommandSpec().qualifiedName() + ": "
+            + dev.mikoto2000.rei.event.FailureMessages.describe(error));
+        line.getErr().flush();
+        return cancelled ? 130 : line.getExitCodeExceptionMapper() == null
+            ? line.getCommandSpec().exitCodeOnExecutionException()
+            : line.getExitCodeExceptionMapper().getExitCode(error);
+      }
       var out=line.getErr();
       out.println("新しい依頼は受け付けていません。同じ Session に既存の Run が残っています。");
       out.println("Run ID: "+busy.runId()+" / 状態: "+(busy.status()==null?"不明":busy.status()));

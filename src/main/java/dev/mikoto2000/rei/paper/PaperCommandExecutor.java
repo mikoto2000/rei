@@ -101,10 +101,10 @@ public class PaperCommandExecutor {
           };
       return PaperJson.MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(result);
     } catch (PaperException e) {
-      return e.code() + ": " + e.getMessage();
+      return e.code() + ": " + dev.mikoto2000.rei.event.FailureMessages.describe(e);
     } catch (RuntimeException e) {
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(e);
-      return PaperException.Code.LIBRARY_READ_FAILED + ": 論文処理に失敗しました";
+      return PaperException.Code.LIBRARY_READ_FAILED + ": 論文処理に失敗しました 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(e);
     }
   }
 

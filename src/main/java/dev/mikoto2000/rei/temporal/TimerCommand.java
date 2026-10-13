@@ -38,7 +38,7 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
         default -> throw new IllegalArgumentException("Use /timer list|show|activate|cancel|history|reconcile [timerId]");
       };
       writer.println(dev.mikoto2000.rei.event.CredentialRedactor.redact(String.valueOf(result)));return 0;
-    } catch(RuntimeException error){writer.println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));return 2;}
+    } catch(RuntimeException error){writer.println("[error] "+dev.mikoto2000.rei.event.FailureMessages.describe(error));return 2;}
     finally {writer.flush();}
   }
   private String requiredId(){if(id==null||id.isBlank())throw new IllegalArgumentException("timerId is required");return id;}

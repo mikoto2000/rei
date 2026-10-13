@@ -76,7 +76,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
         default -> throw new IllegalArgumentException("Use /goal list|create|show|progress|run|verify|cancel|history|reconcile|completion|wait|wait-activate|wait-resume|wait-cancel");
       };
       writer.println(dev.mikoto2000.rei.event.CredentialRedactor.redact(String.valueOf(result)));return 0;
-    } catch(RuntimeException error){writer.println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));return 2;}
+    } catch(RuntimeException error){writer.println("[error] "+dev.mikoto2000.rei.event.FailureMessages.describe(error));return 2;}
     finally {writer.flush();}
   }
   private java.util.List<GoalRepository.FileCriterion> parseCriteria() {

@@ -38,7 +38,7 @@ public class PaperCommand implements java.util.concurrent.Callable<Integer> {
                   .collect(java.util.stream.Collectors.joining(" ")));
       return 0;
     } catch (PaperException e) {
-      spec.commandLine().getErr().println(e.getMessage());
+      spec.commandLine().getErr().println(dev.mikoto2000.rei.event.FailureMessages.describe(e));
       return 2;
     }
   }

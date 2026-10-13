@@ -432,7 +432,12 @@ public class ReiApplication {
       try {
         boolean consoleExit=environment!=null&&environment.getProperty(ForegroundConsole.PROPERTY,Boolean.class,false);
         escCancellationMonitor.await(future, timeoutMillis -> consoleExit
-            ?ForegroundConsole.readCommandInput(terminal.reader(),timeoutMillis):terminal.reader().read(timeoutMillis), commandCancellationService::cancel);
+            ?ForegroundConsole.readCommandInput(terminal.reader(),timeoutMillis):terminal.reader().read(timeoutMillis), () -> {
+          boolean accepted = commandCancellationService.cancel();
+          cmd.getErr().println(accepted ? "[cancel] Esc により停止を要求しました。"
+              : "[cancel] 停止対象の実行がないか、既に停止を要求済みです。");
+          cmd.getErr().flush();
+        });
       }catch(UserInterruptException|EndOfFileException exit) {
         commandCancellationService.cancel();future.cancel(true);throw exit;
       }

@@ -180,11 +180,34 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         closeAssistantLine();closeThinkingLine();
         output.println(((dev.mikoto2000.rei.event.MemoryLifecyclePayload)event.payload()).status());
       }
+      case DEPENDENCY_FAILED, DEPENDENCY_CANCELLED -> {
+        closeAssistantLine(); closeThinkingLine();
+        var payload = (dev.mikoto2000.rei.event.DependencyStatusPayload) event.payload();
+        output.println("[dependency] " + payload.dependencyId() + " " + payload.state()
+            + " 理由: " + dev.mikoto2000.rei.event.FailureMessages.text(payload.reason()));
+      }
+      case MEMORY_SLEEP_FAILED -> {
+        closeAssistantLine(); closeThinkingLine();
+        var payload = (dev.mikoto2000.rei.event.MemoryLifecyclePayload) event.payload();
+        output.println("[memory.sleep] " + payload.status() + " (" + payload.sleepRunId() + ")");
+      }
+      case CONTEXT_COMPRESSION_FAILED -> {
+        closeAssistantLine(); closeThinkingLine();
+        var payload = (dev.mikoto2000.rei.event.ContextCompressionPayload) event.payload();
+        output.println("[context.compression] failed: " + dev.mikoto2000.rei.event.FailureMessages.text(payload.reason()));
+      }
+      case TASK_FAILED -> {
+        closeAssistantLine(); closeThinkingLine();
+        var payload = (dev.mikoto2000.rei.event.TaskFailedPayload) event.payload();
+        output.println("[task] failed " + payload.taskId() + ": " + errorMessage(payload.error()));
+      }
       case GOAL_UPDATED -> {
         closeAssistantLine();closeThinkingLine();
         var payload=(dev.mikoto2000.rei.event.GoalLifecyclePayload)event.payload();
         output.println("[goal] "+payload.goalId()+" "+payload.status()+" runs="+payload.attempts()+"/"+payload.maxRuns()
             +" llm="+payload.llmCallsUsed()+"/"+payload.maxLlmCalls());
+        if (payload.reason() != null && !payload.reason().isBlank())
+          output.println("[goal] 理由: " + dev.mikoto2000.rei.event.FailureMessages.text(payload.reason()));
       }
       case ATTENTION_REQUIRED -> {
         closeAssistantLine();closeThinkingLine();
@@ -292,7 +315,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         llmRequestFeatures.keySet().removeIf(key -> java.util.Objects.equals(key.runId(), event.runId()));
         output.println(event.type() == dev.mikoto2000.rei.event.AgentEventType.AGENT_RUN_CANCELLED
             || payload.error() != null && "cancelled".equals(payload.error().code())
-            ? "[agent] cancelled" : "[agent] failed: " + errorMessage(payload.error()));
+            ? "[agent] cancelled: " + errorMessage(payload.error()) : "[agent] failed: " + errorMessage(payload.error()));
       }
       case LLM_REQUEST_STARTED -> {
         closeAssistantLine();
@@ -821,8 +844,11 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   }
 
   private String errorMessage(dev.mikoto2000.rei.event.ErrorInformation error) {
-    if (error == null || error.message() == null || error.message().isBlank()) return "unknown error";
-    return error.message();
+    if (error == null) return dev.mikoto2000.rei.event.FailureMessages.text(null);
+    String reason = error.message();
+    if (reason == null || reason.isBlank()) reason = error.errorType();
+    if (error.code() != null && !error.code().isBlank()) reason = "[" + error.code() + "] " + reason;
+    return dev.mikoto2000.rei.event.FailureMessages.text(reason);
   }
 
   private String formatSeconds(long durationMillis) {

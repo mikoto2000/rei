@@ -58,18 +58,18 @@ public final class LlmCaptureCommand implements Runnable {
         case "list" -> {if(args.length==1)store.sessions().forEach(s->out.println(s));else{arity(args,2);store.attempts(args[1]).forEach(a->out.println(a));}}
         case "show" -> {arity(args,2);var a=store.attempt(args[1]);out.println(a);out.println("マスキングは完全性を保証しません。");
           if(a.captureState().equals("COMPLETE"))out.println(CaptureDisplay.masked(store.body(a.attemptId())));else out.println("完全な原本はありません: "+a.reason());}
-        case "raw" -> {arity(args,2);var a=store.attempt(args[1]);requireComplete(a);if(!confirm())return 2;
+        case "raw" -> {arity(args,2);var a=store.attempt(args[1]);requireComplete(a);if(!confirm()){out.println("確認が得られなかったため、原本の表示・保存を中止しました。");return 2;}
           out.println("UTF-8復号・制御文字エスケープ済み表示です。完全なバイト表現ではありません。");out.println(CaptureDisplay.escape(new String(store.body(a.attemptId()),StandardCharsets.UTF_8)));}
-        case "export" -> {arity(args,3);var a=store.attempt(args[1]);requireComplete(a);if(!confirm())return 2;
+        case "export" -> {arity(args,3);var a=store.attempt(args[1]);requireComplete(a);if(!confirm()){out.println("確認が得られなかったため、原本の表示・保存を中止しました。");return 2;}
           export(store.body(a.attemptId()),Path.of(args[2]));out.println("原本バイト列を保存しました。出力ファイルはcaptureの削除対象外です。");}
         case "delete" -> {arity(args,2);if(!store.delete(args[1]))throw new IllegalArgumentException("Unknown or ambiguous Run ID");out.println("Run記録を削除しました。");}
         case "clear" -> {arity(args,1);store.clear();out.println("予約と全記録を削除しました。");}
         default -> throw new IllegalArgumentException("Unknown capture action");
       }
       return 0;
-    }catch(IllegalArgumentException|IllegalStateException error){out.println(CaptureDisplay.escape(error.getMessage()));return 2;}
-    catch(IOException error){out.println("原本の表示・保存に失敗しました。ファイルは上書きしません。");return 2;}
-    catch(RuntimeException error){out.println("Capture操作に失敗しました。");return 2;}
+    }catch(IllegalArgumentException|IllegalStateException error){out.println(CaptureDisplay.escape(dev.mikoto2000.rei.event.FailureMessages.describe(error)));return 2;}
+    catch(IOException error){out.println("原本の表示・保存に失敗しました。ファイルは上書きしません。 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(error));return 2;}
+    catch(RuntimeException error){out.println("Capture操作に失敗しました。 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(error));return 2;}
     finally{out.flush();}
   }
   private boolean confirm(){return confirmation.test("秘密情報を含む未加工本文を表示・保存します。端末履歴・保存後のコピーは削除対象外です。続行しますか? [y/N] ");}

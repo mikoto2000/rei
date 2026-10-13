@@ -47,7 +47,7 @@ public class SubAgentCommand implements Callable<Integer> {
       if (registry == null) throw new IllegalArgumentException("SubAgent runtime unavailable");
       action.run(); return 0;
     } catch (Exception e) {
-      out("[error] " + dev.mikoto2000.rei.event.CredentialRedactor.redact(e.getMessage())); return 2;
+      out("[error] " + dev.mikoto2000.rei.event.FailureMessages.describe(e)); return 2;
     } finally { output().flush(); }
   }
   @FunctionalInterface private interface Action { void run() throws Exception; }

@@ -47,9 +47,9 @@ public class HistoryCommand implements Callable<Integer> {
     } catch(ResourceNotFoundException error) {
       out.println("Session not found."); return 2;
     } catch(IllegalArgumentException error) {
-      out.println(new HistoryFormatter().label(error.getMessage())); return 2;
+      out.println(new HistoryFormatter().label(dev.mikoto2000.rei.event.FailureMessages.describe(error))); return 2;
     } catch(RuntimeException error) {
-      out.println("Cannot read conversation history."); return 1;
+      out.println("Cannot read conversation history." + " 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(error)); return 1;
     } finally { out.flush(); }
   }
   private int show(String project,String conversation,int last,boolean all) {

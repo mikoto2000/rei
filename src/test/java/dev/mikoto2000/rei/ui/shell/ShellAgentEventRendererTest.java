@@ -19,6 +19,21 @@ import dev.mikoto2000.rei.topic.TopicScoreBreakdown;
 import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
 
 class ShellAgentEventRendererTest {
+  @Test void cancellationShowsCodeAndSpecificRedactedReason() {
+    var output = new RecordingOutput();
+    new ShellAgentEventRenderer(output).onEvent(events.runCancelled("run", new ErrorInformation("CancellationException", "approval denied token=hidden", "approval_denied")));
+    assertEquals("[agent] cancelled: [approval_denied] approval denied token=[REDACTED]\n", output.text());
+  }
+  @Test void compressionFailureIsVisibleAtStreamBoundary() {
+    var output = new RecordingOutput(); var renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.messageStarted("m", "assistant")); renderer.onEvent(events.messageDelta("m", "answer"));
+    renderer.onEvent(events.contextCompression(dev.mikoto2000.rei.event.AgentEventType.CONTEXT_COMPRESSION_FAILED,
+        new dev.mikoto2000.rei.event.ContextCompressionPayload(100,100,2,1,"compression_unavailable")));
+    assertTrue(!output.text().contains("compression_unavailable"));
+    renderer.onEvent(events.messageCompleted("m", "assistant", "answer"));
+    assertTrue(output.text().contains("answer\n[context.compression] failed: compression_unavailable\n"));
+  }
+
   @Test void subAgentFailureDisplaysTheSpecificFailureReason() {
     var output=new RecordingOutput();
     new ShellAgentEventRenderer(output).onEvent(new dev.mikoto2000.rei.event.AgentEvent("event",0,Instant.EPOCH,
@@ -64,7 +79,7 @@ class ShellAgentEventRendererTest {
         "run-1", new dev.mikoto2000.rei.event.ExecutionProgressPayload(null, 1, 4, 0, 2, null)));
     assertEquals(beforeNotification, output.text());
     renderer.onEvent(events.runCancelled("run-1", new ErrorInformation("cancelled", "cancelled", null)));
-    assertTrue(output.text().contains("[stagnation] no progress: 1/4\n[agent] cancelled\n"));
+    assertTrue(output.text().contains("[stagnation] no progress: 1/4\n[agent] cancelled: cancelled\n"));
     String cancelled = output.text();
     renderer.onEvent(events.runStarted("run-2", "user", null));
     assertEquals(cancelled + "[agent] running\n", output.text());
@@ -75,7 +90,7 @@ class ShellAgentEventRendererTest {
     new ShellAgentEventRenderer(output).onEvent(new dev.mikoto2000.rei.event.AgentEvent("event",0,Instant.EPOCH,
         dev.mikoto2000.rei.event.AgentEventType.GOAL_UPDATED,1,"session",null,"run",null,null,
         new dev.mikoto2000.rei.event.GoalLifecyclePayload("goal","COMPLETED",2,3,4,20,"file_digest_verified"),"project"));
-    assertEquals("[goal] goal COMPLETED runs=2/3 llm=4/20\n",output.text());
+    assertEquals("[goal] goal COMPLETED runs=2/3 llm=4/20\n[goal] 理由: file_digest_verified\n",output.text());
   }
   @Test void rendersPersistentAttentionWithReviewCommand() {
     var output=new RecordingOutput();
@@ -142,7 +157,7 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.runStarted("run-1", "user", null));
     renderer.onEvent(events.runCompleted("run-1", 1_234, 456L, 123.45d, 78.94d, 65.43d));
     renderer.onEvent(events.runFailed("run-2", new ErrorInformation("IO", "permission denied", "stack")));
-    assertEquals("[agent] running\n[agent] completed (1.2 s, 456 tokens, TTFT 123.5 ms, output 78.9 tok/s, end-to-end 65.4 tok/s)\n[agent] failed: permission denied\n", output.text());
+    assertEquals("[agent] running\n[agent] completed (1.2 s, 456 tokens, TTFT 123.5 ms, output 78.9 tok/s, end-to-end 65.4 tok/s)\n[agent] failed: [stack] permission denied\n", output.text());
   }
 
   @Test
@@ -213,7 +228,7 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.runStarted("run-2", "user", null));
     renderer.onEvent(events.llmResponseCompleted("run-2", "request-2", 30));
     assertEquals("=== answer (" + eventTime + ") ===\n途中\n[llm] response received (request-1, 20 ms)\n"
-        + "[agent] cancelled\n[agent] running\n[llm] response received (request-2, 30 ms)\n", output.text());
+        + "[agent] cancelled: [cancelled] cancelled\n[agent] running\n[llm] response received (request-2, 30 ms)\n", output.text());
   }
 
   @Test

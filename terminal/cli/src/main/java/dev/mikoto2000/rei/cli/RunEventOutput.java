@@ -67,13 +67,27 @@ final class RunEventOutput {
   }
 
   private void renderNotice(String type, JsonNode payload) {
+    if (Set.of("agent.run.failed", "agent.run.cancelled", "llm.request.failed", "skill.selection.failed",
+        "skill.routing.failed", "background_process.failed", "task.failed").contains(type)) {
+      output.accept("[" + type + "] 原因: " + errorReason(payload.path("error")));
+      return;
+    }
+    if ("context.compression.failed".equals(type)) {
+      output.accept("[context.compression] failed: " + dev.mikoto2000.rei.event.FailureMessages.text(payload.path("reason").asText()));
+      return;
+    }
+    if ("goal.updated".equals(type) && payload.hasNonNull("reason")) {
+      output.accept("[goal] " + payload.path("goalId").asText() + " " + payload.path("status").asText()
+          + " 理由: " + dev.mikoto2000.rei.event.FailureMessages.text(payload.path("reason").asText()));
+      return;
+    }
     if("tool.failed".equals(type)) {
-      output.accept("✗ " + payload.path("toolName").asText() + ": " + payload.path("error").path("message").asText("原因の詳細がありません。"));
+      output.accept("✗ " + payload.path("toolName").asText() + ": " + errorReason(payload.path("error")));
       return;
     }
     if("subagent.failed".equals(type)) {
       output.accept("[subagent] " + payload.path("agentId").asText() + " " + payload.path("status").asText()+" ["+payload.path("subAgentRunId").asText()+"]");
-      output.accept("[subagent] 原因: " + payload.path("failureReason").asText("失敗理由がありません。返却結果を確認してください。"));
+      output.accept("[subagent] 原因: " + dev.mikoto2000.rei.event.FailureMessages.text(payload.path("failureReason").asText()));
       return;
     }
     if ("attention.required".equals(type)) {
@@ -85,6 +99,14 @@ final class RunEventOutput {
       return;
     }
     output.accept(type + ": " + payload);
+  }
+
+  private static String errorReason(JsonNode error) {
+    String message = error.path("message").asText();
+    if (message.isBlank()) message = error.path("errorType").asText();
+    String code = error.path("code").asText();
+    if (!code.isBlank()) message = "[" + code + "] " + message;
+    return dev.mikoto2000.rei.event.FailureMessages.text(message);
   }
 
   private void append(String text) {

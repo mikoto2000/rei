@@ -17,7 +17,7 @@ public class CheckpointCommand implements Callable<Integer> {
   private int print(java.util.function.Supplier<String> action){
     var writer=output==null?spec.commandLine().getOut():output;
     try{writer.println(action.get());return 0;}
-    catch(RuntimeException error){writer.println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage()));return 2;}
+    catch(RuntimeException error){writer.println("[error] "+dev.mikoto2000.rei.event.FailureMessages.describe(error));return 2;}
     finally{writer.flush();}
   }
   @Command(name="status",description="全プロジェクトのチェックポイント保存量と上限を表示")
@@ -34,5 +34,5 @@ public class CheckpointCommand implements Callable<Integer> {
   public Integer call(){var writer=output==null?spec.commandLine().getOut():output;try {
     var state=service.saveCurrent(projects.currentContext().id(),projects.currentSessionId());
     writer.println("Checkpoint saved: task="+state.taskId()+" revision="+state.revision());return 0;
-  }catch(RuntimeException e){writer.println("[error] "+dev.mikoto2000.rei.event.CredentialRedactor.redact(e.getMessage()));return 2;}finally{writer.flush();}}
+  }catch(RuntimeException e){writer.println("[error] "+dev.mikoto2000.rei.event.FailureMessages.describe(e));return 2;}finally{writer.flush();}}
 }

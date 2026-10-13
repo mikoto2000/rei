@@ -31,7 +31,7 @@ public class TimingCommand implements java.util.concurrent.Callable<Integer> {
    var run=target.equals("last")?recorder.latest(selectedProject,selectedSession):recorder.snapshot(selectedProject,selectedSession,target);
    if(run.isEmpty()){out.println("計測履歴なし: 未計測・別Session・期限切れ・上限による破棄のいずれかです");return 0;}
    render(out,run.get(),details,recorder.statistics());return 0;
-  }catch(RuntimeException unavailable){spec.commandLine().getErr().println("Usage: /timing [last|RUN_ID] [--details]. 計測照会に失敗しました。詳細は非表示です。");return 2;}
+  }catch(RuntimeException unavailable){spec.commandLine().getErr().println("Usage: /timing [last|RUN_ID] [--details]. 計測照会に失敗しました。" + "原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(unavailable));return 2;}
   finally{out.flush();}
  }
  static Object unknown(Object value){return value==null?"UNKNOWN":value;}

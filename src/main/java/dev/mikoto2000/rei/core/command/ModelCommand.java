@@ -38,6 +38,7 @@ public class ModelCommand implements Runnable {
         modelUnloadService.unload(currentModel);
       } catch (RuntimeException e) {
         log.warn("Failed to unload current model: {}", currentModel, e);
+        IO.println("[warning] 旧モデルの解放に失敗しました。モデル切替は続行します。 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));
       }
     }
 

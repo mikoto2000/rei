@@ -76,7 +76,7 @@ public class VoiceCommand {
       if(voice==null||devices==null||properties==null||shell==null)throw new IllegalStateException("Voice service is unavailable");
       return action.getAsInt();
     }
-    catch (IllegalArgumentException | IllegalStateException e) { spec.commandLine().getErr().println(e.getMessage()); return 2; }
+    catch (IllegalArgumentException | IllegalStateException e) { spec.commandLine().getErr().println(dev.mikoto2000.rei.event.FailureMessages.describe(e)); return 2; }
   }
   private void requireOff() {
     if (voice.state()!=VoiceInputCoordinator.State.OFF && voice.state()!=VoiceInputCoordinator.State.FAILED)
@@ -134,7 +134,7 @@ public class VoiceCommand {
     }
   }
   private static void autoStartFailure(java.util.function.Consumer<String> output, Throwable failure) {
-    output.accept("[voice] 自動開始できませんでした: " + failure.getMessage());
+    output.accept("[voice] 自動開始できませんでした: " + dev.mikoto2000.rei.event.FailureMessages.describe(failure));
     output.accept("[voice] テキスト入力を続行します。設定を確認し、/voice on で再試行してください。");
   }
   private void startInput(long generation, AudioDevice selected, ConversationTarget initialTarget,
@@ -246,7 +246,7 @@ public class VoiceCommand {
     if(models==null)return; // compatibility for metadata-only and legacy injected tests
     if(models.busy())throw new IllegalStateException("モデル取得中です。/voice models status または cancel を使ってください");
     try {models.readyDirectory();}
-    catch(java.io.IOException missing) {if (!automatic) printModels();throw new IllegalStateException("モデル一式が未配置または破損しています。承認後に取得するか、固定一式を手動配置してください");}
+    catch(java.io.IOException missing) {if (!automatic) printModels();throw new IllegalStateException("モデル一式が未配置または破損しています。承認後に取得するか、固定一式を手動配置してください", missing);}
   }
   @Component @Command(name="models",description="固定モデル一式の案内・明示承認付き取得",mixinStandardHelpOptions=true)
   public static class Models implements Runnable {
@@ -258,7 +258,7 @@ public class VoiceCommand {
     int status(){return parent.attempt(()->{
       var manager=parent.modelManager();
       if(!manager.busy())try {parent.spec.commandLine().getOut().println("verified ready: "+manager.readyDirectory());}
-        catch(java.io.IOException unavailable){parent.spec.commandLine().getOut().println("bundle: missing or corrupt");}
+        catch(java.io.IOException unavailable){parent.spec.commandLine().getOut().println("bundle: missing or corrupt 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(unavailable));}
       parent.spec.commandLine().getOut().println(manager.status());
       return 0;
     });}
@@ -266,7 +266,7 @@ public class VoiceCommand {
     int verify(){return parent.attempt(()->{
       var manager=parent.modelManager();if(manager.busy())throw new IllegalStateException("モデル取得中です。完了後に検証してください");
       try{parent.spec.commandLine().getOut().println("verified ready: "+manager.readyDirectory());return 0;}
-      catch(java.io.IOException invalid){throw new IllegalStateException("モデル一式が未配置または破損しています。models info を確認してください");}
+      catch(java.io.IOException invalid){throw new IllegalStateException("モデル一式が未配置または破損しています。models info を確認してください", invalid);}
     });}
     @Command(name="install",description="表示したmanifest IDを承認して非同期取得。失敗後は同じコマンドで再試行",mixinStandardHelpOptions=true)
     int install(@Option(names="--approve",paramLabel="MANIFEST_ID") String approval){return parent.attempt(()->{

@@ -8,6 +8,16 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.event.*;
 class QueuedRunCancellationTest {
+ @Test void runnerFailurePreservesRedactedUnderlyingCause() {
+  var registry=new RunRegistry(Clock.systemUTC());var bus=new InMemoryAgentEventBus();
+  var owner=new AgentRunContext("run","session",Path.of("."),"p");registry.register(owner);
+  try(var runs=new RunService(registry,bus,new AgentEventFactory(Clock.systemUTC()),new CommandCancellationService(),id->false)) {
+   runs.execute(owner,()->{throw new IllegalStateException("operation failed",new java.io.IOException("disk full password=hidden"));});
+   assertEquals(RunStatus.FAILED,runs.get("run").status());
+   assertTrue(runs.get("run").failure().message().contains("operation failed → disk full password=[REDACTED]"));
+  }
+ }
+
  @Test void terminalCompletionCannotOverwriteAcceptedCancellationOrPublishFalseSuccess() {
   var registry=new RunRegistry(Clock.systemUTC());var bus=new InMemoryAgentEventBus();var owner=new AgentRunContext("run","session",Path.of("."),"p");registry.register(owner);
   var events=new java.util.ArrayList<AgentEvent>();bus.subscribe(events::add);
