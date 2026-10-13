@@ -43,6 +43,126 @@ public class PersistentCheckpointRepository {
   public List<PersistentCheckpoint> list(String project) {
     return db.sql("SELECT task FROM checkpoint_heads WHERE project=? AND revision>0 ORDER BY task LIMIT 1000").param(project).query(String.class).list().stream().map(t->get(project,t)).toList();
   }
+  public record OverviewSelection(long count,ResumeOverview.Candidate latest) {}
+  private static final String OVERVIEW_HEADS="""
+      WITH heads AS MATERIALIZED (
+        SELECT h.task,h.revision AS head_revision,h.owner,r.created,
+          CASE WHEN json_valid(r.snapshot) THEN r.snapshot END AS snapshot
+        FROM checkpoint_heads h LEFT JOIN checkpoint_revisions r
+          ON r.project=h.project AND r.task=h.task AND r.revision=h.revision
+        WHERE h.project=:project AND h.revision>0
+      )
+      """;
+  private static final String VALID_OVERVIEW_HEAD="""
+      snapshot IS NOT NULL AND json_extract(snapshot,'$.schemaVersion')=1
+      AND json_extract(snapshot,'$.projectId')=:project AND json_extract(snapshot,'$.taskId')=task
+      AND json_extract(snapshot,'$.revision')=head_revision
+      AND (json_type(snapshot,'$.createdAt') IN ('integer','real') OR datetime(json_extract(snapshot,'$.createdAt')) IS NOT NULL)
+      AND json_type(snapshot,'$.request')='text' AND json_type(snapshot,'$.status')='text'
+      AND json_type(snapshot,'$.projectRoot')='text' AND json_type(snapshot,'$.sessionId')='text'
+      AND json_type(snapshot,'$.originalRunId')='text' AND json_type(snapshot,'$.runId')='text'
+      AND json_type(snapshot,'$.instructions')='array' AND json_type(snapshot,'$.acceptanceCriteria')='array'
+      AND json_type(snapshot,'$.plan')='array' AND json_type(snapshot,'$.evidence')='array'
+      AND json_type(snapshot,'$.operations')='array' AND json_type(snapshot,'$.files')='object'
+      AND json_type(snapshot,'$.git')='object' AND json_type(snapshot,'$.processes')='array'
+      AND json_type(snapshot,'$.blockers')='array'
+      AND NOT EXISTS(SELECT 1 FROM json_each(snapshot) WHERE key NOT IN (
+        'schemaVersion','revision','createdAt','taskId','projectId','projectRoot','sessionId','originalRunId','runId',
+        'resumedFromRunId','resumedFromRevision','request','instructions','acceptanceCriteria','plan','currentStep',
+        'status','interruptionReason','nextAction','evidence','operations','files','git','processes','blockers','reconciliation','mode','voiceInput','progress'))
+      AND COALESCE(json_extract(snapshot,'$.mode'),'EXCLUSIVE') IN ('EXCLUSIVE','READ_ONLY','CONVERSATION')
+      AND COALESCE(json_type(snapshot,'$.nextAction'),'null') IN ('text','null')
+      AND NOT EXISTS(SELECT 1 FROM json_each(snapshot,'$.instructions') WHERE type<>'text')
+      AND NOT EXISTS(SELECT 1 FROM json_each(snapshot,'$.acceptanceCriteria') WHERE type<>'text')
+      AND NOT EXISTS(SELECT 1 FROM json_each(snapshot,'$.blockers') WHERE type<>'text')
+      AND NOT EXISTS(SELECT 1 FROM json_each(snapshot,'$.files') WHERE type<>'text')
+      AND NOT EXISTS(SELECT 1 FROM json_each(snapshot,'$.git') WHERE type<>'text')
+      AND NOT EXISTS(SELECT 1 FROM json_each(snapshot,'$.evidence') WHERE type<>'object')
+      AND NOT EXISTS(SELECT 1 FROM json_each(snapshot,'$.plan') WHERE type<>'object')
+      AND NOT EXISTS(SELECT 1 FROM json_each(snapshot,'$.processes') WHERE type<>'object')
+      AND NOT EXISTS(SELECT 1 FROM json_each(snapshot,'$.operations')
+        WHERE type<>'object' OR COALESCE(json_extract(CASE WHEN type='object' THEN value END,'$.status'),'PLANNED')
+          NOT IN ('PLANNED','STARTED','SUCCEEDED','FAILED','UNKNOWN'))
+      """;
+  /** Normal heads are projected in SQLite; only damaged heads need the existing decoder/fallback. */
+  private JdbcClient.StatementSpec overviewQuery(String project,Instant failedCutoff,boolean latestOnly,boolean explain) {
+    var fallbacks=new LinkedHashMap<String,String>();
+    var damaged=db.sql(OVERVIEW_HEADS+"SELECT task FROM heads WHERE NOT COALESCE(("+VALID_OVERVIEW_HEAD+"),0)")
+        .param("project",project).query(String.class).list();
+    for(String task:damaged) {
+      try{fallbacks.put(task,encode(get(project,task)));}
+      catch(RuntimeException invalid){
+        // No valid history: keep a read-only review candidate rather than imply completion.
+        fallbacks.put(task,"{\"revision\":0,\"status\":\"UNAVAILABLE\"}");
+      }
+    }
+    var live=db.sql("SELECT DISTINCT owner FROM checkpoint_heads WHERE project=? AND owner IS NOT NULL")
+        .param(project).query(String.class).list().stream().filter(PersistentCheckpointRepository::alive).toList();
+    String sql=OVERVIEW_HEADS+"""
+        , restored AS MATERIALIZED (
+          SELECT *,COALESCE((SELECT value FROM json_each(:fallbacks) WHERE key=task),snapshot) AS state,
+            EXISTS(SELECT 1 FROM json_each(:fallbacks) WHERE key=task) AS fallback
+          FROM heads
+        ), projected AS MATERIALIZED (
+          SELECT task,head_revision,owner,created,fallback,
+            json_extract(state,'$.revision') AS revision,COALESCE(json_extract(state,'$.createdAt'),created) AS saved_at,
+            substr(created,1,19)||substr(CASE WHEN substr(created,20,1)='.' THEN substr(created,21,length(created)-21) ELSE '' END||'000000000',1,9) AS saved_sort,
+            json_extract(state,'$.status') AS status,
+            EXISTS(SELECT 1 FROM json_each(state,'$.operations') WHERE json_extract(value,'$.status')='UNKNOWN'
+              OR (json_extract(state,'$.status')='RUNNING' AND json_extract(value,'$.status')='STARTED')) AS unknown,
+            state
+          FROM restored
+        ), candidates AS MATERIALIZED (
+          SELECT * FROM projected WHERE status NOT IN ('ABANDONED','CANCELLED')
+            AND (status IN ('INTERRUPTED','WAITING','WAITING_APPROVAL','UNAVAILABLE') OR unknown OR fallback
+              OR (status='FAILED' AND saved_sort>=:cutoff)
+              OR (status='RUNNING' AND NOT EXISTS(SELECT 1 FROM json_each(:live) WHERE value=owner)))
+            AND NOT (status='RUNNING' AND EXISTS(SELECT 1 FROM json_each(:live) WHERE value=owner))
+        )
+        SELECT task,revision,head_revision,saved_at,status,fallback,unknown,
+          json_extract(state,'$.request') AS request,json_extract(state,'$.nextAction') AS remaining,
+          COALESCE((SELECT json_extract(value,'$.description') FROM json_each(state,'$.plan')
+            WHERE json_extract(value,'$.status')='DONE' ORDER BY key DESC LIMIT 1),
+            (SELECT json_extract(value,'$.summary')||'（保存された申告）' FROM json_each(state,'$.evidence')
+              WHERE json_extract(value,'$.origin')='ASSISTANT_CLAIM' ORDER BY key DESC LIMIT 1)) AS completed,
+          COUNT(*) OVER () AS total
+        FROM candidates ORDER BY saved_sort DESC,task
+        """+(latestOnly?" LIMIT 1":"");
+    String cutoff=java.time.format.DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss").withZone(ZoneOffset.UTC).format(failedCutoff)
+        +String.format(Locale.ROOT,"%09d",failedCutoff.getNano());
+    try{return db.sql((explain?"EXPLAIN QUERY PLAN ":"")+sql).param("project",project).param("cutoff",cutoff)
+        .param("fallbacks",json.writeValueAsString(fallbacks)).param("live",json.writeValueAsString(live));}
+    catch(java.io.IOException error){throw new IllegalStateException(error);}
+  }
+  private ResumeOverview.Candidate overviewCandidate(java.sql.ResultSet row) throws java.sql.SQLException {
+    boolean fallback=row.getBoolean("fallback"),unknown=row.getBoolean("unknown");
+    String status=row.getString("status");
+    String notice="UNAVAILABLE".equals(status)?"正常revisionが見つかりません。保存状態は未確認、要確認":
+        fallback?"新しいrevisionが破損・非対応。過去の正常revisionは参考情報、要確認"+(unknown?"。結果不明の操作あり":""):
+        unknown?"結果不明の操作あり・要確認。再実行前の照合が必要":
+        "RUNNING".equals(status)?"実行所有権喪失・中断候補。再開前の照合が必要":"再開前の照合が必要";
+    return new ResumeOverview.Candidate(row.getString("task"),row.getLong("revision"),row.getLong("head_revision"),
+        overviewInstant(row.getString("saved_at")),"UNAVAILABLE".equals(status)?"未記録":ResumeOverview.safe(status,24),ResumeOverview.safe(row.getString("request"),80),
+        ResumeOverview.safe(row.getString("completed"),120),ResumeOverview.safe(row.getString("remaining"),120),notice,fallback);
+  }
+  private Instant overviewInstant(String value) {
+    if(value.matches("-?\\d+(?:\\.\\d+)?")) {
+      var seconds=new java.math.BigDecimal(value);
+      long whole=seconds.setScale(0,java.math.RoundingMode.FLOOR).longValueExact();
+      return Instant.ofEpochSecond(whole,seconds.subtract(java.math.BigDecimal.valueOf(whole)).movePointRight(9).longValue());
+    }
+    return Instant.parse(value);
+  }
+  public OverviewSelection overviewSelection(String project,Instant cutoff) {
+    return overviewQuery(project,cutoff,true,false).query((row,n)->new OverviewSelection(row.getLong("total"),overviewCandidate(row)))
+        .optional().orElse(new OverviewSelection(0,null));
+  }
+  List<ResumeOverview.Candidate> overviewCandidates(String project,Instant cutoff) {
+    return overviewQuery(project,cutoff,false,false).query((row,n)->overviewCandidate(row)).list();
+  }
+  List<String> overviewQueryPlan(String project,Instant cutoff) {
+    return overviewQuery(project,cutoff,true,true).query((row,n)->row.getString("detail")).list();
+  }
   /** Page immutable original Run identities, including a valid older revision of a damaged head. */
   public List<PersistentCheckpoint> taskPage(String project,String root,String session,String after,int limit) {
     if(limit<1||limit>101)throw new IllegalArgumentException("Invalid projection page limit");
