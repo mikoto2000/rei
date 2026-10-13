@@ -36,6 +36,8 @@ Project: rei
 
 文字列はANSI/OSC・制御文字を除去し、CredentialRedactorによるマスキング後にUnicodeコードポイント数で短縮する。依頼80、完了/残作業120文字。端末制御や命令として解釈しない。taskIdは端末・コマンドに安全なASCII識別子だけを受け入れる。CLIはさらに接続APIキーをマスクし、既存のJLine `printAbove`を使用する。
 
+共有CredentialRedactorのJSON秘密文字列パターンは、長い文字列やエスケープの連続で再帰的バックトラックしない形を使用する。10万文字の秘密文字列も、短縮前にマスキングできることを回帰テストで確認している。
+
 Work Contextは補助的な保存背景情報としてcheckpointの後に表示する。Shellの自動表示は`presentSaved`を使い、Gitを取得しない。checkpointからWork Contextへの複製保存や状態の上書きは行わない。手動のWork Context経路は変更しない。
 
 ## APIと設定

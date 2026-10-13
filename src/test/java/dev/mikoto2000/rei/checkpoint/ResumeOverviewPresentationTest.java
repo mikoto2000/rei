@@ -42,4 +42,9 @@ class ResumeOverviewPresentationTest {
     assertEquals("",history.present(new ResumeOverview("A","A",0,null,"empty"),ZoneOffset.UTC,false));
     assertTrue(history.present(a,ZoneOffset.UTC,false).contains("最新の再開候補"));
   }
+  @Test void extremelyLongQuotedJsonSecretsCannotOverflowTheDisplayStack() {
+    String secret="x".repeat(100000);
+    assertEquals("{\"password\":\"[REDACTED]\"}",ResumeOverview.safe("{\"password\":\""+secret+"\"}",80));
+    assertEquals("{\"token\":\"[REDACTED]\"}",ResumeOverview.safe("{\"token\":\""+("\\\\\\\"".repeat(20000))+"\"}",80));
+  }
 }
