@@ -134,6 +134,7 @@ Maven Wrapper から起動する場合は `./mvnw spring-boot:run -Dspring-boot.
 | 新しい会話を開始する | `/session new [title]`（即時作成・選択） |
 | 既知 Session を再開する | `/session switch <sessionId>`（`resume` も利用可） |
 | 会話履歴を検索する | `/history search 検索したい言葉` |
+| 現在のプロジェクトの再開候補を再表示する | `/resume overview` |
 | 実行中の処理を確認する | `/runs` |
 | 選択中プロジェクトの AI の実行を中止する | `/cancel` |
 

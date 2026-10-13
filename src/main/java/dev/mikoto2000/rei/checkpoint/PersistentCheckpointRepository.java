@@ -159,11 +159,13 @@ public class PersistentCheckpointRepository {
     return Instant.parse(value);
   }
   public OverviewSelection overviewSelection(String project,Instant cutoff) {
-    return overviewQuery(project,cutoff,true,false).query((row,n)->new OverviewSelection(row.getLong("total"),overviewCandidate(row)))
-        .optional().orElse(new OverviewSelection(0,null));
+    // A deferred read transaction keeps damage, lease and candidate reads on one SQLite snapshot.
+    return transaction.execute(tx->overviewQuery(project,cutoff,true,false)
+        .query((row,n)->new OverviewSelection(row.getLong("total"),overviewCandidate(row)))
+        .optional().orElse(new OverviewSelection(0,null)));
   }
   List<ResumeOverview.Candidate> overviewCandidates(String project,Instant cutoff) {
-    return overviewQuery(project,cutoff,false,false).query((row,n)->overviewCandidate(row)).list();
+    return transaction.execute(tx->overviewQuery(project,cutoff,false,false).query((row,n)->overviewCandidate(row)).list());
   }
   List<String> overviewQueryPlan(String project,Instant cutoff) {
     return overviewQuery(project,cutoff,true,true).query((row,n)->row.getString("detail")).list();

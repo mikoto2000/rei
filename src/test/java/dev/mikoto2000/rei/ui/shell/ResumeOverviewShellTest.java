@@ -36,4 +36,12 @@ class ResumeOverviewShellTest extends ProjectClientTestSupport {
     when(service.overview(a.id())).thenThrow(new IllegalStateException("DB unavailable"));
     assertDoesNotThrow(()->shell.restore(a));
   }
+  @Test void projectCommandRestoresBeforeAnySessionBackgroundPresentation() throws Exception {
+    var projects=new ProjectService(directory,new ProjectRegistry(directory.resolve("projects.json")));
+    var activity=mock(ProjectShellActivity.class);var client=projects.newClient();
+    var cd=new picocli.CommandLine(new dev.mikoto2000.rei.core.command.ProjectCommand.CdCommand(projects));
+    ShellProjectCommands.configure(cd,projects,client,activity);
+    assertEquals(0,cd.execute(directory.toString()));
+    verify(activity).restore(any());verify(activity,never()).refreshSession();
+  }
 }
