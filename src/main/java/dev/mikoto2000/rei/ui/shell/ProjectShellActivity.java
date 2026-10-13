@@ -10,6 +10,10 @@ import dev.mikoto2000.rei.event.*;
 /** Shell restoration and live rendering share AgentEvent and the same renderer, with different display modes. */
 @Component
 public class ProjectShellActivity implements AgentEventListener {
+  private dev.mikoto2000.rei.checkpoint.ResumeOverviewService resumeOverview;
+  private dev.mikoto2000.rei.checkpoint.ResumeOverview.DisplayHistory resumeSeen=new dev.mikoto2000.rei.checkpoint.ResumeOverview.DisplayHistory();
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setResumeOverview(dev.mikoto2000.rei.checkpoint.ResumeOverviewService service){resumeOverview=service;}
   private dev.mikoto2000.rei.workcontext.WorkContextPresenter workContext;
   private final java.util.Set<String> workContextSeen = new java.util.HashSet<>();
   @org.springframework.beans.factory.annotation.Autowired
@@ -45,6 +49,12 @@ public class ProjectShellActivity implements AgentEventListener {
     renderers.clear();
     renderer = rendererFor(visibleProject);
     globalRenderer = new ShellAgentEventRenderer(output, options);
+    resumeSeen=new dev.mikoto2000.rei.checkpoint.ResumeOverview.DisplayHistory();
+    if(resumeOverview!=null&&resumeOverview.enabled()) {
+      try{String summary=resumeOverview.startupSummary();if(!summary.isBlank())output.println(summary);}
+      catch(RuntimeException error){overviewUnavailable(error);}
+      presentResume(projects.currentContext());
+    }
     presentWorkContext(projects.currentContext(), visibleSession);
   }
   @Override public synchronized void onEvent(AgentEvent event) {
@@ -68,12 +78,13 @@ public class ProjectShellActivity implements AgentEventListener {
   }
   public synchronized void restore(ProjectContext project) {
     if (output == null) return;
-    refreshSession();
+    refreshSession(false);
     renderer.finish();
     visibleProject = project.id();
-    presentWorkContext(project, visibleSession);
     renderer = rendererFor(visibleProject);
     output.println("Switched project: " + project.name());
+    presentResume(project);
+    presentWorkContext(project, visibleSession);
     if (activeRuns != null) output.println(activeRuns.summary());
     String conversation = visibleSession == null ? project.conversationId("chat:main") : visibleSession;
     output.println("Conversation restored: " + (visibleSession == null ? "chat:main" : visibleSession)
@@ -88,6 +99,9 @@ public class ProjectShellActivity implements AgentEventListener {
   }
   /** Refresh on command completion and before asynchronous events; never replay a previous run as current. */
   public synchronized void refreshSession() {
+    refreshSession(true);
+  }
+  private void refreshSession(boolean showContext) {
     if (client == null || renderer == null) return;
     String selected;
     ProjectContext selectedProject;
@@ -95,19 +109,30 @@ public class ProjectShellActivity implements AgentEventListener {
     if (java.util.Objects.equals(selected, visibleSession)) return;
     renderer.finish();
     visibleSession = selected;
-    presentWorkContext(selectedProject, selected);
+    if(showContext)presentWorkContext(selectedProject, selected);
     renderers.clear();
     renderer = rendererFor(visibleProject);
   }
   private void presentWorkContext(ProjectContext project, String session) {
     if (workContext == null || output == null) return;
     try {
-      workContext.present(project, session, workContextSeen).ifPresent(output::println);
+      workContext.presentSaved(project, session, workContextSeen).ifPresent(output::println);
       output.flush();
     } catch (RuntimeException error) {
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
       org.slf4j.LoggerFactory.getLogger(getClass()).warn("Work Context presentation unavailable ({})", error.getClass().getSimpleName());
     }
+  }
+  private void presentResume(ProjectContext project) {
+    if(resumeOverview==null||!resumeOverview.enabled())return;
+    try {
+      String text=resumeSeen.present(resumeOverview.overview(project.id()),resumeOverview.zone(java.time.ZoneId.systemDefault()),false);
+      if(!text.isBlank())output.println(text);output.flush();
+    }catch(RuntimeException error){overviewUnavailable(error);}
+  }
+  private void overviewUnavailable(RuntimeException error) {
+    dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
+    org.slf4j.LoggerFactory.getLogger(getClass()).warn("Resume overview unavailable ({})",error.getClass().getSimpleName());
   }
   private ShellAgentEventRenderer rendererFor(String projectId) {
     return renderers.computeIfAbsent(projectId, id -> new ShellAgentEventRenderer(new ShellEventOutput() {
