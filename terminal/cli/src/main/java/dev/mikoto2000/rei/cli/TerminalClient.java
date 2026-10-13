@@ -144,11 +144,11 @@ public final class TerminalClient implements AutoCloseable {
         if(message.toString().stripLeading().startsWith("/"))command(message.toString().strip());else send(message.toString());
       } catch(BackendClient.UncertainAcceptanceException uncertain){out(uncertain.getMessage());}
       catch(BackendClient.ApiException rejected){out(rejected.getMessage());}
-      catch(InterruptedException interrupted){Thread.currentThread().interrupt();return;}
+      catch(InterruptedException interrupted){out("コマンドが割り込みにより中断されました。 原因: "+dev.mikoto2000.rei.event.FailureMessages.describe(interrupted));Thread.currentThread().interrupt();return;}
       catch(UserInterruptException interrupted){out("Ctrl-C により入力を中止しました。依頼は送信していません。");}
       catch(EndOfFileException eof){return;}
       catch(IllegalArgumentException invalid){out(invalid.getMessage());}
-      catch(IOException failure){out("Backend connection failed. Inspect the Run or receipt before submitting again. 原因: "+dev.mikoto2000.rei.event.FailureMessages.describe(failure));}
+      catch(IOException failure){out("Command I/O failed. Inspect the Run or receipt before submitting again. 原因: "+dev.mikoto2000.rei.event.FailureMessages.describe(failure));}
     }
   }
   private void refresh()throws IOException,InterruptedException {
