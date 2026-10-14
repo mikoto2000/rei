@@ -13,6 +13,9 @@ public final class CheckpointHistoryReport {
   }
 
   public static String cleanup(CheckpointHistory.Cleanup cleanup){
+    if(cleanup.force()){
+      return forcedCleanup(cleanup);
+    }
     var result=new StringBuilder(cleanup.applied()?"チェックポイント履歴を整理しました（全プロジェクト）。":"チェックポイント履歴の整理候補（全プロジェクト・まだ削除していません）。");
     result.append('\n').append(cleanup.applied()?"削除した履歴: ":"削除可能な履歴: ")
         .append(cleanup.removedRevisions()).append(" 件 / ").append(cleanup.removedBytes()).append(" バイト\n")
@@ -33,6 +36,26 @@ public final class CheckpointHistoryReport {
       result.append("\n削除した過去の revision は復元できません。DBファイルのサイズはそのままでも、チェックポイント保存枠は再利用できます。");
     }else{
       result.append("\n整理を実行するには: /checkpoint cleanup --apply\n削除した過去の revision は復元できません。");
+    }
+    return result.toString();
+  }
+
+  private static String forcedCleanup(CheckpointHistory.Cleanup cleanup){
+    var result=new StringBuilder(cleanup.applied()
+        ?"全チェックポイントを削除しました（全プロジェクト・強制削除）。"
+        :"全チェックポイントの強制削除候補（全プロジェクト・まだ削除していません）。");
+    result.append('\n').append(cleanup.applied()?"削除した履歴: ":"削除対象の履歴: ")
+        .append(cleanup.removedRevisions()).append(" 件 / ").append(cleanup.removedBytes()).append(" バイト\n")
+        .append("最新状態・再開元・承認続行用・実行中・承認待ち・破損した履歴も保護せず、全チェックポイントを対象にします。\n")
+        .append("削除したタスクは /resume で再開できません。履歴は復元できません。\n")
+        .append("重複実行防止キーと承認・承認続行データは保持します。\n")
+        .append("実行中の Run は継続しますが、その Run が終了するまでチェックポイントの保存を停止します。\n")
+        .append("承認続行や新しい Run では、新たなチェックポイントが作成されることがあります。\n")
+        .append(usage(cleanup.applied()?cleanup.after():cleanup.before()));
+    if(cleanup.applied()){
+      result.append("\nDBファイルのサイズはそのままでも、チェックポイント保存枠は再利用できます。");
+    }else{
+      result.append("\n全チェックポイントを削除するには: /checkpoint cleanup --force --apply");
     }
     return result.toString();
   }

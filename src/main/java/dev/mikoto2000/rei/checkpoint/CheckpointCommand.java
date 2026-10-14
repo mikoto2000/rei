@@ -29,7 +29,12 @@ public class CheckpointCommand implements Callable<Integer> {
   public static class Cleanup implements Callable<Integer>{
     @ParentCommand CheckpointCommand parent;
     @Option(names="--apply",description="全プロジェクトの整理可能な過去履歴を削除（最新状態・再開・承認続行に必要な履歴は保護）") boolean apply;
-    public Integer call(){return parent.print(()->CheckpointHistoryReport.cleanup(parent.service.cleanupHistory(apply)));}
+    @Option(names="--force",description="最新状態・実行中・承認待ちも含む全チェックポイントを対象にする。削除には --apply も必要")
+    boolean force;
+    public Integer call(){
+      return parent.print(()->CheckpointHistoryReport.cleanup(force
+          ?parent.service.cleanupHistory(apply,true):parent.service.cleanupHistory(apply)));
+    }
   }
   public Integer call(){var writer=output==null?spec.commandLine().getOut():output;try {
     var state=service.saveCurrent(projects.currentContext().id(),projects.currentSessionId());

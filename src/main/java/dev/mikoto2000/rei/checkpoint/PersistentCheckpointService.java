@@ -33,6 +33,8 @@ public class PersistentCheckpointService implements AutoCloseable {
   private final ConcurrentMap<String,PersistentCheckpoint> active=new ConcurrentHashMap<>();
   private final Set<String> executing=ConcurrentHashMap.newKeySet();
   private final ConcurrentMap<String,String> currentGuidance=new ConcurrentHashMap<>();
+  // Guarded by this monitor. Force reset removes durable history, not a live Run's safety state.
+  private final Map<String,Set<String>> transientEvents=new HashMap<>();
   public String currentGuidance(String run){return currentGuidance.getOrDefault(run,"");}
   private final AgentEventBus.Subscription subscription,boundaries;
   private dev.mikoto2000.rei.review.ReviewCoverageLedger reviewLedger;
@@ -85,14 +87,17 @@ public class PersistentCheckpointService implements AutoCloseable {
   }
   public void start(AgentRunContext context,String request) {
     if(!settings.isEnabled()||context.projectId()==null)return;
-    var state=active.get(context.runId());
-    if(state==null) {
-      var waiting=repository.list(context.projectId()).stream().filter(s->s.runId().equals(context.runId())&&Set.of("WAITING","WAITING_APPROVAL").contains(s.status())&&s.sessionId().equals(context.conversationId())&&s.projectRoot().equals(context.projectRoot().toString())).findFirst();
-      state=waiting.orElseGet(()->PersistentCheckpoint.initial(UUID.randomUUID().toString(),context.projectId(),context.conversationId(),context.runId(),context.projectRoot(),request));
-      var initial=repository.fields(state);initial.put("mode",context.mode());initial.put("voiceInput",context.voiceInput());initial.put("git",CheckpointReconciler.git(context.projectRoot()));state=repository.fields(initial);
-      if(waiting.isEmpty())state=repository.save(state,0,"start:"+context.runId());
-      if(!repository.acquire(state.projectId(),state.taskId(),context.runId()))throw new IllegalStateException("Task execution already owned");
-      active.put(context.runId(),state);
+    PersistentCheckpoint state;
+    synchronized(this) {
+      state=active.get(context.runId());
+      if(state==null) {
+        var waiting=repository.list(context.projectId()).stream().filter(s->s.runId().equals(context.runId())&&Set.of("WAITING","WAITING_APPROVAL").contains(s.status())&&s.sessionId().equals(context.conversationId())&&s.projectRoot().equals(context.projectRoot().toString())).findFirst();
+        state=waiting.orElseGet(()->PersistentCheckpoint.initial(UUID.randomUUID().toString(),context.projectId(),context.conversationId(),context.runId(),context.projectRoot(),request));
+        var initial=repository.fields(state);initial.put("mode",context.mode());initial.put("voiceInput",context.voiceInput());initial.put("git",CheckpointReconciler.git(context.projectRoot()));state=repository.fields(initial);
+        if(waiting.isEmpty())state=repository.save(state,0,"start:"+context.runId());
+        if(!repository.acquire(state.projectId(),state.taskId(),context.runId()))throw new IllegalStateException("Task execution already owned");
+        active.put(context.runId(),state);
+      }
     }
     if(reviewLedger!=null&&state.resumedFromRunId()!=null)for(var evidence:state.evidence())if(evidence.origin().equals("REVIEW_JOB_REFERENCE"))
       reviewLedger.resume(evidence.summary(),new dev.mikoto2000.rei.review.ReviewCoverageLedger.Scope(state.projectId(),state.sessionId(),state.resumedFromRunId()),dev.mikoto2000.rei.review.ReviewTools.scope(context));
@@ -112,7 +117,15 @@ public class PersistentCheckpointService implements AutoCloseable {
       if(!"COMPLETED".equals(status))fields.put("interruptionReason",status);
       fields.put("operations",unknown(repository.fields(fields).operations()));
     });}
-    finally {repository.release(state.projectId(),state.taskId(),context.runId());active.remove(context.runId());executing.remove(context.runId());currentGuidance.remove(context.runId());}
+    finally {
+      synchronized(this) {
+        repository.release(state.projectId(),state.taskId(),context.runId());
+        active.remove(context.runId());
+        executing.remove(context.runId());
+        currentGuidance.remove(context.runId());
+        transientEvents.remove(context.runId());
+      }
+    }
   }
   private List<Operation> unknown(List<Operation> operations) {
     return operations.stream().map(o->o.status()==OperationStatus.STARTED?new Operation(o.toolCallId(),o.toolName(),OperationStatus.UNKNOWN,o.eventId(),o.runId()):o).toList();
@@ -125,13 +138,18 @@ public class PersistentCheckpointService implements AutoCloseable {
       return previous.orElseThrow(()->new IllegalArgumentException("No checkpoint task in this session"));
     }
     var state=current.get();var owner=AgentRunScope.current();
-    return update(state.runId(),"manual:"+UUID.randomUUID(),fields->{if(owner!=null&&owner.runId().equals(state.runId()))capture(fields,owner);});
+    return update(state.runId(),"manual:"+UUID.randomUUID(),fields->{if(owner!=null&&owner.runId().equals(state.runId()))capture(fields,owner);},true);
   }
   public List<PersistentCheckpoint> list(String project) {
     return repository.list(project).stream().map(this::recoverView).filter(s->!"ABANDONED".equals(s.status())&&(!"COMPLETED".equals(s.status())||s.operations().stream().anyMatch(o->o.status()==OperationStatus.UNKNOWN))).sorted(Comparator.comparing(PersistentCheckpoint::createdAt).reversed()).toList();
   }
   public CheckpointHistory.Usage historyUsage(){return repository.historyUsage();}
   public CheckpointHistory.Cleanup cleanupHistory(boolean apply){return repository.cleanupHistory(apply);}
+  public synchronized CheckpointHistory.Cleanup cleanupHistory(boolean apply,boolean force) {
+    var result=repository.cleanupHistory(apply,force);
+    if(apply&&force)for(String run:active.keySet())transientEvents.computeIfAbsent(run,id->new HashSet<>());
+    return result;
+  }
   public PersistentCheckpoint get(String project,String task){return recoverView(repository.get(project,task));}
   private PersistentCheckpoint recoverView(PersistentCheckpoint state) {
     if(!"RUNNING".equals(state.status())||repository.leased(state.projectId(),state.taskId()))return state;
@@ -189,8 +207,10 @@ public class PersistentCheckpointService implements AutoCloseable {
         fields.put("mode",AgentRunContext.Mode.READ_ONLY);fields.put("voiceInput",false);
         var evidence=new ArrayList<>(state.evidence());evidence.add(new Evidence("EXTERNAL_RESULT_UNTRUSTED",bounded(untrustedSummary,4000),null,expectedPrevious,null));fields.put("evidence",evidence);
       }
-      next=repository.save(repository.fields(fields),state.revision(),"resume:"+run);
-      active.put(run,next);
+      synchronized(this) {
+        next=repository.save(repository.fields(fields),state.revision(),"resume:"+run);
+        active.put(run,next);
+      }
       var context=new AgentRunContext(run,next.sessionId(),Path.of(next.projectRoot()),project,source,next.mode(),next.voiceInput());
       var registry=runs.getIfAvailable();var runner=lifecycle.getIfAvailable();
       if(registry!=null)registry.register(context);
@@ -218,8 +238,12 @@ public class PersistentCheckpointService implements AutoCloseable {
       var result=reconciler.check(state,false);
       if(!repository.diagnostics(owner.projectId(),task).isEmpty()||!result.automaticResumeSafe())throw new IllegalStateException("Checkpoint requires reconciliation or individual effect confirmation");
       var next=state.resume(owner.runId());var fields=repository.fields(next);fields.put("nextAction",result.nextAction());fields.put("reconciliation",result);
-      next=repository.save(repository.fields(fields),state.revision(),"goal-resume:"+owner.runId());
-      active.put(owner.runId(),next);prepared=true;publish(next,AgentEventType.CHECKPOINT_RESUMED,result.decision());
+      synchronized(this) {
+        next=repository.save(repository.fields(fields),state.revision(),"goal-resume:"+owner.runId());
+        active.put(owner.runId(),next);
+      }
+      prepared=true;
+      publish(next,AgentEventType.CHECKPOINT_RESUMED,result.decision());
     } finally {if(!prepared){active.remove(owner.runId());repository.release(owner.projectId(),task,owner.runId());}}
   }
   public void abortPreparedGoalContinuation(String run) {
@@ -278,13 +302,40 @@ public class PersistentCheckpointService implements AutoCloseable {
     });
   }
   private PersistentCheckpoint update(String run,String event,Consumer<Map<String,Object>> mutation) {
-    var cached=active.get(run);if(cached==null)throw new IllegalStateException("No active checkpoint task");
-    for(int attempt=0;attempt<3;attempt++) {
-      var current=repository.get(cached.projectId(),cached.taskId());var fields=repository.fields(current);mutation.accept(fields);
-      try {var next=repository.save(repository.fields(fields),current.revision(),event);active.computeIfPresent(run,(id,previous)->next);publish(next,AgentEventType.CHECKPOINT_REVISION_SAVED,next.status());return next;}
-      catch(ConcurrentModificationException conflict){if(attempt==2)throw conflict;}
+    return update(run,event,mutation,false);
+  }
+  private PersistentCheckpoint update(String run,String event,Consumer<Map<String,Object>> mutation,boolean requirePersistent) {
+    PersistentCheckpoint next=null;
+    synchronized(this) {
+      var cached=active.get(run);if(cached==null)throw new IllegalStateException("No active checkpoint task");
+      var transientHistory=transientEvents.get(run);
+      if(transientHistory!=null) {
+        if(requirePersistent)throw new IllegalStateException("このRunのチェックポイントは強制削除済みです。Runが終了するまで保存は停止しています。保存を再開するには新しいRunを開始してください。");
+        if(transientHistory.contains(event)||repository.recordedEvent(cached.projectId(),cached.taskId(),event))return cached;
+        if(transientHistory.size()>=10000)throw new IllegalStateException("強制削除後のRun内イベント追跡上限に達しました。現在のRunを終了し、新しいRunを開始してください。");
+        var fields=repository.fields(cached);
+        mutation.accept(fields);
+        var memory=repository.fields(fields).revision(cached.revision()+1);
+        active.put(run,memory);
+        transientHistory.add(event);
+        // No save event: only in-memory safety evidence and progress have changed.
+        return memory;
+      }
+      for(int attempt=0;attempt<3;attempt++) {
+        var current=repository.get(cached.projectId(),cached.taskId());var fields=repository.fields(current);mutation.accept(fields);
+        try {
+          var saved=repository.save(repository.fields(fields),current.revision(),event);
+          active.computeIfPresent(run,(id,previous)->saved);
+          next=saved;
+          break;
+        }
+        catch(ConcurrentModificationException conflict){if(attempt==2)throw conflict;}
+      }
     }
-    throw new IllegalStateException();
+    if(next==null)throw new IllegalStateException();
+    // The event bus invokes listeners while holding its own monitor. Never publish under ours.
+    publish(next,AgentEventType.CHECKPOINT_REVISION_SAVED,next.status());
+    return next;
   }
   private void capture(Map<String,Object> fields,AgentRunContext context) {
     if(context.mode()!=AgentRunContext.Mode.EXCLUSIVE)return;

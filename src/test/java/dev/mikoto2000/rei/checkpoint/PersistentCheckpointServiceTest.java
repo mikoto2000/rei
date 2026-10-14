@@ -108,6 +108,103 @@ class PersistentCheckpointServiceTest {
     assertEquals(AgentRunContext.Mode.CONVERSATION, repository.list("A").stream().filter(s -> s.runId().equals(resumed.runId())).findFirst().orElseThrow().mode());
   }
   PersistentCheckpoint state(){return repository.list("A").getFirst();}
+  @Test void forcePreviewDoesNotDisableActiveRunPersistence() {
+    var before=repository.historyUsage();
+    var preview=service.cleanupHistory(false,true);
+    assertTrue(preview.force());
+    assertEquals(before,repository.historyUsage());
+    var event=new AgentEventFactory(java.time.Clock.systemUTC()).toolStarted("read","readFile","read").withOwnership(owner);
+    bus.publishBoundary(event);
+    assertTrue(repository.historyUsage().revisions()>before.revisions());
+  }
+  @Test void forceDeleteKeepsLiveProgressWithoutRecreatingHistoryOrClaimingSaves() {
+    var ledger=new dev.mikoto2000.rei.core.stagnation.InformationLedger();
+    ledger.observeRange("A","v1",1,2);
+    var progress=new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(ledger.snapshot(),
+        new dev.mikoto2000.rei.llm.OutputLimitRunBudget.Snapshot(0,4,0,false),0,0);
+    service.preserveResults(owner,List.of(),progress);
+    var savedEvents=new ArrayList<AgentEvent>();
+    var listener=bus.subscribe(event->{if(event.type()==AgentEventType.CHECKPOINT_REVISION_SAVED)savedEvents.add(event);});
+    try {
+      service.cleanupHistory(true,true);
+      var events=new AgentEventFactory(java.time.Clock.systemUTC());
+      bus.publishBoundary(events.toolStarted("read","readFile","read").withOwnership(owner));
+      var completed=events.toolCompleted("read","readFile",1,"read result").withOwnership(owner);
+      bus.publishBoundary(completed);
+      bus.publishBoundary(completed);
+      assertEquals(progress,service.progress(owner));
+      assertEquals(0,repository.historyUsage().revisions());
+      assertTrue(savedEvents.isEmpty());
+      assertTrue(assertThrows(IllegalStateException.class,()->service.saveCurrent("A","session")).getMessage().contains("強制削除"));
+      service.finish(owner,"COMPLETED");
+      assertTrue(repository.list("A").isEmpty());
+      assertTrue(savedEvents.isEmpty());
+      var next=new AgentRunContext("new-run","session",root,"A");
+      service.start(next,"new request");
+      assertEquals(1,repository.historyUsage().revisions());
+      assertEquals("new-run",state().runId());
+      service.finish(next,"COMPLETED");
+    }finally{listener.unsubscribe();}
+  }
+  @Test void forceDeletePreservesUnknownSideEffectGateForAnExecutingResumedRun() {
+    var events=new AgentEventFactory(java.time.Clock.systemUTC());
+    bus.publishBoundary(events.toolStarted("deploy","deploy","deploy").withOwnership(owner));
+    service.finish(owner,"INTERRUPTED");
+    var resumed=service.resume("A",state().taskId(),AgentRunContext.RequestSource.SHELL);
+    var next=new AgentRunContext(resumed.runId(),"session",root,"A");
+    service.start(next,"resume");
+    service.cleanupHistory(true,true);
+    var effectCalls=new java.util.concurrent.atomic.AtomicInteger();
+    var callback=new org.springframework.ai.tool.ToolCallback(){
+      public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition(){
+        return org.springframework.ai.tool.definition.ToolDefinition.builder().name("deploy").description("deploy").inputSchema("{}").build();
+      }
+      public String call(String input){
+        effectCalls.incrementAndGet();
+        return "deployed";
+      }
+    };
+    try(var scope=AgentRunScope.open(next)) {
+      assertThrows(IllegalStateException.class,()->new ToolEventCallbackDecorator(callback,events,bus).call("{}"));
+      bus.publishBoundary(events.toolStarted("read","readFile","read").withOwnership(next));
+      bus.publishBoundary(events.toolCompleted("read","readFile",1,"read result").withOwnership(next));
+      assertThrows(IllegalStateException.class,()->new ToolEventCallbackDecorator(callback,events,bus).call("{}"));
+    }
+    assertEquals(0,effectCalls.get());
+    assertTrue(service.context(next.runId()).contains("Unknown operations MUST NOT be replayed"));
+    assertEquals(0,repository.historyUsage().revisions());
+    service.finish(next,"CANCELLED");
+    assertEquals(0,repository.historyUsage().revisions());
+  }
+  @Test void failedForceDeleteDoesNotDisableActiveRunPersistence() throws Exception {
+    var before=repository.historyUsage();
+    try(var connection=java.sql.DriverManager.getConnection("jdbc:sqlite:"+root.resolve("state.db"));var statement=connection.createStatement()) {
+      statement.execute("CREATE TRIGGER fail_force BEFORE DELETE ON checkpoint_heads BEGIN SELECT RAISE(ABORT,'injected'); END");
+    }
+    assertThrows(RuntimeException.class,()->service.cleanupHistory(true,true));
+    assertEquals(before,repository.historyUsage());
+    bus.publishBoundary(new AgentEventFactory(java.time.Clock.systemUTC()).toolStarted("read","readFile","read").withOwnership(owner));
+    assertTrue(repository.historyUsage().revisions()>before.revisions());
+  }
+  @Test void concurrentForceDeleteAndToolBoundaryDoNotRecreateOldCheckpoints() throws Exception {
+    var barrier=new java.util.concurrent.CyclicBarrier(2);
+    try(var pool=java.util.concurrent.Executors.newFixedThreadPool(2)) {
+      var clear=pool.submit(()->{
+        barrier.await();
+        return service.cleanupHistory(true,true);
+      });
+      var event=pool.submit(()->{
+        barrier.await();
+        bus.publishBoundary(new AgentEventFactory(java.time.Clock.systemUTC()).toolStarted("read","readFile","read").withOwnership(owner));
+        return null;
+      });
+      clear.get();
+      event.get();
+    }
+    assertEquals(0,repository.historyUsage().revisions());
+    service.finish(owner,"COMPLETED");
+    assertEquals(0,repository.historyUsage().revisions());
+  }
   @Test void staleTaskProjectionRevisionCannotResumeOrConsumeAnExecutionLease() {
     service.finish(owner,"CANCELLED");var saved=state();
     assertThrows(dev.mikoto2000.rei.application.state.OperationConflictException.class,

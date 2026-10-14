@@ -232,6 +232,10 @@ public class PersistentCheckpointRepository {
   }
   /** Preview and apply share the same eligibility rules; apply re-evaluates under SQLite's writer lock. */
   public CheckpointHistory.Cleanup cleanupHistory(boolean apply) {
+    return cleanupHistory(apply,false);
+  }
+  public CheckpointHistory.Cleanup cleanupHistory(boolean apply,boolean force) {
+    if(force)return clearHistory(apply);
     var removed=new ArrayList<HistoricalRow>();
     var result=transaction.execute(tx->{
       if(apply)db.sql("UPDATE checkpoint_heads SET revision=revision").update();
@@ -244,6 +248,28 @@ public class PersistentCheckpointRepository {
     });
     releaseReferences(removed);
     return result;
+  }
+  /** Explicit reset of checkpoint snapshots/heads; durable replay keys and approval receipts survive. */
+  private CheckpointHistory.Cleanup clearHistory(boolean apply) {
+    var removed=new ArrayList<HistoricalRow>();
+    var result=transaction.execute(tx->{
+      if(apply)db.sql("UPDATE checkpoint_heads SET revision=revision").update();
+      var before=historyUsage();
+      if(apply) {
+        removed.addAll(db.sql("SELECT project,task,revision,length(CAST(snapshot AS BLOB)) AS bytes,created FROM checkpoint_revisions")
+            .query((row,index)->new HistoricalRow(row.getString("project"),row.getString("task"),row.getLong("revision"),row.getLong("bytes"),row.getString("created"))).list());
+        db.sql("DELETE FROM checkpoint_revisions").update();
+        db.sql("DELETE FROM checkpoint_heads").update();
+      }
+      return new CheckpointHistory.Cleanup(before.revisions(),before.snapshotBytes(),0,before,
+          new CheckpointHistory.Usage(0,before.eventKeys(),0,before.maxRevisions(),before.maxBytes()),apply,0,0,true);
+    });
+    releaseReferences(removed);
+    return result;
+  }
+  public boolean recordedEvent(String project,String task,String event) {
+    return db.sql("SELECT EXISTS(SELECT 1 FROM checkpoint_event_keys WHERE project=? AND task=? AND event=?)")
+        .params(project,task,event).query(Integer.class).single()!=0;
   }
   private record TaskKey(String project,String task) {}
   private record RevisionKey(String project,String task,long revision) {}
