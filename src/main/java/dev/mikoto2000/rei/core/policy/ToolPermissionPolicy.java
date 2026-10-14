@@ -22,6 +22,7 @@ public class ToolPermissionPolicy {
   void setDelegationResolver(dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver resolver) {this.delegation=resolver;}
   public void validateArguments(String tool,String input) {
     ShellFileReadArguments.validate(tool,input);
+    ProcessWaitArguments.validate(tool,input);
     dev.mikoto2000.rei.core.taskstate.TaskStateArguments.validate(tool,input);
     validateDelegation(tool,input);
   }

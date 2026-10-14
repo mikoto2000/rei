@@ -51,6 +51,7 @@ public class RunExecutionContext {
     else {
       dev.mikoto2000.rei.core.taskstate.TaskStateArguments.validate(name,input);
       dev.mikoto2000.rei.core.policy.ShellFileReadArguments.validate(name,input);
+      dev.mikoto2000.rei.core.policy.ProcessWaitArguments.validate(name,input);
     }
   }
   public void reportToolPermissionFailure(String callId,String name,dev.mikoto2000.rei.chatgpt.ChatGptException error) {

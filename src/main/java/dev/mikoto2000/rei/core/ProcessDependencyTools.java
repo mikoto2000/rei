@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Component;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.ai.chat.model.ToolContext;
 import dev.mikoto2000.rei.core.dependency.*;
 import dev.mikoto2000.rei.core.process.*;
@@ -17,8 +18,10 @@ public class ProcessDependencyTools {
   public ProcessDependencyTools(BackgroundProcessManager processes){this.processes=processes;}
   void setDependencyAwaiter(DependencyAwaiter awaiter){this.awaiter=awaiter;}
   public record ShellDependencyResult(DependencyObservation dependency,BackgroundProcessSnapshot process) {}
-  @Tool(name="waitForShellProcess",description="Wait up to 60 seconds for an existing managed shell process without launching or killing it. Default 10 seconds. Returns COMPLETED, FAILED, CANCELLED, BLOCKED (unknown process), or WAITING at timeout. WAITING is not successful completion. Uses bounded polling instead of repeated LLM status requests.")
-  public ShellDependencyResult waitForShellProcess(String processId,Integer timeoutSeconds,ToolContext toolContext) {
+  @Tool(name="waitForShellProcess",description="Wait 0 to 60 seconds for an existing managed shell process without launching or killing it. Default 10 seconds; 0 checks immediately. Returns COMPLETED, FAILED, CANCELLED, BLOCKED (unknown process), or WAITING at timeout. WAITING is not successful completion; wait again with the same processId instead of relaunching the command. Uses bounded polling instead of repeated LLM status requests.")
+  public ShellDependencyResult waitForShellProcess(String processId,
+      @ToolParam(required=false,description="Integer seconds from 0 to 60 inclusive. Omit or use null for the default 10 seconds; 0 checks immediately.") Integer timeoutSeconds,
+      ToolContext toolContext) {
     int seconds=timeoutSeconds==null?10:timeoutSeconds;
     var execution=toolContext!=null && toolContext.getContext().get(RunExecutionContext.KEY) instanceof RunExecutionContext current?current:null;
     var latest=new AtomicReference<BackgroundProcessSnapshot>();
