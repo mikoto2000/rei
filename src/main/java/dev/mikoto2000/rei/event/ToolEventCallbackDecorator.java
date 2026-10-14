@@ -17,6 +17,15 @@ import org.springframework.ai.tool.definition.ToolDefinition;
  */
 public class ToolEventCallbackDecorator implements dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.Registered {
 
+  // Only requested filesystem operations may recover. A missing internal resource in
+  // another tool (for example checkpoint storage) must still fail the Run.
+  private static final java.util.Set<String> FILE_TOOLS = java.util.Set.of(
+      "readMultiFile", "readFile", "readTextFile", "readTextFileRange", "readPdfFile",
+      "readBinaryFile", "countFileLines", "findFile", "listFile", "grepMultiQuery",
+      "searchAndRead", "readSkillResource", "writeMultiFile", "writeTextFile",
+      "writeBinaryFile", "applyTextDiff", "deleteFile", "copyFile", "moveFile",
+      "createDirectories");
+
   private final ToolCallback delegate;
   private final AgentEventFactory eventFactory;
   private final AgentEventPublisher eventPublisher;
@@ -71,6 +80,16 @@ public class ToolEventCallbackDecorator implements dev.mikoto2000.rei.core.conte
     } catch (RuntimeException e) {
       eventPublisher.publishBoundary(eventFactory.toolFailed(toolCallId, toolName,
           new ErrorInformation(e.getClass().getSimpleName(), summarize(e.getMessage()), null)));
+      if (FILE_TOOLS.contains(toolName) && !Thread.currentThread().isInterrupted()) {
+        var diagnostic = dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(e);
+        if (diagnostic.code().equals("source_missing") || diagnostic.code().equals("file_unavailable")) {
+          // Return an explicit failure to the model, never a successful/empty read.
+          // Keep TOOL_FAILED above; do not emit TOOL_COMPLETED for this invocation.
+          return """
+              {"success":false,"error":"%s","message":"%s","guidance":"findFile または listFile で実際のパスを確認してください。同じ存在しないパスへの再試行を繰り返さず、見つからない場合は未確認として記録し、他の対象の作業を続けてください。操作が成功したとは扱わないでください。"}
+              """.formatted(diagnostic.code(), diagnostic.message());
+        }
+      }
       throw e;
     }
     long duration = Duration.ofNanos(System.nanoTime() - startedAtNanos).toMillis();

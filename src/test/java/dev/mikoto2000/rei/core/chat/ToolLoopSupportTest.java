@@ -13,6 +13,47 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 
 class ToolLoopSupportTest {
+  @Test void missingFileDoesNotAbortRemainingToolCalls(@org.junit.jupiter.api.io.TempDir java.nio.file.Path root)
+      throws java.io.IOException {
+    java.nio.file.Files.writeString(root.resolve("present.md"), "hello");
+    var tools = new SampleFileTools(root);
+    var events = new java.util.ArrayList<dev.mikoto2000.rei.event.AgentEvent>();
+    var provider = org.springframework.ai.tool.method.MethodToolCallbackProvider.builder().toolObjects(tools).build();
+    var callback = new dev.mikoto2000.rei.event.ToolEventCallbackProvider(provider,
+        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), events::add)
+        .getToolCallbacks()[0];
+    var prompt = new Prompt("review all files", OpenAiChatOptions.builder().toolCallbacks(callback).build());
+    var response = new ChatResponse(List.of(new org.springframework.ai.chat.model.Generation(
+        org.springframework.ai.chat.messages.AssistantMessage.builder().content("").toolCalls(List.of(
+            new org.springframework.ai.chat.messages.AssistantMessage.ToolCall("missing", "function", "readBinaryFile", "{\"pathStr\":\"missing.md\"}"),
+            new org.springframework.ai.chat.messages.AssistantMessage.ToolCall("present", "function", "readBinaryFile", "{\"pathStr\":\"present.md\"}")))
+            .build())));
+
+    var result = new ToolLoopSupport().execute(prompt, response);
+    var feedback = (org.springframework.ai.chat.messages.ToolResponseMessage) result.conversationHistory().getLast();
+    assertThat(feedback.getResponses()).hasSize(2);
+    assertThat(feedback.getResponses().getFirst().responseData()).contains("source_missing");
+    assertThat(dev.mikoto2000.rei.core.stagnation.ProgressEvaluator.failedResult(
+        feedback.getResponses().getLast().responseData())).isFalse();
+    assertThat(tools.attempted).containsExactly("missing.md", "present.md");
+    assertThat(events.stream().map(dev.mikoto2000.rei.event.AgentEvent::type).toList()).containsExactly(
+        dev.mikoto2000.rei.event.AgentEventType.TOOL_STARTED,
+        dev.mikoto2000.rei.event.AgentEventType.TOOL_FAILED,
+        dev.mikoto2000.rei.event.AgentEventType.TOOL_STARTED,
+        dev.mikoto2000.rei.event.AgentEventType.TOOL_COMPLETED);
+  }
+
+  public static class SampleFileTools {
+    private final java.nio.file.Path root;
+    final java.util.List<String> attempted = new java.util.ArrayList<>();
+    SampleFileTools(java.nio.file.Path root) { this.root = root; }
+    @org.springframework.ai.tool.annotation.Tool(name = "readBinaryFile", description = "read test file")
+    public byte[] read(String pathStr) throws java.io.IOException {
+      attempted.add(pathStr);
+      return java.nio.file.Files.readAllBytes(root.resolve(pathStr));
+    }
+  }
+
   @Test void rejectsDefaultCallbacks() {
     ToolCallback callback = new ToolCallback() {
       public ToolDefinition getToolDefinition() {

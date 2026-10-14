@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.event;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -79,6 +80,78 @@ class ToolEventCallbackDecoratorTest {
     assertEquals("RuntimeException", failed.error().errorType());
     assertEquals("boom", failed.error().message());
     assertEquals(received.get(0).correlationId(), received.get(1).correlationId());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"readBinaryFile", "readPdfFile", "copyFile"})
+  void missingFileReturnsFailureAndPreservesFailedEvent(String toolName) {
+    bus.subscribe(received::add);
+    var callback = delegate(toolName, "unused");
+    when(callback.call("input")).thenThrow(new IllegalStateException(
+        new java.nio.file.NoSuchFileException("PRIVATE_PATH")));
+    String result = new ToolEventCallbackDecorator(callback, factory, bus).call("input");
+
+    assertTrue(dev.mikoto2000.rei.core.stagnation.ProgressEvaluator.failedResult(result));
+    assertTrue(result.contains("source_missing"));
+    assertTrue(result.contains("findFile"));
+    assertTrue(!result.contains("PRIVATE_PATH"));
+    assertEquals(List.of(AgentEventType.TOOL_STARTED, AgentEventType.TOOL_FAILED),
+        received.stream().map(AgentEvent::type).toList());
+    assertEquals(received.get(0).correlationId(), received.get(1).correlationId());
+  }
+
+  @Test
+  void missingFileWithContextReturnsFailure() {
+    bus.subscribe(received::add);
+    var callback = delegate("readBinaryFile", "unused");
+    when(callback.call(eq("input"), any(ToolContext.class))).thenThrow(
+        new java.io.UncheckedIOException(new java.io.FileNotFoundException("PRIVATE_PATH")));
+    String result = new ToolEventCallbackDecorator(callback, factory, bus).call("input",
+        new ToolContext(java.util.Map.of("toolCallId", "missing-file-call")));
+
+    assertTrue(dev.mikoto2000.rei.core.stagnation.ProgressEvaluator.failedResult(result));
+    assertTrue(result.contains("file_unavailable"));
+    assertEquals("missing-file-call", received.get(1).correlationId());
+    assertEquals(AgentEventType.TOOL_FAILED, received.get(1).type());
+  }
+
+  @Test
+  void internalMissingResourceStillPropagates() {
+    var callback = delegate("updateTaskState", "unused");
+    var failure = new IllegalStateException(new java.nio.file.NoSuchFileException("storage"));
+    when(callback.call("input")).thenThrow(failure);
+    assertSame(failure, assertThrows(IllegalStateException.class,
+        () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
+  }
+
+  @Test
+  void unrelatedFailuresStillPropagate() {
+    var callback = delegate("readBinaryFile", "unused");
+    for (var failure : List.of(
+        new java.io.UncheckedIOException(new java.nio.file.AccessDeniedException("denied")),
+        new IllegalStateException(new java.io.IOException("disk failure")),
+        new SecurityException("denied"),
+        new IllegalStateException(new java.util.concurrent.CancellationException()))) {
+      org.mockito.Mockito.doThrow(failure).when(callback).call("input");
+      assertSame(failure, assertThrows(RuntimeException.class,
+          () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
+    }
+  }
+
+  @Test
+  void cancellationDuringMissingFileReadStillPropagates() {
+    var callback = delegate("readBinaryFile", "unused");
+    var failure = new java.io.UncheckedIOException(new java.nio.file.NoSuchFileException("missing"));
+    when(callback.call("input")).thenAnswer(invocation -> {
+      Thread.currentThread().interrupt();
+      throw failure;
+    });
+    try {
+      assertSame(failure, assertThrows(RuntimeException.class,
+          () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
+    } finally {
+      Thread.interrupted();
+    }
   }
 
   @Test

@@ -67,7 +67,7 @@ class AttentionServiceTest {
     service.setApprovals(approvals);
     var guard=new dev.mikoto2000.rei.core.policy.ToolPermissionGuard(new dev.mikoto2000.rei.core.policy.ToolPermissionPolicy(new dev.mikoto2000.rei.core.policy.ToolPermissionProperties(true,null,java.util.Set.of(),null)),factory(),bus);
     guard.setApprovals(approvals);
-    assertThrows(dev.mikoto2000.rei.core.policy.ToolPermissionException.class,()->guard.check("runCommand","{\"command\":\"git status --short\"}",owner("approval-run")));
+    assertThrows(dev.mikoto2000.rei.core.policy.ToolPermissionException.class,()->guard.check("runCommand","{\"request\":{\"command\":\"git status --short\"}}",owner("approval-run")));
     var request=approvals.list("project").getFirst();var notice=repository.list("project").getFirst();
     assertEquals(request.id(),notice.reference());assertEquals("APPROVAL_REQUIRED",notice.kind());
     assertTrue(notice.message().contains("git status --short"));assertTrue(notice.message().contains("/approval approve "+request.id()+" --continue"));

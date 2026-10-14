@@ -218,7 +218,7 @@ class ApprovalContinuationTest {
   @Test void aSecondApprovalInTheSameBatchDoesNotSpendAModelCallOrRepeatTheFirstEffect() {
     var effects=new ArrayList<String>();var modelCalls=new AtomicInteger();
     var command=callback("runCommand",input->{effects.add(input);return "done";});
-    String first="{\"command\":\"first\"}",second="{\"command\":\"second\"}";
+    String first="{\"request\":{\"command\":\"first\"}}",second="{\"request\":{\"command\":\"second\"}}";
     var calls=List.of(new AssistantMessage.ToolCall("first","function","runCommand",first),new AssistantMessage.ToolCall("second","function","runCommand",second));
     ChatModel model=new ChatModel(){public ChatResponse call(Prompt p){throw new AssertionError();}public Flux<ChatResponse> stream(Prompt p){return Flux.just(new ChatResponse(List.of(new Generation(modelCalls.incrementAndGet()==1?AssistantMessage.builder().content("").toolCalls(calls).build():new AssistantMessage("done")))));}};
     var controlled=new StagnationChatModel(model);var initial=execution();initial.consumeNextLlmCall();

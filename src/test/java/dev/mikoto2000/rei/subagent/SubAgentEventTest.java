@@ -92,7 +92,7 @@ class SubAgentEventTest {
       assertThat(output.toString()).contains(
           prefix + "[llm] first token (10 ms)",
           prefix + "[llm] response received (" + (run.equals("unknown") ? "request" : "subagent-" + run) + ", 20 ms)",
-          prefix + "[llm] request failed (30 ms): failure",
+          prefix + "[llm] request failed (30 ms): [invalid_state] 処理に必要な状態が整っていません。保存済みの状態と接続先の状態を確認してください。",
           prefix + "  ✓ webSearch (40 ms)",
           prefix + "  ✗ webSearch: failure",
           prefix + "tool.started webSearch");

@@ -33,7 +33,7 @@ test("Inbox reviews notifications and explicitly confirms one-time approval", as
   await expect(page.getByText("有効な承認要求はありません。")).toBeVisible();
   await expect(
     page.getByText(
-      "承認は一回の呼び出しに対する判断です。通知の確認や承認だけでは実行を再開しません。",
+      "「承認して続行」は、表示した呼び出しを一度だけ実行して作業を再開します。通知の確認や承認のみでは再開しません。",
     ),
   ).toBeVisible();
 });

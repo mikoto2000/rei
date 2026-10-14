@@ -20,6 +20,8 @@
 
 ## Phase 1: リクエスト内スナップショット
 
+ファイル操作 Tool が `NoSuchFileException` / `FileNotFoundException` を投げた場合は、共通 callback 境界で `success: false` の結果としてモデルへ返す。`tool.failed` は記録し、成功イベントは発行しない。同じバッチの後続 Tool とモデルの次の判断を継続できるため、`findFile` / `listFile` によるパス確認、未確認対象の記録、他の対象の作業を行える。キャンセル、アクセス拒否、その他の I/O エラー、およびファイル操作以外の Tool 内で発生した内部リソースの欠落は引き続き例外として伝播する。停滞・実行予算の上限は維持する。`ToolEventCallbackDecoratorTest` と `ToolLoopSupportTest` で失敗イベント・後続ファイルの読み取りを検証する。
+
 `FileSnapshots` はリクエストごとの immutable bytes と SHA-256 を保持する。検索条件間、検索と本文取得間、一括読み取りの重複した範囲で同じ bytes を使用する。リクエストをまたぐ TTL のみの grep 結果再利用を停止した。既存の SearchResultCache のクラスと書き込み時の無効化契約は残している。
 
 単一ファイルは 1 MiB、リクエスト全体は 8 MiB、inventory / snapshot は最大 1,024 ファイル。容量超過は読み取りエラーであり、空ファイルとして扱わない。読み取りは同期し、同じ request-local cache への並列アクセスも1回に集約する。走査と読み取りで cancellation を確認する。
