@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 public class CheckpointProperties {
   private boolean enabled=true;
   private int maxRevisions=10000, maxSnapshotBytes=262144, contextCharacters=12000, retentionDays=90;
-  private long maxBytes=67108864;
+  private long maxBytes=134217728;
   public boolean isEnabled(){return enabled;}
   public void setEnabled(boolean value){enabled=value;}
   public int getMaxRevisions(){return maxRevisions;}

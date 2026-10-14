@@ -10,7 +10,7 @@ import picocli.CommandLine;
 
 class CheckpointCommandTest {
   private static CheckpointHistory.Usage usage(){return new CheckpointHistory.Usage(10,30,4096,100,8192);}
-  private static CheckpointHistory.Cleanup cleanup(boolean applied){return new CheckpointHistory.Cleanup(7,2048,2,usage(),new CheckpointHistory.Usage(3,30,2048,100,8192),applied);}
+  private static CheckpointHistory.Cleanup cleanup(boolean applied){return new CheckpointHistory.Cleanup(7,2048,2,usage(),new CheckpointHistory.Usage(3,30,2048,100,8192),applied,3,2048);}
 
   @Test void statusIsGlobalAndShowsBothCapacitySettingNames(){
     var service=mock(PersistentCheckpointService.class);var projects=mock(ProjectService.class);when(service.historyUsage()).thenReturn(usage());
@@ -27,6 +27,8 @@ class CheckpointCommandTest {
     assertEquals(0,new CommandLine(command).execute("cleanup"));
     assertTrue(output.toString().contains("まだ削除していません"));assertTrue(output.toString().contains("7 件 / 2048 バイト"));
     assertTrue(output.toString().contains("/checkpoint cleanup --apply"));assertTrue(output.toString().contains("4096 / 8192"));
+    assertTrue(output.toString().contains("保護されて削除できない履歴: 3 件 / 2048 バイト"));
+    assertTrue(output.toString().contains("実行中・承認待ちのタスクでも不要な過去の履歴は古い順に整理できます"));
     verify(service).cleanupHistory(false);verifyNoMoreInteractions(service);verifyNoInteractions(projects);
   }
 
@@ -36,7 +38,28 @@ class CheckpointCommandTest {
     assertEquals(0,command.execute("cleanup","--apply"));
     assertTrue(output.toString().contains("削除した履歴: 7 件"));assertTrue(output.toString().contains("2048 / 8192"));
     assertTrue(output.toString().contains("重複実行防止キー: 30 件"));assertTrue(output.toString().contains("各タスクの最新状態"));
+    assertTrue(output.toString().contains("保護されて削除できない履歴: 3 件 / 2048 バイト"));
     verify(service).cleanupHistory(true);verifyNoMoreInteractions(service);
+  }
+
+  @Test void noCleanupCandidatesExplainsThatApplyWillNotRemoveProtectedHistory(){
+    var service=mock(PersistentCheckpointService.class);
+    when(service.cleanupHistory(false)).thenReturn(new CheckpointHistory.Cleanup(0,0,2,usage(),usage(),false,10,4096));
+    var output=new StringWriter();
+    var command=new CommandLine(new CheckpointCommand(service,mock(ProjectService.class))).setOut(new PrintWriter(output,true));
+    assertEquals(0,command.execute("cleanup"));
+    assertTrue(output.toString().contains("保護されて削除できない履歴: 10 件 / 4096 バイト"));
+    assertTrue(output.toString().contains("削除可能な履歴はありません"));
+    assertTrue(output.toString().contains("保護対象の履歴は /checkpoint cleanup --apply でも削除されません"));
+    verify(service).cleanupHistory(false);
+    verifyNoMoreInteractions(service);
+  }
+
+  @Test void legacyCleanupCallerKeepsUnknownProtectionTotalsDistinctFromZero(){
+    var cleanup=new CheckpointHistory.Cleanup(0,0,2,usage(),usage(),false);
+    assertEquals(-1,cleanup.protectedRevisions());
+    assertEquals(-1,cleanup.protectedBytes());
+    assertTrue(CheckpointHistoryReport.cleanup(cleanup).contains("保護されて削除できない履歴の件数・容量: 未取得"));
   }
 
   @Test void capacityFailuresArePrintedWithoutAStackTrace(){

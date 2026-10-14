@@ -49,16 +49,20 @@ class PersistentCheckpointRepositoryTest {
     }
     assertFalse(repo.leased("A","task"));assertTrue(open().acquire("A","task","recovered"));
   }
-  @Test void capacityFailureAndCorruptionKeepLatestValidRevision() throws Exception {
+  @Test void singleRevisionLimitAllowsAtomicReplacementAndCorruptionKeepsLatestValidRevision() throws Exception {
     var settings=new CheckpointProperties();settings.setMaxRevisions(1);
     var ds=new SQLiteDataSource();ds.setUrl("jdbc:sqlite:"+directory.resolve("work.db"));
     var repo=new PersistentCheckpointRepository(ds,settings);var first=PersistentCheckpoint.initial("task","A","session","run",directory,"request");
-    repo.save(first,0,"start");assertThrows(IllegalStateException.class,()->repo.save(first,1,"next"));assertEquals(1,repo.get("A","task").revision());
-    settings.setMaxRevisions(10);repo.save(first,1,"next");
+    repo.save(first,0,"start");
+    repo.save(first,1,"next");
+    assertEquals(2,repo.get("A","task").revision());
+    settings.setMaxRevisions(10);
+    repo.save(first,2,"third");
     try(var c=java.sql.DriverManager.getConnection("jdbc:sqlite:"+directory.resolve("work.db"));var s=c.createStatement()) {
-      s.executeUpdate("UPDATE checkpoint_revisions SET snapshot='broken' WHERE revision=2");
+      s.executeUpdate("UPDATE checkpoint_revisions SET snapshot='broken' WHERE revision=3");
     }
-    assertEquals(1,repo.get("A","task").revision());assertEquals(List.of("Corrupt checkpoint"),repo.diagnostics("A","task"));
+    assertEquals(2,repo.get("A","task").revision());
+    assertEquals(List.of("Corrupt checkpoint"),repo.diagnostics("A","task"));
   }
   @Test void concurrentWritersHaveExactlyOneWinner() throws Exception {
     var repo=open();var first=PersistentCheckpoint.initial("task","A","session","run",directory,"request");repo.save(first,0,"start");
