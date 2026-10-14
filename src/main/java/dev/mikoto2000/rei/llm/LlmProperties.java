@@ -108,6 +108,9 @@ public class LlmProperties {
     private Integer maxReplansPerGoal = DEFAULT_MAX_REPLANS_PER_GOAL;
     private Integer maxSubgoalsPerReplan = DEFAULT_MAX_SUBGOALS_PER_REPLAN;
     private Integer maxLlmCallsPerRun = DEFAULT_MAX_LLM_CALLS_PER_RUN;
+    private boolean llmCallBudgetEnabled = true;
+    public boolean isLlmCallBudgetEnabled() { return llmCallBudgetEnabled; }
+    public void setLlmCallBudgetEnabled(boolean enabled) { llmCallBudgetEnabled = enabled; }
     private Integer maxToolArgumentCorrectionsPerRun = OutputLimitRunBudget.DEFAULT_MAX_ARGUMENT_CORRECTIONS;
     private long maxTotalTokensPerRun;
     private long maxTotalTokensPerGoal;

@@ -7,6 +7,34 @@ import org.junit.jupiter.api.Test;
 
 class OutputLimitRunBudgetTest {
 
+  @Test void disabledCallLimitKeepsAccountingAndRestoredUsage() {
+    var budget = new OutputLimitRunBudget(2, 1, null, 0, 5, false);
+    budget.restore(new OutputLimitRunBudget.Snapshot(0, 120, 0, false));
+    for (int i = 0; i < 200; i++) assertThat(budget.tryConsumeLlmCall()).isTrue();
+    assertThat(budget.snapshot().llmCalls()).isEqualTo(320);
+    assertThat(budget.remainingLlmCalls()).isEqualTo(Integer.MAX_VALUE);
+    assertThat(budget.tryConsumeStagnationReplan()).isTrue();
+    assertThat(budget.tryConsumeStagnationReplan()).isTrue();
+    assertThat(budget.tryConsumeStagnationReplan()).isFalse();
+  }
+
+  @Test void disabledCallLimitStillEnforcesTokensAndParentReservations() {
+    var tokens = new OutputLimitRunBudget(2, 1, null, 10, 5, false);
+    assertThat(tokens.tryConsumeLlmCall()).isTrue();
+    tokens.recordTotalTokens(10);
+    assertThat(tokens.tryConsumeLlmCall()).isFalse();
+    assertThat(tokens.remainingLlmCalls()).isZero();
+    var parent = new OutputLimitRunBudget(2, 1);
+    var reservation = new OutputLimitRunBudget.LlmCallReservation() {
+      public boolean tryReserve() { return parent.tryConsumeLlmCall(); }
+      public int remaining() { return parent.remainingLlmCalls(); }
+    };
+    var child = new OutputLimitRunBudget(2, 1, reservation, 0, 5, false);
+    assertThat(child.tryConsumeLlmCall()).isTrue();
+    assertThat(child.tryConsumeLlmCall()).isFalse();
+    assertThat(child.remainingLlmCalls()).isZero();
+  }
+
   @Test
   void consumesLlmCallsUntilLimit() {
     OutputLimitRunBudget budget = new OutputLimitRunBudget(2, 2);

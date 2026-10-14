@@ -39,8 +39,9 @@ class ChatExecutionStagnationTest {
     assertThat(service.execute("work").status()).isEqualTo(ChatExecutionResult.Status.CANCELLED);
     verifyNoInteractions(planner);
   }
-  @Test
-  void recoveredOutputLimitIsNotReportedAsTerminalFailure() {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+  void recoveredOutputLimitIsNotReportedAsTerminalFailure(boolean callBudgetEnabled) {
     AtomicInteger calls = new AtomicInteger();
     ChatModel model = new ChatModel() {
       @Override public ToolCallingChatOptions getOptions() { return ToolCallingChatOptions.builder().build(); }
@@ -69,8 +70,11 @@ class ChatExecutionStagnationTest {
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenReturn("test");
     var planner = mock(OutputLimitReplanner.class);
+    var properties = new LlmProperties();
+    properties.getOutputLimit().setLlmCallBudgetEnabled(callBudgetEnabled);
+    properties.getOutputLimit().setMaxLlmCallsPerRun(callBudgetEnabled ? 3 : 1);
     var service = new ChatExecutionService(new FixedLlmChatClientProvider(client), holder,
-        new FixedLlmModelProvider(), new LlmProperties(), new CommandCancellationService(), Optional.empty(),
+        new FixedLlmModelProvider(), properties, new CommandCancellationService(), Optional.empty(),
         Optional.of(planner), Optional.empty(), Optional.empty(), Clock.systemUTC(), Optional.empty(),
         new AgentEventFactory(Clock.systemUTC()), events::add);
     var result = service.execute("work");
@@ -82,8 +86,9 @@ class ChatExecutionStagnationTest {
     var completed = events.stream().filter(e -> e.type() == AgentEventType.AGENT_RUN_COMPLETED).findFirst().orElseThrow();
     assertThat(((AgentRunCompletedPayload) completed.payload()).completionTokens()).isEqualTo(6L);
   }
-  @Test
-  void actualChatClientStopsAndPublishesTypedFailureAndResetsNextRun() {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+  void actualChatClientStopsAndPublishesTypedFailureAndResetsNextRun(boolean callBudgetEnabled) {
     AtomicInteger calls = new AtomicInteger();
     ChatModel model = new ChatModel() {
       @Override public ToolCallingChatOptions getOptions() { return ToolCallingChatOptions.builder().build(); }
@@ -106,8 +111,11 @@ class ChatExecutionStagnationTest {
     List<AgentEvent> events = new ArrayList<>();
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenReturn("test");
+    var properties = new LlmProperties();
+    properties.getOutputLimit().setLlmCallBudgetEnabled(callBudgetEnabled);
+    properties.getOutputLimit().setMaxLlmCallsPerRun(callBudgetEnabled ? 120 : 1);
     var service = new ChatExecutionService(new FixedLlmChatClientProvider(client), holder,
-        new FixedLlmModelProvider(), new LlmProperties(), new CommandCancellationService(), Optional.empty(),
+        new FixedLlmModelProvider(), properties, new CommandCancellationService(), Optional.empty(),
         Optional.empty(), Optional.empty(), Optional.empty(), Clock.systemUTC(), Optional.empty(),
         new AgentEventFactory(Clock.systemUTC()), events::add);
     var first = service.execute("work");

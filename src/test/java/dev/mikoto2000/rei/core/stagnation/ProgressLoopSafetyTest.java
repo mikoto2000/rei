@@ -32,6 +32,13 @@ class ProgressLoopSafetyTest {
   assertThatThrownBy(()->{for(int i=0;i<1000;i++){e.consumeNextLlmCall();iterate(e,"unknown"+i);e.requestReplan();}})
     .isInstanceOf(ExecutionStoppedException.class).hasMessageContaining("LLM_CALL_BUDGET_EXCEEDED");
  }
+ @Test void unknownRunStopsAfterDiagnosisWhenCallLimitIsDisabled() {
+  var budget=new OutputLimitRunBudget(2,1,null,0,5,false);
+  var e=execution(budget);e.evaluator().restoreInformation(null);
+  assertThatThrownBy(()->{for(int i=0;i<1000;i++){e.consumeNextLlmCall();iterate(e,"unknown"+i);e.requestReplan();}})
+    .isInstanceOf(ExecutionStoppedException.class).hasMessageContaining("STAGNATED");
+  assertThat(budget.snapshot().llmCalls()).isEqualTo(48);
+ }
  @Test void acquiredInformationDoesNotCompletePlanAndConfirmedWorkResetsWorkStall() {
   var plan=new dev.mikoto2000.rei.core.actionplan.ActionPlan();plan.addStep("review document");
   var e=new RunExecutionContext("run",new OutputLimitRunBudget(2,100),new ProgressEvaluator(root,plan),new AgentEventFactory(java.time.Clock.systemUTC()),event->{});
