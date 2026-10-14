@@ -141,11 +141,11 @@ rei:
     threshold: ${REI_CONTEXT_COMPRESSION_THRESHOLD:70000}
     hard-limit: ${REI_CONTEXT_HARD_LIMIT:85000}
     recent-tokens: ${REI_CONTEXT_RECENT_TOKENS:12000}
-    summary-tokens: ${REI_CONTEXT_SUMMARY_TOKENS:3000}
+    summary-tokens: ${REI_CONTEXT_SUMMARY_TOKENS:12000}
     minimum-compression-gain: ${REI_CONTEXT_MINIMUM_GAIN:0.1}
     tool-result-threshold: ${REI_CONTEXT_TOOL_RESULT_THRESHOLD:8000}
     tool-result-tokens: ${REI_CONTEXT_TOOL_RESULT_TOKENS:2000}
-    summary-timeout-seconds: ${REI_CONTEXT_SUMMARY_TIMEOUT_SECONDS:60}
+    summary-timeout-seconds: ${REI_CONTEXT_SUMMARY_TIMEOUT_SECONDS:300}
     retry-cooldown-seconds: ${REI_CONTEXT_RETRY_COOLDOWN_SECONDS:120}
     standalone-summary-max-llm-calls: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_LLM_CALLS:0}
     standalone-summary-max-total-tokens: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_TOTAL_TOKENS:0}
