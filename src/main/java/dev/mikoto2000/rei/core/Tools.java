@@ -418,6 +418,9 @@ public class Tools {
 
   @Tool(name = "runCommand", description = """
   Run a shell command. Use this as the default and primary tool for shell command execution.
+  File content reads (Get-Content/gc/cat/type/head/tail with file operands) are rejected before execution.
+  Use readMultiFile even for one file. For truncated results, pass each returned nextRead unchanged in files;
+  never switch to shell to bypass paging or output limits. Use shell for builds, tests, Git and other development commands.
   Arguments require an outer request object: {"request":{"command":"...","executionMode":"auto","timeoutSeconds":30}}.
   Do not place command or executionMode at the top level.
   In auto mode, short-lived commands return normally while long-running commands continue as managed background processes.
@@ -434,6 +437,7 @@ public class Tools {
   RunCommandResult runCommand(RunCommandRequest request, java.nio.file.Path workingDirectory, Duration autoWait)
       throws IOException, InterruptedException {
     if (request == null) throw new IllegalArgumentException("request must not be null");
+    dev.mikoto2000.rei.core.policy.ShellFileReadArguments.validateCommand(request.command());
     return switch (request.mode()) {
       case FOREGROUND -> foregroundResult(request, workingDirectory);
       case BACKGROUND -> backgroundResult(request, workingDirectory);

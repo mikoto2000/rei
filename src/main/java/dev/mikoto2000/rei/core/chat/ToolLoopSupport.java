@@ -60,7 +60,7 @@ public final class ToolLoopSupport {
     return ToolExecutionResult.builder().conversationHistory(history).returnDirect(result.returnDirect()).build();
   }
   public ToolExecutionResult executeResumable(Prompt prompt,ChatResponse response,dev.mikoto2000.rei.core.stagnation.RunExecutionContext context) {
-    if(!context.hasApprovalContinuation() && response.getResult().getOutput().getToolCalls().stream().noneMatch(call->java.util.Set.of("delegateTask","delegateTasks").contains(call.name())||dev.mikoto2000.rei.core.taskstate.TaskStateArguments.supports(call.name())))return execute(prompt,response);
+    if(!context.hasApprovalContinuation() && response.getResult().getOutput().getToolCalls().stream().noneMatch(call->java.util.Set.of("delegateTask","delegateTasks").contains(call.name())||dev.mikoto2000.rei.core.taskstate.TaskStateArguments.supports(call.name())||dev.mikoto2000.rei.core.policy.ShellFileReadArguments.supports(call.name())))return execute(prompt,response);
     if(response.getResults().size()!=1)throw new IllegalArgumentException("Approval continuation requires a single selected generation");
     var output=response.getResult().getOutput();
     return executePending(prompt,new RunContinuation.PendingTools(java.util.Objects.toString(output.getText(),""),output.getToolCalls(),java.util.List.of()),context,false);

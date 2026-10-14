@@ -1,0 +1,19 @@
+package dev.mikoto2000.rei.core;
+
+import static org.junit.jupiter.api.Assertions.*;
+import java.nio.file.Path;
+import java.time.Duration;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException;
+import dev.mikoto2000.rei.core.process.RunCommandRequest;
+
+class ShellFileReadExecutionTest {
+  @ParameterizedTest
+  @ValueSource(strings = {"auto", "foreground", "background"})
+  void directToolRejectsBeforeStartingAnyProcess(String mode) {
+    var request = new RunCommandRequest("git status; Get-Content docs/a.md", mode, 30);
+    assertThrows(InvalidToolArgumentsException.class,
+        () -> new Tools().runCommand(request, Path.of("."), Duration.ZERO));
+  }
+}

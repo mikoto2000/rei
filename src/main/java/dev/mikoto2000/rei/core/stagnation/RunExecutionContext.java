@@ -48,7 +48,10 @@ public class RunExecutionContext {
   public void setToolPermissionGuard(dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {this.permissions=permissions;}
   public void validateToolArguments(String name,String input) {
     if(permissions!=null)permissions.validateArguments(name,input,runContext);
-    else dev.mikoto2000.rei.core.taskstate.TaskStateArguments.validate(name,input);
+    else {
+      dev.mikoto2000.rei.core.taskstate.TaskStateArguments.validate(name,input);
+      dev.mikoto2000.rei.core.policy.ShellFileReadArguments.validate(name,input);
+    }
   }
   public void reportToolPermissionFailure(String callId,String name,dev.mikoto2000.rei.chatgpt.ChatGptException error) {
     publisher.publishBoundary(factory.toolFailed(callId,name,dev.mikoto2000.rei.chatgpt.ChatGptRunFailure.diagnostic(error)).withOwnership(runContext));
@@ -267,16 +270,19 @@ public class RunExecutionContext {
     }
     boolean recovering = detector.replanCount() > 0 || detector.isReplanRequested();
     boolean work = pending.stream().anyMatch(e -> e.kind() == ProgressEvent.SUBGOAL_COMPLETED || e.kind() == ProgressEvent.STATE_CHANGED);
+    boolean acquisitionProgress = pending.stream().anyMatch(ProgressEvidence::acquisitionProgress);
     boolean known = pending.stream().anyMatch(e -> e.kind() != ProgressEvent.INFORMATION_UNKNOWN);
     boolean unknown = pending.stream().anyMatch(e -> e.kind() == ProgressEvent.INFORMATION_UNKNOWN);
     if (work) acquisitionOnlyIterations = 0;
-    else if (known) acquisitionOnlyIterations++;
+    // Reading another exact range is necessary acquisition, even if one file needs many pages.
+    // Pause this heuristic only: reads do not complete work or replenish any shared Run budget.
+    else if (known && !acquisitionProgress) acquisitionOnlyIterations++;
     if (unknown && !known) unknownIterations++; else unknownIterations = 0;
-    stagnationReason = acquisitionOnlyIterations >= ACQUISITION_ONLY_LIMIT ? "WORK_STALLED"
+    boolean stalledWork = acquisitionOnlyIterations >= ACQUISITION_ONLY_LIMIT && !acquisitionProgress;
+    stagnationReason = stalledWork ? "WORK_STALLED"
         : unknown ? "INFORMATION_UNKNOWN" : iterationFailed ? "TOOL_FAILURE"
         : detector.hasRepeatedToolCall() ? lastToolName.startsWith("read") ? "REPEATED_READ" : "REPEATED_SEARCH_OR_ACTION"
         : toolCalls > 0 && !known ? "DUPLICATE_OR_UNSUPPORTED_INFORMATION" : "no_progress";
-    boolean stalledWork = acquisitionOnlyIterations >= ACQUISITION_ONLY_LIMIT;
     // Unknown is neither progress nor a duplicate. Allow bounded diagnosis time before replanning.
     if (!(unknown && !known)) detector.recordIteration(known && !stalledWork);
     for (ProgressEvidence evidence : pending) {

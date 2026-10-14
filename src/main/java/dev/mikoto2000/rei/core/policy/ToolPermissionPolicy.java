@@ -21,6 +21,7 @@ public class ToolPermissionPolicy {
   @org.springframework.beans.factory.annotation.Autowired
   void setDelegationResolver(dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver resolver) {this.delegation=resolver;}
   public void validateArguments(String tool,String input) {
+    ShellFileReadArguments.validate(tool,input);
     dev.mikoto2000.rei.core.taskstate.TaskStateArguments.validate(tool,input);
     validateDelegation(tool,input);
   }

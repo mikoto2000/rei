@@ -66,7 +66,8 @@ public class ProgressEvaluator {
     if(name.equals("readReviewFile") && output!=null && output.has("range")) {
       var range=output.path("range");var span=range.path("span");
       var observed=information.observeRange("review-chars:"+range.path("path").asText(),range.path("version").asText(),span.path("start").asInt()+1,span.path("end").asInt()+1);
-      if(observed.status()==InformationLedger.Status.NEW)evidence.add(new ProgressEvidence(ProgressEvent.NEW_INFORMATION,"New review characters fetched",range.path("path").asText(),range.path("version").asText()));
+      if(observed.status()==InformationLedger.Status.NEW)evidence.add(ProgressEvidence.acquiredRange("New review characters fetched",range.path("path").asText(),range.path("version").asText()));
+      else if(observed.status()==InformationLedger.Status.UNKNOWN)unknown(name,"LEDGER_CAPACITY_OR_HISTORY",evidence);
       return List.copyOf(evidence);
     }
     if(name.equals("submitReviewResult") && output!=null && output.hasNonNull("id")) {
@@ -81,13 +82,11 @@ public class ProgressEvaluator {
     }
     if(name.equals("readRawToolResult")) {
       try {
-        var header=result.split("\\n",8);
-        if(header.length!=8)throw new IllegalArgumentException();
-        String ref=header[2].substring(14);java.util.UUID.fromString(ref);
-        int start=Integer.parseInt(header[3].substring(8)),end=Integer.parseInt(header[5].substring(12));
-        if(end-start!=header[7].length())throw new IllegalArgumentException();
-        var observed=information.observeRange("raw:"+ref,ref,start+1,end+1);
-        if(observed.status()==InformationLedger.Status.NEW)evidence.add(new ProgressEvidence(ProgressEvent.NEW_INFORMATION,"New raw result characters",ref));
+        var page=dev.mikoto2000.rei.core.contextbudget.RawResultPage.parse(result);
+        if(page.content().isEmpty())return List.copyOf(evidence);
+        var observed=information.observeRange("raw:"+page.rawResultRef(),page.rawResultRef(),page.offset()+1,page.nextOffset()+1);
+        if(observed.status()==InformationLedger.Status.NEW)evidence.add(ProgressEvidence.acquiredRange("New raw result characters",page.rawResultRef(),page.rawResultRef()));
+        else if(observed.status()==InformationLedger.Status.UNKNOWN)unknown(name,"LEDGER_CAPACITY_OR_HISTORY",evidence);
       }catch(RuntimeException invalid){unknown(name,"RAW_RANGE_UNAVAILABLE",evidence);}
       return List.copyOf(evidence);
     }
@@ -195,11 +194,9 @@ public class ProgressEvaluator {
     if (count == 0) return;
     if (start < 1 || (long) start + count > Integer.MAX_VALUE) { unknown(source, "FILE_RANGE_UNAVAILABLE", evidence); return; }
     boolean firstFragment = false;
-    int fragmentOffset = 0;
     boolean ambiguousOffset = false;
     if (input != null) {
-      fragmentOffset = Math.max(0, input.path("offset").asInt(0));
-      firstFragment = fragmentOffset > 0;
+      firstFragment = input.path("offset").asInt(0) > 0;
       Set<Integer> offsets = new HashSet<>();
       for (JsonNode request : input.path("files")) {
         if (request.hasNonNull("path") && request.path("startLine").asInt(1) == originalStart) {
@@ -207,7 +204,7 @@ public class ProgressEvaluator {
             if (normalizeSource(request.path("path").asText()).equals(source)) {
               int offset = Math.max(0, request.path("offset").asInt(0));
               offsets.add(offset);
-              if (offset > 0) { firstFragment = true; fragmentOffset = offset; }
+              if (offset > 0) firstFragment = true;
             }
           }
           catch (RuntimeException ignored) { /* Invalid paths remain unknown to the tool. */ }
@@ -224,15 +221,18 @@ public class ProgressEvaluator {
     if (count > 0) {
       var observed = information.observeRange(source, version, start, start + count);
       if (observed.status() == InformationLedger.Status.NEW) {
-        evidence.add(new ProgressEvidence(ProgressEvent.NEW_INFORMATION,
+        evidence.add(ProgressEvidence.acquiredRange(
             "type=FILE_RANGE newLines=" + observed.newLines(), source, version));
       } else if (observed.status() == InformationLedger.Status.UNKNOWN) unknown(source, "LEDGER_CAPACITY_OR_HISTORY", evidence);
     }
     if (count < originalCount && !information.covers(source, version, originalStart, originalStart + originalCount)) {
       // Deduplicate observed fragments, without claiming that their whole line was read.
       if (ambiguousOffset) unknown(source, "FILE_RANGE_UNAVAILABLE", evidence);
-      else addInformation(source + ":" + version + ":fragment:" + originalStart + ":offset:" + fragmentOffset
-          + ":" + canonical(section.path("content")), source, evidence);
+      // Identify the delivered fragment by its returned endpoint, not caller-controlled cursor spelling.
+      // Repeated characters at successive endpoints are new; changed arguments with the same page are not.
+      else addInformation(source + ":" + version + ":fragment:" + originalStart + ":end:"
+          + next.path("startLine").asInt(-1) + ":" + next.path("offset").asInt(-1)
+          + ":" + canonical(section.path("content")), source, version, true, evidence);
     }
   }
   private static void unknown(String source, String reason, List<ProgressEvidence> evidence) {
@@ -247,9 +247,13 @@ public class ProgressEvaluator {
     addInformation(key, source, digest(key), evidence);
   }
   private void addInformation(String key, String source, String revision, List<ProgressEvidence> evidence) {
+    addInformation(key,source,revision,false,evidence);
+  }
+  private void addInformation(String key, String source, String revision, boolean acquisitionProgress,
+      List<ProgressEvidence> evidence) {
     var status = information.observe(digest(key));
     if (status == InformationLedger.Status.NEW && evidence.stream().noneMatch(e -> e.kind() == ProgressEvent.NEW_INFORMATION)) {
-      evidence.add(new ProgressEvidence(ProgressEvent.NEW_INFORMATION, "Previously unseen tool information", source, revision));
+      evidence.add(new ProgressEvidence(ProgressEvent.NEW_INFORMATION, "Previously unseen tool information", source, revision,acquisitionProgress));
     } else if (status == InformationLedger.Status.UNKNOWN) unknown(source, "LEDGER_CAPACITY_OR_HISTORY", evidence);
   }
   private Set<String> doneSteps() {
