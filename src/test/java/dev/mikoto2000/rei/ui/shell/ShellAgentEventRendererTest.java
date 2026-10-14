@@ -19,6 +19,39 @@ import dev.mikoto2000.rei.topic.TopicScoreBreakdown;
 import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
 
 class ShellAgentEventRendererTest {
+  @Test
+  void checkpointNotificationsStaySilentAndDoNotInterruptAnswerStreams() {
+    var output = new RecordingOutput();
+    var renderer = new ShellAgentEventRenderer(output);
+    var notifications = new java.util.ArrayList<dev.mikoto2000.rei.event.AgentEvent>();
+    notifications.add(events.checkpointSaved("task", "TURN_END", 2));
+    for (var type : java.util.List.of(
+        dev.mikoto2000.rei.event.AgentEventType.CHECKPOINT_RECONCILED,
+        dev.mikoto2000.rei.event.AgentEventType.CHECKPOINT_RESUMED,
+        dev.mikoto2000.rei.event.AgentEventType.CHECKPOINT_REVISION_SAVED)) {
+      notifications.add(new dev.mikoto2000.rei.event.AgentEvent("event", 0, Instant.EPOCH,
+          type, 1, null, null, "run", null, null,
+          new dev.mikoto2000.rei.event.CheckpointLifecyclePayload("task", 2, "previous", 1L, "CONTINUE")));
+    }
+    for (var event : notifications) {
+      renderer.onEvent(event);
+      renderer.onEvent(event.withContext("subagent:child", null));
+    }
+    assertEquals("", output.text());
+
+    renderer.onEvent(events.messageStarted("m", "assistant"));
+    renderer.onEvent(events.messageDelta("m", "first"));
+    var before = output.text();
+    for (var event : notifications) {
+      renderer.onEvent(event);
+      renderer.onEvent(event.withContext("subagent:child", null));
+    }
+    assertEquals(before, output.text());
+    renderer.onEvent(events.messageDelta("m", " second"));
+    renderer.onEvent(events.messageCompleted("m", "assistant", "first second"));
+    assertEquals(before + " second\n", output.text());
+  }
+
   @Test void cancellationShowsCodeAndSpecificRedactedReason() {
     var output = new RecordingOutput();
     new ShellAgentEventRenderer(output).onEvent(events.runCancelled("run", new ErrorInformation("CancellationException", "approval denied token=hidden", "approval_denied")));
@@ -448,7 +481,6 @@ class ShellAgentEventRendererTest {
         + "[file-summary] saved Foo.java (55 chars)\n"
         + "[file-summary] invalidated Foo.java\n"
         + "[file-summary] skipped stale Foo.java\n"
-        + "[checkpoint] saved task-1 (TURN_END), 2 files\n"
         + "[file] created New.java\n"
         + "[file] modified Foo.java (+3/-1)\n"
         + "[file] deleted Old.java\n"

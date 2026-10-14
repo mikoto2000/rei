@@ -11,7 +11,6 @@ import dev.mikoto2000.rei.event.BackgroundProcessCompletedPayload;
 import dev.mikoto2000.rei.event.BackgroundProcessFailedPayload;
 import dev.mikoto2000.rei.event.BackgroundProcessKilledPayload;
 import dev.mikoto2000.rei.event.BackgroundProcessStartedPayload;
-import dev.mikoto2000.rei.event.CheckpointSavedPayload;
 import dev.mikoto2000.rei.event.ContextBudgetEvaluatedPayload;
 import dev.mikoto2000.rei.event.ContextBudgetTrimmedPayload;
 import dev.mikoto2000.rei.event.ContextInjectedPayload;
@@ -96,6 +95,11 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   @Override
   public synchronized void onEvent(AgentEvent event) {
+    // Checkpoint bookkeeping must not interrupt answer/thinking streams, including child runs.
+    switch (event.type()) {
+      case CHECKPOINT_SAVED, CHECKPOINT_RECONCILED, CHECKPOINT_RESUMED, CHECKPOINT_REVISION_SAVED -> { return; }
+      default -> { }
+    }
     // Notifications may overtake downstream answer chunks. Preserve the text until
     // a stream boundary, including when a chunk ends in a newline or mid-link.
     if (!flushingNotifications && assistantMessageId != null && deferDuringAnswer(event)) {
@@ -491,17 +495,6 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         closeAssistantLine();
         FileSummaryStaleSkippedPayload payload = (FileSummaryStaleSkippedPayload) event.payload();
         output.println("[file-summary] skipped stale " + displayName(null, payload.path()));
-      }
-      case CHECKPOINT_SAVED -> {
-        closeAssistantLine();
-        CheckpointSavedPayload payload = (CheckpointSavedPayload) event.payload();
-        output.println("[checkpoint] saved " + valueOr(payload.taskId(), "task") + reasonSuffix(payload.reason())
-            + ", " + payload.workingFileCount() + " files");
-      }
-      case CHECKPOINT_RECONCILED, CHECKPOINT_RESUMED, CHECKPOINT_REVISION_SAVED -> {
-        closeAssistantLine();
-        var payload=(dev.mikoto2000.rei.event.CheckpointLifecyclePayload)event.payload();
-        output.println("[checkpoint] "+event.type().value()+" task="+payload.taskId()+" revision="+payload.revision()+" "+payload.decision());
       }
       case TOPIC_GENERATION_STARTED -> {
         closeAssistantLine();
