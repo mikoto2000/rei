@@ -245,7 +245,8 @@ public class ChatExecutionService {
         llmProperties.getOutputLimit().getMaxReplansPerGoal(),
         llmProperties.getOutputLimit().getMaxLlmCallsPerRun(),reservation,
         llmProperties.getOutputLimit().getMaxTotalTokensPerRun(),
-        llmProperties.getOutputLimit().getMaxToolArgumentCorrectionsPerRun());
+        llmProperties.getOutputLimit().getMaxToolArgumentCorrectionsPerRun(),
+        llmProperties.getOutputLimit().isLlmCallBudgetEnabled());
     RunExecutionContext execution = new RunExecutionContext(runId, budget,
         new ProgressEvaluator(context.projectRoot(),
             context.mode()==AgentRunContext.Mode.EXCLUSIVE && !structuredCommand ? actionPlan : null), eventFactory, eventPublisher);

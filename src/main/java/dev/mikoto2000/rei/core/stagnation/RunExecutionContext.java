@@ -308,12 +308,20 @@ public class RunExecutionContext {
   }
   public synchronized String requestReplan() {
     if (!detector.isReplanRequested()) {
+      // Without a call ceiling, inconclusive tracking must not allow an endless loop.
+      if (!budget.llmCallBudgetEnabled() && unknownReplanNotices >= 2
+          && unknownIterations >= 3 * UNKNOWN_GRACE_ITERATIONS) {
+        emit(AgentEventType.STAGNATION_STOPPED, null, "INFORMATION_UNKNOWN");
+        throw new ExecutionStoppedException(STAGNATED);
+      }
       if (unknownReplanNotices<2 && unknownIterations >= (unknownReplanNotices+1)*UNKNOWN_GRACE_ITERATIONS) {
         if (!budget.hasRemainingLlmCalls()) throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
         unknownReplanNotices++;
         publisher.publish(factory.executionProgress(AgentEventType.STAGNATION_REPLAN_REQUESTED, runId,
             new ExecutionProgressPayload(null,detector.stagnationCount(),detector.threshold(),unknownReplanNotices,2,"INFORMATION_UNKNOWN")).withOwnership(runContext));
-        return "Progress diagnosis: INFORMATION_UNKNOWN. Tracking capacity or historical evidence is insufficient to classify these reads. Replan toward independently verifiable work outcomes. Do not infer completion or stagnation from unknown information. The remaining shared Run budget is finite.";
+        return "Progress diagnosis: INFORMATION_UNKNOWN. Tracking capacity or historical evidence is insufficient to classify these reads. Replan toward independently verifiable work outcomes. Do not infer completion from unknown information."
+            + (budget.llmCallBudgetEnabled() ? " The remaining shared Run budget is finite."
+                : " Call limiting is disabled; continued inconclusive tracking after diagnosis will stop the Run.");
       }
       return null;
     }

@@ -36,6 +36,7 @@ public class OutputLimitRunBudget {
 
   private final int maxReplans;
   private final int maxLlmCalls;
+  private final boolean llmCallBudgetEnabled;
   private final int maxArgumentCorrections;
   private int replans;
   private int stagnationReplans;
@@ -54,23 +55,28 @@ public class OutputLimitRunBudget {
     this(maxReplans,maxLlmCalls,reservation,maxTotalTokens,DEFAULT_MAX_ARGUMENT_CORRECTIONS);
   }
   public OutputLimitRunBudget(int maxReplans,int maxLlmCalls,LlmCallReservation reservation,long maxTotalTokens,int maxArgumentCorrections) {
+    this(maxReplans,maxLlmCalls,reservation,maxTotalTokens,maxArgumentCorrections,true);
+  }
+
+  public OutputLimitRunBudget(int maxReplans,int maxLlmCalls,LlmCallReservation reservation,long maxTotalTokens,int maxArgumentCorrections,boolean llmCallBudgetEnabled) {
     if(maxTotalTokens<0)throw new IllegalArgumentException("Token limit must be nonnegative");
     if(maxArgumentCorrections<0)throw new IllegalArgumentException("Argument correction limit must be nonnegative");
     this.maxArgumentCorrections=maxArgumentCorrections;
     this.maxTotalTokens=maxTotalTokens;
     this.maxReplans = Math.max(0, maxReplans);
     this.maxLlmCalls = Math.max(0, maxLlmCalls);
+    this.llmCallBudgetEnabled = llmCallBudgetEnabled;
     this.reservation=reservation;
   }
 
   public LlmCallReservation sharedLlmReservation() {return reservation;}
 
   public synchronized boolean tryConsumeLlmCall() {
-    if (llmCalls >= maxLlmCalls || tokenExhausted()) {
+    if ((llmCallBudgetEnabled && llmCalls >= maxLlmCalls) || tokenExhausted()) {
       return false;
     }
     if(reservation!=null&&!reservation.tryReserve())return false;
-    llmCalls++;
+    if (llmCalls < Integer.MAX_VALUE) llmCalls++;
     return true;
   }
 
@@ -92,7 +98,7 @@ public class OutputLimitRunBudget {
 
   public synchronized int remainingLlmCalls() {
     if(tokenExhausted())return 0;
-    int local=Math.max(0,maxLlmCalls-llmCalls);
+    int local=llmCallBudgetEnabled?Math.max(0,maxLlmCalls-llmCalls):Integer.MAX_VALUE;
     return reservation==null?local:Math.min(local,Math.max(0,reservation.remaining()));
   }
 
@@ -100,6 +106,7 @@ public class OutputLimitRunBudget {
     return remainingLlmCalls() > 0;
   }
   public boolean tokenLimitEnabled(){return maxTotalTokens>0||(reservation!=null&&reservation.tokenLimitEnabled());}
+  public boolean llmCallBudgetEnabled(){return llmCallBudgetEnabled;}
   public synchronized long totalTokens(){return totalTokens;}
   public synchronized boolean usageUnknown(){return usageUnknown||(reservation!=null&&reservation.usageUnknown());}
   public synchronized boolean tokenExceeded(){return maxTotalTokens>0&&totalTokens>maxTotalTokens;}

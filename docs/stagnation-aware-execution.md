@@ -63,9 +63,11 @@ MCP ツールも共通境界で実行制御するが、独自名・独自形式�
 
 - `rei.llm.max-output-tokens`：1回の出力上限（既定8192）。
 - `rei.llm.output-limit.max-llm-calls-per-run`：外側の初期／サブゴール／統合呼び出し、分割プランナー、内部の追加LLM反復の合計（既定120）。
+- `rei.llm.output-limit.llm-call-budget-enabled`：Run の呼出回数上限を適用するか（既定true）。環境変数は `REI_LLM_OUTPUT_LIMIT_LLM_CALL_BUDGET_ENABLED`。false でも呼出回数を記録し、停滞監視・再計画上限・token上限・キャンセル、および明示的なGoal／親の予約上限は維持する。再開で保存された回数が上限以上でも、falseならRun回数上限による停止は行わない。
 - `rei.llm.output-limit.max-replans-per-goal`：名前は既存互換のまま、出力分割と停滞再計画それぞれのRun内絶対上限（既定2）。独立カウンターを使い、両方が共通のLLM呼び出し・トークン予算を消費する。
 
 意味のある進捗が続いてもこの上限を超えない。エピソードの回復は hard budget を回復しない。
+Run の呼出回数上限を無効にした場合、進捗不明が16 iteration続くごとに診断を促し、2回の診断後も48 iterationまで進捗不明が続いたら `STAGNATED` で停止する。既知の停滞は従来の再計画・停止経路を維持する。
 ここで数えるLLM呼び出しはアプリケーションの論理呼び出しであり、HTTPリトライ／サーバーフォールバックや
 別機能の補助LLM呼び出しは従来と同様に別扱い。
 
