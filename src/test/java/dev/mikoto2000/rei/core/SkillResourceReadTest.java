@@ -17,6 +17,69 @@ import dev.mikoto2000.rei.core.policy.ActionCapability;
 import dev.mikoto2000.rei.core.policy.ToolPermissionPolicy;
 
 class SkillResourceReadTest {
+  private static Tools.ReadFileResult readOne(Tools tools, String skillName, Tools.ReadFileRequest file)
+      throws Exception {
+    return tools.readSkillResource(skillName, List.of(file)).getFirst();
+  }
+
+  @Test
+  void readsMultipleResourcesWithIndependentRangesAndErrors() throws Exception {
+    Tools tools = tools();
+    Files.writeString(temporary.resolve("skills/review/references/other.md"), "alpha\nbeta\n");
+    Files.writeString(temporary.resolve("skills/review/.env"), "SECRET=private");
+    var results = tools.readSkillResource("review", List.of(
+        new Tools.ReadFileRequest("references/guide.md", 2, 2),
+        new Tools.ReadFileRequest("references/other.md", 1, 1),
+        new Tools.ReadFileRequest("../outside.md", null, null),
+        new Tools.ReadFileRequest(".env", null, null)));
+    assertThat(results).hasSize(4);
+    assertThat(results.get(0).path()).isEqualTo("references/guide.md");
+    assertThat(results.get(0).content()).hasSize(1).anyMatch(line -> line.contains("second"));
+    assertThat(results.get(1).path()).isEqualTo("references/other.md");
+    assertThat(results.get(1).content()).hasSize(1).anyMatch(line -> line.contains("alpha"));
+    assertThat(results.get(2).error()).contains("outside Project");
+    assertThat(results.get(3).error()).contains("Excluded");
+  }
+
+  @Test
+  void validatesBatchSizeAndEveryPathBeforeReading() throws Exception {
+    Tools tools = tools();
+    var valid = new Tools.ReadFileRequest("references/guide.md", null, null);
+    assertThatThrownBy(() -> tools.readSkillResource("review", null))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> tools.readSkillResource("review", List.of()))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> tools.readSkillResource("review", java.util.Collections.nCopies(21, valid)))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> tools.readSkillResource("review", java.util.Arrays.asList(valid, null)))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> tools.readSkillResource("review", List.of(valid,
+        new Tools.ReadFileRequest(temporary.resolve("outside.md").toString(), null, null))))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void continuesMultipleLongResourcesInOneBatch() throws Exception {
+    Tools tools = tools();
+    Files.writeString(temporary.resolve("skills/review/references/guide.md"), "guide\n".repeat(1200));
+    Files.writeString(temporary.resolve("skills/review/references/other.md"), "other\n".repeat(1200));
+    var first = tools.readSkillResource("review", List.of(
+        new Tools.ReadFileRequest("references/guide.md", null, null),
+        new Tools.ReadFileRequest("references/other.md", null, null)));
+    assertThat(first).allSatisfy(result -> {
+      assertThat(result.error()).isNull();
+      assertThat(result.truncated()).isTrue();
+      assertThat(result.nextRead()).isNotNull();
+    });
+    var next = tools.readSkillResource("review", first.stream().map(Tools.ReadFileResult::nextRead).toList());
+    assertThat(next).hasSize(2).allSatisfy(result -> {
+      assertThat(result.error()).isNull();
+      assertThat(result.content()).isNotEmpty();
+      assertThat(result.startLine()).isGreaterThan(1);
+      assertThat(result.truncated()).isFalse();
+    });
+  }
+
   @TempDir Path temporary;
 
   private AgentSkillsProperties properties;
@@ -51,7 +114,7 @@ class SkillResourceReadTest {
         temporary.resolve("skills/review").toString());
     var ordinaryRead = tools.readMultiFile(List.of(new Tools.ReadFileRequest(guide.toString(), null, null)), project);
     assertThat(ordinaryRead.getFirst().error()).contains("outside Project");
-    var resource = tools.readSkillResource("review", new Tools.ReadFileRequest("references/guide.md", 2, 3));
+    var resource = readOne(tools, "review", new Tools.ReadFileRequest("references/guide.md", 2, 3));
     assertThat(resource.error()).isNull();
     assertThat(resource.content()).hasSize(2).anyMatch(line -> line.contains("second"))
         .anyMatch(line -> line.contains("third"));
@@ -62,16 +125,16 @@ class SkillResourceReadTest {
     Tools tools = tools();
     Files.writeString(temporary.resolve("skills/outside.md"), "private");
     Files.writeString(temporary.resolve("skills/review/.env"), "SECRET=private");
-    assertThat(tools.readSkillResource("review", new Tools.ReadFileRequest("../outside.md", null, null)).error())
+    assertThat(readOne(tools, "review", new Tools.ReadFileRequest("../outside.md", null, null)).error())
         .contains("outside Project");
-    assertThat(tools.readSkillResource("review", new Tools.ReadFileRequest(".env", null, null)).error())
+    assertThat(readOne(tools, "review", new Tools.ReadFileRequest(".env", null, null)).error())
         .contains("Excluded");
-    assertThatThrownBy(() -> tools.readSkillResource("review",
+    assertThatThrownBy(() -> readOne(tools, "review",
         new Tools.ReadFileRequest(temporary.resolve("skills/outside.md").toString(), null, null)))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> tools.readSkillResource("missing", new Tools.ReadFileRequest("guide.md", null, null)))
+    assertThatThrownBy(() -> readOne(tools, "missing", new Tools.ReadFileRequest("guide.md", null, null)))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThat(tools.readSkillResource("review", new Tools.ReadFileRequest("missing.md", null, null)).error())
+    assertThat(readOne(tools, "review", new Tools.ReadFileRequest("missing.md", null, null)).error())
         .isNotNull();
   }
 
@@ -87,10 +150,10 @@ class SkillResourceReadTest {
         instructions
         """);
     repository.reload();
-    assertThatThrownBy(() -> tools.readSkillResource("review", new Tools.ReadFileRequest("references/guide.md", null, null)))
+    assertThatThrownBy(() -> readOne(tools, "review", new Tools.ReadFileRequest("references/guide.md", null, null)))
         .isInstanceOf(IllegalArgumentException.class);
     properties.setEnabled(false);
-    assertThatThrownBy(() -> tools.readSkillResource("review", new Tools.ReadFileRequest("references/guide.md", null, null)))
+    assertThatThrownBy(() -> readOne(tools, "review", new Tools.ReadFileRequest("references/guide.md", null, null)))
         .isInstanceOf(IllegalStateException.class);
   }
 
@@ -98,11 +161,11 @@ class SkillResourceReadTest {
   void returnsContinuationForLongReferences() throws Exception {
     Tools tools = tools();
     Files.writeString(temporary.resolve("skills/review/references/guide.md"), "line\n".repeat(1200));
-    var result = tools.readSkillResource("review", new Tools.ReadFileRequest("references/guide.md", null, null));
+    var result = readOne(tools, "review", new Tools.ReadFileRequest("references/guide.md", null, null));
     assertThat(result.error()).isNull();
     assertThat(result.truncated()).isTrue();
     assertThat(result.nextRead()).isNotNull();
-    var continuation = tools.readSkillResource("review", result.nextRead());
+    var continuation = readOne(tools, "review", result.nextRead());
     assertThat(continuation.error()).isNull();
     assertThat(continuation.content()).isNotEmpty();
     assertThat(continuation.startLine()).isGreaterThan(result.startLine());
@@ -120,7 +183,14 @@ class SkillResourceReadTest {
         .toolObjects(tools()).build().getToolCallbacks();
     var callback = java.util.Arrays.stream(callbacks)
         .filter(tool -> tool.getToolDefinition().name().equals("readSkillResource")).findFirst().orElseThrow();
-    assertThat(callback.getToolDefinition().inputSchema()).contains("skillName", "file", "path", "offset");
+    assertThat(callback.getToolDefinition().inputSchema()).contains("skillName", "files", "path", "offset");
+    var response = callback.call("""
+        {"skillName":"review","files":[
+          {"path":"references/guide.md","startLine":1,"endLine":1},
+          {"path":"references/guide.md","startLine":3,"endLine":3}
+        ]}
+        """);
+    assertThat(response).contains("first", "third").doesNotContain("second");
   }
 
   @Test
@@ -131,7 +201,7 @@ class SkillResourceReadTest {
         dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.MCP,
         dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY);
     try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
-      assertThat(tools.readSkillResource("review", new Tools.ReadFileRequest("references/guide.md", null, null)).error())
+      assertThat(readOne(tools, "review", new Tools.ReadFileRequest("references/guide.md", null, null)).error())
           .contains("MCP excludes");
     }
   }

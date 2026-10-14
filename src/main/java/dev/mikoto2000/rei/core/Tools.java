@@ -1263,24 +1263,31 @@ public class Tools {
 
   @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(description = """
-      Read a reference file inside an enabled Agent Skill, independent of the current Project directory.
-      Specify skillName and file.path relative to that skill's directory (e.g. references/learning-design.md).
+      Read one or more reference files inside an enabled Agent Skill, independent of the current Project directory.
+      Specify skillName and files[].path relative to that skill's directory (e.g. references/learning-design.md).
       Absolute paths, paths outside the skill directory, sensitive files and linked paths are rejected.
-      file supports line ranges, charset, expectedVersion and offset; Java symbol requests are unsupported.
-      If truncated, call this tool again with the same skillName and returned nextRead as file.
+      Each file supports line ranges, charset, expectedVersion and offset; Java symbol requests are unsupported.
+      Batch known references from the same skill in one call, including single-file reads as a one-item list.
+      A batch accepts 1 to 20 files and shares source byte/line and result token budgets across files.
+      If truncated, call again with the same skillName and each returned nextRead unchanged in files.
       Reads only; does not execute scripts or grant permission to modify files.
       """)
-  ReadFileResult readSkillResource(String skillName, ReadFileRequest file) throws IOException {
+  List<ReadFileResult> readSkillResource(String skillName, List<ReadFileRequest> files) throws IOException {
     if (skillRepository == null || skillProperties == null || !skillProperties.isEnabled()) {
       throw new IllegalStateException("Agent Skills are unavailable or disabled");
     }
     var skill = skillRepository.findByName(skillName).filter(dev.mikoto2000.rei.skills.AgentSkill::enabled)
         .orElseThrow(() -> new IllegalArgumentException("Unknown or disabled skill"));
-    if (file == null || file.path() == null || file.path().isBlank() || file.symbol() != null
-        || Paths.get(file.path()).isAbsolute()) {
-      throw new IllegalArgumentException("A relative skill resource path is required; symbols are unsupported");
+    if (files == null || files.isEmpty() || files.size() > MAX_READ_FILES) {
+      throw new IllegalArgumentException("files must contain 1 to " + MAX_READ_FILES + " entries");
     }
-    return readMultiFile(List.of(file), skill.directory()).getFirst();
+    for (var file : files) {
+      if (file == null || file.path() == null || file.path().isBlank() || file.symbol() != null
+          || Paths.get(file.path()).isAbsolute()) {
+        throw new IllegalArgumentException("A relative skill resource path is required; symbols are unsupported");
+      }
+    }
+    return readMultiFile(files, skill.directory());
   }
 
   @Tool(name = "countFileLines", description = "複数ファイルの行数を本文を返さず確認します。pathsに具体的なファイルパスを1〜64件指定。globは先にfindFileで展開してください。wc -lと同じLFの数で、末尾に改行がない行は数えません。UTF-8等のLFを使うファイル向け。各fileのpath/lineCount/errorと成功分のtotalLinesを返します。読み取り専用、shell実行なし。各file最大64MiB。")
