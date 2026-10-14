@@ -1,0 +1,76 @@
+name: Java static analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test baseline gate
+        run: ./.github/ci/test-static-analysis-gate.ps1
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Checkstyle reports
+        id: checkstyle
+        continue-on-error: true
+        run: |
+          New-Item -ItemType Directory -Force target | Out-Null
+          ./mvnw.cmd -B checkstyle:checkstyle 2>&1 | Tee-Object target/ci-checkstyle.log
+          exit $LASTEXITCODE
+      - name: Compile and SpotBugs reports
+        id: spotbugs
+        continue-on-error: true
+        run: |
+          ./mvnw.cmd -B -DskipTests compile spotbugs:spotbugs 2>&1 | Tee-Object target/ci-spotbugs.log
+          exit $LASTEXITCODE
+      - name: Analysis summary
+        if: always()
+        env:
+          CHECKSTYLE_OUTCOME: ${{ steps.checkstyle.outcome }}
+          SPOTBUGS_OUTCOME: ${{ steps.spotbugs.outcome }}
+        run: ./.github/ci/static-analysis-summary.ps1
+      - name: Gate new findings against existing debt
+        id: gate
+        if: always()
+        continue-on-error: true
+        run: ./.github/ci/static-analysis-gate.ps1
+      - name: Preserve reports and diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-analysis-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            target/checkstyle-result.xml
+            target/reports/**
+            target/spotbugs*.xml
+            target/ci-checkstyle.log
+            target/ci-spotbugs.log
+            target/static-analysis-summary.md
+            target/static-analysis-gate.md
+      - name: Enforce both analysis results
+        if: always()
+        env:
+          CHECKSTYLE_OUTCOME: ${{ steps.checkstyle.outcome }}
+          SPOTBUGS_OUTCOME: ${{ steps.spotbugs.outcome }}
+          GATE_OUTCOME: ${{ steps.gate.outcome }}
+        run: |
+          if ($env:CHECKSTYLE_OUTCOME -ne 'success' -or $env:SPOTBUGS_OUTCOME -ne 'success' -or $env:GATE_OUTCOME -ne 'success') {
+            throw 'Static analysis failed. See summary and static-analysis artifact.'
+          }
