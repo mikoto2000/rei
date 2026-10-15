@@ -55,8 +55,11 @@ Episode の経緯・根拠・差分整理・横断検索は [Episode Memory](doc
 
 OS 標準の Rei Data Directory に保存します。Windows は `%LOCALAPPDATA%\Rei`、他 OS と移行方法は [設計メモ](docs/agent-run-project-state.md) を参照してください。`REI_DATA_DIR` で上書きできます。
 
-- `<rei-data-dir>/history`
-  - REPL 履歴
+- `<rei-data-dir>/command-history/<project-id>.history`
+  - プロジェクト別の JLine 入力履歴（各 1,000 件まで）。プロジェクトの UUID を使うため、同名プロジェクトも分離されます。
+  - 次の入力受付前にプロジェクトの変更を確認し、変更前の履歴を保存して、変更先のファイルとメモリ上の履歴を切り替えます。終了時にも保存します。
+  - `/project cd` 自体は切り替え前のプロジェクトに記録されます。Session の切り替えでは同じプロジェクトの入力履歴を使います。
+  - 旧 `<rei-data-dir>/history` は残します。複数プロジェクトの入力が混ざっている可能性があるため、自動移行はしません。
 - `<rei-data-dir>/memory.db`
   - アプリ本体の SQLite
 - `<rei-data-dir>/vectorstore.db`

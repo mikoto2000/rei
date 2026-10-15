@@ -328,7 +328,12 @@ public class ReiApplication {
 
     ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
     UserInputService inputService = new UserInputService(new UserInputParser());
-    try (var consoleSession = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession();
+    try (var commandHistory =
+            new dev.mikoto2000.rei.ui.shell.ProjectCommandHistory(
+                (org.jline.reader.impl.LineReaderImpl) reader,
+                projects::currentContext,
+                dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current());
+        var consoleSession = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession();
         var runPrompt =
             new dev.mikoto2000.rei.ui.shell.ActiveRunPrompt(
                 reader,
@@ -345,6 +350,7 @@ public class ReiApplication {
       shellLoop:
       while (true) {
         try {
+          commandHistory.refresh();
           String line;
           approvalMenu.enabled(true);
           try {
