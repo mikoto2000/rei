@@ -36,12 +36,19 @@ class ProjectCommandHistoryTest {
 
   @BeforeEach
   void setup() throws Exception {
-    terminal = new DumbTerminal("fixture", "xterm", new ByteArrayInputStream(new byte[0]),
-        new ByteArrayOutputStream(), StandardCharsets.UTF_8);
+    terminal =
+        new DumbTerminal(
+            "fixture",
+            "xterm",
+            new ByteArrayInputStream(new byte[0]),
+            new ByteArrayOutputStream(),
+            StandardCharsets.UTF_8);
     terminal.setSize(new Size(100, 30));
-    reader = (LineReaderImpl) ReiLineReaderFactory.create(
-        terminal, new CommandLine(CommandSpec.create())).reader();
-    selected.set(new ProjectContext("00000000-0000-0000-0000-000000000001", "same-name", root.resolve("a")));
+    reader =
+        (LineReaderImpl)
+            ReiLineReaderFactory.create(terminal, new CommandLine(CommandSpec.create())).reader();
+    selected.set(
+        new ProjectContext("00000000-0000-0000-0000-000000000001", "same-name", root.resolve("a")));
   }
 
   @AfterEach
@@ -61,12 +68,14 @@ class ProjectCommandHistoryTest {
   java.util.List<String> entries() {
     return reader.getHistory().iterator().hasNext()
         ? java.util.stream.StreamSupport.stream(reader.getHistory().spliterator(), false)
-            .map(History.Entry::line).toList()
+            .map(History.Entry::line)
+            .toList()
         : java.util.List.of();
   }
 
   void selectB() {
-    selected.set(new ProjectContext("00000000-0000-0000-0000-000000000002", "same-name", root.resolve("b")));
+    selected.set(
+        new ProjectContext("00000000-0000-0000-0000-000000000002", "same-name", root.resolve("b")));
   }
 
   @Test
@@ -80,16 +89,24 @@ class ProjectCommandHistoryTest {
       history.refresh();
       assertThat(reader.getHistory()).isNotSameAs(previous);
       assertThat(entries()).isEmpty();
-      assertThat(Files.readString(file("00000000-0000-0000-0000-000000000001"))).contains("alpha command", "/project cd b");
+      assertThat(Files.readString(file("00000000-0000-0000-0000-000000000001")))
+          .contains("alpha command", "/project cd b");
       read("beta command");
-      assertThat(read(org.jline.keymap.KeyMap.key(terminal, org.jline.utils.InfoCmp.Capability.key_up))).isEqualTo("beta command");
+      assertThat(
+              read(
+                  org.jline.keymap.KeyMap.key(terminal, org.jline.utils.InfoCmp.Capability.key_up)))
+          .isEqualTo("beta command");
       selected.set(projectA);
       history.refresh();
       assertThat(entries()).containsExactly("alpha command", "/project cd b");
-      assertThat(read(org.jline.keymap.KeyMap.key(terminal, org.jline.utils.InfoCmp.Capability.key_up))).isEqualTo("/project cd b");
+      assertThat(
+              read(
+                  org.jline.keymap.KeyMap.key(terminal, org.jline.utils.InfoCmp.Capability.key_up)))
+          .isEqualTo("/project cd b");
       assertThat(read("\u0012alpha\u001b")).isEqualTo("alpha command");
       assertThat(entries()).doesNotContain("beta command");
-      assertThat(Files.readString(file("00000000-0000-0000-0000-000000000002"))).doesNotContain("alpha command");
+      assertThat(Files.readString(file("00000000-0000-0000-0000-000000000002")))
+          .doesNotContain("alpha command");
     }
   }
 
@@ -100,11 +117,15 @@ class ProjectCommandHistoryTest {
       reader.unsetOpt(LineReader.Option.HISTORY_INCREMENTAL);
       read("persist on close");
     }
-    assertThat(Files.readString(file("00000000-0000-0000-0000-000000000001"))).contains("persist on close");
+    assertThat(Files.readString(file("00000000-0000-0000-0000-000000000001")))
+        .contains("persist on close");
     reader.setHistory(new org.jline.reader.impl.history.DefaultHistory());
     try (var history = new ProjectCommandHistory(() -> reader, selected::get, root)) {
       assertThat(entries()).containsExactly("persist on close");
-      assertThat(read(org.jline.keymap.KeyMap.key(terminal, org.jline.utils.InfoCmp.Capability.key_up))).isEqualTo("persist on close");
+      assertThat(
+              read(
+                  org.jline.keymap.KeyMap.key(terminal, org.jline.utils.InfoCmp.Capability.key_up)))
+          .isEqualTo("persist on close");
     }
     assertThat(Files.readString(root.resolve("history"))).isEqualTo("old shared command\n");
   }
@@ -130,7 +151,8 @@ class ProjectCommandHistoryTest {
       selectB();
       assertThatThrownBy(history::refresh).isInstanceOf(java.io.IOException.class);
       assertThat(reader.getHistory()).isSameAs(current);
-      assertThat(reader.getVariable(LineReader.HISTORY_FILE)).isEqualTo(file("00000000-0000-0000-0000-000000000001"));
+      assertThat(reader.getVariable(LineReader.HISTORY_FILE))
+          .isEqualTo(file("00000000-0000-0000-0000-000000000001"));
       assertThat(entries()).containsExactly("alpha command");
       Files.delete(file("00000000-0000-0000-0000-000000000002"));
       history.refresh();
@@ -149,7 +171,8 @@ class ProjectCommandHistoryTest {
       try {
         assertThatThrownBy(history::refresh).isInstanceOf(java.io.IOException.class);
         assertThat(reader.getHistory()).isSameAs(current);
-        assertThat(reader.getVariable(LineReader.HISTORY_FILE)).isEqualTo(file("00000000-0000-0000-0000-000000000001"));
+        assertThat(reader.getVariable(LineReader.HISTORY_FILE))
+            .isEqualTo(file("00000000-0000-0000-0000-000000000001"));
         assertThat(entries()).containsExactly("alpha command");
       } finally {
         Files.delete(file("00000000-0000-0000-0000-000000000001"));
@@ -163,9 +186,10 @@ class ProjectCommandHistoryTest {
     Path other = Files.createDirectory(root.resolve("other"));
     var projects = new ProjectService(startup, root.resolve("projects.json"));
     var client = projects.newClient();
-    var command = new CommandLine(CommandSpec.create().name("root"))
-        .addSubcommand("cd", new ProjectCommand.CdCommand(projects))
-        .addSubcommand("remove", new ProjectCommand.RemoveCommand(projects));
+    var command =
+        new CommandLine(CommandSpec.create().name("root"))
+            .addSubcommand("cd", new ProjectCommand.CdCommand(projects))
+            .addSubcommand("remove", new ProjectCommand.RemoveCommand(projects));
     ShellProjectCommands.configure(command, projects, client, null);
     try (var scope = client.open();
         var history = new ProjectCommandHistory(() -> reader, projects::currentContext, root)) {
