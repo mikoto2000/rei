@@ -330,7 +330,7 @@ public class ReiApplication {
     UserInputService inputService = new UserInputService(new UserInputParser());
     try (var commandHistory =
             new dev.mikoto2000.rei.ui.shell.ProjectCommandHistory(
-                (org.jline.reader.impl.LineReaderImpl) reader,
+                () -> (org.jline.reader.impl.LineReaderImpl) reader,
                 projects::currentContext,
                 dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current());
         var consoleSession = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession();

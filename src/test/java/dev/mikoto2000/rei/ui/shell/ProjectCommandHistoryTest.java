@@ -71,7 +71,7 @@ class ProjectCommandHistoryTest {
 
   @Test
   void switchesFilesAndMemoryAndRestoresArrowAndSearchHistory() throws Exception {
-    try (var history = new ProjectCommandHistory(reader, selected::get, root)) {
+    try (var history = new ProjectCommandHistory(() -> reader, selected::get, root)) {
       var projectA = selected.get();
       read("alpha command");
       read("/project cd b");
@@ -96,13 +96,13 @@ class ProjectCommandHistoryTest {
   @Test
   void reloadsOnRestartAndKeepsLegacySharedHistoryUntouched() throws Exception {
     Files.writeString(root.resolve("history"), "old shared command\n");
-    try (var history = new ProjectCommandHistory(reader, selected::get, root)) {
+    try (var history = new ProjectCommandHistory(() -> reader, selected::get, root)) {
       reader.unsetOpt(LineReader.Option.HISTORY_INCREMENTAL);
       read("persist on close");
     }
     assertThat(Files.readString(file("00000000-0000-0000-0000-000000000001"))).contains("persist on close");
     reader.setHistory(new org.jline.reader.impl.history.DefaultHistory());
-    try (var history = new ProjectCommandHistory(reader, selected::get, root)) {
+    try (var history = new ProjectCommandHistory(() -> reader, selected::get, root)) {
       assertThat(entries()).containsExactly("persist on close");
       assertThat(read(org.jline.keymap.KeyMap.key(terminal, org.jline.utils.InfoCmp.Capability.key_up))).isEqualTo("persist on close");
     }
@@ -111,7 +111,7 @@ class ProjectCommandHistoryTest {
 
   @Test
   void unchangedProjectPreservesHistoryInstanceAndUnsavedEntries() throws Exception {
-    try (var history = new ProjectCommandHistory(reader, selected::get, root)) {
+    try (var history = new ProjectCommandHistory(() -> reader, selected::get, root)) {
       reader.unsetOpt(LineReader.Option.HISTORY_INCREMENTAL);
       read("unsaved command");
       var current = reader.getHistory();
@@ -123,7 +123,7 @@ class ProjectCommandHistoryTest {
 
   @Test
   void loadFailureKeepsPreviousFileAndMemoryAndCanBeRetried() throws Exception {
-    try (var history = new ProjectCommandHistory(reader, selected::get, root)) {
+    try (var history = new ProjectCommandHistory(() -> reader, selected::get, root)) {
       read("alpha command");
       var current = reader.getHistory();
       Files.createDirectory(file("00000000-0000-0000-0000-000000000002"));
@@ -140,7 +140,7 @@ class ProjectCommandHistoryTest {
 
   @Test
   void saveFailureDoesNotSwitchBackingFileOrMemory() throws Exception {
-    try (var history = new ProjectCommandHistory(reader, selected::get, root)) {
+    try (var history = new ProjectCommandHistory(() -> reader, selected::get, root)) {
       reader.unsetOpt(LineReader.Option.HISTORY_INCREMENTAL);
       read("alpha command");
       var current = reader.getHistory();
@@ -168,7 +168,7 @@ class ProjectCommandHistoryTest {
         .addSubcommand("remove", new ProjectCommand.RemoveCommand(projects));
     ShellProjectCommands.configure(command, projects, client, null);
     try (var scope = client.open();
-        var history = new ProjectCommandHistory(reader, projects::currentContext, root)) {
+        var history = new ProjectCommandHistory(() -> reader, projects::currentContext, root)) {
       read("startup command");
       assertThat(command.execute("cd", other.toString())).isZero();
       history.refresh();

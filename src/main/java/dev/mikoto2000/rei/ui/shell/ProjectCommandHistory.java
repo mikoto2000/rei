@@ -11,15 +11,15 @@ import org.jline.reader.impl.history.DefaultHistory;
 
 /** Shell-thread history ownership. Switch only between readLine calls, never from event workers. */
 public final class ProjectCommandHistory implements AutoCloseable {
-  private final LineReaderImpl reader;
+  private final Supplier<LineReaderImpl> input;
   private final Supplier<ProjectContext> selectedProject;
   private final Path directory;
   private Path currentFile;
 
   public ProjectCommandHistory(
-      LineReaderImpl reader, Supplier<ProjectContext> selectedProject, Path dataDirectory)
+      Supplier<LineReaderImpl> input, Supplier<ProjectContext> selectedProject, Path dataDirectory)
       throws IOException {
-    this.reader = reader;
+    this.input = input;
     this.selectedProject = selectedProject;
     this.directory = dataDirectory.resolve("command-history");
     refresh();
@@ -27,10 +27,8 @@ public final class ProjectCommandHistory implements AutoCloseable {
 
   /** Save the old owner before replacing both its backing file and its in-memory history. */
   public void refresh() throws IOException {
+    var reader = input.get();
     String id = selectedProject.get().id();
-    // Registry identities are UUIDs; validate before using an identity as a filename.
-    if (!id.matches("[a-zA-Z0-9_-]+"))
-      throw new IOException("Invalid project identity for command history");
     Path nextFile = directory.resolve(id + ".history");
     if (nextFile.equals(currentFile)) return;
     if (currentFile != null) reader.getHistory().save();
@@ -54,6 +52,6 @@ public final class ProjectCommandHistory implements AutoCloseable {
 
   @Override
   public void close() throws IOException {
-    reader.getHistory().save();
+    input.get().getHistory().save();
   }
 }
